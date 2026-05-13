@@ -1,0 +1,38 @@
+{
+  "appName": "CRM Santé",
+  "dashboard": "Tableau de bord",
+  "patients": "Patients",
+  "appointments": "Rendez-vous",
+  "tasks": "Tâches",
+  "payments": "Paiements",
+  "settings": "Paramètres",
+  "logout": "Déconnexion",
+  "search": "Rechercher...",
+  "viewAll": "Voir tout",
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "delete": "Supprimer",
+  "archive": "Archiver",
+  "edit": "Modifier",
+  "add": "Ajouter",
+  "back": "Retour",
+  "export": "Exporter les données",
+  "newAppointment": "Nouveau rendez-vous",
+  "time": "Heure",
+  "service": "Service",
+  "practitioner": "Praticien",
+  "loading": "Chargement...",
+  "noData": "Aucune donnée trouvée.",
+  "roles": {
+    "admin": "Administrateur",
+    "doctor": "Docteur",
+    "receptionist": "Réceptionniste",
+    "billing": "Facturation"
+  },
+  "languages": {
+    "en": "Anglais",
+    "fr": "Français",
+    "tr": "Turc",
+    "de": "Allemand"
+  }
+}

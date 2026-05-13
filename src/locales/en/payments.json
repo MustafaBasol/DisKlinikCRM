@@ -1,0 +1,57 @@
+{
+  "title": "Payments & Collections",
+  "subtitle": "Track clinic income and patient payment history.",
+  "addPayment": "Add Payment",
+  "editPayment": "Edit Payment",
+  "summary": {
+    "totalPaid": "Total Paid",
+    "totalPending": "Total Pending",
+    "totalRefunded": "Total Refunded",
+    "remaining": "Remaining Balance",
+    "totalCollected": "Total Collected",
+    "pending": "Pending",
+    "transactions": "Transactions",
+    "average": "Average",
+    "totalRecords": "Total records",
+    "perTransaction": "Per transaction",
+    "awaitingPayment": "Awaiting payment",
+    "fromPaidRecords": "From paid records"
+  },
+  "filters": {
+    "allStatus": "All Statuses",
+    "allMethods": "All Methods",
+    "dateRange": "Date Range"
+  },
+  "status": {
+    "pending": "Pending",
+    "partial": "Partial",
+    "paid": "Paid",
+    "refunded": "Refunded",
+    "cancelled": "Cancelled"
+  },
+  "methods": {
+    "cash": "Cash",
+    "card": "Credit/Debit Card",
+    "bank_transfer": "Bank Transfer",
+    "cheque": "Cheque",
+    "other": "Other"
+  },
+  "list": {
+    "patient": "Patient",
+    "treatment": "Treatment",
+    "amount": "Amount",
+    "method": "Method",
+    "status": "Status",
+    "date": "Payment Date"
+  },
+  "form": {
+    "patient": "Patient",
+    "treatment": "Treatment Case",
+    "amount": "Amount",
+    "currency": "Currency",
+    "method": "Payment Method",
+    "status": "Status",
+    "paidAt": "Payment Date",
+    "notes": "Notes"
+  }
+}

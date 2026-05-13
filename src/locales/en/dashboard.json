@@ -1,0 +1,26 @@
+{
+  "welcome": "Welcome back, {{name}}",
+  "subtitle": "Here is what's happening in your clinic today.",
+  "todayAppointments": "Today's Appointments",
+  "newPatients": "New Patients (30d)",
+  "monthlyRevenue": "Revenue This Month",
+  "pendingCollections": "Pending Collections",
+  "todayAgenda": "Today's Agenda",
+  "activityFeed": "Recent Activity",
+  "viewFullLogs": "View full activity logs",
+  "noAgendaToday": "No appointments scheduled for today.",
+  "noShowsMonth": "No-Shows This Month",
+  "openTreatments": "Open Treatment Cases",
+  "preparedMessages": "Prepared Messages (Week)",
+  "stats": {
+    "weekTotal": "{{count}} appointments this week",
+    "monthTrend": "Trending up this month",
+    "revenueGoal": "Based on accepted quotes",
+    "actionRequired": "Needs follow-up"
+  },
+  "alerts": {
+    "overdueTasks": "Overdue Follow-ups",
+    "noShowFollowUp": "No-Shows to Contact",
+    "pendingCollections": "Unpaid Balances"
+  }
+}

@@ -1,0 +1,549 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Mail, 
+  Phone, 
+  Calendar, 
+  Edit2, 
+  Archive, 
+  Clock, 
+  MapPin, 
+  User as UserIcon,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Plus,
+  ClipboardList,
+  MessageSquare,
+  Briefcase,
+  ShieldCheck
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { patientService, taskService, treatmentCaseService, paymentService, insuranceProvisionService } from '../services/api';
+import PatientForm from '../components/PatientForm';
+import TaskForm from '../components/TaskForm';
+import TreatmentCaseForm from '../components/TreatmentCaseForm';
+import PaymentForm from '../components/PaymentForm';
+import PrepareMessageModal from '../components/PrepareMessageModal';
+import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
+
+const PatientDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases']);
+  const [patient, setPatient] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [isTreatmentFormOpen, setIsTreatmentFormOpen] = useState(false);
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
+  const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'activity'>('overview');
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [insuranceProvisions, setInsuranceProvisions] = useState<any[]>([]);
+  const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || 'TRY';
+
+  const fetchPatient = async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const response = await patientService.getById(id);
+      setPatient(response.data);
+      
+      const tasksRes = await taskService.getAll({ patientId: id });
+      setTasks(tasksRes.data);
+
+      const treatmentsRes = await treatmentCaseService.getAll({ patientId: id });
+      setTreatmentCases(treatmentsRes.data);
+
+      const paymentsRes = await paymentService.getAll({ patientId: id });
+      setPayments(paymentsRes.data);
+
+      const insuranceRes = await insuranceProvisionService.getAll({ patient_id: id });
+      setInsuranceProvisions(insuranceRes.data);
+    } catch (error) {
+      console.error('Failed to fetch patient:', error);
+      navigate('/patients');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatient();
+  }, [id]);
+
+  const handleArchive = async () => {
+    if (!window.confirm(t('common:confirmAction'))) return;
+    try {
+      await patientService.archive(id!);
+      fetchPatient();
+    } catch (error) {
+      alert('Failed to archive patient');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="animate-spin text-primary-600" size={48} />
+      </div>
+    );
+  }
+
+  if (!patient) return null;
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={() => navigate('/patients')}
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft size={20} />
+          {t('patients:detail.backToList')}
+        </button>
+        <div className="flex gap-3">
+          <button onClick={handleArchive} className="btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200">
+            <Archive size={18} />
+            {t('common:archive')}
+          </button>
+          <button 
+            onClick={() => setIsMessageModalOpen(true)}
+            className="btn-secondary"
+          >
+            <MessageSquare size={18} />
+            {t('messages:prepare', { defaultValue: 'Prepare Message' })}
+          </button>
+          <button onClick={() => setIsEditOpen(true)} className="btn-primary">
+            <Edit2 size={18} />
+            {t('patients:editPatient')}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-6 border-b border-gray-200">
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'activity'] as const).map(tab => (
+          <button 
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            {t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column - Profile Summary */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="card p-8 text-center">
+            <div className="w-24 h-24 rounded-3xl bg-primary-50 text-primary-600 flex items-center justify-center text-3xl font-bold mx-auto mb-6 border-2 border-primary-100">
+              {patient.firstName[0]}{patient.lastName[0]}
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">{patient.firstName} {patient.lastName}</h2>
+            <div className="mt-2">
+              <span className={`badge ${
+                patient.patientStatus === 'active' ? 'badge-green' : 
+                patient.patientStatus === 'new' ? 'badge-blue' : 'badge-gray'
+              }`}>
+                {t(`patients:status.${patient.patientStatus}`)}
+              </span>
+            </div>
+            
+            <div className="mt-8 space-y-4 text-left border-t border-gray-50 pt-8">
+              <div className="flex items-center gap-3 text-gray-600">
+                <Mail size={18} className="text-gray-400" />
+                <span className="text-sm truncate">{patient.email || t('common:noData')}</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-600">
+                <Phone size={18} className="text-gray-400" />
+                <span className="text-sm">{patient.phone || t('common:noData')}</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-600">
+                <Calendar size={18} className="text-gray-400" />
+                <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString() : t('common:noData')}</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-600">
+                <MapPin size={18} className="text-gray-400" />
+                <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card p-6 space-y-4">
+            <h3 className="font-bold text-gray-900">{t('patients:detail.consents')}</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.communicationConsent')}</span>
+                {patient.communicationConsent ? (
+                  <span className="flex items-center gap-1 text-green-600 text-xs font-bold">
+                    <CheckCircle2 size={14} /> {t('common:yes')}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-gray-400 text-xs font-bold">
+                    <AlertCircle size={14} /> {t('common:no')}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.marketingConsent')}</span>
+                {patient.marketingConsent ? (
+                  <span className="flex items-center gap-1 text-green-600 text-xs font-bold">
+                    <CheckCircle2 size={14} /> {t('common:yes')}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-gray-400 text-xs font-bold">
+                    <AlertCircle size={14} /> {t('common:no')}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="lg:col-span-2 space-y-8">
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <div className="card p-6 bg-primary-600 text-white border-none shadow-xl shadow-primary-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold">{t('patients:detail.nextAppointment')}</h3>
+                  <Calendar size={20} />
+                </div>
+                {patient.appointments?.find((a: any) => new Date(a.startTime) > new Date()) ? (
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <p className="text-primary-100 text-sm">{t('common:date')}</p>
+                      <p className="text-lg font-bold">
+                        {new Date(patient.appointments[0].startTime).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })} at {new Date(patient.appointments[0].startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-primary-100 text-sm">{t('common:service')}</p>
+                      <p className="text-lg font-bold">{patient.appointments[0].appointmentType.name}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="opacity-80 italic">No upcoming appointments scheduled.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'appointments' && (
+            <div className="card overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="font-bold">{t('patients:detail.history')}</h3>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {patient.appointments?.length > 0 ? patient.appointments.map((appt: any) => (
+                  <div key={appt.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 bg-gray-100 rounded-lg text-gray-500">
+                        <Clock size={18} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{appt.appointmentType.name}</p>
+                        <p className="text-xs text-gray-500">with {appt.practitioner.firstName} {appt.practitioner.lastName}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-700">{new Date(appt.startTime).toLocaleDateString()}</p>
+                      <span className={`badge ${
+                        appt.status === 'completed' ? 'badge-green' : 'badge-blue'
+                      }`}>
+                        {t(`appointments:status.${appt.status}`)}
+                      </span>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="p-8 text-center text-gray-400 italic">{t('common:noData')}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'tasks' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">{t('tasks:title')}</h3>
+                <button 
+                  onClick={() => setIsTaskFormOpen(true)}
+                  className="btn-primary py-1.5 text-xs"
+                >
+                  <Plus size={16} />
+                  {t('tasks:newTask')}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                {tasks.length > 0 ? tasks.map(task => (
+                  <div key={task.id} className={`card p-4 flex items-center gap-4 ${task.status === 'completed' ? 'opacity-60 bg-gray-50' : ''}`}>
+                     <div className={`w-2 h-2 rounded-full ${
+                       task.priority === 'urgent' ? 'bg-red-500' : 
+                       task.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500'
+                     }`}></div>
+                     <div className="flex-1">
+                       <p className={`font-semibold ${task.status === 'completed' ? 'line-through' : ''}`}>{task.title}</p>
+                       <p className="text-xs text-gray-500">{t('tasks:form.dueDate')}: {new Date(task.dueDate).toLocaleDateString()}</p>
+                     </div>
+                     <span className={`badge ${task.status === 'completed' ? 'badge-green' : 'badge-yellow'}`}>
+                       {t(`tasks:status.${task.status}`)}
+                     </span>
+                  </div>
+                )) : (
+                  <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">
+                    {t('common:noData')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'treatments' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">{t('treatmentCases:title')}</h3>
+                <button 
+                  onClick={() => setIsTreatmentFormOpen(true)}
+                  className="btn-primary py-1.5 text-xs"
+                >
+                  <Plus size={16} />
+                  {t('treatmentCases:newCase')}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {treatmentCases.length > 0 ? treatmentCases.map(tc => (
+                  <Link 
+                    key={tc.id} 
+                    to={`/treatment-cases/${tc.id}`}
+                    className="card p-4 flex items-center justify-between hover:border-primary-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-primary-50 text-primary-600 rounded-2xl group-hover:bg-primary-600 group-hover:text-white transition-colors">
+                        <Briefcase size={20} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">{tc.title}</p>
+                        <p className="text-xs text-gray-500">{t(`treatmentCases:stages.${tc.stage}`)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-gray-900">{tc.acceptedAmount || tc.estimatedAmount} {tc.currency}</p>
+                      <p className="text-[10px] text-gray-400 uppercase font-bold">
+                        {tc.acceptedAmount ? t('treatmentCases:list.accepted') : t('treatmentCases:list.estimated')}
+                      </p>
+                    </div>
+                  </Link>
+                )) : (
+                  <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">
+                    {t('common:noData')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'payments' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="card p-4 bg-green-50 border-green-100">
+                  <p className="text-[10px] font-bold text-green-600 uppercase mb-1">{t('payments:summary.totalPaid')}</p>
+                  <p className="text-xl font-bold text-green-700">
+                    {payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} {paymentCurrency}
+                  </p>
+                </div>
+                <div className="card p-4 bg-amber-50 border-amber-100">
+                  <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">{t('payments:summary.totalPending')}</p>
+                  <p className="text-xl font-bold text-amber-700">
+                    {payments.filter(p => p.paymentStatus === 'pending').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} {paymentCurrency}
+                  </p>
+                </div>
+                <div className="card p-4 bg-red-50 border-red-100">
+                  <p className="text-[10px] font-bold text-red-600 uppercase mb-1">{t('payments:summary.totalRefunded')}</p>
+                  <p className="text-xl font-bold text-red-700">
+                    {payments.filter(p => p.paymentStatus === 'refunded').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} {paymentCurrency}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">{t('payments:title')}</h3>
+                <button 
+                  onClick={() => setIsPaymentFormOpen(true)}
+                  className="btn-primary py-1.5 text-xs"
+                >
+                  <Plus size={16} />
+                  {t('payments:addPayment')}
+                </button>
+              </div>
+
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="p-3 font-bold text-gray-500">{t('payments:list.amount')}</th>
+                        <th className="p-3 font-bold text-gray-500">{t('payments:list.method')}</th>
+                        <th className="p-3 font-bold text-gray-500">{t('payments:list.status')}</th>
+                        <th className="p-3 font-bold text-gray-500">{t('payments:list.date')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {payments.length > 0 ? payments.map(p => (
+                        <tr key={p.id}>
+                          <td className="p-3 font-bold">{p.amount.toLocaleString()} {p.currency}</td>
+                          <td className="p-3 text-gray-600 capitalize">{p.paymentMethod.replace('_', ' ')}</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
+                              p.paymentStatus === 'paid' ? 'bg-green-50 text-green-700 border-green-100' :
+                              p.paymentStatus === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-gray-50 text-gray-700'
+                            }`}>
+                              {t(`payments:status.${p.paymentStatus}`)}
+                            </span>
+                          </td>
+                          <td className="p-3 text-gray-500">{new Date(p.paidAt).toLocaleDateString()}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-gray-400 italic">{t('payments:empty')}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+          {activeTab === 'insurance' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">{t('insurance:title', { defaultValue: 'Insurance / Provisions' })}</h3>
+                <button onClick={() => setIsInsuranceFormOpen(true)} className="btn-primary py-1.5 text-xs">
+                  <Plus size={16} />
+                  {t('insurance:newProvision', { defaultValue: 'New Provision Request' })}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {insuranceProvisions.length > 0 ? insuranceProvisions.map(provision => (
+                  <Link key={provision.id} to={`/insurance-provisions/${provision.id}`} className="card p-4 flex items-center justify-between hover:border-primary-300 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-primary-50 text-primary-600 rounded-2xl">
+                        <ShieldCheck size={20} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">{provision.insuranceProviderName}</p>
+                        <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`, { defaultValue: provision.insuranceType })} • {provision.treatmentCase?.title || '-'}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="badge badge-blue">{t(`insurance:statuses.${provision.status}`, { defaultValue: provision.status })}</span>
+                      <p className="text-xs text-gray-500 mt-2">{provision.requestedAmount?.toLocaleString()} {provision.currency}</p>
+                    </div>
+                  </Link>
+                )) : (
+                  <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">{t('common:noData')}</div>
+                )}
+              </div>
+            </div>
+          )}
+        {/* Activity Tab */}
+        {activeTab === 'activity' && (
+          <div className="card p-6">
+            <h3 className="font-bold mb-6">{t('patients:detail.activityTimeline')}</h3>
+            <div className="space-y-8 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
+              {patient.activityLogs?.length > 0 ? patient.activityLogs.map((log: any) => (
+                <div key={log.id} className="relative pl-10">
+                  <div className={`absolute left-0 top-1 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center ${
+                    log.action === 'created' ? 'bg-green-500 text-white' : 
+                    log.action === 'updated' ? 'bg-blue-500 text-white' : 
+                    log.action === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'
+                  }`}>
+                    {log.action === 'created' ? <Plus size={14} /> : log.action === 'completed' ? <CheckCircle2 size={14} /> : <Edit2 size={14} />}
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-900 font-medium">{log.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      by {log.user.firstName} {log.user.lastName} • {new Date(log.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center text-gray-400 italic">{t('common:noData')}</div>
+              )}
+            </div>
+          </div>
+        )}
+        </div>
+      </div>
+
+      {isEditOpen && (
+        <PatientForm 
+          patient={patient}
+          onClose={() => setIsEditOpen(false)}
+          onSuccess={() => {
+            setIsEditOpen(false);
+            fetchPatient();
+          }}
+        />
+      )}
+      {isTaskFormOpen && (
+        <TaskForm 
+          patientId={id}
+          onClose={() => setIsTaskFormOpen(false)}
+          onSuccess={() => {
+            setIsTaskFormOpen(false);
+            fetchPatient();
+          }}
+        />
+      )}
+      {isTreatmentFormOpen && (
+        <TreatmentCaseForm 
+          patientId={id}
+          onClose={() => setIsTreatmentFormOpen(false)}
+          onSuccess={() => {
+            setIsTreatmentFormOpen(false);
+            fetchPatient();
+          }}
+        />
+      )}
+      {isPaymentFormOpen && (
+        <PaymentForm 
+          patientId={id}
+          onClose={() => setIsPaymentFormOpen(false)}
+          onSuccess={() => {
+            setIsPaymentFormOpen(false);
+            fetchPatient();
+          }}
+        />
+      )}
+      {isInsuranceFormOpen && (
+        <InsuranceProvisionForm
+          patientId={id}
+          onClose={() => setIsInsuranceFormOpen(false)}
+          onSuccess={() => {
+            setIsInsuranceFormOpen(false);
+            fetchPatient();
+          }}
+        />
+      )}
+
+      {isMessageModalOpen && (
+        <PrepareMessageModal 
+          patientId={id!}
+          onClose={() => setIsMessageModalOpen(false)}
+          onSuccess={() => {
+            setIsMessageModalOpen(false);
+            fetchPatient();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default PatientDetail;

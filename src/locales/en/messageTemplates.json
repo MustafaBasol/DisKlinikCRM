@@ -1,0 +1,33 @@
+{
+  "title": "Message Templates",
+  "subtitle": "Manage pre-defined messages for quick communication.",
+  "addTemplate": "Add Template",
+  "editTemplate": "Edit Template",
+  "fields": {
+    "name": "Template Name",
+    "channel": "Channel",
+    "language": "Language",
+    "subject": "Subject (Optional)",
+    "body": "Message Body",
+    "isActive": "Is Active"
+  },
+  "variables": {
+    "title": "Available Variables",
+    "patient_name": "Patient Name",
+    "clinic_name": "Clinic Name",
+    "appointment_date": "Appointment Date",
+    "appointment_time": "Appointment Time",
+    "practitioner_name": "Practitioner Name",
+    "treatment_title": "Treatment Title",
+    "remaining_balance": "Remaining Balance"
+  },
+  "channels": {
+    "sms": "SMS",
+    "whatsapp": "WhatsApp",
+    "email": "Email"
+  },
+  "seed": {
+    "button": "Seed Default Templates",
+    "success": "Default templates created successfully"
+  }
+}

@@ -1,0 +1,384 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Clinic {
+  id              String   @id @default(uuid())
+  name            String
+  legalName       String?
+  address         String?
+  phone           String?
+  email           String?
+  website         String?
+  timezone        String   @default("UTC")
+  currency        String   @default("USD")
+  defaultLanguage String   @default("en")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users                User[]
+  doctorAvailabilities DoctorAvailability[]
+  patients             Patient[]
+  appointmentTypes     AppointmentType[]
+  appointments         Appointment[]
+  appointmentRequests  AppointmentRequest[]
+  treatmentCases       TreatmentCase[]
+  tasks                Task[]
+  payments             Payment[]
+  insuranceProvisions  InsuranceProvision[]
+  messageTemplates     MessageTemplate[]
+  sentMessages         SentMessage[]
+  activityLogs         ActivityLog[]
+  settings             Setting[]
+}
+
+model User {
+  id           String    @id @default(uuid())
+  clinicId     String
+  clinic       Clinic    @relation(fields: [clinicId], references: [id])
+  firstName    String
+  lastName     String
+  email        String    @unique
+  phone        String?
+  role         String // admin, doctor, receptionist, billing
+  passwordHash String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tasksCreated        Task[]               @relation("TaskCreator")
+  tasksAssigned       Task[]               @relation("TaskAssignee")
+  appointments        Appointment[]        @relation("Practitioner")
+  appointmentRequests AppointmentRequest[] @relation("AppointmentRequestPractitioner")
+  availabilities      DoctorAvailability[] @relation("DoctorAvailability")
+  treatmentCases      TreatmentCase[]      @relation("Practitioner")
+  insuranceAssigned   InsuranceProvision[] @relation("InsuranceAssignedTo")
+  insuranceCreated    InsuranceProvision[] @relation("InsuranceCreatedBy")
+  sentMessages        SentMessage[]
+  createdTemplates    MessageTemplate[]    @relation("TemplateCreator")
+  activityLogs        ActivityLog[]
+}
+
+model DoctorAvailability {
+  id             String   @id @default(uuid())
+  clinicId       String
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  practitionerId String
+  practitioner   User     @relation("DoctorAvailability", fields: [practitionerId], references: [id])
+  weekday        Int // 0 Sunday, 1 Monday, ... 6 Saturday
+  startTime      String // HH:mm
+  endTime        String // HH:mm
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([clinicId, practitionerId, weekday])
+}
+
+model Patient {
+  id                   String    @id @default(uuid())
+  clinicId             String
+  clinic               Clinic    @relation(fields: [clinicId], references: [id])
+  firstName            String
+  lastName             String
+  email                String?
+  phone                String?
+  dateOfBirth          DateTime?
+  address              String?
+  city                 String?
+  postalCode           String?
+  country              String?
+  patientStatus        String    @default("new") // new, active, inactive, archived
+  source               String? // google, referral, social_media, etc.
+  notes                String?
+  communicationConsent Boolean   @default(false)
+  marketingConsent     Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  appointments        Appointment[]
+  appointmentRequests AppointmentRequest[]
+  treatmentCases      TreatmentCase[]
+  tasks               Task[]
+  payments            Payment[]
+  insuranceProvisions InsuranceProvision[]
+  sentMessages        SentMessage[]
+  activityLogs        ActivityLog[]
+}
+
+model AppointmentType {
+  id              String   @id @default(uuid())
+  clinicId        String
+  clinic          Clinic   @relation(fields: [clinicId], references: [id])
+  name            String
+  durationMinutes Int
+  color           String?
+  isActive        Boolean  @default(true)
+  category        String?
+  description     String?
+  basePrice       Float?
+  currency        String?
+  isService       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  appointments        Appointment[]
+  appointmentRequests AppointmentRequest[]
+  treatmentCases      TreatmentCase[]
+}
+
+model Appointment {
+  id                 String          @id @default(uuid())
+  clinicId           String
+  clinic             Clinic          @relation(fields: [clinicId], references: [id])
+  patientId          String
+  patient            Patient         @relation(fields: [patientId], references: [id])
+  practitionerId     String
+  practitioner       User            @relation("Practitioner", fields: [practitionerId], references: [id])
+  appointmentTypeId  String
+  appointmentType    AppointmentType @relation(fields: [appointmentTypeId], references: [id])
+  title              String?
+  startTime          DateTime
+  endTime            DateTime
+  status             String          @default("scheduled") // scheduled, confirmed, completed, cancelled, etc.
+  notes              String?
+  cancellationReason String?
+  noShowReason       String?
+  createdById        String?
+  updatedById        String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  deletedAt          DateTime?
+
+  tasks          Task[]
+  sentMessages   SentMessage[]
+  activityLogs   ActivityLog[]
+  sourceRequests AppointmentRequest[] @relation("ConvertedAppointment")
+}
+
+model AppointmentRequest {
+  id                     String           @id @default(uuid())
+  clinicId               String
+  clinic                 Clinic           @relation(fields: [clinicId], references: [id])
+  patientId              String?
+  patient                Patient?         @relation(fields: [patientId], references: [id])
+  patientName            String
+  phone                  String
+  email                  String?
+  appointmentTypeId      String?
+  appointmentType        AppointmentType? @relation(fields: [appointmentTypeId], references: [id])
+  practitionerId         String?
+  practitioner           User?            @relation("AppointmentRequestPractitioner", fields: [practitionerId], references: [id])
+  preferredStartTime     DateTime?
+  preferredEndTime       DateTime?
+  requestType            String           @default("appointment") // appointment, reschedule, cancel, info
+  source                 String           @default("whatsapp")
+  status                 String           @default("pending") // pending, approved, rejected, converted, closed
+  rawMessage             String?
+  notes                  String?
+  rejectionReason        String?
+  convertedAppointmentId String?
+  convertedAppointment   Appointment?     @relation("ConvertedAppointment", fields: [convertedAppointmentId], references: [id])
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  @@index([clinicId, status, createdAt])
+  @@index([clinicId, phone])
+  @@index([clinicId, practitionerId])
+}
+
+model TreatmentCase {
+  id                String           @id @default(uuid())
+  clinicId          String
+  clinic            Clinic           @relation(fields: [clinicId], references: [id])
+  patientId         String
+  patient           Patient          @relation(fields: [patientId], references: [id])
+  practitionerId    String?
+  practitioner      User?            @relation("Practitioner", fields: [practitionerId], references: [id])
+  appointmentTypeId String?
+  appointmentType   AppointmentType? @relation(fields: [appointmentTypeId], references: [id])
+  title             String
+  description       String?
+  stage             String           @default("new") // new, quote_sent, in_progress, completed, lost
+  estimatedAmount   Float?
+  acceptedAmount    Float?
+  currency          String?
+  expectedStartDate DateTime?
+  closedAt          DateTime?
+  lostReason        String?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  tasks               Task[]
+  payments            Payment[]
+  insuranceProvisions InsuranceProvision[]
+  sentMessages        SentMessage[]
+  activityLogs        ActivityLog[]
+}
+
+model InsuranceProvision {
+  id                          String         @id @default(uuid())
+  clinicId                    String
+  clinic                      Clinic         @relation(fields: [clinicId], references: [id])
+  patientId                   String
+  patient                     Patient        @relation(fields: [patientId], references: [id])
+  treatmentCaseId             String?
+  treatmentCase               TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  insuranceProviderName       String
+  insuranceType               String
+  policyNumber                String?
+  provisionNumber             String?
+  status                      String         @default("draft")
+  requestedAmount             Float
+  approvedAmount              Float?
+  patientResponsibilityAmount Float?
+  currency                    String         @default("TRY")
+  submittedAt                 DateTime?
+  respondedAt                 DateTime?
+  rejectionReason             String?
+  notes                       String?
+  assignedToId                String?
+  assignedTo                  User?          @relation("InsuranceAssignedTo", fields: [assignedToId], references: [id])
+  createdById                 String
+  createdBy                   User           @relation("InsuranceCreatedBy", fields: [createdById], references: [id])
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
+
+  activityLogs ActivityLog[]
+}
+
+model Task {
+  id              String         @id @default(uuid())
+  clinicId        String
+  clinic          Clinic         @relation(fields: [clinicId], references: [id])
+  patientId       String?
+  patient         Patient?       @relation(fields: [patientId], references: [id])
+  treatmentCaseId String?
+  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  appointmentId   String?
+  appointment     Appointment?   @relation(fields: [appointmentId], references: [id])
+  assignedToId    String?
+  assignedTo      User?          @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdById     String
+  createdBy       User           @relation("TaskCreator", fields: [createdById], references: [id])
+  title           String
+  description     String?
+  dueDate         DateTime?
+  status          String         @default("open") // open, in_progress, completed, cancelled
+  priority        String         @default("normal") // low, normal, high, urgent
+  completedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Payment {
+  id              String         @id @default(uuid())
+  clinicId        String
+  clinic          Clinic         @relation(fields: [clinicId], references: [id])
+  patientId       String
+  patient         Patient        @relation(fields: [patientId], references: [id])
+  treatmentCaseId String?
+  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  amount          Float
+  currency        String
+  paymentMethod   String // cash, card, bank_transfer, etc.
+  paymentStatus   String         @default("pending") // pending, partial, paid, refunded, cancelled
+  paidAt          DateTime?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  sentMessages SentMessage[]
+}
+
+model MessageTemplate {
+  id        String   @id @default(uuid())
+  clinicId  String
+  clinic    Clinic   @relation(fields: [clinicId], references: [id])
+  name      String
+  channel   String // sms, whatsapp, email
+  subject   String?
+  body      String
+  language  String   @default("en")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdById String?
+  createdBy   User?   @relation("TemplateCreator", fields: [createdById], references: [id])
+
+  sentMessages SentMessage[]
+}
+
+model SentMessage {
+  id                String           @id @default(uuid())
+  clinicId          String
+  clinic            Clinic           @relation(fields: [clinicId], references: [id])
+  patientId         String
+  patient           Patient          @relation(fields: [patientId], references: [id])
+  appointmentId     String?
+  appointment       Appointment?     @relation(fields: [appointmentId], references: [id])
+  treatmentCaseId   String?
+  treatmentCase     TreatmentCase?   @relation(fields: [treatmentCaseId], references: [id])
+  paymentId         String?
+  payment           Payment?         @relation(fields: [paymentId], references: [id])
+  templateId        String?
+  template          MessageTemplate? @relation(fields: [templateId], references: [id])
+  channel           String
+  recipient         String
+  subject           String?
+  body              String
+  status            String           @default("prepared") // prepared, sent, failed, delivered, read
+  providerMessageId String?
+  sentAt            DateTime?
+  createdById       String?
+  createdBy         User?            @relation(fields: [createdById], references: [id])
+  createdAt         DateTime         @default(now())
+}
+
+model ActivityLog {
+  id                   String   @id @default(uuid())
+  clinicId             String
+  clinic               Clinic   @relation(fields: [clinicId], references: [id])
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id])
+  entityType           String
+  entityId             String // Legacy or general fallback
+  patientId            String?
+  appointmentId        String?
+  treatmentCaseId      String?
+  insuranceProvisionId String?
+  action               String
+  description          String?
+  metadataJson         String?
+  ipAddress            String?
+  userAgent            String?
+  createdAt            DateTime @default(now())
+
+  patient            Patient?            @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointment        Appointment?        @relation(fields: [appointmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatmentCase      TreatmentCase?      @relation(fields: [treatmentCaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  insuranceProvision InsuranceProvision? @relation(fields: [insuranceProvisionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  clinicId  String
+  clinic    Clinic   @relation(fields: [clinicId], references: [id])
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clinicId, key])
+}

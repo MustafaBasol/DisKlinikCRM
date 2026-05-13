@@ -1,0 +1,26 @@
+{
+  "welcome": "Tekrar hoş geldiniz, {{name}}",
+  "subtitle": "Bugün Aile Diş operasyonlarında neler olduğunu hızlıca görün.",
+  "todayAppointments": "Bugünkü Randevular",
+  "newPatients": "Yeni Hastalar (30g)",
+  "monthlyRevenue": "Bu Ayki Gelir",
+  "pendingCollections": "Bekleyen Tahsilatlar",
+  "todayAgenda": "Günlük Ajanda",
+  "activityFeed": "Son Aktiviteler",
+  "viewFullLogs": "Tüm aktivite kayıtlarını gör",
+  "noAgendaToday": "Bugün için planlanmış randevu bulunmuyor.",
+  "noShowsMonth": "Bu Ayki Gelmeyenler",
+  "openTreatments": "Açık Tedavi Dosyaları",
+  "preparedMessages": "Hazırlanan Mesajlar (Hafta)",
+  "stats": {
+    "weekTotal": "Bu hafta {{count}} randevu",
+    "monthTrend": "Bu ay yükselişte",
+    "revenueGoal": "Onaylanan tedavilere göre",
+    "actionRequired": "Takip gerekiyor"
+  },
+  "alerts": {
+    "overdueTasks": "Gecikmiş Takipler",
+    "noShowFollowUp": "Aranacak Randevular",
+    "pendingCollections": "Ödenmemiş Bakiyeler"
+  }
+}

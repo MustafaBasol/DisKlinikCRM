@@ -1,0 +1,52 @@
+{
+  "title": "Hastalar",
+  "subtitle": "Aile Diş hasta kayıtlarını, iletişim bilgilerini ve randevu geçmişini yönetin.",
+  "addPatient": "Hasta Ekle",
+  "editPatient": "Hastayı Düzenle",
+  "searchPlaceholder": "İsim, e-posta veya telefon ile ara...",
+  "includeArchived": "Arşivlenmişleri Dahil Et",
+  "noPatientsFound": "Arama kriterlerine uygun hasta bulunamadı.",
+  "list": {
+    "name": "Hasta Adı",
+    "contact": "İletişim Bilgisi",
+    "status": "Durum",
+    "createdAt": "Kayıt Tarihi"
+  },
+  "detail": {
+    "backToList": "Hastalara Dön",
+    "profileSummary": "Profil Özeti",
+    "consents": "Onaylar ve Kaynak",
+    "nextAppointment": "Sıradaki Randevu",
+    "history": "Randevu Geçmişi",
+    "activityTimeline": "İşlem Geçmişi"
+  },
+  "form": {
+    "firstName": "Ad",
+    "lastName": "Soyad",
+    "email": "E-posta Adresi",
+    "phone": "Telefon Numarası",
+    "dob": "Doğum Tarihi",
+    "status": "Hasta Durumu",
+    "source": "Kaynak",
+    "communicationConsent": "Hasta iletişim izni veriyor",
+    "marketingConsent": "Hasta pazarlama mesajları izni veriyor"
+  },
+  "status": {
+    "all": "Tüm Durumlar",
+    "new": "Yeni",
+    "active": "Aktif",
+    "inactive": "Pasif",
+    "archived": "Arşivlenmiş"
+  },
+  "source": {
+    "google": "Google",
+    "referral": "Tavsiye",
+    "social_media": "Sosyal Medya",
+    "instagram": "Instagram",
+    "website": "Web Sitesi",
+    "phone": "Telefon",
+    "walk_in": "Doğrudan Başvuru",
+    "doctolib": "Doctolib",
+    "other": "Diğer"
+  }
+}

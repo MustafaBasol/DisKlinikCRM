@@ -1,0 +1,60 @@
+{
+  "title": "Ödemeler ve Tahsilatlar",
+  "subtitle": "Klinik gelirlerini ve hasta ödeme geçmişini takip edin.",
+  "addPayment": "Ödeme Ekle",
+  "editPayment": "Ödemeyi Düzenle",
+  "summary": {
+    "totalPaid": "Toplam Ödenen",
+    "totalPending": "Toplam Bekleyen",
+    "totalRefunded": "Toplam İade",
+    "remaining": "Kalan Bakiye",
+    "totalCollected": "Toplam Tahsilat",
+    "pending": "Bekleyen",
+    "transactions": "İşlemler",
+    "average": "Ortalama",
+    "totalRecords": "Toplam kayıt",
+    "perTransaction": "İşlem başına",
+    "awaitingPayment": "Ödeme bekleniyor",
+    "fromPaidRecords": "Ödenmiş kayıtlardan"
+  },
+  "filters": {
+    "allStatus": "Tüm Durumlar",
+    "allMethods": "Tüm Yöntemler",
+    "dateRange": "Tarih Aralığı"
+  },
+  "status": {
+    "pending": "Bekliyor",
+    "partial": "Kısmi Ödeme",
+    "paid": "Ödendi",
+    "refunded": "İade Edildi",
+    "cancelled": "İptal Edildi"
+  },
+  "methods": {
+    "cash": "Nakit",
+    "card": "Kredi/Banka Kartı",
+    "bank_transfer": "Banka Havalesi",
+    "cheque": "Çek",
+    "other": "Diğer"
+  },
+  "list": {
+    "patient": "Hasta",
+    "treatment": "Tedavi",
+    "amount": "Tutar",
+    "method": "Yöntem",
+    "status": "Durum",
+    "date": "Ödeme Tarihi"
+  },
+  "form": {
+    "patient": "Hasta",
+    "treatment": "Tedavi Dosyası",
+    "amount": "Tutar",
+    "currency": "Para Birimi",
+    "method": "Ödeme Yöntemi",
+    "status": "Durum",
+    "paidAt": "Ödeme Tarihi",
+    "notes": "Notlar"
+  },
+  "confirmCancel": "Bu ödeme iptal edilsin mi?",
+  "empty": "Ödeme kaydı bulunmuyor.",
+  "noRelatedPayments": "İlgili ödeme bulunmuyor."
+}

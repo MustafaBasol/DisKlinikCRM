@@ -1,0 +1,30 @@
+{
+  "title": "Patients",
+  "subtitle": "Gérez les dossiers et l'historique des patients de votre clinique.",
+  "addPatient": "Ajouter un patient",
+  "editPatient": "Modifier le patient",
+  "searchPlaceholder": "Rechercher par nom, e-mail ou téléphone...",
+  "includeArchived": "Inclure les archivés",
+  "list": {
+    "name": "Nom du patient",
+    "contact": "Coordonnées",
+    "status": "Statut",
+    "createdAt": "Créé le"
+  },
+  "status": {
+    "all": "Tous les statuts",
+    "new": "Nouveau",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "archived": "Archivé"
+  },
+  "source": {
+    "google": "Google",
+    "referral": "Recommandation",
+    "social_media": "Réseaux sociaux",
+    "website": "Site web",
+    "walk_in": "Sans rendez-vous",
+    "doctolib": "Doctolib",
+    "other": "Autre"
+  }
+}

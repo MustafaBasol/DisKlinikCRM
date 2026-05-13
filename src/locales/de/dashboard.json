@@ -1,0 +1,17 @@
+{
+  "welcome": "Willkommen zurück, {{name}}",
+  "subtitle": "Hier ist, was heute passiert.",
+  "todayAppointments": "Heutige Termine",
+  "newPatients": "Neue Patienten",
+  "pendingTasks": "Anstehende Aufgaben",
+  "monthlyRevenue": "Monatlicher Umsatz",
+  "pendingCollections": "Ausstehende Inkassos",
+  "quickTasks": "Schnelle Aufgaben",
+  "activityFeed": "Aktivitäts-Feed",
+  "stats": {
+    "trendUp": "+{{count}} seit gestern",
+    "trendDown": "-{{count}} seit gestern",
+    "monthTrend": "{{count}}% in diesem Monat",
+    "actionRequired": "Handlung erforderlich"
+  }
+}

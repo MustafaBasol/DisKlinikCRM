@@ -1,0 +1,9 @@
+{
+  "unexpected": "An unexpected error occurred. Please try again.",
+  "accessDenied": "Access denied. You do not have permission for this action.",
+  "notFound": "Resource not found.",
+  "PATIENT_NOT_FOUND": "Patient not found.",
+  "ACCESS_DENIED": "Access denied.",
+  "VALIDATION_ERROR": "Validation error.",
+  "APPOINTMENT_OVERLAP": "Appointment overlaps with another booking."
+}

@@ -1,0 +1,33 @@
+{
+  "title": "Klinik Hizmetleri",
+  "fields": {
+    "name": "Hizmet",
+    "category": "Kategori",
+    "description": "Açıklama",
+    "duration": "Süre",
+    "durationMinutes": "Süre (dk)",
+    "basePrice": "Temel Fiyat",
+    "currency": "Para Birimi",
+    "status": "Durum",
+    "color": "Renk"
+  },
+  "status": {
+    "active": "Aktif",
+    "inactive": "Pasif"
+  },
+  "actions": {
+    "edit": "Hizmeti Düzenle",
+    "save": "Hizmeti Kaydet",
+    "deactivate": "Pasifleştir",
+    "reactivate": "Aktifleştir"
+  },
+  "placeholders": {
+    "name": "örn. İmplant Tedavisi",
+    "category": "örn. Cerrahi, Estetik",
+    "description": "Kısa dahili açıklama"
+  },
+  "errors": {
+    "loadFailed": "Hizmetler yüklenemedi",
+    "validationFailed": "Doğrulama başarısız. Lütfen alanları kontrol edin."
+  }
+}

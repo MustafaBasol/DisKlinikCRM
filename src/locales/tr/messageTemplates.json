@@ -1,0 +1,33 @@
+{
+  "title": "Mesaj Şablonları",
+  "subtitle": "Hızlı iletişim için önceden tanımlanmış mesajları yönetin.",
+  "addTemplate": "Şablon Ekle",
+  "editTemplate": "Şablonu Düzenle",
+  "fields": {
+    "name": "Şablon Adı",
+    "channel": "Kanal",
+    "language": "Dil",
+    "subject": "Konu (Opsiyonel)",
+    "body": "Mesaj İçeriği",
+    "isActive": "Aktif mi"
+  },
+  "variables": {
+    "title": "Kullanılabilir Değişkenler",
+    "patient_name": "Hasta Adı",
+    "clinic_name": "Klinik Adı",
+    "appointment_date": "Randevu Tarihi",
+    "appointment_time": "Randevu Saati",
+    "practitioner_name": "Doktor Adı",
+    "treatment_title": "Tedavi Başlığı",
+    "remaining_balance": "Kalan Bakiye"
+  },
+  "channels": {
+    "sms": "SMS",
+    "whatsapp": "WhatsApp",
+    "email": "E-posta"
+  },
+  "seed": {
+    "button": "Varsayılan Şablonları Yükle",
+    "success": "Varsayılan şablonlar başarıyla oluşturuldu"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "title": "Tedavi ve Hizmetler",
+  "subtitle": "Hizmet fırsatlarını ve hasta tedavi süreçlerini takip edin.",
+  "newCase": "Yeni Tedavi Dosyası",
+  "editCase": "Tedaviyi Düzenle",
+  "detailTitle": "Tedavi Dosyası Detayları",
+  "filters": {
+    "allStages": "Tüm Aşamalar",
+    "openOnly": "Sadece Açık",
+    "closedOnly": "Sadece Kapalı",
+    "allPractitioners": "Tüm Hekimler"
+  },
+  "summary": {
+    "pipelineValue": "Pipeline Değeri",
+    "activeOpportunities": "{{count}} aktif fırsat",
+    "active": "Aktif",
+    "closed": "Kapandı",
+    "casesInProgress": "Devam eden dosyalar",
+    "successfullyCompleted": "Başarıyla tamamlandı"
+  },
+  "stages": {
+    "new": "Yeni Fırsat",
+    "consultation_scheduled": "Konsültasyon Planlandı",
+    "consultation_done": "Konsültasyon Yapıldı",
+    "quote_sent": "Teklif Gönderildi",
+    "waiting_patient_decision": "Karar Bekleniyor",
+    "accepted": "Kabul Edildi",
+    "in_progress": "Devam Ediyor",
+    "completed": "Tamamlandı",
+    "lost": "Kaybedildi"
+  },
+  "list": {
+    "title": "Tedavi Başlığı",
+    "patient": "Hasta",
+    "practitioner": "Hekim",
+    "stage": "Aşama",
+    "estimated": "Tahmini",
+    "accepted": "Kabul Edilen",
+    "startDate": "Beklenen Başlangıç",
+    "updated": "Son Güncelleme"
+  },
+  "form": {
+    "title": "Dosya Başlığı",
+    "description": "Açıklama",
+    "patient": "Hasta",
+    "practitioner": "Hekim",
+    "stage": "Aşama",
+    "estimatedAmount": "Tahmini Tutar",
+    "acceptedAmount": "Kabul Edilen Tutar",
+    "currency": "Para Birimi",
+    "expectedStartDate": "Beklenen Başlangıç Tarihi",
+    "lostReason": "Kaybetme Nedeni"
+    ,
+    "lostReasonRequired": "Kaybetme nedeni gereklidir.",
+    "noSpecificService": "Belirli hizmet yok"
+  },
+  "actions": {
+    "changeStage": "Aşamayı Değiştir",
+    "markAccepted": "Kabul Edildi İşaretle",
+    "markCompleted": "Tamamlandı İşaretle",
+    "markLost": "Kaybedildi İşaretle",
+    "viewDetails": "Detayları Gör"
+  }
+}

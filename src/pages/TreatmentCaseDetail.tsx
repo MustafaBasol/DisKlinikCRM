@@ -1,0 +1,565 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Briefcase, 
+  User, 
+  Stethoscope, 
+  Calendar, 
+  DollarSign, 
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  AlertCircle, 
+  Edit2, 
+  Loader2,
+  ClipboardList,
+  Plus,
+  TrendingUp,
+  FileText,
+  MessageSquare
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { treatmentCaseService, paymentService, insuranceProvisionService } from '../services/api';
+import TreatmentCaseForm from '../components/TreatmentCaseForm';
+import TaskForm from '../components/TaskForm';
+import PaymentForm from '../components/PaymentForm';
+import PrepareMessageModal from '../components/PrepareMessageModal';
+import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
+
+const TreatmentCaseDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { t } = useTranslation(['treatmentCases', 'common', 'tasks', 'appointments', 'messages', 'insurance', 'payments']);
+  
+  const [tCase, setTCase] = useState<any>(null);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [insuranceProvisions, setInsuranceProvisions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
+  const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
+  const [paymentInitialData, setPaymentInitialData] = useState<any>(null);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDetail = async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const res = await treatmentCaseService.getById(id);
+      setTCase(res.data);
+      
+      const payRes = await paymentService.getAll({ treatmentCaseId: id });
+      setPayments(payRes.data);
+
+      const insuranceRes = await insuranceProvisionService.getAll({ treatment_case_id: id });
+      setInsuranceProvisions(insuranceRes.data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to fetch details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDetail();
+  }, [id]);
+
+  const handleStageUpdate = async (stage: string) => {
+    if (!tCase) return;
+    
+    let lostReason = '';
+    if (stage === 'lost') {
+      const reason = window.prompt(t('treatmentCases:form.lostReason'));
+      if (!reason) return;
+      lostReason = reason;
+    }
+
+    try {
+      await treatmentCaseService.updateStage(tCase.id, stage, lostReason);
+      fetchDetail();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Update failed');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="animate-spin text-primary-600" size={48} />
+      </div>
+    );
+  }
+
+  if (error || !tCase) {
+    return (
+      <div className="card p-12 text-center text-red-600">
+        <AlertCircle className="mx-auto mb-4" size={48} />
+        <p className="text-xl font-bold">{error || 'Treatment Case not found'}</p>
+        <button onClick={() => navigate('/treatment-cases')} className="mt-4 btn-secondary">
+          Back to Pipeline
+        </button>
+      </div>
+    );
+  }
+
+  const stages = [
+    'new', 'consultation_scheduled', 'consultation_done', 
+    'quote_sent', 'waiting_patient_decision', 'accepted', 
+    'in_progress', 'completed'
+  ];
+
+  const currentStageIndex = stages.indexOf(tCase.stage);
+  const provisionTotals = insuranceProvisions.reduce((totals, provision) => ({
+    requested: totals.requested + (provision.requestedAmount || 0),
+    approved: totals.approved + (provision.approvedAmount || 0),
+    patientResponsibility: totals.patientResponsibility + (provision.patientResponsibilityAmount || 0),
+  }), { requested: 0, approved: 0, patientResponsibility: 0 });
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => navigate('/treatment-cases')}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+          >
+            <ArrowLeft size={24} />
+          </button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">{tCase.title}</h1>
+              <span className={`badge ${
+                tCase.stage === 'completed' ? 'badge-green' : 
+                tCase.stage === 'lost' ? 'badge-red' : 'badge-blue'
+              }`}>
+                {t(`treatmentCases:stages.${tCase.stage}`)}
+              </span>
+            </div>
+            <p className="text-gray-500 mt-1 flex items-center gap-2 text-sm">
+              <Briefcase size={14} />
+              {t('treatmentCases:detailTitle')} • {tCase.patient.firstName} {tCase.patient.lastName}
+              {tCase.appointmentType && (
+                <>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-primary-600 font-medium">{t('treatmentCases:service')}: {tCase.appointmentType.name}</span>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {tCase.stage !== 'completed' && tCase.stage !== 'lost' && (
+            <>
+              <button 
+                onClick={() => handleStageUpdate('accepted')}
+                className="btn-secondary text-green-600 border-green-200 hover:bg-green-50"
+              >
+                <CheckCircle2 size={18} />
+                {t('treatmentCases:actions.markAccepted')}
+              </button>
+              <button 
+                onClick={() => handleStageUpdate('lost')}
+                className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+              >
+                <XCircle size={18} />
+                {t('treatmentCases:actions.markLost')}
+              </button>
+            </>
+          )}
+          <button 
+            onClick={() => setIsMessageModalOpen(true)}
+            className="btn-secondary"
+          >
+            <MessageSquare size={18} />
+            {t('messages:prepare', { defaultValue: 'Prepare Follow-up' })}
+          </button>
+          <button onClick={() => setIsEditOpen(true)} className="btn-primary">
+            <Edit2 size={18} />
+            {t('common:edit')}
+          </button>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      {tCase.stage !== 'lost' && (
+        <div className="card p-6 bg-gray-50 border-none">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('treatmentCases:form.stage')}</h3>
+            <span className="text-xs font-bold text-primary-600">
+              {Math.round(((currentStageIndex + 1) / stages.length) * 100)}% Complete
+            </span>
+          </div>
+          <div className="flex gap-2 h-2">
+            {stages.map((s, i) => (
+              <div 
+                key={s}
+                className={`flex-1 rounded-full transition-all duration-500 ${
+                  i <= currentStageIndex ? 'bg-primary-500' : 'bg-gray-200'
+                }`}
+              />
+            ))}
+          </div>
+          <div className="flex justify-between mt-4 overflow-x-auto gap-4 no-scrollbar">
+            {stages.map((s, i) => (
+              <div key={s} className={`text-[10px] font-bold text-center min-w-[80px] ${
+                i === currentStageIndex ? 'text-primary-600' : 
+                i < currentStageIndex ? 'text-gray-400' : 'text-gray-300'
+              }`}>
+                {t(`treatmentCases:stages.${s}`)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tCase.stage === 'lost' && (
+        <div className="card p-6 bg-red-50 border-red-100 flex items-start gap-4">
+          <div className="p-3 bg-red-100 rounded-2xl text-red-600">
+            <XCircle size={24} />
+          </div>
+          <div>
+            <h3 className="font-bold text-red-900">{t('treatmentCases:stages.lost')}</h3>
+            <p className="text-red-700 mt-1">{t('treatmentCases:form.lostReason')}: {tCase.lostReason}</p>
+            {tCase.closedAt && (
+              <p className="text-xs text-red-500 mt-2">Closed on {new Date(tCase.closedAt).toLocaleDateString()}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column - Financial & Summary */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="card p-6 space-y-6">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              <DollarSign size={20} className="text-primary-500" />
+              Financial Summary
+            </h3>
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                <p className="text-xs font-bold text-gray-400 uppercase">{t('treatmentCases:form.estimatedAmount')}</p>
+                <p className="text-2xl font-bold text-gray-900">{tCase.estimatedAmount?.toLocaleString()} <span className="text-sm font-normal text-gray-500">{tCase.currency}</span></p>
+              </div>
+              <div className="p-4 rounded-2xl bg-primary-50 border border-primary-100">
+                <p className="text-xs font-bold text-primary-400 uppercase">{t('treatmentCases:form.acceptedAmount')}</p>
+                <p className="text-2xl font-bold text-primary-700">{tCase.acceptedAmount?.toLocaleString()} <span className="text-sm font-normal text-primary-500">{tCase.currency}</span></p>
+              </div>
+              <div className="p-4 rounded-2xl bg-green-50 border border-green-100">
+                <p className="text-xs font-bold text-green-400 uppercase">{t('payments:summary.totalPaid')}</p>
+                <p className="text-xl font-bold text-green-700">
+                  {payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} <span className="text-sm font-normal text-green-500">{tCase.currency}</span>
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                <p className="text-xs font-bold text-amber-400 uppercase">{t('payments:summary.remaining')}</p>
+                <p className="text-xl font-bold text-amber-700">
+                  {( (tCase.acceptedAmount || tCase.estimatedAmount || 0) - payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0) ).toLocaleString()} <span className="text-sm font-normal text-amber-500">{tCase.currency}</span>
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100">
+                <p className="text-xs font-bold text-blue-400 uppercase">{t('insurance:summary.patientResponsibility')}</p>
+                <p className="text-xl font-bold text-blue-700">{provisionTotals.patientResponsibility.toLocaleString()} <span className="text-sm font-normal text-blue-500">{tCase.currency || 'TRY'}</span></p>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-gray-50 space-y-3">
+              <div className="flex items-center gap-3 text-sm">
+                <Calendar size={16} className="text-gray-400" />
+                <span className="text-gray-600">{t('treatmentCases:form.expectedStartDate')}:</span>
+                <span className="font-bold">{tCase.expectedStartDate ? new Date(tCase.expectedStartDate).toLocaleDateString() : t('common:noData')}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Clock size={16} className="text-gray-400" />
+                <span className="text-gray-600">{t('common:updated')}:</span>
+                <span className="font-bold">{new Date(tCase.updatedAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card p-6">
+            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <User size={20} className="text-primary-500" />
+              Stakeholders
+            </h3>
+            <div className="space-y-6">
+              <Link to={`/patients/${tCase.patientId}`} className="flex items-center gap-3 group">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
+                  {tCase.patient.firstName[0]}{tCase.patient.lastName[0]}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900 group-hover:text-primary-600 transition-colors">{tCase.patient.firstName} {tCase.patient.lastName}</p>
+                  <p className="text-xs text-gray-500">{t('treatmentCases:form.patient')}</p>
+                </div>
+              </Link>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center text-primary-600">
+                  <Stethoscope size={20} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">
+                    {tCase.practitioner ? `Dt. ${tCase.practitioner.firstName} ${tCase.practitioner.lastName}` : t('common:unassigned')}
+                  </p>
+                  <p className="text-xs text-gray-500">{t('treatmentCases:form.practitioner')}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column - Tabs & Activities */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Description */}
+          <div className="card p-6">
+            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <FileText size={20} className="text-primary-500" />
+              {t('treatmentCases:form.description')}
+            </h3>
+            <p className="text-gray-600 whitespace-pre-wrap">{tCase.description || 'No description provided.'}</p>
+          </div>
+
+          {/* Related Items Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Appointments */}
+            <div className="card overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-sm flex items-center gap-2">
+                  <Calendar size={16} className="text-gray-400" />
+                  {t('common:appointments')}
+                </h3>
+                <Link to="/appointments" className="text-[10px] font-bold text-primary-600 uppercase hover:underline">View All</Link>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {tCase.appointments?.length > 0 ? tCase.appointments.map((a: any) => (
+                  <div key={a.id} className="p-3 text-sm flex justify-between">
+                    <div>
+                      <p className="font-bold">{a.appointmentType.name}</p>
+                      <p className="text-xs text-gray-500">{new Date(a.startTime).toLocaleDateString()}</p>
+                    </div>
+                    <span className="badge badge-blue h-fit text-[10px]">{a.status}</span>
+                  </div>
+                )) : (
+                  <p className="p-6 text-center text-gray-400 text-xs italic">No related appointments.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Tasks */}
+            <div className="card overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-sm flex items-center gap-2">
+                  <ClipboardList size={16} className="text-gray-400" />
+                  {t('common:tasks')}
+                </h3>
+                <button onClick={() => setIsTaskFormOpen(true)} className="p-1 hover:bg-white rounded transition-colors text-primary-600">
+                  <Plus size={16} />
+                </button>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {tCase.tasks?.length > 0 ? tCase.tasks.map((tk: any) => (
+                  <div key={tk.id} className="p-3 text-sm flex justify-between items-center">
+                    <div>
+                      <p className={`font-bold ${tk.status === 'completed' ? 'line-through text-gray-400' : ''}`}>{tk.title}</p>
+                      <p className="text-xs text-gray-500">{new Date(tk.dueDate).toLocaleDateString()}</p>
+                    </div>
+                    <div className={`w-2 h-2 rounded-full ${tk.status === 'completed' ? 'bg-green-400' : 'bg-blue-400'}`}></div>
+                  </div>
+                )) : (
+                  <p className="p-6 text-center text-gray-400 text-xs italic">No related tasks.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Payments List */}
+            <div className="card overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-sm flex items-center gap-2">
+                  <DollarSign size={16} className="text-gray-400" />
+                  {t('payments:title')}
+                </h3>
+                <button onClick={() => setIsPaymentFormOpen(true)} className="p-1 hover:bg-white rounded transition-colors text-primary-600">
+                  <Plus size={16} />
+                </button>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {payments.length > 0 ? payments.map((p: any) => (
+                  <div key={p.id} className="p-3 text-sm flex justify-between items-center">
+                    <div>
+                      <p className="font-bold">{p.amount.toLocaleString()} {p.currency}</p>
+                      <p className="text-[10px] text-gray-500 capitalize">{p.paymentMethod.replace('_', ' ')} • {new Date(p.paidAt).toLocaleDateString()}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
+                      p.paymentStatus === 'paid' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      {t(`payments:status.${p.paymentStatus}`)}
+                    </span>
+                  </div>
+                )) : (
+                  <p className="p-6 text-center text-gray-400 text-xs italic">{t('payments:noRelatedPayments')}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Insurance Provisions */}
+            <div className="card overflow-hidden md:col-span-2">
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-sm flex items-center gap-2">
+                  <FileText size={16} className="text-gray-400" />
+                  {t('insurance:title')}
+                </h3>
+                <button onClick={() => setIsInsuranceFormOpen(true)} className="p-1 hover:bg-white rounded transition-colors text-primary-600">
+                  <Plus size={16} />
+                </button>
+              </div>
+              <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3 border-b border-gray-50">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.requestedAmount')}</p>
+                  <p className="font-bold">{provisionTotals.requested.toLocaleString()} {tCase.currency || 'TRY'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.approvedAmount')}</p>
+                  <p className="font-bold">{provisionTotals.approved.toLocaleString()} {tCase.currency || 'TRY'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.patientResponsibility')}</p>
+                  <p className="font-bold">{provisionTotals.patientResponsibility.toLocaleString()} {tCase.currency || 'TRY'}</p>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {insuranceProvisions.length > 0 ? insuranceProvisions.map((provision: any) => (
+                  <div key={provision.id} className="p-3 text-sm flex justify-between items-center">
+                    <div>
+                      <Link to={`/insurance-provisions/${provision.id}`} className="font-bold hover:text-primary-600">{provision.insuranceProviderName}</Link>
+                      <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`)} • {provision.requestedAmount?.toLocaleString()} {provision.currency}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="badge badge-blue text-[10px]">{t(`insurance:statuses.${provision.status}`)}</span>
+                      {provision.patientResponsibilityAmount > 0 && (
+                        <button
+                          onClick={() => {
+                            setPaymentInitialData({
+                              patientId: tCase.patientId,
+                              treatmentCaseId: tCase.id,
+                              amount: provision.patientResponsibilityAmount,
+                              currency: provision.currency,
+                              notes: `${provision.insuranceProviderName} için hasta katılım tutarı`,
+                            });
+                            setIsPaymentFormOpen(true);
+                          }}
+                          className="block text-[10px] text-primary-600 font-bold mt-2 hover:underline"
+                        >
+                          {t('insurance:actions.createPatientPayment')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )) : (
+                  <p className="p-6 text-center text-gray-400 text-xs italic">{t('common:noData')}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Activity Timeline */}
+          <div className="card p-6">
+            <h3 className="font-bold mb-6 flex items-center gap-2">
+              <Clock size={20} className="text-primary-500" />
+              Activity History
+            </h3>
+            <div className="space-y-8 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
+              {tCase.activityLogs?.length > 0 ? tCase.activityLogs.map((log: any) => (
+                <div key={log.id} className="relative pl-10">
+                  <div className={`absolute left-0 top-1 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center ${
+                    log.action === 'created' ? 'bg-green-500 text-white' : 
+                    log.action.startsWith('stage_') ? 'bg-blue-500 text-white' : 
+                    log.action === 'amount_updated' ? 'bg-amber-500 text-white' : 'bg-gray-400 text-white'
+                  }`}>
+                    {log.action === 'created' ? <Plus size={14} /> : 
+                     log.action === 'amount_updated' ? <DollarSign size={14} /> : <TrendingUp size={14} />}
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-900 font-medium">{log.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      by {log.user.firstName} {log.user.lastName} • {new Date(log.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center text-gray-400 italic">No activity recorded.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isEditOpen && (
+        <TreatmentCaseForm 
+          onClose={() => setIsEditOpen(false)} 
+          onSuccess={() => {
+            setIsEditOpen(false);
+            fetchDetail();
+          }}
+          initialData={tCase}
+        />
+      )}
+
+      {isTaskFormOpen && (
+        <TaskForm 
+          patientId={tCase.patientId}
+          onClose={() => setIsTaskFormOpen(false)}
+          onSuccess={() => {
+            setIsTaskFormOpen(false);
+            fetchDetail();
+          }}
+        />
+      )}
+
+      {isPaymentFormOpen && (
+        <PaymentForm 
+          patientId={tCase.patientId}
+          treatmentCaseId={tCase.id}
+          initialData={paymentInitialData}
+          onClose={() => {
+            setIsPaymentFormOpen(false);
+            setPaymentInitialData(null);
+          }}
+          onSuccess={() => {
+            setIsPaymentFormOpen(false);
+            setPaymentInitialData(null);
+            fetchDetail();
+          }}
+        />
+      )}
+
+      {isInsuranceFormOpen && (
+        <InsuranceProvisionForm
+          patientId={tCase.patientId}
+          treatmentCaseId={tCase.id}
+          requestedAmount={tCase.estimatedAmount || tCase.acceptedAmount || 0}
+          currency={tCase.currency || 'TRY'}
+          onClose={() => setIsInsuranceFormOpen(false)}
+          onSuccess={() => {
+            setIsInsuranceFormOpen(false);
+            fetchDetail();
+          }}
+        />
+      )}
+
+      {isMessageModalOpen && (
+        <PrepareMessageModal 
+          patientId={tCase.patientId}
+          treatmentCaseId={tCase.id}
+          onClose={() => setIsMessageModalOpen(false)}
+          onSuccess={() => {
+            setIsMessageModalOpen(false);
+            fetchDetail();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default TreatmentCaseDetail;

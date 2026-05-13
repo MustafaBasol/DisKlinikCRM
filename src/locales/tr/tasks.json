@@ -1,0 +1,48 @@
+{
+  "title": "Görevler ve Takipler",
+  "subtitle": "Klinik takip görevlerini ve atamalarını yönetin.",
+  "newTask": "Yeni Görev",
+  "editTask": "Görevi Düzenle",
+  "filters": {
+    "allStatus": "Tüm Durumlar",
+    "allPriorities": "Tüm Öncelikler",
+    "allUsers": "Tüm Kullanıcılar",
+    "dueToday": "Bugün",
+    "overdue": "Gecikmiş"
+  },
+  "status": {
+    "open": "Açık",
+    "in_progress": "Devam Ediyor",
+    "completed": "Tamamlandı",
+    "cancelled": "İptal Edildi"
+  },
+  "priority": {
+    "low": "Düşük",
+    "normal": "Normal",
+    "high": "Yüksek",
+    "urgent": "Acil"
+  },
+  "list": {
+    "task": "Görev",
+    "patient": "Hasta",
+    "assignedTo": "Atanan",
+    "dueDate": "Vade Tarihi",
+    "priority": "Öncelik",
+    "status": "Durum"
+  },
+  "form": {
+    "title": "Görev Başlığı",
+    "description": "Açıklama",
+    "assignedTo": "Atanan Kişi",
+    "patient": "İlgili Hasta",
+    "appointment": "İlgili Randevu",
+    "dueDate": "Bitiş Tarihi",
+    "priority": "Öncelik",
+    "status": "Durum"
+  },
+  "actions": {
+    "complete": "Tamamla",
+    "cancel": "İptal Et",
+    "edit": "Düzenle"
+  }
+}

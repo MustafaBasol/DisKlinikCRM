@@ -1,0 +1,33 @@
+{
+  "title": "Mesajlar",
+  "subtitle": "Hazırlanan ve gönderilen iletişim kayıtlarını takip edin.",
+  "prepare": "Mesaj Hazırla",
+  "history": "İletişim Geçmişi",
+  "list": {
+    "patient": "Hasta",
+    "channel": "Kanal",
+    "body": "Mesaj",
+    "status": "Durum",
+    "createdBy": "Hazırlayan",
+    "date": "Tarih"
+  },
+  "status": {
+    "prepared": "Hazırlandı",
+    "sent": "Gönderildi",
+    "failed": "Hata",
+    "delivered": "İletildi",
+    "read": "Okundu"
+  },
+  "actions": {
+    "copy": "Metni Kopyala",
+    "whatsapp": "WhatsApp'ta Aç",
+    "preview": "Mesajı Önizle"
+  },
+  "prepareModal": {
+    "title": "Mesaj Hazırla",
+    "selectTemplate": "Şablon Seç",
+    "customMessage": "Özel Mesaj",
+    "preview": "Önizleme",
+    "send": "Hazır Olarak Kaydet"
+  }
+}

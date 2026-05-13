@@ -1,0 +1,55 @@
+{
+  "generalPreferences": "General Preferences",
+  "preferences": "Preferences",
+  "language": "Language",
+  "languageHelp": "Changes the UI language instantly.",
+  "accountInfo": "Account Info",
+  "services": {
+    "title": "Clinic Services",
+    "subtitle": "Manage the services and treatments offered by your clinic.",
+    "newService": "New Service",
+    "empty": "No services configured yet."
+  },
+  "users": {
+    "title": "Users & Dentists",
+    "subtitle": "Manage dentists and clinic staff accounts.",
+    "newUser": "New User",
+    "editUser": "Edit User",
+    "empty": "No users configured yet.",
+    "passwordHelp": "Leave blank to keep unchanged",
+    "fields": {
+      "name": "Name",
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "email": "Email",
+      "phone": "Phone",
+      "role": "Role",
+      "password": "Password",
+      "status": "Status",
+      "isActive": "Active user"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "errors": {
+      "loadFailed": "Failed to load users",
+      "saveFailed": "Failed to save user"
+    }
+  },
+  "availability": {
+    "title": "Doctor Availability",
+    "subtitle": "Manage weekly working hours where appointments can be booked.",
+    "weeklySchedule": "Weekly availability schedule",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "fields": {
+      "practitioner": "Practitioner",
+      "isAvailable": "Available"
+    },
+    "errors": {
+      "loadFailed": "Failed to load availability",
+      "saveFailed": "Failed to save availability"
+    }
+  }
+}

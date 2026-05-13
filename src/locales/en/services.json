@@ -1,0 +1,33 @@
+{
+  "title": "Clinic Services",
+  "fields": {
+    "name": "Service",
+    "category": "Category",
+    "description": "Description",
+    "duration": "Duration",
+    "durationMinutes": "Duration (mins)",
+    "basePrice": "Base Price",
+    "currency": "Currency",
+    "status": "Status",
+    "color": "Color Marker"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "actions": {
+    "edit": "Edit Service",
+    "save": "Save Service",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate"
+  },
+  "placeholders": {
+    "name": "e.g. Dental Cleaning",
+    "category": "e.g. Hygiene, Surgery",
+    "description": "Short internal description"
+  },
+  "errors": {
+    "loadFailed": "Failed to load services",
+    "validationFailed": "Validation failed. Please check your inputs."
+  }
+}

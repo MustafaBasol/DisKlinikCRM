@@ -1,0 +1,57 @@
+{
+  "title": "Zahlungen & Inkasso",
+  "subtitle": "Verfolgen Sie die Einnahmen der Klinik und die Zahlungshistorie der Patienten.",
+  "addPayment": "Zahlung hinzufügen",
+  "editPayment": "Zahlung bearbeiten",
+  "summary": {
+    "totalPaid": "Gesamt Bezahlt",
+    "totalPending": "Gesamt Ausstehend",
+    "totalRefunded": "Gesamt Rückerstattet",
+    "remaining": "Restbetrag",
+    "totalCollected": "Gesamt Eingezogen",
+    "pending": "Ausstehend",
+    "transactions": "Transaktionen",
+    "average": "Durchschnitt",
+    "totalRecords": "Gesamtanzahl Datensätze",
+    "perTransaction": "Pro Transaktion",
+    "awaitingPayment": "Warten auf Zahlung",
+    "fromPaidRecords": "Aus bezahlten Datensätzen"
+  },
+  "filters": {
+    "allStatus": "Alle Status",
+    "allMethods": "Alle Methoden",
+    "dateRange": "Datumsbereich"
+  },
+  "status": {
+    "pending": "Ausstehend",
+    "partial": "Teilweise",
+    "paid": "Bezahlt",
+    "refunded": "Rückerstattet",
+    "cancelled": "Abgebrochen"
+  },
+  "methods": {
+    "cash": "Bargeld",
+    "card": "Kredit-/Debitkarte",
+    "bank_transfer": "Banküberweisung",
+    "cheque": "Scheck",
+    "other": "Andere"
+  },
+  "list": {
+    "patient": "Patient",
+    "treatment": "Behandlung",
+    "amount": "Betrag",
+    "method": "Methode",
+    "status": "Status",
+    "date": "Zahlungsdatum"
+  },
+  "form": {
+    "patient": "Patient",
+    "treatment": "Behandlungsfall",
+    "amount": "Betrag",
+    "currency": "Währung",
+    "method": "Zahlungsmethode",
+    "status": "Status",
+    "paidAt": "Zahlungsdatum",
+    "notes": "Notizen"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "title": "Appointments",
+  "subtitle": "Manage and schedule clinic appointments.",
+  "service": "Clinic Service",
+  "newAppointment": "New Appointment",
+  "editAppointment": "Edit Appointment",
+  "appointmentDetails": "Appointment Details",
+  "noAppointmentsFound": "No appointments found for this selection.",
+  "filters": {
+    "searchPatient": "Search patient...",
+    "allStatus": "All Statuses",
+    "allPractitioners": "All Practitioners",
+    "date": "Date"
+  },
+  "calendar": {
+    "monthView": "Monthly Calendar",
+    "clickDayHint": "Click a day to open that daily schedule.",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "appointmentCount": "{{count}} appointments",
+    "noAppointments": "No appointments"
+  },
+  "availabilityWarning": {
+    "title": "Practitioner is not available at this time",
+    "description": "The selected appointment time is outside the practitioner's configured availability. Choose another time within their schedule or update availability in Settings > Doctor Availability.",
+    "ok": "Edit Time"
+  },
+  "status": {
+    "scheduled": "Scheduled",
+    "confirmed": "Confirmed",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "rescheduled": "Rescheduled",
+    "no_show": "No Show"
+  },
+  "actions": {
+    "confirm": "Confirm",
+    "complete": "Complete",
+    "cancel": "Cancel",
+    "noShow": "No Show",
+    "reschedule": "Reschedule",
+    "viewDetails": "View Details"
+  },
+  "form": {
+    "selectPatient": "Select Patient",
+    "selectPractitioner": "Select Practitioner",
+    "selectType": "Clinic Service",
+    "basePrice": "Base price",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "notes": "Notes",
+    "overlapError": "Overlap detected! Practitioner is busy at this time.",
+    "durationInfo": "{{minutes}} minutes"
+  }
+}

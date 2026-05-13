@@ -1,0 +1,38 @@
+{
+  "appName": "Gesundheits-CRM",
+  "dashboard": "Dashboard",
+  "patients": "Patienten",
+  "appointments": "Termine",
+  "tasks": "Aufgaben",
+  "payments": "Zahlungen",
+  "settings": "Einstellungen",
+  "logout": "Abmelden",
+  "search": "Suchen...",
+  "viewAll": "Alle anzeigen",
+  "save": "Speichern",
+  "cancel": "Abbrechen",
+  "delete": "Löschen",
+  "archive": "Archivieren",
+  "edit": "Bearbeiten",
+  "add": "Hinzufügen",
+  "back": "Zurück",
+  "export": "Daten exportieren",
+  "newAppointment": "Neuer Termin",
+  "time": "Zeit",
+  "service": "Leistung",
+  "practitioner": "Behandler",
+  "loading": "Laden...",
+  "noData": "Keine Daten gefunden.",
+  "roles": {
+    "admin": "Administrator",
+    "doctor": "Arzt",
+    "receptionist": "Empfangsmitarbeiter",
+    "billing": "Abrechnung"
+  },
+  "languages": {
+    "en": "Englisch",
+    "fr": "Französisch",
+    "tr": "Türkisch",
+    "de": "Deutsch"
+  }
+}

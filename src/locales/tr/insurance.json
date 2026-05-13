@@ -1,0 +1,65 @@
+{
+  "title": "Sigorta / Provizyonlar",
+  "subtitle": "SGK, TSS, ÖSS ve özel sigorta onay süreçleri için manuel takip.",
+  "newProvision": "Yeni Provizyon Talebi",
+  "editProvision": "Provizyonu Düzenle",
+  "backToList": "Provizyonlara Dön",
+  "noTreatmentCase": "Bağlı tedavi dosyası yok",
+  "confirmCancel": "Bu provizyon talebi iptal edilsin mi?",
+  "activity": "Provizyon Aktivitesi",
+  "fields": {
+    "patient": "Hasta",
+    "treatmentCase": "Tedavi Dosyası",
+    "provider": "Sigorta Kurumu",
+    "type": "Sigorta Tipi",
+    "policyNumber": "Poliçe Numarası",
+    "provisionNumber": "Provizyon Numarası",
+    "status": "Durum",
+    "requestedAmount": "Talep Edilen Tutar",
+    "approvedAmount": "Onaylanan Tutar",
+    "patientResponsibility": "Hasta Katılım Tutarı",
+    "currency": "Para Birimi",
+    "submittedAt": "Gönderim Tarihi",
+    "respondedAt": "Yanıt Tarihi",
+    "rejectionReason": "Ret Nedeni",
+    "notes": "Notlar",
+    "assignedTo": "Sorumlu",
+    "createdBy": "Oluşturan"
+  },
+  "types": {
+    "sgk": "SGK",
+    "tss": "TSS",
+    "oss": "ÖSS",
+    "private": "Özel Sigorta",
+    "corporate": "Kurum Anlaşması",
+    "other": "Diğer"
+  },
+  "statuses": {
+    "draft": "Taslak",
+    "pending_documents": "Evrak Bekleniyor",
+    "submitted": "Gönderildi",
+    "waiting_response": "Yanıt Bekleniyor",
+    "approved": "Onaylandı",
+    "partially_approved": "Kısmi Onaylandı",
+    "rejected": "Reddedildi",
+    "cancelled": "İptal Edildi"
+  },
+  "filters": {
+    "title": "Filtreler",
+    "allStatuses": "Tüm Durumlar",
+    "allTypes": "Tüm Tipler",
+    "allPatients": "Tüm Hastalar",
+    "provider": "Sigorta kurumu..."
+  },
+  "summary": {
+    "patientResponsibility": "Hasta Katılım Tutarı"
+  },
+  "actions": {
+    "cancel": "İptal Et",
+    "createPatientPayment": "Hasta Ödemesi Oluştur"
+  },
+  "errors": {
+    "loadFailed": "Sigorta verileri yüklenemedi",
+    "saveFailed": "Provizyon kaydedilemedi"
+  }
+}

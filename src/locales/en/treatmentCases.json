@@ -1,0 +1,64 @@
+{
+  "title": "Treatment & Services",
+  "subtitle": "Track service opportunities and patient treatment pipeline.",
+  "service": "Clinic Service",
+  "newCase": "New Treatment Case",
+  "editCase": "Edit Treatment Case",
+  "detailTitle": "Treatment Case Details",
+  "filters": {
+    "allStages": "All Stages",
+    "openOnly": "Open Only",
+    "closedOnly": "Closed Only",
+    "allPractitioners": "All Practitioners"
+  },
+  "summary": {
+    "pipelineValue": "Pipeline Value",
+    "activeOpportunities": "{{count}} active opportunities",
+    "active": "Active",
+    "closed": "Closed",
+    "casesInProgress": "Cases in progress",
+    "successfullyCompleted": "Successfully completed"
+  },
+  "stages": {
+    "new": "New Opportunity",
+    "consultation_scheduled": "Consultation Scheduled",
+    "consultation_done": "Consultation Done",
+    "quote_sent": "Quote Sent",
+    "waiting_patient_decision": "Waiting for Decision",
+    "accepted": "Accepted",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+    "lost": "Lost"
+  },
+  "list": {
+    "title": "Treatment Title",
+    "patient": "Patient",
+    "practitioner": "Practitioner",
+    "stage": "Stage",
+    "estimated": "Estimated",
+    "accepted": "Accepted",
+    "startDate": "Expected Start",
+    "updated": "Last Updated"
+  },
+  "form": {
+    "title": "Case Title",
+    "description": "Description",
+    "patient": "Patient",
+    "practitioner": "Practitioner",
+    "stage": "Stage",
+    "estimatedAmount": "Estimated Amount",
+    "acceptedAmount": "Accepted Amount",
+    "currency": "Currency",
+    "expectedStartDate": "Expected Start Date",
+    "lostReason": "Reason for Loss"
+    ,
+    "noSpecificService": "No specific service"
+  },
+  "actions": {
+    "changeStage": "Change Stage",
+    "markAccepted": "Mark as Accepted",
+    "markCompleted": "Mark as Completed",
+    "markLost": "Mark as Lost",
+    "viewDetails": "View Details"
+  }
+}

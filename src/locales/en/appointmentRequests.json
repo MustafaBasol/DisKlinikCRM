@@ -1,0 +1,46 @@
+{
+  "title": "WhatsApp Appointment Requests",
+  "subtitle": "Review appointment, reschedule, and cancel requests coming from the WhatsApp line.",
+  "empty": "No WhatsApp requests found for this filter.",
+  "summary": {
+    "visible": "Visible Requests",
+    "pending": "Pending Requests",
+    "source": "Source"
+  },
+  "filters": {
+    "allStatus": "All Statuses",
+    "sourceHint": "This page shows WhatsApp-sourced requests only."
+  },
+  "fields": {
+    "service": "Service",
+    "practitioner": "Practitioner",
+    "preferredTime": "Requested Time"
+  },
+  "status": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "converted": "Converted",
+    "closed": "Closed"
+  },
+  "requestType": {
+    "appointment": "Appointment",
+    "reschedule": "Reschedule",
+    "cancel": "Cancel",
+    "info": "Info"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "convert": "Convert",
+    "approve": "Approve",
+    "reject": "Reject",
+    "close": "Close",
+    "rejectionPrompt": "Enter the rejection reason"
+  },
+  "errors": {
+    "loadFailed": "Failed to load WhatsApp requests.",
+    "convertFailed": "Request could not be converted.",
+    "outsideAvailability": "The selected time is outside practitioner availability.",
+    "overlap": "The practitioner already has another appointment at this time."
+  }
+}

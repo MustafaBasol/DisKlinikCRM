@@ -1,0 +1,54 @@
+{
+  "title": "Randevular",
+  "subtitle": "Klinik randevularını yönetin ve planlayın.",
+  "newAppointment": "Yeni Randevu",
+  "editAppointment": "Randevuyu Düzenle",
+  "appointmentDetails": "Randevu Detayları",
+  "noAppointmentsFound": "Bu seçim için randevu bulunamadı.",
+  "filters": {
+    "searchPatient": "Hasta ara...",
+    "allStatus": "Tüm Durumlar",
+    "allPractitioners": "Tüm Hekimler",
+    "date": "Tarih"
+  },
+  "calendar": {
+    "monthView": "Aylık Takvim",
+    "clickDayHint": "Günlük programa ulaşmak için takvimde bir güne tıklayın.",
+    "previousMonth": "Önceki ay",
+    "nextMonth": "Sonraki ay",
+    "appointmentCount": "{{count}} randevu",
+    "noAppointments": "Randevu yok"
+  },
+  "availabilityWarning": {
+    "title": "Hekim bu saatte müsait değil",
+    "description": "Seçtiğiniz randevu saati hekimin tanımlı müsaitlik saatleri dışında. Lütfen hekimin çalışma saatleri içinde başka bir saat seçin veya Ayarlar > Hekim Müsaitliği bölümünden saatleri güncelleyin.",
+    "ok": "Saati Düzenle"
+  },
+  "status": {
+    "scheduled": "Planlandı",
+    "confirmed": "Onaylandı",
+    "completed": "Tamamlandı",
+    "cancelled": "İptal Edildi",
+    "rescheduled": "Ertelendi",
+    "no_show": "Gelmedi"
+  },
+  "actions": {
+    "confirm": "Onayla",
+    "complete": "Tamamla",
+    "cancel": "İptal Et",
+    "noShow": "Gelmedi İşaretle",
+    "reschedule": "Yeniden Planla",
+    "viewDetails": "Detayları Gör"
+  },
+  "form": {
+    "selectPatient": "Hasta Seçin",
+    "selectPractitioner": "Hekim Seçin",
+    "selectType": "Randevu Türü",
+    "startTime": "Başlangıç Saati",
+    "endTime": "Bitiş Saati",
+    "notes": "Notlar",
+    "basePrice": "Temel fiyat",
+    "overlapError": "Çakışma tespit edildi! Hekim bu saatte meşgul.",
+    "durationInfo": "{{minutes}} dakika"
+  }
+}

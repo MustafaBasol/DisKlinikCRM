@@ -1,0 +1,57 @@
+{
+  "title": "Paiements et Collectes",
+  "subtitle": "Suivez les revenus de la clinique et l'historique des paiements des patients.",
+  "addPayment": "Ajouter un Paiement",
+  "editPayment": "Modifier le Paiement",
+  "summary": {
+    "totalPaid": "Total Payé",
+    "totalPending": "Total en Attente",
+    "totalRefunded": "Total Remboursé",
+    "remaining": "Solde Restant",
+    "totalCollected": "Total Collecté",
+    "pending": "En Attente",
+    "transactions": "Transactions",
+    "average": "Moyenne",
+    "totalRecords": "Total des dossiers",
+    "perTransaction": "Par transaction",
+    "awaitingPayment": "En attente de paiement",
+    "fromPaidRecords": "À partir des dossiers payés"
+  },
+  "filters": {
+    "allStatus": "Tous les Statuts",
+    "allMethods": "Toutes les Méthodes",
+    "dateRange": "Plage de dates"
+  },
+  "status": {
+    "pending": "En attente",
+    "partial": "Partiel",
+    "paid": "Payé",
+    "refunded": "Remboursé",
+    "cancelled": "Annulé"
+  },
+  "methods": {
+    "cash": "Espèces",
+    "card": "Carte de Crédit/Débit",
+    "bank_transfer": "Virement Bancaire",
+    "cheque": "Chèque",
+    "other": "Autre"
+  },
+  "list": {
+    "patient": "Patient",
+    "treatment": "Traitement",
+    "amount": "Montant",
+    "method": "Méthode",
+    "status": "Statut",
+    "date": "Date de Paiement"
+  },
+  "form": {
+    "patient": "Patient",
+    "treatment": "Dossier de Traitement",
+    "amount": "Montant",
+    "currency": "Devise",
+    "method": "Méthode de Paiement",
+    "status": "Statut",
+    "paidAt": "Date de Paiement",
+    "notes": "Notes"
+  }
+}

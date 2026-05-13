@@ -1,0 +1,50 @@
+{
+  "title": "Patients",
+  "subtitle": "Manage your clinic's patient records and history.",
+  "addPatient": "Add Patient",
+  "editPatient": "Edit Patient",
+  "searchPlaceholder": "Search patients by name, email or phone...",
+  "includeArchived": "Include Archived",
+  "noPatientsFound": "No patients found matching your criteria.",
+  "list": {
+    "name": "Patient Name",
+    "contact": "Contact Info",
+    "status": "Status",
+    "createdAt": "Created At"
+  },
+  "detail": {
+    "backToList": "Back to Patients",
+    "profileSummary": "Profile Summary",
+    "consents": "Consents & Source",
+    "nextAppointment": "Next Appointment",
+    "history": "Appointment History",
+    "activityTimeline": "Activity Timeline"
+  },
+  "form": {
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "email": "Email Address",
+    "phone": "Phone Number",
+    "dob": "Date of Birth",
+    "status": "Patient Status",
+    "source": "Source",
+    "communicationConsent": "Patient consents to communication",
+    "marketingConsent": "Patient consents to marketing messages"
+  },
+  "status": {
+    "all": "All Statuses",
+    "new": "New",
+    "active": "Active",
+    "inactive": "Inactive",
+    "archived": "Archived"
+  },
+  "source": {
+    "google": "Google",
+    "referral": "Referral",
+    "social_media": "Social Media",
+    "website": "Website",
+    "walk_in": "Walk-in",
+    "doctolib": "Doctolib",
+    "other": "Other"
+  }
+}

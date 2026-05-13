@@ -1,0 +1,33 @@
+{
+  "title": "Messages",
+  "subtitle": "Track prepared and sent communications.",
+  "prepare": "Prepare Message",
+  "history": "Communication History",
+  "list": {
+    "patient": "Patient",
+    "channel": "Channel",
+    "body": "Message",
+    "status": "Status",
+    "createdBy": "Prepared By",
+    "date": "Date"
+  },
+  "status": {
+    "prepared": "Prepared",
+    "sent": "Sent",
+    "failed": "Failed",
+    "delivered": "Delivered",
+    "read": "Read"
+  },
+  "actions": {
+    "copy": "Copy Body",
+    "whatsapp": "Open WhatsApp",
+    "preview": "Preview Message"
+  },
+  "prepareModal": {
+    "title": "Prepare Message",
+    "selectTemplate": "Select Template",
+    "customMessage": "Custom Message",
+    "preview": "Preview",
+    "send": "Save as Prepared"
+  }
+}

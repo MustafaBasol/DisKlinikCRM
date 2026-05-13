@@ -1,0 +1,30 @@
+{
+  "title": "Patienten",
+  "subtitle": "Verwalten Sie die Patientenakten und die Historie Ihrer Klinik.",
+  "addPatient": "Patient hinzufügen",
+  "editPatient": "Patient bearbeiten",
+  "searchPlaceholder": "Nach Name, E-Mail oder Telefon suchen...",
+  "includeArchived": "Archivierte einschließen",
+  "list": {
+    "name": "Patientenname",
+    "contact": "Kontaktinfo",
+    "status": "Status",
+    "createdAt": "Erstellt am"
+  },
+  "status": {
+    "all": "Alle Status",
+    "new": "Neu",
+    "active": "Aktiv",
+    "inactive": "Inaktiv",
+    "archived": "Archiviert"
+  },
+  "source": {
+    "google": "Google",
+    "referral": "Empfehlung",
+    "social_media": "Social Media",
+    "website": "Webseite",
+    "walk_in": "Laufkundschaft",
+    "doctolib": "Doctolib",
+    "other": "Sonstiges"
+  }
+}

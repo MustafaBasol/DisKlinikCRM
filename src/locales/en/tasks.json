@@ -1,0 +1,48 @@
+{
+  "title": "Tasks & Follow-Ups",
+  "subtitle": "Manage clinic follow-up tasks and assignments.",
+  "newTask": "New Task",
+  "editTask": "Edit Task",
+  "filters": {
+    "allStatus": "All Statuses",
+    "allPriorities": "All Priorities",
+    "allUsers": "All Users",
+    "dueToday": "Due Today",
+    "overdue": "Overdue"
+  },
+  "status": {
+    "open": "Open",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
+  },
+  "priority": {
+    "low": "Low",
+    "normal": "Normal",
+    "high": "High",
+    "urgent": "Urgent"
+  },
+  "list": {
+    "task": "Task",
+    "patient": "Patient",
+    "assignedTo": "Assigned To",
+    "dueDate": "Due Date",
+    "priority": "Priority",
+    "status": "Status"
+  },
+  "form": {
+    "title": "Task Title",
+    "description": "Description",
+    "assignedTo": "Assign To",
+    "patient": "Related Patient",
+    "appointment": "Related Appointment",
+    "dueDate": "Due Date",
+    "priority": "Priority",
+    "status": "Status"
+  },
+  "actions": {
+    "complete": "Complete",
+    "cancel": "Cancel",
+    "edit": "Edit"
+  }
+}

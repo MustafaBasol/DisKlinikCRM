@@ -1,0 +1,65 @@
+{
+  "title": "Insurance / Provisions",
+  "subtitle": "Manual tracking for SGK, TSS, OSS, and private insurance approval workflows.",
+  "newProvision": "New Provision Request",
+  "editProvision": "Edit Provision",
+  "backToList": "Back to Provisions",
+  "noTreatmentCase": "No linked treatment case",
+  "confirmCancel": "Cancel this provision request?",
+  "activity": "Provision Activity",
+  "fields": {
+    "patient": "Patient",
+    "treatmentCase": "Treatment Case",
+    "provider": "Provider",
+    "type": "Insurance Type",
+    "policyNumber": "Policy Number",
+    "provisionNumber": "Provision Number",
+    "status": "Status",
+    "requestedAmount": "Requested Amount",
+    "approvedAmount": "Approved Amount",
+    "patientResponsibility": "Patient Responsibility",
+    "currency": "Currency",
+    "submittedAt": "Submitted At",
+    "respondedAt": "Responded At",
+    "rejectionReason": "Rejection Reason",
+    "notes": "Notes",
+    "assignedTo": "Assigned To",
+    "createdBy": "Created By"
+  },
+  "types": {
+    "sgk": "SGK",
+    "tss": "TSS",
+    "oss": "OSS",
+    "private": "Private Insurance",
+    "corporate": "Corporate",
+    "other": "Other"
+  },
+  "statuses": {
+    "draft": "Draft",
+    "pending_documents": "Pending Documents",
+    "submitted": "Submitted",
+    "waiting_response": "Waiting Response",
+    "approved": "Approved",
+    "partially_approved": "Partially Approved",
+    "rejected": "Rejected",
+    "cancelled": "Cancelled"
+  },
+  "filters": {
+    "title": "Filters",
+    "allStatuses": "All Statuses",
+    "allTypes": "All Types",
+    "allPatients": "All Patients",
+    "provider": "Provider name..."
+  },
+  "summary": {
+    "patientResponsibility": "Patient Responsibility"
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "createPatientPayment": "Create Patient Payment"
+  },
+  "errors": {
+    "loadFailed": "Failed to load insurance data",
+    "saveFailed": "Failed to save provision"
+  }
+}

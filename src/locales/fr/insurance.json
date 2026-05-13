@@ -1,0 +1,65 @@
+{
+  "title": "Assurance / Provisions",
+  "subtitle": "Suivi manuel des demandes d'assurance.",
+  "newProvision": "Nouvelle demande",
+  "editProvision": "Modifier la demande",
+  "backToList": "Retour",
+  "noTreatmentCase": "Aucun cas lié",
+  "confirmCancel": "Annuler cette demande ?",
+  "activity": "Activité",
+  "fields": {
+    "patient": "Patient",
+    "treatmentCase": "Cas",
+    "provider": "Assureur",
+    "type": "Type",
+    "policyNumber": "Police",
+    "provisionNumber": "Provision",
+    "status": "Statut",
+    "requestedAmount": "Montant demandé",
+    "approvedAmount": "Montant approuvé",
+    "patientResponsibility": "Part patient",
+    "currency": "Devise",
+    "submittedAt": "Soumis le",
+    "respondedAt": "Réponse le",
+    "rejectionReason": "Motif de rejet",
+    "notes": "Notes",
+    "assignedTo": "Assigné à",
+    "createdBy": "Créé par"
+  },
+  "types": {
+    "sgk": "SGK",
+    "tss": "TSS",
+    "oss": "OSS",
+    "private": "Assurance privée",
+    "corporate": "Entreprise",
+    "other": "Autre"
+  },
+  "statuses": {
+    "draft": "Brouillon",
+    "pending_documents": "Documents en attente",
+    "submitted": "Soumis",
+    "waiting_response": "En attente",
+    "approved": "Approuvé",
+    "partially_approved": "Partiellement approuvé",
+    "rejected": "Rejeté",
+    "cancelled": "Annulé"
+  },
+  "filters": {
+    "title": "Filtres",
+    "allStatuses": "Tous les statuts",
+    "allTypes": "Tous les types",
+    "allPatients": "Tous les patients",
+    "provider": "Assureur..."
+  },
+  "summary": {
+    "patientResponsibility": "Part patient"
+  },
+  "actions": {
+    "cancel": "Annuler",
+    "createPatientPayment": "Créer paiement patient"
+  },
+  "errors": {
+    "loadFailed": "Chargement impossible",
+    "saveFailed": "Enregistrement impossible"
+  }
+}

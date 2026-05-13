@@ -1,0 +1,133 @@
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('hcrm_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      window.dispatchEvent(new CustomEvent('auth:expired'));
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const authService = {
+  login: (credentials: any) => axios.post(`${API_URL}/auth/login`, credentials),
+  me: () => api.get('/auth/me'),
+};
+
+export const patientService = {
+  getAll: (params?: any) => api.get('/patients', { params }),
+  getById: (id: string) => api.get(`/patients/${id}`),
+  create: (data: any) => api.post('/patients', data),
+  update: (id: string, data: any) => api.put(`/patients/${id}`, data),
+  archive: (id: string) => api.delete(`/patients/${id}`),
+};
+
+export const appointmentTypeService = {
+  getAll: (onlyActive = false) => api.get('/appointment-types', { params: { onlyActive } }),
+  create: (data: any) => api.post('/appointment-types', data),
+  update: (id: string, data: any) => api.put(`/appointment-types/${id}`, data),
+};
+
+export const serviceService = {
+  getAll: (params?: { onlyActive?: boolean, includeInactive?: boolean }) => api.get('/services', { params }),
+  create: (data: any) => api.post('/services', data),
+  update: (id: string, data: any) => api.put(`/services/${id}`, data),
+};
+
+export const appointmentService = {
+  getAll: (params?: any) => api.get('/appointments', { params }),
+  getById: (id: string) => api.get(`/appointments/${id}`),
+  create: (data: any) => api.post('/appointments', data),
+  update: (id: string, data: any) => api.put(`/appointments/${id}`, data),
+  updateStatus: (id: string, status: string) => api.put(`/appointments/${id}`, { status }),
+};
+
+export const appointmentRequestService = {
+  getAll: (params?: any) => api.get('/appointment-requests', { params }),
+  updateStatus: (id: string, data: any) => api.put(`/appointment-requests/${id}/status`, data),
+  convert: (id: string, data?: any) => api.post(`/appointment-requests/${id}/convert`, data || {}),
+};
+
+export const taskService = {
+  getAll: (params?: any) => api.get('/tasks', { params }),
+  getById: (id: string) => api.get(`/tasks/${id}`),
+  create: (data: any) => api.post('/tasks', data),
+  update: (id: string, data: any) => api.put(`/tasks/${id}`, data),
+  complete: (id: string) => api.patch(`/tasks/${id}/complete`),
+  cancel: (id: string) => api.put(`/tasks/${id}`, { status: 'cancelled' }),
+};
+
+export const treatmentCaseService = {
+  getAll: (params?: any) => api.get('/treatment-cases', { params }),
+  getById: (id: string) => api.get(`/treatment-cases/${id}`),
+  create: (data: any) => api.post('/treatment-cases', data),
+  update: (id: string, data: any) => api.put(`/treatment-cases/${id}`, data),
+  updateStage: (id: string, stage: string, lostReason?: string) => api.put(`/treatment-cases/${id}`, { stage, lostReason }),
+};
+
+export const insuranceProvisionService = {
+  getAll: (params?: any) => api.get('/insurance-provisions', { params }),
+  getById: (id: string) => api.get(`/insurance-provisions/${id}`),
+  create: (data: any) => api.post('/insurance-provisions', data),
+  update: (id: string, data: any) => api.put(`/insurance-provisions/${id}`, data),
+  updateStatus: (id: string, data: any) => api.patch(`/insurance-provisions/${id}/status`, data),
+  cancel: (id: string) => api.patch(`/insurance-provisions/${id}/cancel`),
+};
+
+export const paymentService = {
+  getAll: (params?: any) => api.get('/payments', { params }),
+  getById: (id: string) => api.get(`/payments/${id}`),
+  create: (data: any) => api.post('/payments', data),
+  update: (id: string, data: any) => api.put(`/payments/${id}`, data),
+  cancel: (id: string) => api.patch(`/payments/${id}/cancel`),
+};
+
+export const messageTemplateService = {
+  getAll: (params?: any) => api.get('/message-templates', { params }),
+  getById: (id: string) => api.get(`/message-templates/${id}`),
+  create: (data: any) => api.post('/message-templates', data),
+  update: (id: string, data: any) => api.put(`/message-templates/${id}`, data),
+  seed: () => api.post('/message-templates/seed'),
+};
+
+export const messageService = {
+  getAll: (params?: any) => api.get('/messages', { params }),
+  getById: (id: string) => api.get(`/messages/${id}`),
+  prepare: (data: any) => api.post('/messages/prepare', data),
+};
+
+export const userService = {
+  getDoctors: () => api.get('/users', { params: { role: 'doctor' } }),
+  getAll: () => api.get('/users'),
+  create: (data: any) => api.post('/users', data),
+  update: (id: string, data: any) => api.put(`/users/${id}`, data),
+};
+
+export const doctorAvailabilityService = {
+  getAll: (params?: { practitionerId?: string }) => api.get('/doctor-availabilities', { params }),
+  updateForPractitioner: (practitionerId: string, slots: any[]) => api.put(`/doctor-availabilities/${practitionerId}`, { slots }),
+};
+
+export const dashboardService = {
+  getStats: () => api.get('/dashboard/stats'),
+};
+
+export default api;

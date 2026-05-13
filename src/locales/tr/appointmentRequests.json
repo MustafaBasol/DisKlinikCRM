@@ -1,0 +1,46 @@
+{
+  "title": "WhatsApp Randevu Talepleri",
+  "subtitle": "WhatsApp hattından gelen randevu, değişiklik ve iptal taleplerini yönetin.",
+  "empty": "Bu filtre için WhatsApp talebi bulunamadı.",
+  "summary": {
+    "visible": "Listelenen Talep",
+    "pending": "Bekleyen Talep",
+    "source": "Kaynak"
+  },
+  "filters": {
+    "allStatus": "Tüm Durumlar",
+    "sourceHint": "Bu ekran yalnızca WhatsApp kaynaklı talepleri gösterir."
+  },
+  "fields": {
+    "service": "Hizmet",
+    "practitioner": "Hekim",
+    "preferredTime": "Talep Edilen Saat"
+  },
+  "status": {
+    "pending": "Bekliyor",
+    "approved": "Onaylandı",
+    "rejected": "Reddedildi",
+    "converted": "Randevuya Çevrildi",
+    "closed": "Kapandı"
+  },
+  "requestType": {
+    "appointment": "Randevu",
+    "reschedule": "Değişiklik",
+    "cancel": "İptal",
+    "info": "Bilgi"
+  },
+  "actions": {
+    "refresh": "Yenile",
+    "convert": "Randevuya Çevir",
+    "approve": "Onayla",
+    "reject": "Reddet",
+    "close": "Kapat",
+    "rejectionPrompt": "Reddetme nedenini yazın"
+  },
+  "errors": {
+    "loadFailed": "WhatsApp talepleri yüklenemedi.",
+    "convertFailed": "Talep randevuya çevrilemedi.",
+    "outsideAvailability": "Seçilen saat hekimin müsaitlik saatleri dışında.",
+    "overlap": "Seçilen saatte hekimin başka bir randevusu var."
+  }
+}

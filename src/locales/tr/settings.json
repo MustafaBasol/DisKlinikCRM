@@ -1,0 +1,55 @@
+{
+  "generalPreferences": "Genel Tercihler",
+  "preferences": "Tercihler",
+  "language": "Dil",
+  "languageHelp": "Arayüz dilini anında değiştirir.",
+  "accountInfo": "Hesap Bilgisi",
+  "services": {
+    "title": "Klinik Hizmetleri",
+    "subtitle": "Aile Diş tarafından sunulan hizmetleri ve tedavi randevularını yönetin.",
+    "newService": "Yeni Hizmet",
+    "empty": "Henüz hizmet tanımlanmadı."
+  },
+  "users": {
+    "title": "Kullanıcılar ve Hekimler",
+    "subtitle": "Klinikte çalışan hekimleri ve ekip kullanıcılarını yönetin.",
+    "newUser": "Yeni Kullanıcı",
+    "editUser": "Kullanıcıyı Düzenle",
+    "empty": "Henüz kullanıcı tanımlanmadı.",
+    "passwordHelp": "Değiştirmek istemiyorsanız boş bırakın",
+    "fields": {
+      "name": "Ad Soyad",
+      "firstName": "Ad",
+      "lastName": "Soyad",
+      "email": "E-posta",
+      "phone": "Telefon",
+      "role": "Rol",
+      "password": "Şifre",
+      "status": "Durum",
+      "isActive": "Aktif kullanıcı"
+    },
+    "status": {
+      "active": "Aktif",
+      "inactive": "Pasif"
+    },
+    "errors": {
+      "loadFailed": "Kullanıcılar yüklenemedi",
+      "saveFailed": "Kullanıcı kaydedilemedi"
+    }
+  },
+  "availability": {
+    "title": "Hekim Müsaitliği",
+    "subtitle": "Hekimlerin randevu alınabilecek haftalık çalışma saatlerini yönetin.",
+    "weeklySchedule": "Haftalık müsaitlik planı",
+    "available": "Müsait",
+    "unavailable": "Müsait değil",
+    "fields": {
+      "practitioner": "Hekim",
+      "isAvailable": "Müsait"
+    },
+    "errors": {
+      "loadFailed": "Müsaitlik bilgileri yüklenemedi",
+      "saveFailed": "Müsaitlik kaydedilemedi"
+    }
+  }
+}
