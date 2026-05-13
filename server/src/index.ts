@@ -391,6 +391,10 @@ const whatsappAvailabilityQuerySchema = z.object({
   practitionerId: z.string().uuid().optional(),
 });
 
+const whatsappAppointmentLookupQuerySchema = z.object({
+  phone: z.string().trim().min(6, 'Phone is required'),
+});
+
 const appointmentRequestStatusSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'closed']),
   notes: z.string().optional().nullable(),
@@ -644,6 +648,30 @@ const minutesToTime = (minutes: number) => {
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 };
 
+const formatClinicDateTime = (date: Date, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const year = parts.find(part => part.type === 'year')?.value ?? '0000';
+  const month = parts.find(part => part.type === 'month')?.value ?? '00';
+  const day = parts.find(part => part.type === 'day')?.value ?? '00';
+  const hour = parts.find(part => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find(part => part.type === 'minute')?.value ?? '00';
+
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hour}:${minute}`,
+  };
+};
+
 // --- WhatsApp Public API (Secret Protected) ---
 
 app.get('/api/public/whatsapp/services', authorizeWhatsappApi, async (_req, res) => {
@@ -701,6 +729,72 @@ app.get('/api/public/whatsapp/availability', authorizeWhatsappApi, async (req, r
     res.json({ clinic: { id: clinic.id, name: clinic.name }, slots });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch WhatsApp availability' });
+  }
+});
+
+app.get('/api/public/whatsapp/appointment-lookup', authorizeWhatsappApi, async (req, res) => {
+  const validation = whatsappAppointmentLookupQuerySchema.safeParse(req.query);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.format() });
+  }
+
+  try {
+    const clinic = await getDefaultClinic();
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        clinicId: clinic.id,
+        deletedAt: null,
+        patient: {
+          phone: validation.data.phone,
+          deletedAt: null,
+        },
+      },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        appointmentType: {
+          select: { id: true, name: true },
+        },
+        practitioner: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+      orderBy: { startTime: 'asc' },
+      take: 10,
+    });
+
+    const timeZone = clinic.timezone || 'Europe/Istanbul';
+    const results = appointments.map(appointment => {
+      const start = formatClinicDateTime(appointment.startTime, timeZone);
+      const end = formatClinicDateTime(appointment.endTime, timeZone);
+
+      return {
+        id: appointment.id,
+        date: start.date,
+        startTime: start.time,
+        endTime: end.time,
+        service: appointment.appointmentType ? {
+          id: appointment.appointmentType.id,
+          name: appointment.appointmentType.name,
+        } : null,
+        practitioner: appointment.practitioner ? {
+          id: appointment.practitioner.id,
+          name: `${appointment.practitioner.firstName} ${appointment.practitioner.lastName}`,
+        } : null,
+        status: appointment.status,
+      };
+    });
+
+    res.json({
+      clinic: { id: clinic.id, name: clinic.name },
+      appointments: results,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to lookup WhatsApp appointments' });
   }
 });
 

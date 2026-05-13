@@ -26,6 +26,8 @@ Secret-protected public endpoints:
   - Returns active dentists.
 - `GET /public/whatsapp/availability?appointmentTypeId=<id>&date=YYYY-MM-DD&practitionerId=<optional>`
   - Returns available slots from doctor availability and existing appointments.
+- `GET /public/whatsapp/appointment-lookup?phone=<phone>`
+  - Returns a limited appointment summary by phone with date, time, service, doctor, and status only.
 - `POST /public/whatsapp/appointment-requests`
   - Creates a pending WhatsApp appointment request.
 - `POST /public/whatsapp/cancel-request`
@@ -70,10 +72,12 @@ Add HTTP Request nodes:
 - `CRM - Get Services`
 - `CRM - Get Doctors`
 - `CRM - Get Availability`
+- `CRM - Appointment Lookup`
 - `CRM - Create Appointment Request`
 - `CRM - Create Cancel Request`
 
 The AI assistant must not invent available hours. It should ask the workflow to call the availability endpoint before offering times.
+The AI assistant must not write directly into CRM. Use deterministic HTTP Request nodes for CRM reads and writes, and reserve AI for intent/entity extraction plus response composing.
 
 ## Clinic Assistant System Message
 
@@ -133,6 +137,10 @@ Talebinizi klinik onay ekranina aldik. Klinik ekibi bu talebi randevu ekranindan
    - Fetch availability.
    - Offer CRM-returned slots.
    - Create appointment request.
+6. If appointment lookup flow:
+  - Collect phone number.
+  - Call appointment lookup endpoint.
+  - Return only appointment summary fields.
 6. Send response through Evolution API.
 
 ## CRM Review
