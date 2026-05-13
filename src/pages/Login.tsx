@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 const Login: React.FC = () => {
   const { t } = useTranslation(['auth', 'common']);
-  const [email, setEmail] = useState('admin@ailedis.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -97,8 +97,30 @@ const Login: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-8 pt-8 border-t border-gray-50 text-center text-sm text-gray-500">
-            {t('auth:demoCredentials')}
+          <div className="mt-8 pt-8 border-t border-gray-100">
+            <p className="text-xs text-gray-500 mb-3 font-medium">Password Requirements:</p>
+            <ul className="space-y-2 text-xs text-gray-600">
+              <li className="flex items-start gap-2">
+                <span className="text-primary-600 mt-0.5">•</span>
+                <span>Minimum 8 characters</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary-600 mt-0.5">•</span>
+                <span>One uppercase letter (A-Z)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary-600 mt-0.5">•</span>
+                <span>One lowercase letter (a-z)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary-600 mt-0.5">•</span>
+                <span>One number (0-9)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary-600 mt-0.5">•</span>
+                <span>One special character (!@#$%^&* etc)</span>
+              </li>
+            </ul>
           </div>
         </div>
 

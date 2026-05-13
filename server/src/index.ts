@@ -42,6 +42,72 @@ const getZonedDateParts = (date: Date, timeZone: string) => {
   };
 };
 
+// --- Security Utilities ---
+const validatePassword = (password: string): { valid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (password.length < 8) {
+    errors.push('Password must be at least 8 characters long');
+  }
+  if (password.length > 128) {
+    errors.push('Password must be less than 128 characters');
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter');
+  }
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter');
+  }
+  if (!/\d/.test(password)) {
+    errors.push('Password must contain at least one number');
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    errors.push('Password must contain at least one special character (!@#$%^&* etc)');
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+};
+
+const loginAttempts = new Map<string, { count: number; timestamp: number }>();
+
+const checkLoginAttempt = (email: string): boolean => {
+  const now = Date.now();
+  const attempt = loginAttempts.get(email);
+  
+  if (!attempt) {
+    return true;
+  }
+  
+  // Reset after 15 minutes
+  if (now - attempt.timestamp > 15 * 60 * 1000) {
+    loginAttempts.delete(email);
+    return true;
+  }
+  
+  // Allow 5 attempts per 15 minutes
+  return attempt.count < 5;
+};
+
+const recordLoginAttempt = (email: string): void => {
+  const now = Date.now();
+  const attempt = loginAttempts.get(email);
+  
+  if (!attempt) {
+    loginAttempts.set(email, { count: 1, timestamp: now });
+  } else if (now - attempt.timestamp > 15 * 60 * 1000) {
+    loginAttempts.set(email, { count: 1, timestamp: now });
+  } else {
+    attempt.count++;
+  }
+};
+
+const resetLoginAttempts = (email: string): void => {
+  loginAttempts.delete(email);
+};
+
 app.use(cors());
 app.use(express.json());
 
@@ -116,10 +182,25 @@ const userCreateSchema = z.object({
   role: z.enum(['admin', 'doctor', 'receptionist', 'billing']),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   isActive: z.boolean().default(true),
+}).refine(data => {
+  const validation = validatePassword(data.password);
+  return validation.valid;
+}, {
+  message: 'Password does not meet security requirements',
+  path: ['password'],
 });
 
 const userUpdateSchema = userCreateSchema.omit({ password: true }).partial().extend({
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+}).refine(data => {
+  if (data.password) {
+    const validation = validatePassword(data.password);
+    return validation.valid;
+  }
+  return true;
+}, {
+  message: 'Password does not meet security requirements',
+  path: ['password'],
 });
 
 const timeStringSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Time must use HH:mm format');
@@ -337,18 +418,33 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // Email validation
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check login attempts
+    if (!checkLoginAttempt(email)) {
+      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
       include: { clinic: true },
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      recordLoginAttempt(email);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     if (!user.isActive) {
+      recordLoginAttempt(email);
       return res.status(403).json({ error: 'User account is inactive' });
     }
+
+    // Reset login attempts on successful login
+    resetLoginAttempts(email);
 
     const token = generateToken({
       id: user.id,
@@ -738,6 +834,17 @@ app.post('/api/users', authorize(['admin']), async (req: AuthRequest, res: Respo
   const validation = userCreateSchema.safeParse(req.body);
 
   if (!validation.success) {
+    // Check if it's a password validation error
+    const passwordError = validation.error.flatten();
+    if (passwordError.fieldErrors.password) {
+      const passwordValidation = validatePassword(req.body.password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({ 
+          error: 'Password does not meet security requirements',
+          details: passwordValidation.errors
+        });
+      }
+    }
     return res.status(400).json({ error: validation.error.format() });
   }
 
@@ -750,7 +857,7 @@ app.post('/api/users', authorize(['admin']), async (req: AuthRequest, res: Respo
       return res.status(409).json({ error: 'Email is already in use' });
     }
 
-    const passwordHash = await bcrypt.hash(validation.data.password, 10);
+    const passwordHash = await bcrypt.hash(validation.data.password, 12);
     const user = await prisma.user.create({
       data: {
         clinicId,
@@ -796,6 +903,19 @@ app.put('/api/users/:id', authorize(['admin']), async (req: AuthRequest, res: Re
   const validation = userUpdateSchema.safeParse(req.body);
 
   if (!validation.success) {
+    // Check if it's a password validation error
+    const passwordError = validation.error.flatten();
+    if (passwordError.fieldErrors.password) {
+      if (req.body.password) {
+        const passwordValidation = validatePassword(req.body.password);
+        if (!passwordValidation.valid) {
+          return res.status(400).json({ 
+            error: 'Password does not meet security requirements',
+            details: passwordValidation.errors
+          });
+        }
+      }
+    }
     return res.status(400).json({ error: validation.error.format() });
   }
 
@@ -826,7 +946,7 @@ app.put('/api/users/:id', authorize(['admin']), async (req: AuthRequest, res: Re
       where: { id },
       data: {
         ...rest,
-        ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
+        ...(password ? { passwordHash: await bcrypt.hash(password, 12) } : {}),
       },
       select: {
         id: true,

@@ -132,6 +132,22 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+
+  const validatePassword = (pwd: string) => {
+    const errors: string[] = [];
+    if (pwd.length < 8) errors.push('At least 8 characters');
+    if (!/[A-Z]/.test(pwd)) errors.push('One uppercase letter');
+    if (!/[a-z]/.test(pwd)) errors.push('One lowercase letter');
+    if (!/\d/.test(pwd)) errors.push('One number');
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) errors.push('One special character (!@#$%^&* etc)');
+    setPasswordErrors(errors);
+  };
+
+  const handlePasswordChange = (pwd: string) => {
+    setFormData({ ...formData, password: pwd });
+    if (!user || pwd) validatePassword(pwd);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +167,12 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
       }
       onSuccess();
     } catch (err: any) {
-      setError(err.response?.data?.error || t('settings:users.errors.saveFailed'));
+      const errorMsg = err.response?.data?.error || t('settings:users.errors.saveFailed');
+      const details = err.response?.data?.details;
+      setError(errorMsg);
+      if (details && Array.isArray(details)) {
+        setPasswordErrors(details);
+      }
     } finally {
       setLoading(false);
     }
@@ -205,9 +226,22 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings:users.fields.password')}{user ? '' : ' *'}</label>
-              <input required={!user} minLength={8} type="password" className="input-field w-full" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder={user ? t('settings:users.passwordHelp') : ''} />
+              <input required={!user} type="password" className="input-field w-full" value={formData.password} onChange={e => handlePasswordChange(e.target.value)} placeholder={user ? t('settings:users.passwordHelp') : ''} />
             </div>
           </div>
+
+          {(formData.password || !user) && passwordErrors.length > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm font-medium text-amber-900 mb-2">Password must include:</p>
+              <ul className="space-y-1">
+                {passwordErrors.map(error => (
+                  <li key={error} className="text-xs text-amber-800 flex items-center gap-2">
+                    <span className="text-amber-600">•</span> {error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <label className="flex items-center gap-3 pt-2 cursor-pointer">
             <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" checked={formData.isActive} onChange={e => setFormData({ ...formData, isActive: e.target.checked })} />
@@ -217,7 +251,7 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
 
           <div className="flex gap-3 pt-4 mt-6 border-t border-gray-100">
             <button type="button" onClick={onClose} className="flex-1 btn-secondary">{t('common:cancel')}</button>
-            <button type="submit" disabled={loading} className="flex-1 btn-primary">
+            <button type="submit" disabled={loading || (!user && passwordErrors.length > 0)} className="flex-1 btn-primary">
               {loading ? <Loader2 size={18} className="animate-spin" /> : t('common:save')}
             </button>
           </div>
