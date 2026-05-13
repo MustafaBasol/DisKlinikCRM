@@ -174,15 +174,18 @@ const appointmentTypeSchema = z.object({
   isService: z.boolean().default(true),
 });
 
-const userCreateSchema = z.object({
+  const userBaseSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Valid email is required'),
   phone: z.string().optional().nullable(),
   role: z.enum(['admin', 'doctor', 'receptionist', 'billing']),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
   isActive: z.boolean().default(true),
-}).refine(data => {
+  });
+
+  const userCreateSchema = userBaseSchema.extend({
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+  }).refine(data => {
   const validation = validatePassword(data.password);
   return validation.valid;
 }, {
@@ -190,7 +193,7 @@ const userCreateSchema = z.object({
   path: ['password'],
 });
 
-const userUpdateSchema = userCreateSchema.omit({ password: true }).partial().extend({
+  const userUpdateSchema = userBaseSchema.partial().extend({
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
 }).refine(data => {
   if (data.password) {
