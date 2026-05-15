@@ -11,24 +11,27 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { appointmentRequestService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { formatDateTimeInTimeZone, formatTimeInTimeZone } from '../utils/dateTime';
 
 const AppointmentRequests: React.FC = () => {
   const { t, i18n } = useTranslation(['appointmentRequests', 'common']);
-  const [requests, setRequests] = useState<any[]>([]);
+  const { user } = useAuth();
+  const [allRequests, setAllRequests] = useState<any[]>([]);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState('');
   const [error, setError] = useState('');
+  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
 
   const fetchRequests = async () => {
     setLoading(true);
     setError('');
     try {
       const res = await appointmentRequestService.getAll({
-        status: status || undefined,
         source: 'whatsapp',
       });
-      setRequests(res.data);
+      setAllRequests(res.data);
     } catch {
       setError(t('appointmentRequests:errors.loadFailed'));
     } finally {
@@ -38,7 +41,7 @@ const AppointmentRequests: React.FC = () => {
 
   useEffect(() => {
     fetchRequests();
-  }, [status]);
+  }, []);
 
   const updateStatus = async (request: any, nextStatus: string) => {
     const rejectionReason = nextStatus === 'rejected'
@@ -82,8 +85,11 @@ const AppointmentRequests: React.FC = () => {
     }
   };
 
+  const requests = status ? allRequests.filter(item => item.status === status) : allRequests;
+
   const stats = {
-    pending: requests.filter(item => item.status === 'pending').length,
+    pending: allRequests.filter(item => item.status === 'pending').length,
+    converted: allRequests.filter(item => item.status === 'converted').length,
     visible: requests.length,
   };
 
@@ -110,8 +116,8 @@ const AppointmentRequests: React.FC = () => {
           <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
         </div>
         <div className="card p-4">
-          <p className="text-sm text-gray-500">{t('appointmentRequests:summary.source')}</p>
-          <p className="text-2xl font-bold text-green-600">WhatsApp</p>
+          <p className="text-sm text-gray-500">{t('appointmentRequests:summary.converted')}</p>
+          <p className="text-2xl font-bold text-green-600">{stats.converted}</p>
         </div>
       </div>
 
@@ -146,13 +152,13 @@ const AppointmentRequests: React.FC = () => {
           </div>
         ) : (
           requests.map(request => (
-            <div key={request.id} className="card p-4 space-y-4">
+            <div key={request.id} className={`card p-4 space-y-4 border-l-4 ${statusCardClass(request.status)}`}>
               <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                 <div className="space-y-2 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-bold text-gray-900">{request.patientName}</h3>
-                    <span className={`px-2 py-1 rounded text-xs font-bold border ${statusClass(request.status)}`}>
-                      {t(`appointmentRequests:status.${request.status}`)}
+                    <span className={`px-3 py-1.5 rounded-md text-sm font-bold border ${statusClass(request.status)}`}>
+                      {t('appointmentRequests:labels.status')}: {t(`appointmentRequests:status.${request.status}`)}
                     </span>
                     {request.status === 'converted' && (
                       <span className="px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
@@ -173,7 +179,7 @@ const AppointmentRequests: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-sm">
                     <InfoBlock label={t('appointmentRequests:fields.service')} value={request.appointmentType?.name || t('common:unassigned')} />
                     <InfoBlock label={t('appointmentRequests:fields.practitioner')} value={request.practitioner ? `Dt. ${request.practitioner.firstName} ${request.practitioner.lastName}` : t('common:unassigned')} />
-                    <InfoBlock label={t('appointmentRequests:fields.preferredTime')} value={formatDateRange(request.preferredStartTime, request.preferredEndTime, i18n.language)} />
+                    <InfoBlock label={t('appointmentRequests:fields.preferredTime')} value={formatDateRange(request.preferredStartTime, request.preferredEndTime, i18n.language, clinicTimeZone)} />
                   </div>
 
                   {request.rawMessage && (
@@ -227,13 +233,23 @@ const InfoBlock = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-const formatDateRange = (start?: string, end?: string, locale = 'tr') => {
+const formatDateRange = (start?: string, end?: string, locale = 'tr', timeZone = 'Europe/Paris') => {
   if (!start) return '-';
-  const startDate = new Date(start);
-  const startLabel = startDate.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  const startLabel = formatDateTimeInTimeZone(start, locale, timeZone);
   if (!end) return startLabel;
-  const endLabel = new Date(end).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const endLabel = formatTimeInTimeZone(end, locale, timeZone);
   return `${startLabel} - ${endLabel}`;
+};
+
+const statusCardClass = (status: string) => {
+  switch (status) {
+    case 'pending': return 'border-l-amber-400';
+    case 'approved': return 'border-l-blue-400';
+    case 'converted': return 'border-l-green-500';
+    case 'rejected': return 'border-l-red-400';
+    case 'closed': return 'border-l-gray-300';
+    default: return 'border-l-gray-200';
+  }
 };
 
 const statusClass = (status: string) => {

@@ -22,10 +22,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { dashboardService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { formatTimeInTimeZone } from '../utils/dateTime';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation(['dashboard', 'common', 'appointments', 'patients', 'tasks', 'messages']);
   const { user } = useAuth();
+  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   const navigate = useNavigate();
   
   const [data, setData] = useState<any>(null);
@@ -220,7 +222,7 @@ const Dashboard: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                        {new Date(appt.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">

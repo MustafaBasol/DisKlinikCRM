@@ -20,6 +20,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
 import { patientService, taskService, treatmentCaseService, paymentService, insuranceProvisionService } from '../services/api';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
@@ -27,11 +28,14 @@ import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PaymentForm from '../components/PaymentForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '../utils/dateTime';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases']);
+  const { user } = useAuth();
+  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   const [patient, setPatient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -257,7 +261,7 @@ const PatientDetail: React.FC = () => {
                     <div>
                       <p className="text-primary-100 text-sm">{t('common:date')}</p>
                       <p className="text-lg font-bold">
-                        {new Date(patient.appointments[0].startTime).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })} at {new Date(patient.appointments[0].startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatDateInTimeZone(patient.appointments[0].startTime, undefined, clinicTimeZone, { month: 'long', day: 'numeric', year: 'numeric' })} at {formatTimeInTimeZone(patient.appointments[0].startTime, undefined, clinicTimeZone)}
                       </p>
                     </div>
                     <div>
@@ -290,7 +294,7 @@ const PatientDetail: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-700">{new Date(appt.startTime).toLocaleDateString()}</p>
+                      <p className="text-sm text-gray-700">{formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone)}</p>
                       <span className={`badge ${
                         appt.status === 'completed' ? 'badge-green' : 'badge-blue'
                       }`}>

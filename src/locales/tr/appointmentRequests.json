@@ -5,7 +5,11 @@
   "summary": {
     "visible": "Listelenen Talep",
     "pending": "Bekleyen Talep",
-    "source": "Kaynak"
+    "source": "Kaynak",
+    "converted": "Takvime İşlenen"
+  },
+  "labels": {
+    "status": "Durum"
   },
   "filters": {
     "allStatus": "Tüm Durumlar",
