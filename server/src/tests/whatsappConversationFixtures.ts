@@ -325,6 +325,93 @@ const run = async () => {
     assert.match(message, /16:00/);
   });
 
+  await runFixture('awaiting_time supports explicit time ranges like 15-16 arasında', async () => {
+    const recorder = createStateRecorder();
+    const availableSlots = [
+      createSlot('13:30', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('15:00', 'p2', 'Dt. Kerem Ozguler'),
+      createSlot('15:30', 'p3', 'Uzm. Dt. Hatice Erkin'),
+      createSlot('16:00', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('16:30', 'p2', 'Dt. Kerem Ozguler'),
+    ];
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: 'Saat 15-16 arasında istiyorum',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots,
+        lastShownSlots: availableSlots.slice(0, 3),
+      },
+      extractNumericSelection,
+      findSlotMatches: defaultFindSlotMatches,
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => ({ appointmentType: { name: 'Dis Temizligi' } }),
+    });
+
+    assert.match(message, /saat 15:00 ile 16:00 arasındaki uygun saatler/i);
+    assert.ok(!message.includes('13:30'));
+    assert.match(message, /15:00/);
+    assert.match(message, /15:30/);
+    assert.match(message, /16:00/);
+    assert.ok(!message.includes('16:30'));
+  });
+
+  await runFixture('awaiting_time uses AI fallback interpretation when local parsing finds no actionable time signal', async () => {
+    const recorder = createStateRecorder();
+    const availableSlots = [
+      createSlot('13:30', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('15:00', 'p2', 'Dt. Kerem Ozguler'),
+      createSlot('15:30', 'p3', 'Uzm. Dt. Hatice Erkin'),
+    ];
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: 'ogleden sonraymis gibi ama 3ten sonrasina bakin',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots,
+        lastShownSlots: availableSlots.slice(0, 2),
+      },
+      extractNumericSelection,
+      findSlotMatches: defaultFindSlotMatches,
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      interpretTimeWithAi: async () => ({
+        exactTime: null,
+        afterTime: '15:00',
+        timePreference: null,
+      }),
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => ({ appointmentType: { name: 'Dis Temizligi' } }),
+    });
+
+    assert.match(message, /saat 15:00 sonrası uygun saatler/i);
+    assert.ok(!message.includes('13:30'));
+    assert.match(message, /15:00/);
+    assert.match(message, /15:30/);
+  });
+
   await runFixture('awaiting_time offers next unseen slots for more-options requests', async () => {
     const recorder = createStateRecorder();
     const availableSlots = [

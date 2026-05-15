@@ -9,7 +9,7 @@ import {
   slotIdentity,
   type SavedAvailableSlot,
 } from './whatsappAvailability.js';
-import { interpretTimeRequest } from './whatsappInterpreter.js';
+import { interpretTimeRequest, type TimePreference } from './whatsappInterpreter.js';
 import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE } from '../utils/whatsappDate.js';
 
 export type BookingServiceOption = {
@@ -67,6 +67,11 @@ export type AwaitingTimeDependencies = {
   formatAvailabilityMessage: (date: string, slots: SavedAvailableSlot[]) => string;
   minutesToTime: (minutes: number) => string;
   logAvailabilitySave: (totalSlots: number, shownSlots: number) => void;
+  interpretTimeWithAi?: (text: string) => Promise<{
+    exactTime: string | null;
+    afterTime: string | null;
+    timePreference: TimePreference | null;
+  } | null>;
   upsertState: (data: {
     customerName?: string | null;
     currentIntent?: string | null;
@@ -112,6 +117,27 @@ export type AwaitingServiceDependencies = {
     lastMessage?: string | null;
     stateJson?: BookingStateJson | null;
   }) => Promise<unknown>;
+};
+
+const parseTimeStringToMinutes = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  if (!match) {
+    return null;
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const filterSlotsByTimeRange = (slots: SavedAvailableSlot[], startMinutes: number, endMinutes: number) => {
+  return slots.filter(slot => {
+    const [hours, minutes] = slot.localStartTime.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes;
+    return totalMinutes >= startMinutes && totalMinutes <= endMinutes;
+  });
 };
 
 export type AwaitingDateDependencies = {
@@ -376,6 +402,7 @@ export const handleAwaitingTimeStep = async ({
   formatAvailabilityMessage,
   minutesToTime,
   logAvailabilitySave,
+  interpretTimeWithAi,
   upsertState,
   resetState,
   createAppointment,
@@ -407,9 +434,20 @@ export const handleAwaitingTimeStep = async ({
   });
 
   const interpretedTimeRequest = interpretTimeRequest(text);
-  const preference = interpretedTimeRequest.preference;
-  const explicitTimeThreshold = interpretedTimeRequest.afterTimeMinutes;
-  const explicitRequestedTime = interpretedTimeRequest.exactTime;
+  const hasPreciseLocalTimeSignal = interpretedTimeRequest.exactTime !== null
+    || interpretedTimeRequest.afterTimeMinutes !== null
+    || interpretedTimeRequest.rangeStartMinutes !== null;
+  const aiInterpretedTimeRequest = !numericSlotSelection && !hasPreciseLocalTimeSignal && interpretTimeWithAi
+    ? await interpretTimeWithAi(text)
+    : null;
+  const aiAfterTimeMinutes = parseTimeStringToMinutes(aiInterpretedTimeRequest?.afterTime);
+  const explicitRequestedTime = interpretedTimeRequest.exactTime ?? aiInterpretedTimeRequest?.exactTime ?? null;
+  const explicitTimeThreshold = interpretedTimeRequest.afterTimeMinutes ?? aiAfterTimeMinutes;
+  const preference = explicitRequestedTime || explicitTimeThreshold !== null
+    ? interpretedTimeRequest.preference
+    : interpretedTimeRequest.preference ?? aiInterpretedTimeRequest?.timePreference ?? null;
+  const rangeStartMinutes = interpretedTimeRequest.rangeStartMinutes;
+  const rangeEndMinutes = interpretedTimeRequest.rangeEndMinutes;
   const normalizedDifferentDate = normalizeDateFromTurkishInput(text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE);
 
   if (!numericSlotSelection && slotMatch.extractedTime && slotMatch.hasPractitionerFragment && slotMatch.matches.length > 1) {
@@ -481,6 +519,39 @@ export const handleAwaitingTimeStep = async ({
 
       return `${explicitRequestedTime} için uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
     }
+  }
+
+  if (!numericSlotSelection && rangeStartMinutes !== null && rangeEndMinutes !== null) {
+    const filteredSlots = filterSlotsByTimeRange(availableSlots, rangeStartMinutes, rangeEndMinutes);
+    const shownSlots = filteredSlots.slice(0, 8);
+
+    console.log('[whatsapp-assistant] time-request', {
+      phone,
+      text,
+      type: 'time_range',
+      requestedStartTime: minutesToTime(rangeStartMinutes),
+      requestedEndTime: minutesToTime(rangeEndMinutes),
+      totalAvailableSlots: availableSlots.length,
+      matchedCount: filteredSlots.length,
+    });
+
+    await upsertState({
+      customerName,
+      currentIntent: 'book_appointment',
+      step: 'awaiting_time',
+      selectedAppointmentTypeId,
+      selectedAppointmentTypeName,
+      selectedDate,
+      selectedTime: null,
+      lastMessage: text,
+      stateJson: { availableSlots, lastShownSlots: shownSlots },
+    });
+
+    if (filteredSlots.length === 0) {
+      return `${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(rangeStartMinutes)} ile ${minutesToTime(rangeEndMinutes)} arasında uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
+    }
+
+    return formatSlotListMessage(`Elbette, ${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(rangeStartMinutes)} ile ${minutesToTime(rangeEndMinutes)} arasındaki uygun saatler şunlar:`, shownSlots);
   }
 
   if (!numericSlotSelection && explicitTimeThreshold !== null) {

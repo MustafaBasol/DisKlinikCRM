@@ -2000,6 +2000,22 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       formatAvailabilityMessage,
       minutesToTime,
       logAvailabilitySave,
+      interpretTimeWithAi: async messageText => {
+        const extracted = await resolveAssistantExtraction(messageText, services, {
+          currentIntent: state?.currentIntent,
+          step: state?.step,
+          customerName: state?.customerName,
+          selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+          selectedDate: state?.selectedDate,
+        });
+
+        return {
+          exactTime: extracted.exactTime,
+          afterTime: extracted.afterTime,
+          timePreference: extracted.timePreference,
+        };
+      },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
       resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
       createAppointment: createAppointmentFromAssistant,
