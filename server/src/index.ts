@@ -1753,37 +1753,39 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       return 'Tabii, hangi gün için kontrol etmemi istersiniz? Örneğin yarın, 22 Mayıs veya cuma yazabilirsiniz.';
     }
 
-    console.info('[whatsapp-assistant] availability-check', { appointmentTypeId: selectedAppointmentTypeId, date: normalizedDate });
-    try {
-      const availability = await loadAvailabilityForDate(prisma, clinic.id, selectedAppointmentTypeId, normalizedDate, selectedPractitionerId);
-      if (!availability) {
-        return 'Önce hizmet seçelim. Lütfen listedeki hizmet numarasını paylaşın.';
-      }
-
-      logStateTransition(input.phone, currentStep, 'awaiting_time', 'change_date_direct');
-      await upsertWhatsAppConversationState(clinic.id, input.phone, {
-        customerName,
-        currentIntent: 'book_appointment',
-        step: 'awaiting_time',
+    logStateTransition(input.phone, currentStep, 'awaiting_time', 'change_date_direct');
+    return handleAwaitingDateStep({
+      prisma,
+      clinicId: clinic.id,
+      text: input.text,
+      customerName,
+      state: {
         selectedAppointmentTypeId,
         selectedAppointmentTypeName,
         selectedPractitionerId,
-        selectedDate: normalizedDate,
-        selectedTime: null,
-        lastMessage: input.text,
-        stateJson: { availableSlots: availability.allSlots, lastShownSlots: availability.shownSlots },
-      });
-      logAvailabilitySave(availability.allSlots.length, availability.shownSlots.length);
+      },
+      buildAvailableSlots,
+      formatAvailabilityMessage,
+      logAvailabilitySave,
+      minutesToTime,
+      interpretTimeWithAi: async messageText => {
+        const extracted = await resolveAssistantExtraction(messageText, services, {
+          currentIntent: state?.currentIntent,
+          step: state?.step,
+          customerName: state?.customerName,
+          selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+          selectedDate: state?.selectedDate,
+        });
 
-      if (availability.allSlots.length === 0) {
-        return 'Bu tarih için uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim.';
-      }
-
-      return formatAvailabilityMessage(normalizedDate, availability.shownSlots);
-    } catch (error) {
-      console.error('[whatsapp-assistant] availability-error', error);
-      return 'Şu anda randevu takvimine erişirken teknik bir sorun oluştu. Lütfen biraz sonra tekrar deneyin.';
-    }
+        return {
+          exactTime: extracted.exactTime,
+          afterTime: extracted.afterTime,
+          timePreference: extracted.timePreference,
+        };
+      },
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+    });
   }
 
   if (!existingPatient && currentStep !== 'awaiting_name') {

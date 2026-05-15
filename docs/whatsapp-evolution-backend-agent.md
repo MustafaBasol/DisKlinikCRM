@@ -182,4 +182,6 @@ Amaç: doğal dil yorumlamayı booking execution akışından ayırmak ve WhatsA
 - [x] 2026-05-15: Extraction sonrası intent routing bloğu `server/src/services/whatsappResolvedIntentRouter.ts` servisine ayrıldı ve orchestration seviyesinde fixture senaryoları eklendi.
 - [x] 2026-05-15: Evolution webhook payload normalizasyonu ve ignore kararları `server/src/services/whatsappWebhookPayload.ts` servisine ayrıldı; `unsupported_event`, `from_me`, `no_text_message` ve metin çıkarımı fixture kapsamına alındı.
 - [x] 2026-05-15: Public WhatsApp secret doğrulaması ve availability/lookup/request schema parse yüzeyi `server/src/services/whatsappPublicApi.ts` servisine ayrıldı; header/bearer secret ve invalid tarih aralığı fixture kapsamına alındı.
+- [x] 2026-05-15: Aktif booking akışındaki tarih değiştirme intercept'i `handleAwaitingDateStep` ile hizalandı; aynı mesajdaki `14 ten sonra` gibi saat eşikleri artık ilk yanıtta da korunuyor.
+- [x] 2026-05-15: `server/src/tests/whatsappConversationFixtures.ts` içine `19 Mayıs saat 14 ten sonra istiyorum` regresyon fixture'ı eklendi; spaced threshold phrasing senaryosu otomatik doğrulamaya bağlandı.
 - [x] Sonraki adım: yeni üretim bug'ları geldikçe fixture setine regresyon senaryoları eklemek.

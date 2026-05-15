@@ -253,6 +253,52 @@ const run = async () => {
     assert.match(message, /15:30/);
   });
 
+  await runFixture('awaiting_date applies after-time filtering for spaced threshold phrasing in the same message', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: '19 Mayıs saat 14 ten sonra istiyorum',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+      },
+      buildAvailableSlots: async () => [
+        {
+          practitioner: { id: 'p1', firstName: 'Dt.', lastName: 'Aysegul Akmese' },
+          startTime: new Date('2026-05-19T09:00:00.000Z'),
+          endTime: new Date('2026-05-19T09:30:00.000Z'),
+          localStartTime: '09:00',
+          localEndTime: '09:30',
+        },
+        {
+          practitioner: { id: 'p2', firstName: 'Dt.', lastName: 'Batikan Sirin' },
+          startTime: new Date('2026-05-19T14:00:00.000Z'),
+          endTime: new Date('2026-05-19T14:30:00.000Z'),
+          localStartTime: '14:00',
+          localEndTime: '14:30',
+        },
+        {
+          practitioner: { id: 'p3', firstName: 'Dt.', lastName: 'Kerem Ozguler' },
+          startTime: new Date('2026-05-19T14:30:00.000Z'),
+          endTime: new Date('2026-05-19T15:00:00.000Z'),
+          localStartTime: '14:30',
+          localEndTime: '15:00',
+        },
+      ],
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      upsertState: recorder.upsertState,
+    });
+
+    assert.match(message, /19 Mayıs 2026 için saat 14:00 sonrası uygun saatler/i);
+    assert.ok(!message.includes('09:00'));
+    assert.match(message, /14:00/);
+    assert.match(message, /14:30/);
+  });
+
   await runFixture('awaiting_time finds afternoon slots beyond the initial shown list', async () => {
     const recorder = createStateRecorder();
     const availableSlots = [
