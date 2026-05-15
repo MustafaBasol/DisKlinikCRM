@@ -62,9 +62,6 @@ export const buildClarificationMessage = (
   state: ClarificationState | null | undefined,
   customerName?: string | null,
 ): ClarificationDecision => {
-  const prefix = extracted.clarificationReason
-    ? `${extracted.clarificationReason.trim()} `
-    : '';
   const inferredIntent = extracted.intent !== 'unknown'
     ? extracted.intent
     : (state?.currentIntent as ClarificationIntent | null) ?? 'unknown';
@@ -111,13 +108,13 @@ export const buildClarificationMessage = (
 
   if (extracted.intent === 'unknown') {
     return {
-      message: formatWarmPrompt(`${prefix}Sizi doğru yönlendirebilmem için şunu netleştirebilir misiniz: yeni randevu mu almak istiyorsunuz, mevcut randevunuzu mu sorgulamak istiyorsunuz, yoksa iptal mi etmek istiyorsunuz?`, customerName),
+      message: formatWarmPrompt('Sizi doğru yönlendirebilmem için şunu netleştirebilir misiniz: yeni randevu mu almak istiyorsunuz, mevcut randevunuzu mu sorgulamak istiyorsunuz, yoksa iptal mi etmek istiyorsunuz?', customerName),
       nextState: null,
     };
   }
 
   return {
-    message: formatWarmPrompt(`${prefix}Sizi doğru yönlendirebilmem için isteğinizi biraz daha açık yazabilir misiniz?`, customerName),
+    message: formatWarmPrompt('Sizi doğru yönlendirebilmem için isteğinizi biraz daha açık yazabilir misiniz?', customerName),
     nextState: null,
   };
 };

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { buildClarificationMessage } from '../services/whatsappClarification.js';
 import {
+  handleAwaitingConfirmationStep,
+  handleAwaitingDateStep,
   handleAwaitingServiceStep,
   handleAwaitingTimeStep,
   type BookingServiceOption,
@@ -112,6 +114,22 @@ const run = async () => {
     assert.match(result.message, /hangi gün/i);
   });
 
+  await runFixture('clarification hides raw AI reasons for unknown intents', () => {
+    const result = buildClarificationMessage({
+      intent: 'unknown',
+      appointmentTypeName: null,
+      appointmentTypeId: null,
+      dateText: null,
+      exactTime: null,
+      afterTime: null,
+      timePreference: null,
+      clarificationReason: 'kullanıcı müsaitlik durumu hakkında genel bir soru soruyor',
+    }, null, customerName);
+
+    assert.match(result.message, /yeni randevu mu almak istiyorsunuz/i);
+    assert.doesNotMatch(result.message, /kullanıcı müsaitlik durumu hakkında genel bir soru soruyor/i);
+  });
+
   await runFixture('awaiting_service keeps multiple matching services in state', async () => {
     const recorder = createStateRecorder();
     const message = await handleAwaitingServiceStep({
@@ -187,6 +205,52 @@ const run = async () => {
         { id: 'svc-2', name: 'Dis Beyazlatma' },
       ],
     });
+  });
+
+  await runFixture('awaiting_date applies after-time filtering when the date message also includes a time threshold', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: '18 Mayıs 15ten sonra var mı',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+      },
+      buildAvailableSlots: async () => [
+        {
+          practitioner: { id: 'p1', firstName: 'Dt.', lastName: 'Aysegul Akmese' },
+          startTime: new Date('2026-05-18T09:00:00.000Z'),
+          endTime: new Date('2026-05-18T09:30:00.000Z'),
+          localStartTime: '09:00',
+          localEndTime: '09:30',
+        },
+        {
+          practitioner: { id: 'p2', firstName: 'Dt.', lastName: 'Kerem Ozguler' },
+          startTime: new Date('2026-05-18T15:00:00.000Z'),
+          endTime: new Date('2026-05-18T15:30:00.000Z'),
+          localStartTime: '15:00',
+          localEndTime: '15:30',
+        },
+        {
+          practitioner: { id: 'p3', firstName: 'Uzm. Dt.', lastName: 'Hatice Erkin' },
+          startTime: new Date('2026-05-18T15:30:00.000Z'),
+          endTime: new Date('2026-05-18T16:00:00.000Z'),
+          localStartTime: '15:30',
+          localEndTime: '16:00',
+        },
+      ],
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      upsertState: recorder.upsertState,
+    });
+
+    assert.match(message, /saat 15:00 sonrası uygun saatler/i);
+    assert.ok(!message.includes('09:00'));
+    assert.match(message, /15:00/);
+    assert.match(message, /15:30/);
   });
 
   await runFixture('awaiting_time finds afternoon slots beyond the initial shown list', async () => {
@@ -498,6 +562,286 @@ const run = async () => {
     assert.match(message, /14:30/);
     assert.match(message, /15:15/);
     assert.equal(recorder.calls.length, 1);
+  });
+
+  await runFixture('awaiting_time asks for confirmation instead of immediately creating the appointment for a unique slot', async () => {
+    const recorder = createStateRecorder();
+    const availableSlots = [
+      createSlot('16:30', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('17:00', 'p2', 'Dt. Kerem Ozguler'),
+    ];
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: 'Aysegul hanim 16:30 da uygun mu',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots,
+        lastShownSlots: availableSlots,
+      },
+      extractNumericSelection,
+      findSlotMatches: () => ({
+        extractedTime: '16:30',
+        hasPractitionerFragment: true,
+        matches: [{ slot: availableSlots[0], index: 0 }],
+      }),
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => ({ appointmentType: { name: 'Dis Temizligi' } }),
+    });
+
+    assert.match(message, /uygun görünüyor/i);
+    assert.match(message, /onaylıyor musunuz/i);
+    assert.equal(recorder.calls[0].step, 'awaiting_confirmation');
+    const updatedState = recorder.calls[0].stateJson as BookingStateJson;
+    assert.equal(updatedState.pendingConfirmationSlot?.localStartTime, '16:30');
+  });
+
+  await runFixture('awaiting_confirmation only creates the appointment after explicit approval', async () => {
+    const recorder = createStateRecorder();
+    let created = 0;
+    const pendingSlot = createSlot('16:30', 'p1', 'Dt. Aysegul Akmese');
+
+    const rejectMessage = await handleAwaitingConfirmationStep({
+      clinicId,
+      phone,
+      text: 'Sadece uygun mu diye sordum',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots: [pendingSlot],
+        lastShownSlots: [pendingSlot],
+        pendingConfirmationSlot: pendingSlot,
+      },
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => {
+        created += 1;
+        return { appointmentType: { name: 'Dis Temizligi' } };
+      },
+    });
+
+    assert.match(rejectMessage, /yalnız uygunluğu teyit etmiş oldum/i);
+    assert.equal(created, 0);
+
+    const approveMessage = await handleAwaitingConfirmationStep({
+      clinicId,
+      phone,
+      text: 'Evet, oluştur',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots: [pendingSlot],
+        lastShownSlots: [pendingSlot],
+        pendingConfirmationSlot: pendingSlot,
+      },
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => {
+        created += 1;
+        return { appointmentType: { name: 'Dis Temizligi' } };
+      },
+    });
+
+    assert.match(approveMessage, /Randevunuzu oluşturdum/i);
+    assert.equal(created, 1);
+  });
+
+  await runFixture('transcript flow keeps availability checks non-committing and allows appointment lookup afterwards', async () => {
+    const availableSlots = [
+      createSlot('09:00', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('15:00', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('15:30', 'p2', 'Dt. Kerem Ozguler'),
+      createSlot('16:30', 'p1', 'Dt. Aysegul Akmese'),
+    ];
+    let conversationState: {
+      currentIntent?: string | null;
+      step?: string | null;
+      selectedAppointmentTypeId?: string | null;
+      selectedAppointmentTypeName?: string | null;
+      selectedPractitionerId?: string | null;
+      selectedDate?: string | null;
+      selectedTime?: string | null;
+      stateJson?: BookingStateJson | null;
+      lastMessage?: string | null;
+    } = {
+      currentIntent: 'book_appointment',
+      step: 'awaiting_date',
+      selectedAppointmentTypeId: 'svc-1',
+      selectedAppointmentTypeName: 'Estetik Dis Hekimligi',
+      stateJson: null,
+    };
+    const upsertState = async (data: Record<string, unknown>) => {
+      conversationState = {
+        ...conversationState,
+        ...data,
+      };
+      return conversationState;
+    };
+    let resetCalls = 0;
+    let createdAppointments = 0;
+
+    const dateMessage = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: '18 Mayıs 15ten sonra var mı',
+      customerName: 'Selami Sahin',
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Estetik Dis Hekimligi',
+      },
+      buildAvailableSlots: async () => availableSlots.map(slot => ({
+        practitioner: {
+          id: slot.practitionerId,
+          firstName: slot.practitionerName.split(' ')[0] ?? 'Dt.',
+          lastName: slot.practitionerName.split(' ').slice(1).join(' ') || 'Hekim',
+        },
+        startTime: new Date(slot.startTime),
+        endTime: new Date(slot.endTime),
+        localStartTime: slot.localStartTime,
+        localEndTime: slot.localEndTime,
+      })),
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      upsertState,
+    });
+
+    assert.match(dateMessage, /saat 15:00 sonrası uygun saatler/i);
+    assert.ok(!dateMessage.includes('09:00'));
+    assert.equal(conversationState.step, 'awaiting_time');
+
+    const confirmPrompt = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: 'Aysegul hanim 16:30 da uygun mu',
+      customerName: 'Selami Sahin',
+      state: {
+        selectedAppointmentTypeId: conversationState.selectedAppointmentTypeId,
+        selectedAppointmentTypeName: conversationState.selectedAppointmentTypeName,
+        selectedDate: conversationState.selectedDate,
+        selectedPractitionerId: conversationState.selectedPractitionerId,
+      },
+      stateJson: conversationState.stateJson ?? {},
+      extractNumericSelection,
+      findSlotMatches: () => ({
+        extractedTime: '16:30',
+        hasPractitionerFragment: true,
+        matches: [{ slot: availableSlots[3], index: 3 }],
+      }),
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      upsertState,
+      resetState: async () => {
+        resetCalls += 1;
+      },
+      createAppointment: async () => {
+        createdAppointments += 1;
+        return { appointmentType: { name: 'Estetik Dis Hekimligi' } };
+      },
+    });
+
+    assert.match(confirmPrompt, /onaylıyor musunuz/i);
+    assert.equal(conversationState.step, 'awaiting_confirmation');
+    assert.equal(createdAppointments, 0);
+
+    const rejectPrompt = await handleAwaitingConfirmationStep({
+      clinicId,
+      phone,
+      text: 'Sadece uygun mu diye sordum',
+      customerName: 'Selami Sahin',
+      state: {
+        selectedAppointmentTypeId: conversationState.selectedAppointmentTypeId,
+        selectedAppointmentTypeName: conversationState.selectedAppointmentTypeName,
+        selectedDate: conversationState.selectedDate,
+        selectedPractitionerId: conversationState.selectedPractitionerId,
+      },
+      stateJson: conversationState.stateJson ?? {},
+      upsertState,
+      resetState: async () => {
+        resetCalls += 1;
+      },
+      createAppointment: async () => {
+        createdAppointments += 1;
+        return { appointmentType: { name: 'Estetik Dis Hekimligi' } };
+      },
+    });
+
+    assert.match(rejectPrompt, /uygunluğu teyit etmiş oldum/i);
+    assert.equal(conversationState.step, 'awaiting_time');
+    assert.equal(createdAppointments, 0);
+
+    const lookupMessage = await routeResolvedWhatsAppIntent({
+      extraction: {
+        intent: 'check_appointment',
+        appointmentTypeName: null,
+        appointmentTypeId: null,
+        dateText: null,
+        exactTime: null,
+        afterTime: null,
+        timePreference: null,
+        clarificationReason: null,
+        confidence: 0.99,
+        needsClarification: false,
+      },
+      state: {
+        currentIntent: 'book_appointment',
+        step: conversationState.step,
+        customerName: 'Selami Sahin',
+        selectedAppointmentTypeId: conversationState.selectedAppointmentTypeId,
+        selectedAppointmentTypeName: conversationState.selectedAppointmentTypeName,
+        selectedDate: conversationState.selectedDate,
+      },
+      customerName: 'Selami Sahin',
+      clinicName: 'Aile Dis Kliniği',
+      inputText: 'Mevcut randevuyu sorgulamak istiyorum',
+      services: baseServices,
+      upsertState,
+      resetState: async () => {
+        resetCalls += 1;
+      },
+      getAppointments: async () => [{
+        id: 'apt-1',
+        date: '2026-05-18',
+        startTime: '16:30',
+        endTime: '17:00',
+        serviceName: 'Estetik Dis Hekimligi',
+        practitionerName: 'Dt. Aysegul Akmese',
+        status: 'scheduled',
+      }],
+      formatAppointmentLookup: appointments => [
+        'Sistemde görebildiğim randevularınız şunlar:',
+        ...appointments.map((appointment, index) => `${index + 1}. ${appointment.date} ${appointment.startTime} - ${appointment.serviceName} / ${appointment.practitionerName} / ${appointment.status}`),
+      ].join('\n'),
+      formatServiceList: () => 'services',
+      formatMainMenu: () => 'main menu',
+      handleCancelIntent: async () => 'cancel',
+    });
+
+    assert.match(lookupMessage, /Sistemde görebildiğim randevularınız şunlar:/i);
+    assert.match(lookupMessage, /2026-05-18 16:30 - Estetik Dis Hekimligi/i);
+    assert.equal(resetCalls, 1);
+    assert.equal(createdAppointments, 0);
   });
 
   await runFixture('resolved intent router sends booking requests into awaiting_service', async () => {

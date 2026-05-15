@@ -13,7 +13,7 @@ import {
   saveSlotsForState,
   type SavedAvailableSlot,
 } from './services/whatsappAvailability.js';
-import { handleAwaitingDateStep, handleAwaitingServiceStep, handleAwaitingTimeStep } from './services/whatsappBookingFlow.js';
+import { handleAwaitingConfirmationStep, handleAwaitingDateStep, handleAwaitingServiceStep, handleAwaitingTimeStep } from './services/whatsappBookingFlow.js';
 import {
   extractExplicitRequestedTime as interpretExplicitRequestedTime,
   extractExplicitTimeThreshold as interpretExplicitTimeThreshold,
@@ -604,6 +604,7 @@ type AssistantStep =
   | 'awaiting_service'
   | 'awaiting_date'
   | 'awaiting_time'
+  | 'awaiting_confirmation'
   | 'awaiting_cancel_selection';
 
 type AssistantExtraction = {
@@ -664,6 +665,7 @@ type ConversationStateJson = {
   lastShownSlots?: SavedAvailableSlot[];
   cancellableAppointments?: SavedAppointmentSummary[];
   matchedServices?: SavedServiceOption[];
+  pendingConfirmationSlot?: SavedAvailableSlot | null;
 };
 
 const WHATSAPP_MAIN_MENU = [
@@ -812,6 +814,9 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
       : undefined,
     matchedServices: Array.isArray(stateValue.matchedServices)
       ? stateValue.matchedServices as SavedServiceOption[]
+      : undefined,
+    pendingConfirmationSlot: stateValue.pendingConfirmationSlot && typeof stateValue.pendingConfirmationSlot === 'object' && !Array.isArray(stateValue.pendingConfirmationSlot)
+      ? stateValue.pendingConfirmationSlot as SavedAvailableSlot
       : undefined,
   };
 };
@@ -996,7 +1001,7 @@ const isCheckAppointmentIntent = (text: string) => {
 
 const isBookingFlowCancelCommand = (text: string, state: AssistantStateRecord | null | undefined) => {
   const normalized = normalizeTurkishSearchText(text);
-  const isBookingStep = ['awaiting_service', 'awaiting_date', 'awaiting_time'].includes(state?.step ?? '');
+  const isBookingStep = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation'].includes(state?.step ?? '');
   if (!isBookingStep) {
     return false;
   }
@@ -1557,7 +1562,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
   const selectedAppointmentTypeName = state?.selectedAppointmentTypeName ?? null;
   const selectedPractitionerId = state?.selectedPractitionerId ?? null;
   const selectedDate = state?.selectedDate ?? null;
-  const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time'].includes(currentStep ?? '');
+  const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation'].includes(currentStep ?? '');
 
   console.log('[whatsapp-assistant] route-start', {
     phone: input.phone,
@@ -1660,6 +1665,26 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
         stateJson: null,
       });
       return 'Tabii, tarihi yeniden seçebiliriz. Hangi gün için kontrol etmemi istersiniz?';
+    }
+
+    if (currentStep === 'awaiting_confirmation') {
+      logStateTransition(input.phone, currentStep, 'awaiting_time', 'back_command');
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_time',
+        selectedAppointmentTypeId,
+        selectedAppointmentTypeName,
+        selectedPractitionerId: null,
+        selectedDate,
+        selectedTime: null,
+        lastMessage: input.text,
+        stateJson: {
+          availableSlots: stateJson.availableSlots,
+          lastShownSlots: stateJson.lastShownSlots,
+        },
+      });
+      return 'Tabii, saat seçimine geri dönebiliriz. İsterseniz başka bir saat veya saat aralığı seçin.';
     }
 
     if (currentStep === 'awaiting_cancel_selection') {
@@ -1967,6 +1992,23 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       buildAvailableSlots,
       formatAvailabilityMessage,
       logAvailabilitySave,
+      minutesToTime,
+      interpretTimeWithAi: async messageText => {
+        const extracted = await resolveAssistantExtraction(messageText, services, {
+          currentIntent: state?.currentIntent,
+          step: state?.step,
+          customerName: state?.customerName,
+          selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+          selectedDate: state?.selectedDate,
+        });
+
+        return {
+          exactTime: extracted.exactTime,
+          afterTime: extracted.afterTime,
+          timePreference: extracted.timePreference,
+        };
+      },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
     });
   }
@@ -2015,6 +2057,36 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
           afterTime: extracted.afterTime,
           timePreference: extracted.timePreference,
         };
+      },
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
+      createAppointment: createAppointmentFromAssistant,
+    });
+  }
+
+  if (currentStep === 'awaiting_confirmation') {
+    console.log('[whatsapp-assistant] route-handler', {
+      phone: input.phone,
+      handler: 'awaiting_confirmation',
+      selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null,
+      selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+      selectedDate: state?.selectedDate ?? null,
+    });
+    return handleAwaitingConfirmationStep({
+      clinicId: clinic.id,
+      phone: input.phone,
+      text: input.text,
+      customerName,
+      state: {
+        selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+        selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+        selectedPractitionerId: state?.selectedPractitionerId,
+        selectedDate: state?.selectedDate,
+      },
+      stateJson: {
+        availableSlots: stateJson.availableSlots,
+        lastShownSlots: stateJson.lastShownSlots,
+        pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
       },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
       resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
