@@ -99,6 +99,7 @@ export type AwaitingServiceDependencies = {
   stateJson: BookingStateJson;
   extractNumericSelection: (text: string) => number | null;
   findServiceMatches: (text: string, services: BookingServiceOption[]) => BookingServiceOption[];
+  formatServiceList: (services: BookingServiceOption[]) => string;
   upsertState: (data: {
     customerName?: string | null;
     currentIntent?: string | null;
@@ -136,6 +137,37 @@ export type AwaitingDateDependencies = {
   }) => Promise<unknown>;
 };
 
+const normalizeBookingText = (value: string) => value
+  .trim()
+  .toLocaleLowerCase('tr-TR')
+  .replace(/ğ/g, 'g')
+  .replace(/ü/g, 'u')
+  .replace(/ş/g, 's')
+  .replace(/ı/g, 'i')
+  .replace(/i̇/g, 'i')
+  .replace(/ö/g, 'o')
+  .replace(/ç/g, 'c')
+  .replace(/[^a-z0-9\s]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const isServiceListRequest = (text: string) => {
+  const normalized = normalizeBookingText(text);
+  return [
+    'hangi hizmetleriniz var',
+    'hangi hizmetler var',
+    'hizmetleriniz neler',
+    'hizmetler neler',
+    'hizmetleri goster',
+    'listeyi goster',
+    'listeyi ver',
+    'listeyi vermedin',
+    'listeyi vermedin ki',
+    'liste yok',
+    'liste gelsin',
+  ].some(pattern => normalized.includes(pattern));
+};
+
 export const handleAwaitingServiceStep = async ({
   text,
   phone,
@@ -145,12 +177,29 @@ export const handleAwaitingServiceStep = async ({
   stateJson,
   extractNumericSelection,
   findServiceMatches,
+  formatServiceList,
   upsertState,
 }: AwaitingServiceDependencies) => {
   const previousMatchedServices = stateJson.matchedServices?.length
     ? services.filter(service => stateJson.matchedServices?.some(match => match.id === service.id))
     : [];
   const selectableServices = previousMatchedServices.length > 0 ? previousMatchedServices : services;
+
+  if (isServiceListRequest(text)) {
+    await upsertState({
+      customerName,
+      currentIntent: 'book_appointment',
+      step: 'awaiting_service',
+      lastMessage: text,
+      stateJson: previousMatchedServices.length > 0
+        ? {
+            matchedServices: previousMatchedServices.map(service => ({ id: service.id, name: service.name } satisfies SavedServiceOption)),
+          }
+        : null,
+    });
+    return formatServiceList(selectableServices);
+  }
+
   const extractedServiceNumber = extractNumericSelection(text);
   const matchedServices = extractedServiceNumber
     ? selectableServices

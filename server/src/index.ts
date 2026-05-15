@@ -1941,6 +1941,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       },
       extractNumericSelection,
       findServiceMatches,
+      formatServiceList,
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
     });
   }

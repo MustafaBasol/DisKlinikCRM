@@ -87,6 +87,7 @@ const run = async () => {
     assert.equal(result.nextState?.step, 'awaiting_service');
     assert.equal(result.nextState?.currentIntent, 'book_appointment');
     assert.match(result.message, /hangi hizmet/i);
+    assert.doesNotMatch(result.message, /Tam olarak hangi hizmeti istediğinizi anlayamadim/i);
   });
 
   await runFixture('clarification routes service-known booking requests to awaiting_date', () => {
@@ -122,12 +123,64 @@ const run = async () => {
       stateJson: {},
       extractNumericSelection,
       findServiceMatches: () => [baseServices[0], baseServices[1]],
+      formatServiceList: services => services.map((service, index) => `${index + 1}. ${service.name}`).join('\n'),
       upsertState: recorder.upsertState,
     });
 
     assert.match(message, /Birden fazla uygun hizmet buldum/i);
     assert.equal(recorder.calls.length, 1);
     assert.equal(recorder.calls[0].step, 'awaiting_service');
+    assert.deepEqual(recorder.calls[0].stateJson, {
+      matchedServices: [
+        { id: 'svc-1', name: 'Dis Temizligi' },
+        { id: 'svc-2', name: 'Dis Beyazlatma' },
+      ],
+    });
+  });
+
+  await runFixture('awaiting_service shows full service list when the user asks what services are available', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingServiceStep({
+      text: 'hangi hizmetleriniz var',
+      phone,
+      customerName,
+      services: baseServices,
+      state: {},
+      stateJson: {},
+      extractNumericSelection,
+      findServiceMatches: () => [],
+      formatServiceList: services => services.map((service, index) => `${index + 1}. ${service.name}`).join('\n'),
+      upsertState: recorder.upsertState,
+    });
+
+    assert.match(message, /1\. Dis Temizligi/);
+    assert.match(message, /2\. Dis Beyazlatma/);
+    assert.equal(recorder.calls.length, 1);
+    assert.equal(recorder.calls[0].step, 'awaiting_service');
+  });
+
+  await runFixture('awaiting_service re-shows narrowed service list when the user says the list was not shown', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingServiceStep({
+      text: 'listeyi vermedin ki',
+      phone,
+      customerName,
+      services: baseServices,
+      state: {},
+      stateJson: {
+        matchedServices: [
+          { id: 'svc-1', name: 'Dis Temizligi' },
+          { id: 'svc-2', name: 'Dis Beyazlatma' },
+        ],
+      },
+      extractNumericSelection,
+      findServiceMatches: () => [],
+      formatServiceList: services => services.map((service, index) => `${index + 1}. ${service.name}`).join('\n'),
+      upsertState: recorder.upsertState,
+    });
+
+    assert.equal(message, '1. Dis Temizligi\n2. Dis Beyazlatma');
+    assert.equal(recorder.calls.length, 1);
     assert.deepEqual(recorder.calls[0].stateJson, {
       matchedServices: [
         { id: 'svc-1', name: 'Dis Temizligi' },

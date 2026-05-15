@@ -80,7 +80,7 @@ export const buildClarificationMessage = (
 
   if (hasBookingSignal && !selectedAppointmentTypeId && !selectedAppointmentTypeName) {
     return {
-      message: formatWarmPrompt(`${prefix}Size yardımcı olayım. Önce hangi hizmet için randevu düşündüğünüzü yazar mısınız?`, customerName),
+      message: formatWarmPrompt('Size yardımcı olayım. Önce hangi hizmet için randevu düşündüğünüzü yazar mısınız?', customerName),
       nextState: {
         currentIntent: 'book_appointment',
         step: 'awaiting_service',
@@ -96,7 +96,7 @@ export const buildClarificationMessage = (
 
   if (hasBookingSignal && selectedAppointmentTypeId && !state?.selectedDate && !extracted.dateText) {
     return {
-      message: formatWarmPrompt(`${prefix}Hangi gün için bakmamı istediğinizi de paylaşır mısınız? Örneğin yarın, 22 Mayıs veya cuma yazabilirsiniz.`, customerName),
+      message: formatWarmPrompt('Hangi gün için bakmamı istediğinizi de paylaşır mısınız? Örneğin yarın, 22 Mayıs veya cuma yazabilirsiniz.', customerName),
       nextState: {
         currentIntent: 'book_appointment',
         step: 'awaiting_date',
