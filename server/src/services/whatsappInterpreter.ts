@@ -172,7 +172,7 @@ export const extractExplicitRequestedTime = (text: string) => {
     return null;
   }
 
-  if (!includesAny(normalized, ['saat', 'olsun', 'istiyorum', 'uygun', 'olur mu', 'civari', 'gibi'])) {
+  if (!includesAny(normalized, ['saat', 'olsun', 'istiyorum', 'uygun', 'musait', 'olur mu', 'civari', 'gibi', 'var mi'])) {
     return null;
   }
 

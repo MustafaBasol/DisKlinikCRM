@@ -624,7 +624,7 @@ export const handleAwaitingTimeStep = async ({
     return formatSlotListMessage(`${slotMatch.extractedTime} için birden fazla hekim uygun görünüyor:`, matchingSlots);
   }
 
-  if (!numericSlotSelection && !slotMatch.hasPractitionerFragment && explicitRequestedTime) {
+  if (!numericSlotSelection && (!slotMatch.hasPractitionerFragment || slotMatch.matches.length === 0) && explicitRequestedTime) {
     const exactMatches = availableSlots
       .map((slot, index) => ({ slot, index }))
       .filter(item => item.slot.localStartTime === explicitRequestedTime);

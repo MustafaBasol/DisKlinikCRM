@@ -770,6 +770,23 @@ const normalizeTurkishSearchText = (value: string) => normalizeIntentText(value)
 
 const isGreetingMessage = (text: string) => /^(merhaba|selam|iyi günler|günaydın|gunaydin|iyi akşamlar|iyi aksamlar|hey)\b/i.test(text.trim());
 
+const isBotIdentityQuestion = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'sen kimsin',
+    'siz kimsiniz',
+    'sen bir robot musun',
+    'bot musun',
+    'yapay zeka misin',
+    'asislan misin',
+    'asistan misin',
+    'kim konusuyor',
+    'kim bu',
+    'hangi sistem',
+    'otomatik mi',
+  ].some(pattern => normalized.includes(pattern));
+};
+
 const isClosingMessage = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
   return [
@@ -1116,6 +1133,9 @@ const normalizePractitionerName = (value: string) => normalizeTurkishSearchText(
   .replace(/\buygun\b/g, ' ')
   .replace(/\bsaat\b/g, ' ')
   .replace(/\bnumara\b/g, ' ')
+  .replace(/\brandevu\b/g, ' ')
+  .replace(/\bmusait\b/g, ' ')
+  .replace(/\bvar\b/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
 
@@ -1589,6 +1609,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       ...clearBookingState(),
     });
     return handleCancelIntent(clinic.id, input.phone);
+  }
+
+  if (isBotIdentityQuestion(input.text)) {
+    return `Ben ${clinic.name} kliniğinin dijital randevu asistanıyım. Randevu almak, mevcut randevunuzu sorgulamak veya iptal etmek için yardımcı olabilirim. Herhangi bir sorunuz varsa kliniği doğrudan arayabilirsiniz.`;
   }
 
   if (isCheckAppointmentIntent(input.text)) {
