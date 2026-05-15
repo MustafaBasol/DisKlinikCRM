@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:fixtures",
+    "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

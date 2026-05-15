@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const allowedIntents = new Set(['book_appointment', 'check_appointment', 'cancel_appointment', 'service_info', 'unknown']);
+const allowedTimePreferences = new Set(['afternoon', 'morning', 'noon', 'evening']);
 
 const assistantExtractionSchema = z.object({
   intent: z.enum(['book_appointment', 'check_appointment', 'cancel_appointment', 'service_info', 'unknown']),
@@ -10,6 +11,12 @@ const assistantExtractionSchema = z.object({
   appointmentTypeId: z.string().nullable(),
   dateText: z.string().nullable(),
   time: z.string().nullable(),
+  exactTime: z.string().nullable(),
+  afterTime: z.string().nullable(),
+  timePreference: z.enum(['afternoon', 'morning', 'noon', 'evening']).nullable(),
+  confidence: z.number().min(0).max(1),
+  needsClarification: z.boolean(),
+  clarificationReason: z.string().nullable(),
 });
 
 type StructuredAssistantExtraction = z.infer<typeof assistantExtractionSchema>;
@@ -77,6 +84,16 @@ const sanitizeAssistantExtraction = (value: unknown) => {
     appointmentTypeId: readNullableString(record.appointmentTypeId),
     dateText: readNullableString(record.dateText),
     time: readNullableString(record.time),
+    exactTime: readNullableString(record.exactTime),
+    afterTime: readNullableString(record.afterTime),
+    timePreference: typeof record.timePreference === 'string' && allowedTimePreferences.has(record.timePreference)
+      ? record.timePreference
+      : null,
+    confidence: typeof record.confidence === 'number'
+      ? Math.max(0, Math.min(1, record.confidence))
+      : 0.4,
+    needsClarification: record.needsClarification === true,
+    clarificationReason: readNullableString(record.clarificationReason),
   };
 };
 
@@ -114,8 +131,21 @@ export const extractAssistantInputWithGoogleAi = async (
     '  "appointmentTypeName": string | null,',
     '  "appointmentTypeId": string | null,',
     '  "dateText": string | null,',
-    '  "time": string | null',
+    '  "time": string | null,',
+    '  "exactTime": string | null,',
+    '  "afterTime": string | null,',
+    '  "timePreference": "afternoon" | "morning" | "noon" | "evening" | null,',
+    '  "confidence": number,',
+    '  "needsClarification": boolean,',
+    '  "clarificationReason": string | null',
     '}',
+    '',
+    'Interpretation rules:',
+    '- exactTime should be normalized like 09:30 or 10:00 when the user asks for a specific time.',
+    '- afterTime should be normalized like 11:00 when the user says 11 den sonra / 11 sonrası / after 11.',
+    '- timePreference should be used for broad phrases like ikindi vakti, öğleden sonra, akşam üzeri, sabah erken.',
+    '- confidence must reflect how certain you are about the extraction from the latest message and current context.',
+    '- needsClarification should be true when the message is ambiguous enough that the backend should ask a short follow-up instead of assuming.',
   ].join('\n');
 
   const response = await fetch(endpoint, {
