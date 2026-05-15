@@ -45,6 +45,27 @@ const getZonedDateParts = (date: Date, timeZone: string) => {
   };
 };
 
+const getZonedDateTimeParts = (date: Date, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  return {
+    year: Number(parts.find(part => part.type === 'year')?.value ?? '0'),
+    month: Number(parts.find(part => part.type === 'month')?.value ?? '0'),
+    day: Number(parts.find(part => part.type === 'day')?.value ?? '0'),
+    hour: Number(parts.find(part => part.type === 'hour')?.value ?? '0'),
+    minute: Number(parts.find(part => part.type === 'minute')?.value ?? '0'),
+  };
+};
+
 // --- Security Utilities ---
 const validatePassword = (password: string): { valid: boolean; errors: string[] } => {
   const errors: string[] = [];
@@ -569,8 +590,21 @@ const getDefaultClinic = async () => {
   });
 };
 
-const localDateTimeToClinicDate = (date: string, time: string) => {
-  return new Date(`${date}T${time}:00+03:00`);
+const localDateTimeToClinicDate = (date: string, time: string, timeZone: string) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute);
+  const zonedGuess = getZonedDateTimeParts(new Date(utcGuess), timeZone);
+  const zonedGuessUtc = Date.UTC(
+    zonedGuess.year,
+    zonedGuess.month - 1,
+    zonedGuess.day,
+    zonedGuess.hour,
+    zonedGuess.minute
+  );
+  const desiredUtc = utcGuess - (zonedGuessUtc - utcGuess);
+
+  return new Date(desiredUtc);
 };
 
 const buildAvailableSlots = async (clinicId: string, appointmentTypeId: string, date: string, practitionerId?: string) => {
@@ -594,7 +628,7 @@ const buildAvailableSlots = async (clinicId: string, appointmentTypeId: string, 
   }
 
   const timeZone = clinic?.timezone || 'Europe/Istanbul';
-  const weekday = getZonedDateParts(localDateTimeToClinicDate(date, '12:00'), timeZone).weekday;
+  const weekday = getZonedDateParts(localDateTimeToClinicDate(date, '12:00', timeZone), timeZone).weekday;
   const durationMinutes = service.durationMinutes;
   const results: any[] = [];
 
@@ -611,8 +645,8 @@ const buildAvailableSlots = async (clinicId: string, appointmentTypeId: string, 
       while (cursor + durationMinutes <= end) {
         const slotStart = minutesToTime(cursor);
         const slotEnd = minutesToTime(cursor + durationMinutes);
-        const startTime = localDateTimeToClinicDate(date, slotStart);
-        const endTime = localDateTimeToClinicDate(date, slotEnd);
+        const startTime = localDateTimeToClinicDate(date, slotStart, timeZone);
+        const endTime = localDateTimeToClinicDate(date, slotEnd, timeZone);
 
         const overlap = await prisma.appointment.findFirst({
           where: {
@@ -749,9 +783,15 @@ type SavedAppointmentSummary = {
   status: string;
 };
 
+type SavedServiceOption = {
+  id: string;
+  name: string;
+};
+
 type ConversationStateJson = {
   availableSlots?: SavedAvailableSlot[];
   cancellableAppointments?: SavedAppointmentSummary[];
+  matchedServices?: SavedServiceOption[];
 };
 
 const WHATSAPP_MAIN_MENU = [
@@ -830,7 +870,35 @@ const normalizePhone = (value: string) => value.replace(/@.+$/, '').replace(/\D/
 
 const normalizeIntentText = (value: string) => value.trim().toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ');
 
+const normalizeTurkishSearchText = (value: string) => normalizeIntentText(value)
+  .replace(/ğ/g, 'g')
+  .replace(/ü/g, 'u')
+  .replace(/ş/g, 's')
+  .replace(/ı/g, 'i')
+  .replace(/i̇/g, 'i')
+  .replace(/ö/g, 'o')
+  .replace(/ç/g, 'c')
+  .replace(/[^a-z0-9\s]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 const isGreetingMessage = (text: string) => /^(merhaba|selam|iyi günler|günaydın|gunaydin|iyi akşamlar|iyi aksamlar|hey)\b/i.test(text.trim());
+
+const isClosingMessage = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'tesekkurler',
+    'tesekkur ederim',
+    'sag olun',
+    'tamam',
+    'iyi gunler',
+  ].includes(normalized);
+};
+
+const extractNumericSelection = (text: string) => {
+  const match = normalizeIntentText(text).match(/(?:^|\D)(\d{1,2})(?:\D|$)/);
+  return match ? Number(match[1]) : null;
+};
 
 const optionalWhatsappWebhookSecret: express.RequestHandler = (req, res, next) => {
   const configuredSecret = process.env.WHATSAPP_WEBHOOK_SECRET?.trim();
@@ -889,6 +957,9 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
     availableSlots: Array.isArray(value.availableSlots) ? value.availableSlots as SavedAvailableSlot[] : undefined,
     cancellableAppointments: Array.isArray(value.cancellableAppointments)
       ? value.cancellableAppointments as SavedAppointmentSummary[]
+      : undefined,
+    matchedServices: Array.isArray(value.matchedServices)
+      ? value.matchedServices as SavedServiceOption[]
       : undefined,
   };
 };
@@ -1020,6 +1091,22 @@ const isPlaceholderPatientName = (patient: Pick<WhatsAppContactPatient, 'firstNa
   return !patient.firstName.trim() || !hasValidLastName(patient.lastName);
 };
 
+const findServiceMatches = (text: string, services: AssistantService[]) => {
+  const normalizedQuery = normalizeTurkishSearchText(text);
+  if (!normalizedQuery || /^\d+$/.test(normalizedQuery)) {
+    return [];
+  }
+
+  const queryTokens = normalizedQuery.split(' ').filter(Boolean);
+
+  return services.filter(service => {
+    const normalizedServiceName = normalizeTurkishSearchText(service.name);
+    return normalizedServiceName.includes(normalizedQuery)
+      || normalizedQuery.includes(normalizedServiceName)
+      || queryTokens.every(token => normalizedServiceName.includes(token));
+  });
+};
+
 const findServiceSelection = (text: string, services: AssistantService[]) => {
   const normalized = normalizeIntentText(text);
   if (/^\d+$/.test(normalized)) {
@@ -1027,7 +1114,8 @@ const findServiceSelection = (text: string, services: AssistantService[]) => {
     return selected ?? null;
   }
 
-  return services.find(service => normalizeIntentText(service.name) === normalized || normalizeIntentText(service.name).includes(normalized)) ?? null;
+  const matches = findServiceMatches(text, services);
+  return matches.length === 1 ? matches[0] : null;
 };
 
 const extractAssistantInputRuleBased = (text: string, services: AssistantService[]): AssistantExtraction => {
@@ -1257,7 +1345,8 @@ const createAppointmentFromAssistant = async (
   phone: string,
   customerName: string,
   appointmentTypeId: string,
-  selectedSlot: SavedAvailableSlot
+  selectedSlot: SavedAvailableSlot,
+  rawMessage?: string | null
 ) => {
   const patient = await ensurePatientForWhatsApp(clinicId, phone, customerName);
   const startTime = new Date(selectedSlot.startTime);
@@ -1298,6 +1387,25 @@ const createAppointmentFromAssistant = async (
       appointmentType: { select: { name: true } },
       practitioner: { select: { firstName: true, lastName: true } },
       patient: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  await prisma.appointmentRequest.create({
+    data: {
+      clinicId,
+      patientId: patient.id,
+      patientName: getPatientFullName(patient),
+      phone,
+      appointmentTypeId,
+      practitionerId: selectedSlot.practitionerId,
+      preferredStartTime: startTime,
+      preferredEndTime: endTime,
+      requestType: 'appointment',
+      source: 'whatsapp',
+      status: 'converted',
+      rawMessage: rawMessage ?? null,
+      notes: 'WhatsApp assistant üzerinden otomatik olarak takvime işlendi.',
+      convertedAppointmentId: appointment.id,
     },
   });
 
@@ -1570,9 +1678,34 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       selectedDate: state?.selectedDate ?? null,
     });
 
-    const selectedService = /^\d+$/.test(normalizedText)
-      ? services[Number(normalizedText) - 1] ?? null
-      : findServiceSelection(input.text, services);
+    const previousMatchedServices = stateJson.matchedServices?.length
+      ? services.filter(service => stateJson.matchedServices?.some(match => match.id === service.id))
+      : [];
+    const numericSelection = /^\d+$/.test(normalizedText) ? Number(normalizedText) : null;
+    const matchedServices = numericSelection
+      ? previousMatchedServices
+      : findServiceMatches(input.text, services);
+    const selectedService = numericSelection
+      ? (matchedServices.length > 0 ? matchedServices[numericSelection - 1] : services[numericSelection - 1]) ?? null
+      : matchedServices.length === 1
+        ? matchedServices[0]
+        : null;
+
+    if (!numericSelection && matchedServices.length > 1) {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_service',
+        lastMessage: input.text,
+        stateJson: {
+          matchedServices: matchedServices.map(service => ({ id: service.id, name: service.name } satisfies SavedServiceOption)),
+        },
+      });
+      return [
+        'Birden fazla uygun hizmet buldum. Lütfen aşağıdaki seçeneklerden birini numarasıyla seçin:',
+        ...matchedServices.map((service, index) => `${index + 1}. ${service.name}`),
+      ].join('\n');
+    }
 
     if (!selectedService) {
       await upsertWhatsAppConversationState(clinic.id, input.phone, {
@@ -1580,6 +1713,11 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
         currentIntent: 'book_appointment',
         step: 'awaiting_service',
         lastMessage: input.text,
+        stateJson: previousMatchedServices.length > 0
+          ? {
+              matchedServices: previousMatchedServices.map(service => ({ id: service.id, name: service.name } satisfies SavedServiceOption)),
+            }
+          : null,
       });
       return 'Lütfen listedeki hizmet numarasını seçin. Örneğin 1, 2 veya 5 yazabilirsiniz.';
     }
@@ -1711,8 +1849,9 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       selectedDate: state?.selectedDate ?? null,
     });
     const availableSlots = stateJson.availableSlots ?? [];
-    const selectedSlot = /^\d+$/.test(normalizedText)
-      ? availableSlots[Number(normalizedText) - 1]
+    const numericSelection = extractNumericSelection(input.text);
+    const selectedSlot = numericSelection && numericSelection >= 1 && numericSelection <= availableSlots.length
+      ? availableSlots[numericSelection - 1]
       : availableSlots.find(slot => slot.localStartTime === input.text.trim() || slot.localStartTime === normalizedText);
 
     if (!selectedSlot || !state?.selectedAppointmentTypeId || !state?.selectedDate) {
@@ -1741,7 +1880,8 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
         input.phone,
         customerName,
         state.selectedAppointmentTypeId,
-        selectedSlot
+        selectedSlot,
+        input.text
       );
 
       await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
@@ -1765,6 +1905,13 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       console.error('[whatsapp-assistant] appointment-create-error', error);
       return 'Randevunuzu oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
     }
+  }
+
+  if ((!currentStep || currentStep === 'main_menu') && isClosingMessage(input.text)) {
+    const firstName = getFirstNameFromCustomerName(customerName);
+    return firstName
+      ? `Rica ederim ${firstName}. Sağlıklı günler dilerim.`
+      : 'Rica ederim. Sağlıklı günler dilerim.';
   }
 
   const extracted = await resolveAssistantExtraction(input.text, services, {
@@ -2896,7 +3043,63 @@ app.get('/api/appointment-requests', authorize(['admin', 'receptionist']), async
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(requests);
+    const shouldIncludeLegacyWhatsappAppointments = String(source ?? '') === 'whatsapp'
+      && (!status || String(status) === 'converted')
+      && (!requestType || String(requestType) === 'appointment');
+
+    if (!shouldIncludeLegacyWhatsappAppointments) {
+      return res.json(requests);
+    }
+
+    const legacyAppointments = await prisma.appointment.findMany({
+      where: {
+        clinicId,
+        deletedAt: null,
+        notes: { contains: 'WhatsApp assistant üzerinden oluşturuldu.' },
+        sourceRequests: { none: {} },
+      },
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } },
+        appointmentType: true,
+        practitioner: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const legacyRequestRows = legacyAppointments.map(appointment => ({
+      id: `legacy-${appointment.id}`,
+      clinicId,
+      patientId: appointment.patientId,
+      patient: appointment.patient,
+      patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`.trim(),
+      phone: appointment.patient.phone,
+      email: appointment.patient.email,
+      appointmentTypeId: appointment.appointmentTypeId,
+      appointmentType: appointment.appointmentType,
+      practitionerId: appointment.practitionerId,
+      practitioner: appointment.practitioner,
+      preferredStartTime: appointment.startTime,
+      preferredEndTime: appointment.endTime,
+      requestType: 'appointment',
+      source: 'whatsapp',
+      status: 'converted',
+      rawMessage: null,
+      notes: appointment.notes,
+      rejectionReason: null,
+      convertedAppointmentId: appointment.id,
+      convertedAppointment: {
+        id: appointment.id,
+        startTime: appointment.startTime,
+        status: appointment.status,
+      },
+      createdAt: appointment.createdAt,
+      updatedAt: appointment.updatedAt,
+    }));
+
+    const combined = [...requests, ...legacyRequestRows]
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+
+    res.json(combined);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch appointment requests' });
   }
