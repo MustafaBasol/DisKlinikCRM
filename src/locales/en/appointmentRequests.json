@@ -5,7 +5,11 @@
   "summary": {
     "visible": "Visible Requests",
     "pending": "Pending Requests",
-    "source": "Source"
+    "source": "Source",
+    "converted": "Scheduled in Calendar"
+  },
+  "labels": {
+    "status": "Status"
   },
   "filters": {
     "allStatus": "All Statuses",

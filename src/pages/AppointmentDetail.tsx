@@ -23,12 +23,14 @@ import { useAuth } from '../context/AuthContext';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '../utils/dateTime';
 
 const AppointmentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation(['appointments', 'common']);
   const { user } = useAuth();
+  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   
   const [appointment, setAppointment] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -160,7 +162,7 @@ const AppointmentDetail: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase">{t('common:date')}</p>
-                    <p className="font-medium">{new Date(appointment.startTime).toLocaleDateString(undefined, { dateStyle: 'long' })}</p>
+                    <p className="font-medium">{formatDateInTimeZone(appointment.startTime, undefined, clinicTimeZone, { dateStyle: 'long' })}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-gray-600">
@@ -170,8 +172,8 @@ const AppointmentDetail: React.FC = () => {
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase">{t('appointments:form.startTime')}</p>
                     <p className="font-medium">
-                      {new Date(appointment.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
-                      {new Date(appointment.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTimeInTimeZone(appointment.startTime, undefined, clinicTimeZone)} - 
+                      {formatTimeInTimeZone(appointment.endTime, undefined, clinicTimeZone)}
                     </p>
                   </div>
                 </div>

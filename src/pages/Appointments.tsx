@@ -19,10 +19,12 @@ import { useTranslation } from 'react-i18next';
 import { appointmentService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import AppointmentForm from '../components/AppointmentForm';
+import { formatTimeInTimeZone, getDateKeyInTimeZone } from '../utils/dateTime';
 
 const Appointments: React.FC = () => {
   const { t, i18n } = useTranslation(['appointments', 'common']);
   const { user } = useAuth();
+  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   
   const [appointments, setAppointments] = useState<any[]>([]);
   const [monthAppointments, setMonthAppointments] = useState<any[]>([]);
@@ -137,11 +139,11 @@ const Appointments: React.FC = () => {
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth]);
   const appointmentCounts = useMemo(() => {
     return monthAppointments.reduce<Record<string, number>>((acc, appointment) => {
-      const key = toLocalDateString(new Date(appointment.startTime));
+      const key = getDateKeyInTimeZone(appointment.startTime, clinicTimeZone);
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
-  }, [monthAppointments]);
+  }, [monthAppointments, clinicTimeZone]);
   const selectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(i18n.language, {
     weekday: 'long',
     month: 'long',
@@ -320,7 +322,7 @@ const Appointments: React.FC = () => {
               <div className="flex items-center gap-4 md:w-32 flex-shrink-0">
                 <div className="bg-gray-50 p-2 rounded-lg text-gray-600 font-bold flex flex-col items-center">
                   <Clock size={16} className="mb-1 text-primary-500" />
-                  <span className="text-sm">{new Date(appt.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="text-sm">{formatTimeInTimeZone(appt.startTime, i18n.language, clinicTimeZone)}</span>
                 </div>
               </div>
 

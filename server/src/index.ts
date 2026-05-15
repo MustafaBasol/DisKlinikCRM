@@ -504,6 +504,7 @@ app.post('/api/auth/login', async (req, res) => {
           id: user.clinic.id,
           name: user.clinic.name,
           currency: user.clinic.currency,
+          timezone: user.clinic.timezone,
         }
       }
     });
@@ -527,7 +528,7 @@ app.get('/api/auth/me', authenticate as express.RequestHandler, async (req: Auth
       lastName: user.lastName,
       email: user.email,
       role: user.role,
-      clinic: { id: user.clinic.id, name: user.clinic.name, currency: user.clinic.currency },
+      clinic: { id: user.clinic.id, name: user.clinic.name, currency: user.clinic.currency, timezone: user.clinic.timezone },
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -821,17 +822,31 @@ const getFirstNameFromCustomerName = (customerName?: string | null) => {
   return titleCaseName(customerName).split(/\s+/)[0] ?? null;
 };
 
-const formatMainMenu = (customerName?: string | null, isReturningCustomer = false) => {
+const formatClinicWelcomeName = (clinicName?: string | null) => {
+  const normalized = clinicName?.trim();
+  if (!normalized) {
+    return 'kliniğimize';
+  }
+
+  if (/klinik|klinigi|kliniği/i.test(normalized)) {
+    return `${normalized}'ne`;
+  }
+
+  return `${normalized} Kliniği'ne`;
+};
+
+const formatMainMenu = (customerName?: string | null, isReturningCustomer = false, clinicName?: string | null) => {
   const firstName = getFirstNameFromCustomerName(customerName);
+  const clinicWelcomeName = formatClinicWelcomeName(clinicName);
   if (firstName && isReturningCustomer) {
-    return [`Merhaba ${firstName}, yeniden hoş geldiniz. Size nasıl yardımcı olabilirim?`, '1. Randevu almak', '2. Randevumu sorgulamak', '3. Randevumu iptal etmek', '4. Hizmetler hakkında bilgi almak'].join('\n');
+    return [`Merhaba ${firstName}, ${clinicWelcomeName} yeniden hoş geldiniz. Size nasıl yardımcı olabilirim?`, '1. Randevu almak', '2. Randevumu sorgulamak', '3. Randevumu iptal etmek', '4. Hizmetler hakkında bilgi almak'].join('\n');
   }
 
   if (firstName) {
     return [`Teşekkür ederim ${firstName}. Size nasıl yardımcı olabilirim?`, '1. Randevu almak', '2. Randevumu sorgulamak', '3. Randevumu iptal etmek', '4. Hizmetler hakkında bilgi almak'].join('\n');
   }
 
-  return 'Merhaba, kliniğimize hoş geldiniz. Size yardımcı olabilmem için adınızı ve soyadınızı paylaşır mısınız?';
+  return `Merhaba, ${clinicWelcomeName} hoş geldiniz. Size yardımcı olabilmem için adınızı ve soyadınızı paylaşır mısınız?`;
 };
 
 const WHATSAPP_FALLBACK_SERVICES: AssistantService[] = [
@@ -1118,6 +1133,62 @@ const findServiceSelection = (text: string, services: AssistantService[]) => {
   return matches.length === 1 ? matches[0] : null;
 };
 
+const extractTimeSelection = (text: string) => {
+  const normalized = normalizeIntentText(text);
+  const timeMatch = normalized.match(/\b(?:saat\s*)?([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if (!timeMatch) {
+    return null;
+  }
+
+  return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+};
+
+const normalizePractitionerName = (value: string) => normalizeTurkishSearchText(value)
+  .replace(/\bdt\b/g, ' ')
+  .replace(/\bdis\b/g, ' ')
+  .replace(/\bdr\b/g, ' ')
+  .replace(/\bhanim\b/g, ' ')
+  .replace(/\bbey\b/g, ' ')
+  .replace(/\bhoca\b/g, ' ')
+  .replace(/\bhosun\b/g, ' ')
+  .replace(/\bolsun\b/g, ' ')
+  .replace(/\buygun\b/g, ' ')
+  .replace(/\bsaat\b/g, ' ')
+  .replace(/\bnumara\b/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const findSlotMatches = (text: string, slots: SavedAvailableSlot[]) => {
+  const extractedTime = extractTimeSelection(text);
+  const normalizedQuery = normalizePractitionerName(text);
+  const queryTokens = normalizedQuery.split(' ').filter(token => token.length >= 3 && !/^\d+$/.test(token));
+
+  const matches = slots
+    .map((slot, index) => {
+      const normalizedPractitioner = normalizePractitionerName(slot.practitionerName);
+      const practitionerTokens = normalizedPractitioner.split(' ').filter(token => token.length >= 3);
+      const timeMatches = extractedTime ? slot.localStartTime === extractedTime : true;
+      const practitionerMatches = queryTokens.length === 0
+        ? true
+        : queryTokens.every(token => normalizedPractitioner.includes(token) || practitionerTokens.some(nameToken => nameToken.includes(token)));
+
+      return {
+        slot,
+        index,
+        practitionerName: normalizedPractitioner,
+        timeMatches,
+        practitionerMatches,
+      };
+    })
+    .filter(item => item.timeMatches && item.practitionerMatches);
+
+  return {
+    extractedTime,
+    hasPractitionerFragment: queryTokens.length > 0,
+    matches,
+  };
+};
+
 const extractAssistantInputRuleBased = (text: string, services: AssistantService[]): AssistantExtraction => {
   const normalized = normalizeIntentText(text);
   const matchedService = findServiceSelection(text, services);
@@ -1213,6 +1284,10 @@ const getClinicSystemUserId = async (clinicId: string) => {
 
 const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fullName: string) => {
   const parsedName = splitNameForPatient(fullName);
+  if (!parsedName.firstName || !hasValidLastName(parsedName.lastName)) {
+    throw new Error('PATIENT_LAST_NAME_REQUIRED');
+  }
+
   const patient = await prisma.patient.create({
     data: {
       clinicId,
@@ -1250,12 +1325,13 @@ const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fu
 
 const ensureWhatsAppContactPatient = async (clinicId: string, phone: string, providedName?: string | null) => {
   const existingPatient = await findExistingPatientByPhone(clinicId, phone);
+  const parsedProvidedName = providedName?.trim() ? splitNameForPatient(providedName) : null;
+
   if (existingPatient) {
-    if (providedName && (!existingPatient.firstName.trim() || isPlaceholderPatientName(existingPatient))) {
-      const parsedName = splitNameForPatient(providedName);
+    if (parsedProvidedName && hasValidLastName(parsedProvidedName.lastName) && (!existingPatient.firstName.trim() || isPlaceholderPatientName(existingPatient))) {
       return prisma.patient.update({
         where: { id: existingPatient.id },
-        data: parsedName,
+        data: parsedProvidedName,
         select: { id: true, firstName: true, lastName: true, phone: true },
       });
     }
@@ -1263,11 +1339,11 @@ const ensureWhatsAppContactPatient = async (clinicId: string, phone: string, pro
     return existingPatient;
   }
 
-  if (!providedName?.trim()) {
+  if (!parsedProvidedName || !hasValidLastName(parsedProvidedName.lastName)) {
     return null;
   }
 
-  return createPatientFromWhatsAppName(clinicId, phone, providedName);
+  return createPatientFromWhatsAppName(clinicId, phone, providedName!.trim());
 };
 
 const saveWhatsAppConversationMessage = async (args: {
@@ -1521,7 +1597,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       lastMessage: input.text,
       stateJson: null,
     });
-    return 'Merhaba, kliniğimize hoş geldiniz. Size yardımcı olabilmem için adınızı ve soyadınızı paylaşır mısınız?';
+    return `Merhaba, ${formatClinicWelcomeName(clinic.name)} hoş geldiniz. Size yardımcı olabilmem için adınızı ve soyadınızı paylaşır mısınız?`;
   }
 
   if (isResetCommand) {
@@ -1544,7 +1620,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       lastMessage: input.text,
       stateJson: null,
     });
-    return formatMainMenu(customerName, Boolean(existingPatient));
+    return formatMainMenu(customerName, Boolean(existingPatient), clinic.name);
   }
 
   if (currentStep === 'awaiting_name') {
@@ -1555,6 +1631,18 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       selectedAppointmentTypeName: null,
       selectedDate: null,
     });
+    const parsedName = splitNameForPatient(input.text);
+    if (!parsedName.firstName || !hasValidLastName(parsedName.lastName)) {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName: null,
+        currentIntent: null,
+        step: 'awaiting_name',
+        lastMessage: input.text,
+        stateJson: null,
+      });
+      return 'Kaydınızı oluşturabilmem için ad ve soyadınızı birlikte paylaşır mısınız? Örneğin Mustafa Yılmaz gibi yazabilirsiniz.';
+    }
+
     const createdPatient = await createPatientFromWhatsAppName(clinic.id, input.phone, input.text);
     await saveWhatsAppConversationMessage({
       clinicId: clinic.id,
@@ -1578,7 +1666,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       lastMessage: input.text,
       stateJson: null,
     });
-    return formatMainMenu(fullName, false);
+    return formatMainMenu(fullName, false, clinic.name);
   }
 
   if ((!currentStep || currentStep === 'main_menu') && (isGreetingMessage(input.text) || normalizedText === '0')) {
@@ -1596,7 +1684,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       lastMessage: input.text,
       stateJson: null,
     });
-    return formatMainMenu(customerName, true);
+    return formatMainMenu(customerName, true, clinic.name);
   }
 
   if (currentStep === 'main_menu') {
@@ -1640,7 +1728,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
     }
 
     if (/^\d+$/.test(normalizedText)) {
-      return formatMainMenu(customerName, true);
+      return formatMainMenu(customerName, true, clinic.name);
     }
   }
 
@@ -1681,17 +1769,25 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
     const previousMatchedServices = stateJson.matchedServices?.length
       ? services.filter(service => stateJson.matchedServices?.some(match => match.id === service.id))
       : [];
-    const numericSelection = /^\d+$/.test(normalizedText) ? Number(normalizedText) : null;
-    const matchedServices = numericSelection
-      ? previousMatchedServices
+    const selectableServices = previousMatchedServices.length > 0 ? previousMatchedServices : services;
+    const extractedServiceNumber = extractNumericSelection(input.text);
+    const matchedServices = extractedServiceNumber
+      ? selectableServices
       : findServiceMatches(input.text, services);
-    const selectedService = numericSelection
-      ? (matchedServices.length > 0 ? matchedServices[numericSelection - 1] : services[numericSelection - 1]) ?? null
+    const selectedService = extractedServiceNumber && extractedServiceNumber >= 1 && extractedServiceNumber <= selectableServices.length
+      ? selectableServices[extractedServiceNumber - 1] ?? null
       : matchedServices.length === 1
         ? matchedServices[0]
         : null;
 
-    if (!numericSelection && matchedServices.length > 1) {
+    console.log('[whatsapp-assistant] route-handler', {
+      phone: input.phone,
+      handler: 'awaiting_service-selection',
+      extractedServiceNumber,
+      matchedServiceName: selectedService?.name ?? null,
+    });
+
+    if (!extractedServiceNumber && matchedServices.length > 1) {
       await upsertWhatsAppConversationState(clinic.id, input.phone, {
         customerName,
         currentIntent: 'book_appointment',
@@ -1850,9 +1946,37 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
     });
     const availableSlots = stateJson.availableSlots ?? [];
     const numericSelection = extractNumericSelection(input.text);
-    const selectedSlot = numericSelection && numericSelection >= 1 && numericSelection <= availableSlots.length
-      ? availableSlots[numericSelection - 1]
-      : availableSlots.find(slot => slot.localStartTime === input.text.trim() || slot.localStartTime === normalizedText);
+    const slotMatch = findSlotMatches(input.text, availableSlots);
+    const selectedSlotIndex = numericSelection && numericSelection >= 1 && numericSelection <= availableSlots.length
+      ? numericSelection - 1
+      : slotMatch.matches.length === 1
+        ? slotMatch.matches[0].index
+        : -1;
+    const selectedSlot = selectedSlotIndex >= 0 ? availableSlots[selectedSlotIndex] : null;
+
+    console.log('[whatsapp-assistant] route-handler', {
+      phone: input.phone,
+      handler: 'awaiting_time-selection',
+      extractedTime: slotMatch.extractedTime,
+      matchedPractitioner: selectedSlot?.practitionerName ?? (slotMatch.matches.length === 1 ? slotMatch.matches[0].slot.practitionerName : null),
+      matchedSlotIndex: selectedSlotIndex >= 0 ? selectedSlotIndex + 1 : null,
+    });
+
+    if (!numericSelection && slotMatch.extractedTime && !slotMatch.hasPractitionerFragment) {
+      const sameTimeMatches = availableSlots
+        .map((slot, index) => ({ slot, index }))
+        .filter(item => item.slot.localStartTime === slotMatch.extractedTime);
+      if (sameTimeMatches.length > 1) {
+        return `${slotMatch.extractedTime} için birden fazla hekim uygun görünüyor. Lütfen listedeki numaralardan birini seçin.`;
+      }
+    }
+
+    if (!numericSelection && !selectedSlot && slotMatch.matches.length > 1) {
+      return [
+        'Birden fazla uygun saat buldum. Lütfen aşağıdaki seçeneklerden birini numarasıyla seçin:',
+        ...slotMatch.matches.map(item => `${item.index + 1}. ${item.slot.localStartTime}${item.slot.practitionerName ? ` (${item.slot.practitionerName})` : ''}`),
+      ].join('\n');
+    }
 
     if (!selectedSlot || !state?.selectedAppointmentTypeId || !state?.selectedDate) {
       return 'Lütfen listede paylaştığım uygun saatlerden birini numarasıyla seçin.';
@@ -1994,7 +2118,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
     stateJson: null,
   });
 
-  return formatMainMenu(customerName, true);
+  return formatMainMenu(customerName, true, clinic.name);
 };
 
 // --- WhatsApp Public API (Secret Protected) ---
