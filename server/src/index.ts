@@ -1304,7 +1304,7 @@ const getTimePreference = (text: string) => extractTimePreference(text);
 
 const extractExplicitTimeThreshold = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
-  const hourAfterMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*sonrasi\b/);
+  const hourAfterMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(?:sonrasi|den sonra|dan sonra)\b/);
   if (hourAfterMatch) {
     const hour = Number(hourAfterMatch[1]);
     const minute = hourAfterMatch[2] ? Number(hourAfterMatch[2]) : 0;
@@ -1317,6 +1317,30 @@ const extractExplicitTimeThreshold = (text: string) => {
   }
 
   return null;
+};
+
+const extractExplicitRequestedTime = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  if (/(?:sonrasi|den sonra|dan sonra)/.test(normalized)) {
+    return null;
+  }
+
+  const exactTimeMatch = normalized.match(/\b(?:saat\s*)?([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if (exactTimeMatch) {
+    return `${exactTimeMatch[1].padStart(2, '0')}:${exactTimeMatch[2]}`;
+  }
+
+  const hourOnlyMatch = normalized.match(/\b(?:saat\s*)?([01]?\d|2[0-3])\b/);
+  if (!hourOnlyMatch) {
+    return null;
+  }
+
+  const hasTimeIntent = ['saat', 'olsun', 'istiyorum', 'uygun', 'olur mu', 'civari'].some(pattern => normalized.includes(pattern));
+  if (!hasTimeIntent) {
+    return null;
+  }
+
+  return `${hourOnlyMatch[1].padStart(2, '0')}:00`;
 };
 
 const getSlotMinutes = (slot: SavedAvailableSlot) => timeToMinutes(slot.localStartTime);
@@ -1351,6 +1375,18 @@ const formatSlotListMessage = (heading: string, slots: SavedAvailableSlot[]) => 
   '',
   'Size uygun olan saati numarasıyla veya saat/hekim adıyla paylaşabilirsiniz.',
 ].join('\n');
+
+const logAvailabilitySave = (totalSlots: number, shownSlots: number) => {
+  console.log('[whatsapp-assistant] availability-save', {
+    totalSlots,
+    shownSlots,
+  });
+};
+
+const findNearbySlotsForTime = (slots: SavedAvailableSlot[], requestedTime: string, thresholdMinutes = 30) => {
+  const requestedMinutes = timeToMinutes(requestedTime);
+  return slots.filter(slot => Math.abs(getSlotMinutes(slot) - requestedMinutes) <= thresholdMinutes);
+};
 
 const saveSlotsForState = (slots: Array<{
   practitioner: { id: string; firstName: string; lastName: string };
@@ -2005,6 +2041,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
         lastMessage: input.text,
         stateJson: { availableSlots: availability.allSlots, lastShownSlots: availability.shownSlots },
       });
+      logAvailabilitySave(availability.allSlots.length, availability.shownSlots.length);
 
       if (availability.allSlots.length === 0) {
         return 'Bu tarih için uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim.';
@@ -2347,6 +2384,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
         lastMessage: input.text,
         stateJson: { availableSlots: savedSlots, lastShownSlots },
       });
+      logAvailabilitySave(savedSlots.length, lastShownSlots.length);
       return formatAvailabilityMessage(normalizedDate, lastShownSlots);
     } catch (error) {
       console.error('[whatsapp-assistant] availability-error', error);
@@ -2369,13 +2407,16 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
     const selectedDate = state?.selectedDate ?? null;
     const selectedPractitionerId = state?.selectedPractitionerId ?? null;
     const numericSelection = extractNumericSelection(input.text);
+    const numericSlotSelection = numericSelection && numericSelection >= 1 && numericSelection <= lastShownSlots.length
+      ? numericSelection
+      : null;
     const slotMatch = findSlotMatches(input.text, availableSlots);
-    const selectedSlotIndex = numericSelection && numericSelection >= 1 && numericSelection <= lastShownSlots.length
-      ? availableSlots.findIndex(slot => slotIdentity(slot) === slotIdentity(lastShownSlots[numericSelection - 1]))
-      : slotMatch.matches.length === 1
+    let selectedSlotIndex = numericSlotSelection
+      ? availableSlots.findIndex(slot => slotIdentity(slot) === slotIdentity(lastShownSlots[numericSlotSelection - 1]))
+      : slotMatch.extractedTime && slotMatch.hasPractitionerFragment && slotMatch.matches.length === 1
         ? slotMatch.matches[0].index
         : -1;
-    const selectedSlot = selectedSlotIndex >= 0 ? availableSlots[selectedSlotIndex] : null;
+    let selectedSlot = selectedSlotIndex >= 0 ? availableSlots[selectedSlotIndex] : null;
 
     console.log('[whatsapp-assistant] route-handler', {
       phone: input.phone,
@@ -2387,81 +2428,133 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
 
     const preference = getTimePreference(input.text);
     const explicitTimeThreshold = extractExplicitTimeThreshold(input.text);
+    const explicitRequestedTime = extractExplicitRequestedTime(input.text);
     const normalizedDifferentDate = normalizeDateFromTurkishInput(input.text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE);
 
-    if (!numericSelection && isDifferentDateRequest(input.text)) {
-      if (!selectedAppointmentTypeId) {
-        return 'Önce hizmet seçelim. Lütfen listedeki hizmet numarasını paylaşın.';
-      }
-
-      if (!normalizedDifferentDate) {
-        return 'Elbette, başka bir gün de kontrol edebilirim. Lütfen tarihi örneğin yarın, 22 Mayıs veya cuma gibi paylaşın.';
-      }
-
-      console.info('[whatsapp-assistant] availability-check', {
-        appointmentTypeId: selectedAppointmentTypeId,
-        date: normalizedDifferentDate,
+    if (!numericSlotSelection && slotMatch.extractedTime && slotMatch.hasPractitionerFragment && slotMatch.matches.length > 1) {
+      const matchingSlots = slotMatch.matches.map(item => item.slot);
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_time',
+        selectedAppointmentTypeId,
+        selectedAppointmentTypeName,
+        selectedDate,
+        selectedTime: null,
+        lastMessage: input.text,
+        stateJson: { availableSlots, lastShownSlots: matchingSlots },
       });
 
-      try {
-        const slots = await buildAvailableSlots(clinic.id, selectedAppointmentTypeId, normalizedDifferentDate, selectedPractitionerId ?? undefined);
-        if (!slots) {
-          return 'Önce hizmet seçelim. Lütfen listedeki hizmet numarasını paylaşın.';
-        }
+      return formatSlotListMessage(
+        `${slotMatch.extractedTime} için birden fazla hekim uygun görünüyor:`,
+        matchingSlots
+      );
+    }
 
-        const savedSlots = slots.map(slot => ({
-          practitionerId: slot.practitioner.id,
-          practitionerName: `${slot.practitioner.firstName} ${slot.practitioner.lastName}`,
-          startTime: slot.startTime.toISOString(),
-          endTime: slot.endTime.toISOString(),
-          localStartTime: slot.localStartTime,
-          localEndTime: slot.localEndTime,
-        } satisfies SavedAvailableSlot));
-        const nextShownSlots = savedSlots.slice(0, 8);
+    if (!numericSlotSelection && !slotMatch.hasPractitionerFragment && explicitRequestedTime) {
+      const exactMatches = availableSlots
+        .map((slot, index) => ({ slot, index }))
+        .filter(item => item.slot.localStartTime === explicitRequestedTime);
 
-        if (savedSlots.length === 0) {
-          await upsertWhatsAppConversationState(clinic.id, input.phone, {
-            customerName,
-            currentIntent: 'book_appointment',
-            step: 'awaiting_time',
-            selectedAppointmentTypeId: selectedAppointmentTypeId,
-            selectedAppointmentTypeName: selectedAppointmentTypeName,
-            selectedDate: normalizedDifferentDate,
-            selectedTime: null,
-            lastMessage: input.text,
-            stateJson: { availableSlots: [], lastShownSlots: [] },
-          });
-          return 'Bu tarih için uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim.';
-        }
+      console.log('[whatsapp-assistant] time-request', {
+        phone: input.phone,
+        text: input.text,
+        type: 'exact_time',
+        requestedTime: explicitRequestedTime,
+        totalAvailableSlots: availableSlots.length,
+        matchedCount: exactMatches.length,
+      });
 
+      if (exactMatches.length === 1) {
+        selectedSlotIndex = exactMatches[0].index;
+        selectedSlot = exactMatches[0].slot;
+      } else if (exactMatches.length > 1) {
+        const matchingSlots = exactMatches.map(item => item.slot);
         await upsertWhatsAppConversationState(clinic.id, input.phone, {
           customerName,
           currentIntent: 'book_appointment',
           step: 'awaiting_time',
-          selectedAppointmentTypeId: selectedAppointmentTypeId,
-          selectedAppointmentTypeName: selectedAppointmentTypeName,
-          selectedDate: normalizedDifferentDate,
+          selectedAppointmentTypeId,
+          selectedAppointmentTypeName,
+          selectedDate,
           selectedTime: null,
           lastMessage: input.text,
-          stateJson: { availableSlots: savedSlots, lastShownSlots: nextShownSlots },
+          stateJson: { availableSlots, lastShownSlots: matchingSlots },
         });
-        return formatAvailabilityMessage(normalizedDifferentDate, nextShownSlots);
-      } catch (error) {
-        console.error('[whatsapp-assistant] availability-error', error);
-        return 'Şu anda randevu takvimine erişirken teknik bir sorun oluştu. Lütfen biraz sonra tekrar deneyin.';
+
+        return formatSlotListMessage(
+          `${explicitRequestedTime} için birden fazla hekim uygun görünüyor:`,
+          matchingSlots
+        );
+      } else {
+        const nearbySlots = findNearbySlotsForTime(availableSlots, explicitRequestedTime);
+        if (nearbySlots.length > 0) {
+          await upsertWhatsAppConversationState(clinic.id, input.phone, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_time',
+            selectedAppointmentTypeId,
+            selectedAppointmentTypeName,
+            selectedDate,
+            selectedTime: null,
+            lastMessage: input.text,
+            stateJson: { availableSlots, lastShownSlots: nearbySlots },
+          });
+
+          return formatSlotListMessage(
+            `${explicitRequestedTime} için uygun saat görünmüyor; ancak yakın saatler şunlar:`,
+            nearbySlots
+          );
+        }
+
+        return `${explicitRequestedTime} için uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
       }
     }
 
-    if (!numericSelection && (explicitTimeThreshold !== null || preference)) {
-      const filteredSlots = explicitTimeThreshold !== null
-        ? filterSlotsByTimeThreshold(availableSlots, explicitTimeThreshold)
-        : filterSlotsByTimePreference(availableSlots, preference!);
+    if (!numericSlotSelection && explicitTimeThreshold !== null) {
+      const filteredSlots = filterSlotsByTimeThreshold(availableSlots, explicitTimeThreshold);
       const shownSlots = filteredSlots.slice(0, 8);
-      console.log('[whatsapp-assistant] time-refinement', {
-        preference: explicitTimeThreshold !== null ? `after_${minutesToTime(explicitTimeThreshold)}` : preference,
-        totalSlots: availableSlots.length,
-        filteredCount: filteredSlots.length,
-        shownCount: shownSlots.length,
+      console.log('[whatsapp-assistant] time-request', {
+        phone: input.phone,
+        text: input.text,
+        type: 'after_time',
+        requestedTime: minutesToTime(explicitTimeThreshold),
+        totalAvailableSlots: availableSlots.length,
+        matchedCount: filteredSlots.length,
+      });
+
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_time',
+        selectedAppointmentTypeId,
+        selectedAppointmentTypeName,
+        selectedDate,
+        selectedTime: null,
+        lastMessage: input.text,
+        stateJson: { availableSlots, lastShownSlots: shownSlots },
+      });
+
+      if (filteredSlots.length === 0) {
+        return `${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(explicitTimeThreshold)} sonrası uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim ya da listedeki diğer saatlerden birini seçebilirsiniz.`;
+      }
+
+      return formatSlotListMessage(
+        `Elbette, ${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(explicitTimeThreshold)} sonrası uygun saatler şunlar:`,
+        shownSlots
+      );
+    }
+
+    if (!numericSlotSelection && preference) {
+      const filteredSlots = filterSlotsByTimePreference(availableSlots, preference);
+      const shownSlots = filteredSlots.slice(0, 8);
+      console.log('[whatsapp-assistant] time-request', {
+        phone: input.phone,
+        text: input.text,
+        type: 'preference',
+        requestedTime: preference,
+        totalAvailableSlots: availableSlots.length,
+        matchedCount: filteredSlots.length,
       });
 
       await upsertWhatsAppConversationState(clinic.id, input.phone, {
@@ -2477,9 +2570,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       });
 
       if (filteredSlots.length === 0) {
-        const preferenceText = explicitTimeThreshold !== null
-          ? `${minutesToTime(explicitTimeThreshold)} sonrası`
-          : preference === 'afternoon'
+        const preferenceText = preference === 'afternoon'
           ? 'öğleden sonra'
           : preference === 'morning'
             ? 'sabah'
@@ -2489,9 +2580,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
         return `${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için ${preferenceText} uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim ya da listedeki diğer saatlerden birini seçebilirsiniz.`;
       }
 
-      const heading = explicitTimeThreshold !== null
-        ? `${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için ${minutesToTime(explicitTimeThreshold)} sonrası uygun saatler şunlar:`
-        : preference === 'afternoon'
+      const heading = preference === 'afternoon'
         ? `${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için öğleden sonraki uygun saatler şunlar:`
         : preference === 'morning'
           ? `${formatTurkishDateLong(selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} için sabah uygun saatler şunlar:`
@@ -2501,7 +2590,62 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       return formatSlotListMessage(heading, shownSlots);
     }
 
-    if (!numericSelection && isMoreOptionsRequest(input.text)) {
+    if (!numericSlotSelection && isDifferentDateRequest(input.text)) {
+      if (!selectedAppointmentTypeId) {
+        return 'Önce hizmet seçelim. Lütfen listedeki hizmet numarasını paylaşın.';
+      }
+
+      if (!normalizedDifferentDate) {
+        return 'Elbette, başka bir gün de kontrol edebilirim. Lütfen tarihi örneğin yarın, 22 Mayıs veya cuma gibi paylaşın.';
+      }
+
+      console.info('[whatsapp-assistant] availability-check', {
+        appointmentTypeId: selectedAppointmentTypeId,
+        date: normalizedDifferentDate,
+      });
+
+      try {
+        const availability = await loadAvailabilityForDate(clinic.id, selectedAppointmentTypeId, normalizedDifferentDate, selectedPractitionerId);
+        if (!availability) {
+          return 'Önce hizmet seçelim. Lütfen listedeki hizmet numarasını paylaşın.';
+        }
+
+        if (availability.allSlots.length === 0) {
+          await upsertWhatsAppConversationState(clinic.id, input.phone, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_time',
+            selectedAppointmentTypeId,
+            selectedAppointmentTypeName,
+            selectedDate: normalizedDifferentDate,
+            selectedTime: null,
+            lastMessage: input.text,
+            stateJson: { availableSlots: [], lastShownSlots: [] },
+          });
+          logAvailabilitySave(0, 0);
+          return 'Bu tarih için uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim.';
+        }
+
+        await upsertWhatsAppConversationState(clinic.id, input.phone, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_time',
+          selectedAppointmentTypeId,
+          selectedAppointmentTypeName,
+          selectedDate: normalizedDifferentDate,
+          selectedTime: null,
+          lastMessage: input.text,
+          stateJson: { availableSlots: availability.allSlots, lastShownSlots: availability.shownSlots },
+        });
+        logAvailabilitySave(availability.allSlots.length, availability.shownSlots.length);
+        return formatAvailabilityMessage(normalizedDifferentDate, availability.shownSlots);
+      } catch (error) {
+        console.error('[whatsapp-assistant] availability-error', error);
+        return 'Şu anda randevu takvimine erişirken teknik bir sorun oluştu. Lütfen biraz sonra tekrar deneyin.';
+      }
+    }
+
+    if (!numericSlotSelection && isMoreOptionsRequest(input.text)) {
       const shownSlotKeys = new Set(lastShownSlots.map(slot => slotIdentity(slot)));
       const nextSlots = availableSlots.filter(slot => !shownSlotKeys.has(slotIdentity(slot))).slice(0, 8);
 
@@ -2534,20 +2678,8 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       );
     }
 
-    if (!numericSelection && slotMatch.extractedTime && !slotMatch.hasPractitionerFragment) {
-      const sameTimeMatches = availableSlots
-        .map((slot, index) => ({ slot, index }))
-        .filter(item => item.slot.localStartTime === slotMatch.extractedTime);
-      if (sameTimeMatches.length > 1) {
-        return `${slotMatch.extractedTime} için birden fazla hekim uygun görünüyor. Lütfen listedeki numaralardan birini seçin.`;
-      }
-    }
-
-    if (!numericSelection && !selectedSlot && slotMatch.matches.length > 1) {
-      return [
-        'Birden fazla uygun saat buldum. Lütfen aşağıdaki seçeneklerden birini numarasıyla seçin:',
-        ...slotMatch.matches.map(item => `${item.index + 1}. ${item.slot.localStartTime}${item.slot.practitionerName ? ` (${item.slot.practitionerName})` : ''}`),
-      ].join('\n');
+    if (!numericSlotSelection && !selectedSlot && slotMatch.matches.length > 1) {
+      return formatSlotListMessage('Birden fazla uygun saat buldum. Lütfen aşağıdaki seçeneklerden birini seçin:', slotMatch.matches.map(item => item.slot));
     }
 
     if (!selectedSlot || !state?.selectedAppointmentTypeId || !state?.selectedDate) {
