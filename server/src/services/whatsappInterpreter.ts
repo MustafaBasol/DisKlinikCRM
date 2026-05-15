@@ -99,7 +99,7 @@ export const getTimePreference = (text: string): TimePreference | null => {
 
 export const extractExplicitTimeThreshold = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
-  const thresholdMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(?:sonrasi|den sonra|dan sonra)\b/);
+  const thresholdMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(?:sonrasi|den sonra|dan sonra|ten sonra|tan sonra)\b/);
   if (thresholdMatch) {
     const hour = Number(thresholdMatch[1]);
     const minute = thresholdMatch[2] ? Number(thresholdMatch[2]) : 0;
@@ -115,7 +115,7 @@ export const extractExplicitTimeThreshold = (text: string) => {
 
 export const extractExplicitRequestedTime = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
-  if (/(?:sonrasi|den sonra|dan sonra)/.test(normalized)) {
+  if (/(?:sonrasi|den sonra|dan sonra|ten sonra|tan sonra)/.test(normalized)) {
     return null;
   }
 

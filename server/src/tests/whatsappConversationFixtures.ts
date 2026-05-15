@@ -240,6 +240,91 @@ const run = async () => {
     assert.equal(updatedState.lastShownSlots?.[2]?.localStartTime, '13:30');
   });
 
+  await runFixture('awaiting_time treats question-form afternoon requests as a preference filter', async () => {
+    const recorder = createStateRecorder();
+    const availableSlots = [
+      createSlot('10:00', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('10:30', 'p2', 'Dt. Kerem Ozguler'),
+      createSlot('12:00', 'p3', 'Uzm. Dt. Hatice Erkin'),
+      createSlot('12:30', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('13:00', 'p2', 'Dt. Kerem Ozguler'),
+      createSlot('15:30', 'p3', 'Uzm. Dt. Hatice Erkin'),
+    ];
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: 'Öğleden sonra uygun doktor var mı',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots,
+        lastShownSlots: availableSlots.slice(0, 3),
+      },
+      extractNumericSelection,
+      findSlotMatches: defaultFindSlotMatches,
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => ({ appointmentType: { name: 'Dis Temizligi' } }),
+    });
+
+    assert.match(message, /öğleden sonraki uygun saatler/i);
+    assert.ok(!message.includes('10:00'));
+    assert.match(message, /12:00/);
+    assert.match(message, /15:30/);
+  });
+
+  await runFixture('awaiting_time honors 15 ten sonra threshold requests even when the date is repeated', async () => {
+    const recorder = createStateRecorder();
+    const availableSlots = [
+      createSlot('10:00', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('12:30', 'p2', 'Dt. Kerem Ozguler'),
+      createSlot('15:00', 'p3', 'Uzm. Dt. Hatice Erkin'),
+      createSlot('15:30', 'p1', 'Dt. Aysegul Akmese'),
+      createSlot('16:00', 'p2', 'Dt. Kerem Ozguler'),
+    ];
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: '16 Mayıs saat 15 ten sonra uygun doktor var mı',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots,
+        lastShownSlots: availableSlots.slice(0, 3),
+      },
+      extractNumericSelection,
+      findSlotMatches: defaultFindSlotMatches,
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => ({ appointmentType: { name: 'Dis Temizligi' } }),
+    });
+
+    assert.match(message, /saat 15:00 sonrası uygun saatler/i);
+    assert.ok(!message.includes('10:00'));
+    assert.ok(!message.includes('12:30'));
+    assert.match(message, /15:00/);
+    assert.match(message, /15:30/);
+    assert.match(message, /16:00/);
+  });
+
   await runFixture('awaiting_time offers next unseen slots for more-options requests', async () => {
     const recorder = createStateRecorder();
     const availableSlots = [
