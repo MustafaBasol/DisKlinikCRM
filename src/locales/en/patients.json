@@ -18,7 +18,16 @@
     "consents": "Consents & Source",
     "nextAppointment": "Next Appointment",
     "history": "Appointment History",
-    "activityTimeline": "Activity Timeline"
+    "activityTimeline": "Activity Timeline",
+    "whatsappTab": "WhatsApp",
+    "whatsappIncoming": "WhatsApp Incoming",
+    "whatsappOutgoing": "WhatsApp Outgoing",
+    "whatsappSearchPlaceholder": "Search WhatsApp messages...",
+    "whatsappFilterAll": "All",
+    "whatsappFilterIncoming": "Incoming",
+    "whatsappFilterOutgoing": "Outgoing",
+    "whatsappNoMessages": "No WhatsApp messages found for this filter.",
+    "systemActor": "System"
   },
   "form": {
     "firstName": "First Name",

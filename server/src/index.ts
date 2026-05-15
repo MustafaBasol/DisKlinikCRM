@@ -1,11 +1,14 @@
 import express, { Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { authenticate, authorize, generateToken, AuthRequest } from './middleware/auth.js';
+import { sendTextMessage } from './services/evolutionApi.js';
+import { extractAssistantInputWithGoogleAi } from './services/googleAiStudio.js';
 import { logActivity } from './utils/activity.js';
+import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE } from './utils/whatsappDate.js';
 
 dotenv.config();
 
@@ -672,7 +675,1025 @@ const formatClinicDateTime = (date: Date, timeZone: string) => {
   };
 };
 
+type AssistantIntent = 'book_appointment' | 'check_appointment' | 'cancel_appointment' | 'service_info' | 'unknown';
+type AssistantStep =
+  | 'main_menu'
+  | 'awaiting_name'
+  | 'awaiting_service'
+  | 'awaiting_date'
+  | 'awaiting_time'
+  | 'awaiting_cancel_selection';
+
+type NormalizedWhatsAppMessage = {
+  phone: string;
+  name?: string;
+  text: string;
+  rawPayload: Record<string, unknown>;
+};
+
+type NormalizedEvolutionWebhookPayload = {
+  event?: string;
+  instance?: string;
+  fromMe: boolean;
+  message: NormalizedWhatsAppMessage | null;
+};
+
+type AssistantExtraction = {
+  intent: AssistantIntent;
+  name: string | null;
+  phone: string | null;
+  appointmentTypeName: string | null;
+  appointmentTypeId: string | null;
+  dateText: string | null;
+  time: string | null;
+};
+
+type AssistantStateRecord = {
+  currentIntent?: string | null;
+  step?: string | null;
+  customerName?: string | null;
+  selectedAppointmentTypeId?: string | null;
+  selectedAppointmentTypeName?: string | null;
+  selectedDate?: string | null;
+};
+
+type WhatsAppContactPatient = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+};
+
+type AssistantService = {
+  id: string;
+  name: string;
+  durationMinutes: number;
+};
+
+type SavedAvailableSlot = {
+  practitionerId: string;
+  practitionerName: string;
+  startTime: string;
+  endTime: string;
+  localStartTime: string;
+  localEndTime: string;
+};
+
+type SavedAppointmentSummary = {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  serviceName: string | null;
+  practitionerName: string | null;
+  status: string;
+};
+
+type ConversationStateJson = {
+  availableSlots?: SavedAvailableSlot[];
+  cancellableAppointments?: SavedAppointmentSummary[];
+};
+
+const WHATSAPP_MAIN_MENU = [
+  'Merhaba, kliniğimize hoş geldiniz. Size memnuniyetle yardımcı olayım.',
+  '1. Randevu almak',
+  '2. Randevumu sorgulamak',
+  '3. Randevumu iptal etmek',
+  '4. Hizmetler hakkında bilgi almak',
+].join('\n');
+
+const getPatientFullName = (patient: Pick<WhatsAppContactPatient, 'firstName' | 'lastName'>) => `${patient.firstName} ${patient.lastName}`.trim();
+
+const formatMainMenu = (customerName?: string | null, isReturningCustomer = false) => {
+  if (customerName && isReturningCustomer) {
+    return [`Merhaba ${customerName}, yeniden hoş geldiniz. Size nasıl yardımcı olabilirim?`, '1. Randevu almak', '2. Randevumu sorgulamak', '3. Randevumu iptal etmek', '4. Hizmetler hakkında bilgi almak'].join('\n');
+  }
+
+  if (customerName) {
+    return [`Merhaba ${customerName}, kliniğimize hoş geldiniz. Size memnuniyetle yardımcı olayım.`, '1. Randevu almak', '2. Randevumu sorgulamak', '3. Randevumu iptal etmek', '4. Hizmetler hakkında bilgi almak'].join('\n');
+  }
+
+  return WHATSAPP_MAIN_MENU;
+};
+
+const WHATSAPP_FALLBACK_SERVICES: AssistantService[] = [
+  { id: '11111111-1111-4111-8111-111111111111', name: 'Ağız, Diş ve Çene Cerrahisi', durationMinutes: 30 },
+  { id: '22222222-2222-4222-8222-222222222222', name: 'Diş Beyazlatma Bleaching', durationMinutes: 30 },
+  { id: '33333333-3333-4333-8333-333333333333', name: 'Endodonti (Kanal Tedavisi)', durationMinutes: 60 },
+  { id: '44444444-4444-4444-8444-444444444444', name: 'Estetik Diş Hekimliği', durationMinutes: 45 },
+  { id: 'd4e8a00f-b601-4b8d-a21b-f3a13899f336', name: 'Gülüş Tasarımı', durationMinutes: 60 },
+];
+
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const toPrismaStateJson = (value: ConversationStateJson | null | undefined) => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return Prisma.DbNull;
+  }
+
+  return value;
+};
+
+const readString = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return undefined;
+};
+
+const normalizePhone = (value: string) => value.replace(/@.+$/, '').replace(/\D/g, '');
+
+const normalizeIntentText = (value: string) => value.trim().toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ');
+
+const isGreetingMessage = (text: string) => /^(merhaba|selam|iyi günler|günaydın|gunaydin|iyi akşamlar|iyi aksamlar|hey)\b/i.test(text.trim());
+
+const optionalWhatsappWebhookSecret: express.RequestHandler = (req, res, next) => {
+  const configuredSecret = process.env.WHATSAPP_WEBHOOK_SECRET?.trim();
+  if (!configuredSecret) {
+    return next();
+  }
+
+  const providedSecret = readString(req.headers['x-whatsapp-secret'], req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice(7)
+    : undefined);
+
+  if (providedSecret !== configuredSecret) {
+    return res.status(401).json({ error: 'Invalid WhatsApp webhook secret' });
+  }
+
+  next();
+};
+
+const normalizeEvolutionWebhookPayload = (payload: unknown): NormalizedEvolutionWebhookPayload => {
+  const payloadRecord = isRecord(payload) ? payload : undefined;
+  const envelope = payloadRecord && isRecord(payloadRecord.body) ? payloadRecord.body : payloadRecord;
+  if (!isRecord(envelope)) {
+    return { fromMe: false, message: null };
+  }
+
+  const data = isRecord(envelope.data) ? envelope.data : undefined;
+  const key = data && isRecord(data.key) ? data.key : undefined;
+  const message = data && isRecord(data.message) ? data.message : undefined;
+  const extendedText = message && isRecord(message.extendedTextMessage) ? message.extendedTextMessage : undefined;
+  const remoteJid = readString(key?.remoteJid, envelope.sender, data?.sender);
+  const phone = remoteJid ? normalizePhone(remoteJid) : undefined;
+  const text = readString(message?.conversation, extendedText?.text, envelope.message, envelope.text);
+  const name = readString(data?.pushName, envelope.pushName);
+
+  return {
+    event: readString(envelope.event),
+    instance: readString(envelope.instance),
+    fromMe: key?.fromMe === true || envelope.fromMe === true,
+    message: phone && text
+      ? {
+          phone,
+          name,
+          text,
+          rawPayload: envelope,
+        }
+      : null,
+  };
+};
+
+const readConversationStateJson = (value: unknown): ConversationStateJson => {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return {
+    availableSlots: Array.isArray(value.availableSlots) ? value.availableSlots as SavedAvailableSlot[] : undefined,
+    cancellableAppointments: Array.isArray(value.cancellableAppointments)
+      ? value.cancellableAppointments as SavedAppointmentSummary[]
+      : undefined,
+  };
+};
+
+const resetWhatsAppConversationState = async (clinicId: string, phone: string, customerName?: string | null) => {
+  return prisma.whatsAppConversationState.upsert({
+    where: { clinicId_phone: { clinicId, phone } },
+    update: {
+      customerName: customerName ?? null,
+      currentIntent: null,
+      step: null,
+      selectedAppointmentTypeId: null,
+      selectedAppointmentTypeName: null,
+      selectedPractitionerId: null,
+      selectedDate: null,
+      selectedTime: null,
+      lastMessage: null,
+      stateJson: Prisma.DbNull,
+    },
+    create: {
+      clinicId,
+      phone,
+      customerName: customerName ?? null,
+      stateJson: Prisma.DbNull,
+    },
+  });
+};
+
+const upsertWhatsAppConversationState = async (
+  clinicId: string,
+  phone: string,
+  data: {
+    customerName?: string | null;
+    currentIntent?: string | null;
+    step?: string | null;
+    selectedAppointmentTypeId?: string | null;
+    selectedAppointmentTypeName?: string | null;
+    selectedPractitionerId?: string | null;
+    selectedDate?: string | null;
+    selectedTime?: string | null;
+    lastMessage?: string | null;
+    stateJson?: ConversationStateJson | null;
+  }
+) => {
+  const { stateJson: rawStateJson, ...rest } = data;
+  const stateJson = toPrismaStateJson(rawStateJson);
+
+  return prisma.whatsAppConversationState.upsert({
+    where: { clinicId_phone: { clinicId, phone } },
+    update: {
+      ...rest,
+      ...(stateJson !== undefined ? { stateJson } : {}),
+    },
+    create: {
+      clinicId,
+      phone,
+      ...rest,
+      ...(stateJson !== undefined ? { stateJson } : {}),
+    },
+  });
+};
+
+const getAssistantServices = async (clinicId: string): Promise<AssistantService[]> => {
+  const services = await prisma.appointmentType.findMany({
+    where: { clinicId, isActive: true, isService: true },
+    select: { id: true, name: true, durationMinutes: true },
+    orderBy: { name: 'asc' },
+  });
+
+  if (services.length > 0) {
+    return services;
+  }
+
+  return WHATSAPP_FALLBACK_SERVICES;
+};
+
+const formatServiceList = (services: AssistantService[]) => [
+  'Elbette, hangi hizmet için randevu planlamak istersiniz?',
+  ...services.map((service, index) => `${index + 1}. ${service.name}`),
+].join('\n');
+
+const formatAppointmentLookupForMessage = (appointments: SavedAppointmentSummary[]) => {
+  if (appointments.length === 0) {
+    return 'Telefon numaranızla eşleşen aktif bir randevu göremedim. İsterseniz birlikte yeni bir randevu planlayabiliriz.';
+  }
+
+  return [
+    'Sistemde görebildiğim randevularınız şunlar:',
+    ...appointments.map((appointment, index) => `${index + 1}. ${appointment.date} ${appointment.startTime} - ${appointment.serviceName ?? 'Hizmet bilgisi yok'}${appointment.practitionerName ? ` / ${appointment.practitionerName}` : ''} / ${appointment.status}`),
+  ].join('\n');
+};
+
+const formatAvailabilityMessage = (date: string, slots: SavedAvailableSlot[]) => {
+  const formattedDate = formatTurkishDateLong(date, WHATSAPP_ASSISTANT_TIME_ZONE);
+  return [
+    `${formattedDate} için takvimi kontrol ettim. Size sunabileceğim uygun saatler şunlar:`,
+    ...slots.map((slot, index) => `${index + 1}. ${slot.localStartTime}${slot.practitionerName ? ` (${slot.practitionerName})` : ''}`),
+    '',
+    'Size uygun olan saati paylaşabilirsiniz.',
+  ].join('\n');
+};
+
+const formatWarmPrompt = (message: string, customerName?: string | null) => {
+  if (!customerName) {
+    return message;
+  }
+
+  return `${customerName}, ${message.charAt(0).toLocaleLowerCase('tr-TR')}${message.slice(1)}`;
+};
+
+const titleCaseName = (value: string) => value
+  .trim()
+  .split(/\s+/)
+  .map(part => part.charAt(0).toLocaleUpperCase('tr-TR') + part.slice(1).toLocaleLowerCase('tr-TR'))
+  .join(' ');
+
+const splitNameForPatient = (value: string) => {
+  const normalized = titleCaseName(value);
+  const [firstName, ...lastNameParts] = normalized.split(/\s+/);
+
+  return {
+    firstName: firstName || 'WhatsApp',
+    lastName: lastNameParts.join(' ') || '-',
+  };
+};
+
+const isPlaceholderPatientName = (patient: Pick<WhatsAppContactPatient, 'firstName' | 'lastName'>) => {
+  return patient.firstName === 'WhatsApp' || patient.lastName === '-';
+};
+
+const findServiceSelection = (text: string, services: AssistantService[]) => {
+  const normalized = normalizeIntentText(text);
+  if (/^\d+$/.test(normalized)) {
+    const selected = services[Number(normalized) - 1];
+    return selected ?? null;
+  }
+
+  return services.find(service => normalizeIntentText(service.name) === normalized || normalizeIntentText(service.name).includes(normalized)) ?? null;
+};
+
+const extractAssistantInputRuleBased = (text: string, services: AssistantService[]): AssistantExtraction => {
+  const normalized = normalizeIntentText(text);
+  const matchedService = findServiceSelection(text, services);
+  const timeMatch = normalized.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+
+  let intent: AssistantIntent = 'unknown';
+
+  if (normalized === '1' || /(randevu al|randevu almak|randevu oluştur|randevu olustur|randevu istiyorum)/.test(normalized)) {
+    intent = 'book_appointment';
+  } else if (normalized === '2' || /(randevumu sorgu|randevu sorgu|randevum ne zaman|randevu durum|randevum var mı|randevum var mi)/.test(normalized)) {
+    intent = 'check_appointment';
+  } else if (normalized === '3' || /(iptal|randevumu iptal|randevu iptal)/.test(normalized)) {
+    intent = 'cancel_appointment';
+  } else if (normalized === '4' || /(hizmet|tedavi|bilgi almak|fiyat|servis)/.test(normalized)) {
+    intent = 'service_info';
+  }
+
+  return {
+    intent,
+    name: /^[\p{L} .'-]{2,}$/u.test(text.trim()) ? titleCaseName(text) : null,
+    phone: /^\+?\d{6,}$/.test(text.trim()) ? normalizePhone(text.trim()) : null,
+    appointmentTypeName: matchedService?.name ?? null,
+    appointmentTypeId: matchedService?.id ?? null,
+    dateText: normalizeDateFromTurkishInput(text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE) ? text : null,
+    time: timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}` : null,
+  };
+};
+
+const mergeAssistantExtractions = (ruleBased: AssistantExtraction, aiBased: AssistantExtraction | null, services: AssistantService[]): AssistantExtraction => {
+  const aiService = aiBased?.appointmentTypeId
+    ? services.find(service => service.id === aiBased.appointmentTypeId) ?? null
+    : aiBased?.appointmentTypeName
+      ? findServiceSelection(aiBased.appointmentTypeName, services)
+      : null;
+
+  return {
+    intent: ruleBased.intent !== 'unknown' ? ruleBased.intent : (aiBased?.intent ?? 'unknown'),
+    name: ruleBased.name ?? aiBased?.name ?? null,
+    phone: ruleBased.phone ?? aiBased?.phone ?? null,
+    appointmentTypeName: ruleBased.appointmentTypeName ?? aiService?.name ?? aiBased?.appointmentTypeName ?? null,
+    appointmentTypeId: ruleBased.appointmentTypeId ?? aiService?.id ?? aiBased?.appointmentTypeId ?? null,
+    dateText: ruleBased.dateText ?? aiBased?.dateText ?? null,
+    time: ruleBased.time ?? aiBased?.time ?? null,
+  };
+};
+
+const resolveAssistantExtraction = async (
+  text: string,
+  services: AssistantService[],
+  state: AssistantStateRecord
+): Promise<AssistantExtraction> => {
+  const ruleBased = extractAssistantInputRuleBased(text, services);
+
+  try {
+    const aiBased = await extractAssistantInputWithGoogleAi({
+      text,
+      services: services.map(service => ({ id: service.id, name: service.name })),
+      currentIntent: state.currentIntent,
+      currentStep: state.step,
+      customerName: state.customerName,
+      selectedAppointmentTypeName: state.selectedAppointmentTypeName,
+      selectedDate: state.selectedDate,
+    });
+
+    const merged = mergeAssistantExtractions(ruleBased, aiBased, services);
+    console.info('[whatsapp-assistant] extraction-source', { usedAi: Boolean(aiBased), intent: merged.intent });
+    return merged;
+  } catch (error) {
+    console.error('[whatsapp-assistant] ai-extraction-error', error);
+    return ruleBased;
+  }
+};
+
+const findExistingPatientByPhone = async (clinicId: string, phone: string) => {
+  return prisma.patient.findFirst({
+    where: { clinicId, phone, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+};
+
+const getClinicSystemUserId = async (clinicId: string) => {
+  const user = await prisma.user.findFirst({
+    where: { clinicId, isActive: true },
+    select: { id: true },
+    orderBy: [
+      { role: 'asc' },
+      { createdAt: 'asc' },
+    ],
+  });
+
+  return user?.id ?? null;
+};
+
+const ensureWhatsAppContactPatient = async (clinicId: string, phone: string, providedName?: string | null) => {
+  const existingPatient = await findExistingPatientByPhone(clinicId, phone);
+  if (existingPatient) {
+    if (providedName && isPlaceholderPatientName(existingPatient)) {
+      const parsedName = splitNameForPatient(providedName);
+      return prisma.patient.update({
+        where: { id: existingPatient.id },
+        data: parsedName,
+        select: { id: true, firstName: true, lastName: true, phone: true },
+      });
+    }
+
+    return existingPatient;
+  }
+
+  const parsedName = splitNameForPatient(providedName || `WhatsApp ${phone.slice(-4)}`);
+  const patient = await prisma.patient.create({
+    data: {
+      clinicId,
+      firstName: parsedName.firstName,
+      lastName: parsedName.lastName,
+      phone,
+      source: 'whatsapp',
+      patientStatus: 'new',
+      communicationConsent: true,
+      notes: 'WhatsApp üzerinden ilk temas ile otomatik oluşturuldu.',
+    },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+
+  const systemUserId = await getClinicSystemUserId(clinicId);
+  if (systemUserId) {
+    await logActivity({
+      clinicId,
+      userId: systemUserId,
+      entityType: 'patient',
+      entityId: patient.id,
+      action: 'created',
+      description: `Patient automatically created from first WhatsApp contact (${phone})`,
+      patientId: patient.id,
+      metadata: {
+        systemGenerated: true,
+        source: 'whatsapp',
+        phone,
+      },
+    });
+  }
+
+  return patient;
+};
+
+const saveWhatsAppConversationMessage = async (args: {
+  clinicId: string;
+  patientId: string;
+  phone: string;
+  direction: 'incoming' | 'outgoing';
+  text: string;
+  rawPayload?: Record<string, unknown> | null;
+}) => {
+  return prisma.whatsAppConversationMessage.create({
+    data: {
+      clinicId: args.clinicId,
+      patientId: args.patientId,
+      phone: args.phone,
+      direction: args.direction,
+      text: args.text,
+      rawPayload: args.rawPayload ? args.rawPayload as Prisma.InputJsonValue : Prisma.DbNull,
+    },
+  });
+};
+
+const ensurePatientForWhatsApp = async (clinicId: string, phone: string, customerName: string) => {
+  return ensureWhatsAppContactPatient(clinicId, phone, customerName);
+};
+
+const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
+  const timeZone = clinic?.timezone || 'Europe/Istanbul';
+  const now = new Date();
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      clinicId,
+      deletedAt: null,
+      status: { notIn: ['cancelled'] },
+      startTime: { gte: now },
+      patient: { phone, deletedAt: null },
+    },
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+      status: true,
+      appointmentType: { select: { name: true } },
+      practitioner: { select: { firstName: true, lastName: true } },
+    },
+    orderBy: { startTime: 'asc' },
+    take: 10,
+  });
+
+  return appointments.map(appointment => {
+    const start = formatClinicDateTime(appointment.startTime, timeZone);
+    const end = formatClinicDateTime(appointment.endTime, timeZone);
+
+    return {
+      id: appointment.id,
+      date: start.date,
+      startTime: start.time,
+      endTime: end.time,
+      serviceName: appointment.appointmentType?.name ?? null,
+      practitionerName: appointment.practitioner ? `${appointment.practitioner.firstName} ${appointment.practitioner.lastName}` : null,
+      status: appointment.status,
+    } satisfies SavedAppointmentSummary;
+  });
+};
+
+const createAppointmentFromAssistant = async (
+  clinicId: string,
+  phone: string,
+  customerName: string,
+  appointmentTypeId: string,
+  selectedSlot: SavedAvailableSlot
+) => {
+  const patient = await ensurePatientForWhatsApp(clinicId, phone, customerName);
+  const startTime = new Date(selectedSlot.startTime);
+  const endTime = new Date(selectedSlot.endTime);
+
+  const availability = await checkPractitionerAvailability(clinicId, selectedSlot.practitionerId, startTime, endTime);
+  if (!availability.ok) {
+    throw new Error('APPOINTMENT_OUTSIDE_AVAILABILITY');
+  }
+
+  const overlap = await prisma.appointment.findFirst({
+    where: {
+      clinicId,
+      practitionerId: selectedSlot.practitionerId,
+      deletedAt: null,
+      status: { notIn: ['cancelled'] },
+      OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
+    },
+    select: { id: true },
+  });
+
+  if (overlap) {
+    throw new Error('APPOINTMENT_OVERLAP');
+  }
+
+  const appointment = await prisma.appointment.create({
+    data: {
+      clinicId,
+      patientId: patient.id,
+      practitionerId: selectedSlot.practitionerId,
+      appointmentTypeId,
+      startTime,
+      endTime,
+      status: 'scheduled',
+      notes: 'WhatsApp assistant üzerinden oluşturuldu.',
+    },
+    include: {
+      appointmentType: { select: { name: true } },
+      practitioner: { select: { firstName: true, lastName: true } },
+      patient: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  return appointment;
+};
+
+const cancelAppointmentForPhone = async (clinicId: string, appointmentId: string, phone: string) => {
+  const appointment = await prisma.appointment.findFirst({
+    where: {
+      id: appointmentId,
+      clinicId,
+      deletedAt: null,
+      status: { notIn: ['cancelled'] },
+      patient: { phone, deletedAt: null },
+    },
+    include: {
+      appointmentType: { select: { name: true } },
+      practitioner: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  if (!appointment) {
+    return null;
+  }
+
+  return prisma.appointment.update({
+    where: { id: appointment.id },
+    data: {
+      status: 'cancelled',
+      cancellationReason: 'WhatsApp assistant tarafından iptal edildi.',
+      notes: appointment.notes ? `${appointment.notes}\nWhatsApp assistant tarafından iptal edildi.` : 'WhatsApp assistant tarafından iptal edildi.',
+    },
+    include: {
+      appointmentType: { select: { name: true } },
+      practitioner: { select: { firstName: true, lastName: true } },
+    },
+  });
+};
+
+const handleCancelIntent = async (clinicId: string, phone: string) => {
+  const appointments = await getAppointmentsForPhone(clinicId, phone);
+  if (appointments.length === 0) {
+    await resetWhatsAppConversationState(clinicId, phone);
+    return 'İptal edilebilecek aktif bir randevu bulamadım.';
+  }
+
+  await upsertWhatsAppConversationState(clinicId, phone, {
+    currentIntent: 'cancel_appointment',
+    step: 'awaiting_cancel_selection',
+    stateJson: { cancellableAppointments: appointments },
+  });
+
+  return [
+    'İptal etmek istediğiniz randevuyu seçer misiniz?',
+    ...appointments.map((appointment, index) => `${index + 1}. ${appointment.date} ${appointment.startTime} - ${appointment.serviceName ?? 'Hizmet bilgisi yok'}`),
+  ].join('\n');
+};
+
+const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) => {
+  const clinic = await getDefaultClinic();
+  if (!clinic) {
+    return 'Klinik ayarlarına şu anda erişemiyorum.';
+  }
+
+  const existingPatient = await findExistingPatientByPhone(clinic.id, input.phone);
+  const patient = await ensureWhatsAppContactPatient(clinic.id, input.phone, input.name);
+  await saveWhatsAppConversationMessage({
+    clinicId: clinic.id,
+    patientId: patient.id,
+    phone: input.phone,
+    direction: 'incoming',
+    text: input.text,
+    rawPayload: input.rawPayload,
+  });
+  const state = await prisma.whatsAppConversationState.findUnique({
+    where: { clinicId_phone: { clinicId: clinic.id, phone: input.phone } },
+  });
+  const stateJson = readConversationStateJson(state?.stateJson);
+  const services = await getAssistantServices(clinic.id);
+  const extracted = await resolveAssistantExtraction(input.text, services, {
+    currentIntent: state?.currentIntent,
+    step: state?.step,
+    customerName: state?.customerName,
+    selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+    selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+    selectedDate: state?.selectedDate,
+  });
+  const normalizedText = normalizeIntentText(input.text);
+  const persistedCustomerName = getPatientFullName(patient);
+  const customerName = state?.customerName || persistedCustomerName;
+  const effectiveIntent = extracted.intent !== 'unknown'
+    ? extracted.intent
+    : (state?.currentIntent as AssistantIntent | null) ?? 'unknown';
+  const candidateAppointmentTypeId = state?.selectedAppointmentTypeId ?? extracted.appointmentTypeId ?? null;
+  const candidateAppointmentTypeName = state?.selectedAppointmentTypeName ?? extracted.appointmentTypeName ?? null;
+  const candidateDate = state?.selectedDate ?? (extracted.dateText ? normalizeDateFromTurkishInput(extracted.dateText, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE) : null);
+
+  console.info('[whatsapp-assistant] incoming', { phone: input.phone, text: input.text.slice(0, 200) });
+  console.info('[whatsapp-assistant] detected', { intent: effectiveIntent, step: state?.step ?? null });
+
+  if (normalizedText === 'menü' || normalizedText === 'menu' || normalizedText === 'başa dön' || normalizedText === 'basa don') {
+    await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
+    return formatMainMenu(customerName, Boolean(existingPatient));
+  }
+
+  if ((!state?.step && (isGreetingMessage(input.text) || effectiveIntent === 'unknown')) || normalizedText === '0') {
+    await upsertWhatsAppConversationState(clinic.id, input.phone, {
+      customerName,
+      currentIntent: null,
+      step: 'main_menu',
+      lastMessage: input.text,
+      stateJson: null,
+    });
+    return formatMainMenu(customerName, Boolean(existingPatient));
+  }
+
+  if (state?.step === 'awaiting_cancel_selection') {
+    const appointments = stateJson.cancellableAppointments ?? [];
+    const selectedAppointment = /^\d+$/.test(normalizedText) ? appointments[Number(normalizedText) - 1] : null;
+
+    if (!selectedAppointment) {
+      return formatWarmPrompt('iptal etmek istediğiniz randevunun numarasını paylaşır mısınız?', customerName);
+    }
+
+    const cancelledAppointment = await cancelAppointmentForPhone(clinic.id, selectedAppointment.id, input.phone);
+    if (!cancelledAppointment) {
+      await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
+      return formatWarmPrompt('seçtiğiniz randevuyu iptal ederken bir sorun oluştu. İsterseniz hemen yeniden deneyebiliriz.', customerName);
+    }
+
+    await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
+    return `${selectedAppointment.date} ${selectedAppointment.startTime} tarihli ${cancelledAppointment.appointmentType?.name ?? 'randevunuz'} iptal edildi. İhtiyacınız olursa yeni bir randevu için de yardımcı olabilirim.`;
+  }
+
+  if (effectiveIntent === 'service_info') {
+    await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
+    return formatServiceList(services);
+  }
+
+  if (effectiveIntent === 'check_appointment') {
+    const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
+    await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
+    return formatAppointmentLookupForMessage(appointments);
+  }
+
+  if (effectiveIntent === 'cancel_appointment') {
+    return handleCancelIntent(clinic.id, input.phone);
+  }
+
+  const currentStep = state?.step as AssistantStep | null;
+
+  if (effectiveIntent === 'book_appointment' || currentStep) {
+    if (!customerName) {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        currentIntent: 'book_appointment',
+        step: 'awaiting_name',
+        selectedAppointmentTypeId: candidateAppointmentTypeId,
+        selectedAppointmentTypeName: candidateAppointmentTypeName,
+        selectedDate: candidateDate,
+        lastMessage: input.text,
+      });
+
+      if (currentStep === 'awaiting_name' && extracted.name) {
+        await upsertWhatsAppConversationState(clinic.id, input.phone, {
+          customerName: extracted.name,
+          currentIntent: 'book_appointment',
+          step: candidateAppointmentTypeId ? (candidateDate ? 'awaiting_time' : 'awaiting_date') : 'awaiting_service',
+          selectedAppointmentTypeId: candidateAppointmentTypeId,
+          selectedAppointmentTypeName: candidateAppointmentTypeName,
+          selectedDate: candidateDate,
+          lastMessage: input.text,
+        });
+
+        await ensureWhatsAppContactPatient(clinic.id, input.phone, extracted.name);
+
+        if (candidateAppointmentTypeId && candidateDate) {
+          try {
+            const slots = await buildAvailableSlots(clinic.id, candidateAppointmentTypeId, candidateDate, state?.selectedPractitionerId ?? undefined);
+            if (!slots || slots.length === 0) {
+              await upsertWhatsAppConversationState(clinic.id, input.phone, {
+                customerName: extracted.name,
+                currentIntent: 'book_appointment',
+                step: 'awaiting_date',
+                selectedAppointmentTypeId: candidateAppointmentTypeId,
+                selectedAppointmentTypeName: candidateAppointmentTypeName,
+                selectedDate: null,
+                stateJson: null,
+              });
+              return 'Teşekkür ederim. Bu tarih için uygun saat görünmüyor. İsterseniz başka bir gün hemen kontrol edebilirim.';
+            }
+
+            const savedSlots = slots.slice(0, 8).map(slot => ({
+              practitionerId: slot.practitioner.id,
+              practitionerName: `${slot.practitioner.firstName} ${slot.practitioner.lastName}`,
+              startTime: slot.startTime.toISOString(),
+              endTime: slot.endTime.toISOString(),
+              localStartTime: slot.localStartTime,
+              localEndTime: slot.localEndTime,
+            } satisfies SavedAvailableSlot));
+
+            await upsertWhatsAppConversationState(clinic.id, input.phone, {
+              customerName: extracted.name,
+              currentIntent: 'book_appointment',
+              step: 'awaiting_time',
+              selectedAppointmentTypeId: candidateAppointmentTypeId,
+              selectedAppointmentTypeName: candidateAppointmentTypeName,
+              selectedDate: candidateDate,
+              stateJson: { availableSlots: savedSlots },
+            });
+
+            return `Memnun oldum ${extracted.name}. ${candidateAppointmentTypeName ?? 'Seçtiğiniz hizmet'} için ${formatAvailabilityMessage(candidateDate, savedSlots)}`;
+          } catch (error) {
+            console.error('[whatsapp-assistant] availability-after-name-error', error);
+          }
+        }
+
+        return formatServiceList(services);
+      }
+
+      return 'Size doğru şekilde yardımcı olabilmem için adınızı da paylaşır mısınız?';
+    }
+
+    const selectedAppointmentTypeId = candidateAppointmentTypeId;
+    const selectedAppointmentTypeName = candidateAppointmentTypeName;
+
+    if (!selectedAppointmentTypeId) {
+      const selectedService = extracted.appointmentTypeId
+        ? services.find(service => service.id === extracted.appointmentTypeId) ?? findServiceSelection(input.text, services)
+        : findServiceSelection(input.text, services);
+
+      if (!selectedService) {
+        await upsertWhatsAppConversationState(clinic.id, input.phone, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_service',
+          lastMessage: input.text,
+        });
+        return formatServiceList(services);
+      }
+
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_date',
+        selectedAppointmentTypeId: selectedService.id,
+        selectedAppointmentTypeName: selectedService.name,
+        lastMessage: input.text,
+        stateJson: null,
+      });
+      return `Tabii, ${selectedService.name} için yardımcı olayım. Hangi gün randevu düşünüyorsunuz?`;
+    }
+
+    const selectedDate = state?.selectedDate ?? candidateDate;
+
+    if (!selectedDate) {
+      const normalizedDate = extracted.dateText
+        ? normalizeDateFromTurkishInput(extracted.dateText, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE)
+        : normalizeDateFromTurkishInput(input.text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE);
+      if (!normalizedDate) {
+        await upsertWhatsAppConversationState(clinic.id, input.phone, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_date',
+          selectedAppointmentTypeId,
+          selectedAppointmentTypeName,
+          lastMessage: input.text,
+        });
+        return formatWarmPrompt('tarihi netleştiremedim. İsterseniz bugün, yarın, cumartesi, 16.05 ya da 16 Mayıs gibi yazabilirsiniz.', customerName);
+      }
+
+      console.info('[whatsapp-assistant] availability-check', {
+        appointmentTypeId: selectedAppointmentTypeId,
+        date: normalizedDate,
+      });
+
+      try {
+        const slots = await buildAvailableSlots(clinic.id, selectedAppointmentTypeId, normalizedDate, state?.selectedPractitionerId ?? undefined);
+
+        if (!slots) {
+          return 'Seçtiğiniz hizmeti şu anda sistemde doğrulayamadım. İsterseniz listeden yeniden seçim yapabiliriz.';
+        }
+
+        const savedSlots = slots.slice(0, 8).map(slot => ({
+          practitionerId: slot.practitioner.id,
+          practitionerName: `${slot.practitioner.firstName} ${slot.practitioner.lastName}`,
+          startTime: slot.startTime.toISOString(),
+          endTime: slot.endTime.toISOString(),
+          localStartTime: slot.localStartTime,
+          localEndTime: slot.localEndTime,
+        } satisfies SavedAvailableSlot));
+
+        console.info('[whatsapp-assistant] availability-result', { count: savedSlots.length });
+
+        if (savedSlots.length === 0) {
+          await upsertWhatsAppConversationState(clinic.id, input.phone, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_date',
+            selectedAppointmentTypeId,
+            selectedAppointmentTypeName,
+            selectedDate: null,
+            selectedTime: null,
+            lastMessage: input.text,
+            stateJson: null,
+          });
+          return 'Bu tarih için uygun saat görünmüyor. Uygunsanız size hemen başka bir gün bakabilirim.';
+        }
+
+        await upsertWhatsAppConversationState(clinic.id, input.phone, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_time',
+          selectedAppointmentTypeId,
+          selectedAppointmentTypeName,
+          selectedDate: normalizedDate,
+          selectedTime: null,
+          lastMessage: input.text,
+          stateJson: { availableSlots: savedSlots },
+        });
+
+        return formatAvailabilityMessage(normalizedDate, savedSlots);
+      } catch (error) {
+        console.error('[whatsapp-assistant] availability-error', error);
+        return 'Şu anda randevu takvimine erişirken teknik bir sorun oluştu. Lütfen biraz sonra tekrar deneyin veya klinik ekibine iletilmek üzere talebinizi not edebilirim.';
+      }
+    }
+
+    if (currentStep === 'awaiting_time') {
+      const availableSlots = stateJson.availableSlots ?? [];
+      const selectedSlot = /^\d+$/.test(normalizedText)
+        ? availableSlots[Number(normalizedText) - 1]
+        : availableSlots.find(slot => slot.localStartTime === extracted.time);
+
+      if (!selectedSlot) {
+        return formatWarmPrompt('listede paylaştığım uygun saatlerden birini numarasıyla ya da saat olarak yazabilir misiniz?', customerName);
+      }
+
+      console.info('[whatsapp-assistant] appointment-create', {
+        appointmentTypeId: selectedAppointmentTypeId,
+        date: selectedDate,
+        time: selectedSlot.localStartTime,
+      });
+
+      try {
+        const appointment = await createAppointmentFromAssistant(
+          clinic.id,
+          input.phone,
+          customerName,
+          selectedAppointmentTypeId,
+          selectedSlot
+        );
+
+        await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
+
+        return `Randevunuzu oluşturdum. ${selectedAppointmentTypeName ?? appointment.appointmentType.name} için ${formatTurkishDateLong(selectedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${selectedSlot.localStartTime} sizi planladım. Dilerseniz başka bir konuda da yardımcı olabilirim.`;
+      } catch (error) {
+        if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+          await upsertWhatsAppConversationState(clinic.id, input.phone, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_date',
+            selectedAppointmentTypeId,
+            selectedAppointmentTypeName,
+            selectedDate: null,
+            selectedTime: null,
+            lastMessage: input.text,
+            stateJson: null,
+          });
+          return 'Seçtiğiniz saat az önce dolmuş görünüyor. İsterseniz size hemen başka bir gün ya da saat önerebilirim.';
+        }
+
+        console.error('[whatsapp-assistant] appointment-create-error', error);
+        return 'Randevunuzu oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
+      }
+    }
+  }
+
+  await upsertWhatsAppConversationState(clinic.id, input.phone, {
+    customerName,
+    currentIntent: null,
+    step: 'main_menu',
+    lastMessage: input.text,
+    stateJson: null,
+  });
+
+  return formatMainMenu(customerName, Boolean(existingPatient));
+};
+
 // --- WhatsApp Public API (Secret Protected) ---
+
+app.post('/api/public/whatsapp/evolution-webhook', optionalWhatsappWebhookSecret, async (req, res) => {
+  const normalizedPayload = normalizeEvolutionWebhookPayload(req.body);
+
+  if (normalizedPayload.event && normalizedPayload.event !== 'messages.upsert') {
+    return res.status(200).json({ ignored: true, reason: 'unsupported_event' });
+  }
+
+  if (normalizedPayload.fromMe) {
+    return res.status(200).json({ ignored: true, reason: 'from_me' });
+  }
+
+  if (!normalizedPayload.message) {
+    return res.status(200).json({ ignored: true, reason: 'no_text_message' });
+  }
+
+  try {
+    const responseText = await handleIncomingWhatsAppMessage(normalizedPayload.message);
+    const clinic = await getDefaultClinic();
+    const patient = clinic
+      ? await findExistingPatientByPhone(clinic.id, normalizedPayload.message.phone)
+      : null;
+    await sendTextMessage(normalizedPayload.message.phone, responseText);
+    if (clinic && patient) {
+      await saveWhatsAppConversationMessage({
+        clinicId: clinic.id,
+        patientId: patient.id,
+        phone: normalizedPayload.message.phone,
+        direction: 'outgoing',
+        text: responseText,
+      });
+    }
+    console.info('[whatsapp-assistant] send-result', { phone: normalizedPayload.message.phone, instance: normalizedPayload.instance ?? null });
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error('[whatsapp-assistant] webhook-error', error);
+    res.status(500).json({ error: 'Failed to process Evolution webhook' });
+  }
+});
 
 app.get('/api/public/whatsapp/services', authorizeWhatsappApi, async (_req, res) => {
   try {
@@ -1400,6 +2421,10 @@ app.get('/api/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asy
         activityLogs: {
           include: { user: true },
           orderBy: { createdAt: 'desc' },
+        },
+        whatsappConversationMessages: {
+          orderBy: { createdAt: 'desc' },
+          take: 100,
         },
         insuranceProvisions: {
           include: { treatmentCase: true, assignedTo: true },

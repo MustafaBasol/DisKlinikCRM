@@ -34,6 +34,8 @@ model Clinic {
   messageTemplates     MessageTemplate[]
   sentMessages         SentMessage[]
   activityLogs         ActivityLog[]
+  whatsappConversationStates WhatsAppConversationState[]
+  whatsappConversationMessages WhatsAppConversationMessage[]
   settings             Setting[]
 }
 
@@ -111,6 +113,7 @@ model Patient {
   insuranceProvisions InsuranceProvision[]
   sentMessages        SentMessage[]
   activityLogs        ActivityLog[]
+  whatsappConversationMessages WhatsAppConversationMessage[]
 }
 
 model AppointmentType {
@@ -192,6 +195,44 @@ model AppointmentRequest {
   @@index([clinicId, status, createdAt])
   @@index([clinicId, phone])
   @@index([clinicId, practitionerId])
+}
+
+model WhatsAppConversationState {
+  id                          String   @id @default(uuid())
+  clinicId                    String
+  clinic                      Clinic   @relation(fields: [clinicId], references: [id])
+  phone                       String
+  customerName                String?
+  currentIntent               String?
+  step                        String?
+  selectedAppointmentTypeId   String?
+  selectedAppointmentTypeName String?
+  selectedPractitionerId      String?
+  selectedDate                String?
+  selectedTime                String?
+  lastMessage                 String?
+  stateJson                   Json?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@unique([clinicId, phone])
+  @@index([clinicId, updatedAt])
+}
+
+model WhatsAppConversationMessage {
+  id         String   @id @default(uuid())
+  clinicId   String
+  clinic     Clinic   @relation(fields: [clinicId], references: [id])
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id])
+  phone      String
+  direction  String
+  text       String
+  rawPayload Json?
+  createdAt  DateTime @default(now())
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([clinicId, phone, createdAt])
 }
 
 model TreatmentCase {

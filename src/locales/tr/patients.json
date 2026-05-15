@@ -18,7 +18,16 @@
     "consents": "Onaylar ve Kaynak",
     "nextAppointment": "Sıradaki Randevu",
     "history": "Randevu Geçmişi",
-    "activityTimeline": "İşlem Geçmişi"
+    "activityTimeline": "İşlem Geçmişi",
+    "whatsappTab": "WhatsApp",
+    "whatsappIncoming": "WhatsApp Gelen",
+    "whatsappOutgoing": "WhatsApp Giden",
+    "whatsappSearchPlaceholder": "WhatsApp mesajlarında ara...",
+    "whatsappFilterAll": "Tümü",
+    "whatsappFilterIncoming": "Gelen",
+    "whatsappFilterOutgoing": "Giden",
+    "whatsappNoMessages": "Bu filtre için WhatsApp mesajı bulunamadı.",
+    "systemActor": "Sistem"
   },
   "form": {
     "firstName": "Ad",

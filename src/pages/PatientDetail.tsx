@@ -40,7 +40,9 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'activity'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'whatsapp' | 'activity'>('overview');
+  const [whatsappSearch, setWhatsappSearch] = useState('');
+  const [whatsappDirection, setWhatsappDirection] = useState<'all' | 'incoming' | 'outgoing'>('all');
   const [tasks, setTasks] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
@@ -97,6 +99,41 @@ const PatientDetail: React.FC = () => {
 
   if (!patient) return null;
 
+  const timelineItems = [
+    ...(patient.activityLogs || []).map((log: any) => ({
+      id: `activity-${log.id}`,
+      type: 'activity' as const,
+      createdAt: log.createdAt,
+      payload: log,
+    })),
+    ...(patient.whatsappConversationMessages || []).map((message: any) => ({
+      id: `whatsapp-${message.id}`,
+      type: 'whatsapp' as const,
+      createdAt: message.createdAt,
+      payload: message,
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const filteredWhatsappMessages = (patient.whatsappConversationMessages || []).filter((message: any) => {
+    const matchesDirection = whatsappDirection === 'all' || message.direction === whatsappDirection;
+    const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase('tr-TR');
+    const matchesSearch = !normalizedSearch || message.text.toLocaleLowerCase('tr-TR').includes(normalizedSearch);
+    return matchesDirection && matchesSearch;
+  });
+
+  const getActivityActorLabel = (log: any) => {
+    try {
+      const metadata = log.metadataJson ? JSON.parse(log.metadataJson) : null;
+      if (metadata?.systemGenerated) {
+        return t('patients:detail.systemActor', { defaultValue: 'System' });
+      }
+    } catch (error) {
+      console.error('Failed to parse activity metadata:', error);
+    }
+
+    return `${log.user.firstName} ${log.user.lastName}`;
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
@@ -127,13 +164,13 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="flex gap-6 border-b border-gray-200">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'activity'] as const).map(tab => (
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'whatsapp', 'activity'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -451,25 +488,92 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
           )}
+          {activeTab === 'whatsapp' && (
+            <div className="space-y-4">
+              <div className="card p-6 space-y-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="font-bold text-lg">{t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' })}</h3>
+                    <p className="text-sm text-gray-500">{patient.whatsappConversationMessages?.length || 0} mesaj kaydı</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(['all', 'incoming', 'outgoing'] as const).map(direction => (
+                      <button
+                        key={direction}
+                        onClick={() => setWhatsappDirection(direction)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${whatsappDirection === direction ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}
+                      >
+                        {direction === 'all'
+                          ? t('patients:detail.whatsappFilterAll', { defaultValue: 'All' })
+                          : direction === 'incoming'
+                            ? t('patients:detail.whatsappFilterIncoming', { defaultValue: 'Incoming' })
+                            : t('patients:detail.whatsappFilterOutgoing', { defaultValue: 'Outgoing' })}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    value={whatsappSearch}
+                    onChange={(event) => setWhatsappSearch(event.target.value)}
+                    placeholder={t('patients:detail.whatsappSearchPlaceholder', { defaultValue: 'Search WhatsApp messages...' })}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-primary-400"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {filteredWhatsappMessages.length > 0 ? filteredWhatsappMessages.map((message: any) => (
+                  <div key={message.id} className={`card p-5 border ${message.direction === 'incoming' ? 'border-emerald-100 bg-emerald-50/60' : 'border-sky-100 bg-sky-50/60'}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          {message.direction === 'incoming' ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Incoming' }) : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Outgoing' })}
+                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-gray-900">{message.text}</p>
+                      </div>
+                      <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(message.createdAt).toLocaleString()}</span>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="card p-8 text-center text-gray-400 italic">{t('patients:detail.whatsappNoMessages', { defaultValue: 'No WhatsApp messages found for this filter.' })}</div>
+                )}
+              </div>
+            </div>
+          )}
         {/* Activity Tab */}
         {activeTab === 'activity' && (
           <div className="card p-6">
             <h3 className="font-bold mb-6">{t('patients:detail.activityTimeline')}</h3>
             <div className="space-y-8 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
-              {patient.activityLogs?.length > 0 ? patient.activityLogs.map((log: any) => (
-                <div key={log.id} className="relative pl-10">
+              {timelineItems.length > 0 ? timelineItems.map((item: any) => item.type === 'activity' ? (
+                <div key={item.id} className="relative pl-10">
                   <div className={`absolute left-0 top-1 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center ${
-                    log.action === 'created' ? 'bg-green-500 text-white' : 
-                    log.action === 'updated' ? 'bg-blue-500 text-white' : 
-                    log.action === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'
+                    item.payload.action === 'created' ? 'bg-green-500 text-white' : 
+                    item.payload.action === 'updated' ? 'bg-blue-500 text-white' : 
+                    item.payload.action === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'
                   }`}>
-                    {log.action === 'created' ? <Plus size={14} /> : log.action === 'completed' ? <CheckCircle2 size={14} /> : <Edit2 size={14} />}
+                    {item.payload.action === 'created' ? <Plus size={14} /> : item.payload.action === 'completed' ? <CheckCircle2 size={14} /> : <Edit2 size={14} />}
                   </div>
                   <div>
-                    <p className="text-sm text-gray-900 font-medium">{log.description}</p>
+                    <p className="text-sm text-gray-900 font-medium">{item.payload.description}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      by {log.user.firstName} {log.user.lastName} • {new Date(log.createdAt).toLocaleString()}
+                      by {getActivityActorLabel(item.payload)} • {new Date(item.payload.createdAt).toLocaleString()}
                     </p>
+                  </div>
+                </div>
+              ) : (
+                <div key={item.id} className="relative pl-10">
+                  <div className={`absolute left-0 top-1 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center ${item.payload.direction === 'incoming' ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white'}`}>
+                    <MessageSquare size={14} />
+                  </div>
+                  <div className={`rounded-2xl border px-4 py-3 ${item.payload.direction === 'incoming' ? 'bg-emerald-50 border-emerald-100' : 'bg-sky-50 border-sky-100'}`}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      {item.payload.direction === 'incoming' ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Incoming' }) : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Outgoing' })}
+                    </p>
+                    <p className="text-sm text-gray-900 font-medium mt-1 whitespace-pre-wrap">{item.payload.text}</p>
+                    <p className="text-xs text-gray-500 mt-2">{new Date(item.payload.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
               )) : (
