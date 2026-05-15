@@ -15,7 +15,7 @@ import { appointmentRequestService } from '../services/api';
 const AppointmentRequests: React.FC = () => {
   const { t, i18n } = useTranslation(['appointmentRequests', 'common']);
   const [requests, setRequests] = useState<any[]>([]);
-  const [status, setStatus] = useState('pending');
+  const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState('');
   const [error, setError] = useState('');
@@ -154,6 +154,11 @@ const AppointmentRequests: React.FC = () => {
                     <span className={`px-2 py-1 rounded text-xs font-bold border ${statusClass(request.status)}`}>
                       {t(`appointmentRequests:status.${request.status}`)}
                     </span>
+                    {request.status === 'converted' && (
+                      <span className="px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                        {t('appointmentRequests:badges.scheduled')}
+                      </span>
+                    )}
                     <span className="px-2 py-1 rounded text-xs font-bold bg-green-50 text-green-700 border border-green-100">
                       WhatsApp
                     </span>

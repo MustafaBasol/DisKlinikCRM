@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const allowedIntents = new Set(['book_appointment', 'check_appointment', 'cancel_appointment', 'service_info', 'unknown']);
+
 const assistantExtractionSchema = z.object({
   intent: z.enum(['book_appointment', 'check_appointment', 'cancel_appointment', 'service_info', 'unknown']),
   name: z.string().nullable(),
@@ -56,6 +58,27 @@ const readResponseText = (payload: unknown) => {
 };
 
 const stripCodeFence = (value: string) => value.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+
+const readNullableString = (value: unknown) => typeof value === 'string' ? value : null;
+
+const sanitizeAssistantExtraction = (value: unknown) => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const rawIntent = typeof record.intent === 'string' ? record.intent : 'unknown';
+
+  return {
+    intent: allowedIntents.has(rawIntent) ? rawIntent : 'unknown',
+    name: readNullableString(record.name),
+    phone: readNullableString(record.phone),
+    appointmentTypeName: readNullableString(record.appointmentTypeName),
+    appointmentTypeId: readNullableString(record.appointmentTypeId),
+    dateText: readNullableString(record.dateText),
+    time: readNullableString(record.time),
+  };
+};
 
 export const extractAssistantInputWithGoogleAi = async (
   args: ExtractAssistantInputArgs
@@ -126,5 +149,11 @@ export const extractAssistantInputWithGoogleAi = async (
   }
 
   const parsed = JSON.parse(stripCodeFence(text));
-  return assistantExtractionSchema.parse(parsed);
+  const sanitized = sanitizeAssistantExtraction(parsed);
+  if (!sanitized) {
+    return null;
+  }
+
+  const result = assistantExtractionSchema.safeParse(sanitized);
+  return result.success ? result.data : null;
 };

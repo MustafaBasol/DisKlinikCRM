@@ -23,6 +23,9 @@
     "converted": "Converted",
     "closed": "Closed"
   },
+  "badges": {
+    "scheduled": "Scheduled in calendar"
+  },
   "requestType": {
     "appointment": "Appointment",
     "reschedule": "Reschedule",

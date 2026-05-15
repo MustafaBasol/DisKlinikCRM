@@ -23,6 +23,9 @@
     "converted": "Randevuya Çevrildi",
     "closed": "Kapandı"
   },
+  "badges": {
+    "scheduled": "Takvime işlendi"
+  },
   "requestType": {
     "appointment": "Randevu",
     "reschedule": "Değişiklik",
