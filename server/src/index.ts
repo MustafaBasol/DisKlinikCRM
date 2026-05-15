@@ -1083,13 +1083,7 @@ const findServiceSelection = (text: string, services: AssistantService[]) => {
 };
 
 const extractTimeSelection = (text: string) => {
-  const normalized = normalizeIntentText(text);
-  const timeMatch = normalized.match(/\b(?:saat\s*)?([01]?\d|2[0-3]):([0-5]\d)\b/);
-  if (!timeMatch) {
-    return null;
-  }
-
-  return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+  return extractExplicitRequestedTime(text);
 };
 
 const isMoreOptionsRequest = (text: string) => interpretMoreOptionsRequest(text);

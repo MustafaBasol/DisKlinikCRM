@@ -153,6 +153,7 @@ export const extractExplicitTimeRange = (text: string) => {
 
 export const extractExplicitRequestedTime = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
+  const normalizedTimeExpression = normalizeTimeExpressionText(text);
   if (extractExplicitTimeRange(text)) {
     return null;
   }
@@ -161,12 +162,12 @@ export const extractExplicitRequestedTime = (text: string) => {
     return null;
   }
 
-  const exactTimeMatch = normalized.match(/\b(?:saat\s*)?([01]?\d|2[0-3]):([0-5]\d)\b/);
+  const exactTimeMatch = normalizedTimeExpression.match(/\b(?:saat\s*)?([01]?\d|2[0-3]):([0-5]\d)(?:\s*(?:te|ta|de|da))?\b/);
   if (exactTimeMatch) {
     return `${exactTimeMatch[1].padStart(2, '0')}:${exactTimeMatch[2]}`;
   }
 
-  const hourOnlyMatch = normalized.match(/\b(?:saat\s*)?([01]?\d|2[0-3])\b/);
+  const hourOnlyMatch = normalizedTimeExpression.match(/\b(?:saat\s*)?([01]?\d|2[0-3])(?:\s*(?:te|ta|de|da))?\b/);
   if (!hourOnlyMatch) {
     return null;
   }
