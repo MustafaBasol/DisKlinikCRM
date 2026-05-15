@@ -103,25 +103,40 @@ export const normalizeDateFromTurkishInput = (input: string, now: Date, timeZone
 
   const today = getTodayInTimeZone(now, timeZone);
 
-  if (normalized === 'bugün' || normalized === 'bugun') {
+  if (
+    normalized === 'bugün'
+    || normalized === 'bugun'
+    || normalized.includes('bugün')
+    || normalized.includes('bugun')
+  ) {
     return formatIsoDate(today);
   }
 
-  if (normalized === 'yarın' || normalized === 'yarin') {
+  if (
+    normalized === 'yarın'
+    || normalized === 'yarin'
+    || normalized.includes('yarın')
+    || normalized.includes('yarin')
+  ) {
     return formatIsoDate(addUtcDays(today, 1));
   }
 
-  if (normalized === 'yarından sonra' || normalized === 'yarindan sonra') {
+  if (
+    normalized === 'yarından sonra'
+    || normalized === 'yarindan sonra'
+    || normalized.includes('yarından sonra')
+    || normalized.includes('yarindan sonra')
+  ) {
     return formatIsoDate(addUtcDays(today, 2));
   }
 
-  const isoMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const isoMatch = normalized.match(/(?:^|\D)(\d{4})-(\d{2})-(\d{2})(?:\D|$)/);
   if (isoMatch) {
     const parsed = buildUtcDate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
     return parsed ? formatIsoDate(parsed) : null;
   }
 
-  const slashOrDotMatch = normalized.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?$/);
+  const slashOrDotMatch = normalized.match(/(?:^|\D)(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?(?:\D|$)/);
   if (slashOrDotMatch) {
     const day = Number(slashOrDotMatch[1]);
     const month = Number(slashOrDotMatch[2]);
@@ -130,7 +145,7 @@ export const normalizeDateFromTurkishInput = (input: string, now: Date, timeZone
     return parsed ? formatIsoDate(parsed) : null;
   }
 
-  const dayMonthTextMatch = normalized.match(/^(\d{1,2})\s+([a-zçğıöşü]+)(?:\s+(\d{4}))?$/i);
+  const dayMonthTextMatch = normalized.match(/(?:^|\D)(\d{1,2})\s+([a-zçğıöşü]+)(?:\s+(\d{4}))?(?:\D|$)/i);
   if (dayMonthTextMatch) {
     const day = Number(dayMonthTextMatch[1]);
     const month = turkishMonths[dayMonthTextMatch[2]];
