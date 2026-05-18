@@ -172,6 +172,11 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
                 </select>
               </div>
             )}
+
+            {/* Practitioner Selector */}
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Stethoscope size={16} className="text-gray-400" />
                 {t('appointments:form.selectPractitioner')}
               </label>
               <select
