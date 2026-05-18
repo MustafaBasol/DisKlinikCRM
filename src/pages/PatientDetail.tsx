@@ -742,8 +742,6 @@ const PatientDetail: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                  </div>
-                </div>
               )) : (
                 <div className="text-center text-gray-400 italic">{t('common:noData')}</div>
               )}
