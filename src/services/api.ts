@@ -139,8 +139,11 @@ export const dentalChartService = {
 export const attachmentService = {
   getAll: (patientId: string) => api.get(`/patients/${patientId}/attachments`),
   upload: (patientId: string, formData: FormData) =>
-    // Do NOT set Content-Type manually — Axios/browser sets multipart/form-data with boundary automatically
-    api.post(`/patients/${patientId}/attachments`, formData),
+    // Content-Type must be undefined so Axios auto-sets multipart/form-data with boundary
+    // (the default 'application/json' header would break multer otherwise)
+    api.post(`/patients/${patientId}/attachments`, formData, {
+      headers: { 'Content-Type': undefined },
+    }),
   delete: (patientId: string, attachmentId: string) =>
     api.delete(`/patients/${patientId}/attachments/${attachmentId}`),
   getDownloadUrl: (patientId: string, attachmentId: string) =>
