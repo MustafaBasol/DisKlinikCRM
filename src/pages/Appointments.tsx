@@ -166,11 +166,13 @@ const Appointments: React.FC = () => {
   const isDoctor = user?.role === 'doctor';
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth]);
   const appointmentCounts = useMemo(() => {
-    return monthAppointments.reduce<Record<string, number>>((acc, appointment) => {
-      const key = getDateKeyInTimeZone(appointment.startTime, clinicTimeZone);
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
+    return monthAppointments
+      .filter((a) => !['cancelled', 'no_show'].includes(a.status))
+      .reduce<Record<string, number>>((acc, appointment) => {
+        const key = getDateKeyInTimeZone(appointment.startTime, clinicTimeZone);
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
   }, [monthAppointments, clinicTimeZone]);
   const selectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(i18n.language, {
     weekday: 'long',
@@ -494,7 +496,7 @@ const Appointments: React.FC = () => {
       {/* Timeline / FullCalendar view */}
       {viewMode === 'timeline' && (
         <CalendarTimelineView
-          appointments={appointments}
+          appointments={status ? appointments : appointments.filter((a) => !['cancelled', 'no_show'].includes(a.status))}
           selectedDate={selectedDate}
           locale={i18n.language}
           canEdit={canEdit}
