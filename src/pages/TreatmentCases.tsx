@@ -200,7 +200,7 @@ const TreatmentCases: React.FC = () => {
                 </tr>
               ) : cases.length > 0 ? (
                 cases.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50/50 transition-colors group">
+                  <tr key={c.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer" onClick={() => navigate(`/treatment-cases/${c.id}`)}>
                     <td className="p-4">
                       <p className="font-bold text-gray-900">{c.title}</p>
                       <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
@@ -234,13 +234,13 @@ const TreatmentCases: React.FC = () => {
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => navigate(`/treatment-cases/${c.id}`)}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/treatment-cases/${c.id}`); }}
                           className="p-2 text-gray-400 hover:bg-white hover:text-primary-600 rounded-lg transition-all shadow-sm"
                         >
                           <Eye size={18} />
                         </button>
                         <button 
-                          onClick={() => { setEditingCase(c); setIsFormOpen(true); }}
+                          onClick={(e) => { e.stopPropagation(); setEditingCase(c); setIsFormOpen(true); }}
                           className="p-2 text-gray-400 hover:bg-white hover:text-blue-600 rounded-lg transition-all shadow-sm"
                         >
                           <Edit2 size={18} />

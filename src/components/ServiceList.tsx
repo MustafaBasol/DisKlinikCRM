@@ -74,7 +74,7 @@ const ServiceList: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {services.map((service) => (
-                <tr key={service.id} className={`hover:bg-gray-50/50 transition-colors ${!service.isActive ? 'opacity-50' : ''}`}>
+                <tr key={service.id} onClick={() => handleOpenModal(service)} className={`hover:bg-gray-50/50 transition-colors cursor-pointer ${!service.isActive ? 'opacity-50' : ''}`}>
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: service.color || '#e5e7eb' }} />
@@ -92,11 +92,11 @@ const ServiceList: React.FC = () => {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => handleOpenModal(service)} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('services:actions.edit')}>
+                      <button onClick={(e) => { e.stopPropagation(); handleOpenModal(service); }} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('services:actions.edit')}>
                         <Edit2 size={16} />
                       </button>
                       <button
-                        onClick={() => handleToggleActive(service.id, service.isActive)}
+                        onClick={(e) => { e.stopPropagation(); handleToggleActive(service.id, service.isActive); }}
                         className={`p-1.5 transition-colors ${service.isActive ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
                         title={service.isActive ? t('services:actions.deactivate') : t('services:actions.reactivate')}
                       >
