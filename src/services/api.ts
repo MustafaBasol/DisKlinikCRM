@@ -139,9 +139,8 @@ export const dentalChartService = {
 export const attachmentService = {
   getAll: (patientId: string) => api.get(`/patients/${patientId}/attachments`),
   upload: (patientId: string, formData: FormData) =>
-    api.post(`/patients/${patientId}/attachments`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    // Do NOT set Content-Type manually — Axios/browser sets multipart/form-data with boundary automatically
+    api.post(`/patients/${patientId}/attachments`, formData),
   delete: (patientId: string, attachmentId: string) =>
     api.delete(`/patients/${patientId}/attachments/${attachmentId}`),
   getDownloadUrl: (patientId: string, attachmentId: string) =>

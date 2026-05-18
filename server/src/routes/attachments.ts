@@ -88,10 +88,10 @@ router.post(
       });
 
       res.status(201).json(attachment);
-    } catch (err) {
-      if (req.file) fs.unlinkSync(req.file.path);
-      console.error(err);
-      res.status(500).json({ error: 'Failed to upload attachment' });
+    } catch (err: any) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      console.error('[attachments] upload error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to upload attachment', detail: err?.message });
     }
   },
 );
@@ -111,8 +111,9 @@ router.get(
         orderBy: { createdAt: 'desc' },
       });
       res.json(attachments);
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch attachments' });
+    } catch (err: any) {
+      console.error('[attachments] list error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to fetch attachments', detail: err?.message });
     }
   },
 );
@@ -136,8 +137,9 @@ router.get(
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.originalName)}"`);
       res.setHeader('Content-Type', attachment.mimeType);
       fs.createReadStream(attachment.filePath).pipe(res as any);
-    } catch {
-      res.status(500).json({ error: 'Failed to download attachment' });
+    } catch (err: any) {
+      console.error('[attachments] download error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to download attachment', detail: err?.message });
     }
   },
 );
@@ -175,8 +177,9 @@ router.delete(
       });
 
       res.json({ success: true });
-    } catch {
-      res.status(500).json({ error: 'Failed to delete attachment' });
+    } catch (err: any) {
+      console.error('[attachments] delete error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to delete attachment', detail: err?.message });
     }
   },
 );

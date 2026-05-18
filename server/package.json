@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "start": "npx prisma generate && tsx src/index.ts",
     "test": "npm run test:fixtures",
     "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts"
   },
