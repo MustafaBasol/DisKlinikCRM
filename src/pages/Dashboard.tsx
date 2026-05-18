@@ -41,6 +41,7 @@ import { dashboardService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatTimeInTimeZone } from '../utils/dateTime';
+import AppointmentForm from '../components/AppointmentForm';
 
 const STAGE_LABELS: Record<string, { label: string; color: string }> = {
   new:                       { label: 'Yeni',             color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
@@ -56,6 +57,7 @@ const STAGE_LABELS: Record<string, { label: string; color: string }> = {
 
 const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }> = ({ data, user, clinicTimeZone }) => {
   const navigate = useNavigate();
+  const [isNewApptOpen, setIsNewApptOpen] = useState(false);
 
   const stats = data.stats;
   const extras = data.doctorExtras || {};
@@ -78,9 +80,9 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/appointments" className="btn-primary flex items-center gap-2">
+          <button onClick={() => setIsNewApptOpen(true)} className="btn-primary flex items-center gap-2">
             <Plus size={16} />Randevu
-          </Link>
+          </button>
           <Link to="/my-earnings" className="btn-secondary flex items-center gap-2">
             <Award size={16} />Kazançlarım
           </Link>
@@ -288,6 +290,13 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
           </div>
         </div>
       </div>
+
+      {isNewApptOpen && (
+        <AppointmentForm
+          onClose={() => setIsNewApptOpen(false)}
+          onSuccess={() => { setIsNewApptOpen(false); navigate('/appointments'); }}
+        />
+      )}
     </div>
   );
 };
