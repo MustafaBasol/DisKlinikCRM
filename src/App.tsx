@@ -19,6 +19,7 @@ import Messages from './pages/Messages';
 import MessageTemplates from './pages/MessageTemplates';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import BookingWidget from './pages/BookingWidget';
 import Reports from './pages/Reports';
 import PaymentPlans from './pages/PaymentPlans';
 import PractitionerEarnings from './pages/PractitionerEarnings';
@@ -78,7 +79,8 @@ const App: React.FC = () => {
         <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
         <Routes>
           <Route path="/login" element={<Login />} />
-          
+          <Route path="/book/:clinicId" element={<BookingWidget />} />
+
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Dashboard />} />

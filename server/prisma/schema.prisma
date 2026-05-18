@@ -47,6 +47,7 @@ model Clinic {
   practitionerPayouts      PractitionerPayout[]
   inventoryItems           InventoryItem[]
   inventoryTransactions    InventoryTransaction[]
+  treatmentPlanProcedures  TreatmentPlanProcedure[]
 }
 
 model User {
@@ -85,6 +86,7 @@ model User {
   practitionerPayouts  PractitionerPayout[]           @relation("PractitionerPayouts")
   payoutsCreated       PractitionerPayout[]           @relation("PayoutCreator")
   inventoryTransactions InventoryTransaction[]        @relation("InventoryPerformedBy")
+  proceduresCreated     TreatmentPlanProcedure[]      @relation("ProcedureCreator")
 }
 
 model DoctorAvailability {
@@ -138,6 +140,7 @@ model Patient {
   toothRecords        ToothRecord[]
   paymentPlans        PaymentPlan[]
   practitionerEarnings PractitionerEarning[]
+  treatmentPlanProcedures TreatmentPlanProcedure[]
 }
 
 model AppointmentType {
@@ -161,6 +164,7 @@ model AppointmentType {
   treatmentCases       TreatmentCase[]
   serviceCompRules     ServiceCompensationRule[] @relation("ServiceCompRules")
   practitionerEarnings PractitionerEarning[]     @relation("EarningService")
+  treatmentPlanProcedures TreatmentPlanProcedure[]
 }
 
 model Appointment {
@@ -296,6 +300,7 @@ model TreatmentCase {
   paymentPlans        PaymentPlan[]
   practitionerEarnings PractitionerEarning[]
   inventoryTransactions InventoryTransaction[]
+  procedures          TreatmentPlanProcedure[]
 }
 
 model InsuranceProvision {
@@ -678,4 +683,32 @@ model InventoryTransaction {
   createdAt       DateTime      @default(now())
 
   @@index([clinicId, itemId, createdAt])
+}
+
+// ── Tedavi Planı Görselleştirme ───────────────────────────────────────────────
+
+model TreatmentPlanProcedure {
+  id              String           @id @default(uuid())
+  clinicId        String
+  clinic          Clinic           @relation(fields: [clinicId], references: [id])
+  treatmentCaseId String
+  treatmentCase   TreatmentCase    @relation(fields: [treatmentCaseId], references: [id])
+  patientId       String
+  patient         Patient          @relation(fields: [patientId], references: [id])
+  toothFdi        Int?             // FDI notation; null = procedure not tooth-specific
+  procedureName   String
+  serviceId       String?
+  service         AppointmentType? @relation(fields: [serviceId], references: [id])
+  // planned | in_progress | completed | cancelled
+  status          String           @default("planned")
+  notes           String?
+  estimatedCost   Float?
+  completedAt     DateTime?
+  createdById     String
+  createdBy       User             @relation("ProcedureCreator", fields: [createdById], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([clinicId, treatmentCaseId])
+  @@index([clinicId, patientId, toothFdi])
 }

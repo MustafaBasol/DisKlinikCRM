@@ -1,0 +1,416 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Calendar, Clock, User, Stethoscope, Phone, Mail, MessageSquare, CheckCircle, ChevronRight, Loader2 } from 'lucide-react';
+
+// ── Types ──────────────────────────────────────────────────────────────
+interface Service {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  basePrice?: number;
+  currency?: string;
+  category?: string;
+  description?: string;
+}
+
+interface Doctor {
+  id: string;
+  firstName: string;
+  lastName: string;
+  availableWeekdays: number[];
+}
+
+interface ClinicInfo {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+}
+
+interface BookingData {
+  clinic: ClinicInfo;
+  services: Service[];
+  doctors: Doctor[];
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────
+const WEEKDAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
+function getNext30Days(): { date: string; label: string; weekday: number }[] {
+  const days: { date: string; label: string; weekday: number }[] = [];
+  const today = new Date();
+  for (let i = 1; i <= 30; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const weekday = d.getDay();
+    const dateStr = d.toISOString().split('T')[0];
+    const label = `${d.toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })}`;
+    days.push({ date: dateStr, label, weekday });
+  }
+  return days;
+}
+
+const TIME_SLOTS = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+  '11:00', '11:30', '12:00', '13:00', '13:30', '14:00',
+  '14:30', '15:00', '15:30', '16:00', '16:30', '17:00',
+];
+
+// ── Step components ────────────────────────────────────────────────────
+const StepIndicator: React.FC<{ step: number; total: number }> = ({ step, total }) => (
+  <div className="flex items-center justify-center gap-2 mb-6">
+    {Array.from({ length: total }).map((_, i) => (
+      <React.Fragment key={i}>
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors
+            ${i < step ? 'bg-emerald-500 text-white' : i === step ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}
+        >
+          {i < step ? '✓' : i + 1}
+        </div>
+        {i < total - 1 && (
+          <div className={`h-0.5 w-8 transition-colors ${i < step ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+        )}
+      </React.Fragment>
+    ))}
+  </div>
+);
+
+// ── Main Widget ────────────────────────────────────────────────────────
+const BookingWidget: React.FC = () => {
+  // Get clinicId from URL param
+  const clinicId = window.location.pathname.split('/book/')[1]?.split('/')[0] || '';
+
+  const [data, setData] = useState<BookingData | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const [step, setStep] = useState(0); // 0=service 1=doctor+date 2=contact 3=success
+
+  const [selectedService, setSelectedService] = useState<string>('');
+  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [patientName, setPatientName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  useEffect(() => {
+    if (!clinicId) { setLoadError('Geçersiz bağlantı.'); setLoading(false); return; }
+    axios
+      .get(`/api/public/booking/${clinicId}`)
+      .then((r) => setData(r.data))
+      .catch(() => setLoadError('Klinik bilgileri yüklenemedi.'))
+      .finally(() => setLoading(false));
+  }, [clinicId]);
+
+  const allDays = getNext30Days();
+
+  // Filter available days for selected doctor
+  const availableDays = allDays.filter((d) => {
+    if (!selectedDoctor) return true;
+    const doc = data?.doctors.find((x) => x.id === selectedDoctor);
+    return doc ? doc.availableWeekdays.includes(d.weekday) : true;
+  });
+
+  const handleSubmit = async () => {
+    if (!patientName.trim() || !phone.trim()) {
+      setSubmitError('Ad Soyad ve telefon zorunludur.');
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await axios.post(`/api/public/booking/${clinicId}`, {
+        patientName: patientName.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+        serviceId: selectedService || undefined,
+        practitionerId: selectedDoctor || undefined,
+        preferredDate: selectedDate || undefined,
+        preferredTime: selectedTime || undefined,
+        notes: notes.trim() || undefined,
+      });
+      setStep(3);
+    } catch {
+      setSubmitError('Randevu talebi gönderilemedi. Lütfen tekrar deneyin.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-emerald-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-blue-500" size={40} />
+      </div>
+    );
+  }
+
+  if (loadError || !data) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8">
+          <p className="text-red-500 font-medium">{loadError || 'Yükleme hatası'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { clinic, services, doctors } = data;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+            <Stethoscope size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">{clinic.name}</h1>
+            <p className="text-xs text-gray-500">Online Randevu</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-lg mx-auto px-4 py-6">
+        {step < 3 && <StepIndicator step={step} total={3} />}
+
+        {/* ── Step 0: Select service ── */}
+        {step === 0 && (
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800 mb-1">Hizmet seçin</h2>
+            <p className="text-sm text-gray-500 mb-4">Hangi tedavi için randevu almak istiyorsunuz?</p>
+            <div className="space-y-2">
+              {services.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => { setSelectedService(s.id); setStep(1); }}
+                  className="w-full flex items-center justify-between p-4 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all text-left group"
+                >
+                  <div>
+                    <p className="font-medium text-gray-800 group-hover:text-blue-700">{s.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {s.durationMinutes} dk
+                      {s.basePrice ? ` • ${s.basePrice.toLocaleString('tr-TR')} ${s.currency ?? 'TRY'}` : ''}
+                    </p>
+                  </div>
+                  <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-500" />
+                </button>
+              ))}
+              {services.length === 0 && (
+                <p className="text-gray-500 text-center py-4">Henüz hizmet tanımlanmamış.</p>
+              )}
+              <button
+                onClick={() => { setSelectedService(''); setStep(1); }}
+                className="w-full py-3 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                Hizmet seçmeden devam et
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 1: Doctor + date + time ── */}
+        {step === 1 && (
+          <div className="space-y-5">
+            <div>
+              <button onClick={() => setStep(0)} className="text-sm text-blue-600 hover:underline mb-2">← Geri</button>
+              <h2 className="text-xl font-semibold text-gray-800 mb-1">Hekim & Tarih Seçin</h2>
+              <p className="text-sm text-gray-500">İsteğe bağlı</p>
+            </div>
+
+            {/* Doctor selection */}
+            {doctors.length > 0 && (
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                  <User size={14} /> Hekim (opsiyonel)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedDoctor('')}
+                    className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${!selectedDoctor ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}
+                  >
+                    Farksız
+                  </button>
+                  {doctors.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setSelectedDoctor(d.id); setSelectedDate(''); }}
+                      className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${selectedDoctor === d.id ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}
+                    >
+                      Dr. {d.firstName} {d.lastName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Date selection */}
+            <div>
+              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                <Calendar size={14} /> Tercih edilen tarih (opsiyonel)
+              </label>
+              <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto pr-1">
+                {availableDays.map(({ date, label, weekday }) => (
+                  <button
+                    key={date}
+                    onClick={() => setSelectedDate(selectedDate === date ? '' : date)}
+                    className={`px-2 py-2 rounded-lg border text-xs transition-colors ${selectedDate === date ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-700 hover:border-blue-400 bg-white'}`}
+                  >
+                    <span className="block font-medium">{WEEKDAY_NAMES[weekday]}</span>
+                    <span className="block text-[10px] opacity-75">{date.slice(5)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Time slot */}
+            {selectedDate && (
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                  <Clock size={14} /> Tercih edilen saat (opsiyonel)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {TIME_SLOTS.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setSelectedTime(selectedTime === t ? '' : t)}
+                      className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${selectedTime === t ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:border-blue-400 bg-white'}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setStep(2)}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
+            >
+              Devam Et →
+            </button>
+          </div>
+        )}
+
+        {/* ── Step 2: Contact info ── */}
+        {step === 2 && (
+          <div className="space-y-4">
+            <div>
+              <button onClick={() => setStep(1)} className="text-sm text-blue-600 hover:underline mb-2">← Geri</button>
+              <h2 className="text-xl font-semibold text-gray-800 mb-1">İletişim Bilgileri</h2>
+              <p className="text-sm text-gray-500">Sizi arayabilmemiz için lütfen doldurun</p>
+            </div>
+
+            {/* Summary */}
+            <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-800 space-y-1">
+              {selectedService && (
+                <div>🦷 {services.find((s) => s.id === selectedService)?.name}</div>
+              )}
+              {selectedDoctor && (
+                <div>👨‍⚕️ Dr. {doctors.find((d) => d.id === selectedDoctor)?.firstName} {doctors.find((d) => d.id === selectedDoctor)?.lastName}</div>
+              )}
+              {selectedDate && <div>📅 {selectedDate}{selectedTime ? ` ${selectedTime}` : ''}</div>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ad Soyad *</label>
+              <input
+                type="text"
+                value={patientName}
+                onChange={(e) => setPatientName(e.target.value)}
+                placeholder="Adınız Soyadınız"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Phone size={13} />Telefon *</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="05xx xxx xx xx"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Mail size={13} />E-posta (opsiyonel)</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ornek@email.com"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><MessageSquare size={13} />Not (opsiyonel)</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Şikayetiniz, özel isteğiniz..."
+                rows={3}
+                maxLength={500}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+
+            {submitError && (
+              <p className="text-red-500 text-sm bg-red-50 rounded-lg p-3">{submitError}</p>
+            )}
+
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              {submitting ? <><Loader2 size={18} className="animate-spin" /> Gönderiliyor...</> : 'Randevu Talebini Gönder'}
+            </button>
+
+            <p className="text-xs text-gray-400 text-center">
+              Talebiniz alındıktan sonra klinik sizi arayarak randevunuzu onaylayacaktır.
+            </p>
+          </div>
+        )}
+
+        {/* ── Step 3: Success ── */}
+        {step === 3 && (
+          <div className="text-center py-12 space-y-4">
+            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle size={40} className="text-emerald-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800">Talebiniz Alındı!</h2>
+            <p className="text-gray-500 max-w-sm mx-auto">
+              <strong>{clinic.name}</strong> ekibi en kısa sürede{' '}
+              <strong>{phone}</strong> numaranızı arayarak randevunuzu onaylayacaktır.
+            </p>
+            {clinic.phone && (
+              <p className="text-sm text-gray-400">
+                Sorularınız için: <a href={`tel:${clinic.phone}`} className="text-blue-600 hover:underline">{clinic.phone}</a>
+              </p>
+            )}
+            <button
+              onClick={() => { setStep(0); setSelectedService(''); setSelectedDoctor(''); setSelectedDate(''); setSelectedTime(''); setPatientName(''); setPhone(''); setEmail(''); setNotes(''); }}
+              className="mt-4 px-6 py-2 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Yeni Randevu Al
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="text-center py-6 text-xs text-gray-400">
+        {clinic.address && <p>{clinic.address}</p>}
+        Powered by Klinik CRM
+      </div>
+    </div>
+  );
+};
+
+export default BookingWidget;

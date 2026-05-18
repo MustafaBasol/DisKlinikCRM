@@ -24,6 +24,8 @@ import compensationRulesRoutes from './routes/compensationRules.js';
 import practitionerEarningsRoutes from './routes/practitionerEarnings.js';
 import practitionerPayoutsRoutes from './routes/practitionerPayouts.js';
 import inventoryRoutes from './routes/inventory.js';
+import publicBookingRoutes from './routes/publicBooking.js';
+import treatmentPlanProceduresRoutes from './routes/treatmentPlanProcedures.js';
 import { startReminderJobs } from './jobs/reminders.js';
 
 dotenv.config();
@@ -37,6 +39,7 @@ app.use(express.json());
 // Unprotected routes
 app.use('/api/auth', authRoutes);
 app.use('/api/public/whatsapp', whatsappRoutes);
+app.use('/api/public', publicBookingRoutes);
 
 // Global auth middleware for all /api routes below
 app.use('/api', authenticate as express.RequestHandler);
@@ -62,6 +65,7 @@ app.use('/api', compensationRulesRoutes);
 app.use('/api', practitionerEarningsRoutes);
 app.use('/api', practitionerPayoutsRoutes);
 app.use('/api', inventoryRoutes);
+app.use('/api', treatmentPlanProceduresRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

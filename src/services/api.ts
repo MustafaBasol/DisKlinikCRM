@@ -199,6 +199,19 @@ export const practitionerEarningService = {
   markPaid: (id: string) => api.patch(`/practitioner-earnings/${id}/mark-paid`),
 };
 
+export const treatmentPlanProceduresService = {
+  getByCaseId: (caseId: string) => api.get(`/treatment-cases/${caseId}/procedures`),
+  getPatientProcedures: (patientId: string) => api.get(`/patients/${patientId}/treatment-procedures`),
+  create: (caseId: string, data: any) => api.post(`/treatment-cases/${caseId}/procedures`, data),
+  update: (caseId: string, id: string, data: any) => api.put(`/treatment-cases/${caseId}/procedures/${id}`, data),
+  remove: (caseId: string, id: string) => api.delete(`/treatment-cases/${caseId}/procedures/${id}`),
+};
+
+export const publicBookingService = {
+  getClinicInfo: (clinicId: string) => axios.get(`/api/public/booking/${clinicId}`),
+  submit: (clinicId: string, data: any) => axios.post(`/api/public/booking/${clinicId}`, data),
+};
+
 export const practitionerPayoutService = {
   getAll: (params?: any) => api.get('/practitioner-payouts', { params }),
   getById: (id: string) => api.get(`/practitioner-payouts/${id}`),
