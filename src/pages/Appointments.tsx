@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, 
-  Filter, 
   Plus, 
   ChevronLeft, 
   ChevronRight, 
@@ -13,12 +12,17 @@ import {
   MoreVertical,
   Clock,
   User,
-  CalendarCheck
+  CalendarCheck,
+  LayoutList,
+  CalendarDays,
+  Users
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { appointmentService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import AppointmentForm from '../components/AppointmentForm';
+import CalendarTimelineView from '../components/CalendarTimelineView';
+import MultiDoctorDayView from '../components/MultiDoctorDayView';
 import { formatTimeInTimeZone, getDateKeyInTimeZone } from '../utils/dateTime';
 
 const Appointments: React.FC = () => {
@@ -34,6 +38,9 @@ const Appointments: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<any>(null);
   
+  // View mode
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'multidoctor'>('list');
+
   // Filters
   const [search, setSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(toLocalDateString(new Date()));
@@ -134,6 +141,18 @@ const Appointments: React.FC = () => {
     }
   };
 
+  const handleSlotClick = (doctorId: string, time: string) => {
+    setEditingAppointment({ practitionerId: doctorId, startTime: time });
+    setIsFormOpen(true);
+  };
+
+  const handleAppointmentClickInCalendar = (appointment: any) => {
+    if (canEdit) {
+      setEditingAppointment(appointment);
+      setIsFormOpen(true);
+    }
+  };
+
   const canEdit = user?.role === 'admin' || user?.role === 'receptionist';
   const isDoctor = user?.role === 'doctor';
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth]);
@@ -160,8 +179,48 @@ const Appointments: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">{t('appointments:title')}</h1>
           <p className="text-gray-500 mt-1">{t('appointments:subtitle')}</p>
         </div>
-        <div className="flex gap-3">
-          {(user?.role === 'admin' || user?.role === 'receptionist') && (
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          {/* View Mode Toggle */}
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                viewMode === 'list'
+                  ? 'bg-white shadow-sm text-primary-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Liste görünümü"
+            >
+              <LayoutList size={16} />
+              <span className="hidden sm:inline">Liste</span>
+            </button>
+            <button
+              onClick={() => setViewMode('timeline')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                viewMode === 'timeline'
+                  ? 'bg-white shadow-sm text-primary-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Takvim görünümü"
+            >
+              <CalendarDays size={16} />
+              <span className="hidden sm:inline">Takvim</span>
+            </button>
+            <button
+              onClick={() => setViewMode('multidoctor')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                viewMode === 'multidoctor'
+                  ? 'bg-white shadow-sm text-primary-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Çoklu hekim görünümü"
+            >
+              <Users size={16} />
+              <span className="hidden sm:inline">Çoklu Hekim</span>
+            </button>
+          </div>
+
+          {canEdit && (
             <button 
               onClick={() => {
                 setEditingAppointment(null);
@@ -176,8 +235,8 @@ const Appointments: React.FC = () => {
         </div>
       </div>
 
-      {/* Month Calendar */}
-      <div className="card overflow-hidden">
+      {/* Month Calendar — only in list mode */}
+      {viewMode === 'list' && <div className="card overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center text-primary-600">
@@ -258,7 +317,7 @@ const Appointments: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Filter Bar */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -310,8 +369,8 @@ const Appointments: React.FC = () => {
         )}
       </div>
 
-      {/* Appointment List */}
-      <div className="space-y-4">
+      {/* Appointment List — only in list mode */}
+      {viewMode === 'list' && <div className="space-y-4">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 className="animate-spin text-primary-600" size={32} />
@@ -411,7 +470,35 @@ const Appointments: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
+      </div>}
+
+      {/* Timeline / FullCalendar view */}
+      {viewMode === 'timeline' && (
+        <CalendarTimelineView
+          appointments={appointments}
+          selectedDate={selectedDate}
+          locale={i18n.language}
+          canEdit={canEdit}
+          onDateChange={(date) => {
+            setSelectedDate(date);
+            setCalendarMonth(startOfMonth(new Date(date)));
+          }}
+          onAppointmentClick={handleAppointmentClickInCalendar}
+          onRefresh={fetchAppointments}
+        />
+      )}
+
+      {/* Multi-doctor day view */}
+      {viewMode === 'multidoctor' && (
+        <MultiDoctorDayView
+          appointments={appointments}
+          doctors={doctors}
+          selectedDate={selectedDate}
+          canEdit={canEdit}
+          onSlotClick={handleSlotClick}
+          onAppointmentClick={handleAppointmentClickInCalendar}
+        />
+      )}
 
       {isFormOpen && (
         <AppointmentForm 

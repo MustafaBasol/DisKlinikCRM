@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* FullCalendar overrides */
+.fc-wrapper .fc {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.875rem;
+}
+.fc-wrapper .fc-toolbar-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.fc-wrapper .fc-button {
+  background-color: #6366f1 !important;
+  border-color: #6366f1 !important;
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.6rem !important;
+  border-radius: 0.5rem !important;
+}
+.fc-wrapper .fc-button:hover {
+  background-color: #4f46e5 !important;
+  border-color: #4f46e5 !important;
+}
+.fc-wrapper .fc-button-active {
+  background-color: #4338ca !important;
+  border-color: #4338ca !important;
+}
+.fc-wrapper .fc-timegrid-slot {
+  height: 28px !important;
+}
+.fc-wrapper .fc-event {
+  border-radius: 6px !important;
+  cursor: pointer;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
