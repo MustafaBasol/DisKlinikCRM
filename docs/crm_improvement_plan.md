@@ -83,8 +83,12 @@
 - **Etki:** ⭐⭐⭐ — Doluluk oranını artırır
 - **Zorluk:** Düşük-Orta
 
-### 2.4 — Randevu Onay Akışı (SMS/WhatsApp) 🔄 KISMI
-- **Durum:** Otomatik hatırlatma cron job (5.2) aktif — yarınki randevular her gün saat 10:00'da WhatsApp ile gönderiliyor. Hasta onay/iptal yanıtı n8n üzerinden alınıyor. Tam iki yönlü onay akışı eksik.
+### 2.4 — Randevu Onay Akışı (SMS/WhatsApp) ✅ TAMAMLANDI
+- **Durum:** Tam iki yönlü onay akışı tamamlandı.
+  - Otomatik hatırlatma cron job (5.2) aktif — yarınki randevular her gün saat 10:00'da WhatsApp ile gönderiliyor.
+  - Fallback hatırlatma mesajına "EVET / HAYIR yazarak onaylayın/iptal edin" talimatı eklendi.
+  - WhatsApp webhook'a erken EVET/HAYIR algılama eklendi: hasta aktif booking flow dışında "EVET" yazarsa → son 48 saatteki hatırlatma için `scheduled` randevu bulunup `confirmed` yapılıyor. "HAYIR" yazarsa → `cancelled` yapılıp activity log oluşturuluyor.
+  - UI'da (Appointments.tsx) `scheduled` randevular için ✓ (Onayla) ve ✗ (İptal) butonları zaten mevcut.
 - **Hedef:** n8n üzerinden otomatik randevu hatırlatma gönderimi (24 saat önce) ve hasta onay/iptal yanıtı
 - **Etki:** ⭐⭐⭐⭐⭐ — No-show oranını %30-40 azaltır
 - **Zorluk:** Orta (n8n zaten kurulu)
@@ -286,7 +290,7 @@
 | 1 | ~~Gerçek WhatsApp gönderimi (5.1)~~ ✅ | Mesajlaşma modülünü aktif hale getirir |
 | 2 | ~~Otomatik hatırlatma cron job (5.2)~~ ✅ | No-show'u azaltır, geliri artırır |
 | 3 | ~~Backend modülerleştirme (7.1)~~ ✅ | 172KB tek dosya sürdürülemez |
-| 4 | Randevu onay/renk kodlama (2.4, 2.5) | Küçük ama yüksek etki |
+| 4 | ~~Randevu onay/renk kodlama (2.4, 2.5)~~ ✅ | Küçük ama yüksek etki |
 
 ### Kısa Vadeli (Hafta 3-6)
 | # | Geliştirme | Neden |

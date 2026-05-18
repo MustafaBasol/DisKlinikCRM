@@ -158,7 +158,7 @@ async function runDailyReminderJob(): Promise<void> {
 
         const body = reminderTemplate
           ? renderTemplate(reminderTemplate.body, vars)
-          : `Sayın ${vars.patient_name}, yarın ${apptDate} saat ${apptTime} için ${clinic.name} randevunuz bulunmaktadır. Görüşmek üzere!`;
+          : `Sayın ${vars.patient_name}, yarın ${apptDate} saat ${apptTime} için ${clinic.name} randevunuz bulunmaktadır.\n\nRandevunuzu onaylamak için EVET, iptal etmek için HAYIR yazabilirsiniz.\n\nGörüşmek üzere!`;
 
         // Check: don't re-send if a reminder was already sent today for this appointment
         const alreadySent = await prisma.sentMessage.findFirst({

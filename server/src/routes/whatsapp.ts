@@ -924,6 +924,97 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   const selectedDate = state?.selectedDate ?? null;
   const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation'].includes(currentStep ?? '');
 
+  // ── REMINDER CONFIRMATION: Patient replies EVET/HAYIR to an automated reminder ──
+  const isReminderConfirm = /^(evet|e|yes)\s*[!.]*$/i.test(input.text.trim());
+  const isReminderCancel  = /^(hayır|hayir|h|iptal|vazgeç|vazgec|no)\s*[!.]*$/i.test(input.text.trim());
+
+  if ((isReminderConfirm || isReminderCancel) && existingPatient && !hasActiveBookingFlow && currentStep !== 'awaiting_cancel_selection') {
+    const clinic2 = await prisma.clinic.findUnique({ where: { id: clinic.id }, select: { timezone: true } });
+    const tz = clinic2?.timezone ?? 'Europe/Istanbul';
+    const now = new Date();
+    const windowEnd = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+    // Find the most recent reminder SentMessage for this patient that still has a scheduled appointment
+    const reminderMsg = await prisma.sentMessage.findFirst({
+      where: {
+        clinicId: clinic.id,
+        patientId: existingPatient.id,
+        appointmentId: { not: null },
+        status: { in: ['sent', 'delivered', 'prepared'] },
+        createdAt: { gte: new Date(now.getTime() - 48 * 60 * 60 * 1000) },
+      },
+      include: {
+        appointment: {
+          include: { appointmentType: { select: { name: true } } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const targetAppointment = reminderMsg?.appointment
+      && reminderMsg.appointment.deletedAt === null
+      && reminderMsg.appointment.status === 'scheduled'
+      && reminderMsg.appointment.startTime >= now
+      && reminderMsg.appointment.startTime <= windowEnd
+      ? reminderMsg.appointment
+      : null;
+
+    if (targetAppointment) {
+      const start = formatClinicDateTime(targetAppointment.startTime, tz);
+      const apptLabel = `${start.date} ${start.time}`;
+      const serviceName = targetAppointment.appointmentType?.name ?? 'Randevunuz';
+      const systemUserId = await getClinicSystemUserId(clinic.id);
+
+      if (isReminderConfirm) {
+        await prisma.appointment.update({
+          where: { id: targetAppointment.id },
+          data: { status: 'confirmed' },
+        });
+        if (systemUserId) {
+          await logActivity({
+            clinicId: clinic.id,
+            userId: systemUserId,
+            entityType: 'appointment',
+            entityId: targetAppointment.id,
+            action: 'confirmed',
+            description: `Randevu hasta WhatsApp onayı ile teyit edildi (${apptLabel})`,
+            patientId: existingPatient.id,
+            appointmentId: targetAppointment.id,
+            metadata: { source: 'whatsapp_reminder_reply', phone: inputPhone },
+          });
+        }
+        console.log(`[reminders] Appointment ${targetAppointment.id} confirmed via WhatsApp reply from ${inputPhone}`);
+        await upsertWhatsAppConversationState(clinic.id, inputPhone, { customerName, step: null, currentIntent: null, lastMessage: input.text });
+        return `Teşekkürler! ${apptLabel} tarihli ${serviceName} randevunuz onaylandı. Görüşmek üzere! 😊`;
+      } else {
+        await prisma.appointment.update({
+          where: { id: targetAppointment.id },
+          data: {
+            status: 'cancelled',
+            cancellationReason: 'Hasta WhatsApp hatırlatma mesajına HAYIR yanıtı verdi.',
+          },
+        });
+        if (systemUserId) {
+          await logActivity({
+            clinicId: clinic.id,
+            userId: systemUserId,
+            entityType: 'appointment',
+            entityId: targetAppointment.id,
+            action: 'cancelled',
+            description: `Randevu hasta WhatsApp yanıtı ile iptal edildi (${apptLabel})`,
+            patientId: existingPatient.id,
+            appointmentId: targetAppointment.id,
+            metadata: { source: 'whatsapp_reminder_reply', phone: inputPhone },
+          });
+        }
+        console.log(`[reminders] Appointment ${targetAppointment.id} cancelled via WhatsApp reply from ${inputPhone}`);
+        await upsertWhatsAppConversationState(clinic.id, inputPhone, { customerName, step: null, currentIntent: null, lastMessage: input.text });
+        return `Anladım, ${apptLabel} tarihli randevunuzu iptal ettim. Yeni bir randevu almak isterseniz "randevu al" yazabilirsiniz.`;
+      }
+    }
+  }
+  // ── END REMINDER CONFIRMATION ──
+
   console.log('[whatsapp-assistant] route-start', { phone: input.phone, text: input.text, previousStep: state?.step ?? null });
   console.info('[whatsapp-assistant] incoming', { phone: input.phone, text: input.text.slice(0, 200) });
 
