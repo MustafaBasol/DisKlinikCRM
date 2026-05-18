@@ -118,6 +118,26 @@ const PatientDetail: React.FC = () => {
 
   if (!patient) return null;
 
+  // Group WhatsApp messages into conversation sessions (>60 min gap = new session)
+  const whatsappSessions: Array<{ startTime: string; endTime: string; count: number; incomingCount: number; outgoingCount: number }> = [];
+  const sortedWaMsgs = [...(patient.whatsappConversationMessages || [])].sort(
+    (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  let currentSession: { startTime: string; endTime: string; count: number; incomingCount: number; outgoingCount: number } | null = null;
+  for (const msg of sortedWaMsgs) {
+    const msgTime = new Date(msg.createdAt).getTime();
+    if (!currentSession || msgTime - new Date(currentSession.endTime).getTime() > 60 * 60 * 1000) {
+      if (currentSession) whatsappSessions.push(currentSession);
+      currentSession = { startTime: msg.createdAt, endTime: msg.createdAt, count: 1, incomingCount: msg.direction === 'incoming' ? 1 : 0, outgoingCount: msg.direction === 'outgoing' ? 1 : 0 };
+    } else {
+      currentSession.endTime = msg.createdAt;
+      currentSession.count++;
+      if (msg.direction === 'incoming') currentSession.incomingCount++;
+      else currentSession.outgoingCount++;
+    }
+  }
+  if (currentSession) whatsappSessions.push(currentSession);
+
   const timelineItems = [
     ...(patient.activityLogs || []).map((log: any) => ({
       id: `activity-${log.id}`,
@@ -125,11 +145,11 @@ const PatientDetail: React.FC = () => {
       createdAt: log.createdAt,
       payload: log,
     })),
-    ...(patient.whatsappConversationMessages || []).map((message: any) => ({
-      id: `whatsapp-${message.id}`,
-      type: 'whatsapp' as const,
-      createdAt: message.createdAt,
-      payload: message,
+    ...whatsappSessions.map((session, i) => ({
+      id: `whatsapp-session-${i}`,
+      type: 'whatsapp-session' as const,
+      createdAt: session.startTime,
+      payload: session,
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -272,22 +292,25 @@ const PatientDetail: React.FC = () => {
                   <h3 className="font-bold">{t('patients:detail.nextAppointment')}</h3>
                   <Calendar size={20} />
                 </div>
-                {patient.appointments?.find((a: any) => new Date(a.startTime) > new Date()) ? (
-                  <div className="flex items-center gap-6">
-                    <div>
-                      <p className="text-primary-100 text-sm">{t('common:date')}</p>
-                      <p className="text-lg font-bold">
-                        {formatDateInTimeZone(patient.appointments[0].startTime, undefined, clinicTimeZone, { month: 'long', day: 'numeric', year: 'numeric' })} at {formatTimeInTimeZone(patient.appointments[0].startTime, undefined, clinicTimeZone)}
-                      </p>
+{(() => {
+                  const nextAppt = patient.appointments?.find((a: any) => new Date(a.startTime) > new Date());
+                  return nextAppt ? (
+                    <div className="flex items-center gap-6">
+                      <div>
+                        <p className="text-primary-100 text-sm">{t('common:date')}</p>
+                        <p className="text-lg font-bold">
+                          {formatDateInTimeZone(nextAppt.startTime, undefined, clinicTimeZone, { month: 'long', day: 'numeric', year: 'numeric' })} at {formatTimeInTimeZone(nextAppt.startTime, undefined, clinicTimeZone)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-primary-100 text-sm">{t('common:service')}</p>
+                        <p className="text-lg font-bold">{nextAppt.appointmentType.name}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-primary-100 text-sm">{t('common:service')}</p>
-                      <p className="text-lg font-bold">{patient.appointments[0].appointmentType.name}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="opacity-80 italic">No upcoming appointments scheduled.</p>
-                )}
+                  ) : (
+                    <p className="opacity-80 italic">No upcoming appointments scheduled.</p>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -691,15 +714,23 @@ const PatientDetail: React.FC = () => {
                 </div>
               ) : (
                 <div key={item.id} className="relative pl-10">
-                  <div className={`absolute left-0 top-1 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center ${item.payload.direction === 'incoming' ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white'}`}>
+                  <div className="absolute left-0 top-1 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center bg-emerald-500 text-white">
                     <MessageSquare size={14} />
                   </div>
-                  <div className={`rounded-2xl border px-4 py-3 ${item.payload.direction === 'incoming' ? 'bg-emerald-50 border-emerald-100' : 'bg-sky-50 border-sky-100'}`}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      {item.payload.direction === 'incoming' ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Incoming' }) : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Outgoing' })}
+                  <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-100">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">WhatsApp Görüşmesi</p>
+                    <p className="text-sm text-gray-700 mt-1">
+                      {item.payload.incomingCount} gelen · {item.payload.outgoingCount} giden
+                      <span className="text-gray-400"> ({item.payload.count} mesaj)</span>
                     </p>
-                    <p className="text-sm text-gray-900 font-medium mt-1 whitespace-pre-wrap">{item.payload.text}</p>
-                    <p className="text-xs text-gray-500 mt-2">{new Date(item.payload.createdAt).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(item.payload.startTime).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}
+                      {item.payload.startTime !== item.payload.endTime
+                        ? ` — ${new Date(item.payload.endTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`
+                        : ''}
+                    </p>
+                  </div>
+                </div>
                   </div>
                 </div>
               )) : (
