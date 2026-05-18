@@ -106,7 +106,7 @@ router.post('/patients', authorize(['admin', 'receptionist']), async (req: AuthR
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'patient', entityId: patient.id,
       action: 'created',
-      description: `Patient ${patient.firstName} ${patient.lastName} created`,
+      description: `${patient.firstName} ${patient.lastName} adlı hasta oluşturuldu`,
     });
 
     res.json(patient);
@@ -141,7 +141,7 @@ router.put('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
     await logActivity({
       clinicId, userId, entityType: 'patient', entityId: patient.id,
       action: 'updated',
-      description: `Patient ${patient.firstName} ${patient.lastName} updated`,
+      description: `${patient.firstName} ${patient.lastName} adlı hasta bilgileri güncellendi`,
     });
 
     res.json(patient);
@@ -168,7 +168,7 @@ router.delete('/patients/:id', authorize(['admin', 'receptionist']), async (req:
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'patient', entityId: id,
       action: 'archived',
-      description: `Patient ${patient.firstName} ${patient.lastName} archived`,
+      description: `${patient.firstName} ${patient.lastName} adlı hasta arşivlendi`,
     });
 
     res.json({ message: 'Patient archived successfully' });

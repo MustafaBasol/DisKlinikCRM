@@ -78,7 +78,7 @@ router.post('/practitioner-payouts', authorize(['admin', 'billing']), async (req
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'practitioner_payout', entityId: payout.id,
       action: 'created',
-      description: `Payout of ${payout.amount} recorded for ${practitioner.firstName} ${practitioner.lastName}. ${earningIds?.length ?? 0} earning(s) marked as paid.`,
+      description: `${practitioner.firstName} ${practitioner.lastName} için ${payout.amount} tutarında ödeme kaydedildi. ${earningIds?.length ?? 0} kazanç ödendi olarak işaretlendi.`,
     });
 
     res.json(result);
@@ -120,7 +120,7 @@ router.delete('/practitioner-payouts/:id', authorize(['admin']), async (req: Aut
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'practitioner_payout', entityId: id,
-      action: 'deleted', description: `Payout deleted and linked earnings reverted to approved`,
+      action: 'deleted', description: `Ödeme kaydı silindi, bağlı kazançlar onaylı duruma geri döndürüldü`,
     });
 
     res.json({ success: true });

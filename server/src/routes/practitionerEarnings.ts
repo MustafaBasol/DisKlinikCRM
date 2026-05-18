@@ -141,7 +141,7 @@ router.patch('/practitioner-earnings/:id/approve', authorize(['admin', 'billing'
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'practitioner_earning', entityId: id,
       action: 'approved',
-      description: `Earning of ${earning.earningAmount.toFixed(2)} approved for ${updated.practitioner.firstName} ${updated.practitioner.lastName}`,
+      description: `${updated.practitioner.firstName} ${updated.practitioner.lastName} için ${earning.earningAmount.toFixed(2)} tutarındaki kazanç onaylandı`,
     });
 
     res.json(updated);
@@ -179,7 +179,7 @@ router.patch('/practitioner-earnings/:id/adjust', authorize(['admin']), async (r
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'practitioner_earning', entityId: id,
       action: 'adjusted',
-      description: `Admin adjusted earning for ${earning.practitioner.firstName} ${earning.practitioner.lastName} from ${earning.earningAmount.toFixed(2)} to ${adminAdjustmentAmount.toFixed(2)}. Reason: ${adminAdjustmentReason}`,
+      description: `${earning.practitioner.firstName} ${earning.practitioner.lastName} kazancı ${earning.earningAmount.toFixed(2)} → ${adminAdjustmentAmount.toFixed(2)} olarak düzeltildi. Neden: ${adminAdjustmentReason}`,
     });
 
     res.json(updated);
@@ -206,7 +206,7 @@ router.patch('/practitioner-earnings/:id/cancel', authorize(['admin']), async (r
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'practitioner_earning', entityId: id,
-      action: 'cancelled', description: `Earning cancelled`,
+      action: 'cancelled', description: `Kazanç kaydı iptal edildi`,
     });
 
     res.json(updated);
@@ -233,7 +233,7 @@ router.patch('/practitioner-earnings/:id/mark-paid', authorize(['admin', 'billin
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'practitioner_earning', entityId: id,
-      action: 'paid', description: `Earning marked as paid`,
+      action: 'paid', description: `Kazanç ödendi olarak işaretlendi`,
     });
 
     res.json(updated);

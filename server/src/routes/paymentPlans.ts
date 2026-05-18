@@ -124,7 +124,7 @@ router.post('/payment-plans', authorize(['admin', 'billing', 'receptionist']), a
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'payment_plan', entityId: plan.id,
       action: 'created',
-      description: `Payment plan created: ${totalAmount} ${currency || 'TRY'} in ${installmentCount} installments for ${patient.firstName} ${patient.lastName}`,
+      description: `${patient.firstName} ${patient.lastName} için ${totalAmount} ${currency || 'TRY'} tutarında ${installmentCount} taksitli plan oluşturuldu`,
       patientId,
     });
 
@@ -220,7 +220,7 @@ router.patch('/payment-plans/:id/cancel', authorize(['admin', 'billing']), async
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'payment_plan', entityId: id,
-      action: 'cancelled', description: `Payment plan cancelled`,
+      action: 'cancelled', description: `Taksit planı iptal edildi`,
     });
 
     res.json(updated);

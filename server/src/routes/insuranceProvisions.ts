@@ -117,7 +117,7 @@ router.post('/insurance-provisions', authorize(['admin', 'receptionist']), async
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'insurance_provision', entityId: provision.id,
       patientId: provision.patientId, treatmentCaseId: provision.treatmentCaseId,
-      action: 'created', description: `Insurance provision created for ${provision.insuranceProviderName}`,
+      action: 'created', description: `${provision.insuranceProviderName} için sigorta provizyon kaydı oluşturuldu`,
     });
 
     res.json(provision);
@@ -164,8 +164,8 @@ router.put('/insurance-provisions/:id', authorize(['admin', 'receptionist', 'bil
       patientId: updated.patientId, treatmentCaseId: updated.treatmentCaseId,
       action: updated.status !== existing.status ? `status_${updated.status}` : 'updated',
       description: updated.status !== existing.status
-        ? `Insurance provision status changed from ${existing.status} to ${updated.status}`
-        : `Insurance provision updated for ${updated.insuranceProviderName}`,
+        ? `${updated.insuranceProviderName} provizyon durumu güncellendi: ${existing.status} → ${updated.status}`
+        : `${updated.insuranceProviderName} sigorta provizyon kaydı güncellendi`,
     });
 
     res.json(updated);
@@ -229,7 +229,7 @@ router.patch('/insurance-provisions/:id/cancel', authorize(['admin', 'receptioni
       clinicId, userId, entityType: 'insurance_provision', entityId: id,
       patientId: updated.patientId, treatmentCaseId: updated.treatmentCaseId,
       action: 'status_cancelled',
-      description: `Insurance provision cancelled for ${updated.insuranceProviderName}`,
+      description: `${updated.insuranceProviderName} sigorta provizyon kaydı iptal edildi`,
     });
 
     res.json(updated);

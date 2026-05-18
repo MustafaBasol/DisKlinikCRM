@@ -66,7 +66,7 @@ router.post('/message-templates', authorize(['admin', 'receptionist']), async (r
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'message_template', entityId: template.id,
-      action: 'created', description: `Template "${template.name}" created`,
+      action: 'created', description: `"${template.name}" mesaj şablonu oluşturuldu`,
     });
 
     res.json(template);
@@ -90,7 +90,7 @@ router.put('/message-templates/:id', authorize(['admin', 'receptionist']), async
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'message_template', entityId: id,
-      action: 'updated', description: `Template "${template.name}" updated`,
+      action: 'updated', description: `"${template.name}" mesaj şablonu güncellendi`,
     });
 
     res.json(template);
@@ -223,7 +223,7 @@ router.post('/messages/prepare', authorize(['admin', 'receptionist', 'doctor']),
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'message', entityId: message.id,
       action: 'prepared',
-      description: `Message prepared for ${patient.firstName} ${patient.lastName} via ${channel}`,
+      description: `${patient.firstName} ${patient.lastName} için ${channel} kanalında mesaj hazırlandı`,
     });
 
     res.json(message);
@@ -300,7 +300,7 @@ router.post('/messages/:id/send', authorize(['admin', 'receptionist']), async (r
         await logActivity({
           clinicId, userId: req.user!.id, entityType: 'message', entityId: id,
           action: 'send_failed',
-          description: `WhatsApp send failed for ${message.patient.firstName} ${message.patient.lastName}: ${sendErr.message}`,
+          description: `${message.patient.firstName} ${message.patient.lastName} için WhatsApp gönderilemedi: ${sendErr.message}`,
         });
         return res.status(502).json({ error: 'WhatsApp send failed', detail: sendErr.message });
       }
@@ -314,7 +314,7 @@ router.post('/messages/:id/send', authorize(['admin', 'receptionist']), async (r
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'message', entityId: id,
       action: 'sent',
-      description: `Message sent to ${message.patient.firstName} ${message.patient.lastName} via ${message.channel}`,
+      description: `${message.patient.firstName} ${message.patient.lastName} adresine ${message.channel} ile mesaj gönderildi`,
     });
 
     res.json(updated);

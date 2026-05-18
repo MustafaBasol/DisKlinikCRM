@@ -43,7 +43,7 @@ const createServiceHandler = async (req: AuthRequest, res: Response) => {
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'setting', entityId: type.id,
-      action: 'created', description: `Service "${type.name}" created`,
+      action: 'created', description: `"${type.name}" hizmeti oluşturuldu`,
     });
 
     res.json(type);
@@ -66,7 +66,7 @@ const updateServiceHandler = async (req: AuthRequest, res: Response) => {
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'setting', entityId: type.id,
-      action: 'updated', description: `Service "${type.name}" updated`,
+      action: 'updated', description: `"${type.name}" hizmeti güncellendi`,
     });
 
     res.json(type);

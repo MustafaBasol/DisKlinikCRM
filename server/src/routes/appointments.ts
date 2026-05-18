@@ -127,7 +127,8 @@ router.post('/appointments', authorize(['admin', 'receptionist']), async (req: A
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'appointment', entityId: appointment.id,
       action: 'created',
-      description: `Appointment created for ${patient.firstName} ${patient.lastName} with Dr. ${practitioner.lastName}`,
+      description: `${patient.firstName} ${patient.lastName} için Dr. ${practitioner.lastName} ile randevu oluşturuldu`,
+      metadata: { patientName: `${patient.firstName} ${patient.lastName}`, practitioner: `Dr. ${practitioner.lastName}` },
     });
 
     res.json(appointment);
@@ -211,12 +212,12 @@ router.put('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), 
       await logActivity({
         clinicId, userId, entityType: 'appointment', entityId: id,
         action: validation.data.status,
-        description: `Appointment status changed from ${existing.status} to ${validation.data.status}`,
+        description: `Randevu durumu güncellendi: ${existing.status} → ${validation.data.status}`,
       });
     } else {
       await logActivity({
         clinicId, userId, entityType: 'appointment', entityId: id,
-        action: 'updated', description: 'Appointment details updated',
+        action: 'updated', description: 'Randevu bilgileri güncellendi',
       });
     }
 

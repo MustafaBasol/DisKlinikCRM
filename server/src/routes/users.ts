@@ -71,7 +71,7 @@ router.post('/users', authorize(['admin']), async (req: AuthRequest, res: Respon
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'user', entityId: user.id,
-      action: 'created', description: `User ${user.email} created`,
+      action: 'created', description: `${user.email} kullanıcısı oluşturuldu`,
     });
 
     res.status(201).json(user);
@@ -125,7 +125,7 @@ router.put('/users/:id', authorize(['admin']), async (req: AuthRequest, res: Res
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'user', entityId: user.id,
-      action: 'updated', description: `User ${user.email} updated`,
+      action: 'updated', description: `${user.email} kullanıcısı güncellendi`,
     });
 
     res.json(user);
@@ -204,7 +204,7 @@ router.put('/doctor-availabilities/:practitionerId', authorize(['admin', 'doctor
     await logActivity({
       clinicId, userId, entityType: 'doctor_availability', entityId: practitionerId,
       action: 'updated',
-      description: `Availability updated for ${practitioner.firstName} ${practitioner.lastName}`,
+      description: `${practitioner.firstName} ${practitioner.lastName} müsaitlik bilgisi güncellendi`,
     });
 
     res.json(updated);

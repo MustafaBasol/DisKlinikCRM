@@ -49,7 +49,7 @@ router.post('/login', async (req, res) => {
       entityType: 'user',
       entityId: user.id,
       action: 'login',
-      description: `User ${user.email} logged in`,
+      description: `${user.email} sisteme giriş yaptı`,
     });
 
     res.json({

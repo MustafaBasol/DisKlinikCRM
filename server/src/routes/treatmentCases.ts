@@ -94,7 +94,7 @@ router.post('/treatment-cases', authorize(['admin', 'receptionist', 'doctor']), 
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'treatment_case', entityId: tc.id,
-      action: 'created', description: `Treatment case "${tc.title}" created for ${patient.firstName} ${patient.lastName}`,
+      action: 'created', description: `${patient.firstName} ${patient.lastName} için "${tc.title}" tedavi vakası oluşturuldu`,
     });
 
     res.json(tc);
@@ -128,7 +128,7 @@ router.put('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist']
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'treatment_case', entityId: id,
-      action: 'updated', description: `Treatment case "${updated.title}" updated`,
+      action: 'updated', description: `"${updated.title}" tedavi vakası güncellendi`,
     });
 
     // Auto-generate practitioner earning when treatment case is completed (billed base)

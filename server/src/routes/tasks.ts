@@ -79,7 +79,7 @@ router.post('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'task', entityId: task.id,
-      action: 'created', description: `Task "${task.title}" created`,
+      action: 'created', description: `"${task.title}" görevi oluşturuldu`,
     });
 
     res.json(task);
@@ -110,7 +110,7 @@ router.put('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'task', entityId: id,
-      action: 'updated', description: `Task "${updated.title}" updated`,
+      action: 'updated', description: `"${updated.title}" görevi güncellendi`,
     });
 
     res.json(updated);
@@ -140,7 +140,7 @@ router.patch('/tasks/:id/complete', authorize(['admin', 'doctor', 'receptionist'
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'task', entityId: id,
-      action: 'completed', description: `Task "${updated.title}" marked as completed`,
+      action: 'completed', description: `"${updated.title}" görevi tamamlandı`,
     });
 
     res.json(updated);

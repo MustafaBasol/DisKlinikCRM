@@ -100,7 +100,7 @@ router.put('/payments/:id', authorize(['admin', 'billing']), async (req: AuthReq
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'payment', entityId: id,
-      action: 'updated', description: `Payment ${id} updated`,
+      action: 'updated', description: `Ödeme güncellendi`,
     });
 
     // Auto-generate practitioner earning if payment was just moved to 'paid'
@@ -131,7 +131,7 @@ router.patch('/payments/:id/cancel', authorize(['admin', 'billing']), async (req
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'payment', entityId: id,
       action: 'cancelled',
-      description: `Payment of ${existing.amount} ${existing.currency} cancelled`,
+      description: `${existing.amount} ${existing.currency} tutarındaki ödeme iptal edildi`,
     });
 
     res.json(updated);
