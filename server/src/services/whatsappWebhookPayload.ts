@@ -1,6 +1,8 @@
 export type NormalizedWhatsAppMessage = {
   phone: string;
   name?: string;
+  messageId?: string;
+  instance?: string;
   text: string;
   rawPayload: Record<string, unknown>;
 };
@@ -41,15 +43,19 @@ export const normalizeEvolutionWebhookPayload = (payload: unknown): NormalizedEv
   const phone = remoteJid ? normalizePhone(remoteJid) : undefined;
   const text = readString(message?.conversation, extendedText?.text, envelope.message, envelope.text);
   const name = readString(data?.pushName, envelope.pushName);
+  const instance = readString(envelope.instance);
+  const messageId = readString(key?.id, data?.id, envelope.messageId, envelope.id);
 
   return {
     event: readString(envelope.event),
-    instance: readString(envelope.instance),
+    instance,
     fromMe: key?.fromMe === true || envelope.fromMe === true,
     message: phone && text
       ? {
           phone,
           name,
+          messageId,
+          instance,
           text,
           rawPayload: envelope,
         }

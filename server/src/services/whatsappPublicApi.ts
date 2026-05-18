@@ -5,9 +5,11 @@ const optionalUuid = z.preprocess(
   z.string().uuid().optional().nullable()
 );
 
+const normalizePhone = (value: string) => value.replace(/\D/g, '');
+
 export const whatsappAppointmentRequestSchema = z.object({
   patientName: z.string().min(2, 'Patient name is required'),
-  phone: z.string().min(6, 'Phone is required'),
+  phone: z.string().transform(normalizePhone).refine(value => value.length >= 6, 'Phone is required'),
   email: z.string().email().optional().nullable(),
   appointmentTypeId: optionalUuid,
   practitionerId: optionalUuid,
@@ -33,7 +35,7 @@ export const whatsappAvailabilityQuerySchema = z.object({
 });
 
 export const whatsappAppointmentLookupQuerySchema = z.object({
-  phone: z.string().trim().min(6, 'Phone is required'),
+  phone: z.string().trim().transform(normalizePhone).refine(value => value.length >= 6, 'Phone is required'),
 });
 
 const readString = (...values: unknown[]) => {

@@ -9,7 +9,7 @@ Use the same shared secret in n8n and the CRM backend:
 - Backend env: `WHATSAPP_WEBHOOK_SECRET`
 - n8n HTTP Request header: `x-whatsapp-secret: <secret>`
 
-Never expose this value in the AI prompt.
+This secret is required for all WhatsApp public endpoints and the Evolution webhook. Never expose this value in the AI prompt.
 
 ## CRM Endpoints for n8n
 

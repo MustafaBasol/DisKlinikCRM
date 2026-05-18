@@ -28,7 +28,9 @@ Webhook URL:
 
 https://YOUR_DOMAIN/api/public/whatsapp/evolution-webhook
 
-WHATSAPP_WEBHOOK_SECRET ayarlıysa, Evolution API isteğine x-whatsapp-secret başlığı ekleyin.
+WHATSAPP_WEBHOOK_SECRET zorunludur. Evolution API isteğine `x-whatsapp-secret` başlığı veya `Authorization: Bearer <secret>` ekleyin. Secret tanımlı değilse webhook 503, hatalıysa 401 döner.
+
+Evolution payload'ında `instance` alanı varsa backend önce `settings` tablosunda `whatsapp.evolution_instance_name` anahtarıyla eşleşen kliniği arar. Eşleşme yoksa `EVOLUTION_INSTANCE_NAME` ile aynı instance için varsayılan kliniğe düşer; farklı instance'lar reddedilir.
 
 ## Yerel test örneği
 
@@ -39,6 +41,7 @@ curl -X POST http://localhost:5000/api/public/whatsapp/evolution-webhook \
     "event": "messages.upsert",
     "data": {
       "key": {
+        "id": "sample-message-id",
         "remoteJid": "33753849141@s.whatsapp.net",
         "fromMe": false
       },
@@ -72,7 +75,7 @@ Yeni kullanıcı:
 11. Backend normalizeDateFromTurkishInput ile tarihi Europe/Paris bazında çözer ve availability fonksiyonunu doğrudan çağırır.
 12. Uygun saatler varsa kullanıcıya numaralı liste döner.
 13. Kullanıcı saat seçer.
-14. Backend doğrudan randevu oluşturur ve onay mesajı gönderir.
+14. Backend doğrudan randevu oluşturmaz; `pending` durumunda WhatsApp randevu talebi açar ve talebi personel onay ekranına düşürür.
 
 Mevcut kullanıcı:
 
@@ -116,9 +119,11 @@ Mevcut kullanıcı:
 ## Notlar
 
 - Botun kendi gönderdiği mesajlar fromMe=true ise yok sayılır.
+- Evolution mesaj ID'si `data.key.id` üzerinden alınır; aynı ID tekrar gelirse mesaj yeniden işlenmez.
+- WhatsApp telefon numaraları rakam formatına normalize edilir; veritabanında `+90 5xx...` gibi farklı formatta kayıtlı hastalarla yine eşleştirilir.
 - Availability kontrolü mevcut backend servis mantığı üzerinden yapılır; n8n AI tool çağrısı yoktur.
 - AI ana karar verici değildir. Temel akış deterministic olarak backend içinde yönetilir.
-- Google AI Studio sadece intent ve entity extraction için kullanılır; takvim kontrolü, tarih normalizasyonu ve randevu oluşturma backend kararlarıyla yapılır.
+- Google AI Studio sadece intent ve entity extraction için kullanılır; takvim kontrolü, tarih normalizasyonu ve randevu talebi oluşturma backend kararlarıyla yapılır.
 - Yanıt metinleri daha doğal ve danışma ekibi tonu ile düzenlenmiştir; kullanıcı serbest metin yazabilir.
 - İlk WhatsApp temasında hasta kaydı isim alındıktan sonra telefon numarasına göre oluşturulur; daha önce kayıtlıysa aynı hastaya konuşma geçmişi eklenir.
 - Gelen ve giden WhatsApp mesajları hasta geçmişinde saklanır ve hasta detay ekranındaki zaman akışında görünür.

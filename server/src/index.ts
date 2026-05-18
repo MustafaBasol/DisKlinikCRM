@@ -30,7 +30,6 @@ import {
   type NormalizedWhatsAppMessage,
 } from './services/whatsappWebhookPayload.js';
 import {
-  validateOptionalWebhookSecret,
   validateWhatsappApiSecret,
   whatsappAppointmentLookupQuerySchema,
   whatsappAppointmentRequestSchema,
@@ -561,10 +560,53 @@ const authorizeWhatsappApi: express.RequestHandler = (req, res, next) => {
   next();
 };
 
+const authorizeWhatsappWebhook: express.RequestHandler = (req, res, next) => {
+  const validationResult = validateWhatsappApiSecret(process.env.WHATSAPP_WEBHOOK_SECRET, {
+    authorization: req.headers.authorization,
+    xWhatsappSecret: req.headers['x-whatsapp-secret'],
+  });
+
+  if (validationResult === 'not_configured') {
+    return res.status(503).json({ error: 'WhatsApp webhook secret is not configured' });
+  }
+
+  if (validationResult === 'invalid') {
+    return res.status(401).json({ error: 'Invalid WhatsApp webhook secret' });
+  }
+
+  next();
+};
+
 const getDefaultClinic = async () => {
   return prisma.clinic.findFirst({
     orderBy: { createdAt: 'asc' },
   });
+};
+
+const getClinicForWhatsAppInstance = async (instanceName?: string | null) => {
+  const normalizedInstance = instanceName?.trim();
+  if (!normalizedInstance) {
+    return getDefaultClinic();
+  }
+
+  const configuredInstance = process.env.EVOLUTION_INSTANCE_NAME?.trim();
+  const mappedSetting = await prisma.setting.findFirst({
+    where: {
+      key: 'whatsapp.evolution_instance_name',
+      value: normalizedInstance,
+    },
+    include: { clinic: true },
+  });
+
+  if (mappedSetting?.clinic) {
+    return mappedSetting.clinic;
+  }
+
+  if (configuredInstance && configuredInstance === normalizedInstance) {
+    return getDefaultClinic();
+  }
+
+  return null;
 };
 
 const minutesToTime = (minutes: number) => {
@@ -754,6 +796,38 @@ const readString = (...values: unknown[]) => {
 
 const normalizePhone = (value: string) => value.replace(/@.+$/, '').replace(/\D/g, '');
 
+const getPhoneVariants = (value?: string | null) => {
+  const digits = value ? normalizePhone(value) : '';
+  const variants = new Set<string>();
+  if (!digits) {
+    return variants;
+  }
+
+  variants.add(digits);
+  if (digits.startsWith('90') && digits.length === 12) {
+    variants.add(digits.slice(2));
+    variants.add(`0${digits.slice(2)}`);
+  } else if (digits.startsWith('0') && digits.length === 11) {
+    variants.add(digits.slice(1));
+    variants.add(`90${digits.slice(1)}`);
+  } else if (digits.length === 10) {
+    variants.add(`0${digits}`);
+    variants.add(`90${digits}`);
+  }
+
+  return variants;
+};
+
+const phonesMatch = (left?: string | null, right?: string | null) => {
+  const leftVariants = getPhoneVariants(left);
+  const rightVariants = getPhoneVariants(right);
+  return [...leftVariants].some(variant => rightVariants.has(variant));
+};
+
+const isPrismaUniqueConstraintError = (error: unknown) => {
+  return Boolean(error && typeof error === 'object' && (error as { code?: string }).code === 'P2002');
+};
+
 const normalizeIntentText = (value: string) => value.trim().toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ');
 
 const normalizeTurkishSearchText = (value: string) => normalizeIntentText(value)
@@ -803,19 +877,6 @@ const extractNumericSelection = (text: string) => {
   return match ? Number(match[1]) : null;
 };
 
-const optionalWhatsappWebhookSecret: express.RequestHandler = (req, res, next) => {
-  const validationResult = validateOptionalWebhookSecret(process.env.WHATSAPP_WEBHOOK_SECRET, {
-    authorization: req.headers.authorization,
-    xWhatsappSecret: req.headers['x-whatsapp-secret'],
-  });
-
-  if (validationResult === 'invalid') {
-    return res.status(401).json({ error: 'Invalid WhatsApp webhook secret' });
-  }
-
-  next();
-};
-
 const readConversationStateJson = (value: unknown): ConversationStateJson => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
@@ -839,8 +900,9 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
 };
 
 const resetWhatsAppConversationState = async (clinicId: string, phone: string, customerName?: string | null) => {
+  const normalizedPhone = normalizePhone(phone);
   return prisma.whatsAppConversationState.upsert({
-    where: { clinicId_phone: { clinicId, phone } },
+    where: { clinicId_phone: { clinicId, phone: normalizedPhone } },
     update: {
       customerName: customerName ?? null,
       currentIntent: null,
@@ -855,7 +917,7 @@ const resetWhatsAppConversationState = async (clinicId: string, phone: string, c
     },
     create: {
       clinicId,
-      phone,
+      phone: normalizedPhone,
       customerName: customerName ?? null,
       stateJson: Prisma.DbNull,
     },
@@ -876,20 +938,22 @@ const upsertWhatsAppConversationState = async (
     selectedTime?: string | null;
     lastMessage?: string | null;
     stateJson?: ConversationStateJson | null;
+    lastProviderMessageId?: string | null;
   }
 ) => {
+  const normalizedPhone = normalizePhone(phone);
   const { stateJson: rawStateJson, ...rest } = data;
   const stateJson = toPrismaStateJson(rawStateJson);
 
   return prisma.whatsAppConversationState.upsert({
-    where: { clinicId_phone: { clinicId, phone } },
+    where: { clinicId_phone: { clinicId, phone: normalizedPhone } },
     update: {
       ...rest,
       ...(stateJson !== undefined ? { stateJson } : {}),
     },
     create: {
       clinicId,
-      phone,
+      phone: normalizedPhone,
       ...rest,
       ...(stateJson !== undefined ? { stateJson } : {}),
     },
@@ -1267,10 +1331,21 @@ const resolveAssistantExtraction = async (
 };
 
 const findExistingPatientByPhone = async (clinicId: string, phone: string) => {
-  return prisma.patient.findFirst({
+  const exactMatch = await prisma.patient.findFirst({
     where: { clinicId, phone, deletedAt: null },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const candidates = await prisma.patient.findMany({
+    where: { clinicId, phone: { not: null }, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+
+  return candidates.find(candidate => phonesMatch(candidate.phone, phone)) ?? null;
 };
 
 const getClinicSystemUserId = async (clinicId: string) => {
@@ -1297,7 +1372,7 @@ const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fu
       clinicId,
       firstName: parsedName.firstName,
       lastName: parsedName.lastName,
-      phone,
+      phone: normalizePhone(phone),
       source: 'whatsapp',
       patientStatus: 'new',
       communicationConsent: false,
@@ -1319,7 +1394,7 @@ const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fu
       metadata: {
         systemGenerated: true,
         source: 'whatsapp',
-        phone,
+        phone: normalizePhone(phone),
       },
     });
   }
@@ -1354,18 +1429,67 @@ const saveWhatsAppConversationMessage = async (args: {
   clinicId: string;
   patientId: string;
   phone: string;
+  providerMessageId?: string | null;
   direction: 'incoming' | 'outgoing';
   text: string;
   rawPayload?: Record<string, unknown> | null;
 }) => {
-  return prisma.whatsAppConversationMessage.create({
-    data: {
-      clinicId: args.clinicId,
-      patientId: args.patientId,
-      phone: args.phone,
-      direction: args.direction,
-      text: args.text,
-      rawPayload: args.rawPayload ? args.rawPayload as Prisma.InputJsonValue : Prisma.DbNull,
+  try {
+    return await prisma.whatsAppConversationMessage.create({
+      data: {
+        clinicId: args.clinicId,
+        patientId: args.patientId,
+        phone: normalizePhone(args.phone),
+        providerMessageId: args.providerMessageId ?? null,
+        direction: args.direction,
+        text: args.text,
+        rawPayload: args.rawPayload ? args.rawPayload as Prisma.InputJsonValue : Prisma.DbNull,
+      },
+    });
+  } catch (error) {
+    if (args.providerMessageId && isPrismaUniqueConstraintError(error)) {
+      throw new Error('DUPLICATE_WHATSAPP_MESSAGE');
+    }
+
+    throw error;
+  }
+};
+
+const hasProcessedWhatsAppProviderMessage = async (clinicId: string, phone: string, providerMessageId?: string | null) => {
+  if (!providerMessageId?.trim()) {
+    return false;
+  }
+
+  const [message, state] = await Promise.all([
+    prisma.whatsAppConversationMessage.findFirst({
+      where: {
+        clinicId,
+        providerMessageId,
+      },
+      select: { id: true },
+    }),
+    prisma.whatsAppConversationState.findUnique({
+      where: { clinicId_phone: { clinicId, phone: normalizePhone(phone) } },
+      select: { lastProviderMessageId: true },
+    }),
+  ]);
+
+  return Boolean(message || state?.lastProviderMessageId === providerMessageId);
+};
+
+const markWhatsAppProviderMessageProcessed = async (clinicId: string, phone: string, providerMessageId?: string | null) => {
+  if (!providerMessageId?.trim()) {
+    return null;
+  }
+
+  return prisma.whatsAppConversationState.upsert({
+    where: { clinicId_phone: { clinicId, phone: normalizePhone(phone) } },
+    update: { lastProviderMessageId: providerMessageId },
+    create: {
+      clinicId,
+      phone: normalizePhone(phone),
+      lastProviderMessageId: providerMessageId,
+      stateJson: Prisma.DbNull,
     },
   });
 };
@@ -1383,6 +1507,10 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
   const timeZone = clinic?.timezone || 'Europe/Istanbul';
   const now = new Date();
+  const patient = await findExistingPatientByPhone(clinicId, phone);
+  if (!patient) {
+    return [];
+  }
 
   const appointments = await prisma.appointment.findMany({
     where: {
@@ -1390,7 +1518,7 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
       deletedAt: null,
       status: { notIn: ['cancelled'] },
       startTime: { gte: now },
-      patient: { phone, deletedAt: null },
+      patientId: patient.id,
     },
     select: {
       id: true,
@@ -1420,7 +1548,7 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
   });
 };
 
-const createAppointmentFromAssistant = async (
+const createAppointmentRequestFromAssistant = async (
   clinicId: string,
   phone: string,
   customerName: string,
@@ -1452,54 +1580,62 @@ const createAppointmentFromAssistant = async (
     throw new Error('APPOINTMENT_OVERLAP');
   }
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      clinicId,
-      patientId: patient.id,
-      practitionerId: selectedSlot.practitionerId,
-      appointmentTypeId,
-      startTime,
-      endTime,
-      status: 'scheduled',
-      notes: 'WhatsApp assistant üzerinden oluşturuldu.',
-    },
-    include: {
-      appointmentType: { select: { name: true } },
-      practitioner: { select: { firstName: true, lastName: true } },
-      patient: { select: { firstName: true, lastName: true } },
-    },
-  });
-
-  await prisma.appointmentRequest.create({
+  const request = await prisma.appointmentRequest.create({
     data: {
       clinicId,
       patientId: patient.id,
       patientName: getPatientFullName(patient),
-      phone,
+      phone: normalizePhone(phone),
       appointmentTypeId,
       practitionerId: selectedSlot.practitionerId,
       preferredStartTime: startTime,
       preferredEndTime: endTime,
       requestType: 'appointment',
       source: 'whatsapp',
-      status: 'converted',
+      status: 'pending',
       rawMessage: rawMessage ?? null,
-      notes: 'WhatsApp assistant üzerinden otomatik olarak takvime işlendi.',
-      convertedAppointmentId: appointment.id,
+      notes: 'WhatsApp assistant üzerinden personel onayına gönderildi.',
+    },
+    include: {
+      appointmentType: { select: { name: true } },
+      practitioner: { select: { firstName: true, lastName: true } },
     },
   });
 
-  return appointment;
+  const systemUserId = await getClinicSystemUserId(clinicId);
+  if (systemUserId) {
+    await logActivity({
+      clinicId,
+      userId: systemUserId,
+      entityType: 'appointment_request',
+      entityId: request.id,
+      action: 'created',
+      description: 'WhatsApp appointment request created for staff approval',
+      patientId: patient.id,
+      metadata: {
+        systemGenerated: true,
+        source: 'whatsapp',
+        phone: normalizePhone(phone),
+      },
+    });
+  }
+
+  return request;
 };
 
 const cancelAppointmentForPhone = async (clinicId: string, appointmentId: string, phone: string) => {
+  const patient = await findExistingPatientByPhone(clinicId, phone);
+  if (!patient) {
+    return null;
+  }
+
   const appointment = await prisma.appointment.findFirst({
     where: {
       id: appointmentId,
       clinicId,
       deletedAt: null,
       status: { notIn: ['cancelled'] },
-      patient: { phone, deletedAt: null },
+      patientId: patient.id,
     },
     include: {
       appointmentType: { select: { name: true } },
@@ -1511,7 +1647,7 @@ const cancelAppointmentForPhone = async (clinicId: string, appointmentId: string
     return null;
   }
 
-  return prisma.appointment.update({
+  const cancelled = await prisma.appointment.update({
     where: { id: appointment.id },
     data: {
       status: 'cancelled',
@@ -1523,6 +1659,27 @@ const cancelAppointmentForPhone = async (clinicId: string, appointmentId: string
       practitioner: { select: { firstName: true, lastName: true } },
     },
   });
+
+  const systemUserId = await getClinicSystemUserId(clinicId);
+  if (systemUserId) {
+    await logActivity({
+      clinicId,
+      userId: systemUserId,
+      entityType: 'appointment',
+      entityId: cancelled.id,
+      action: 'cancelled',
+      description: 'Appointment cancelled by WhatsApp assistant',
+      patientId: cancelled.patientId,
+      appointmentId: cancelled.id,
+      metadata: {
+        systemGenerated: true,
+        source: 'whatsapp',
+        phone: normalizePhone(phone),
+      },
+    });
+  }
+
+  return cancelled;
 };
 
 const handleCancelIntent = async (clinicId: string, phone: string) => {
@@ -1544,22 +1701,21 @@ const handleCancelIntent = async (clinicId: string, phone: string) => {
   ].join('\n');
 };
 
-const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) => {
-  const clinic = await getDefaultClinic();
-  if (!clinic) {
-    return 'Klinik ayarlarına şu anda erişemiyorum.';
-  }
+const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>) => {
+  const inputPhone = normalizePhone(input.phone);
+  input.phone = inputPhone;
 
-  const existingPatient = await findExistingPatientByPhone(clinic.id, input.phone);
+  const existingPatient = await findExistingPatientByPhone(clinic.id, inputPhone);
   const state = await prisma.whatsAppConversationState.findUnique({
-    where: { clinicId_phone: { clinicId: clinic.id, phone: input.phone } },
+    where: { clinicId_phone: { clinicId: clinic.id, phone: inputPhone } },
   });
 
   if (existingPatient) {
     await saveWhatsAppConversationMessage({
       clinicId: clinic.id,
       patientId: existingPatient.id,
-      phone: input.phone,
+      phone: inputPhone,
+      providerMessageId: input.messageId,
       direction: 'incoming',
       text: input.text,
       rawPayload: input.rawPayload,
@@ -1854,6 +2010,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       clinicId: clinic.id,
       patientId: createdPatient.id,
       phone: input.phone,
+      providerMessageId: input.messageId,
       direction: 'incoming',
       text: input.text,
       rawPayload: input.rawPayload,
@@ -2080,7 +2237,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
       resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
-      createAppointment: createAppointmentFromAssistant,
+      createAppointment: createAppointmentRequestFromAssistant,
     });
   }
 
@@ -2110,7 +2267,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
       },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
       resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
-      createAppointment: createAppointmentFromAssistant,
+      createAppointment: createAppointmentRequestFromAssistant,
     });
   }
 
@@ -2162,7 +2319,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage) =
 
 // --- WhatsApp Public API (Secret Protected) ---
 
-app.post('/api/public/whatsapp/evolution-webhook', optionalWhatsappWebhookSecret, async (req, res) => {
+app.post('/api/public/whatsapp/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => {
   const normalizedPayload = normalizeEvolutionWebhookPayload(req.body);
   const ignoreReason = getWebhookIgnoreReason(normalizedPayload);
   if (ignoreReason) {
@@ -2175,12 +2332,19 @@ app.post('/api/public/whatsapp/evolution-webhook', optionalWhatsappWebhookSecret
   }
 
   try {
-    const responseText = await handleIncomingWhatsAppMessage(incomingMessage);
-    const clinic = await getDefaultClinic();
-    const patient = clinic
-      ? await findExistingPatientByPhone(clinic.id, incomingMessage.phone)
-      : null;
-    await sendTextMessage(incomingMessage.phone, responseText);
+    const clinic = await getClinicForWhatsAppInstance(normalizedPayload.instance);
+    if (!clinic) {
+      return res.status(404).json({ error: 'Clinic not found for WhatsApp instance' });
+    }
+
+    const duplicate = await hasProcessedWhatsAppProviderMessage(clinic.id, incomingMessage.phone, incomingMessage.messageId);
+    if (duplicate) {
+      return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+    }
+
+    const responseText = await handleIncomingWhatsAppMessage(incomingMessage, clinic);
+    const patient = await findExistingPatientByPhone(clinic.id, incomingMessage.phone);
+    await sendTextMessage(incomingMessage.phone, responseText, normalizedPayload.instance);
     if (clinic && patient) {
       await saveWhatsAppConversationMessage({
         clinicId: clinic.id,
@@ -2190,9 +2354,14 @@ app.post('/api/public/whatsapp/evolution-webhook', optionalWhatsappWebhookSecret
         text: responseText,
       });
     }
+    await markWhatsAppProviderMessageProcessed(clinic.id, incomingMessage.phone, incomingMessage.messageId);
     console.info('[whatsapp-assistant] send-result', { phone: incomingMessage.phone, instance: normalizedPayload.instance ?? null });
     res.status(200).json({ ok: true });
   } catch (error) {
+    if (error instanceof Error && error.message === 'DUPLICATE_WHATSAPP_MESSAGE') {
+      return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+    }
+
     console.error('[whatsapp-assistant] webhook-error', error);
     res.status(500).json({ error: 'Failed to process Evolution webhook' });
   }
@@ -2266,15 +2435,20 @@ app.get('/api/public/whatsapp/appointment-lookup', authorizeWhatsappApi, async (
   try {
     const clinic = await getDefaultClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const patient = await findExistingPatientByPhone(clinic.id, validation.data.phone);
+
+    if (!patient) {
+      return res.json({
+        clinic: { id: clinic.id, name: clinic.name },
+        appointments: [],
+      });
+    }
 
     const appointments = await prisma.appointment.findMany({
       where: {
         clinicId: clinic.id,
         deletedAt: null,
-        patient: {
-          phone: validation.data.phone,
-          deletedAt: null,
-        },
+        patientId: patient.id,
       },
       select: {
         id: true,
@@ -2332,11 +2506,9 @@ app.post('/api/public/whatsapp/appointment-requests', authorizeWhatsappApi, asyn
   try {
     const clinic = await getDefaultClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const phone = normalizePhone(validation.data.phone);
 
-    const existingPatient = await prisma.patient.findFirst({
-      where: { clinicId: clinic.id, phone: validation.data.phone, deletedAt: null },
-      select: { id: true },
-    });
+    const existingPatient = await findExistingPatientByPhone(clinic.id, phone);
 
     if (validation.data.appointmentTypeId) {
       const service = await prisma.appointmentType.findFirst({
@@ -2357,7 +2529,7 @@ app.post('/api/public/whatsapp/appointment-requests', authorizeWhatsappApi, asyn
         clinicId: clinic.id,
         patientId: existingPatient?.id,
         patientName: validation.data.patientName,
-        phone: validation.data.phone,
+        phone,
         email: validation.data.email,
         appointmentTypeId: validation.data.appointmentTypeId,
         practitionerId: validation.data.practitionerId,
@@ -2389,18 +2561,16 @@ app.post('/api/public/whatsapp/cancel-request', authorizeWhatsappApi, async (req
   try {
     const clinic = await getDefaultClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const phone = normalizePhone(validation.data.phone);
 
-    const existingPatient = await prisma.patient.findFirst({
-      where: { clinicId: clinic.id, phone: validation.data.phone, deletedAt: null },
-      select: { id: true },
-    });
+    const existingPatient = await findExistingPatientByPhone(clinic.id, phone);
 
     const request = await prisma.appointmentRequest.create({
       data: {
         clinicId: clinic.id,
         patientId: existingPatient?.id,
         patientName: validation.data.patientName,
-        phone: validation.data.phone,
+        phone,
         email: validation.data.email,
         requestType: 'cancel',
         source: 'whatsapp',
@@ -3358,7 +3528,7 @@ app.post('/api/appointment-requests/:id/convert', authorize(['admin', 'reception
           clinicId,
           firstName: firstName || request.patientName,
           lastName: lastNameParts.join(' ') || '-',
-          phone: request.phone,
+          phone: normalizePhone(request.phone),
           email: request.email,
           source: 'whatsapp',
           communicationConsent: true,

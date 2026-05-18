@@ -9,14 +9,15 @@ const buildEvolutionSendTextUrl = (baseUrl: string, instanceName: string) => {
   return `${normalizedBaseUrl}/message/sendText/${encodeURIComponent(instanceName)}`;
 };
 
-export const sendTextMessage = async (phone: string, text: string): Promise<void> => {
+export const sendTextMessage = async (phone: string, text: string, instanceNameOverride?: string | null): Promise<void> => {
   const config = getEvolutionConfig();
+  const instanceName = instanceNameOverride?.trim() || config.instanceName;
 
-  if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+  if (!config.baseUrl || !config.apiKey || !instanceName) {
     throw new Error('Evolution API configuration is incomplete');
   }
 
-  const response = await fetch(buildEvolutionSendTextUrl(config.baseUrl, config.instanceName), {
+  const response = await fetch(buildEvolutionSendTextUrl(config.baseUrl, instanceName), {
     method: 'POST',
     headers: {
       apikey: config.apiKey,
