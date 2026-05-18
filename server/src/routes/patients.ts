@@ -34,8 +34,9 @@ router.get('/patients', authorize(['admin', 'doctor', 'receptionist']), async (r
 
     const patients = await prisma.patient.findMany({ where, orderBy: { createdAt: 'desc' } });
     res.json(patients);
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch patients' });
+  } catch (err: any) {
+    console.error('[patients] list error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to fetch patients', detail: err?.message });
   }
 });
 
@@ -56,10 +57,6 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
           include: { user: true },
           orderBy: { createdAt: 'desc' },
         },
-        whatsappConversationMessages: {
-          orderBy: { createdAt: 'desc' },
-          take: 100,
-        },
         insuranceProvisions: {
           include: { treatmentCase: true, assignedTo: true },
           orderBy: { updatedAt: 'desc' },
@@ -77,9 +74,23 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
     });
 
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
-    res.json(patient);
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch patient' });
+
+    // Fetch WhatsApp messages separately — resilient to missing migrations
+    let whatsappConversationMessages: any[] = [];
+    try {
+      whatsappConversationMessages = await prisma.whatsAppConversationMessage.findMany({
+        where: { patientId: id, clinicId },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+    } catch (waErr: any) {
+      console.warn('[patients/:id] whatsappConversationMessages query failed (migration pending?):', waErr?.message);
+    }
+
+    res.json({ ...patient, whatsappConversationMessages });
+  } catch (err: any) {
+    console.error('[patients/:id] error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to fetch patient', detail: err?.message });
   }
 });
 
@@ -99,8 +110,9 @@ router.post('/patients', authorize(['admin', 'receptionist']), async (req: AuthR
     });
 
     res.json(patient);
-  } catch {
-    res.status(500).json({ error: 'Failed to create patient' });
+  } catch (err: any) {
+    console.error('[patients] create error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to create patient', detail: err?.message });
   }
 });
 
@@ -133,8 +145,9 @@ router.put('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
     });
 
     res.json(patient);
-  } catch {
-    res.status(500).json({ error: 'Failed to update patient' });
+  } catch (err: any) {
+    console.error('[patients] update error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to update patient', detail: err?.message });
   }
 });
 
@@ -159,8 +172,9 @@ router.delete('/patients/:id', authorize(['admin', 'receptionist']), async (req:
     });
 
     res.json({ message: 'Patient archived successfully' });
-  } catch {
-    res.status(500).json({ error: 'Failed to archive patient' });
+  } catch (err: any) {
+    console.error('[patients] archive error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to archive patient', detail: err?.message });
   }
 });
 

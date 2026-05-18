@@ -216,7 +216,24 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
       select: { id: true, firstName: true, lastName: true, commissionRate: true },
     });
 
+    // Pre-fetch all treatment case IDs grouped by practitioner (avoids nested relation
+    // filter inside aggregate which is unreliable for nullable relations in Prisma)
+    const allDoctorCases = await prisma.treatmentCase.findMany({
+      where: { clinicId, practitionerId: { in: doctors.map(d => d.id) } },
+      select: { id: true, practitionerId: true },
+    });
+    const caseIdsByDoctor = new Map<string, string[]>();
+    for (const tc of allDoctorCases) {
+      if (tc.practitionerId) {
+        const list = caseIdsByDoctor.get(tc.practitionerId) ?? [];
+        list.push(tc.id);
+        caseIdsByDoctor.set(tc.practitionerId, list);
+      }
+    }
+
     const results = await Promise.all(doctors.map(async (doc) => {
+      const doctorCaseIds = caseIdsByDoctor.get(doc.id) ?? [];
+
       const [appointmentCount, completedAppointments, noShowCount, treatmentCasesOpened, treatmentCasesCompleted, revenueAgg] = await Promise.all([
         prisma.appointment.count({
           where: { clinicId, practitionerId: doc.id, startTime: { gte: from, lte: to }, status: { not: 'cancelled' } },
@@ -233,26 +250,29 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
         prisma.treatmentCase.count({
           where: { clinicId, practitionerId: doc.id, stage: 'completed', closedAt: { gte: from, lte: to } },
         }),
-        prisma.payment.aggregate({
-          where: {
-            clinicId,
-            paymentStatus: { in: ['paid', 'partial'] },
-            paidAt: { gte: from, lte: to },
-            treatmentCase: { practitionerId: doc.id },
-          },
-          _sum: { amount: true },
-          _count: { id: true },
-        }),
+        doctorCaseIds.length > 0
+          ? prisma.payment.aggregate({
+              where: {
+                clinicId,
+                paymentStatus: { in: ['paid', 'partial'] },
+                paidAt: { gte: from, lte: to },
+                treatmentCaseId: { in: doctorCaseIds },
+              },
+              _sum: { amount: true },
+              _count: { id: true },
+            })
+          : Promise.resolve({ _sum: { amount: null }, _count: { id: 0 } }),
       ]);
 
-      const revenue = revenueAgg._sum.amount || 0;
-      const commissionAmount = Math.round(revenue * doc.commissionRate) / 100;
+      const revenue = Number(revenueAgg._sum.amount) || 0;
+      const commissionRate = (doc as any).commissionRate ?? 0;
+      const commissionAmount = Math.round(revenue * commissionRate) / 100;
 
       return {
         id: doc.id,
         firstName: doc.firstName,
         lastName: doc.lastName,
-        commissionRate: doc.commissionRate,
+        commissionRate,
         metrics: {
           appointmentCount,
           completedAppointments,
@@ -269,9 +289,9 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
     }));
 
     res.json({ dateFrom: from.toISOString(), dateTo: to.toISOString(), doctors: results });
-  } catch (err) {
-    console.error('Doctor performance report error:', err);
-    res.status(500).json({ error: 'Failed to generate doctor performance report' });
+  } catch (err: any) {
+    console.error('Doctor performance report error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to generate doctor performance report', detail: err?.message });
   }
 });
 
