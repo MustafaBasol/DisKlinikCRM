@@ -354,6 +354,19 @@ const isCheckAppointmentIntent = (text: string) => {
     .some(pattern => normalized.includes(pattern));
 };
 
+const isClinicHoursQuestion = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'acik misiniz', 'acik misin', 'klinik acik mi', 'klinik acik misiniz',
+    'calisma saatleri', 'calisma saatiniz', 'mesai saati', 'mesai saatleri',
+    'kacta aciyor', 'kacta kapaniyor', 'saat kacta aciksiniz', 'saat kacta kapaniyor',
+    'hafta sonu acik misiniz', 'cumartesi acik mi', 'pazar acik mi',
+    'bugun acik misiniz', 'yarin acik misiniz',
+  ].some(pattern => normalized.includes(pattern))
+    || /\b\d{1,2}\s*(mayis|haziran|temmuz|agustos|eylul|ekim|kasim|aralik|ocak|subat|mart|nisan)\b.*acik/i.test(normalized)
+    || /acik.*\b\d{1,2}\s*(mayis|haziran|temmuz|agustos|eylul|ekim|kasim|aralik|ocak|subat|mart|nisan)\b/i.test(normalized);
+};
+
 const isBookingFlowCancelCommand = (text: string, state: AssistantStateRecord | null | undefined) => {
   const normalized = normalizeTurkishSearchText(text);
   const isBookingStep = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation'].includes(state?.step ?? '');
@@ -1034,6 +1047,11 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
 
   if (isBotIdentityQuestion(input.text)) {
     return `Ben ${clinic.name} kliniğinin dijital randevu asistanıyım. Randevu almak, mevcut randevunuzu sorgulamak veya iptal etmek için yardımcı olabilirim. Herhangi bir sorunuz varsa kliniği doğrudan arayabilirsiniz.`;
+  }
+
+  if (isClinicHoursQuestion(input.text)) {
+    logGlobalIntent(input.phone, input.text, currentStep, 'clinic_hours');
+    return `Kliniğimizin müsait randevu saatlerini görmek için bir hizmet seçmeniz yeterli. Hangi hizmet için randevu düşünüyorsunuz? Seçtiğiniz hizmet ve tarihe göre boş saatleri hemen kontrol edebilirim.\n\n${services.map((s, i) => `${i + 1}. ${s.name}`).join('\n')}`;
   }
 
   if (isCheckAppointmentIntent(input.text)) {
