@@ -21,6 +21,8 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Reports from './pages/Reports';
 import PaymentPlans from './pages/PaymentPlans';
+import PractitionerEarnings from './pages/PractitionerEarnings';
+import MyEarnings from './pages/MyEarnings';
 
 import { useTranslation } from 'react-i18next';
 
@@ -95,6 +97,8 @@ const App: React.FC = () => {
               <Route path="settings" element={<Settings />} />
               <Route path="reports" element={<Reports />} />
               <Route path="payment-plans" element={<PaymentPlans />} />
+              <Route path="practitioner-earnings" element={<PractitionerEarnings />} />
+              <Route path="my-earnings" element={<MyEarnings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

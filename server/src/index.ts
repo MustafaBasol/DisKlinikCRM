@@ -20,6 +20,9 @@ import notificationsRoutes from './routes/notifications.js';
 import dentalChartRoutes from './routes/dentalChart.js';
 import reportsRoutes from './routes/reports.js';
 import paymentPlansRoutes from './routes/paymentPlans.js';
+import compensationRulesRoutes from './routes/compensationRules.js';
+import practitionerEarningsRoutes from './routes/practitionerEarnings.js';
+import practitionerPayoutsRoutes from './routes/practitionerPayouts.js';
 import { startReminderJobs } from './jobs/reminders.js';
 
 dotenv.config();
@@ -54,6 +57,9 @@ app.use('/api', notificationsRoutes);
 app.use('/api', dentalChartRoutes);
 app.use('/api', reportsRoutes);
 app.use('/api', paymentPlansRoutes);
+app.use('/api', compensationRulesRoutes);
+app.use('/api', practitionerEarningsRoutes);
+app.use('/api', practitionerPayoutsRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

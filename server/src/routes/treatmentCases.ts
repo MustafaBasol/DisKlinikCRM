@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { treatmentCaseSchema } from '../schemas/index.js';
+import { generateEarningFromTreatmentCase } from '../services/earningService.js';
 
 const router = express.Router();
 
@@ -129,6 +130,11 @@ router.put('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist']
       clinicId, userId: req.user!.id, entityType: 'treatment_case', entityId: id,
       action: 'updated', description: `Treatment case "${updated.title}" updated`,
     });
+
+    // Auto-generate practitioner earning when treatment case is completed (billed base)
+    if (validation.data.stage === 'completed' && existing.stage !== 'completed') {
+      generateEarningFromTreatmentCase(id, clinicId, req.user!.id).catch(console.error);
+    }
 
     res.json(updated);
   } catch {

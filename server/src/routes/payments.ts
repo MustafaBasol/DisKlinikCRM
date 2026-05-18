@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { paymentSchema } from '../schemas/index.js';
+import { generateEarningFromPayment } from '../services/earningService.js';
 
 const router = express.Router();
 
@@ -72,6 +73,11 @@ router.post('/payments', authorize(['admin', 'billing', 'receptionist']), async 
       description: `Payment of ${payment.amount} ${payment.currency} recorded for ${patient.firstName} ${patient.lastName}`,
     });
 
+    // Auto-generate practitioner earning for paid payments
+    if (payment.paymentStatus === 'paid') {
+      generateEarningFromPayment(payment.id, clinicId, req.user!.id).catch(console.error);
+    }
+
     res.json(payment);
   } catch {
     res.status(500).json({ error: 'Failed to create payment' });
@@ -96,6 +102,11 @@ router.put('/payments/:id', authorize(['admin', 'billing']), async (req: AuthReq
       clinicId, userId: req.user!.id, entityType: 'payment', entityId: id,
       action: 'updated', description: `Payment ${id} updated`,
     });
+
+    // Auto-generate practitioner earning if payment was just moved to 'paid'
+    if (validation.data.paymentStatus === 'paid' && existing.paymentStatus !== 'paid') {
+      generateEarningFromPayment(updated.id, clinicId, req.user!.id).catch(console.error);
+    }
 
     res.json(updated);
   } catch {

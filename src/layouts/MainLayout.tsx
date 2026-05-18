@@ -22,6 +22,8 @@ import {
   Moon,
   Sun,
   BarChart2,
+  TrendingUp,
+  Award,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -78,6 +80,11 @@ const MainLayout: React.FC = () => {
 
   if (user?.role === 'admin' || user?.role === 'billing') {
     navItems.push({ path: '/reports', icon: <BarChart2 size={20} />, label: 'Raporlar' });
+    navItems.push({ path: '/practitioner-earnings', icon: <TrendingUp size={20} />, label: 'Hekim Kazançları' });
+  }
+
+  if (user?.role === 'doctor') {
+    navItems.push({ path: '/my-earnings', icon: <Award size={20} />, label: 'Kazançlarım' });
   }
 
   return (

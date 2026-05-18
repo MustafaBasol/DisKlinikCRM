@@ -40,6 +40,10 @@ model Clinic {
   patientAttachments   PatientAttachment[]
   toothRecords         ToothRecord[]
   paymentPlans         PaymentPlan[]
+  practitionerCompRules    PractitionerCompensationRule[]
+  serviceCompRules         ServiceCompensationRule[]
+  practitionerEarnings     PractitionerEarning[]
+  practitionerPayouts      PractitionerPayout[]
 }
 
 model User {
@@ -72,6 +76,11 @@ model User {
   uploadedAttachments PatientAttachment[]  @relation("AttachmentUploader")
   toothRecordsCreated  ToothRecord[]        @relation("ToothRecordCreator")
   paymentPlans         PaymentPlan[]
+  compensationRules    PractitionerCompensationRule[] @relation("PractitionerCompRules")
+  serviceCompRules     ServiceCompensationRule[]      @relation("ServiceCompRules")
+  practitionerEarnings PractitionerEarning[]          @relation("PractitionerEarnings")
+  practitionerPayouts  PractitionerPayout[]           @relation("PractitionerPayouts")
+  payoutsCreated       PractitionerPayout[]           @relation("PayoutCreator")
 }
 
 model DoctorAvailability {
@@ -124,6 +133,7 @@ model Patient {
   attachments         PatientAttachment[]
   toothRecords        ToothRecord[]
   paymentPlans        PaymentPlan[]
+  practitionerEarnings PractitionerEarning[]
 }
 
 model AppointmentType {
@@ -142,9 +152,11 @@ model AppointmentType {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  appointments        Appointment[]
-  appointmentRequests AppointmentRequest[]
-  treatmentCases      TreatmentCase[]
+  appointments         Appointment[]
+  appointmentRequests  AppointmentRequest[]
+  treatmentCases       TreatmentCase[]
+  serviceCompRules     ServiceCompensationRule[] @relation("ServiceCompRules")
+  practitionerEarnings PractitionerEarning[]     @relation("EarningService")
 }
 
 model Appointment {
@@ -278,6 +290,7 @@ model TreatmentCase {
   sentMessages        SentMessage[]
   activityLogs        ActivityLog[]
   paymentPlans        PaymentPlan[]
+  practitionerEarnings PractitionerEarning[]
 }
 
 model InsuranceProvision {
@@ -353,8 +366,9 @@ model Payment {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  sentMessages SentMessage[]
-  installment  PaymentPlanInstallment?
+  sentMessages         SentMessage[]
+  installment          PaymentPlanInstallment?
+  practitionerEarnings PractitionerEarning[]
 }
 
 model MessageTemplate {
@@ -514,4 +528,102 @@ model PaymentPlanInstallment {
 
   @@index([planId])
   @@index([dueDate, status])
+}
+
+// ─── Practitioner Earnings ──────────────────────────────────────────────────
+
+model PractitionerCompensationRule {
+  id                 String   @id @default(uuid())
+  clinicId           String
+  clinic             Clinic   @relation(fields: [clinicId], references: [id])
+  practitionerId     String
+  practitioner       User     @relation("PractitionerCompRules", fields: [practitionerId], references: [id])
+  compensationType   String   @default("percentage") // fixed | percentage | fixed_plus_percentage | per_service
+  fixedMonthlyAmount Float?
+  defaultPercentage  Float?
+  calculationBase    String   @default("collected") // billed | collected
+  startDate          DateTime?
+  endDate            DateTime?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([clinicId, practitionerId, isActive])
+}
+
+model ServiceCompensationRule {
+  id             String          @id @default(uuid())
+  clinicId       String
+  clinic         Clinic          @relation(fields: [clinicId], references: [id])
+  practitionerId String
+  practitioner   User            @relation("ServiceCompRules", fields: [practitionerId], references: [id])
+  serviceId      String
+  service        AppointmentType @relation("ServiceCompRules", fields: [serviceId], references: [id])
+  percentage     Float?
+  fixedAmount    Float?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([practitionerId, serviceId])
+  @@index([clinicId, practitionerId, isActive])
+}
+
+model PractitionerEarning {
+  id                    String              @id @default(uuid())
+  clinicId              String
+  clinic                Clinic              @relation(fields: [clinicId], references: [id])
+  practitionerId        String
+  practitioner          User                @relation("PractitionerEarnings", fields: [practitionerId], references: [id])
+  patientId             String?
+  patient               Patient?            @relation(fields: [patientId], references: [id])
+  treatmentCaseId       String?
+  treatmentCase         TreatmentCase?      @relation(fields: [treatmentCaseId], references: [id])
+  paymentId             String?
+  payment               Payment?            @relation(fields: [paymentId], references: [id])
+  serviceId             String?
+  service               AppointmentType?    @relation("EarningService", fields: [serviceId], references: [id])
+  grossAmount           Float
+  collectedAmount       Float               @default(0)
+  earningAmount         Float
+  calculationBase       String              // billed | collected
+  percentageApplied     Float?
+  fixedAmountApplied    Float?
+  status                String              @default("pending") // pending | approved | paid | cancelled
+  periodMonth           Int
+  periodYear            Int
+  adminAdjustmentAmount Float?
+  adminAdjustmentReason String?
+  approvedAt            DateTime?
+  approvedById          String?
+  payoutId              String?
+  payout                PractitionerPayout? @relation(fields: [payoutId], references: [id])
+  paidAt                DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([clinicId, practitionerId, periodYear, periodMonth])
+  @@index([clinicId, status])
+}
+
+model PractitionerPayout {
+  id             String    @id @default(uuid())
+  clinicId       String
+  clinic         Clinic    @relation(fields: [clinicId], references: [id])
+  practitionerId String
+  practitioner   User      @relation("PractitionerPayouts", fields: [practitionerId], references: [id])
+  amount         Float
+  paymentDate    DateTime
+  periodMonth    Int
+  periodYear     Int
+  method         String    @default("bank_transfer") // cash | bank_transfer | card | other
+  note           String?
+  createdById    String
+  createdBy      User      @relation("PayoutCreator", fields: [createdById], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  earnings PractitionerEarning[]
+
+  @@index([clinicId, practitionerId, periodYear, periodMonth])
 }

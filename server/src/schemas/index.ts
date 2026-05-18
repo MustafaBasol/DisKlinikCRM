@@ -281,3 +281,49 @@ export const appointmentRequestConvertSchema = z.object({
   message: 'End time must be after start time',
   path: ['endTime'],
 });
+
+// --- Practitioner Compensation Rule ---
+
+export const compensationTypeEnum = z.enum(['fixed', 'percentage', 'fixed_plus_percentage', 'per_service']);
+export const calculationBaseEnum = z.enum(['billed', 'collected']);
+
+export const practitionerCompensationRuleSchema = z.object({
+  practitionerId: z.string().uuid('Invalid practitioner ID'),
+  compensationType: compensationTypeEnum.default('percentage'),
+  fixedMonthlyAmount: z.number().nonnegative().optional().nullable(),
+  defaultPercentage: z.number().min(0).max(100).optional().nullable(),
+  calculationBase: calculationBaseEnum.default('collected'),
+  startDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+  endDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+  isActive: z.boolean().default(true),
+});
+
+// --- Service Compensation Rule ---
+
+export const serviceCompensationRuleSchema = z.object({
+  practitionerId: z.string().uuid('Invalid practitioner ID'),
+  serviceId: z.string().uuid('Invalid service ID'),
+  percentage: z.number().min(0).max(100).optional().nullable(),
+  fixedAmount: z.number().nonnegative().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+// --- Practitioner Earning adjustment ---
+
+export const earningAdjustSchema = z.object({
+  adminAdjustmentAmount: z.number().nonnegative('Adjustment amount must be non-negative'),
+  adminAdjustmentReason: z.string().min(1, 'Reason is required for adjustment'),
+});
+
+// --- Practitioner Payout ---
+
+export const practitionerPayoutSchema = z.object({
+  practitionerId: z.string().uuid('Invalid practitioner ID'),
+  amount: z.number().positive('Amount must be positive'),
+  paymentDate: z.string().transform(val => new Date(val)),
+  periodMonth: z.number().int().min(1).max(12),
+  periodYear: z.number().int().min(2020).max(2100),
+  method: z.enum(['cash', 'bank_transfer', 'card', 'other']).default('bank_transfer'),
+  note: z.string().optional().nullable(),
+  earningIds: z.array(z.string().uuid()).optional().default([]),
+});

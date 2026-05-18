@@ -166,4 +166,31 @@ export const paymentPlanService = {
     api.post(`/payment-plans/${planId}/installments/${installmentId}/pay`, data),
 };
 
+export const compensationRuleService = {
+  getAll: (params?: any) => api.get('/compensation-rules', { params }),
+  create: (data: any) => api.post('/compensation-rules', data),
+  update: (id: string, data: any) => api.put(`/compensation-rules/${id}`, data),
+  remove: (id: string) => api.delete(`/compensation-rules/${id}`),
+  getServiceRules: (params?: any) => api.get('/service-compensation-rules', { params }),
+  upsertServiceRule: (data: any) => api.post('/service-compensation-rules', data),
+  removeServiceRule: (id: string) => api.delete(`/service-compensation-rules/${id}`),
+};
+
+export const practitionerEarningService = {
+  getAll: (params?: any) => api.get('/practitioner-earnings', { params }),
+  getSummary: (params?: any) => api.get('/practitioner-earnings/summary', { params }),
+  getById: (id: string) => api.get(`/practitioner-earnings/${id}`),
+  approve: (id: string) => api.patch(`/practitioner-earnings/${id}/approve`),
+  adjust: (id: string, data: any) => api.patch(`/practitioner-earnings/${id}/adjust`, data),
+  cancel: (id: string) => api.patch(`/practitioner-earnings/${id}/cancel`),
+  markPaid: (id: string) => api.patch(`/practitioner-earnings/${id}/mark-paid`),
+};
+
+export const practitionerPayoutService = {
+  getAll: (params?: any) => api.get('/practitioner-payouts', { params }),
+  getById: (id: string) => api.get(`/practitioner-payouts/${id}`),
+  create: (data: any) => api.post('/practitioner-payouts', data),
+  remove: (id: string) => api.delete(`/practitioner-payouts/${id}`),
+};
+
 export default api;
