@@ -108,7 +108,7 @@ const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practition
             </thead>
             <tbody>
               {data.map(row => {
-                const remaining = row.approvedEarning - row.paidEarning;
+                const remaining = row.totalEarning - row.paidEarning;
                 return (
                   <tr key={row.practitionerId} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="py-3 pl-4 pr-4 font-medium text-gray-900 dark:text-white">{row.practitionerName}</td>
