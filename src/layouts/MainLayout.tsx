@@ -24,6 +24,7 @@ import {
   BarChart2,
   TrendingUp,
   Award,
+  Package,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -85,6 +86,10 @@ const MainLayout: React.FC = () => {
 
   if (user?.role === 'doctor') {
     navItems.push({ path: '/my-earnings', icon: <Award size={20} />, label: 'Kazançlarım' });
+  }
+
+  if (user?.role === 'admin') {
+    navItems.push({ path: '/inventory', icon: <Package size={20} />, label: 'Stok Takibi' });
   }
 
   return (

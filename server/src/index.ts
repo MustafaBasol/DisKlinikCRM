@@ -23,6 +23,7 @@ import paymentPlansRoutes from './routes/paymentPlans.js';
 import compensationRulesRoutes from './routes/compensationRules.js';
 import practitionerEarningsRoutes from './routes/practitionerEarnings.js';
 import practitionerPayoutsRoutes from './routes/practitionerPayouts.js';
+import inventoryRoutes from './routes/inventory.js';
 import { startReminderJobs } from './jobs/reminders.js';
 
 dotenv.config();
@@ -60,6 +61,7 @@ app.use('/api', paymentPlansRoutes);
 app.use('/api', compensationRulesRoutes);
 app.use('/api', practitionerEarningsRoutes);
 app.use('/api', practitionerPayoutsRoutes);
+app.use('/api', inventoryRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

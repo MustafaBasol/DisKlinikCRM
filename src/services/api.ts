@@ -159,6 +159,17 @@ export const reportService = {
   getNoShowAnalysis: (params?: any) => api.get('/reports/no-show-analysis', { params }),
 };
 
+export const inventoryService = {
+  getAll: (params?: any) => api.get('/inventory', { params }),
+  getById: (id: string) => api.get(`/inventory/${id}`),
+  create: (data: any) => api.post('/inventory', data),
+  update: (id: string, data: any) => api.put(`/inventory/${id}`, data),
+  remove: (id: string) => api.delete(`/inventory/${id}`),
+  getAlerts: () => api.get('/inventory/alerts'),
+  getTransactions: (id: string, params?: any) => api.get(`/inventory/${id}/transactions`, { params }),
+  addTransaction: (id: string, data: any) => api.post(`/inventory/${id}/transactions`, data),
+};
+
 export const paymentPlanService = {
   getAll: (params?: any) => api.get('/payment-plans', { params }),
   getById: (id: string) => api.get(`/payment-plans/${id}`),

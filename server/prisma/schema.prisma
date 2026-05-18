@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client/.prisma/client"
 }
 
 datasource db {
@@ -44,6 +45,8 @@ model Clinic {
   serviceCompRules         ServiceCompensationRule[]
   practitionerEarnings     PractitionerEarning[]
   practitionerPayouts      PractitionerPayout[]
+  inventoryItems           InventoryItem[]
+  inventoryTransactions    InventoryTransaction[]
 }
 
 model User {
@@ -81,6 +84,7 @@ model User {
   practitionerEarnings PractitionerEarning[]          @relation("PractitionerEarnings")
   practitionerPayouts  PractitionerPayout[]           @relation("PractitionerPayouts")
   payoutsCreated       PractitionerPayout[]           @relation("PayoutCreator")
+  inventoryTransactions InventoryTransaction[]        @relation("InventoryPerformedBy")
 }
 
 model DoctorAvailability {
@@ -291,6 +295,7 @@ model TreatmentCase {
   activityLogs        ActivityLog[]
   paymentPlans        PaymentPlan[]
   practitionerEarnings PractitionerEarning[]
+  inventoryTransactions InventoryTransaction[]
 }
 
 model InsuranceProvision {
@@ -626,4 +631,51 @@ model PractitionerPayout {
   earnings PractitionerEarning[]
 
   @@index([clinicId, practitionerId, periodYear, periodMonth])
+}
+
+// ── Stok / Malzeme Takibi ────────────────────────────────────────────────────
+
+model InventoryItem {
+  id           String   @id @default(uuid())
+  clinicId     String
+  clinic       Clinic   @relation(fields: [clinicId], references: [id])
+  name         String
+  // implant | prosthetic | consumable | medication | equipment | other
+  category     String   @default("consumable")
+  unit         String   @default("piece") // piece | box | ml | gram | vial | set
+  currentStock Float    @default(0)
+  minimumStock Float    @default(0)   // triggers low-stock alert
+  unitCost     Float?
+  supplier     String?
+  barcode      String?
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions InventoryTransaction[]
+
+  @@index([clinicId, category, isActive])
+}
+
+model InventoryTransaction {
+  id              String        @id @default(uuid())
+  clinicId        String
+  clinic          Clinic        @relation(fields: [clinicId], references: [id])
+  itemId          String
+  item            InventoryItem @relation(fields: [itemId], references: [id])
+  // in | out | adjustment
+  type            String
+  quantity        Float
+  unitCost        Float?
+  // purchase | usage | treatment_use | adjustment | wastage | return
+  reason          String?
+  treatmentCaseId String?
+  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  performedById   String
+  performedBy     User          @relation("InventoryPerformedBy", fields: [performedById], references: [id])
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  @@index([clinicId, itemId, createdAt])
 }
