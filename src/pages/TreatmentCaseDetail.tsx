@@ -51,6 +51,8 @@ const TreatmentCaseDetail: React.FC = () => {
   const [isLinkApptOpen, setIsLinkApptOpen] = useState(false);
   const [linkableAppts, setLinkableAppts] = useState<any[]>([]);
   const [linkLoading, setLinkLoading] = useState(false);
+  const [pendingStage, setPendingStage] = useState<string | null>(null);
+  const [stageSaving, setStageSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Treatment procedures
@@ -102,11 +104,15 @@ const TreatmentCaseDetail: React.FC = () => {
       lostReason = reason;
     }
 
+    setStageSaving(true);
     try {
       await treatmentCaseService.updateStage(tCase.id, stage, lostReason);
+      setPendingStage(null);
       fetchDetail();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Update failed');
+    } finally {
+      setStageSaving(false);
     }
   };
 
@@ -308,30 +314,77 @@ const TreatmentCaseDetail: React.FC = () => {
         <div className="card p-6 bg-gray-50 border-none">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('treatmentCases:form.stage')}</h3>
-            <span className="text-xs font-bold text-primary-600">
-              {Math.round(((currentStageIndex + 1) / stages.length) * 100)}% Complete
-            </span>
+            {pendingStage && pendingStage !== tCase.stage ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-amber-600 font-semibold">
+                  → {t(`treatmentCases:stages.${pendingStage}`)}
+                </span>
+                <button
+                  onClick={() => handleStageUpdate(pendingStage)}
+                  disabled={stageSaving}
+                  className="px-3 py-1 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-1"
+                >
+                  {stageSaving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                  Kaydet
+                </button>
+                <button
+                  onClick={() => setPendingStage(null)}
+                  className="px-2 py-1 text-xs font-bold text-gray-500 hover:text-gray-700 rounded-lg transition-colors"
+                >
+                  İptal
+                </button>
+              </div>
+            ) : (
+              <span className="text-xs font-bold text-primary-600">
+                {Math.round(((currentStageIndex + 1) / stages.length) * 100)}% Complete
+              </span>
+            )}
           </div>
           <div className="flex gap-2 h-2">
             {stages.map((s, i) => (
-              <div 
+              <button
                 key={s}
-                className={`flex-1 rounded-full transition-all duration-500 ${
-                  i <= currentStageIndex ? 'bg-primary-500' : 'bg-gray-200'
+                type="button"
+                onClick={() => {
+                  if (tCase.stage === 'completed') return;
+                  setPendingStage(s === pendingStage ? null : s);
+                }}
+                className={`flex-1 rounded-full transition-all duration-300 ${
+                  tCase.stage === 'completed' ? 'cursor-default' : 'cursor-pointer hover:opacity-80'
+                } ${
+                  pendingStage
+                    ? i <= stages.indexOf(pendingStage) ? 'bg-amber-400' : 'bg-gray-200'
+                    : i <= currentStageIndex ? 'bg-primary-500' : 'bg-gray-200'
                 }`}
+                style={{ minHeight: 8 }}
+                title={t(`treatmentCases:stages.${s}`)}
               />
             ))}
           </div>
           <div className="flex justify-between mt-4 overflow-x-auto gap-4 no-scrollbar">
             {stages.map((s, i) => (
-              <div key={s} className={`text-[10px] font-bold text-center min-w-[80px] ${
-                i === currentStageIndex ? 'text-primary-600' : 
-                i < currentStageIndex ? 'text-gray-400' : 'text-gray-300'
-              }`}>
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  if (tCase.stage === 'completed') return;
+                  setPendingStage(s === pendingStage ? null : s);
+                }}
+                className={`text-[10px] font-bold text-center min-w-[80px] transition-colors rounded py-1 ${
+                  tCase.stage === 'completed' ? 'cursor-default' : 'cursor-pointer hover:text-amber-500'
+                } ${
+                  pendingStage === s ? 'text-amber-600 underline underline-offset-2' :
+                  s === tCase.stage ? 'text-primary-600' :
+                  i < currentStageIndex ? 'text-gray-400' : 'text-gray-300'
+                }`}
+              >
                 {t(`treatmentCases:stages.${s}`)}
-              </div>
+              </button>
             ))}
           </div>
+          {!pendingStage && tCase.stage !== 'completed' && (
+            <p className="text-center text-[10px] text-gray-400 mt-3 italic">Aşamaya tıklayarak değiştirebilirsiniz</p>
+          )}
         </div>
       )}
 
@@ -906,7 +959,6 @@ const TreatmentCaseDetail: React.FC = () => {
           }}
           initialData={{
             patientId: tCase.patientId,
-            practitionerId: tCase.practitionerId || '',
             treatmentCaseId: tCase.id,
           }}
         />

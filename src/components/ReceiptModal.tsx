@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2, Printer } from 'lucide-react';
 import { paymentService } from '../services/api';
 
@@ -56,13 +57,20 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ paymentId, onClose }) => {
 
   return (
     <>
-      {/* Print overlay styles */}
+      {/* Print overlay styles: visibility trick works regardless of nesting depth */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          .receipt-print-root { display: block !important; position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; }
+          body * { visibility: hidden !important; }
+          .receipt-print-portal, .receipt-print-portal * { visibility: visible !important; }
+          .receipt-print-portal {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important;
+            background: white !important;
+            padding: 40px !important;
+            z-index: 99999 !important;
+          }
           .no-print { display: none !important; }
-          .receipt-area { box-shadow: none !important; border: none !important; }
         }
       `}</style>
 
@@ -100,13 +108,16 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ paymentId, onClose }) => {
         </div>
       </div>
 
-      {/* Printable area (always in DOM for window.print()) */}
-      {!loading && data && (
-        <div className="receipt-print-root hidden">
-          <div className="p-10">
-            <ReceiptContent data={data} />
-          </div>
-        </div>
+      {/* Printable area rendered via portal directly in <body> so print CSS works */}
+      {!loading && data && createPortal(
+        <div
+          className="receipt-print-portal"
+          style={{ position: 'fixed', left: '-200vw', top: 0, width: '100vw' }}
+          aria-hidden="true"
+        >
+          <ReceiptContent data={data} />
+        </div>,
+        document.body
       )}
     </>
   );
