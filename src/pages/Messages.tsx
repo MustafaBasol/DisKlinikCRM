@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { 
   MessageSquare, 
   Search, 
-  Filter, 
-  Eye, 
   Copy, 
   ExternalLink,
   Loader2,
@@ -13,18 +11,22 @@ import {
   Clock,
   AlertCircle,
   User,
-  Calendar,
-  Briefcase,
-  DollarSign
+  Send,
+  XCircle
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { messageService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const Messages: React.FC = () => {
   const { t } = useTranslation(['messages', 'common']);
+  const { user } = useAuth();
+  const canSend = user?.role === 'admin' || user?.role === 'receptionist';
   
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [channel, setChannel] = useState('');
   const [status, setStatus] = useState('');
@@ -51,6 +53,20 @@ const Messages: React.FC = () => {
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard!');
+  };
+
+  const handleSend = async (id: string) => {
+    setSending(id);
+    setSendError(null);
+    try {
+      await messageService.send(id);
+      await fetchMessages();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.error || t('common:error');
+      setSendError(detail);
+    } finally {
+      setSending(null);
+    }
   };
 
   const getStatusBadge = (s: string) => {
@@ -112,6 +128,15 @@ const Messages: React.FC = () => {
       </div>
 
       <div className="card overflow-hidden">
+        {sendError && (
+          <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border-b border-red-100 text-sm text-red-700">
+            <XCircle size={16} className="flex-shrink-0" />
+            <span>{sendError}</span>
+            <button onClick={() => setSendError(null)} className="ml-auto text-red-400 hover:text-red-600">
+              <XCircle size={14} />
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -172,6 +197,19 @@ const Messages: React.FC = () => {
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {canSend && message.status === 'prepared' && (
+                          <button
+                            onClick={() => handleSend(message.id)}
+                            disabled={sending === message.id}
+                            className="p-2 text-gray-400 hover:bg-white hover:text-green-600 rounded-lg transition-all shadow-sm disabled:opacity-50"
+                            title="Şimdi Gönder"
+                          >
+                            {sending === message.id
+                              ? <Loader2 size={18} className="animate-spin" />
+                              : <Send size={18} />
+                            }
+                          </button>
+                        )}
                         <button 
                           onClick={() => handleCopy(message.body)}
                           className="p-2 text-gray-400 hover:bg-white hover:text-primary-600 rounded-lg transition-all shadow-sm"

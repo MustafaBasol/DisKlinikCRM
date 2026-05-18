@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -30,7 +30,26 @@ const MainLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+
+  // Detect mobile breakpoint (< lg = 1024px) and adjust sidebar accordingly
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const handler = (e: MediaQueryList | MediaQueryListEvent) => {
+      const mobile = e.matches;
+      setIsMobile(mobile);
+      setIsSidebarOpen(!mobile); // open by default on desktop, closed on mobile
+    };
+    handler(mq);
+    mq.addEventListener('change', handler as (e: MediaQueryListEvent) => void);
+    return () => mq.removeEventListener('change', handler as (e: MediaQueryListEvent) => void);
+  }, []);
+
+  // Close sidebar when navigating on mobile
+  const handleNavClick = () => {
+    if (isMobile) setIsSidebarOpen(false);
+  };
 
   const navItems = [
     { path: '/', icon: <LayoutDashboard size={20} />, label: t('common:dashboard') },
@@ -53,11 +72,24 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-page flex">
+      {/* Mobile backdrop — closes sidebar on tap outside */}
+      {isMobile && isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-gray-900/50 backdrop-blur-sm"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar */}
-      <aside 
-        className={`${
-          isSidebarOpen ? 'w-64' : 'w-20'
-        } bg-white border-r border-gray-200 transition-all duration-300 flex flex-col fixed inset-y-0 z-50`}
+      <aside
+        className={[
+          'bg-white border-r border-gray-200 transition-all duration-300 flex flex-col fixed inset-y-0 z-50',
+          // Width: always 64 on mobile (full drawer), 64 or 20 icon-only on desktop
+          isMobile ? 'w-64' : (isSidebarOpen ? 'w-64' : 'w-20'),
+          // Slide in/out on mobile; always visible on desktop
+          isMobile ? (isSidebarOpen ? 'translate-x-0' : '-translate-x-full') : 'translate-x-0',
+        ].join(' ')}
       >
         <div className="p-6 flex items-center justify-between">
           {isSidebarOpen ? (
@@ -81,6 +113,7 @@ const MainLayout: React.FC = () => {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={handleNavClick}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
                   isActive 
                     ? 'bg-primary-50 text-primary-600 font-medium shadow-sm border border-primary-100' 
@@ -90,7 +123,7 @@ const MainLayout: React.FC = () => {
                 <span className={isActive ? 'text-primary-600' : 'text-gray-400'}>
                   {item.icon}
                 </span>
-                {isSidebarOpen && <span>{item.label}</span>}
+                {(isSidebarOpen || isMobile) && <span>{item.label}</span>}
               </Link>
             );
           })}
@@ -99,29 +132,31 @@ const MainLayout: React.FC = () => {
         <div className="p-4 border-t border-gray-200">
           <Link
             to="/settings"
+            onClick={handleNavClick}
             className="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-all mb-2"
           >
             <Settings size={20} className="text-gray-400" />
-            {isSidebarOpen && <span>{t('common:settings')}</span>}
+            {(isSidebarOpen || isMobile) && <span>{t('common:settings')}</span>}
           </Link>
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
           >
             <LogOut size={20} />
-            {isSidebarOpen && <span>{t('common:logout')}</span>}
+            {(isSidebarOpen || isMobile) && <span>{t('common:logout')}</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main 
-        className={`flex-1 transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-20'
-        } flex flex-col`}
+      {/* Main Content — no left margin on mobile (sidebar overlays); desktop gets ml based on sidebar state */}
+      <main
+        className={[
+          'flex-1 transition-all duration-300 flex flex-col',
+          isMobile ? 'ml-0' : (isSidebarOpen ? 'ml-64' : 'ml-20'),
+        ].join(' ')}
       >
         {/* Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-40">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40">
           <div className="flex items-center gap-4 flex-1">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -194,7 +229,7 @@ const MainLayout: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           <Outlet />
         </div>
       </main>

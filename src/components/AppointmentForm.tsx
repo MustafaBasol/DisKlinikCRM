@@ -188,7 +188,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
             </div>
 
             {/* Date and Time */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="space-y-1 col-span-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <Calendar size={16} className="text-gray-400" />

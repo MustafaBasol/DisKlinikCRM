@@ -112,6 +112,7 @@ export const messageService = {
   getAll: (params?: any) => api.get('/messages', { params }),
   getById: (id: string) => api.get(`/messages/${id}`),
   prepare: (data: any) => api.post('/messages/prepare', data),
+  send: (id: string) => api.post(`/messages/${id}/send`),
 };
 
 export const userService = {

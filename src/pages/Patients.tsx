@@ -39,12 +39,12 @@ const Patients: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('patients:title')}</h1>
           <p className="text-gray-500 mt-1">{t('patients:subtitle')}</p>
         </div>
-        <button onClick={() => setIsFormOpen(true)} className="btn-primary">
+        <button onClick={() => setIsFormOpen(true)} className="btn-primary shrink-0">
           <Plus size={20} />
           {t('patients:addPatient')}
         </button>
@@ -91,68 +91,70 @@ const Patients: React.FC = () => {
             <Loader2 className="animate-spin text-primary-600" size={32} />
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-100">
-                <th className="px-6 py-4">{t('patients:list.name')}</th>
-                <th className="px-6 py-4">{t('patients:list.contact')}</th>
-                <th className="px-6 py-4">{t('patients:list.status')}</th>
-                <th className="px-6 py-4">{t('patients:list.createdAt')}</th>
-                <th className="px-6 py-4"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {patients.length > 0 ? patients.map((patient) => (
-                <tr key={patient.id} className="hover:bg-gray-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <Link to={`/patients/${patient.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                      <div className="w-10 h-10 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center font-bold">
-                        {patient.firstName[0]}{patient.lastName[0]}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px]">
+              <thead>
+                <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-100">
+                  <th className="px-4 sm:px-6 py-4">{t('patients:list.name')}</th>
+                  <th className="px-4 sm:px-6 py-4 hidden sm:table-cell">{t('patients:list.contact')}</th>
+                  <th className="px-4 sm:px-6 py-4">{t('patients:list.status')}</th>
+                  <th className="px-4 sm:px-6 py-4 hidden md:table-cell">{t('patients:list.createdAt')}</th>
+                  <th className="px-4 sm:px-6 py-4"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {patients.length > 0 ? patients.map((patient) => (
+                  <tr key={patient.id} className="hover:bg-gray-50 transition-colors group">
+                    <td className="px-4 sm:px-6 py-4">
+                      <Link to={`/patients/${patient.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                        <div className="w-9 h-9 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center font-bold shrink-0">
+                          {patient.firstName[0]}{patient.lastName[0]}
+                        </div>
+                        <span className="font-semibold text-gray-900 truncate max-w-[140px] sm:max-w-none">{patient.firstName} {patient.lastName}</span>
+                      </Link>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
+                      <div className="flex flex-col gap-1">
+                        {patient.email && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Mail size={14} className="text-gray-400" />
+                            <span className="truncate max-w-[180px]">{patient.email}</span>
+                          </div>
+                        )}
+                        {patient.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone size={14} className="text-gray-400" />
+                            {patient.phone}
+                          </div>
+                        )}
                       </div>
-                      <span className="font-semibold text-gray-900">{patient.firstName} {patient.lastName}</span>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      {patient.email && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Mail size={14} className="text-gray-400" />
-                          {patient.email}
-                        </div>
-                      )}
-                      {patient.phone && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone size={14} className="text-gray-400" />
-                          {patient.phone}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`badge ${
-                      patient.patientStatus === 'active' ? 'badge-green' : 
-                      patient.patientStatus === 'new' ? 'badge-blue' : 
-                      patient.patientStatus === 'archived' ? 'badge-red' : 'badge-gray'
-                    }`}>
-                      {t(`patients:status.${patient.patientStatus}`)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{new Date(patient.createdAt).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-right">
-                    <Link to={`/patients/${patient.id}`} className="text-gray-400 hover:text-primary-600 p-2 inline-block">
-                      <User size={18} />
-                    </Link>
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                    {t('patients:noPatientsFound')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4">
+                      <span className={`badge ${
+                        patient.patientStatus === 'active' ? 'badge-green' : 
+                        patient.patientStatus === 'new' ? 'badge-blue' : 
+                        patient.patientStatus === 'archived' ? 'badge-red' : 'badge-gray'
+                      }`}>
+                        {t(`patients:status.${patient.patientStatus}`)}
+                      </span>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 hidden md:table-cell">{new Date(patient.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 sm:px-6 py-4 text-right">
+                      <Link to={`/patients/${patient.id}`} className="text-gray-400 hover:text-primary-600 p-2 inline-block">
+                        <User size={18} />
+                      </Link>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      {t('patients:noPatientsFound')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

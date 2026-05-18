@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';
+import { sendTextMessage } from '../services/evolutionApi.js';
 
 const router = express.Router();
 
@@ -270,6 +271,55 @@ router.get('/messages/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
     res.json(message);
   } catch {
     res.status(500).json({ error: 'Failed to fetch message' });
+  }
+});
+
+// POST /api/messages/:id/send
+router.post('/messages/:id/send', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const clinicId = req.user!.clinicId;
+
+  try {
+    const message = await prisma.sentMessage.findFirst({
+      where: { id, clinicId },
+      include: { patient: true },
+    });
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (message.status !== 'prepared') {
+      return res.status(400).json({ error: 'Only prepared messages can be sent' });
+    }
+    if (!message.recipient) {
+      return res.status(400).json({ error: 'Message has no recipient' });
+    }
+
+    if (message.channel === 'whatsapp') {
+      try {
+        await sendTextMessage(message.recipient, message.body);
+      } catch (sendErr: any) {
+        await prisma.sentMessage.update({ where: { id }, data: { status: 'failed' } });
+        await logActivity({
+          clinicId, userId: req.user!.id, entityType: 'message', entityId: id,
+          action: 'send_failed',
+          description: `WhatsApp send failed for ${message.patient.firstName} ${message.patient.lastName}: ${sendErr.message}`,
+        });
+        return res.status(502).json({ error: 'WhatsApp send failed', detail: sendErr.message });
+      }
+    }
+
+    const updated = await prisma.sentMessage.update({
+      where: { id },
+      data: { status: 'sent', sentAt: new Date() },
+    });
+
+    await logActivity({
+      clinicId, userId: req.user!.id, entityType: 'message', entityId: id,
+      action: 'sent',
+      description: `Message sent to ${message.patient.firstName} ${message.patient.lastName} via ${message.channel}`,
+    });
+
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Failed to send message' });
   }
 });
 

@@ -189,9 +189,9 @@ const Payments: React.FC = () => {
               <tr className="bg-gray-50/50 border-b border-gray-100">
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.patient')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.amount')}</th>
-                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.method')}</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden sm:table-cell">{t('payments:list.method')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.status')}</th>
-                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.date')}</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">{t('payments:list.date')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">{t('common:actions')}</th>
               </tr>
             </thead>
@@ -224,7 +224,7 @@ const Payments: React.FC = () => {
                     <td className="p-4">
                       <p className="text-sm font-bold text-gray-900">{p.amount.toLocaleString()} {p.currency}</p>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 hidden sm:table-cell">
                       <span className="text-xs font-medium text-gray-600 flex items-center gap-2">
                         <CreditCard size={14} className="text-gray-400" />
                         {t(`payments:methods.${p.paymentMethod}`)}
@@ -235,7 +235,7 @@ const Payments: React.FC = () => {
                         {t(`payments:status.${p.paymentStatus}`)}
                       </span>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 hidden md:table-cell">
                       <p className="text-xs text-gray-600">{new Date(p.paidAt).toLocaleDateString()}</p>
                     </td>
                     <td className="p-4 text-right">

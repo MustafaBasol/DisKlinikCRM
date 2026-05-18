@@ -57,7 +57,7 @@ Monolitik `index.ts` (4844 satır) aşağıdaki modüler yapıya dönüştürül
 
 ---
 
-## 2. Gerçek WhatsApp Gönderimi (Operasyonel Verimlilik)
+## 2. Gerçek WhatsApp Gönderimi (Operasyonel Verimlilik) ✅ TAMAMLANDI
 
 **Sorun:** Mevcut sistem mesajları sadece "prepared" (hazırlandı) statüsünde veritabanına kaydediyor ancak müşteriye iletmiyor.
 
@@ -73,9 +73,24 @@ Monolitik `index.ts` (4844 satır) aşağıdaki modüler yapıya dönüştürül
 4. **UI Entegrasyonu:**
    - Frontend `Messages.tsx` sayfasına ve hasta detayındaki mesajlar sekmesine "Şimdi Gönder" (Send Now) butonu eklenecek.
 
+**Uygulama Sonucu (18 Mayıs 2026):**
+
+| Dosya | Açıklama |
+|---|---|
+| `server/src/services/evolutionApi.ts` | Zaten mevcuttu — `sendTextMessage(phone, text, instance?)` |
+| `server/src/routes/messages.ts` | `POST /api/messages/:id/send` endpoint eklendi |
+| `src/services/api.ts` | `messageService.send(id)` eklendi |
+| `src/pages/Messages.tsx` | "Şimdi Gönder" (`Send`) butonu + hata banner'ı eklendi |
+
+- **Akış:** `prepared` durumundaki mesaj → Evolution API `sendTextMessage` çağrısı → başarıda `status: 'sent'` + `sentAt` güncelleme + activity log; başarısızlıkta `status: 'failed'` + 502 yanıtı
+- **Yetkilendirme:** Sadece `admin` ve `receptionist` rolleri gönderebilir
+- **Kanal desteği:** `whatsapp` kanalı gerçek Evolution API ile gönderir; diğer kanallar (`sms`, `email`) durum `sent` olarak işaretlenir (harici entegrasyon için hazır)
+- **Güvenlik:** Mesaj içeriğinde telefon no normalleştirme mevcut; hassas veri denetim logu ile kayıt altında
+- **`npx tsc --noEmit` (frontend + backend) → 0 hata**
+
 ---
 
-## 3. Otomatik Hatırlatma Sistemi (Cron Jobs)
+## 3. Otomatik Hatırlatma Sistemi (Cron Jobs) ✅ TAMAMLANDI
 
 **Sorun:** Randevu hatırlatmalarının manuel yapılması zaman kaybına ve "No-show" (gelmeyen hasta) oranlarının yüksek kalmasına neden oluyor.
 
@@ -91,6 +106,24 @@ Monolitik `index.ts` (4844 satır) aşağıdaki modüler yapıya dönüştürül
    - Yazılan cron job'lar `index.ts` içerisinde başlatılacak (`require('./jobs/reminders').start()`).
 4. **Aktivite Logu:**
    - Otomatik gönderilen mesajlar `ActivityLog` tablosuna "Sistem tarafından otomatik hatırlatma gönderildi" şeklinde işlenecek.
+
+**Uygulama Sonucu (19 Mayıs 2026):**
+
+| Dosya | Açıklama |
+|---|---|
+| `server/src/jobs/reminders.ts` | Cron job ana modülü; `startReminderJobs()` + `runDailyReminderJob()` export eder |
+| `server/src/index.ts` | Sunucu başlarken `startReminderJobs()` çağrılır |
+
+- Her gün saat **10:00** (sunucu saati) otomatik olarak çalışır (`cron.schedule('0 10 * * *', ...)`)
+- Tüm klinikler için bir sonraki günkü `scheduled` veya `confirmed` statüslü randevular sorgulanır
+- Klinik timezone'una göre "yarın" aralığı hesaplanır (Intl API kullanılarak UTC offset)
+- Kliniğin aktif WhatsApp **reminder** şablonu aranır; yoksa Türkçe fallback metin kullanılır
+- Her hasta için `SentMessage` kaydı oluşturulur, Evolution API üzerinden WhatsApp gönderimi yapılır
+- Gönderim başarılıysa `status: 'sent'`, başarısızsa `status: 'failed'` güncellenir
+- Aynı gün aynı randevu için mükerrer gönderim önlenir (idempotency kontrolü)
+- Her işlem için `ActivityLog` kaydı düşülür (kullanıcı: klinik admin)
+- `node-cron` ve `@types/node-cron` bağımlılıkları `server/package.json`'a eklendi
+- **`npx tsc --noEmit` → 0 hata**
 
 ---
 
@@ -164,5 +197,5 @@ Bu özellikleri uygulamak için en güvenli yol şudur:
 
 1. **Faz 1:** Backend Modülerleştirme (Diğer tüm özelliklerin temiz bir koda eklenmesi için ön şart).
 2. **Faz 2:** Drag & Drop Takvim ve Çoklu Hekim Görünümü ✅ TAMAMLANDI (18 Mayıs 2026).
-3. **Faz 3:** Gerçek WhatsApp Gönderimi.
-4. **Faz 4:** Otomatik Hatırlatma Sistemi (Faz 3 tamamlanmadan yapılamaz).
+3. **Faz 3:** Gerçek WhatsApp Gönderimi ✅ TAMAMLANDI (18 Mayıs 2026).
+4. **Faz 4:** Otomatik Hatırlatma Sistemi ✅ TAMAMLANDI (19 Mayıs 2026).
