@@ -293,19 +293,30 @@ const PatientDetail: React.FC = () => {
                   <Calendar size={20} />
                 </div>
 {(() => {
-                  const nextAppt = patient.appointments?.find((a: any) => new Date(a.startTime) > new Date());
-                  return nextAppt ? (
-                    <div className="flex items-center gap-6">
-                      <div>
-                        <p className="text-primary-100 text-sm">{t('common:date')}</p>
-                        <p className="text-lg font-bold">
-                          {formatDateInTimeZone(nextAppt.startTime, undefined, clinicTimeZone, { month: 'long', day: 'numeric', year: 'numeric' })} at {formatTimeInTimeZone(nextAppt.startTime, undefined, clinicTimeZone)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-primary-100 text-sm">{t('common:service')}</p>
-                        <p className="text-lg font-bold">{nextAppt.appointmentType.name}</p>
-                      </div>
+                  const now = new Date();
+                  const upcomingAppts = (patient.appointments ?? [])
+                    .filter((a: any) => new Date(a.startTime) > now)
+                    .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+                  return upcomingAppts.length > 0 ? (
+                    <div className="space-y-3">
+                      {upcomingAppts.map((appt: any) => (
+                        <div
+                          key={appt.id}
+                          className="flex items-center gap-6 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => navigate(`/appointments/${appt.id}`)}
+                        >
+                          <div>
+                            <p className="text-primary-100 text-sm">{t('common:date')}</p>
+                            <p className="text-base font-bold">
+                              {formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone, { month: 'long', day: 'numeric', year: 'numeric' })} — {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-primary-100 text-sm">{t('common:service')}</p>
+                            <p className="text-base font-bold">{appt.appointmentType.name}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <p className="opacity-80 italic">No upcoming appointments scheduled.</p>
@@ -322,7 +333,7 @@ const PatientDetail: React.FC = () => {
               </div>
               <div className="divide-y divide-gray-50">
                 {patient.appointments?.length > 0 ? patient.appointments.map((appt: any) => (
-                  <div key={appt.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div key={appt.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate(`/appointments/${appt.id}`)}>                  
                     <div className="flex items-center gap-4">
                       <div className="p-2 bg-gray-100 rounded-lg text-gray-500">
                         <Clock size={18} />
