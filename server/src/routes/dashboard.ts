@@ -125,6 +125,83 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       take: 10,
     });
 
+    // ── Doctor-specific extra data ─────────────────────────────────────
+    let doctorExtras: any = null;
+    if (role === 'doctor') {
+      const nextWeek = new Date(tomorrow);
+      nextWeek.setDate(nextWeek.getDate() + 7);
+
+      const [upcomingAppts, pipeline, recentPatientsRaw, earningsSummary] = await Promise.all([
+        // Next 7 days appointments
+        prisma.appointment.findMany({
+          where: {
+            clinicId,
+            practitionerId: userId,
+            startTime: { gte: tomorrow, lt: nextWeek },
+            status: { not: 'cancelled' },
+          },
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true } },
+            appointmentType: { select: { name: true, color: true } },
+          },
+          orderBy: { startTime: 'asc' },
+          take: 20,
+        }),
+        // Active treatment pipeline grouped by stage
+        prisma.treatmentCase.groupBy({
+          by: ['stage'],
+          where: { clinicId, practitionerId: userId, stage: { notIn: ['completed', 'lost'] } },
+          _count: { stage: true },
+        }),
+        // Recent distinct patients seen by this doctor
+        prisma.appointment.findMany({
+          where: {
+            clinicId,
+            practitionerId: userId,
+            startTime: { lt: tomorrow },
+            status: { in: ['completed', 'confirmed', 'in_progress'] },
+          },
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
+            appointmentType: { select: { name: true } },
+          },
+          orderBy: { startTime: 'desc' },
+          take: 30,
+        }),
+        // Pending + approved earnings
+        prisma.practitionerEarning.groupBy({
+          by: ['status'],
+          where: { clinicId, practitionerId: userId, status: { in: ['pending', 'approved'] } },
+          _sum: { earningAmount: true },
+        }),
+      ]);
+
+      // Deduplicate patients, keep most recent visit per patient
+      const seen = new Set<string>();
+      const recentPatients = recentPatientsRaw
+        .filter((a: any) => {
+          if (seen.has(a.patient.id)) return false;
+          seen.add(a.patient.id);
+          return true;
+        })
+        .slice(0, 5)
+        .map((a: any) => ({
+          ...a.patient,
+          lastService: a.appointmentType.name,
+          lastVisit: a.startTime,
+        }));
+
+      const earningMap: Record<string, number> = {};
+      earningsSummary.forEach((e: any) => { earningMap[e.status] = e._sum.earningAmount || 0; });
+
+      doctorExtras = {
+        upcomingWeek: upcomingAppts,
+        treatmentPipeline: pipeline.map((p: any) => ({ stage: p.stage, count: p._count.stage })),
+        recentPatients,
+        pendingEarnings: (earningMap['pending'] || 0) + (earningMap['approved'] || 0),
+      };
+    }
+
     res.json({
       stats: {
         todayAppointments: stats.todayAppointments,
@@ -143,7 +220,8 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       agenda,
       alerts,
       activities,
-      charts: await buildChartData(prisma, clinicId, today, tomorrow, firstDayOfMonth),
+      doctorExtras,
+      charts: role !== 'doctor' ? await buildChartData(prisma, clinicId, today, tomorrow, firstDayOfMonth) : null,
     });
   } catch (error) {
     console.error(error);

@@ -155,6 +155,8 @@ export const dashboardService = {
 export const reportService = {
   getRevenue: (params?: any) => api.get('/reports/revenue', { params }),
   getDoctorPerformance: (params?: any) => api.get('/reports/doctor-performance', { params }),
+  getPatientSources: (params?: any) => api.get('/reports/patient-sources', { params }),
+  getNoShowAnalysis: (params?: any) => api.get('/reports/no-show-analysis', { params }),
 };
 
 export const paymentPlanService = {

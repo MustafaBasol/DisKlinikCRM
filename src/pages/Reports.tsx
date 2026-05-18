@@ -11,10 +11,13 @@ import {
   Loader2,
   AlertCircle,
   Award,
+  UserMinus,
+  Megaphone,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
+  ComposedChart, Line,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { reportService, userService } from '../services/api';
@@ -29,7 +32,22 @@ const METHOD_LABELS: Record<string, string> = {
   insurance: 'Sigorta',
 };
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6B7280'];
+const SOURCE_LABELS: Record<string, string> = {
+  referral:     'Referans',
+  social_media: 'Sosyal Medya',
+  instagram:    'Instagram',
+  website:      'Web Sitesi',
+  phone:        'Telefon',
+  walk_in:      'Yürüyerek Gelen',
+  google:       'Google',
+  facebook:     'Facebook',
+  whatsapp:     'WhatsApp',
+  other:        'Diğer',
+};
+
+const DAY_LABELS = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6B7280', '#EC4899', '#14B8A6'];
 
 function formatCurrency(amount: number, currency = 'TRY') {
   return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount);
@@ -48,7 +66,7 @@ function defaultDateRange() {
 const Reports: React.FC = () => {
   const { t } = useTranslation(['common']);
   const { user } = useAuth();
-  const [tab, setTab] = useState<'revenue' | 'doctors'>('revenue');
+  const [tab, setTab] = useState<'revenue' | 'doctors' | 'sources' | 'noshow'>('revenue');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -61,6 +79,8 @@ const Reports: React.FC = () => {
 
   const [revenueData, setRevenueData] = useState<any>(null);
   const [doctorData, setDoctorData] = useState<any>(null);
+  const [sourcesData, setSourcesData] = useState<any>(null);
+  const [noShowData, setNoShowData] = useState<any>(null);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [doctorsLoaded, setDoctorsLoaded] = useState(false);
 
@@ -95,6 +115,38 @@ const Reports: React.FC = () => {
     }
   };
 
+  const loadSources = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params: any = {};
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      const res = await reportService.getPatientSources(params);
+      setSourcesData(res.data);
+    } catch {
+      setError('Hasta kaynak raporu yüklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadNoShow = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params: any = {};
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      const res = await reportService.getNoShowAnalysis(params);
+      setNoShowData(res.data);
+    } catch {
+      setError('No-show raporu yüklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadDoctorList = async () => {
     if (doctorsLoaded) return;
     try {
@@ -111,11 +163,15 @@ const Reports: React.FC = () => {
 
   const handleSearch = () => {
     if (tab === 'revenue') loadRevenue();
-    else loadDoctors();
+    else if (tab === 'doctors') loadDoctors();
+    else if (tab === 'sources') loadSources();
+    else if (tab === 'noshow') loadNoShow();
   };
 
   React.useEffect(() => {
     if (tab === 'doctors' && !doctorData) loadDoctors();
+    else if (tab === 'sources' && !sourcesData) loadSources();
+    else if (tab === 'noshow' && !noShowData) loadNoShow();
   }, [tab]); // eslint-disable-line
 
   const handleExportCSV = () => {
@@ -158,23 +214,23 @@ const Reports: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
-        <button
-          onClick={() => setTab('revenue')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            tab === 'revenue' ? 'bg-white dark:bg-gray-700 shadow text-primary-600' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
-          }`}
-        >
-          <span className="flex items-center gap-2"><TrendingUp size={16} />Gelir Raporu</span>
-        </button>
-        <button
-          onClick={() => setTab('doctors')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            tab === 'doctors' ? 'bg-white dark:bg-gray-700 shadow text-primary-600' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
-          }`}
-        >
-          <span className="flex items-center gap-2"><Users size={16} />Hekim Performansı</span>
-        </button>
+      <div className="flex flex-wrap gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
+        {[
+          { key: 'revenue',  icon: <TrendingUp size={16} />,  label: 'Gelir Raporu' },
+          { key: 'doctors',  icon: <Users size={16} />,       label: 'Hekim Performansı' },
+          { key: 'sources',  icon: <Megaphone size={16} />,   label: 'Hasta Kaynakları' },
+          { key: 'noshow',   icon: <UserMinus size={16} />,   label: 'No-Show Analizi' },
+        ].map(({ key, icon, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key as any)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              tab === key ? 'bg-white dark:bg-gray-700 shadow text-primary-600' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+            }`}
+          >
+            <span className="flex items-center gap-2">{icon}{label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
@@ -396,6 +452,296 @@ const Reports: React.FC = () => {
               <p>Seçili tarih aralığında tahsilat kaydı bulunamadı.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Patient Sources Tab */}
+      {!loading && tab === 'sources' && sourcesData && (
+        <div className="space-y-6">
+          {/* Summary */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-5 bg-gradient-to-br from-violet-500 to-violet-600 text-white border-none lg:col-span-2">
+              <p className="text-violet-100 text-sm mb-1">Toplam Kayıtlı Hasta (Dönem)</p>
+              <p className="text-3xl font-bold">{sourcesData.total}</p>
+              <p className="text-violet-200 text-xs mt-1">{sourcesData.sources?.length} farklı kaynak</p>
+            </div>
+            {sourcesData.sources?.slice(0, 2).map((s: any, i: number) => (
+              <div key={s.source} className="card p-5">
+                <p className="text-xs text-gray-500 mb-1">#{i + 1} Kaynak</p>
+                <p className="text-xl font-bold text-gray-900">{SOURCE_LABELS[s.source] || s.source}</p>
+                <p className="text-2xl font-bold mt-1" style={{ color: COLORS[i % COLORS.length] }}>{s.count}</p>
+                <p className="text-xs text-gray-400">hasta</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Pie chart: patient count distribution */}
+            <div className="card p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Users size={18} className="text-violet-500" />Kaynak Bazlı Hasta Dağılımı
+              </h3>
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie
+                    data={sourcesData.sources}
+                    dataKey="count"
+                    nameKey="source"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={85}
+                    label={({ source, percent }: any) =>
+                      percent > 0.03 ? `${SOURCE_LABELS[source] || source} ${(percent * 100).toFixed(0)}%` : ''
+                    }
+                    labelLine={false}
+                  >
+                    {sourcesData.sources.map((_: any, i: number) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number, name: string) => [v + ' hasta', SOURCE_LABELS[name] || name]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Bar chart: revenue per source */}
+            {sourcesData.sources?.some((s: any) => s.revenue > 0) && (
+              <div className="card p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <DollarSign size={18} className="text-emerald-500" />Kaynak Bazlı Gelir
+                </h3>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={sourcesData.sources.filter((s: any) => s.revenue > 0)} layout="vertical"
+                    margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                    <YAxis type="category" dataKey="source" tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => SOURCE_LABELS[v] || v} width={90} />
+                    <Tooltip formatter={(v: number, name: string) => [formatCurrency(v), 'Gelir']} />
+                    <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
+                      {sourcesData.sources.map((_: any, i: number) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Detail Table */}
+          <div className="card overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Kaynak Detay Tablosu</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800/50">
+                  <tr>
+                    <th className="px-6 py-3 font-medium text-gray-500 pl-6">#</th>
+                    <th className="px-6 py-3 font-medium text-gray-500">Kaynak</th>
+                    <th className="px-6 py-3 font-medium text-gray-500 text-right">Hasta Sayısı</th>
+                    <th className="px-6 py-3 font-medium text-gray-500 text-right">Pay %</th>
+                    <th className="px-6 py-3 font-medium text-gray-500 text-right pr-6">Gelir</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {sourcesData.sources.map((s: any, i: number) => (
+                    <tr key={s.source} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                      <td className="px-6 py-3 pl-6">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                          style={{ background: COLORS[i % COLORS.length] }}>
+                          {i + 1}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 font-semibold text-gray-900 dark:text-white">
+                        {SOURCE_LABELS[s.source] || s.source}
+                      </td>
+                      <td className="px-6 py-3 text-right font-bold text-gray-900 dark:text-white">{s.count}</td>
+                      <td className="px-6 py-3 text-right text-gray-500">
+                        {sourcesData.total > 0 ? `%${Math.round(s.count / sourcesData.total * 100)}` : '—'}
+                      </td>
+                      <td className="px-6 py-3 text-right text-emerald-600 font-semibold pr-6">
+                        {s.revenue > 0 ? formatCurrency(s.revenue) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+      {!loading && tab === 'sources' && !sourcesData && (
+        <div className="card p-12 text-center text-gray-400">
+          <Megaphone size={40} className="mx-auto mb-3 opacity-30" />
+          <p>Raporu görüntülemek için "Raporu Getir" butonuna tıklayın.</p>
+        </div>
+      )}
+
+      {/* No-Show Analysis Tab */}
+      {!loading && tab === 'noshow' && noShowData && (
+        <div className="space-y-6">
+          {/* Summary cards */}
+          {(() => {
+            const totalNoShows = noShowData.monthlyTrend.reduce((s: number, m: any) => s + Number(m.no_shows), 0);
+            const totalAppts = noShowData.monthlyTrend.reduce((s: number, m: any) => s + Number(m.total), 0);
+            const totalCancellations = noShowData.monthlyTrend.reduce((s: number, m: any) => s + Number(m.cancellations), 0);
+            const overallRate = totalAppts > 0 ? Math.round(totalNoShows / totalAppts * 100) : 0;
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="card p-5 bg-gradient-to-br from-red-500 to-red-600 text-white border-none">
+                  <p className="text-red-100 text-sm mb-1">Toplam No-Show</p>
+                  <p className="text-3xl font-bold">{totalNoShows}</p>
+                </div>
+                <div className="card p-5">
+                  <p className="text-gray-500 text-sm mb-1">No-Show Oranı</p>
+                  <p className={`text-3xl font-bold ${overallRate > 20 ? 'text-red-600' : overallRate > 10 ? 'text-amber-500' : 'text-green-600'}`}>
+                    %{overallRate}
+                  </p>
+                </div>
+                <div className="card p-5">
+                  <p className="text-gray-500 text-sm mb-1">İptal Sayısı</p>
+                  <p className="text-3xl font-bold text-orange-500">{totalCancellations}</p>
+                </div>
+                <div className="card p-5">
+                  <p className="text-gray-500 text-sm mb-1">Toplam Randevu</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">{totalAppts}</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Monthly trend */}
+          {noShowData.monthlyTrend.length > 0 && (
+            <div className="card p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <TrendingUp size={18} className="text-red-500" />Aylık No-Show Trendi
+              </h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <ComposedChart data={noShowData.monthlyTrend.map((m: any) => ({
+                  month: m.month,
+                  no_shows: Number(m.no_shows),
+                  cancellations: Number(m.cancellations),
+                  rate: Number(m.total) > 0 ? Math.round(Number(m.no_shows) / Number(m.total) * 100) : 0,
+                }))} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => `%${v}`} />
+                  <Tooltip formatter={(v: number, name: string) => {
+                    if (name === 'rate') return [`%${v}`, 'No-Show Oranı'];
+                    if (name === 'no_shows') return [v, 'No-Show'];
+                    if (name === 'cancellations') return [v, 'İptal'];
+                    return [v, name];
+                  }} />
+                  <Legend formatter={(v) => v === 'no_shows' ? 'No-Show' : v === 'cancellations' ? 'İptal' : 'Oran %'} />
+                  <Bar yAxisId="left" dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
+                  <Bar yAxisId="left" dataKey="cancellations" fill="#F97316" radius={[4, 4, 0, 0]} name="cancellations" />
+                  <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#8B5CF6" strokeWidth={2} dot={false} name="rate" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* By day of week */}
+            {noShowData.byDayOfWeek.length > 0 && (
+              <div className="card p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Calendar size={18} className="text-indigo-500" />Gün Bazlı Dağılım
+                </h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={noShowData.byDayOfWeek.map((d: any) => ({
+                    day: DAY_LABELS[d.day_of_week] || d.day_of_week,
+                    no_shows: Number(d.no_shows),
+                    rate: Number(d.total) > 0 ? Math.round(Number(d.no_shows) / Number(d.total) * 100) : 0,
+                  }))} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: number, name: string) => [name === 'rate' ? `%${v}` : v, name === 'rate' ? 'Oran' : 'No-Show']} />
+                    <Bar dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* By hour */}
+            {noShowData.byHour.length > 0 && (
+              <div className="card p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Clock size={18} className="text-amber-500" />Saat Dilimi Dağılımı
+                </h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={noShowData.byHour.map((h: any) => ({
+                    hour: `${String(h.hour).padStart(2, '0')}:00`,
+                    no_shows: Number(h.no_shows),
+                    total: Number(h.total),
+                  }))} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={1} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: number, name: string) => [v, name === 'no_shows' ? 'No-Show' : 'Toplam']} />
+                    <Bar dataKey="total" fill="#E5E7EB" radius={[4, 4, 0, 0]} name="total" />
+                    <Bar dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* By doctor table */}
+          {noShowData.byDoctor.length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Users size={18} className="text-blue-500" />Hekim Bazlı No-Show Oranı
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800/50">
+                    <tr>
+                      <th className="px-6 py-3 font-medium text-gray-500 pl-6">Hekim</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">Toplam</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">No-Show</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">İptal</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right pr-6">No-Show Oranı</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {noShowData.byDoctor.map((doc: any) => (
+                      <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                        <td className="px-6 py-4 pl-6">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 font-bold text-xs">
+                              {doc.firstName[0]}{doc.lastName[0]}
+                            </div>
+                            <span className="font-semibold text-gray-900 dark:text-white">Dr. {doc.firstName} {doc.lastName}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-400">{doc.total}</td>
+                        <td className="px-6 py-4 text-right font-semibold text-red-600">{doc.noShows}</td>
+                        <td className="px-6 py-4 text-right text-orange-500">{doc.cancellations}</td>
+                        <td className="px-6 py-4 text-right pr-6">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            doc.noShowRate > 20 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                            doc.noShowRate > 10 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                            'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          }`}>
+                            %{doc.noShowRate}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {!loading && tab === 'noshow' && !noShowData && (
+        <div className="card p-12 text-center text-gray-400">
+          <UserMinus size={40} className="mx-auto mb-3 opacity-30" />
+          <p>Raporu görüntülemek için "Raporu Getir" butonuna tıklayın.</p>
         </div>
       )}
 

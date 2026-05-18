@@ -2,7 +2,7 @@
 
 > **Mevcut Durum:** MVP tamamlanmış, Aile Diş kliniğine uyarlanmış, 20 fazlık geliştirme süreci başarıyla bitirilmiş. WhatsApp n8n entegrasyonu, doktor müsaitlik yönetimi, sigorta/provizyon takibi, çok dilli destek (TR/EN/FR/DE) ve rol bazlı erişim kontrolü mevcut.
 
-> **Son Güncellemeler (Mayıs 2026):** FullCalendar drag&drop takvim ✅, çoklu hekim yan yana görünüm ✅, CRM'den WhatsApp gönderimi ✅, otomatik hatırlatma cron job ✅, backend route modülerleştirme ✅, mobil responsive iyileştirmeler ✅, **Finansal Yönetim tamamlandı** (makbuz yazdırma ✅, taksit planı ✅, gelir raporu + CSV export ✅, hekim performans & komisyon takibi ✅)
+> **Son Güncellemeler (Mayıs 2026):** FullCalendar drag&drop takvim ✅, çoklu hekim yan yana görünüm ✅, CRM'den WhatsApp gönderimi ✅, otomatik hatırlatma cron job ✅, backend route modülerleştirme ✅, mobil responsive iyileştirmeler ✅, **Finansal Yönetim tamamlandı** (makbuz yazdırma ✅, taksit planı ✅, gelir raporu + CSV export ✅, hekim performans & komisyon takibi ✅), **Hekim Kazanç Yönetimi tamamlandı** (komisyon kural motoru ✅, kazanç oto-hesaplama ✅, onaylama/düzenleme/ödeme akışı ✅, doktor kişisel kazanç görünümü ✅)
 
 ---
 
@@ -159,6 +159,15 @@
 - **Etki:** ⭐⭐⭐⭐ — Çok hekimli klinikler için önemli
 - **Zorluk:** Orta
 
+### 4.5 — Hekim Kazanç Yönetimi ✅ TAMAMLANDI
+- **Durum:** Tam komisyon kural motoru ve kazanç takip modülü eklendi.
+  - **Veritabanı:** 4 yeni Prisma modeli — `PractitionerCompensationRule` (sabit/yüzde/sabit+yüzde/hizmet bazlı, tahsilat/fatura bazı), `ServiceCompensationRule` (hizmet başına özel oran), `PractitionerEarning` (kazanç kaydı, onay/düzeltme/ödeme durumu), `PractitionerPayout` (toplu ödeme kaydı). Migration: `20260518141910_practitioner_earnings`.
+  - **Backend:** `compensationRules.ts` (7 endpoint CRUD), `practitionerEarnings.ts` (7 endpoint — liste/özet/onay/düzenleme/iptal/ödendi), `practitionerPayouts.ts` (4 endpoint). `earningService.ts`: ödeme `paid` durumuna geçince veya tedavi vakası `completed` olunca kazanç otomatik oluşturulur (idempotent).
+  - **Frontend:** `PractitionerEarnings.tsx` — admin/billing için 4 sekmeli yönetim sayfası (Dönem Özeti, Kazanç Listesi, Ödemeler, Komisyon Ayarları). `MyEarnings.tsx` — doktor rolü için salt okunur kişisel kazanç görünümü.
+  - **RBAC:** admin/billing tam erişim; doctor yalnızca kendi kazançlarını görür; receptionist erişemez.
+- **Etki:** ⭐⭐⭐⭐⭐ — Çok hekimli kliniklerde şeffaf ve otomatik hak ediş yönetimi
+- **Zorluk:** Yüksek
+
 ---
 
 ## 📨 Kategori 5: İletişim & Mesajlaşma
@@ -197,23 +206,35 @@
 - **Etki:** ⭐⭐⭐⭐ — Görsel zenginlik, demo etkisi
 - **Zorluk:** Düşük-Orta
 
-### 6.2 — Hekim Dashboard'u
-- **Mevcut:** Rol bazlı metrik var ama her hekim aynı dashboard'u görüyor
-- **Hedef:** Hekim girişinde: bugünkü randevuları, haftanın özeti, kendi hastalari, tedavi aşamaları
-- **Etki:** ⭐⭐⭐⭐ — Hekim bağımsızlığı
-- **Zorluk:** Orta
+### 6.2 — Hekim Dashboard'u ✅ TAMAMLANDI
+- **Durum:** Hekim rolüyle giriş yapıldığında, admin dashboard'u yerine doktor odaklı özel dashboard açılıyor.
+  - **Backend (`dashboard.ts`):** `role === 'doctor'` için `doctorExtras` bloğu eklendi: önümüzdeki 7 gün randevuları, aktif tedavi pipeline (aşama bazlı gruplu), son 5 hasta (deduplike), bekleyen + onaylı kazanç toplamı. `buildChartData` doktor rolünde atlanıyor (gereksiz klinik geneli grafik yükü yok).
+  - **Frontend (`Dashboard.tsx`):** `DoctorDashboard` bileşeni eklendi. İçeriği: kişisel selamlama + tarih, 4 kişisel metrik kart (bugün/hafta/açık tedavi/bekleyen görev), tahakkuk eden kazanç vurgu kartı (→ `/my-earnings` linki), bugünkü program tablosu, önümüzdeki 7 gün listesi, tedavi pipeline rozet görünümü (aşama bazlı), son hastalar listesi, aktivite akışı. Admin/billing/receptionist dashboard'u tamamen değişmedi.
+- **Eklenen değer önerileri (plana işlendi):** Bkz. §6.5, §6.6, §6.7
 
-### 6.3 — Hasta Kazanım Kaynağı Analizi
-- **Mevcut:** Hasta `source` alanı var (google, referral, instagram, phone)
-- **Hedef:** Hangi kanaldan kaç hasta geldi, hangi kanal daha fazla gelir üretiyor grafiği
-- **Etki:** ⭐⭐⭐⭐ — Pazarlama bütçesi kararları
-- **Zorluk:** Düşük
+### 6.3 — Hasta Kazanım Kaynağı Analizi ✅ TAMAMLANDI
+- **Durum:** `GET /api/reports/patient-sources` endpoint'i eklendi. Dönem bazlı hasta kaynak dağılımı (referral, instagram, google, walk_in, website, phone, social_media, whatsapp, other) + her kaynaktan üretilen gelir. `Reports.tsx`'e "Hasta Kaynakları" sekmesi eklendi: PieChart (hasta sayısı dağılımı), yatay BarChart (kaynak bazlı gelir), detay tablosu (kaynak, hasta sayısı, pay %, gelir).
 
 ### 6.4 — GDPR Veri Dışa Aktarım
 - **Mevcut:** MVP freeze notlarında önerilmiş, implementasyon yok
 - **Hedef:** Hasta detayında "Verilerimi İndir" butonu → JSON/CSV formatında tüm hasta verisini export
 - **Etki:** ⭐⭐⭐ — Yasal uyumluluk
 - **Zorluk:** Düşük
+
+### 6.5 — No-Show & İptal Analiz Raporu ✅ TAMAMLANDI
+- **Durum:** `GET /api/reports/no-show-analysis` endpoint'i eklendi. 4 boyutlu analiz: aylık trend (no-show + iptal sayısı + oran), hekim bazlı no-show oranı, gün bazlı dağılım (Pzt-Paz), saat dilimi dağılımı. `Reports.tsx`'e "No-Show Analizi" sekmesi eklendi: özet metrik kartları (toplam no-show, genel oran, iptal sayısı), ComposedChart (bar + line ile aylık trend), gün bazlı BarChart, saat bazlı BarChart (toplam vs no-show karşılaştırmalı), hekim tablosu (orana göre sıralı, renk kodlamalı badge).
+
+### 6.6 — Hasta Geri Dönüş Hatırlatıcısı Analizi
+- **Mevcut:** Hatırlatma mesajları gönderiliyor ama geri dönüş takibi yok
+- **Hedef:** Son randevusundan N gün geçmiş (6 ay, 1 yıl) hastalara otomatik hatırlatma + "Neden gelmedin?" opsiyonel kısa mesaj. Kaç hastanın geri döndüğü raporlanır.
+- **Etki:** ⭐⭐⭐⭐ — Sessiz hasta aktivasyonu, gelir artırımı
+- **Zorluk:** Orta (yeni cron job + mesaj şablonu)
+
+### 6.7 — Hekim Performans Karşılaştırma Paneli
+- **Mevcut:** Hekim başına kazanç raporu var (§4.4)
+- **Hedef:** Birden fazla hekimli klinikte: hekim bazlı no-show oranı, ortalama seans süresi, tedavi kabul oranı, aylık gelir trendi. Sadece admin görür.
+- **Etki:** ⭐⭐⭐⭐ — Klinik sahibi için karar desteği
+- **Zorluk:** Düşük-Orta (mevcut veriler yeterli)
 
 ---
 
@@ -282,9 +303,12 @@
 | 10 | ~~Taksit planı (4.2)~~ ✅ | İmplant/ortodonti kliniği satışı |
 | 11 | ~~Gelir raporu + hekim performans (4.3, 4.4)~~ ✅ | Klinik sahibi karar desteği |
 | 12 | ~~WhatsApp konuşma geçmişi (5.4)~~ ✅ | Veri zaten var, sadece UI gerekli |
-| 13 | Hasta etiketleri (3.4) | Segmentasyon ve pazarlama |
-| 14 | ~~Mobil uyumluluk (1.3)~~ ✅ | Hekim kullanımı |
-| 15 | Rate limiting & güvenlik (7.2) | Prodüksiyon öncesi zorunlu |
+| 13 | ~~Hekim Dashboard'u (6.2)~~ ✅ | Doktor bağımsızlığı, rol bazlı UX |
+| 14 | ~~Hasta kaynak analizi (6.3)~~ ✅ | Pazarlama bütçesi kararları |
+| 15 | ~~No-show analiz raporu (6.5)~~ ✅ | Operasyonel iyileştirme |
+| 16 | Hasta etiketleri (3.4) | Segmentasyon ve pazarlama |
+| 15 | ~~Mobil uyumluluk (1.3)~~ ✅ | Hekim kullanımı |
+| 16 | Rate limiting & güvenlik (7.2) | Prodüksiyon öncesi zorunlu |
 
 ### Uzun Vadeli (Ay 3+)
 | # | Geliştirme | Neden |

@@ -275,4 +275,182 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
   }
 });
 
+// GET /api/reports/patient-sources
+router.get('/reports/patient-sources', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+  const clinicId = req.user!.clinicId;
+  const { dateFrom, dateTo } = req.query;
+
+  const toDate = dateTo ? new Date(String(dateTo)) : new Date();
+  toDate.setHours(23, 59, 59, 999);
+  const fromDate = dateFrom ? new Date(String(dateFrom)) : new Date(new Date().setFullYear(new Date().getFullYear() - 1));
+
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    return res.status(400).json({ error: 'Invalid date format' });
+  }
+
+  try {
+    const dateFilter = { gte: fromDate, lte: toDate };
+
+    const [bySourceCount, allPatientsCount, paymentsWithSource] = await Promise.all([
+      // Patient counts per source (by registration date)
+      prisma.patient.groupBy({
+        by: ['source'],
+        where: { clinicId, createdAt: dateFilter },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+      }),
+      // Total patients in period
+      prisma.patient.count({ where: { clinicId, createdAt: dateFilter } }),
+      // Revenue grouped by patient source
+      prisma.payment.findMany({
+        where: {
+          clinicId,
+          paymentStatus: { in: ['paid', 'partial'] },
+          paidAt: dateFilter,
+        },
+        select: {
+          amount: true,
+          patient: { select: { source: true } },
+        },
+      }),
+    ]);
+
+    // Aggregate revenue by source
+    const revenueBySource: Record<string, number> = {};
+    for (const p of paymentsWithSource) {
+      const src = p.patient?.source || 'other';
+      revenueBySource[src] = (revenueBySource[src] || 0) + p.amount;
+    }
+
+    // Merge counts + revenue
+    const allSources = new Set([
+      ...bySourceCount.map((s) => s.source || 'other'),
+      ...Object.keys(revenueBySource),
+    ]);
+
+    const sources = Array.from(allSources)
+      .map((source) => {
+        const entry = bySourceCount.find((s) => (s.source || 'other') === source);
+        const count = entry?._count.id || 0;
+        const revenue = revenueBySource[source] || 0;
+        return { source, count, revenue };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    res.json({ dateFrom: fromDate.toISOString(), dateTo: toDate.toISOString(), total: allPatientsCount, sources });
+  } catch (err) {
+    console.error('Patient sources report error:', err);
+    res.status(500).json({ error: 'Failed to generate patient sources report' });
+  }
+});
+
+// GET /api/reports/no-show-analysis
+router.get('/reports/no-show-analysis', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+  const clinicId = req.user!.clinicId;
+  const { dateFrom, dateTo } = req.query;
+
+  const toDate = dateTo ? new Date(String(dateTo)) : new Date();
+  toDate.setHours(23, 59, 59, 999);
+  const fromDate = dateFrom ? new Date(String(dateFrom)) : new Date(toDate);
+  if (!dateFrom) fromDate.setMonth(fromDate.getMonth() - 6);
+
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    return res.status(400).json({ error: 'Invalid date format' });
+  }
+
+  try {
+    // Monthly trend
+    const monthlyTrend = await prisma.$queryRaw<
+      { month: string; total: number; no_shows: number; cancellations: number }[]
+    >`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', "startTime"), 'YYYY-MM') AS month,
+        COUNT(*) FILTER (WHERE status != 'cancelled')::int   AS total,
+        COUNT(*) FILTER (WHERE status = 'no_show')::int      AS no_shows,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::int    AS cancellations
+      FROM "Appointment"
+      WHERE "clinicId" = ${clinicId}
+        AND "startTime" >= ${fromDate}
+        AND "startTime" <= ${toDate}
+      GROUP BY DATE_TRUNC('month', "startTime")
+      ORDER BY DATE_TRUNC('month', "startTime")
+    `;
+
+    // By doctor
+    const activeDoctors = await prisma.user.findMany({
+      where: { clinicId, role: 'doctor', isActive: true },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    const byDoctor = await Promise.all(
+      activeDoctors.map(async (doc) => {
+        const [total, noShows, cancellations] = await Promise.all([
+          prisma.appointment.count({
+            where: { clinicId, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: { not: 'cancelled' } },
+          }),
+          prisma.appointment.count({
+            where: { clinicId, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: 'no_show' },
+          }),
+          prisma.appointment.count({
+            where: { clinicId, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: 'cancelled' },
+          }),
+        ]);
+        return {
+          id: doc.id,
+          firstName: doc.firstName,
+          lastName: doc.lastName,
+          total,
+          noShows,
+          cancellations,
+          noShowRate: total > 0 ? Math.round((noShows / total) * 100) : 0,
+        };
+      })
+    );
+
+    // By day of week (0=Sunday … 6=Saturday)
+    const byDayOfWeek = await prisma.$queryRaw<
+      { day_of_week: number; total: number; no_shows: number }[]
+    >`
+      SELECT
+        EXTRACT(DOW FROM "startTime")::int  AS day_of_week,
+        COUNT(*) FILTER (WHERE status != 'cancelled')::int AS total,
+        COUNT(*) FILTER (WHERE status = 'no_show')::int    AS no_shows
+      FROM "Appointment"
+      WHERE "clinicId" = ${clinicId}
+        AND "startTime" >= ${fromDate}
+        AND "startTime" <= ${toDate}
+      GROUP BY EXTRACT(DOW FROM "startTime")
+      ORDER BY EXTRACT(DOW FROM "startTime")
+    `;
+
+    // By hour of day
+    const byHour = await prisma.$queryRaw<
+      { hour: number; total: number; no_shows: number }[]
+    >`
+      SELECT
+        EXTRACT(HOUR FROM "startTime")::int AS hour,
+        COUNT(*) FILTER (WHERE status != 'cancelled')::int AS total,
+        COUNT(*) FILTER (WHERE status = 'no_show')::int    AS no_shows
+      FROM "Appointment"
+      WHERE "clinicId" = ${clinicId}
+        AND "startTime" >= ${fromDate}
+        AND "startTime" <= ${toDate}
+      GROUP BY EXTRACT(HOUR FROM "startTime")
+      ORDER BY EXTRACT(HOUR FROM "startTime")
+    `;
+
+    res.json({
+      dateFrom: fromDate.toISOString(),
+      dateTo: toDate.toISOString(),
+      monthlyTrend,
+      byDoctor: byDoctor.sort((a, b) => b.noShowRate - a.noShowRate),
+      byDayOfWeek,
+      byHour,
+    });
+  } catch (err) {
+    console.error('No-show analysis error:', err);
+    res.status(500).json({ error: 'Failed to generate no-show analysis' });
+  }
+});
+
 export default router;

@@ -17,7 +17,10 @@ import {
   ChevronRight,
   Plus,
   History,
-  BarChart2
+  BarChart2,
+  Award,
+  Activity,
+  Star,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -38,6 +41,258 @@ import { dashboardService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatTimeInTimeZone } from '../utils/dateTime';
+
+const STAGE_LABELS: Record<string, { label: string; color: string }> = {
+  new:                       { label: 'Yeni',             color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
+  consultation_scheduled:    { label: 'Konsültasyon Plan.', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  consultation_done:         { label: 'Konsültasyon Yapıldı', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' },
+  quote_sent:                { label: 'Teklif Gönderildi', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
+  waiting_patient_decision:  { label: 'Hasta Kararı Bekl.', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+  accepted:                  { label: 'Kabul Edildi',     color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' },
+  in_progress:               { label: 'Devam Ediyor',     color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' },
+};
+
+// ─── Doctor Dashboard ─────────────────────────────────────────────────────────
+
+const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }> = ({ data, user, clinicTimeZone }) => {
+  const navigate = useNavigate();
+
+  const stats = data.stats;
+  const extras = data.doctorExtras || {};
+
+  const statCards = [
+    { label: 'Bugünkü Randevular',  value: stats.todayAppointments, icon: <Calendar size={22} />, color: 'bg-blue-500',   link: '/appointments' },
+    { label: 'Bu Hafta',            value: stats.weekAppointments,  icon: <Clock size={22} />,    color: 'bg-indigo-500', link: '/appointments' },
+    { label: 'Açık Tedaviler',      value: stats.openTreatments,    icon: <Briefcase size={22} />,color: 'bg-teal-500',   link: '/treatment-cases' },
+    { label: 'Bekleyen Görevler',   value: stats.pendingTasks,      icon: <CheckSquare size={22} />, color: 'bg-amber-500', link: '/tasks' },
+  ];
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Merhaba, Dr. {user?.firstName} 👋</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/appointments" className="btn-primary flex items-center gap-2">
+            <Plus size={16} />Randevu
+          </Link>
+          <Link to="/my-earnings" className="btn-secondary flex items-center gap-2">
+            <Award size={16} />Kazançlarım
+          </Link>
+        </div>
+      </div>
+
+      {/* Overdue task alert */}
+      {stats.overdueTasks > 0 && (
+        <Link to="/tasks?overdue=true" className="flex items-center gap-3 p-4 rounded-xl bg-red-50 border border-red-100 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 hover:shadow-sm transition-all">
+          <AlertCircle size={20} />
+          <span className="text-sm font-semibold">{stats.overdueTasks} gecikmiş göreviniz var — hemen inceleyin</span>
+          <ChevronRight size={16} className="ml-auto" />
+        </Link>
+      )}
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((card) => (
+          <Link key={card.label} to={card.link} className="card p-5 hover:shadow-md transition-all group">
+            <div className={`w-10 h-10 rounded-xl ${card.color} text-white flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}>
+              {card.icon}
+            </div>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{card.value}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{card.label}</p>
+          </Link>
+        ))}
+      </div>
+
+      {/* Earnings card */}
+      {extras.pendingEarnings > 0 && (
+        <Link to="/my-earnings" className="flex items-center gap-4 p-5 card hover:shadow-md transition-all">
+          <div className="w-12 h-12 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+            <Award size={22} />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Tahakkuk Eden Kazanç (Bekleyen + Onaylı)</p>
+            <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+              {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(extras.pendingEarnings)}
+            </p>
+          </div>
+          <ChevronRight size={20} className="text-gray-400" />
+        </Link>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Today's Appointments */}
+        <div className="lg:col-span-2 card overflow-hidden">
+          <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Calendar size={18} className="text-blue-500" />Bugünkü Program
+            </h2>
+            <Link to="/appointments" className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">Tümü</Link>
+          </div>
+          {data.agenda?.length > 0 ? (
+            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              {data.agenda.map((appt: any) => (
+                <div
+                  key={appt.id}
+                  onClick={() => navigate(`/appointments/${appt.id}`)}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
+                >
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: appt.appointmentType?.color || '#6366f1' }} />
+                  <div className="w-14 text-xs font-bold text-gray-500 dark:text-gray-400 shrink-0">
+                    {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+                      {appt.patient.firstName} {appt.patient.lastName}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{appt.appointmentType?.name}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                    appt.status === 'completed'  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                    appt.status === 'confirmed'  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                    appt.status === 'in_progress'? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
+                    appt.status === 'no_show'    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  }`}>
+                    {appt.status === 'completed' ? 'Tamamlandı' : appt.status === 'confirmed' ? 'Onaylı' : appt.status === 'in_progress' ? 'Devam' : appt.status === 'no_show' ? 'Gelmedi' : 'Planlandı'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-gray-400 dark:text-gray-600">
+              <Calendar size={40} className="mx-auto mb-2 opacity-20" />
+              <p className="text-sm">Bugün randevu yok</p>
+            </div>
+          )}
+        </div>
+
+        {/* Activity Feed */}
+        <div className="card flex flex-col overflow-hidden">
+          <div className="p-5 border-b border-gray-100 dark:border-gray-800">
+            <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Activity size={18} className="text-purple-500" />Son Aktiviteler
+            </h2>
+          </div>
+          <div className="flex-1 overflow-y-auto max-h-72 p-4 space-y-4">
+            {data.activities?.length > 0 ? data.activities.slice(0, 8).map((log: any, idx: number) => (
+              <div key={idx} className="flex gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-2 shrink-0" />
+                <div>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{log.description}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {new Date(log.createdAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}
+                  </p>
+                </div>
+              </div>
+            )) : (
+              <p className="text-sm text-gray-400 text-center pt-8">Aktivite yok</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Upcoming 7 days */}
+        <div className="card overflow-hidden">
+          <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <TrendingUp size={18} className="text-teal-500" />Önümüzdeki 7 Gün
+            </h2>
+            <span className="text-xs text-gray-400">{extras.upcomingWeek?.length || 0} randevu</span>
+          </div>
+          {extras.upcomingWeek?.length > 0 ? (
+            <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-64 overflow-y-auto">
+              {extras.upcomingWeek.map((appt: any) => (
+                <div key={appt.id} onClick={() => navigate(`/appointments/${appt.id}`)}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer text-sm">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: appt.appointmentType?.color || '#6366f1' }} />
+                  <span className="text-gray-500 dark:text-gray-400 w-24 shrink-0 text-xs">
+                    {new Date(appt.startTime).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </span>
+                  <span className="font-medium text-gray-900 dark:text-white truncate">
+                    {appt.patient.firstName} {appt.patient.lastName}
+                  </span>
+                  <span className="text-gray-400 dark:text-gray-500 text-xs truncate ml-auto">{appt.appointmentType?.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-gray-400 dark:text-gray-600 text-sm">
+              Önümüzdeki 7 günde randevu yok
+            </div>
+          )}
+        </div>
+
+        {/* Treatment Pipeline + Recent Patients */}
+        <div className="space-y-4">
+          {/* Pipeline */}
+          {extras.treatmentPipeline?.length > 0 && (
+            <div className="card p-5">
+              <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
+                <Briefcase size={18} className="text-indigo-500" />Tedavi Pipeline
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {extras.treatmentPipeline.map((p: any) => {
+                  const meta = STAGE_LABELS[p.stage] || { label: p.stage, color: 'bg-gray-100 text-gray-700' };
+                  return (
+                    <Link key={p.stage} to={`/treatment-cases?stage=${p.stage}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${meta.color} hover:opacity-80 transition-opacity`}>
+                      {meta.label}
+                      <span className="ml-1 bg-white/60 dark:bg-black/20 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[11px]">
+                        {p.count}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Patients */}
+          <div className="card overflow-hidden">
+            <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Star size={18} className="text-amber-500" />Son Hastalar
+              </h2>
+              <Link to="/patients" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">Tümü</Link>
+            </div>
+            {extras.recentPatients?.length > 0 ? (
+              <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                {extras.recentPatients.map((p: any) => (
+                  <Link key={p.id} to={`/patients/${p.id}`}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300 shrink-0">
+                      {p.firstName[0]}{p.lastName[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                        {p.firstName} {p.lastName}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">{p.lastService}</p>
+                    </div>
+                    <p className="text-xs text-gray-400 shrink-0">
+                      {new Date(p.lastVisit).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center text-gray-400 text-sm">Henüz hasta kaydı yok</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation(['dashboard', 'common', 'appointments', 'patients', 'tasks', 'messages']);
@@ -70,6 +325,11 @@ const Dashboard: React.FC = () => {
         <Loader2 className="animate-spin text-primary-600" size={48} />
       </div>
     );
+  }
+
+  // ── Hekim kendi özel dashboard'unu görür ──────────────────────────
+  if (user?.role === 'doctor') {
+    return <DoctorDashboard data={data} user={user} clinicTimeZone={clinicTimeZone} />;
   }
 
   const statCards = [
