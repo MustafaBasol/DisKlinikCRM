@@ -1,4 +1,4 @@
-import express, { Response } from 'express';
+import express, { Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -40,16 +40,45 @@ const upload = multer({
 });
 
 // ── POST /api/patients/:patientId/attachments ─────────────────────────
+// Multer error handler — catches fileFilter rejection & size limit errors
+function handleUpload(req: AuthRequest, res: Response, next: NextFunction) {
+  upload.single('file')(req as any, res as any, (err: any) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'Dosya 10 MB sınırını aşıyor' });
+      }
+      console.error('[attachments] multer error:', err.code, err.message);
+      return res.status(400).json({ error: `Yükleme hatası: ${err.message}` });
+    }
+    // fileFilter rejected the MIME type
+    if (err?.message === 'File type not allowed') {
+      return res.status(400).json({
+        error: 'Desteklenmeyen dosya türü',
+        detail: 'Yalnızca JPEG, PNG, GIF, WebP, PDF ve Word dosyaları kabul edilir',
+      });
+    }
+    console.error('[attachments] upload middleware error:', err?.message ?? err);
+    return res.status(500).json({ error: 'Yükleme başlatılamadı', detail: err?.message });
+  });
+}
+
 router.post(
   '/patients/:patientId/attachments',
   authorize(['admin', 'receptionist', 'doctor']),
-  upload.single('file'),
+  handleUpload,
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const clinicId = req.user!.clinicId;
 
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      // req.file is undefined only when Content-Type boundary is missing
+      // (Axios/fetch must set it automatically — do NOT set Content-Type manually)
+      console.error('[attachments] req.file is undefined — Content-Type boundary likely missing');
+      return res.status(400).json({
+        error: 'Dosya alınamadı',
+        detail: 'İstek Content-Type başlığında boundary eksik olabilir',
+      });
     }
 
     try {
