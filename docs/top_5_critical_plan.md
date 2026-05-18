@@ -4,7 +4,7 @@ Bu belge, CRM sistemini bir sonraki seviyeye taşıyacak en acil ve kritik 5 öz
 
 ---
 
-## 1. Backend Modülerleştirme (Kod Mimarisi İyileştirmesi)
+## 1. Backend Modülerleştirme (Kod Mimarisi İyileştirmesi) ✅ TAMAMLANDI
 
 **Sorun:** `server/src/index.ts` dosyası şu an 172KB büyüklüğünde ve tüm endpoint'leri, Zod şemalarını, yetkilendirme mantığını tek bir dosyada barındırıyor. Bu durum, yeni özellik eklemeyi ve hata ayıklamayı zorlaştırıyor.
 
@@ -20,6 +20,40 @@ Bu belge, CRM sistemini bir sonraki seviyeye taşıyacak en acil ve kritik 5 öz
 4. **Test ve Doğrulama:**
    - TypeScript derleme kontrolü (`npx tsc --noEmit`) yapılacak.
    - Frontend üzerinden tüm CRUD operasyonları test edilerek kopukluk olup olmadığı doğrulanacak.
+
+**Uygulama Sonucu (18 Mayıs 2026):**
+
+Monolitik `index.ts` (4844 satır) aşağıdaki modüler yapıya dönüştürüldü:
+
+| Dosya | İçerik |
+|---|---|
+| `server/src/index.ts` | 4844 → **49 satır**: Express başlatma, middleware, route bağlama |
+| `server/src/db.ts` | Prisma singleton |
+| `server/src/schemas/index.ts` | Tüm Zod şemaları |
+| `server/src/utils/helpers.ts` | Paylaşılan yardımcı fonksiyonlar (zaman, şifre, müsaitlik) |
+| `server/src/routes/auth.ts` | `POST /api/auth/login`, `GET /api/auth/me` |
+| `server/src/routes/users.ts` | Kullanıcı CRUD, hekim müsaitliği |
+| `server/src/routes/dashboard.ts` | Dashboard istatistikleri |
+| `server/src/routes/patients.ts` | Hasta CRUD (soft-delete) |
+| `server/src/routes/services.ts` | Randevu tipleri ve hizmetler |
+| `server/src/routes/appointmentRequests.ts` | Randevu talepleri |
+| `server/src/routes/appointments.ts` | Randevu CRUD, durum geçişleri |
+| `server/src/routes/tasks.ts` | Görev CRUD |
+| `server/src/routes/treatmentCases.ts` | Tedavi süreci CRUD |
+| `server/src/routes/insuranceProvisions.ts` | Sigorta provizyon CRUD |
+| `server/src/routes/payments.ts` | Ödeme CRUD |
+| `server/src/routes/messages.ts` | Mesaj şablonları ve hazırlama |
+| `server/src/routes/whatsapp.ts` | WhatsApp public endpoint'leri ve konversasyon state machine |
+
+`codex/whatsapp-approval-flow` branch merge'ünden gelen değişiklikler de `routes/whatsapp.ts`'e uygulandı:
+- **Webhook güvenliği:** `optionalWhatsappWebhookSecret` → `authorizeWhatsappWebhook` (zorunlu kimlik doğrulama)
+- **Randevu akışı:** Direkt randevu oluşturma → Personel onayına giden `pending` talep akışı
+- **Telefon eşleştirme:** Fuzzy eşleştirme (`getPhoneVariants`/`phonesMatch`) — Türkçe hat formatları (90xxx/0xxx/10 hane) destekleniyor
+- **Duplicate koruması:** `hasProcessedWhatsAppProviderMessage` + `markWhatsAppProviderMessageProcessed`
+- **Çoklu klinik:** `getClinicForWhatsAppInstance` ile instance adına göre klinik çözümleme
+- **Activity log:** İptal ve onay isteği olayları loglanıyor
+
+`npx tsc --noEmit` → **0 hata**
 
 ---
 
