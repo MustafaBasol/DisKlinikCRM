@@ -234,7 +234,20 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
                   <td className="py-3 pr-3 text-gray-600 dark:text-gray-400">
                     {e.service?.name ?? (e.treatmentCase?.title ?? '—')}
                   </td>
-                  <td className="py-3 pr-3 text-right">{fmt(e.collectedAmount)}</td>
+                  <td className="py-3 pr-3 text-right">
+                    <div className="flex flex-col items-end">
+                      <span>{fmt(e.collectedAmount)}</span>
+                      {e.grossAmount > 0 && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5 ${
+                          e.collectedAmount >= e.grossAmount ? 'bg-green-100 text-green-700' :
+                          e.collectedAmount > 0 ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-600'
+                        }`}>
+                          %{Math.round((e.collectedAmount / e.grossAmount) * 100)} tahsil
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-3 pr-3 text-right">{fmt(e.earningAmount)}</td>
                   <td className="py-3 pr-3 text-right font-semibold text-gray-900 dark:text-white">
                     {e.adminAdjustmentAmount != null ? fmt(e.adminAdjustmentAmount) : '—'}
@@ -541,6 +554,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
   const [filterPractitioner, setFilterPractitioner] = useState('');
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [showServiceRuleForm, setShowServiceRuleForm] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [ruleForm, setRuleForm] = useState({
     practitionerId: '', compensationType: 'percentage', fixedMonthlyAmount: '',
     defaultPercentage: '', calculationBase: 'collected', isActive: true,
@@ -577,8 +591,13 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       if (ruleForm.defaultPercentage) data.defaultPercentage = parseFloat(ruleForm.defaultPercentage);
       if (ruleForm.startDate) data.startDate = ruleForm.startDate;
       if (ruleForm.endDate) data.endDate = ruleForm.endDate;
-      await compensationRuleService.create(data);
+      if (editingRuleId) {
+        await compensationRuleService.update(editingRuleId, data);
+      } else {
+        await compensationRuleService.create(data);
+      }
       setShowRuleForm(false);
+      setEditingRuleId(null);
       setRuleForm({ practitionerId: '', compensationType: 'percentage', fixedMonthlyAmount: '', defaultPercentage: '', calculationBase: 'collected', isActive: true, startDate: '', endDate: '' });
       load();
     } catch { setError('Kural kaydedilemedi.'); }
@@ -653,11 +672,31 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
                       </span>
                     </td>
                     <td className="py-2 pr-4 text-center">
-                      <button
-                        onClick={() => { if (window.confirm('Bu kuralı silmek istediğinize emin misiniz?')) compensationRuleService.remove(r.id).then(load); }}
-                        className="text-red-500 hover:text-red-700"
-                        title="Sil"
-                      ><Trash2 size={14} /></button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => {
+                            setEditingRuleId(r.id);
+                            setRuleForm({
+                              practitionerId: r.practitionerId,
+                              compensationType: r.compensationType,
+                              fixedMonthlyAmount: r.fixedMonthlyAmount?.toString() ?? '',
+                              defaultPercentage: r.defaultPercentage?.toString() ?? '',
+                              calculationBase: r.calculationBase,
+                              isActive: r.isActive,
+                              startDate: r.startDate ? r.startDate.substring(0, 10) : '',
+                              endDate: r.endDate ? r.endDate.substring(0, 10) : '',
+                            });
+                            setShowRuleForm(true);
+                          }}
+                          className="text-blue-500 hover:text-blue-700"
+                          title="Düzenle"
+                        ><Pencil size={14} /></button>
+                        <button
+                          onClick={() => { if (window.confirm('Bu kuralı silmek istediğinize emin misiniz?')) compensationRuleService.remove(r.id).then(load); }}
+                          className="text-red-500 hover:text-red-700"
+                          title="Sil"
+                        ><Trash2 size={14} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -723,7 +762,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       {showRuleForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Komisyon Kuralı Ekle</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{editingRuleId ? 'Komisyon Kuralı Düzenle' : 'Komisyon Kuralı Ekle'}</h3>
             <div className="space-y-3">
               <div>
                 <label className="label">Hekim <span className="text-red-500">*</span></label>
@@ -775,7 +814,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
               </div>
             </div>
             <div className="flex gap-3 mt-6 justify-end">
-              <button onClick={() => setShowRuleForm(false)} className="btn-secondary">İptal</button>
+              <button onClick={() => { setShowRuleForm(false); setEditingRuleId(null); setRuleForm({ practitionerId: '', compensationType: 'percentage', fixedMonthlyAmount: '', defaultPercentage: '', calculationBase: 'collected', isActive: true, startDate: '', endDate: '' }); }} className="btn-secondary">İptal</button>
               <button onClick={handleSaveRule} disabled={!ruleForm.practitionerId} className="btn-primary disabled:opacity-50">Kaydet</button>
             </div>
           </div>

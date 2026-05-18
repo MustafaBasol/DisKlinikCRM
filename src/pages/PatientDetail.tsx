@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { patientService, taskService, treatmentCaseService, paymentService, insuranceProvisionService, attachmentService } from '../services/api';
+import { patientService, taskService, treatmentCaseService, paymentService, paymentPlanService, insuranceProvisionService, attachmentService } from '../services/api';
 import DentalChart from '../components/DentalChart';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
@@ -60,6 +60,7 @@ const PatientDetail: React.FC = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [paymentPlans, setPaymentPlans] = useState<any[]>([]);
   const [insuranceProvisions, setInsuranceProvisions] = useState<any[]>([]);
   const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || 'TRY';
 
@@ -78,6 +79,13 @@ const PatientDetail: React.FC = () => {
 
       const paymentsRes = await paymentService.getAll({ patientId: id });
       setPayments(paymentsRes.data);
+
+      try {
+        const plansRes = await paymentPlanService.getAll({ patientId: id });
+        setPaymentPlans(plansRes.data || []);
+      } catch {
+        setPaymentPlans([]);
+      }
 
       const insuranceRes = await insuranceProvisionService.getAll({ patient_id: id });
       setInsuranceProvisions(insuranceRes.data);
@@ -450,26 +458,43 @@ const PatientDetail: React.FC = () => {
 
           {activeTab === 'payments' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="card p-4 bg-green-50 border-green-100">
-                  <p className="text-[10px] font-bold text-green-600 uppercase mb-1">{t('payments:summary.totalPaid')}</p>
-                  <p className="text-xl font-bold text-green-700">
-                    {payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} {paymentCurrency}
-                  </p>
-                </div>
-                <div className="card p-4 bg-amber-50 border-amber-100">
-                  <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">{t('payments:summary.totalPending')}</p>
-                  <p className="text-xl font-bold text-amber-700">
-                    {payments.filter(p => p.paymentStatus === 'pending').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} {paymentCurrency}
-                  </p>
-                </div>
-                <div className="card p-4 bg-red-50 border-red-100">
-                  <p className="text-[10px] font-bold text-red-600 uppercase mb-1">{t('payments:summary.totalRefunded')}</p>
-                  <p className="text-xl font-bold text-red-700">
-                    {payments.filter(p => p.paymentStatus === 'refunded').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} {paymentCurrency}
-                  </p>
-                </div>
-              </div>
+              {/* Summary cards */}
+              {(() => {
+                const paidTotal = payments.filter(p => p.paymentStatus === 'paid').reduce((a, p) => a + p.amount, 0);
+                const pendingPayments = payments.filter(p => p.paymentStatus === 'pending').reduce((a, p) => a + p.amount, 0);
+                const unpaidInstallments = paymentPlans
+                  .flatMap((plan: any) => plan.installments || [])
+                  .filter((inst: any) => inst.status !== 'paid' && inst.status !== 'cancelled')
+                  .reduce((a: number, inst: any) => a + inst.amount, 0);
+                const pendingTreatments = treatmentCases
+                  .filter((tc: any) => tc.stage !== 'cancelled')
+                  .reduce((a: number, tc: any) => {
+                    const amount = tc.acceptedAmount ?? tc.estimatedAmount ?? 0;
+                    const paid = payments.filter(p => p.treatmentCaseId === tc.id && p.paymentStatus === 'paid').reduce((s: number, p: any) => s + p.amount, 0);
+                    return a + Math.max(0, amount - paid);
+                  }, 0);
+                const totalPending = pendingPayments + unpaidInstallments + pendingTreatments;
+                const refundedTotal = payments.filter(p => p.paymentStatus === 'refunded').reduce((a, p) => a + p.amount, 0);
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="card p-4 bg-green-50 border-green-100">
+                      <p className="text-[10px] font-bold text-green-600 uppercase mb-1">{t('payments:summary.totalPaid')}</p>
+                      <p className="text-xl font-bold text-green-700">{paidTotal.toLocaleString()} {paymentCurrency}</p>
+                    </div>
+                    <div className="card p-4 bg-amber-50 border-amber-100">
+                      <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">{t('payments:summary.totalPending')}</p>
+                      <p className="text-xl font-bold text-amber-700">{totalPending.toLocaleString()} {paymentCurrency}</p>
+                      {unpaidInstallments > 0 && (
+                        <p className="text-[10px] text-amber-500 mt-1">• {unpaidInstallments.toLocaleString()} taksit + {pendingPayments.toLocaleString()} ödeme bekleyen</p>
+                      )}
+                    </div>
+                    <div className="card p-4 bg-red-50 border-red-100">
+                      <p className="text-[10px] font-bold text-red-600 uppercase mb-1">{t('payments:summary.totalRefunded')}</p>
+                      <p className="text-xl font-bold text-red-700">{refundedTotal.toLocaleString()} {paymentCurrency}</p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg">{t('payments:title')}</h3>
@@ -517,6 +542,72 @@ const PatientDetail: React.FC = () => {
                   </table>
                 </div>
               </div>
+
+              {/* Payment Plans / Installment Schedule */}
+              {paymentPlans.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-bold text-lg">Taksit Planları &amp; Ödeme Takvimi</h3>
+                  {paymentPlans.map((plan: any) => {
+                    const unpaid = (plan.installments || []).filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled');
+                    const paidAmount = (plan.installments || []).filter((i: any) => i.status === 'paid').reduce((a: number, i: any) => a + i.amount, 0);
+                    const progress = plan.totalAmount > 0 ? Math.round((paidAmount / plan.totalAmount) * 100) : 0;
+                    return (
+                      <div key={plan.id} className="card p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <p className="font-semibold text-gray-900 dark:text-white">{plan.description || 'Taksit Planı'}</p>
+                            <p className="text-xs text-gray-500">{plan.installments?.length || 0} taksit • Toplam: {plan.totalAmount?.toLocaleString()} {plan.currency || paymentCurrency}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-green-600 font-bold">Ödenen: {paidAmount.toLocaleString()}</p>
+                            <p className="text-xs text-amber-600 font-bold">Kalan: {(plan.totalAmount - paidAmount).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="w-full bg-gray-100 rounded-full h-1.5 mb-3">
+                          <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                        </div>
+                        {unpaid.length > 0 && (
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-gray-400 text-xs">
+                                <th className="text-left py-1 pr-3">Taksit No</th>
+                                <th className="text-left py-1 pr-3">Vade Tarihi</th>
+                                <th className="text-right py-1 pr-3">Tutar</th>
+                                <th className="text-right py-1">Durum</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(plan.installments || []).map((inst: any) => {
+                                const isOverdue = inst.status !== 'paid' && inst.status !== 'cancelled' && new Date(inst.dueDate) < new Date();
+                                return (
+                                  <tr key={inst.id} className="border-t border-gray-50">
+                                    <td className="py-1.5 pr-3 text-gray-500 text-xs">{inst.installmentNo}. Taksit</td>
+                                    <td className="py-1.5 pr-3 text-gray-700">{new Date(inst.dueDate).toLocaleDateString('tr-TR')}</td>
+                                    <td className="py-1.5 pr-3 text-right font-medium">{inst.amount.toLocaleString()} {plan.currency || paymentCurrency}</td>
+                                    <td className="py-1.5 text-right">
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                        inst.status === 'paid' ? 'bg-green-50 text-green-700' :
+                                        inst.status === 'cancelled' ? 'bg-gray-100 text-gray-500' :
+                                        isOverdue ? 'bg-red-50 text-red-700' :
+                                        'bg-amber-50 text-amber-700'
+                                      }`}>
+                                        {inst.status === 'paid' ? 'Ödendi' :
+                                         inst.status === 'cancelled' ? 'İptal' :
+                                         isOverdue ? 'Gecikmiş' : 'Bekliyor'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
           {activeTab === 'insurance' && (

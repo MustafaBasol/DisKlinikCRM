@@ -102,6 +102,11 @@ router.post('/treatment-cases', authorize(['admin', 'receptionist', 'doctor']), 
       action: 'created', description: `${patient.firstName} ${patient.lastName} için "${tc.title}" tedavi vakası oluşturuldu`,
     });
 
+    // Auto-generate practitioner earning when TC is created with a known cost (billed base)
+    if (tc.practitionerId && (tc.estimatedAmount || tc.acceptedAmount)) {
+      generateEarningFromTreatmentCase(tc.id, clinicId, req.user!.id).catch(console.error);
+    }
+
     res.json(tc);
   } catch {
     res.status(500).json({ error: 'Failed to create treatment case' });
@@ -136,8 +141,9 @@ router.put('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist']
       action: 'updated', description: `"${updated.title}" tedavi vakası güncellendi`,
     });
 
-    // Auto-generate practitioner earning when treatment case is completed (billed base)
-    if (validation.data.stage === 'completed' && existing.stage !== 'completed') {
+    // Auto-generate practitioner earning when treatment case has a known cost (billed base)
+    // Covers: initial cost set, cost updated, and stage=completed
+    if (updated.practitionerId && (updated.estimatedAmount || updated.acceptedAmount)) {
       generateEarningFromTreatmentCase(id, clinicId, req.user!.id).catch(console.error);
     }
 

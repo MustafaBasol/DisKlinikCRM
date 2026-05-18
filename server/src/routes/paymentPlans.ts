@@ -25,7 +25,7 @@ function generateInstallments(totalAmount: number, count: number, firstDueDate: 
 }
 
 // GET /api/payment-plans
-router.get('/payment-plans', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/payment-plans', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { patientId, status } = req.query;
 

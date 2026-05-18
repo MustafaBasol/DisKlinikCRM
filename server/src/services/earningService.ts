@@ -118,6 +118,21 @@ export async function generateEarningFromPayment(
     },
   });
 
+  // Also update the billed-base earning's collectedAmount for this treatment case (if any)
+  const billedEarning = await prisma.practitionerEarning.findFirst({
+    where: { treatmentCaseId: treatmentCase.id, clinicId, calculationBase: 'billed' },
+  });
+  if (billedEarning) {
+    const paymentsAgg = await prisma.payment.aggregate({
+      where: { treatmentCaseId: treatmentCase.id, clinicId, paymentStatus: 'paid', deletedAt: null },
+      _sum: { amount: true },
+    });
+    await prisma.practitionerEarning.update({
+      where: { id: billedEarning.id },
+      data: { collectedAmount: paymentsAgg._sum.amount ?? 0 },
+    });
+  }
+
   await logActivity({
     clinicId,
     userId: actingUserId,
@@ -131,9 +146,8 @@ export async function generateEarningFromPayment(
 }
 
 /**
- * Called after a TreatmentCase is moved to stage 'completed'.
- * Generates a PractitionerEarning for the practitioner
- * if their calculationBase = 'billed'.
+ * Called after a TreatmentCase has a known cost (create, update, or completed).
+ * Generates or updates a PractitionerEarning for billed-base practitioners.
  */
 export async function generateEarningFromTreatmentCase(
   treatmentCaseId: string,
@@ -156,20 +170,35 @@ export async function generateEarningFromTreatmentCase(
   const calculationBase: string = dr.calculationBase ?? 'collected';
   if (calculationBase !== 'billed') return;
 
-  // Idempotency: don't double-generate for the same treatment case with billed base
-  const exists = await prisma.practitionerEarning.findFirst({
-    where: { treatmentCaseId, clinicId, calculationBase: 'billed' },
-  });
-  if (exists) return;
-
   const grossAmount = tc.acceptedAmount ?? tc.estimatedAmount ?? 0;
   if (grossAmount <= 0) return;
 
-  const now = new Date();
   const { earningAmount, percentageApplied, fixedAmountApplied } = calcEarning(grossAmount, ruleResult);
-
   if (earningAmount <= 0 && !fixedAmountApplied) return;
 
+  // Count collected payments for this treatment case
+  const paymentsAgg = await prisma.payment.aggregate({
+    where: { treatmentCaseId, clinicId, paymentStatus: 'paid', deletedAt: null },
+    _sum: { amount: true },
+  });
+  const collectedAmount = paymentsAgg._sum.amount ?? 0;
+
+  const existing = await prisma.practitionerEarning.findFirst({
+    where: { treatmentCaseId, clinicId, calculationBase: 'billed' },
+  });
+
+  if (existing) {
+    // Update if gross amount or collected amount changed
+    if (existing.grossAmount !== grossAmount || existing.collectedAmount !== collectedAmount || existing.earningAmount !== earningAmount) {
+      await prisma.practitionerEarning.update({
+        where: { id: existing.id },
+        data: { grossAmount, earningAmount, percentageApplied, fixedAmountApplied, collectedAmount },
+      });
+    }
+    return;
+  }
+
+  const now = new Date();
   const earning = await prisma.practitionerEarning.create({
     data: {
       clinicId,
@@ -178,7 +207,7 @@ export async function generateEarningFromTreatmentCase(
       treatmentCaseId,
       serviceId,
       grossAmount,
-      collectedAmount: 0,
+      collectedAmount,
       earningAmount,
       calculationBase: 'billed',
       percentageApplied,
@@ -195,7 +224,7 @@ export async function generateEarningFromTreatmentCase(
     entityType: 'practitioner_earning',
     entityId: earning.id,
     action: 'generated',
-    description: `Earning of ${earningAmount.toFixed(2)} generated for practitioner from treatment case completion`,
+    description: `Earning of ${earningAmount.toFixed(2)} generated for practitioner from treatment case cost`,
     patientId: tc.patientId,
     treatmentCaseId,
   });
