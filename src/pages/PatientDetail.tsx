@@ -17,11 +17,16 @@ import {
   ClipboardList,
   MessageSquare,
   Briefcase,
-  ShieldCheck
+  ShieldCheck,
+  Paperclip,
+  Download,
+  Trash2,
+  FileText,
+  Image
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { patientService, taskService, treatmentCaseService, paymentService, insuranceProvisionService } from '../services/api';
+import { patientService, taskService, treatmentCaseService, paymentService, insuranceProvisionService, attachmentService } from '../services/api';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
@@ -44,7 +49,11 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'whatsapp' | 'activity'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'whatsapp' | 'activity' | 'files'>('overview');
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [whatsappSearch, setWhatsappSearch] = useState('');
   const [whatsappDirection, setWhatsappDirection] = useState<'all' | 'incoming' | 'outgoing'>('all');
   const [tasks, setTasks] = useState<any[]>([]);
@@ -71,6 +80,9 @@ const PatientDetail: React.FC = () => {
 
       const insuranceRes = await insuranceProvisionService.getAll({ patient_id: id });
       setInsuranceProvisions(insuranceRes.data);
+
+      const attachRes = await attachmentService.getAll(id);
+      setAttachments(attachRes.data);
     } catch (error) {
       console.error('Failed to fetch patient:', error);
       navigate('/patients');
@@ -168,13 +180,13 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="flex gap-6 border-b border-gray-200">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'whatsapp', 'activity'] as const).map(tab => (
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'whatsapp', 'files', 'activity'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : tab === 'files' ? t('patients:detail.filesTab', { defaultValue: 'Dosyalar' }) : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -547,6 +559,94 @@ const PatientDetail: React.FC = () => {
             </div>
           )}
         {/* Activity Tab */}
+        {activeTab === 'files' && (
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold flex items-center gap-2"><Paperclip size={18} /> Dosyalar</h3>
+              {['admin', 'receptionist', 'doctor'].includes(user?.role || '') && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !id) return;
+                      setUploadingFile(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        await attachmentService.upload(id, fd);
+                        const res = await attachmentService.getAll(id);
+                        setAttachments(res.data);
+                      } catch {
+                        alert('Dosya yüklenemedi');
+                      } finally {
+                        setUploadingFile(false);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                    className="btn-primary flex items-center gap-2 text-sm"
+                  >
+                    {uploadingFile ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    {uploadingFile ? 'Yükleniyor...' : 'Dosya Ekle'}
+                  </button>
+                </>
+              )}
+            </div>
+            {attachmentsLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary-500" /></div>
+            ) : attachments.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <Paperclip size={36} className="mx-auto mb-2 opacity-30" />
+                <p>Henüz dosya eklenmemiş</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {attachments.map((att: any) => (
+                  <div key={att.id} className="flex items-center gap-4 py-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                      {att.mimeType.startsWith('image/') ? <Image size={20} /> : <FileText size={20} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{att.originalName}</p>
+                      <p className="text-xs text-gray-400">
+                        {(att.fileSize / 1024).toFixed(1)} KB • {new Date(att.createdAt).toLocaleDateString('tr-TR')} • {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
+                      </p>
+                    </div>
+                    <a
+                      href={attachmentService.getDownloadUrl(id!, att.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
+                      title="İndir"
+                    >
+                      <Download size={16} />
+                    </a>
+                    {['admin', 'receptionist'].includes(user?.role || '') && (
+                      <button
+                        onClick={async () => {
+                          if (!id || !confirm('Bu dosyayı silmek istediğinizden emin misiniz?')) return;
+                          await attachmentService.delete(id, att.id);
+                          setAttachments(prev => prev.filter(a => a.id !== att.id));
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        title="Sil"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {activeTab === 'activity' && (
           <div className="card p-6">
             <h3 className="font-bold mb-6">{t('patients:detail.activityTimeline')}</h3>

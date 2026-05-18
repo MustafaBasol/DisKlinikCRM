@@ -16,9 +16,24 @@ import {
   Briefcase,
   ChevronRight,
   Plus,
-  History
+  History,
+  BarChart2
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
 import { dashboardService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -294,6 +309,91 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Grafikler ───────────────────────────────────────── */}
+      {data?.charts && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Haftalık randevu trendi */}
+          <div className="card p-6 lg:col-span-2">
+            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+              <BarChart2 size={18} className="text-primary-600" />
+              Son 7 Gün — Randevu Trendi
+            </h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={data.charts.dailyTrend} barSize={28}>
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
+                  cursor={{ fill: '#f3f4f6' }}
+                />
+                <Bar dataKey="count" name="Randevu" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Hizmet bazlı dağılım */}
+          <div className="card p-6">
+            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+              <TrendingUp size={18} className="text-primary-600" />
+              Bu Ay — Hizmet Dağılımı
+            </h2>
+            {data.charts.appointmentsByType.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={data.charts.appointmentsByType}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={3}
+                  >
+                    {data.charts.appointmentsByType.map((entry: any, index: number) => (
+                      <Cell key={index} fill={entry.color || `hsl(${index * 60},70%,55%)`} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
+                  />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">Veri yok</div>
+            )}
+          </div>
+
+          {/* Aylık gelir trendi */}
+          <div className="card p-6 lg:col-span-3">
+            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+              <DollarSign size={18} className="text-primary-600" />
+              Son 6 Ay — Gelir Trendi
+            </h2>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={data.charts.monthlyRevenueTrend}>
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={55} tickFormatter={(v) => v.toLocaleString()} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
+                  formatter={(v: any) => [v.toLocaleString(), 'Gelir']}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="revenue"
+                  name="Gelir"
+                  stroke="#10b981"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#10b981', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Operational Summary Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

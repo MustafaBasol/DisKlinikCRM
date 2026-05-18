@@ -143,6 +143,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       agenda,
       alerts,
       activities,
+      charts: await buildChartData(prisma, clinicId, today, tomorrow, firstDayOfMonth),
     });
   } catch (error) {
     console.error(error);
@@ -151,3 +152,73 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+
+async function buildChartData(prisma: any, clinicId: string, today: Date, tomorrow: Date, firstDayOfMonth: Date) {
+  // ── 1) Son 7 günlük günlük randevu sayısı ──────────────────────────
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
+  const weekAppts = await prisma.appointment.findMany({
+    where: { clinicId, startTime: { gte: sevenDaysAgo, lt: tomorrow }, status: { not: 'cancelled' } },
+    select: { startTime: true },
+  });
+
+  const dailyMap: Record<string, number> = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    dailyMap[d.toISOString().slice(0, 10)] = 0;
+  }
+  weekAppts.forEach((a: { startTime: Date }) => {
+    const key = new Date(a.startTime).toISOString().slice(0, 10);
+    if (dailyMap[key] !== undefined) dailyMap[key]++;
+  });
+  const dailyTrend = Object.entries(dailyMap).map(([date, count]) => ({
+    date: new Date(date).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric' }),
+    count,
+  }));
+
+  // ── 2) Bu ay hizmet bazlı randevu dağılımı ────────────────────────
+  const monthAppts = await prisma.appointment.findMany({
+    where: { clinicId, startTime: { gte: firstDayOfMonth }, status: { not: 'cancelled' } },
+    select: { appointmentType: { select: { name: true, color: true } } },
+  });
+
+  const typeMap: Record<string, { name: string; color: string; value: number }> = {};
+  monthAppts.forEach((a: { appointmentType: { name: string; color: string | null } }) => {
+    const key = a.appointmentType.name;
+    if (!typeMap[key]) typeMap[key] = { name: key, color: a.appointmentType.color || '#6366f1', value: 0 };
+    typeMap[key].value++;
+  });
+  const appointmentsByType = Object.values(typeMap).sort((a, b) => b.value - a.value).slice(0, 6);
+
+  // ── 3) Son 6 aylık gelir trendi ───────────────────────────────────
+  const sixMonthsAgo = new Date(today);
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+
+  const payments6m = await prisma.payment.findMany({
+    where: { clinicId, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: sixMonthsAgo } },
+    select: { paidAt: true, amount: true },
+  });
+
+  const revenueMap: Record<string, number> = {};
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(today);
+    d.setMonth(d.getMonth() - i);
+    revenueMap[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`] = 0;
+  }
+  payments6m.forEach((p: { paidAt: Date | null; amount: number }) => {
+    if (!p.paidAt) return;
+    const d = new Date(p.paidAt);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (revenueMap[key] !== undefined) revenueMap[key] += p.amount;
+  });
+  const monthlyRevenueTrend = Object.entries(revenueMap).map(([month, revenue]) => ({
+    month: new Date(month + '-01').toLocaleDateString('tr-TR', { month: 'short', year: '2-digit' }),
+    revenue,
+  }));
+
+  return { dailyTrend, appointmentsByType, monthlyRevenueTrend };
+}

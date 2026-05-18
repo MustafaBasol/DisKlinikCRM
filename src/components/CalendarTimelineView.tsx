@@ -26,10 +26,28 @@ interface CalendarTimelineViewProps {
   onRefresh: () => void;
 }
 
+const STATUS_BORDER_COLORS: Record<string, string> = {
+  scheduled:   '#f59e0b', // amber
+  confirmed:   '#10b981', // emerald
+  in_progress: '#3b82f6', // blue
+  completed:   '#6b7280', // gray
+  cancelled:   '#ef4444', // red
+  no_show:     '#f97316', // orange
+};
+
+const STATUS_DOT_CLASSES: Record<string, string> = {
+  scheduled:   'bg-amber-400',
+  confirmed:   'bg-emerald-400',
+  in_progress: 'bg-blue-400',
+  completed:   'bg-gray-400',
+  cancelled:   'bg-red-400',
+  no_show:     'bg-orange-400',
+};
+
 const STATUS_OPACITY: Record<string, string> = {
-  cancelled: 'opacity-40',
-  no_show: 'opacity-50',
-  completed: 'opacity-70',
+  cancelled: 'opacity-50',
+  no_show:   'opacity-60',
+  completed: 'opacity-75',
 };
 
 const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
@@ -49,7 +67,7 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
     start: appt.startTime,
     end: appt.endTime,
     backgroundColor: appt.appointmentType.color || '#6366f1',
-    borderColor: appt.appointmentType.color || '#6366f1',
+    borderColor: STATUS_BORDER_COLORS[appt.status] || '#6366f1',
     extendedProps: { appointment: appt },
     editable: canEdit && ['scheduled', 'confirmed'].includes(appt.status),
   }));
@@ -91,9 +109,13 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
   const renderEventContent = (info: EventContentArg) => {
     const appt: CalendarAppointment = info.event.extendedProps.appointment;
     const opacityClass = STATUS_OPACITY[appt.status] || '';
+    const dotClass = STATUS_DOT_CLASSES[appt.status] || 'bg-indigo-400';
     return (
       <div className={`px-1 py-0.5 text-white text-xs leading-tight overflow-hidden h-full ${opacityClass}`}>
-        <div className="font-semibold truncate">{info.event.title}</div>
+        <div className="flex items-center gap-1">
+          <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
+          <span className="font-semibold truncate">{info.event.title}</span>
+        </div>
         <div className="truncate opacity-90">{appt.appointmentType.name}</div>
         <div className="truncate opacity-75">Dt. {appt.practitioner.lastName}</div>
       </div>

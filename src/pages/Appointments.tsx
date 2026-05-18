@@ -25,6 +25,15 @@ import CalendarTimelineView from '../components/CalendarTimelineView';
 import MultiDoctorDayView from '../components/MultiDoctorDayView';
 import { formatTimeInTimeZone, getDateKeyInTimeZone } from '../utils/dateTime';
 
+const STATUS_BORDER_COLORS: Record<string, string> = {
+  scheduled:   '#f59e0b',
+  confirmed:   '#10b981',
+  in_progress: '#3b82f6',
+  completed:   '#6b7280',
+  cancelled:   '#ef4444',
+  no_show:     '#f97316',
+};
+
 const Appointments: React.FC = () => {
   const { t, i18n } = useTranslation(['appointments', 'common']);
   const { user } = useAuth();
@@ -377,7 +386,7 @@ const Appointments: React.FC = () => {
           </div>
         ) : appointments.length > 0 ? (
           appointments.map((appt) => (
-            <div key={appt.id} className="card p-5 flex flex-col md:flex-row md:items-center gap-6 group hover:shadow-lg transition-all border-l-4" style={{ borderLeftColor: appt.appointmentType.color }}>
+            <div key={appt.id} className="card p-5 flex flex-col md:flex-row md:items-center gap-6 group hover:shadow-lg transition-all border-l-4" style={{ borderLeftColor: STATUS_BORDER_COLORS[appt.status] || appt.appointmentType.color }}>
               <div className="flex items-center gap-4 md:w-32 flex-shrink-0">
                 <div className="bg-gray-50 p-2 rounded-lg text-gray-600 font-bold flex flex-col items-center">
                   <Clock size={16} className="mb-1 text-primary-500" />

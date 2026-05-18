@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Settings, 
   LogOut,
-  Bell,
   Search,
   Globe,
   ChevronDown,
@@ -19,16 +18,21 @@ import {
   Briefcase,
   MessageSquare,
   Mail,
-  CalendarPlus
+  CalendarPlus,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import TaskForm from '../components/TaskForm';
+import NotificationBell from '../components/NotificationBell';
+import { useDarkMode } from '../utils/darkMode';
 
 const MainLayout: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
   const location = useLocation();
+  const { isDark, toggle: toggleDark } = useDarkMode();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
@@ -71,7 +75,7 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-page flex">
+    <div className="min-h-screen bg-page dark:bg-gray-950 flex">
       {/* Mobile backdrop — closes sidebar on tap outside */}
       {isMobile && isSidebarOpen && (
         <div
@@ -84,7 +88,7 @@ const MainLayout: React.FC = () => {
       {/* Sidebar */}
       <aside
         className={[
-          'bg-white border-r border-gray-200 transition-all duration-300 flex flex-col fixed inset-y-0 z-50',
+          'bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col fixed inset-y-0 z-50',
           // Width: always 64 on mobile (full drawer), 64 or 20 icon-only on desktop
           isMobile ? 'w-64' : (isSidebarOpen ? 'w-64' : 'w-20'),
           // Slide in/out on mobile; always visible on desktop
@@ -116,8 +120,8 @@ const MainLayout: React.FC = () => {
                 onClick={handleNavClick}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
                   isActive 
-                    ? 'bg-primary-50 text-primary-600 font-medium shadow-sm border border-primary-100' 
-                    : 'text-gray-600 hover:bg-gray-50'
+                    ? 'bg-primary-50 text-primary-600 font-medium shadow-sm border border-primary-100 dark:bg-primary-900/30 dark:border-primary-800' 
+                    : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800'
                 }`}
               >
                 <span className={isActive ? 'text-primary-600' : 'text-gray-400'}>
@@ -129,11 +133,11 @@ const MainLayout: React.FC = () => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
           <Link
             to="/settings"
             onClick={handleNavClick}
-            className="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-all mb-2"
+            className="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800 rounded-lg transition-all mb-2"
           >
             <Settings size={20} className="text-gray-400" />
             {(isSidebarOpen || isMobile) && <span>{t('common:settings')}</span>}
@@ -156,29 +160,41 @@ const MainLayout: React.FC = () => {
         ].join(' ')}
       >
         {/* Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40">
+        <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40">
           <div className="flex items-center gap-4 flex-1">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-500 dark:text-gray-400"
             >
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <div className="max-w-md w-full relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text" 
-                placeholder={t('common:search')} 
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary-500 transition-all"
-              />
-            </div>
+            {/* Küresel Arama Tetikleyici */}
+            <button
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))}
+              className="hidden md:flex items-center gap-2 max-w-md w-full pl-3 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-xl text-sm text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <Search size={18} className="text-gray-400" />
+              <span className="flex-1 text-left">{t('common:search')}…</span>
+              <span className="hidden lg:flex items-center gap-0.5 text-[11px] font-mono bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-400">
+                <span>Ctrl</span><span>+K</span>
+              </span>
+            </button>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-bold border border-primary-100">
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-bold border border-primary-100 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-800">
               <span className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></span>
               {user?.clinic.name}
             </div>
+            
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleDark}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-500 dark:text-gray-400"
+              aria-label="Tema değiştir"
+            >
+              {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
             
             {/* Language Switcher */}
             <button 
@@ -191,18 +207,18 @@ const MainLayout: React.FC = () => {
             <div className="w-px h-6 bg-gray-200 mx-2"></div>
             
             <div className="relative group">
-              <button className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600">
+              <button className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300">
                 <Globe size={20} />
                 <span className="text-xs font-bold uppercase">{t(`common:languages.${i18n.language.split('-')[0]}`)}</span>
                 <ChevronDown size={14} />
               </button>
-              <div className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                 {['en', 'tr', 'fr', 'de'].map((lng) => (
                   <button
                     key={lng}
                     onClick={() => i18n.changeLanguage(lng)}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-primary-50 hover:text-primary-600 transition-colors ${
-                      i18n.language.startsWith(lng) ? 'text-primary-600 font-bold' : 'text-gray-600'
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/30 hover:text-primary-600 transition-colors ${
+                      i18n.language.startsWith(lng) ? 'text-primary-600 font-bold' : 'text-gray-600 dark:text-gray-300'
                     }`}
                   >
                     {t(`common:languages.${lng}`)}
@@ -211,15 +227,12 @@ const MainLayout: React.FC = () => {
               </div>
             </div>
 
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
-            <div className="h-8 w-[1px] bg-gray-200 mx-2"></div>
-            <div className="flex items-center gap-3 cursor-pointer p-1 hover:bg-gray-50 rounded-lg transition-colors">
+            <NotificationBell />
+            <div className="h-8 w-[1px] bg-gray-200 dark:bg-gray-700 mx-2"></div>
+            <div className="flex items-center gap-3 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-gray-900 leading-none">{user?.firstName} {user?.lastName}</p>
-                <p className="text-xs text-gray-500 mt-1 capitalize">{user?.role}</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none">{user?.firstName} {user?.lastName}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 capitalize">{user?.role}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-health-100 flex items-center justify-center text-health-700 font-bold border-2 border-health-200">
                 {user?.firstName[0]}{user?.lastName[0]}

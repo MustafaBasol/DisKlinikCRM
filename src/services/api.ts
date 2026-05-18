@@ -127,6 +127,18 @@ export const doctorAvailabilityService = {
   updateForPractitioner: (practitionerId: string, slots: any[]) => api.put(`/doctor-availabilities/${practitionerId}`, { slots }),
 };
 
+export const attachmentService = {
+  getAll: (patientId: string) => api.get(`/patients/${patientId}/attachments`),
+  upload: (patientId: string, formData: FormData) =>
+    api.post(`/patients/${patientId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  delete: (patientId: string, attachmentId: string) =>
+    api.delete(`/patients/${patientId}/attachments/${attachmentId}`),
+  getDownloadUrl: (patientId: string, attachmentId: string) =>
+    `${api.defaults.baseURL}/patients/${patientId}/attachments/${attachmentId}/download`,
+};
+
 export const dashboardService = {
   getStats: () => api.get('/dashboard/stats'),
 };
