@@ -146,8 +146,20 @@ export const attachmentService = {
     }),
   delete: (patientId: string, attachmentId: string) =>
     api.delete(`/patients/${patientId}/attachments/${attachmentId}`),
-  getDownloadUrl: (patientId: string, attachmentId: string) =>
-    `${api.defaults.baseURL}/patients/${patientId}/attachments/${attachmentId}/download`,
+  download: async (patientId: string, attachmentId: string, fileName: string) => {
+    const response = await api.get(
+      `/patients/${patientId}/attachments/${attachmentId}/download`,
+      { responseType: 'blob' },
+    );
+    const url = URL.createObjectURL(response.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const dashboardService = {

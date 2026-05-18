@@ -666,15 +666,13 @@ const PatientDetail: React.FC = () => {
                         {(att.fileSize / 1024).toFixed(1)} KB • {new Date(att.createdAt).toLocaleDateString('tr-TR')} • {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
                       </p>
                     </div>
-                    <a
-                      href={attachmentService.getDownloadUrl(id!, att.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => attachmentService.download(id!, att.id, att.originalName)}
                       className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
                       title="İndir"
                     >
                       <Download size={16} />
-                    </a>
+                    </button>
                     {['admin', 'receptionist'].includes(user?.role || '') && (
                       <button
                         onClick={async () => {
