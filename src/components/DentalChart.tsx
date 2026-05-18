@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, Trash2, Save, X, ClipboardList, CheckCircle2, Circle, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Loader2, Trash2, Save, X, ClipboardList, CheckCircle2, Circle, AlertCircle, Plus, ExternalLink } from 'lucide-react';
 import { dentalChartService, treatmentPlanProceduresService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -416,17 +417,40 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
       {showTreatmentPlan && activeProcTab === 'plan' && (
         <div className="space-y-4">
           {Object.keys(procByCase).length === 0 ? (
-            <div className="text-center py-10 text-gray-400">
-              <ClipboardList size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Bu hasta için henüz tedavi prosedürü tanımlanmamış.</p>
-              <p className="text-xs mt-1">Tedavi vakası detayından prosedür ekleyebilirsiniz.</p>
+            <div className="text-center py-12 text-gray-400">
+              <ClipboardList size={40} className="mx-auto mb-3 opacity-20" />
+              <p className="text-sm font-medium text-gray-500">Bu hasta için henüz tedavi prosedürü eklenmemiş.</p>
+              <p className="text-xs mt-2 text-gray-400 max-w-xs mx-auto">
+                Prosedür eklemek için önce <strong>Tedavi Vakaları</strong> sekmesine gidin,
+                bir vaka seçin ve vaka detay sayfasından <strong>Tedavi Planı Prosedürleri</strong> bölümündeki <strong>+</strong> butonuna tıklayın.
+              </p>
+              <Link
+                to="#"
+                onClick={(e) => { e.preventDefault(); document.querySelector<HTMLButtonElement>('[data-tab="treatments"]')?.click(); }}
+                className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                <ExternalLink size={13} />
+                Tedavi Vakaları Sekmesine Git
+              </Link>
             </div>
           ) : (
             Object.entries(procByCase).map(([caseId, group]) => (
               <div key={caseId} className="card p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{group.caseTitle}</h4>
+                  <Link
+                    to={`/treatment-cases/${caseId}`}
+                    className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                  >
+                    {group.caseTitle}
+                  </Link>
                   <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500">{group.caseStage}</span>
+                  <Link
+                    to={`/treatment-cases/${caseId}`}
+                    className="ml-auto flex items-center gap-1 text-xs text-primary-600 font-semibold hover:underline flex-shrink-0"
+                    title="Prosedür eklemek için vaka detayına git"
+                  >
+                    <Plus size={12} /> Prosedür Ekle
+                  </Link>
                 </div>
                 <div className="space-y-2">
                   {group.items.map((p) => {

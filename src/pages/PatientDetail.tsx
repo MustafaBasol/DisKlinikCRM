@@ -186,6 +186,7 @@ const PatientDetail: React.FC = () => {
         {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'whatsapp', 'files', 'dental', 'activity'] as const).map(tab => (
           <button 
             key={tab}
+            data-tab={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
@@ -386,6 +387,9 @@ const PatientDetail: React.FC = () => {
                       <div>
                         <p className="font-bold text-gray-900">{tc.title}</p>
                         <p className="text-xs text-gray-500">{t(`treatmentCases:stages.${tc.stage}`)}</p>
+                        <p className="text-xs text-primary-600 font-medium mt-0.5">
+                          Tedavi planı prosedürleri için tıkla → Vaka Detayı
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -397,10 +401,16 @@ const PatientDetail: React.FC = () => {
                   </Link>
                 )) : (
                   <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">
-                    {t('common:noData')}
+                    <p>{t('common:noData')}</p>
+                    <p className="text-xs mt-1">Tedavi planı eklemek için önce "Yeni Vaka" oluşturun</p>
                   </div>
                 )}
               </div>
+              {treatmentCases.length > 0 && (
+                <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
+                  <strong>Tedavi Planı Prosedürü Eklemek İçin:</strong> Yukarıdaki vakalardan birine tıklayın → Açılan sayfada "Tedavi Planı Prosedürleri" bölümündeki <strong>+</strong> butonuna tıklayın.
+                </div>
+              )}
             </div>
           )}
 

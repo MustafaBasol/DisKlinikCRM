@@ -26,6 +26,7 @@ async function main() {
   await prisma.task.deleteMany({});
   await prisma.appointment.deleteMany({});
   await prisma.payment.deleteMany({});
+  await prisma.treatmentPlanProcedure.deleteMany({});
   await prisma.treatmentCase.deleteMany({});
   await prisma.patient.deleteMany({});
   await prisma.appointmentType.deleteMany({});
@@ -506,6 +507,140 @@ async function main() {
         language: 'tr',
         body: 'Merhaba {{patient_name}}, {{clinic_name}} kayitlarinda bekleyen odeme bakiyeniz gorunmektedir. Detayli bilgi icin klinigimizle iletisime gecebilirsiniz.',
         createdById: billing.id,
+      },
+    ],
+  });
+
+  // ── Treatment Plan Procedures (demo data) ──────────────────────────
+  await prisma.treatmentPlanProcedure.deleteMany({});
+  await prisma.treatmentPlanProcedure.createMany({
+    data: [
+      // İmplant vakası prosedürleri
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: implantCase.id,
+        patientId: patients[0].id,
+        toothFdi: 46,
+        procedureName: 'Kemik Grefti',
+        status: 'completed',
+        estimatedCost: 8000,
+        notes: 'Alt çene sağ 1. büyük azı bölgesi — greft materyali uygulandı.',
+        createdById: dentists[0].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: implantCase.id,
+        patientId: patients[0].id,
+        toothFdi: 46,
+        procedureName: 'İmplant Yerleştirme',
+        status: 'in_progress',
+        estimatedCost: 18000,
+        notes: 'Straumann BL 4.1mm x 10mm — osseointegrasyon süreci devam ediyor.',
+        createdById: dentists[0].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: implantCase.id,
+        patientId: patients[0].id,
+        toothFdi: 36,
+        procedureName: 'İmplant Kron',
+        status: 'planned',
+        estimatedCost: 12000,
+        notes: 'Zirkonyum kron — osseointegrasyon tamamlandıktan sonra uygulanacak.',
+        createdById: dentists[0].id,
+      },
+      // Gülüş tasarımı prosedürleri
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: smileCase.id,
+        patientId: patients[1].id,
+        toothFdi: 11,
+        procedureName: 'Porselen Veneer',
+        status: 'completed',
+        estimatedCost: 4000,
+        notes: 'Üst sağ santral — renk A1 seçildi.',
+        createdById: dentists[1].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: smileCase.id,
+        patientId: patients[1].id,
+        toothFdi: 21,
+        procedureName: 'Porselen Veneer',
+        status: 'completed',
+        estimatedCost: 4000,
+        createdById: dentists[1].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: smileCase.id,
+        patientId: patients[1].id,
+        toothFdi: 12,
+        procedureName: 'Porselen Veneer',
+        status: 'in_progress',
+        estimatedCost: 4000,
+        createdById: dentists[1].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: smileCase.id,
+        patientId: patients[1].id,
+        toothFdi: 22,
+        procedureName: 'Porselen Veneer',
+        status: 'in_progress',
+        estimatedCost: 4000,
+        createdById: dentists[1].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: smileCase.id,
+        patientId: patients[1].id,
+        toothFdi: 13,
+        procedureName: 'Diş Beyazlatma',
+        status: 'planned',
+        estimatedCost: 2000,
+        notes: 'Veneer öncesi beyazlatma protokolü.',
+        createdById: dentists[1].id,
+      },
+      // Ortodonti prosedürleri
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: orthoCase.id,
+        patientId: patients[3].id,
+        procedureName: 'Metal Braket Uygulaması',
+        status: 'completed',
+        estimatedCost: 15000,
+        notes: 'Üst ve alt çene — 3M Unitek braketler uygulandı.',
+        createdById: dentists[3].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: orthoCase.id,
+        patientId: patients[3].id,
+        procedureName: 'Tel Aktivasyonu (1. seans)',
+        status: 'completed',
+        estimatedCost: 500,
+        createdById: dentists[3].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: orthoCase.id,
+        patientId: patients[3].id,
+        procedureName: 'Tel Aktivasyonu (2. seans)',
+        status: 'in_progress',
+        estimatedCost: 500,
+        createdById: dentists[3].id,
+      },
+      {
+        clinicId: clinic.id,
+        treatmentCaseId: orthoCase.id,
+        patientId: patients[3].id,
+        toothFdi: 44,
+        procedureName: 'Diş Çekimi (Yer Açma)',
+        status: 'planned',
+        estimatedCost: 800,
+        notes: 'Yer kazanımı için ortodontist onayı bekleniyor.',
+        createdById: dentists[3].id,
       },
     ],
   });
