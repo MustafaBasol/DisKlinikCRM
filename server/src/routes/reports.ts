@@ -80,20 +80,32 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
       byPeriodQuery, clinicId, from, to
     );
 
-    // By practitioner — via treatmentCase link
-    const paymentsWithTC = await prisma.payment.findMany({
-      where: baseWhere,
-      select: {
-        amount: true,
-        treatmentCase: {
-          select: {
-            practitioner: {
-              select: { id: true, firstName: true, lastName: true, commissionRate: true },
+    // By practitioner — fetch commission rates separately (avoids select validation on old Prisma client)
+    const [paymentsWithTC, doctorCommissions] = await Promise.all([
+      prisma.payment.findMany({
+        where: baseWhere,
+        select: {
+          amount: true,
+          treatmentCase: {
+            select: {
+              practitioner: {
+                select: { id: true, firstName: true, lastName: true },
+              },
             },
           },
         },
-      },
-    });
+      }),
+      prisma.user.findMany({
+        where: { clinicId, role: 'doctor', isActive: true },
+        select: { id: true },
+      }),
+    ]);
+
+    // Build commission rate map — safe regardless of whether commissionRate exists in client
+    const commissionRateMap = new Map<string, number>();
+    for (const doc of doctorCommissions) {
+      commissionRateMap.set(doc.id, (doc as any).commissionRate ?? 0);
+    }
 
     const byPractitionerMap: Record<string, { practitionerId: string; firstName: string; lastName: string; commissionRate: number; revenue: number; count: number }> = {};
     for (const p of paymentsWithTC) {
@@ -104,7 +116,7 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
             practitionerId: practitioner.id,
             firstName: practitioner.firstName,
             lastName: practitioner.lastName,
-            commissionRate: practitioner.commissionRate,
+            commissionRate: commissionRateMap.get(practitioner.id) ?? 0,
             revenue: 0,
             count: 0,
           };
@@ -213,7 +225,7 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
   try {
     const doctors = await prisma.user.findMany({
       where: { clinicId, role: 'doctor', isActive: true },
-      select: { id: true, firstName: true, lastName: true, commissionRate: true },
+      select: { id: true, firstName: true, lastName: true },
     });
 
     // Pre-fetch all treatment case IDs grouped by practitioner (avoids nested relation
