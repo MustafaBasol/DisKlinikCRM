@@ -19,6 +19,8 @@ import Messages from './pages/Messages';
 import MessageTemplates from './pages/MessageTemplates';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import Reports from './pages/Reports';
+import PaymentPlans from './pages/PaymentPlans';
 
 import { useTranslation } from 'react-i18next';
 
@@ -91,6 +93,8 @@ const App: React.FC = () => {
               <Route path="messages" element={<Messages />} />
               <Route path="templates" element={<MessageTemplates />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="payment-plans" element={<PaymentPlans />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

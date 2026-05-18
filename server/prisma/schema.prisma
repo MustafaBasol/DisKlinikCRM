@@ -39,6 +39,7 @@ model Clinic {
   settings             Setting[]
   patientAttachments   PatientAttachment[]
   toothRecords         ToothRecord[]
+  paymentPlans         PaymentPlan[]
 }
 
 model User {
@@ -51,10 +52,11 @@ model User {
   phone        String?
   role         String // admin, doctor, receptionist, billing
   passwordHash String
-  isActive     Boolean   @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isActive       Boolean   @default(true)
+  lastLoginAt    DateTime?
+  commissionRate Float     @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   tasksCreated        Task[]               @relation("TaskCreator")
   tasksAssigned       Task[]               @relation("TaskAssignee")
@@ -69,6 +71,7 @@ model User {
   activityLogs        ActivityLog[]
   uploadedAttachments PatientAttachment[]  @relation("AttachmentUploader")
   toothRecordsCreated  ToothRecord[]        @relation("ToothRecordCreator")
+  paymentPlans         PaymentPlan[]
 }
 
 model DoctorAvailability {
@@ -120,6 +123,7 @@ model Patient {
   whatsappConversationMessages WhatsAppConversationMessage[]
   attachments         PatientAttachment[]
   toothRecords        ToothRecord[]
+  paymentPlans        PaymentPlan[]
 }
 
 model AppointmentType {
@@ -273,6 +277,7 @@ model TreatmentCase {
   insuranceProvisions InsuranceProvision[]
   sentMessages        SentMessage[]
   activityLogs        ActivityLog[]
+  paymentPlans        PaymentPlan[]
 }
 
 model InsuranceProvision {
@@ -349,6 +354,7 @@ model Payment {
   updatedAt       DateTime       @updatedAt
 
   sentMessages SentMessage[]
+  installment  PaymentPlanInstallment?
 }
 
 model MessageTemplate {
@@ -465,4 +471,47 @@ model ToothRecord {
 
   @@unique([patientId, toothFdi])
   @@index([clinicId, patientId])
+}
+
+model PaymentPlan {
+  id              String    @id @default(uuid())
+  clinicId        String
+  clinic          Clinic    @relation(fields: [clinicId], references: [id])
+  patientId       String
+  patient         Patient   @relation(fields: [patientId], references: [id])
+  treatmentCaseId String?
+  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  totalAmount     Float
+  currency        String    @default("TRY")
+  installmentCount Int
+  description     String?
+  status          String    @default("active") // active, completed, cancelled
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  installments    PaymentPlanInstallment[]
+
+  @@index([clinicId, patientId])
+  @@index([clinicId, status])
+}
+
+model PaymentPlanInstallment {
+  id            String      @id @default(uuid())
+  planId        String
+  plan          PaymentPlan @relation(fields: [planId], references: [id])
+  installmentNo Int
+  dueDate       DateTime
+  amount        Float
+  status        String      @default("pending") // pending, paid, overdue
+  paymentId     String?     @unique
+  payment       Payment?    @relation(fields: [paymentId], references: [id])
+  paidAt        DateTime?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([planId])
+  @@index([dueDate, status])
 }

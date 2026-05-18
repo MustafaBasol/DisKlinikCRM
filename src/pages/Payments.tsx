@@ -14,11 +14,13 @@ import {
   Briefcase,
   Calendar,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  FileText,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { paymentService, patientService } from '../services/api';
 import PaymentForm from '../components/PaymentForm';
+import ReceiptModal from '../components/ReceiptModal';
 
 const Payments: React.FC = () => {
   const { t } = useTranslation(['payments', 'common']);
@@ -28,6 +30,7 @@ const Payments: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<any>(null);
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   
   // Filters
   const [patientId, setPatientId] = useState('');
@@ -240,6 +243,13 @@ const Payments: React.FC = () => {
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => setReceiptPaymentId(p.id)}
+                          className="p-2 text-gray-400 hover:bg-white hover:text-indigo-600 rounded-lg transition-all shadow-sm"
+                          title="Makbuz"
+                        >
+                          <FileText size={18} />
+                        </button>
                         <button 
                           onClick={() => { setEditingPayment(p); setIsFormOpen(true); }}
                           className="p-2 text-gray-400 hover:bg-white hover:text-blue-600 rounded-lg transition-all shadow-sm"
@@ -285,6 +295,9 @@ const Payments: React.FC = () => {
           }}
           initialData={editingPayment}
         />
+      )}
+      {receiptPaymentId && (
+        <ReceiptModal paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />
       )}
     </div>
   );

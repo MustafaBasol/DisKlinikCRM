@@ -20,7 +20,8 @@ import {
   Mail,
   CalendarPlus,
   Moon,
-  Sun
+  Sun,
+  BarChart2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -62,6 +63,7 @@ const MainLayout: React.FC = () => {
     { path: '/treatment-cases', icon: <Briefcase size={20} />, label: t('common:treatmentCases') },
     { path: '/tasks', icon: <CheckSquare size={20} />, label: t('common:tasks') },
     { path: '/payments', icon: <CreditCard size={20} />, label: t('common:payments') },
+    { path: '/payment-plans', icon: <CreditCard size={20} />, label: 'Taksit Planları' },
     { path: '/insurance-provisions', icon: <ShieldCheck size={20} />, label: t('common:insurance') },
     { path: '/messages', icon: <MessageSquare size={20} />, label: t('common:messages', { defaultValue: 'Messages' }) },
   ];
@@ -72,6 +74,10 @@ const MainLayout: React.FC = () => {
 
   if (user?.role === 'admin' || user?.role === 'receptionist') {
     navItems.push({ path: '/templates', icon: <Mail size={20} />, label: t('common:templates', { defaultValue: 'Templates' }) });
+  }
+
+  if (user?.role === 'admin' || user?.role === 'billing') {
+    navItems.push({ path: '/reports', icon: <BarChart2 size={20} />, label: 'Raporlar' });
   }
 
   return (

@@ -129,4 +129,26 @@ router.patch('/payments/:id/cancel', authorize(['admin', 'billing']), async (req
   }
 });
 
+// GET /api/payments/:id/receipt
+router.get('/payments/:id/receipt', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const clinicId = req.user!.clinicId;
+
+  try {
+    const payment = await prisma.payment.findFirst({
+      where: { id, clinicId },
+      include: {
+        patient: { select: { firstName: true, lastName: true, phone: true, email: true } },
+        treatmentCase: { select: { title: true, estimatedAmount: true, acceptedAmount: true, currency: true } },
+        clinic: { select: { name: true, legalName: true, address: true, phone: true, email: true, currency: true } },
+      },
+    });
+
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    res.json(payment);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch receipt data' });
+  }
+});
+
 export default router;

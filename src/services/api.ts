@@ -98,6 +98,7 @@ export const paymentService = {
   create: (data: any) => api.post('/payments', data),
   update: (id: string, data: any) => api.put(`/payments/${id}`, data),
   cancel: (id: string) => api.patch(`/payments/${id}/cancel`),
+  getReceipt: (id: string) => api.get(`/payments/${id}/receipt`),
 };
 
 export const messageTemplateService = {
@@ -149,6 +150,20 @@ export const attachmentService = {
 
 export const dashboardService = {
   getStats: () => api.get('/dashboard/stats'),
+};
+
+export const reportService = {
+  getRevenue: (params?: any) => api.get('/reports/revenue', { params }),
+  getDoctorPerformance: (params?: any) => api.get('/reports/doctor-performance', { params }),
+};
+
+export const paymentPlanService = {
+  getAll: (params?: any) => api.get('/payment-plans', { params }),
+  getById: (id: string) => api.get(`/payment-plans/${id}`),
+  create: (data: any) => api.post('/payment-plans', data),
+  cancel: (id: string) => api.patch(`/payment-plans/${id}/cancel`),
+  payInstallment: (planId: string, installmentId: string, data: any) =>
+    api.post(`/payment-plans/${planId}/installments/${installmentId}/pay`, data),
 };
 
 export default api;
