@@ -58,6 +58,8 @@ export const appointmentService = {
   create: (data: any) => api.post('/appointments', data),
   update: (id: string, data: any) => api.put(`/appointments/${id}`, data),
   updateStatus: (id: string, status: string) => api.put(`/appointments/${id}`, { status }),
+  linkTreatmentCase: (id: string, treatmentCaseId: string | null) =>
+    api.patch(`/appointments/${id}/treatment-case`, { treatmentCaseId }),
 };
 
 export const appointmentRequestService = {

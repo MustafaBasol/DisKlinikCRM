@@ -123,6 +123,7 @@ const appointmentBaseSchema = z.object({
   endTime: z.string().transform(val => new Date(val)),
   status: appointmentStatusEnum.default('scheduled'),
   notes: z.string().optional().nullable(),
+  treatmentCaseId: z.string().uuid().optional().nullable(),
 });
 
 export const appointmentSchema = appointmentBaseSchema.refine(data => data.endTime > data.startTime, {

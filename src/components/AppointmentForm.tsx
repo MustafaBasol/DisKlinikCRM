@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle } from 'lucide-react';
+import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle, Briefcase } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { patientService, userService, serviceService, appointmentService } from '../services/api';
+import { patientService, userService, serviceService, appointmentService, treatmentCaseService } from '../services/api';
 
 interface AppointmentFormProps {
   onClose: () => void;
@@ -18,6 +18,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
   const [patients, setPatients] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
+  const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     patientId: initialData?.patientId || '',
@@ -27,6 +28,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     startTime: initialData?.startTime ? new Date(initialData.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '09:00',
     endTime: initialData?.endTime ? new Date(initialData.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '09:30',
     notes: initialData?.notes || '',
+    treatmentCaseId: initialData?.treatmentCaseId || '',
   });
   const selectedService = types.find(t => t.id === formData.appointmentTypeId);
 
@@ -47,6 +49,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     };
     fetchData();
   }, []);
+
+  // Load treatment cases when patientId changes
+  useEffect(() => {
+    if (!formData.patientId) { setTreatmentCases([]); return; }
+    treatmentCaseService.getAll({ patientId: formData.patientId })
+      .then(res => setTreatmentCases(res.data.filter((tc: any) => tc.deletedAt == null && tc.stage !== 'lost')))
+      .catch(() => setTreatmentCases([]));
+  }, [formData.patientId]);
 
   // Auto-calculate end time when type or start time changes
   useEffect(() => {
@@ -80,6 +90,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
       startTime: start.toISOString(),
       endTime: end.toISOString(),
       notes: formData.notes,
+      treatmentCaseId: formData.treatmentCaseId || null,
     };
 
     try {
@@ -142,10 +153,25 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
               </select>
             </div>
 
-            {/* Practitioner Selector */}
-            <div className="space-y-1">
-              <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <Stethoscope size={16} className="text-gray-400" />
+            {/* Treatment Case Selector (optional, shown when patient is selected) */}
+            {treatmentCases.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Briefcase size={16} className="text-gray-400" />
+                  Tedavi Dosyası <span className="text-gray-400 font-normal">(isteğe bağlı)</span>
+                </label>
+                <select
+                  className="input-field"
+                  value={formData.treatmentCaseId}
+                  onChange={(e) => setFormData({ ...formData, treatmentCaseId: e.target.value })}
+                >
+                  <option value="">Tedavi dosyası seçin (isteğe bağlı)</option>
+                  {treatmentCases.map(tc => (
+                    <option key={tc.id} value={tc.id}>{tc.title}</option>
+                  ))}
+                </select>
+              </div>
+            )}
                 {t('appointments:form.selectPractitioner')}
               </label>
               <select

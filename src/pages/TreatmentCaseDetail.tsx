@@ -19,15 +19,18 @@ import {
   FileText,
   MessageSquare,
   Trash2,
-  Circle
+  Circle,
+  Link as LinkIcon,
+  Unlink
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService } from '../services/api';
+import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService } from '../services/api';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
+import AppointmentForm from '../components/AppointmentForm';
 
 const TreatmentCaseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +47,10 @@ const TreatmentCaseDetail: React.FC = () => {
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [paymentInitialData, setPaymentInitialData] = useState<any>(null);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
+  const [isLinkApptOpen, setIsLinkApptOpen] = useState(false);
+  const [linkableAppts, setLinkableAppts] = useState<any[]>([]);
+  const [linkLoading, setLinkLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Treatment procedures
@@ -155,7 +162,41 @@ const TreatmentCaseDetail: React.FC = () => {
       alert(err.response?.data?.error || 'Failed to delete');
     }
   };
+  const openLinkApptModal = async () => {
+    if (!tCase) return;
+    setLinkLoading(true);
+    setIsLinkApptOpen(true);
+    try {
+      const res = await appointmentService.getAll({ patientId: tCase.patientId });
+      // Show only appointments not yet linked to this treatment case
+      const linked = new Set((tCase.appointments || []).map((a: any) => a.id));
+      setLinkableAppts(res.data.filter((a: any) => !linked.has(a.id)));
+    } catch {
+      setLinkableAppts([]);
+    } finally {
+      setLinkLoading(false);
+    }
+  };
 
+  const handleLinkAppt = async (apptId: string) => {
+    try {
+      await appointmentService.linkTreatmentCase(apptId, id!);
+      setIsLinkApptOpen(false);
+      fetchDetail();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Bağlantı kurulamadı');
+    }
+  };
+
+  const handleUnlinkAppt = async (apptId: string) => {
+    if (!window.confirm('Bu randevunun tedavi dosyası bağlantısı kaldırılsın mı?')) return;
+    try {
+      await appointmentService.linkTreatmentCase(apptId, null);
+      fetchDetail();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Bağlantı kaldırılamadı');
+    }
+  };
   const PROC_STATUS = {
     planned:     { label: 'Planlandı',    dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100' },
     in_progress: { label: 'Devam Ediyor', dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100' },
@@ -406,20 +447,61 @@ const TreatmentCaseDetail: React.FC = () => {
                 <h3 className="font-bold text-sm flex items-center gap-2">
                   <Calendar size={16} className="text-gray-400" />
                   {t('common:appointments')}
+                  {(tCase.appointments?.length ?? 0) > 0 && (
+                    <span className="bg-primary-600 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">
+                      {tCase.appointments.length}
+                    </span>
+                  )}
                 </h3>
-                <Link to="/appointments" className="text-[10px] font-bold text-primary-600 uppercase hover:underline">View All</Link>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={openLinkApptModal}
+                    className="p-1 hover:bg-white rounded transition-colors text-gray-500"
+                    title="Mevcut randevu bağla"
+                  >
+                    <LinkIcon size={15} />
+                  </button>
+                  <button
+                    onClick={() => setIsAppointmentFormOpen(true)}
+                    className="p-1 hover:bg-white rounded transition-colors text-primary-600"
+                    title="Yeni randevu oluştur"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
               </div>
               <div className="divide-y divide-gray-50">
                 {tCase.appointments?.length > 0 ? tCase.appointments.map((a: any) => (
-                  <div key={a.id} className="p-3 text-sm flex justify-between">
-                    <div>
-                      <p className="font-bold">{a.appointmentType.name}</p>
-                      <p className="text-xs text-gray-500">{new Date(a.startTime).toLocaleDateString()}</p>
+                  <div key={a.id} className="p-3 text-sm flex justify-between items-center group">
+                    <Link to={`/appointments/${a.id}`} className="flex-1 hover:text-primary-600">
+                      <p className="font-bold">{a.appointmentType?.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(a.startTime).toLocaleDateString('tr-TR')} {new Date(a.startTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                        {a.practitioner && <> &bull; Dt. {a.practitioner.lastName}</>}
+                      </p>
+                    </Link>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`badge h-fit text-[10px] ${
+                        a.status === 'completed' ? 'badge-green' :
+                        a.status === 'cancelled' ? 'badge-red' :
+                        a.status === 'confirmed' ? 'badge-blue' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                      }`}>{a.status}</span>
+                      <button
+                        onClick={() => handleUnlinkAppt(a.id)}
+                        className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded"
+                        title="Bağlantıyı kaldır"
+                      >
+                        <Unlink size={13} />
+                      </button>
                     </div>
-                    <span className="badge badge-blue h-fit text-[10px]">{a.status}</span>
                   </div>
                 )) : (
-                  <p className="p-6 text-center text-gray-400 text-xs italic">No related appointments.</p>
+                  <div className="p-6 text-center text-gray-400 text-xs">
+                    <p className="italic mb-2">Bu tedaviyle ilişkili randevu yok.</p>
+                    <button onClick={() => setIsAppointmentFormOpen(true)} className="text-primary-600 font-semibold hover:underline">
+                      Randevu oluştur →
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -808,6 +890,83 @@ const TreatmentCaseDetail: React.FC = () => {
               </button>
               <button onClick={() => setIsProcFormOpen(false)} className="btn-secondary">
                 İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Appointment Form Modal */}
+      {isAppointmentFormOpen && (
+        <AppointmentForm
+          onClose={() => setIsAppointmentFormOpen(false)}
+          onSuccess={() => {
+            setIsAppointmentFormOpen(false);
+            fetchDetail();
+          }}
+          initialData={{
+            patientId: tCase.patientId,
+            practitionerId: tCase.practitionerId || '',
+            treatmentCaseId: tCase.id,
+          }}
+        />
+      )}
+
+      {/* Link Existing Appointment Modal */}
+      {isLinkApptOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="card p-6 w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <LinkIcon size={18} className="text-primary-500" />
+                Mevcut Randevu Bağla
+              </h3>
+              <button onClick={() => setIsLinkApptOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                <XCircle size={18} className="text-gray-400" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              <span className="font-semibold">{tCase.patient.firstName} {tCase.patient.lastName}</span> hastasına ait randevulardan birini bu tedavi dosyasına bağlayın.
+            </p>
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {linkLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="animate-spin text-primary-600" size={28} />
+                </div>
+              ) : linkableAppts.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm italic py-8">
+                  Bağlanabilecek randevu bulunamadı.<br />
+                  <button onClick={() => { setIsLinkApptOpen(false); setIsAppointmentFormOpen(true); }} className="text-primary-600 font-semibold hover:underline mt-2">
+                    Yeni randevu oluştur →
+                  </button>
+                </p>
+              ) : (
+                linkableAppts.map((a: any) => (
+                  <button
+                    key={a.id}
+                    onClick={() => handleLinkAppt(a.id)}
+                    className="w-full p-3 text-left hover:bg-primary-50 transition-colors flex justify-between items-center"
+                  >
+                    <div>
+                      <p className="font-semibold text-sm">{a.appointmentType?.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(a.startTime).toLocaleDateString('tr-TR')} {new Date(a.startTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                        {a.practitioner && <> &bull; Dt. {a.practitioner.lastName}</>}
+                        {a.treatmentCase && <span className="text-amber-600"> &bull; {a.treatmentCase.title}</span>}
+                      </p>
+                    </div>
+                    <span className={`badge text-[10px] flex-shrink-0 ${
+                      a.status === 'completed' ? 'badge-green' :
+                      a.status === 'cancelled' ? 'badge-red' :
+                      a.status === 'confirmed' ? 'badge-blue' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                    }`}>{a.status}</span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <button onClick={() => setIsLinkApptOpen(false)} className="btn-secondary w-full">
+                Kapat
               </button>
             </div>
           </div>

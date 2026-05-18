@@ -189,6 +189,9 @@ model Appointment {
   updatedAt          DateTime        @updatedAt
   deletedAt          DateTime?
 
+  treatmentCaseId String?
+  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+
   tasks          Task[]
   sentMessages   SentMessage[]
   activityLogs   ActivityLog[]
@@ -292,6 +295,7 @@ model TreatmentCase {
   deletedAt         DateTime?
 
   tasks               Task[]
+  appointments        Appointment[]
   payments            Payment[]
   insuranceProvisions InsuranceProvision[]
   sentMessages        SentMessage[]

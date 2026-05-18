@@ -11,7 +11,7 @@ const router = express.Router();
 router.get('/appointments', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
-  const { start, end, status, practitionerId, patientId, search } = req.query;
+const { start, end, status, practitionerId, patientId, search, treatmentCaseId } = req.query;
 
   try {
     const where: any = { clinicId, deletedAt: null };
@@ -24,6 +24,7 @@ router.get('/appointments', authorize(['admin', 'doctor', 'receptionist']), asyn
 
     if (patientId) where.patientId = String(patientId);
     if (status) where.status = String(status);
+    if (treatmentCaseId) where.treatmentCaseId = String(treatmentCaseId);
 
     if (start || end) {
       where.startTime = {};
@@ -42,7 +43,7 @@ router.get('/appointments', authorize(['admin', 'doctor', 'receptionist']), asyn
 
     const appointments = await prisma.appointment.findMany({
       where,
-      include: { patient: true, practitioner: true, appointmentType: true },
+      include: { patient: true, practitioner: true, appointmentType: true, treatmentCase: { select: { id: true, title: true } } },
       orderBy: { startTime: 'asc' },
     });
     res.json(appointments);
@@ -64,6 +65,7 @@ router.get('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), 
         patient: true,
         practitioner: true,
         appointmentType: true,
+        treatmentCase: { select: { id: true, title: true } },
         activityLogs: { include: { user: true }, orderBy: { createdAt: 'desc' } },
       },
     });
@@ -224,6 +226,43 @@ router.put('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), 
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update appointment' });
+  }
+});
+
+// PATCH /api/appointments/:id/treatment-case — link or unlink a treatment case
+router.patch('/appointments/:id/treatment-case', authorize(['admin', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const clinicId = req.user!.clinicId;
+  const { treatmentCaseId } = req.body; // null to unlink
+
+  try {
+    const existing = await prisma.appointment.findFirst({ where: { id, clinicId, deletedAt: null } });
+    if (!existing) return res.status(404).json({ error: 'Appointment not found' });
+
+    if (treatmentCaseId) {
+      const tc = await prisma.treatmentCase.findFirst({ where: { id: treatmentCaseId, clinicId } });
+      if (!tc) return res.status(400).json({ error: 'Invalid treatment case' });
+      // ensure appointment belongs to same patient
+      if (tc.patientId !== existing.patientId) {
+        return res.status(400).json({ error: 'Treatment case does not belong to this appointment\'s patient' });
+      }
+    }
+
+    const updated = await prisma.appointment.update({
+      where: { id },
+      data: { treatmentCaseId: treatmentCaseId ?? null },
+      include: { patient: true, practitioner: true, appointmentType: true, treatmentCase: { select: { id: true, title: true } } },
+    });
+
+    await logActivity({
+      clinicId, userId: req.user!.id, entityType: 'appointment', entityId: id,
+      action: 'updated',
+      description: treatmentCaseId ? `Randevu tedavi dosyasına bağlandı` : 'Randevunun tedavi dosyası bağlantısı kaldırıldı',
+    });
+
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Failed to update treatment case link' });
   }
 });
 

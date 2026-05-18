@@ -11,6 +11,11 @@ const router = express.Router();
 const treatmentCaseInclude = {
   patient: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } },
   practitioner: { select: { id: true, firstName: true, lastName: true } },
+  appointments: {
+    where: { deletedAt: null },
+    include: { appointmentType: { select: { id: true, name: true } }, practitioner: { select: { id: true, firstName: true, lastName: true } } },
+    orderBy: { startTime: 'asc' as const },
+  },
   payments: { orderBy: { createdAt: 'desc' as const } },
 };
 
