@@ -17,10 +17,12 @@ import {
   Plus,
   TrendingUp,
   FileText,
-  MessageSquare
+  MessageSquare,
+  Trash2,
+  Circle
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { treatmentCaseService, paymentService, insuranceProvisionService } from '../services/api';
+import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService } from '../services/api';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
@@ -44,6 +46,19 @@ const TreatmentCaseDetail: React.FC = () => {
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Treatment procedures
+  const [procedures, setProcedures] = useState<any[]>([]);
+  const [isProcFormOpen, setIsProcFormOpen] = useState(false);
+  const [editingProc, setEditingProc] = useState<any | null>(null);
+  const [procSaving, setProcSaving] = useState(false);
+  const [procForm, setProcForm] = useState({
+    procedureName: '',
+    toothFdi: '',
+    status: 'planned',
+    estimatedCost: '',
+    notes: '',
+  });
+
   const fetchDetail = async () => {
     if (!id) return;
     setLoading(true);
@@ -56,6 +71,9 @@ const TreatmentCaseDetail: React.FC = () => {
 
       const insuranceRes = await insuranceProvisionService.getAll({ treatment_case_id: id });
       setInsuranceProvisions(insuranceRes.data);
+
+      const procRes = await treatmentPlanProceduresService.getByCaseId(id);
+      setProcedures(procRes.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch details');
     } finally {
@@ -84,6 +102,66 @@ const TreatmentCaseDetail: React.FC = () => {
       alert(err.response?.data?.error || 'Update failed');
     }
   };
+
+  const openProcForm = (proc?: any) => {
+    if (proc) {
+      setEditingProc(proc);
+      setProcForm({
+        procedureName: proc.procedureName,
+        toothFdi: proc.toothFdi ? String(proc.toothFdi) : '',
+        status: proc.status,
+        estimatedCost: proc.estimatedCost ? String(proc.estimatedCost) : '',
+        notes: proc.notes ?? '',
+      });
+    } else {
+      setEditingProc(null);
+      setProcForm({ procedureName: '', toothFdi: '', status: 'planned', estimatedCost: '', notes: '' });
+    }
+    setIsProcFormOpen(true);
+  };
+
+  const handleProcSave = async () => {
+    if (!procForm.procedureName.trim() || !id) return;
+    setProcSaving(true);
+    const payload = {
+      procedureName: procForm.procedureName.trim(),
+      toothFdi: procForm.toothFdi ? parseInt(procForm.toothFdi) : null,
+      status: procForm.status,
+      estimatedCost: procForm.estimatedCost ? parseFloat(procForm.estimatedCost) : null,
+      notes: procForm.notes.trim() || null,
+    };
+    try {
+      if (editingProc) {
+        await treatmentPlanProceduresService.update(id, editingProc.id, payload);
+      } else {
+        await treatmentPlanProceduresService.create(id, payload);
+      }
+      setIsProcFormOpen(false);
+      const procRes = await treatmentPlanProceduresService.getByCaseId(id);
+      setProcedures(procRes.data);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to save procedure');
+    } finally {
+      setProcSaving(false);
+    }
+  };
+
+  const handleProcDelete = async (procId: string) => {
+    if (!id || !window.confirm('Prosedür silinsin mi?')) return;
+    try {
+      await treatmentPlanProceduresService.remove(id, procId);
+      setProcedures((prev) => prev.filter((p) => p.id !== procId));
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to delete');
+    }
+  };
+
+  const PROC_STATUS = {
+    planned:     { label: 'Planlandı',    dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100' },
+    in_progress: { label: 'Devam Ediyor', dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100' },
+    completed:   { label: 'Tamamlandı',   dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+    cancelled:   { label: 'İptal',        dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200' },
+  } as const;
 
   if (loading) {
     return (
@@ -460,6 +538,80 @@ const TreatmentCaseDetail: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Treatment Plan Procedures */}
+            <div className="card overflow-hidden md:col-span-2">
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-sm flex items-center gap-2">
+                  <ClipboardList size={16} className="text-gray-400" />
+                  Tedavi Planı Prosedürleri
+                  {procedures.filter((p) => p.status !== 'cancelled').length > 0 && (
+                    <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">
+                      {procedures.filter((p) => p.status !== 'cancelled').length}
+                    </span>
+                  )}
+                </h3>
+                <button
+                  onClick={() => openProcForm()}
+                  className="p-1 hover:bg-white rounded transition-colors text-primary-600"
+                  title="Prosedür Ekle"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              {procedures.length === 0 ? (
+                <div className="p-6 text-center text-gray-400 text-xs italic">
+                  Henüz prosedür eklenmemiş.{' '}
+                  <button onClick={() => openProcForm()} className="text-primary-600 font-semibold hover:underline">
+                    Ekle →
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {procedures.map((proc: any) => {
+                    const cfg = PROC_STATUS[proc.status as keyof typeof PROC_STATUS] ?? PROC_STATUS.planned;
+                    return (
+                      <div key={proc.id} className="p-3 flex items-start gap-3 group">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${cfg.dot}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-gray-900">{proc.procedureName}</span>
+                            {proc.toothFdi && (
+                              <span className="text-xs bg-white border border-gray-200 px-1.5 py-0.5 rounded font-mono">
+                                Diş {proc.toothFdi}
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
+                              {cfg.label}
+                            </span>
+                          </div>
+                          {proc.notes && <p className="text-xs text-gray-500 mt-0.5">{proc.notes}</p>}
+                          {proc.estimatedCost && (
+                            <p className="text-xs text-gray-400 mt-0.5">Tahmini: {Number(proc.estimatedCost).toLocaleString('tr-TR')} ₺</p>
+                          )}
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <button
+                            onClick={() => openProcForm(proc)}
+                            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-700"
+                            title="Düzenle"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleProcDelete(proc.id)}
+                            className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"
+                            title="Sil"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Activity Timeline */}
@@ -557,6 +709,109 @@ const TreatmentCaseDetail: React.FC = () => {
             fetchDetail();
           }}
         />
+      )}
+
+      {/* Procedure add/edit modal */}
+      {isProcFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="card p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <ClipboardList size={18} className="text-primary-500" />
+                {editingProc ? 'Prosedürü Düzenle' : 'Prosedür Ekle'}
+              </h3>
+              <button onClick={() => setIsProcFormOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                <XCircle size={18} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">İşlem Adı *</label>
+                <input
+                  type="text"
+                  value={procForm.procedureName}
+                  onChange={(e) => setProcForm((f) => ({ ...f, procedureName: e.target.value }))}
+                  placeholder="ör. İmplant Yerleştirme, Kanal Tedavisi..."
+                  className="input-field"
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Diş No (FDI) <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                  <input
+                    type="number"
+                    value={procForm.toothFdi}
+                    onChange={(e) => setProcForm((f) => ({ ...f, toothFdi: e.target.value }))}
+                    placeholder="ör. 16, 36..."
+                    min={11}
+                    max={48}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label">Tahmini Tutar (₺) <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                  <input
+                    type="number"
+                    value={procForm.estimatedCost}
+                    onChange={(e) => setProcForm((f) => ({ ...f, estimatedCost: e.target.value }))}
+                    placeholder="0"
+                    min={0}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Durum</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.entries(PROC_STATUS) as [string, typeof PROC_STATUS[keyof typeof PROC_STATUS]][]).map(([s, cfg]) => (
+                    <button
+                      key={s}
+                      onClick={() => setProcForm((f) => ({ ...f, status: s }))}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                        procForm.status === s
+                          ? `${cfg.badge} border-current`
+                          : 'bg-gray-50 dark:bg-gray-700 text-gray-500 border-gray-200 dark:border-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                      {cfg.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Not <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                <textarea
+                  value={procForm.notes}
+                  onChange={(e) => setProcForm((f) => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Klinik not, özel bilgi..."
+                  className="input-field resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={handleProcSave}
+                disabled={procSaving || !procForm.procedureName.trim()}
+                className="btn-primary flex-1"
+              >
+                {procSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                {editingProc ? 'Güncelle' : 'Ekle'}
+              </button>
+              <button onClick={() => setIsProcFormOpen(false)} className="btn-secondary">
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

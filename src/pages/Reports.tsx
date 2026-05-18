@@ -341,7 +341,7 @@ const Reports: React.FC = () => {
                     <BarChart data={byPeriod} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                       <XAxis dataKey="period" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Tooltip formatter={(v: any) => formatCurrency(v as number)} />
                       <Bar dataKey="revenue" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Gelir" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -358,14 +358,14 @@ const Reports: React.FC = () => {
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie data={byMethod} dataKey="revenue" nameKey="method" cx="50%" cy="50%"
-                      outerRadius={80} label={({ method, percent }) => `${METHOD_LABELS[method] || method} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80} label={({ method, percent }: any) => `${METHOD_LABELS[method] || method} ${((percent ?? 0) * 100).toFixed(0)}%`}
                       labelLine={false}
                     >
                       {byMethod.map((_: any, index: number) => (
                         <Cell key={index} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: number, name: string) => [formatCurrency(v), METHOD_LABELS[name] || name]} />
+                    <Tooltip formatter={(v: any, name: any) => [formatCurrency(v as number), METHOD_LABELS[name as string] || name]} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="mt-3 space-y-1">
@@ -499,7 +499,7 @@ const Reports: React.FC = () => {
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number, name: string) => [v + ' hasta', SOURCE_LABELS[name] || name]} />
+                  <Tooltip formatter={(v: any, name: any) => [(v as number) + ' hasta', SOURCE_LABELS[name as string] || name]} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -516,7 +516,7 @@ const Reports: React.FC = () => {
                     <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
                     <YAxis type="category" dataKey="source" tick={{ fontSize: 11 }}
                       tickFormatter={(v) => SOURCE_LABELS[v] || v} width={90} />
-                    <Tooltip formatter={(v: number, name: string) => [formatCurrency(v), 'Gelir']} />
+                    <Tooltip formatter={(v: any) => [formatCurrency(v as number), 'Gelir']} />
                     <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
                       {sourcesData.sources.map((_: any, i: number) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -627,7 +627,7 @@ const Reports: React.FC = () => {
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => `%${v}`} />
-                  <Tooltip formatter={(v: number, name: string) => {
+                  <Tooltip formatter={(v: any, name: any) => {
                     if (name === 'rate') return [`%${v}`, 'No-Show Oranı'];
                     if (name === 'no_shows') return [v, 'No-Show'];
                     if (name === 'cancellations') return [v, 'İptal'];
@@ -657,7 +657,7 @@ const Reports: React.FC = () => {
                   }))} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
                     <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: number, name: string) => [name === 'rate' ? `%${v}` : v, name === 'rate' ? 'Oran' : 'No-Show']} />
+                    <Tooltip formatter={(v: any, name: any) => [name === 'rate' ? `%${v}` : v, name === 'rate' ? 'Oran' : 'No-Show']} />
                     <Bar dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -678,7 +678,7 @@ const Reports: React.FC = () => {
                   }))} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
                     <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={1} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: number, name: string) => [v, name === 'no_shows' ? 'No-Show' : 'Toplam']} />
+                    <Tooltip formatter={(v: any, name: any) => [v, name === 'no_shows' ? 'No-Show' : 'Toplam']} />
                     <Bar dataKey="total" fill="#E5E7EB" radius={[4, 4, 0, 0]} name="total" />
                     <Bar dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
                   </BarChart>

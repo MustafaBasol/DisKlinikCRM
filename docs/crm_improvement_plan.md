@@ -325,9 +325,9 @@
 
 Modern diş klinik yazılımlarında (Dentrix, Planmeca Romexis, DentalSoft) olan ama bu CRM'de olmayan en çarpıcı özellikler:
 
-1. **Tedavi Planı Görselleştirme** — Diş haritası üzerinde planlanan tedaviler
+1. **Tedavi Planı Görselleştirme** — Diş haritası üzerinde planlanan tedaviler ✅ TAMAMLANDI
 2. **Hasta Fotoğraf Galerisi** — Tedavi öncesi/sonrası fotoğraf karşılaştırma
-3. **Online Randevu Widget** — Kliniğin web sitesine gömülebilir randevu formu
+3. **Online Randevu Widget** — Kliniğin web sitesine gömülebilir randevu formu ✅ TAMAMLANDI
 4. **SMS ile İki Yönlü İletişim** — Hasta yanıtlarını CRM'de takip
 5. **Stok/Malzeme Takibi** — Basit düzeyde implant, protez malzeme stoku ✅ TAMAMLANDI
 
