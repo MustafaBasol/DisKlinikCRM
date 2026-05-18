@@ -269,15 +269,15 @@ const Appointments: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-4">
-          <div className="grid grid-cols-7 gap-2 mb-2">
+        <div className="p-2 sm:p-4">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-2 mb-1 sm:mb-2">
             {weekdayLabels.map((label) => (
-              <div key={label} className="text-center text-xs font-bold uppercase text-gray-400 py-2">
+              <div key={label} className="text-center text-[9px] sm:text-xs font-bold uppercase text-gray-400 py-1 sm:py-2 truncate">
                 {label}
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-2">
             {calendarDays.map((date) => {
               const dateKey = toLocalDateString(date);
               const count = appointmentCounts[dateKey] || 0;
@@ -290,7 +290,7 @@ const Appointments: React.FC = () => {
                   key={dateKey}
                   type="button"
                   onClick={() => handleCalendarDayClick(date)}
-                  className={`min-h-[86px] rounded-xl border p-2 text-left transition-all ${
+                  className={`min-h-[52px] sm:min-h-[86px] rounded-lg sm:rounded-xl border p-1 sm:p-2 text-left transition-all ${
                     isSelected
                       ? 'border-primary-500 bg-primary-50 shadow-sm'
                       : isCurrentMonth
@@ -298,21 +298,31 @@ const Appointments: React.FC = () => {
                         : 'border-gray-50 bg-gray-50/60 text-gray-300'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className={`text-sm font-bold ${isSelected ? 'text-primary-700' : isToday ? 'text-primary-600' : isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}`}>
+                  <div className="flex items-start justify-between gap-0.5">
+                    <span className={`text-[11px] sm:text-sm font-bold leading-none ${isSelected ? 'text-primary-700' : isToday ? 'text-primary-600' : isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}`}>
                       {date.getDate()}
                     </span>
-                    {isToday && <span className="w-2 h-2 rounded-full bg-primary-500 mt-1" />}
+                    {isToday && <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-primary-500 mt-0.5 shrink-0" />}
                   </div>
-                  <div className="mt-4">
+                  <div className="mt-1 sm:mt-4">
                     {count > 0 ? (
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-bold ${
-                        isSelected ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {t('appointments:calendar.appointmentCount', { count })}
-                      </span>
+                      <>
+                        {/* Mobile: sadece sayı + küçük badge */}
+                        <span className={`sm:hidden inline-flex items-center justify-center rounded-full w-5 h-5 text-[10px] font-bold ${
+                          isSelected ? 'bg-primary-600 text-white' : 'bg-primary-100 text-primary-700'
+                        }`}>
+                          {count}
+                        </span>
+                        {/* Desktop: tam metin */}
+                        <span className={`hidden sm:inline-flex items-center rounded-full px-2 py-1 text-xs font-bold ${
+                          isSelected ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {t('appointments:calendar.appointmentCount', { count })}
+                        </span>
+                      </>
                     ) : (
-                      <span className="text-xs text-gray-300">{t('appointments:calendar.noAppointments')}</span>
+                      /* Mobilde "Randevu yok" yazısı gizli */
+                      <span className="hidden sm:block text-xs text-gray-300">{t('appointments:calendar.noAppointments')}</span>
                     )}
                   </div>
                 </button>

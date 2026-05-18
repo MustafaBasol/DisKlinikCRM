@@ -155,16 +155,16 @@ const MainLayout: React.FC = () => {
       {/* Main Content — no left margin on mobile (sidebar overlays); desktop gets ml based on sidebar state */}
       <main
         className={[
-          'flex-1 transition-all duration-300 flex flex-col',
+          'flex-1 transition-all duration-300 flex flex-col min-w-0 overflow-x-hidden',
           isMobile ? 'ml-0' : (isSidebarOpen ? 'ml-64' : 'ml-20'),
         ].join(' ')}
       >
         {/* Header */}
-        <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40">
-          <div className="flex items-center gap-4 flex-1">
+        <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-3 sm:px-8 sticky top-0 z-40">
+          <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-500 dark:text-gray-400"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-500 dark:text-gray-400 shrink-0"
             >
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -181,7 +181,7 @@ const MainLayout: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 sm:gap-4 shrink-0">
             <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-bold border border-primary-100 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-800">
               <span className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></span>
               {user?.clinic.name}
@@ -196,21 +196,22 @@ const MainLayout: React.FC = () => {
               {isDark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
             
-            {/* Language Switcher */}
+            {/* Yeni Görev — mobilde gizli */}
             <button 
               onClick={() => setIsTaskFormOpen(true)} 
-              className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors relative"
+              className="hidden sm:flex p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors relative"
               title={t('tasks:newTask')}
             >
               <ClipboardList size={20} />
             </button>
-            <div className="w-px h-6 bg-gray-200 mx-2"></div>
+            <div className="hidden sm:block w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
             
+            {/* Dil Seçici */}
             <div className="relative group">
-              <button className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300">
-                <Globe size={20} />
-                <span className="text-xs font-bold uppercase">{t(`common:languages.${i18n.language.split('-')[0]}`)}</span>
-                <ChevronDown size={14} />
+              <button className="flex items-center gap-1 sm:gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300">
+                <Globe size={18} />
+                <span className="hidden sm:inline text-xs font-bold uppercase">{t(`common:languages.${i18n.language.split('-')[0]}`)}</span>
+                <ChevronDown size={12} className="hidden sm:block" />
               </button>
               <div className="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                 {['en', 'tr', 'fr', 'de'].map((lng) => (
@@ -228,13 +229,13 @@ const MainLayout: React.FC = () => {
             </div>
 
             <NotificationBell />
-            <div className="h-8 w-[1px] bg-gray-200 dark:bg-gray-700 mx-2"></div>
-            <div className="flex items-center gap-3 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
+            <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+            <div className="flex items-center gap-2 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none">{user?.firstName} {user?.lastName}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 capitalize">{user?.role}</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-health-100 flex items-center justify-center text-health-700 font-bold border-2 border-health-200">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-health-100 flex items-center justify-center text-health-700 font-bold border-2 border-health-200 text-sm">
                 {user?.firstName[0]}{user?.lastName[0]}
               </div>
             </div>

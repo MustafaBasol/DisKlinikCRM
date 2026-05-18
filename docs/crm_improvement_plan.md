@@ -124,12 +124,12 @@
 - **Etki:** ⭐⭐⭐⭐ — Hedefli iletişim ve pazarlama
 - **Zorluk:** Düşük
 
-### 3.5 — Diş Haritası (Dental Chart) — Basit Versiyon
-- **Mevcut:** Yok (EHR değil, CRM odaklı)
-- **Hedef:** 32 dişlik interaktif görsel harita. Her dişe kısa not/durum ekleyebilme. (Tıbbi kayıt değil, operasyonel not amaçlı)
+### 3.5 — Diş Haritası (Dental Chart) — Basit Versiyon ✅ TAMAMLANDI
+- **Mevcut:** 32 dişlik interaktif FDI haritası. Her dişe durum (planned/treated/issue/missing/crown/implant) ve not eklenebilir.
+- **Hedef:** ~~32 dişlik interaktif görsel harita. Her dişe kısa not/durum ekleyebilme.~~ **Tamamlandı.**
+- **Uygulama:** ToothRecord Prisma modeli (FDI notasyonu, upsert), backend `/api/patients/:id/dental-chart` (GET/PUT/DELETE), `DentalChart.tsx` bileşeni (renk kodlamalı, popover editör, özet tablo), PatientDetail "Diş Haritası" sekmesi
 - **Etki:** ⭐⭐⭐⭐⭐ — Diş klinikleri için çok güçlü satış argümanı
 - **Zorluk:** Yüksek
-- **Not:** EHR sınırını aşmadan, "hangi dişe hangi hizmet planlandı" düzeyinde tutulmalı
 
 ---
 
@@ -181,8 +181,8 @@
 - **Etki:** ⭐⭐⭐ — WhatsApp'a ek kanal
 - **Zorluk:** Düşük
 
-### 5.4 — WhatsApp Konuşma Geçmişi Görünümü
-- **Mevcut:** `WhatsAppConversationMessage` modeli var ama UI'da konuşma geçmişi yok
+### 5.4 — WhatsApp Konuşma Geçmişi Görünümü ✅ TAMAMLANDI
+- **Durum:** `PatientDetail.tsx`'te ayrı bir "WhatsApp" sekmesi mevcut. `whatsappConversationMessages` verisi patient API'den yükleniyor. Yön filtresi (tümü/gelen/giden), metin arama, chat baloncukları (gelen=yeşil, giden=mavi), mesaj sayısı özeti — tümü aktif.
 - **Hedef:** Hasta detayında WhatsApp konuşma geçmişini chat baloncukları olarak göster
 - **Etki:** ⭐⭐⭐⭐ — Hasta ile iletişim bağlamı
 - **Zorluk:** Düşük-Orta
@@ -281,7 +281,7 @@
 |---|-----------|-------|
 | 10 | Taksit planı (4.2) | İmplant/ortodonti kliniği satışı |
 | 11 | Gelir raporu + hekim performans (4.3, 4.4) | Klinik sahibi karar desteği |
-| 12 | WhatsApp konuşma geçmişi (5.4) | Veri zaten var, sadece UI gerekli |
+| 12 | ~~WhatsApp konuşma geçmişi (5.4)~~ ✅ | Veri zaten var, sadece UI gerekli |
 | 13 | Hasta etiketleri (3.4) | Segmentasyon ve pazarlama |
 | 14 | ~~Mobil uyumluluk (1.3)~~ ✅ | Hekim kullanımı |
 | 15 | Rate limiting & güvenlik (7.2) | Prodüksiyon öncesi zorunlu |
@@ -289,7 +289,7 @@
 ### Uzun Vadeli (Ay 3+)
 | # | Geliştirme | Neden |
 |---|-----------|-------|
-| 16 | Diş haritası (3.5) | Güçlü rekabet avantajı |
+| 16 | ~~Diş haritası (3.5)~~ ✅ | Güçlü rekabet avantajı |
 | 17 | Çoklu şube (7.5) | Ölçeklenme |
 | 18 | Hasta portalı (3.1) | Self-service randevu |
 | 19 | CI/CD + testler (7.3, 7.4) | Ekip büyüdüğünde zorunlu |

@@ -27,6 +27,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { patientService, taskService, treatmentCaseService, paymentService, insuranceProvisionService, attachmentService } from '../services/api';
+import DentalChart from '../components/DentalChart';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
@@ -49,7 +50,7 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'whatsapp' | 'activity' | 'files'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'whatsapp' | 'activity' | 'files' | 'dental'>('overview');
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -83,9 +84,11 @@ const PatientDetail: React.FC = () => {
 
       const attachRes = await attachmentService.getAll(id);
       setAttachments(attachRes.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch patient:', error);
-      navigate('/patients');
+      if (error?.response?.status === 404) {
+        navigate('/patients');
+      }
     } finally {
       setLoading(false);
     }
@@ -180,13 +183,13 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="flex gap-6 border-b border-gray-200">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'whatsapp', 'files', 'activity'] as const).map(tab => (
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'whatsapp', 'files', 'dental', 'activity'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : tab === 'files' ? t('patients:detail.filesTab', { defaultValue: 'Dosyalar' }) : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : tab === 'files' ? t('patients:detail.filesTab', { defaultValue: 'Dosyalar' }) : tab === 'dental' ? 'Diş Haritası' : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -645,6 +648,15 @@ const PatientDetail: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+        {/* Dental Chart Tab */}
+        {activeTab === 'dental' && (
+          <div className="card p-6">
+            <h3 className="font-bold flex items-center gap-2 mb-6">
+              <span>🦷</span> Diş Haritası
+            </h3>
+            <DentalChart patientId={id!} />
           </div>
         )}
         {activeTab === 'activity' && (

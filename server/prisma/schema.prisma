@@ -38,6 +38,7 @@ model Clinic {
   whatsappConversationMessages WhatsAppConversationMessage[]
   settings             Setting[]
   patientAttachments   PatientAttachment[]
+  toothRecords         ToothRecord[]
 }
 
 model User {
@@ -67,6 +68,7 @@ model User {
   createdTemplates    MessageTemplate[]    @relation("TemplateCreator")
   activityLogs        ActivityLog[]
   uploadedAttachments PatientAttachment[]  @relation("AttachmentUploader")
+  toothRecordsCreated  ToothRecord[]        @relation("ToothRecordCreator")
 }
 
 model DoctorAvailability {
@@ -117,6 +119,7 @@ model Patient {
   activityLogs        ActivityLog[]
   whatsappConversationMessages WhatsAppConversationMessage[]
   attachments         PatientAttachment[]
+  toothRecords        ToothRecord[]
 }
 
 model AppointmentType {
@@ -444,4 +447,22 @@ model PatientAttachment {
   uploadedById String
   uploadedBy   User     @relation("AttachmentUploader", fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
+}
+
+model ToothRecord {
+  id          String   @id @default(uuid())
+  clinicId    String
+  clinic      Clinic   @relation(fields: [clinicId], references: [id])
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  toothFdi    Int      // FDI notation: 11-18, 21-28, 31-38, 41-48
+  status      String   // planned, treated, issue, missing, crown, implant
+  note        String?
+  createdById String
+  createdBy   User     @relation("ToothRecordCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([patientId, toothFdi])
+  @@index([clinicId, patientId])
 }

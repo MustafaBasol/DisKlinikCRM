@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global yatay taşma koruması */
+html {
+  overflow-x: hidden;
+}
+body {
+  overflow-x: hidden;
+}
+
 /* FullCalendar overrides */
 .fc-wrapper .fc {
   font-family: 'Inter', system-ui, sans-serif;
@@ -113,3 +121,140 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* ── Dark scrollbar ── */
+.dark ::-webkit-scrollbar-thumb { background: #475569; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE — SYSTEMATIC OVERRIDES
+   (covers all pages/components without touching individual files)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Backgrounds ── */
+.dark .bg-white          { background-color: #1e293b; }
+.dark .bg-gray-50        { background-color: #162032; }
+.dark .bg-gray-100       { background-color: #1e293b; }
+.dark .bg-gray-200       { background-color: #334155; }
+
+/* ── Hover backgrounds ── */
+.dark .hover\:bg-white:hover       { background-color: #334155; }
+.dark .hover\:bg-gray-50:hover     { background-color: #1e293b; }
+.dark .hover\:bg-gray-100:hover    { background-color: #334155; }
+.dark .hover\:bg-gray-200:hover    { background-color: #475569; }
+
+/* ── Text colors ── */
+.dark .text-gray-900     { color: #f1f5f9; }
+.dark .text-gray-800     { color: #e2e8f0; }
+.dark .text-gray-700     { color: #cbd5e1; }
+.dark .text-gray-600     { color: #94a3b8; }
+.dark .text-gray-500     { color: #94a3b8; }
+
+/* ── Hover text ── */
+.dark .hover\:text-gray-900:hover  { color: #f1f5f9; }
+.dark .hover\:text-gray-700:hover  { color: #cbd5e1; }
+.dark .hover\:text-gray-600:hover  { color: #94a3b8; }
+
+/* ── Borders ── */
+.dark .border-gray-50    { border-color: #1e293b; }
+.dark .border-gray-100   { border-color: #334155; }
+.dark .border-gray-200   { border-color: #334155; }
+.dark .border-gray-300   { border-color: #475569; }
+
+/* ── Divide (table row separators) ── */
+.dark .divide-gray-50  > :not([hidden]) ~ :not([hidden]) { border-color: #1e293b; }
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #334155; }
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #334155; }
+
+/* ── Status / colored light backgrounds → subtle in dark ── */
+.dark .bg-red-50         { background-color: rgba(239, 68,  68,  0.15); }
+.dark .bg-green-50       { background-color: rgba(34,  197, 94,  0.15); }
+.dark .bg-yellow-50      { background-color: rgba(234, 179, 8,   0.15); }
+.dark .bg-amber-50       { background-color: rgba(245, 158, 11,  0.15); }
+.dark .bg-blue-50        { background-color: rgba(59,  130, 246, 0.15); }
+.dark .bg-indigo-50      { background-color: rgba(99,  102, 241, 0.15); }
+.dark .bg-purple-50      { background-color: rgba(168, 85,  247, 0.15); }
+
+/* ── Status / colored light borders → subtle in dark ── */
+.dark .border-red-100    { border-color: rgba(239, 68,  68,  0.35); }
+.dark .border-red-200    { border-color: rgba(239, 68,  68,  0.45); }
+.dark .border-green-100  { border-color: rgba(34,  197, 94,  0.35); }
+.dark .border-green-200  { border-color: rgba(34,  197, 94,  0.45); }
+.dark .border-amber-100  { border-color: rgba(245, 158, 11,  0.35); }
+.dark .border-blue-100   { border-color: rgba(59,  130, 246, 0.35); }
+.dark .border-primary-100 { border-color: rgba(59, 130, 246, 0.35); }
+
+/* ── Status hover backgrounds ── */
+.dark .hover\:bg-red-50:hover    { background-color: rgba(239, 68,  68,  0.2); }
+.dark .hover\:bg-green-50:hover  { background-color: rgba(34,  197, 94,  0.2); }
+
+/* ── Colored text — slightly lighter in dark for readability ── */
+.dark .text-red-700      { color: #f87171; }
+.dark .text-red-600      { color: #f87171; }
+.dark .text-red-500      { color: #f87171; }
+.dark .text-green-700    { color: #4ade80; }
+.dark .text-green-600    { color: #4ade80; }
+.dark .text-green-500    { color: #4ade80; }
+.dark .text-amber-700    { color: #fbbf24; }
+.dark .text-amber-600    { color: #fbbf24; }
+.dark .text-yellow-700   { color: #fbbf24; }
+.dark .text-blue-700     { color: #60a5fa; }
+.dark .text-blue-600     { color: #60a5fa; }
+.dark .text-blue-500     { color: #60a5fa; }
+.dark .text-indigo-700   { color: #818cf8; }
+.dark .text-indigo-600   { color: #818cf8; }
+
+/* ── Shadows: soften in dark mode ── */
+.dark .shadow-sm  { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.4); }
+.dark .shadow     { box-shadow: 0 1px 3px 0 rgba(0,0,0,0.5), 0 1px 2px -1px rgba(0,0,0,0.5); }
+.dark .shadow-md  { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5), 0 2px 4px -2px rgba(0,0,0,0.5); }
+.dark .shadow-lg  { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.6), 0 4px 6px -4px rgba(0,0,0,0.6); }
+.dark .shadow-xl  { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.7), 0 8px 10px -6px rgba(0,0,0,0.7); }
+
+/* ── Ring (focus outlines) ── */
+.dark .ring-gray-200 { --tw-ring-color: #334155; }
+
+/* ── Placeholder text ── */
+.dark input::placeholder,
+.dark textarea::placeholder,
+.dark select::placeholder { color: #64748b; }
+
+/* ── Select element ── */
+.dark select {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+.dark select option {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+/* ── Table specifics ── */
+.dark thead th { color: #94a3b8; }
+
+/* ── Modal overlays ── */
+.dark .bg-black\/50 { background-color: rgba(0,0,0,0.7); }
+
+/* ── Badge dark overrides ── */
+.dark .badge-blue   { background-color: rgba(59,130,246,0.2); color: #60a5fa; }
+.dark .badge-green  { background-color: rgba(34,197,94,0.2);  color: #4ade80; }
+.dark .badge-yellow { background-color: rgba(234,179,8,0.2);  color: #fbbf24; }
+.dark .badge-red    { background-color: rgba(239,68,68,0.2);  color: #f87171; }
+.dark .badge-gray   { background-color: #334155; color: #cbd5e1; }
+.dark .badge-teal   { background-color: rgba(20,184,166,0.2); color: #2dd4bf; }
+
+/* ── Primary color overrides in dark ── */
+.dark .bg-primary-50          { background-color: rgba(59,130,246,0.15); }
+.dark .hover\:bg-primary-50:hover { background-color: rgba(59,130,246,0.2); }
+
+/* ── Recharts dark mode ── */
+.dark .recharts-cartesian-axis-tick text { fill: #64748b; }
+.dark .recharts-legend-item-text         { color: #94a3b8 !important; }
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+.dark .recharts-default-tooltip .recharts-tooltip-label { color: #f1f5f9 !important; }
+.dark .recharts-default-tooltip .recharts-tooltip-item  { color: #cbd5e1 !important; }
+.dark .recharts-tooltip-cursor { fill: rgba(255,255,255,0.05) !important; }

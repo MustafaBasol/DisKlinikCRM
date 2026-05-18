@@ -17,6 +17,7 @@ import paymentsRoutes from './routes/payments.js';
 import messagesRoutes from './routes/messages.js';
 import attachmentsRoutes from './routes/attachments.js';
 import notificationsRoutes from './routes/notifications.js';
+import dentalChartRoutes from './routes/dentalChart.js';
 import { startReminderJobs } from './jobs/reminders.js';
 
 dotenv.config();
@@ -48,6 +49,7 @@ app.use('/api', paymentsRoutes);
 app.use('/api', messagesRoutes);
 app.use('/api', attachmentsRoutes);
 app.use('/api', notificationsRoutes);
+app.use('/api', dentalChartRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
