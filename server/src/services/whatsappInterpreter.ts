@@ -35,9 +35,21 @@ const normalizeTimeExpressionText = (value: string) => normalizeIntentText(value
   .replace(/i̇/g, 'i')
   .replace(/ö/g, 'o')
   .replace(/ç/g, 'c')
-  .replace(/[^a-z0-9\s:\-]/g, ' ')
+  .replace(/[^a-z0-9\s:.\-]/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
+
+const hasTimeSignal = (normalized: string) => includesAny(normalized, [
+  'saat',
+  'olsun',
+  'istiyorum',
+  'uygun',
+  'musait',
+  'olur mu',
+  'civari',
+  'gibi',
+  'var mi',
+]);
 
 export const isMoreOptionsRequest = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
@@ -162,7 +174,7 @@ export const extractExplicitRequestedTime = (text: string) => {
     return null;
   }
 
-  const exactTimeMatch = normalizedTimeExpression.match(/\b(?:saat\s*)?([01]?\d|2[0-3]):([0-5]\d)(?:\s*(?:te|ta|de|da))?\b/);
+  const exactTimeMatch = normalizedTimeExpression.match(/\b(?:saat\s*)?([01]?\d|2[0-3])[:.]([0-5]\d)(?:\s*(?:te|ta|de|da))?\b/);
   if (exactTimeMatch) {
     return `${exactTimeMatch[1].padStart(2, '0')}:${exactTimeMatch[2]}`;
   }
@@ -172,7 +184,7 @@ export const extractExplicitRequestedTime = (text: string) => {
     return null;
   }
 
-  if (!includesAny(normalized, ['saat', 'olsun', 'istiyorum', 'uygun', 'musait', 'olur mu', 'civari', 'gibi', 'var mi'])) {
+  if (!hasTimeSignal(normalized)) {
     return null;
   }
 

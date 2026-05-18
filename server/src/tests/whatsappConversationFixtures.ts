@@ -11,8 +11,9 @@ import {
 import type { SavedAvailableSlot } from '../services/whatsappAvailability.js';
 import { routeResolvedWhatsAppIntent } from '../services/whatsappResolvedIntentRouter.js';
 import { getWebhookIgnoreReason, normalizeEvolutionWebhookPayload } from '../services/whatsappWebhookPayload.js';
+import { interpretTimeRequest } from '../services/whatsappInterpreter.js';
+import { normalizeDateFromTurkishInput } from '../utils/whatsappDate.js';
 import {
-  validateOptionalWebhookSecret,
   validateWhatsappApiSecret,
   whatsappAppointmentLookupQuerySchema,
   whatsappAppointmentRequestSchema,
@@ -297,6 +298,96 @@ const run = async () => {
     assert.ok(!message.includes('09:00'));
     assert.match(message, /14:00/);
     assert.match(message, /14:30/);
+  });
+
+  await runFixture('date and time parser handles Turkish date plus dotted time', () => {
+    const now = new Date('2026-05-16T21:36:00.000Z');
+    assert.equal(normalizeDateFromTurkishInput('24 mayis 18.30', now), '2026-05-24');
+    assert.equal(interpretTimeRequest('24 mayis 18.30').exactTime, '18:30');
+  });
+
+  await runFixture('awaiting_date understands date plus dotted time instead of failing date parsing', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: '24 mayis 18.30',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+      },
+      buildAvailableSlots: async () => [],
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      upsertState: recorder.upsertState,
+    });
+
+    assert.doesNotMatch(message, /Tarihi anlayamadim|Tarihi anlayamadım/i);
+    assert.match(message, /24 Mayıs 2026/i);
+    assert.match(message, /uygun saat görünmüyor/i);
+  });
+
+  await runFixture('awaiting_date filters exact dotted time when slots exist', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: '24 mayis 18.30',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+      },
+      buildAvailableSlots: async () => [
+        {
+          practitioner: { id: 'p1', firstName: 'Dt.', lastName: 'Aysegul Akmese' },
+          startTime: new Date('2026-05-24T18:00:00.000Z'),
+          endTime: new Date('2026-05-24T18:30:00.000Z'),
+          localStartTime: '18:00',
+          localEndTime: '18:30',
+        },
+        {
+          practitioner: { id: 'p2', firstName: 'Dt.', lastName: 'Kerem Ozguler' },
+          startTime: new Date('2026-05-24T18:30:00.000Z'),
+          endTime: new Date('2026-05-24T19:00:00.000Z'),
+          localStartTime: '18:30',
+          localEndTime: '19:00',
+        },
+      ],
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      upsertState: recorder.upsertState,
+    });
+
+    assert.match(message, /18:30/);
+    assert.ok(!message.includes('18:00'));
+  });
+
+  await runFixture('awaiting_date treats short affirmative continuation as asking for another date', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: 'Olur',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+      },
+      buildAvailableSlots: async () => {
+        throw new Error('availability should not be called without a date');
+      },
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      upsertState: recorder.upsertState,
+    });
+
+    assert.match(message, /hangi günü kontrol/i);
+    assert.doesNotMatch(message, /Tarihi anlayamad/i);
   });
 
   await runFixture('awaiting_time finds afternoon slots beyond the initial shown list', async () => {
@@ -820,9 +911,9 @@ const run = async () => {
     assert.equal(updatedState.pendingConfirmationSlot?.localStartTime, '16:30');
   });
 
-  await runFixture('awaiting_confirmation only creates the appointment after explicit approval', async () => {
+  await runFixture('awaiting_confirmation only creates a staff approval request after explicit approval', async () => {
     const recorder = createStateRecorder();
-    let created = 0;
+    let createdRequests = 0;
     const pendingSlot = createSlot('16:30', 'p1', 'Dt. Aysegul Akmese');
 
     const rejectMessage = await handleAwaitingConfirmationStep({
@@ -843,18 +934,18 @@ const run = async () => {
       upsertState: recorder.upsertState,
       resetState: async () => undefined,
       createAppointment: async () => {
-        created += 1;
+        createdRequests += 1;
         return { appointmentType: { name: 'Dis Temizligi' } };
       },
     });
 
     assert.match(rejectMessage, /yalnız uygunluğu teyit etmiş oldum/i);
-    assert.equal(created, 0);
+    assert.equal(createdRequests, 0);
 
     const approveMessage = await handleAwaitingConfirmationStep({
       clinicId,
       phone,
-      text: 'Evet, oluştur',
+      text: '👍',
       customerName,
       state: {
         selectedAppointmentTypeId: 'svc-1',
@@ -869,13 +960,14 @@ const run = async () => {
       upsertState: recorder.upsertState,
       resetState: async () => undefined,
       createAppointment: async () => {
-        created += 1;
+        createdRequests += 1;
         return { appointmentType: { name: 'Dis Temizligi' } };
       },
     });
 
-    assert.match(approveMessage, /Randevunuzu oluşturdum/i);
-    assert.equal(created, 1);
+    assert.match(approveMessage, /klinik onay ekranına aldım/i);
+    assert.match(approveMessage, /personel tarafından kontrol edilecek/i);
+    assert.equal(createdRequests, 1);
   });
 
   await runFixture('transcript flow keeps availability checks non-committing and allows appointment lookup afterwards', async () => {
@@ -1183,6 +1275,7 @@ const run = async () => {
         instance: 'clinic-main',
         data: {
           key: {
+            id: 'msg-1',
             remoteJid: '90 555 111 22 33@s.whatsapp.net',
             fromMe: false,
           },
@@ -1199,6 +1292,8 @@ const run = async () => {
     assert.equal(normalized.fromMe, false);
     assert.equal(normalized.message?.phone, '905551112233');
     assert.equal(normalized.message?.name, 'Ayse');
+    assert.equal(normalized.message?.messageId, 'msg-1');
+    assert.equal(normalized.message?.instance, 'clinic-main');
     assert.equal(normalized.message?.text, 'Merhaba');
   });
 
@@ -1266,14 +1361,14 @@ const run = async () => {
     }), 'invalid');
   });
 
-  await runFixture('optional webhook secret is skipped when not configured and rejects invalid secrets', () => {
-    assert.equal(validateOptionalWebhookSecret(undefined, {
+  await runFixture('webhook secret is required and accepts header or bearer secrets', () => {
+    assert.equal(validateWhatsappApiSecret(undefined, {
       xWhatsappSecret: 'anything',
-    }), null);
-    assert.equal(validateOptionalWebhookSecret('hook-secret', {
+    }), 'not_configured');
+    assert.equal(validateWhatsappApiSecret('hook-secret', {
       authorization: 'Bearer hook-secret',
     }), null);
-    assert.equal(validateOptionalWebhookSecret('hook-secret', {
+    assert.equal(validateWhatsappApiSecret('hook-secret', {
       xWhatsappSecret: 'wrong-secret',
     }), 'invalid');
   });
@@ -1285,7 +1380,7 @@ const run = async () => {
       practitionerId: '22222222-2222-4222-8222-222222222222',
     });
     const lookup = whatsappAppointmentLookupQuerySchema.parse({
-      phone: ' 905551112233 ',
+      phone: ' +90 555 111 22 33 ',
     });
 
     assert.equal(availability.date, '2026-05-16');

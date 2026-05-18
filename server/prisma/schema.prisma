@@ -202,6 +202,7 @@ model WhatsAppConversationState {
   clinicId                    String
   clinic                      Clinic   @relation(fields: [clinicId], references: [id])
   phone                       String
+  lastProviderMessageId       String?
   customerName                String?
   currentIntent               String?
   step                        String?
@@ -220,17 +221,19 @@ model WhatsAppConversationState {
 }
 
 model WhatsAppConversationMessage {
-  id         String   @id @default(uuid())
-  clinicId   String
-  clinic     Clinic   @relation(fields: [clinicId], references: [id])
-  patientId  String
-  patient    Patient  @relation(fields: [patientId], references: [id])
-  phone      String
-  direction  String
-  text       String
-  rawPayload Json?
-  createdAt  DateTime @default(now())
+  id                String   @id @default(uuid())
+  clinicId          String
+  clinic            Clinic   @relation(fields: [clinicId], references: [id])
+  patientId         String
+  patient           Patient  @relation(fields: [patientId], references: [id])
+  phone             String
+  providerMessageId String?
+  direction         String
+  text              String
+  rawPayload        Json?
+  createdAt         DateTime @default(now())
 
+  @@unique([clinicId, providerMessageId])
   @@index([clinicId, patientId, createdAt])
   @@index([clinicId, phone, createdAt])
 }

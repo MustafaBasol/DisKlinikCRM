@@ -142,7 +142,9 @@ export const normalizeDateFromTurkishInput = (input: string, now: Date, timeZone
     const month = Number(slashOrDotMatch[2]);
     const year = slashOrDotMatch[3] ? Number(slashOrDotMatch[3]) : undefined;
     const parsed = year ? buildUtcDate(year, month, day) : resolveYearIfMissing(month, day, today);
-    return parsed ? formatIsoDate(parsed) : null;
+    if (parsed) {
+      return formatIsoDate(parsed);
+    }
   }
 
   const dayMonthTextMatch = normalized.match(/(?:^|\D)(\d{1,2})\s+([a-zçğıöşü]+)(?:\s+(\d{4}))?(?:\D|$)/i);
@@ -188,6 +190,16 @@ export const normalizeDateFromTurkishInput = (input: string, now: Date, timeZone
 export const formatTurkishDateLong = (isoDate: string, timeZone = WHATSAPP_ASSISTANT_TIME_ZONE) => {
   return new Intl.DateTimeFormat('tr-TR', {
     timeZone,
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${isoDate}T12:00:00Z`));
+};
+
+export const formatTurkishDateWithWeekday = (isoDate: string, timeZone = WHATSAPP_ASSISTANT_TIME_ZONE) => {
+  return new Intl.DateTimeFormat('tr-TR', {
+    timeZone,
+    weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',

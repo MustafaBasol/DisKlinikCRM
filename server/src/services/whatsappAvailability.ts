@@ -176,6 +176,7 @@ export const buildAvailableSlots = async (
   const weekday = getZonedDateParts(localDateTimeToClinicDate(date, '12:00', timeZone), timeZone).weekday;
   const durationMinutes = service.durationMinutes;
   const results: RawAvailableSlot[] = [];
+  const now = new Date();
 
   for (const practitioner of practitioners) {
     const availabilities = await prisma.doctorAvailability.findMany({
@@ -204,7 +205,7 @@ export const buildAvailableSlots = async (
           select: { id: true },
         });
 
-        if (!overlap) {
+        if (!overlap && startTime > now) {
           results.push({
             practitioner,
             startTime,
