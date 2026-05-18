@@ -2,7 +2,7 @@
 
 > **Mevcut Durum:** MVP tamamlanmış, Aile Diş kliniğine uyarlanmış, 20 fazlık geliştirme süreci başarıyla bitirilmiş. WhatsApp n8n entegrasyonu, doktor müsaitlik yönetimi, sigorta/provizyon takibi, çok dilli destek (TR/EN/FR/DE) ve rol bazlı erişim kontrolü mevcut.
 
-> **Son Güncellemeler (Mayıs 2026):** FullCalendar drag&drop takvim ✅, çoklu hekim yan yana görünüm ✅, CRM'den WhatsApp gönderimi ✅, otomatik hatırlatma cron job ✅, backend route modülerleştirme ✅, mobil responsive iyileştirmeler ✅
+> **Son Güncellemeler (Mayıs 2026):** FullCalendar drag&drop takvim ✅, çoklu hekim yan yana görünüm ✅, CRM'den WhatsApp gönderimi ✅, otomatik hatırlatma cron job ✅, backend route modülerleştirme ✅, mobil responsive iyileştirmeler ✅, **Finansal Yönetim tamamlandı** (makbuz yazdırma ✅, taksit planı ✅, gelir raporu + CSV export ✅, hekim performans & komisyon takibi ✅)
 
 ---
 
@@ -133,29 +133,29 @@
 
 ---
 
-## 💰 Kategori 4: Finansal Yönetim
+## 💰 Kategori 4: Finansal Yönetim ✅ TAMAMLANDI
 
-### 4.1 — Fatura / Makbuz Oluşturma
-- **Mevcut:** Sadece ödeme kaydı var, belge çıktısı yok
-- **Hedef:** Basit bir PDF makbuz/fatura şablonu. Hasta adı, hizmetler, tutar, ödeme yöntemi.
+### 4.1 — Fatura / Makbuz Oluşturma ✅ TAMAMLANDI
+- **Durum:** Backend `GET /api/payments/:id/receipt` endpoint'i oluşturuldu (klinik, hasta, tedavi bilgilerini döner). `ReceiptModal.tsx` bileşeni: `window.print()` ile yazdırma desteği, `@media print` CSS ile modal dışı her şeyi gizleme. Makbuz içeriği: klinik header, makbuz no, hasta bilgisi, ödeme detayı tablosu, tutar kutusu. `Payments.tsx` listesine her ödeme satırı için makbuz butonu eklendi.
+- **Hedef:** ~~Basit bir PDF makbuz/fatura şablonu. Hasta adı, hizmetler, tutar, ödeme yöntemi.~~
 - **Etki:** ⭐⭐⭐⭐ — Yasal zorunluluk (muhasebe entegrasyonuna alternatif)
 - **Zorluk:** Orta
 
-### 4.2 — Taksit Planı
-- **Mevcut:** Tek seferlik ödeme kaydı
-- **Hedef:** Tedavi toplamını taksitlere bölme, ödeme takvimi oluşturma, gecikme uyarısı
+### 4.2 — Taksit Planı ✅ TAMAMLANDI
+- **Durum:** Prisma `PaymentPlan` + `PaymentPlanInstallment` modelleri eklendi (migration: `financial_management_phase1`). Backend `paymentPlans.ts` route'u: liste, detay, oluşturma (otomatik taksit hesaplama), taksit ödeme (Payment kaydı oluşturur), plan iptal. `PaymentPlanForm.tsx`: hasta seçimi, tutar, taksit sayısı, ilk vade tarihi, önizleme tablosu. `PaymentPlans.tsx` sayfası: ilerleme çubukları, genişletilebilir taksit tablosu, "Ödendi" akışı (ödeme yöntemi seçimi), gecikmiş taksit renklendirme, plan iptal. Sidebar'a "Taksit Planları" eklendi.
+- **Hedef:** ~~Tedavi toplamını taksitlere bölme, ödeme takvimi oluşturma, gecikme uyarısı.~~
 - **Etki:** ⭐⭐⭐⭐ — Yüksek tutarlı tedaviler (implant, ortodonti) için kritik
 - **Zorluk:** Orta
 
-### 4.3 — Gelir-Gider Raporu
-- **Mevcut:** Dashboard'da aylık gelir ve bekleyen tahsilat var
-- **Hedef:** Tarih aralığı seçerek hekim bazlı, hizmet bazlı gelir raporu. CSV/PDF export.
+### 4.3 — Gelir-Gider Raporu ✅ TAMAMLANDI
+- **Durum:** Backend `reports.ts` route'u: `GET /api/reports/revenue` (tarih aralığı, gruplama: gün/hafta/ay, hekim ve yöntem filtresi), `GET /api/reports/revenue/export.csv` (BOM'lu CSV, Excel Türkçe uyumlu), özet metrikler (toplam gelir, ortalama ödeme, bekleyen tahsilat). `Reports.tsx` sayfası: BarChart (dönemsel), PieChart (yöntem dağılımı), hekim bazlı gelir listesi, detay tablosu, "CSV İndir" butonu. Sidebar'a "Raporlar" eklendi (admin/billing rolü).
+- **Hedef:** ~~Tarih aralığı seçerek hekim bazlı, hizmet bazlı gelir raporu. CSV/PDF export.~~
 - **Etki:** ⭐⭐⭐⭐ — Klinik sahibinin en çok baktığı veri
 - **Zorluk:** Orta
 
-### 4.4 — Hekim Performans ve Komisyon Takibi
-- **Mevcut:** Yok
-- **Hedef:** Hekim başına randevu sayısı, tamamlanan tedavi sayısı, üretilen gelir, komisyon hesaplama
+### 4.4 — Hekim Performans ve Komisyon Takibi ✅ TAMAMLANDI
+- **Durum:** `User` modeline `commissionRate Float @default(0)` alanı eklendi. `GET /api/reports/doctor-performance` endpoint'i: hekim başına randevu sayısı, tamamlanma oranı, no-show sayısı, açılan/tamamlanan tedavi vakaları, üretilen gelir, komisyon tutarı (gelir × commissionRate). `Reports.tsx`'te "Hekim Performansı" sekmesi: her hekim için metrik kartları, tamamlanma çubuğu.
+- **Hedef:** ~~Hekim başına randevu sayısı, tamamlanan tedavi sayısı, üretilen gelir, komisyon hesaplama.~~
 - **Etki:** ⭐⭐⭐⭐ — Çok hekimli klinikler için önemli
 - **Zorluk:** Orta
 
@@ -279,8 +279,8 @@
 ### Orta Vadeli (Ay 2-3)
 | # | Geliştirme | Neden |
 |---|-----------|-------|
-| 10 | Taksit planı (4.2) | İmplant/ortodonti kliniği satışı |
-| 11 | Gelir raporu + hekim performans (4.3, 4.4) | Klinik sahibi karar desteği |
+| 10 | ~~Taksit planı (4.2)~~ ✅ | İmplant/ortodonti kliniği satışı |
+| 11 | ~~Gelir raporu + hekim performans (4.3, 4.4)~~ ✅ | Klinik sahibi karar desteği |
 | 12 | ~~WhatsApp konuşma geçmişi (5.4)~~ ✅ | Veri zaten var, sadece UI gerekli |
 | 13 | Hasta etiketleri (3.4) | Segmentasyon ve pazarlama |
 | 14 | ~~Mobil uyumluluk (1.3)~~ ✅ | Hekim kullanımı |
@@ -293,7 +293,7 @@
 | 17 | Çoklu şube (7.5) | Ölçeklenme |
 | 18 | Hasta portalı (3.1) | Self-service randevu |
 | 19 | CI/CD + testler (7.3, 7.4) | Ekip büyüdüğünde zorunlu |
-| 20 | Fatura/makbuz (4.1) | Muhasebe entegrasyonuna alternatif |
+| 20 | ~~Fatura/makbuz (4.1)~~ ✅ | Muhasebe entegrasyonuna alternatif |
 
 ---
 
