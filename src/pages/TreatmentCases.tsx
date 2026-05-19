@@ -186,6 +186,7 @@ const TreatmentCases: React.FC = () => {
               <tr className="bg-gray-50/50 border-b border-gray-100">
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('treatmentCases:list.title')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('treatmentCases:list.patient')}</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">{t('treatmentCases:list.practitioner')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('treatmentCases:list.stage')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">{t('treatmentCases:list.accepted')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">{t('common:actions')}</th>
@@ -194,7 +195,7 @@ const TreatmentCases: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center">
+                  <td colSpan={6} className="p-12 text-center">
                     <Loader2 className="animate-spin text-primary-600 mx-auto" size={32} />
                   </td>
                 </tr>
@@ -203,10 +204,6 @@ const TreatmentCases: React.FC = () => {
                   <tr key={c.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer" onClick={() => navigate(`/treatment-cases/${c.id}`)}>
                     <td className="p-4">
                       <p className="font-bold text-gray-900">{c.title}</p>
-                      <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        <Stethoscope size={12} />
-                        {c.practitioner ? `${c.practitioner.lastName}` : t('common:unassigned')}
-                      </p>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
@@ -217,6 +214,11 @@ const TreatmentCases: React.FC = () => {
                           <p className="text-sm font-medium text-gray-900">{c.patient.firstName} {c.patient.lastName}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="p-4 hidden md:table-cell">
+                      <p className="text-sm text-gray-700">
+                        {c.practitioner ? `${c.practitioner.firstName} ${c.practitioner.lastName}` : <span className="text-gray-400 italic">{t('common:unassigned')}</span>}
+                      </p>
                     </td>
                     <td className="p-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStageColor(c.stage)}`}>
@@ -251,7 +253,7 @@ const TreatmentCases: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-gray-400">
+                  <td colSpan={6} className="p-12 text-center text-gray-400">
                     <Briefcase size={48} className="mx-auto mb-3 opacity-20" />
                     <p>{t('common:noData')}</p>
                   </td>

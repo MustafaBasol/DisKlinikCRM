@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Calendar, CheckSquare, CalendarPlus, X } from 'lucide-react';
+import { Bell, Calendar, CheckSquare, CalendarPlus, AlertTriangle, X, CheckCheck, Circle, CheckCircle2 } from 'lucide-react';
 import api from '../services/api';
 
 interface NotificationItem {
   id: string;
-  type: 'upcoming_appointment' | 'overdue_task' | 'appointment_request';
+  type: 'upcoming_appointment' | 'overdue_task' | 'appointment_request' | 'low_stock';
   title: string;
   subtitle?: string;
   link: string;
+  isRead: boolean;
   createdAt: string;
 }
 
@@ -16,21 +17,23 @@ const TYPE_CONFIG = {
   upcoming_appointment: { icon: <Calendar size={15} />, color: 'text-primary-600 bg-primary-50' },
   overdue_task:         { icon: <CheckSquare size={15} />, color: 'text-red-600 bg-red-50' },
   appointment_request:  { icon: <CalendarPlus size={15} />, color: 'text-amber-600 bg-amber-50' },
+  low_stock:            { icon: <AlertTriangle size={15} />, color: 'text-orange-600 bg-orange-50' },
 };
 
 const NotificationBell: React.FC = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [markingAll, setMarkingAll] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await api.get('/notifications');
-      setItems(res.data.items || []);
-      setTotal(res.data.total || 0);
+      const fetched: NotificationItem[] = res.data.items || [];
+      setItems(fetched);
+      setUnreadCount(fetched.filter(n => !n.isRead).length);
     } catch {
       // silently fail
     }
@@ -59,6 +62,27 @@ const NotificationBell: React.FC = () => {
     navigate(item.link);
   };
 
+  const handleMarkAllRead = async () => {
+    setMarkingAll(true);
+    try {
+      await api.post('/notifications/mark-all-read');
+      setItems(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch { /* ignore */ } finally {
+      setMarkingAll(false);
+    }
+  };
+
+  const handleToggleRead = async (e: React.MouseEvent, item: NotificationItem) => {
+    e.stopPropagation();
+    try {
+      const res = await api.patch(`/notifications/${item.id}/toggle-read`);
+      const updated: NotificationItem = res.data;
+      setItems(prev => prev.map(n => n.id === item.id ? { ...n, isRead: updated.isRead } : n));
+      setUnreadCount(prev => updated.isRead ? Math.max(0, prev - 1) : prev + 1);
+    } catch { /* ignore */ }
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -67,8 +91,10 @@ const NotificationBell: React.FC = () => {
         aria-label="Bildirimler"
       >
         <Bell size={20} />
-        {total > 0 && (
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-gray-900 leading-none">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
         )}
       </button>
 
@@ -77,11 +103,26 @@ const NotificationBell: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              Bildirimler {total > 0 && <span className="ml-1 text-xs font-bold text-white bg-red-500 rounded-full px-1.5 py-0.5">{total}</span>}
+              Bildirimler
+              {unreadCount > 0 && (
+                <span className="ml-2 text-[10px] font-bold text-white bg-red-500 rounded-full px-1.5 py-0.5">{unreadCount}</span>
+              )}
             </span>
-            <button onClick={() => setOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-              <X size={14} className="text-gray-400" />
-            </button>
+            <div className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAllRead}
+                  disabled={markingAll}
+                  title="Tümünü okundu işaretle"
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-green-600 transition-colors"
+                >
+                  <CheckCheck size={15} />
+                </button>
+              )}
+              <button onClick={() => setOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                <X size={14} className="text-gray-400" />
+              </button>
+            </div>
           </div>
 
           {/* Items */}
@@ -93,39 +134,38 @@ const NotificationBell: React.FC = () => {
               </div>
             ) : (
               items.map((item) => {
-                const cfg = TYPE_CONFIG[item.type];
+                const cfg = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.overdue_task;
                 return (
-                  <button
+                  <div
                     key={item.id}
+                    className={`group flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-50 dark:border-gray-700/50 last:border-0 cursor-pointer ${!item.isRead ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}
                     onClick={() => handleItemClick(item)}
-                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50 last:border-0"
                   >
                     <span className={`mt-0.5 flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${cfg.color}`}>
                       {cfg.icon}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{item.title}</p>
+                      <p className={`text-sm truncate ${!item.isRead ? 'font-semibold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-700 dark:text-gray-300'}`}>
+                        {item.title}
+                      </p>
                       {item.subtitle && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{item.subtitle}</p>
                       )}
                     </div>
-                  </button>
+                    <button
+                      onClick={(e) => handleToggleRead(e, item)}
+                      title={item.isRead ? 'Okunmadı olarak işaretle' : 'Okundu olarak işaretle'}
+                      className="flex-shrink-0 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 dark:hover:bg-gray-600"
+                    >
+                      {item.isRead
+                        ? <Circle size={13} className="text-gray-400" />
+                        : <CheckCircle2 size={13} className="text-blue-500" />}
+                    </button>
+                  </div>
                 );
               })
             )}
           </div>
-
-          {/* Footer */}
-          {total > 0 && (
-            <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-center">
-              <button
-                onClick={() => { setOpen(false); fetchNotifications(); }}
-                className="text-xs text-primary-600 hover:underline"
-              >
-                Yenile
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

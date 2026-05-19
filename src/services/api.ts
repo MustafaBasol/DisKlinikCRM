@@ -83,6 +83,9 @@ export const treatmentCaseService = {
   create: (data: any) => api.post('/treatment-cases', data),
   update: (id: string, data: any) => api.put(`/treatment-cases/${id}`, data),
   updateStage: (id: string, stage: string, lostReason?: string) => api.put(`/treatment-cases/${id}`, { stage, lostReason }),
+  getMaterials: (id: string) => api.get(`/treatment-cases/${id}/materials`),
+  addMaterial: (id: string, data: { itemId: string; quantity: number; notes?: string }) => api.post(`/treatment-cases/${id}/materials`, data),
+  removeMaterial: (id: string, txId: string) => api.delete(`/treatment-cases/${id}/materials/${txId}`),
 };
 
 export const insuranceProvisionService = {

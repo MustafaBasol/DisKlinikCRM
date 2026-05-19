@@ -21,10 +21,11 @@ import {
   Trash2,
   Circle,
   Link as LinkIcon,
-  Unlink
+  Unlink,
+  Package
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService } from '../services/api';
+import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService } from '../services/api';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
@@ -68,6 +69,15 @@ const TreatmentCaseDetail: React.FC = () => {
     notes: '',
   });
 
+  // Treatment materials
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [matItemId, setMatItemId] = useState('');
+  const [matQty, setMatQty] = useState('');
+  const [matNotes, setMatNotes] = useState('');
+  const [matSaving, setMatSaving] = useState(false);
+  const [matError, setMatError] = useState<string | null>(null);
+
   const fetchDetail = async () => {
     if (!id) return;
     setLoading(true);
@@ -83,6 +93,12 @@ const TreatmentCaseDetail: React.FC = () => {
 
       const procRes = await treatmentPlanProceduresService.getByCaseId(id);
       setProcedures(procRes.data);
+
+      const matRes = await treatmentCaseService.getMaterials(id);
+      setMaterials(matRes.data);
+
+      const invRes = await inventoryService.getAll({ isActive: 'true' });
+      setInventoryItems(invRes.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch details');
     } finally {
@@ -747,6 +763,130 @@ const TreatmentCaseDetail: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Treatment Materials */}
+          <div className="card overflow-hidden">
+            <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <Package size={16} className="text-gray-400" />
+                Kullanılan Malzemeler
+                {materials.length > 0 && (
+                  <span className="bg-indigo-600 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">{materials.length}</span>
+                )}
+              </h3>
+            </div>
+            {/* Add material form */}
+            <div className="p-4 border-b border-gray-100 bg-white">
+              {matError && <p className="text-xs text-red-600 mb-2">{matError}</p>}
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex-1 min-w-36">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Malzeme</label>
+                  <select
+                    className="input-field text-sm py-1.5"
+                    value={matItemId}
+                    onChange={e => setMatItemId(e.target.value)}
+                  >
+                    <option value="">— Seçiniz —</option>
+                    {inventoryItems.map((item: any) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} (Stok: {item.currentStock} {item.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-24">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Adet</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    className="input-field text-sm py-1.5"
+                    placeholder="0"
+                    value={matQty}
+                    onChange={e => setMatQty(e.target.value)}
+                  />
+                </div>
+                <div className="flex-1 min-w-24">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Not (opsiyonel)</label>
+                  <input
+                    type="text"
+                    className="input-field text-sm py-1.5"
+                    placeholder="Not..."
+                    value={matNotes}
+                    onChange={e => setMatNotes(e.target.value)}
+                  />
+                </div>
+                <button
+                  disabled={!matItemId || !matQty || matSaving}
+                  onClick={async () => {
+                    if (!id || !matItemId || !matQty) return;
+                    setMatSaving(true);
+                    setMatError(null);
+                    try {
+                      await treatmentCaseService.addMaterial(id, {
+                        itemId: matItemId,
+                        quantity: Number(matQty),
+                        notes: matNotes || undefined,
+                      });
+                      setMatItemId('');
+                      setMatQty('');
+                      setMatNotes('');
+                      const matRes = await treatmentCaseService.getMaterials(id);
+                      setMaterials(matRes.data);
+                      const invRes = await inventoryService.getAll({ isActive: 'true' });
+                      setInventoryItems(invRes.data);
+                    } catch (err: any) {
+                      setMatError(err.response?.data?.error || 'Eklenemedi');
+                    } finally {
+                      setMatSaving(false);
+                    }
+                  }}
+                  className="btn-primary py-1.5 text-sm flex-shrink-0"
+                >
+                  {matSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                  Ekle
+                </button>
+              </div>
+            </div>
+            {/* Materials list */}
+            {materials.length === 0 ? (
+              <p className="p-4 text-xs text-gray-400 italic text-center">Henüz malzeme eklenmemiş.</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {materials.map((m: any) => (
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 group">
+                    <Package size={14} className="text-indigo-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900">{m.item?.name}</span>
+                      <span className="text-xs text-gray-400 ml-2">{m.quantity} {m.item?.unit}</span>
+                      {m.notes && <span className="text-xs text-gray-400 ml-2">— {m.notes}</span>}
+                    </div>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                      {new Date(m.createdAt).toLocaleDateString('tr-TR')}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        if (!id || !window.confirm('Bu malzeme kullanımı silinsin mi? Stok geri eklenecek.')) return;
+                        try {
+                          await treatmentCaseService.removeMaterial(id, m.id);
+                          const matRes = await treatmentCaseService.getMaterials(id);
+                          setMaterials(matRes.data);
+                          const invRes = await inventoryService.getAll({ isActive: 'true' });
+                          setInventoryItems(invRes.data);
+                        } catch {
+                          alert('Silinemedi');
+                        }
+                      }}
+                      className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded text-gray-400 hover:text-red-600 transition-all"
+                      title="Sil"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Activity Timeline */}

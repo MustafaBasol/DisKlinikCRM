@@ -153,4 +153,141 @@ router.put('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist']
   }
 });
 
+// ── Treatment Materials (inventory usage) ────────────────────────────────────
+
+// Helper: create a low-stock notification if item drops at or below minimum
+async function checkAndNotifyLowStock(clinicId: string, itemId: string) {
+  try {
+    const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, clinicId } });
+    if (!item || item.minimumStock <= 0) return;
+    if (item.currentStock <= item.minimumStock) {
+      await (prisma as any).notification.upsert({
+        where: { clinicId_externalId: { clinicId, externalId: `lowstock-${itemId}` } },
+        create: {
+          clinicId,
+          externalId: `lowstock-${itemId}`,
+          type: 'low_stock',
+          title: `Düşük stok: ${item.name}`,
+          subtitle: `Mevcut: ${item.currentStock} ${item.unit} (Min: ${item.minimumStock})`,
+          link: '/inventory',
+          isRead: false,
+        },
+        update: {
+          isRead: false, // reset to unread whenever threshold is hit again
+          subtitle: `Mevcut: ${item.currentStock} ${item.unit} (Min: ${item.minimumStock})`,
+        },
+      });
+    }
+  } catch {
+    // silently fail if Notification table not migrated yet
+  }
+}
+
+// GET /api/treatment-cases/:id/materials
+router.get('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
+  const id = String(getParam(req, 'id'));
+  const clinicId = req.user!.clinicId;
+  try {
+    const materials = await prisma.inventoryTransaction.findMany({
+      where: { treatmentCaseId: id, clinicId, type: 'out', reason: 'treatment_use' },
+      include: { item: { select: { id: true, name: true, unit: true, category: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(materials);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch materials' });
+  }
+});
+
+// POST /api/treatment-cases/:id/materials
+router.post('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+  const id = String(getParam(req, 'id'));
+  const clinicId = req.user!.clinicId;
+  const userId = req.user!.id;
+  const { itemId, quantity, notes } = req.body;
+
+  if (!itemId || !quantity || Number(quantity) <= 0) {
+    return res.status(400).json({ error: 'itemId and quantity (>0) are required' });
+  }
+
+  try {
+    const tc = await prisma.treatmentCase.findFirst({ where: { id, clinicId } });
+    if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+
+    const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, clinicId, isActive: true } });
+    if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+
+    const qty = Number(quantity);
+    if (item.currentStock < qty) {
+      return res.status(400).json({ error: `Yetersiz stok. Mevcut: ${item.currentStock} ${item.unit}` });
+    }
+
+    // Deduct from stock
+    await prisma.inventoryItem.update({
+      where: { id: itemId },
+      data: { currentStock: { decrement: qty } },
+    });
+
+    // Create transaction record
+    const tx = await prisma.inventoryTransaction.create({
+      data: {
+        clinicId,
+        itemId,
+        treatmentCaseId: id,
+        type: 'out',
+        quantity: qty,
+        unitCost: item.unitCost ?? null,
+        reason: 'treatment_use',
+        notes: notes ? String(notes) : null,
+        performedById: userId,
+      },
+      include: { item: { select: { id: true, name: true, unit: true, category: true } } },
+    });
+
+    await checkAndNotifyLowStock(clinicId, itemId);
+
+    await logActivity({
+      clinicId, userId, action: 'updated', entityType: 'treatmentCase', entityId: id,
+      description: `Tedavi malzemesi eklendi: ${item.name} × ${qty} ${item.unit}`,
+    });
+
+    res.status(201).json(tx);
+  } catch (err: any) {
+    console.error('Treatment material create error:', err?.message);
+    res.status(500).json({ error: 'Failed to add material' });
+  }
+});
+
+// DELETE /api/treatment-cases/:id/materials/:txId
+router.delete('/treatment-cases/:id/materials/:txId', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+  const id = String(getParam(req, 'id'));
+  const txId = String(req.params.txId);
+  const clinicId = req.user!.clinicId;
+  const userId = req.user!.id;
+
+  try {
+    const tx = await prisma.inventoryTransaction.findFirst({
+      where: { id: txId, treatmentCaseId: id, clinicId, type: 'out', reason: 'treatment_use' },
+    });
+    if (!tx) return res.status(404).json({ error: 'Material record not found' });
+
+    // Restore stock
+    await prisma.inventoryItem.update({
+      where: { id: tx.itemId },
+      data: { currentStock: { increment: tx.quantity } },
+    });
+
+    await prisma.inventoryTransaction.delete({ where: { id: txId } });
+
+    await logActivity({
+      clinicId, userId, action: 'updated', entityType: 'treatmentCase', entityId: id,
+      description: `Tedavi malzemesi kaldırıldı: ${tx.quantity} adet (stoka geri eklendi)`,
+    });
+
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to remove material' });
+  }
+});
+
 export default router;

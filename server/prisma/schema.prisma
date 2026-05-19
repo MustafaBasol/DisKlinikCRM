@@ -48,6 +48,7 @@ model Clinic {
   inventoryItems           InventoryItem[]
   inventoryTransactions    InventoryTransaction[]
   treatmentPlanProcedures  TreatmentPlanProcedure[]
+  notifications            Notification[]
 }
 
 model User {
@@ -731,4 +732,25 @@ model TreatmentPlanProcedure {
 
   @@index([clinicId, treatmentCaseId])
   @@index([clinicId, patientId, toothFdi])
+}
+
+// ── Kalıcı Bildirimler ────────────────────────────────────────────────────────
+
+model Notification {
+  id         String   @id @default(uuid())
+  clinicId   String
+  clinic     Clinic   @relation(fields: [clinicId], references: [id])
+  // upcoming_appointment | overdue_task | appointment_request | low_stock
+  type       String
+  title      String
+  subtitle   String?
+  link       String
+  isRead     Boolean  @default(false)
+  // deterministic key to prevent duplicate inserts (e.g. "appt-{id}", "lowstock-{itemId}")
+  externalId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([clinicId, externalId])
+  @@index([clinicId, isRead])
 }

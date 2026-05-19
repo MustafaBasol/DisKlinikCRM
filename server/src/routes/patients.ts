@@ -64,18 +64,11 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
         treatmentCases: {
           where: { deletedAt: null },
           orderBy: { updatedAt: 'desc' },
-          include: {
-            practitioner: { select: { firstName: true, lastName: true } },
-            treatmentPlanProcedures: { select: { id: true, status: true } },
-          },
         },
         tasks: { orderBy: { dueDate: 'asc' } },
         payments: {
           where: { paymentStatus: { not: 'cancelled' } },
           orderBy: { createdAt: 'desc' },
-        },
-        toothRecords: {
-          select: { id: true, status: true, toothFdi: true },
         },
       },
     });
@@ -94,7 +87,34 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
       console.warn('[patients/:id] whatsappConversationMessages query failed (migration pending?):', waErr?.message);
     }
 
-    res.json({ ...patient, whatsappConversationMessages });
+    // Fetch tooth records separately — resilient to missing migrations
+    let toothRecords: any[] = [];
+    try {
+      toothRecords = await (prisma as any).toothRecord.findMany({
+        where: { patientId: id, clinicId },
+        select: { id: true, status: true, toothFdi: true },
+      });
+    } catch (trErr: any) {
+      console.warn('[patients/:id] toothRecords query failed (migration pending?):', trErr?.message);
+    }
+
+    // Fetch treatment cases with procedures + practitioner separately — resilient
+    let treatmentCasesEnriched: any[] = (patient as any).treatmentCases || [];
+    try {
+      const enriched = await prisma.treatmentCase.findMany({
+        where: { patientId: id, clinicId, deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          practitioner: { select: { firstName: true, lastName: true } },
+          treatmentPlanProcedures: { select: { id: true, status: true } },
+        },
+      });
+      treatmentCasesEnriched = enriched;
+    } catch (tcErr: any) {
+      console.warn('[patients/:id] enriched treatmentCases query failed (migration pending?):', tcErr?.message);
+    }
+
+    res.json({ ...patient, treatmentCases: treatmentCasesEnriched, toothRecords, whatsappConversationMessages });
   } catch (err: any) {
     console.error('[patients/:id] error:', err?.message ?? err);
     res.status(500).json({ error: 'Failed to fetch patient', detail: err?.message });
