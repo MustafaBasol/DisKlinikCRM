@@ -22,7 +22,11 @@ import {
   Download,
   Trash2,
   FileText,
-  Image
+  Image,
+  TrendingUp,
+  Activity,
+  Layers,
+  AlertTriangle
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -289,47 +293,246 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Clinical Alerts — overview tab only */}
+          {activeTab === 'overview' && (
+            <div className={`card p-5 ${patient.notes ? 'border-amber-200 bg-amber-50' : ''}`}>
+              <h3 className="font-bold flex items-center gap-2 mb-3">
+                <AlertTriangle size={17} className={patient.notes ? 'text-amber-500' : 'text-gray-400'} />
+                {t('patients:detail.overview.clinicalAlerts')}
+              </h3>
+              {patient.notes ? (
+                <p className="text-sm text-amber-800 bg-white rounded-xl border border-amber-200 p-3 whitespace-pre-line">{patient.notes}</p>
+              ) : (
+                <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noClinicalAlerts')}</p>
+              )}
+            </div>
+          )}
+
+          {/* Financial Summary — overview tab only */}
+          {activeTab === 'overview' && (
+            <div className="card p-5">
+              <h3 className="font-bold flex items-center gap-2 mb-3">
+                <TrendingUp size={17} className="text-primary-500" />
+                {t('patients:detail.overview.financialSummary')}
+              </h3>
+              {(() => {
+                const totalTreatment = treatmentCases.reduce((sum: number, tc: any) => sum + (tc.acceptedAmount ?? tc.estimatedAmount ?? 0), 0);
+                const totalPaid = payments.filter((p: any) => p.paymentStatus === 'paid').reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                const remaining = Math.max(0, totalTreatment - totalPaid);
+                const lastPmt = payments.find((p: any) => p.paymentStatus === 'paid');
+                const currency = paymentCurrency;
+                const fmt = (n: number) => n.toLocaleString('tr-TR', { minimumFractionDigits: 0 }) + ' ' + currency;
+                if (totalTreatment === 0 && payments.length === 0) {
+                  return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
+                }
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">{t('patients:detail.overview.totalTreatment')}</span>
+                      <span className="font-semibold">{fmt(totalTreatment)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">{t('patients:detail.overview.totalPaid')}</span>
+                      <span className="font-semibold text-green-600">{fmt(totalPaid)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm border-t border-gray-100 pt-2">
+                      <span className="text-gray-500 font-medium">{t('patients:detail.overview.remaining')}</span>
+                      <span className={`font-bold ${remaining > 0 ? 'text-amber-600' : 'text-green-600'}`}>{fmt(remaining)}</span>
+                    </div>
+                    {lastPmt && (
+                      <p className="text-xs text-gray-400 pt-1">{t('patients:detail.overview.lastPayment')}: {new Date(lastPmt.paidAt || lastPmt.createdAt).toLocaleDateString('tr-TR')}</p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Right Column */}
         <div className="lg:col-span-2 space-y-8">
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              <div className="card p-6 bg-primary-600 text-white border-none shadow-xl shadow-primary-200">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold">{t('patients:detail.nextAppointment')}</h3>
-                  <Calendar size={20} />
+              {/* Upcoming Appointments */}
+              <div className="card overflow-hidden">
+                <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                  <h3 className="font-bold flex items-center gap-2">
+                    <Calendar size={17} className="text-primary-500" />
+                    {t('patients:detail.overview.upcomingAppointments')}
+                  </h3>
+                  <button onClick={() => setActiveTab('appointments')} className="text-xs text-primary-600 hover:underline">
+                    {t('patients:detail.overview.viewAllAppointments')}
+                  </button>
                 </div>
-{(() => {
+                {(() => {
                   const now = new Date();
                   const upcomingAppts = (patient.appointments ?? [])
-                    .filter((a: any) => new Date(a.startTime) > now)
-                    .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-                  return upcomingAppts.length > 0 ? (
-                    <div className="space-y-3">
-                      {upcomingAppts.map((appt: any) => (
+                    .filter((a: any) => new Date(a.startTime) > now && a.status !== 'cancelled')
+                    .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+                    .slice(0, 5);
+                  if (upcomingAppts.length === 0) {
+                    return <p className="p-4 text-sm text-gray-400 italic">{t('patients:detail.overview.noUpcomingAppointments')}</p>;
+                  }
+                  return (
+                    <div className="divide-y divide-gray-50">
+                      {upcomingAppts.map((appt: any, idx: number) => (
                         <div
                           key={appt.id}
-                          className="flex items-center gap-6 cursor-pointer hover:opacity-80 transition-opacity"
                           onClick={() => navigate(`/appointments/${appt.id}`)}
+                          className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 transition-colors ${idx === 0 ? 'bg-primary-50' : ''}`}
                         >
-                          <div>
-                            <p className="text-primary-100 text-sm">{t('common:date')}</p>
-                            <p className="text-base font-bold">
-                              {formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone, { month: 'long', day: 'numeric', year: 'numeric' })} — {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)}
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-center ${idx === 0 ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                            <span className="text-[10px] leading-none font-bold uppercase">
+                              {formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone, { month: 'short' })}
+                            </span>
+                            <span className="text-lg leading-none font-extrabold">
+                              {formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone, { day: 'numeric' })}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{appt.appointmentType?.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)} &middot; {appt.practitioner ? `${appt.practitioner.firstName} ${appt.practitioner.lastName}` : t('patients:detail.overview.unassigned')}
                             </p>
                           </div>
-                          <div>
-                            <p className="text-primary-100 text-sm">{t('common:service')}</p>
-                            <p className="text-base font-bold">{appt.appointmentType.name}</p>
-                          </div>
+                          <span className={`badge text-xs flex-shrink-0 ${appt.status === 'completed' ? 'badge-green' : appt.status === 'confirmed' ? 'badge-blue' : 'badge-yellow'}`}>
+                            {t(`appointments:status.${appt.status}`, { defaultValue: appt.status })}
+                          </span>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="opacity-80 italic">No upcoming appointments scheduled.</p>
                   );
                 })()}
+              </div>
+
+              {/* Active Treatment Plans */}
+              <div className="card overflow-hidden">
+                <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                  <h3 className="font-bold flex items-center gap-2">
+                    <Layers size={17} className="text-purple-500" />
+                    {t('patients:detail.overview.activeTreatments')}
+                  </h3>
+                  <button onClick={() => setActiveTab('treatments')} className="text-xs text-primary-600 hover:underline">
+                    {t('patients:detail.overview.viewAllTreatments')}
+                  </button>
+                </div>
+                {(() => {
+                  const CLOSED_STAGES = ['completed', 'lost', 'cancelled'];
+                  const active = treatmentCases.filter((tc: any) => !CLOSED_STAGES.includes(tc.stage));
+                  if (active.length === 0) {
+                    return <p className="p-4 text-sm text-gray-400 italic">{t('patients:detail.overview.noActiveTreatments')}</p>;
+                  }
+                  return (
+                    <div className="divide-y divide-gray-50">
+                      {active.slice(0, 4).map((tc: any) => {
+                        const procs = tc.treatmentPlanProcedures || [];
+                        const total = procs.length;
+                        const completed = procs.filter((p: any) => p.status === 'completed').length;
+                        const pct = total > 0 ? Math.round((completed / total) * 100) : null;
+                        return (
+                          <div key={tc.id} className="p-3 hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => navigate(`/treatment-cases/${tc.id}`)}>
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{tc.title}</p>
+                              <span className="badge badge-blue text-xs ml-2 flex-shrink-0">
+                                {t(`treatmentCases:stages.${tc.stage}`, { defaultValue: tc.stage })}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              {tc.practitioner ? `${tc.practitioner.firstName} ${tc.practitioner.lastName}` : t('patients:detail.overview.unassigned')}
+                            </p>
+                            {pct !== null && (
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                                  <span>{t('patients:detail.overview.procedures', { completed, total })}</span>
+                                  <span>{pct}%</span>
+                                </div>
+                                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Dental Chart Summary */}
+              <div className="card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold flex items-center gap-2">
+                    <span className="text-base">🦷</span>
+                    {t('patients:detail.overview.dentalSummary')}
+                  </h3>
+                  <button onClick={() => setActiveTab('dental')} className="text-xs text-primary-600 hover:underline">
+                    {t('patients:detail.overview.openDentalChart')}
+                  </button>
+                </div>
+                {(() => {
+                  const records = patient.toothRecords || [];
+                  if (records.length === 0) {
+                    return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noDentalData')}</p>;
+                  }
+                  const issues = records.filter((r: any) => r.status === 'issue').length;
+                  const missing = records.filter((r: any) => r.status === 'missing').length;
+                  const implants = records.filter((r: any) => r.status === 'implant').length;
+                  const crowns = records.filter((r: any) => r.status === 'crown').length;
+                  const stats = [
+                    { key: 'issues', label: t('patients:detail.overview.problemTeeth'), value: issues, color: 'text-red-600 bg-red-50' },
+                    { key: 'missing', label: t('patients:detail.overview.missingTeeth'), value: missing, color: 'text-gray-600 bg-gray-100' },
+                    { key: 'implants', label: t('patients:detail.overview.implants'), value: implants, color: 'text-blue-600 bg-blue-50' },
+                    { key: 'crowns', label: t('patients:detail.overview.crowns'), value: crowns, color: 'text-amber-600 bg-amber-50' },
+                  ];
+                  return (
+                    <div className="grid grid-cols-4 gap-2">
+                      {stats.map(s => (
+                        <div key={s.key} className={`rounded-xl p-2 text-center ${s.color}`}>
+                          <p className="text-2xl font-extrabold">{s.value}</p>
+                          <p className="text-xs mt-0.5">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Recent Activity */}
+              <div className="card overflow-hidden">
+                <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                  <h3 className="font-bold flex items-center gap-2">
+                    <Activity size={17} className="text-gray-500" />
+                    {t('patients:detail.overview.recentActivity')}
+                  </h3>
+                  <button onClick={() => setActiveTab('activity')} className="text-xs text-primary-600 hover:underline">
+                    {t('patients:detail.overview.viewAllActivity')}
+                  </button>
+                </div>
+                {timelineItems.length === 0 ? (
+                  <p className="p-4 text-sm text-gray-400 italic">{t('patients:detail.overview.noRecentActivity')}</p>
+                ) : (
+                  <div className="divide-y divide-gray-50">
+                    {timelineItems.slice(0, 5).map((item: any) => (
+                      <div key={item.id} className="flex items-start gap-3 p-3">
+                        <div className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white ${item.type === 'whatsapp-session' ? 'bg-emerald-500' : item.payload?.action === 'created' ? 'bg-green-500' : item.payload?.action === 'completed' ? 'bg-green-600' : 'bg-blue-500'}`}>
+                          {item.type === 'whatsapp-session' ? <MessageSquare size={11} /> : item.payload?.action === 'completed' ? <CheckCircle2 size={11} /> : <Edit2 size={11} />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-700 line-clamp-2">
+                            {item.type === 'whatsapp-session'
+                              ? `WhatsApp: ${item.payload.count} mesaj (${item.payload.incomingCount} gelen · ${item.payload.outgoingCount} giden)`
+                              : item.payload?.description}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {new Date(item.createdAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

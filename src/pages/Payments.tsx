@@ -191,6 +191,8 @@ const Payments: React.FC = () => {
             <thead>
               <tr className="bg-gray-50/50 border-b border-gray-100">
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.patient')}</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden lg:table-cell">{t('payments:list.treatment')}</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden lg:table-cell">{t('common:practitioner')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.amount')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider hidden sm:table-cell">{t('payments:list.method')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('payments:list.status')}</th>
@@ -201,7 +203,7 @@ const Payments: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center">
+                  <td colSpan={8} className="p-12 text-center">
                     <Loader2 className="animate-spin text-primary-600 mx-auto" size={32} />
                   </td>
                 </tr>
@@ -215,14 +217,22 @@ const Payments: React.FC = () => {
                         </div>
                         <div>
                           <p className="text-sm font-bold text-gray-900">{p.patient.firstName} {p.patient.lastName}</p>
-                          {p.treatmentCase && (
-                            <p className="text-[10px] text-gray-500 flex items-center gap-1">
-                              <Briefcase size={10} />
-                              {p.treatmentCase.title}
-                            </p>
-                          )}
                         </div>
                       </div>
+                    </td>
+                    <td className="p-4 hidden lg:table-cell">
+                      {p.treatmentCase ? (
+                        <span className="text-sm text-gray-700">{p.treatmentCase.title}</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="p-4 hidden lg:table-cell">
+                      {p.treatmentCase?.practitioner ? (
+                        <span className="text-sm text-gray-700">{p.treatmentCase.practitioner.firstName} {p.treatmentCase.practitioner.lastName}</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <p className="text-sm font-bold text-gray-900">{p.amount.toLocaleString()} {p.currency}</p>

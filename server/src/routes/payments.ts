@@ -37,7 +37,14 @@ router.get('/payments', authorize(['admin', 'billing', 'receptionist', 'doctor']
 
     const payments = await prisma.payment.findMany({
       where,
-      include: { patient: true, treatmentCase: true },
+      include: {
+        patient: true,
+        treatmentCase: {
+          include: {
+            practitioner: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
     res.json(payments);

@@ -64,11 +64,18 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
         treatmentCases: {
           where: { deletedAt: null },
           orderBy: { updatedAt: 'desc' },
+          include: {
+            practitioner: { select: { firstName: true, lastName: true } },
+            treatmentPlanProcedures: { select: { id: true, status: true } },
+          },
         },
         tasks: { orderBy: { dueDate: 'asc' } },
         payments: {
           where: { paymentStatus: { not: 'cancelled' } },
           orderBy: { createdAt: 'desc' },
+        },
+        toothRecords: {
+          select: { id: true, status: true, toothFdi: true },
         },
       },
     });

@@ -420,7 +420,7 @@ const Appointments: React.FC = () => {
                       <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                       <span className="flex items-center gap-1">
                         <User size={14} className="text-primary-500" />
-                        {appt.practitioner.lastName}
+                        {appt.practitioner.firstName} {appt.practitioner.lastName}
                       </span>
                     </div>
                   </div>

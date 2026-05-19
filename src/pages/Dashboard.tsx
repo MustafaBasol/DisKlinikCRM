@@ -486,6 +486,7 @@ const Dashboard: React.FC = () => {
                 <thead>
                   <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50/50">
                     <th className="px-6 py-4">{t('patients:list.name')}</th>
+                    <th className="px-6 py-4">{t('common:practitioner')}</th>
                     <th className="px-6 py-4">{t('common:time')}</th>
                     <th className="px-6 py-4">{t('common:service')}</th>
                     <th className="px-6 py-4">{t('patients:list.status')}</th>
@@ -499,11 +500,11 @@ const Dashboard: React.FC = () => {
                           <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
                             {appt.patient.firstName[0]}{appt.patient.lastName[0]}
                           </div>
-                          <div>
-                            <p className="font-bold text-gray-900 group-hover:text-primary-600 transition-colors">{appt.patient.firstName} {appt.patient.lastName}</p>
-                            <p className="text-[10px] text-gray-500">{appt.practitioner.firstName}</p>
-                          </div>
+                          <p className="font-bold text-gray-900 group-hover:text-primary-600 transition-colors">{appt.patient.firstName} {appt.patient.lastName}</p>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">
+                        {appt.practitioner.firstName} {appt.practitioner.lastName}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-700">
                         {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)}
