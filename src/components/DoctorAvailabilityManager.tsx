@@ -25,7 +25,9 @@ const DoctorAvailabilityManager: React.FC = () => {
 
   // Off-day state
   const [offDays, setOffDays] = useState<any[]>([]);
+  const [offDayMode, setOffDayMode] = useState<'single' | 'range'>('single');
   const [offDayDate, setOffDayDate] = useState('');
+  const [offDayDateEnd, setOffDayDateEnd] = useState('');
   const [offDayReason, setOffDayReason] = useState('');
   const [offDaySaving, setOffDaySaving] = useState(false);
   const [offDayError, setOffDayError] = useState('');
@@ -122,16 +124,43 @@ const DoctorAvailabilityManager: React.FC = () => {
 
   const handleAddOffDay = async () => {
     if (!selectedDoctorId || !offDayDate) return;
+
+    if (offDayMode === 'range') {
+      const end = offDayDateEnd || offDayDate;
+      if (end < offDayDate) {
+        setOffDayError(t('settings:availability.offDays.errors.invalidRange'));
+        return;
+      }
+    }
+
     setOffDaySaving(true);
     setOffDayError('');
+
     try {
-      const res = await doctorOffDayService.create({
-        practitionerId: selectedDoctorId,
-        date: offDayDate,
-        reason: offDayReason || undefined,
-      });
-      setOffDays(prev => [...prev, res.data].sort((a, b) => a.date.localeCompare(b.date)));
+      const datesToAdd = offDayMode === 'range'
+        ? expandDateRange(offDayDate, offDayDateEnd || offDayDate)
+        : [offDayDate];
+
+      const results = await Promise.allSettled(
+        datesToAdd.map(date =>
+          doctorOffDayService.create({
+            practitionerId: selectedDoctorId,
+            date,
+            reason: offDayReason || undefined,
+          })
+        )
+      );
+
+      const newEntries = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+        .map(r => r.value.data);
+
+      setOffDays(prev =>
+        [...prev.filter(d => !newEntries.find((n: any) => n.date === d.date)), ...newEntries]
+          .sort((a, b) => a.date.localeCompare(b.date))
+      );
       setOffDayDate('');
+      setOffDayDateEnd('');
       setOffDayReason('');
     } catch (err: any) {
       setOffDayError(err.response?.data?.error || t('settings:availability.offDays.errors.saveFailed'));
@@ -250,42 +279,76 @@ const DoctorAvailabilityManager: React.FC = () => {
           )}
 
           {/* Add new off day */}
-          <div className="flex flex-col sm:flex-row gap-2 items-end">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {t('common:date')}
-              </label>
-              <input
-                type="date"
-                className="input-field w-full"
-                value={offDayDate}
-                onChange={e => setOffDayDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                disabled={!selectedDoctorId}
-              />
+          <div className="space-y-3">
+            {/* Mode toggle */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setOffDayMode('single'); setOffDayDateEnd(''); }}
+                className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${offDayMode === 'single' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                {t('settings:availability.offDays.modeSingle')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOffDayMode('range')}
+                className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${offDayMode === 'range' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                {t('settings:availability.offDays.modeRange')}
+              </button>
             </div>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {t('settings:availability.offDays.reason')}
-              </label>
-              <input
-                type="text"
-                className="input-field w-full"
-                placeholder={t('settings:availability.offDays.reasonPlaceholder')}
-                value={offDayReason}
-                onChange={e => setOffDayReason(e.target.value)}
-                disabled={!selectedDoctorId}
-                maxLength={255}
-              />
+
+            <div className="flex flex-col sm:flex-row gap-2 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {offDayMode === 'range' ? t('settings:availability.offDays.startDate') : t('common:date')}
+                </label>
+                <input
+                  type="date"
+                  className="input-field w-full"
+                  value={offDayDate}
+                  onChange={e => setOffDayDate(e.target.value)}
+                  disabled={!selectedDoctorId}
+                />
+              </div>
+              {offDayMode === 'range' && (
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {t('settings:availability.offDays.endDate')}
+                  </label>
+                  <input
+                    type="date"
+                    className="input-field w-full"
+                    value={offDayDateEnd}
+                    onChange={e => setOffDayDateEnd(e.target.value)}
+                    min={offDayDate || undefined}
+                    disabled={!selectedDoctorId || !offDayDate}
+                  />
+                </div>
+              )}
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {t('settings:availability.offDays.reason')}
+                </label>
+                <input
+                  type="text"
+                  className="input-field w-full"
+                  placeholder={t('settings:availability.offDays.reasonPlaceholder')}
+                  value={offDayReason}
+                  onChange={e => setOffDayReason(e.target.value)}
+                  disabled={!selectedDoctorId}
+                  maxLength={255}
+                />
+              </div>
+              <button
+                className="btn-primary shrink-0"
+                onClick={handleAddOffDay}
+                disabled={!selectedDoctorId || !offDayDate || (offDayMode === 'range' && !offDayDateEnd) || offDaySaving}
+              >
+                {offDaySaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                {t('settings:availability.offDays.addDate')}
+              </button>
             </div>
-            <button
-              className="btn-primary shrink-0"
-              onClick={handleAddOffDay}
-              disabled={!selectedDoctorId || !offDayDate || offDaySaving}
-            >
-              {offDaySaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-              {t('settings:availability.offDays.addDate')}
-            </button>
           </div>
 
           {/* Off days list */}
@@ -327,6 +390,18 @@ const weekdayLabel = (weekday: number, locale: string) => {
   const date = new Date(baseSunday);
   date.setDate(baseSunday.getDate() + weekday);
   return date.toLocaleDateString(locale, { weekday: 'long' });
+};
+
+/** Returns every YYYY-MM-DD date string from start to end (inclusive). */
+const expandDateRange = (start: string, end: string): string[] => {
+  const dates: string[] = [];
+  const current = new Date(start + 'T00:00:00');
+  const last = new Date(end + 'T00:00:00');
+  while (current <= last) {
+    dates.push(current.toISOString().split('T')[0]);
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
 };
 
 export default DoctorAvailabilityManager;

@@ -54,14 +54,20 @@
     "offDays": {
       "title": "Off Days & Holidays",
       "subtitle": "Enter specific dates when the practitioner will not accept appointments.",
-      "addDate": "Add Date",
+      "addDate": "Add",
       "noOffDays": "No off days recorded.",
       "reason": "Reason (optional)",
       "reasonPlaceholder": "Holiday, sick leave, conference...",
       "confirmDelete": "Are you sure you want to remove this date?",
+      "modeSingle": "Single Day",
+      "modeRange": "Date Range",
+      "startDate": "Start",
+      "endDate": "End",
+      "rangeAdded": "{{count}} days added",
       "errors": {
         "loadFailed": "Failed to load off days",
-        "saveFailed": "Failed to add off day"
+        "saveFailed": "Failed to add off day",
+        "invalidRange": "End date cannot be before start date"
       }
     }
   }

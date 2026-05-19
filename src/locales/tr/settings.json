@@ -54,14 +54,20 @@
     "offDays": {
       "title": "İzin ve Tatil Günleri",
       "subtitle": "Hekimin randevu kabul etmeyeceği belirli tarihleri girin.",
-      "addDate": "Tarih Ekle",
+      "addDate": "Ekle",
       "noOffDays": "Kayıtlı izin/tatil günü yok.",
       "reason": "Açıklama (opsiyonel)",
       "reasonPlaceholder": "Tatil, hastalık, kongre...",
       "confirmDelete": "Bu tarihi silmek istediğinizden emin misiniz?",
+      "modeSingle": "Tek Gün",
+      "modeRange": "Tarih Aralığı",
+      "startDate": "Başlangıç",
+      "endDate": "Bitiş",
+      "rangeAdded": "{{count}} gün eklendi",
       "errors": {
         "loadFailed": "İzin günleri yüklenemedi",
-        "saveFailed": "İzin günü eklenemedi"
+        "saveFailed": "İzin günü eklenemedi",
+        "invalidRange": "Bitiş tarihi başlangıç tarihinden önce olamaz"
       }
     }
   }
