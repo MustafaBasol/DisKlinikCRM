@@ -186,7 +186,7 @@ const AppointmentDetail: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase">{t('common:practitioner')}</p>
-                    <p className="font-medium">Dt. {appointment.practitioner.firstName} {appointment.practitioner.lastName}</p>
+                    <p className="font-medium">{appointment.practitioner.firstName} {appointment.practitioner.lastName}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-gray-600">

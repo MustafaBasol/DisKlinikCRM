@@ -130,6 +130,12 @@ export const doctorAvailabilityService = {
   updateForPractitioner: (practitionerId: string, slots: any[]) => api.put(`/doctor-availabilities/${practitionerId}`, { slots }),
 };
 
+export const doctorOffDayService = {
+  getAll: (params?: { practitionerId?: string }) => api.get('/doctor-off-days', { params }),
+  create: (data: { practitionerId: string; date: string; reason?: string }) => api.post('/doctor-off-days', data),
+  delete: (id: string) => api.delete(`/doctor-off-days/${id}`),
+};
+
 export const dentalChartService = {
   getAll: (patientId: string) => api.get(`/patients/${patientId}/dental-chart`),
   upsert: (patientId: string, toothFdi: number, data: { status: string; note?: string }) =>

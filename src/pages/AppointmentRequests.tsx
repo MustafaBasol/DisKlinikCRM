@@ -178,7 +178,7 @@ const AppointmentRequests: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-sm">
                     <InfoBlock label={t('appointmentRequests:fields.service')} value={request.appointmentType?.name || t('common:unassigned')} />
-                    <InfoBlock label={t('appointmentRequests:fields.practitioner')} value={request.practitioner ? `Dt. ${request.practitioner.firstName} ${request.practitioner.lastName}` : t('common:unassigned')} />
+                    <InfoBlock label={t('appointmentRequests:fields.practitioner')} value={request.practitioner ? `${request.practitioner.firstName} ${request.practitioner.lastName}` : t('common:unassigned')} />
                     <InfoBlock label={t('appointmentRequests:fields.preferredTime')} value={formatDateRange(request.preferredStartTime, request.preferredEndTime, i18n.language, clinicTimeZone)} />
                   </div>
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarClock, Loader2, Save } from 'lucide-react';
+import { AlertCircle, CalendarClock, CalendarOff, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { doctorAvailabilityService, userService } from '../services/api';
+import { doctorAvailabilityService, doctorOffDayService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const weekdays = [1, 2, 3, 4, 5, 6, 0];
@@ -22,6 +22,13 @@ const DoctorAvailabilityManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Off-day state
+  const [offDays, setOffDays] = useState<any[]>([]);
+  const [offDayDate, setOffDayDate] = useState('');
+  const [offDayReason, setOffDayReason] = useState('');
+  const [offDaySaving, setOffDaySaving] = useState(false);
+  const [offDayError, setOffDayError] = useState('');
 
   const canSelectDoctor = user?.role === 'admin';
   const selectedDoctor = useMemo(() => doctors.find(d => d.id === selectedDoctorId), [doctors, selectedDoctorId]);
@@ -79,6 +86,19 @@ const DoctorAvailabilityManager: React.FC = () => {
     fetchAvailability();
   }, [selectedDoctorId]);
 
+  useEffect(() => {
+    const fetchOffDays = async () => {
+      if (!selectedDoctorId) return;
+      try {
+        const res = await doctorOffDayService.getAll({ practitionerId: selectedDoctorId });
+        setOffDays(res.data);
+      } catch {
+        setOffDayError(t('settings:availability.offDays.errors.loadFailed'));
+      }
+    };
+    fetchOffDays();
+  }, [selectedDoctorId]);
+
   const updateRow = (weekday: number, patch: Partial<{ startTime: string; endTime: string; isActive: boolean }>) => {
     setRows(prev => prev.map(row => row.weekday === weekday ? { ...row, ...patch } : row));
   };
@@ -97,6 +117,36 @@ const DoctorAvailabilityManager: React.FC = () => {
       setError(err.response?.data?.error || t('settings:availability.errors.saveFailed'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddOffDay = async () => {
+    if (!selectedDoctorId || !offDayDate) return;
+    setOffDaySaving(true);
+    setOffDayError('');
+    try {
+      const res = await doctorOffDayService.create({
+        practitionerId: selectedDoctorId,
+        date: offDayDate,
+        reason: offDayReason || undefined,
+      });
+      setOffDays(prev => [...prev, res.data].sort((a, b) => a.date.localeCompare(b.date)));
+      setOffDayDate('');
+      setOffDayReason('');
+    } catch (err: any) {
+      setOffDayError(err.response?.data?.error || t('settings:availability.offDays.errors.saveFailed'));
+    } finally {
+      setOffDaySaving(false);
+    }
+  };
+
+  const handleDeleteOffDay = async (id: string) => {
+    if (!window.confirm(t('settings:availability.offDays.confirmDelete'))) return;
+    try {
+      await doctorOffDayService.delete(id);
+      setOffDays(prev => prev.filter(d => d.id !== id));
+    } catch {
+      setOffDayError(t('settings:availability.offDays.errors.loadFailed'));
     }
   };
 
@@ -129,7 +179,7 @@ const DoctorAvailabilityManager: React.FC = () => {
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings:availability.fields.practitioner')}</label>
           <select className="input-field max-w-md" value={selectedDoctorId} onChange={e => setSelectedDoctorId(e.target.value)}>
             {doctors.map(doctor => (
-              <option key={doctor.id} value={doctor.id}>Dt. {doctor.firstName} {doctor.lastName}</option>
+              <option key={doctor.id} value={doctor.id}>{doctor.firstName} {doctor.lastName}</option>
             ))}
           </select>
         </div>
@@ -140,7 +190,7 @@ const DoctorAvailabilityManager: React.FC = () => {
           <CalendarClock size={18} className="text-primary-600" />
           <div>
             <p className="font-bold text-gray-900">
-              {selectedDoctor ? `Dt. ${selectedDoctor.firstName} ${selectedDoctor.lastName}` : t('common:selectPlaceholder')}
+              {selectedDoctor ? `${selectedDoctor.firstName} ${selectedDoctor.lastName}` : t('common:selectPlaceholder')}
             </p>
             <p className="text-xs text-gray-500">{t('settings:availability.weeklySchedule')}</p>
           </div>
@@ -178,6 +228,94 @@ const DoctorAvailabilityManager: React.FC = () => {
               </label>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Off Days Section */}
+      <div className="card overflow-hidden">
+        <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+          <CalendarOff size={18} className="text-red-500" />
+          <div>
+            <p className="font-bold text-gray-900">{t('settings:availability.offDays.title')}</p>
+            <p className="text-xs text-gray-500">{t('settings:availability.offDays.subtitle')}</p>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {offDayError && (
+            <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2">
+              <AlertCircle size={16} />
+              {offDayError}
+            </div>
+          )}
+
+          {/* Add new off day */}
+          <div className="flex flex-col sm:flex-row gap-2 items-end">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {t('common:date')}
+              </label>
+              <input
+                type="date"
+                className="input-field w-full"
+                value={offDayDate}
+                onChange={e => setOffDayDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                disabled={!selectedDoctorId}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {t('settings:availability.offDays.reason')}
+              </label>
+              <input
+                type="text"
+                className="input-field w-full"
+                placeholder={t('settings:availability.offDays.reasonPlaceholder')}
+                value={offDayReason}
+                onChange={e => setOffDayReason(e.target.value)}
+                disabled={!selectedDoctorId}
+                maxLength={255}
+              />
+            </div>
+            <button
+              className="btn-primary shrink-0"
+              onClick={handleAddOffDay}
+              disabled={!selectedDoctorId || !offDayDate || offDaySaving}
+            >
+              {offDaySaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+              {t('settings:availability.offDays.addDate')}
+            </button>
+          </div>
+
+          {/* Off days list */}
+          {offDays.length === 0 ? (
+            <p className="text-sm text-gray-400 py-2">{t('settings:availability.offDays.noOffDays')}</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {offDays.map(od => (
+                <div key={od.id} className="flex items-center justify-between py-2">
+                  <div>
+                    <span className="font-medium text-sm text-gray-800">
+                      {new Date(od.date + 'T00:00:00').toLocaleDateString(i18n.language, {
+                        weekday: 'short', year: 'numeric', month: 'long', day: 'numeric',
+                      })}
+                    </span>
+                    {od.reason && (
+                      <span className="ml-2 text-xs text-gray-500">— {od.reason}</span>
+                    )}
+                  </div>
+                  <button
+                    className="text-red-400 hover:text-red-600 transition-colors p-1"
+                    onClick={() => handleDeleteOffDay(od.id)}
+                    title={t('common:delete')}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

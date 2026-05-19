@@ -187,7 +187,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
               >
                 <option value="">{t('common:selectPlaceholder')}</option>
                 {doctors.map(d => (
-                  <option key={d.id} value={d.id}>Dt. {d.firstName} {d.lastName}</option>
+                  <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
                 ))}
               </select>
             </div>

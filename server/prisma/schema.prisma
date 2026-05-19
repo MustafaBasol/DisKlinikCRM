@@ -23,6 +23,7 @@ model Clinic {
 
   users                User[]
   doctorAvailabilities DoctorAvailability[]
+  doctorOffDays        DoctorOffDay[]
   patients             Patient[]
   appointmentTypes     AppointmentType[]
   appointments         Appointment[]
@@ -70,6 +71,7 @@ model User {
   appointments        Appointment[]        @relation("Practitioner")
   appointmentRequests AppointmentRequest[] @relation("AppointmentRequestPractitioner")
   availabilities      DoctorAvailability[] @relation("DoctorAvailability")
+  offDays             DoctorOffDay[]       @relation("DoctorOffDays")
   treatmentCases      TreatmentCase[]      @relation("Practitioner")
   insuranceAssigned   InsuranceProvision[] @relation("InsuranceAssignedTo")
   insuranceCreated    InsuranceProvision[] @relation("InsuranceCreatedBy")
@@ -102,6 +104,21 @@ model DoctorAvailability {
   updatedAt      DateTime @updatedAt
 
   @@index([clinicId, practitionerId, weekday])
+}
+
+model DoctorOffDay {
+  id             String   @id @default(uuid())
+  clinicId       String
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  practitionerId String
+  practitioner   User     @relation("DoctorOffDays", fields: [practitionerId], references: [id])
+  date           String   // YYYY-MM-DD (clinic local date)
+  reason         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([clinicId, practitionerId, date])
+  @@index([clinicId, practitionerId])
 }
 
 model Patient {

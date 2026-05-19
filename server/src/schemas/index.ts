@@ -104,6 +104,14 @@ export const availabilityBatchSchema = z.object({
   slots: z.array(availabilitySlotSchema).max(28),
 });
 
+// --- Doctor Off Day ---
+
+export const doctorOffDaySchema = z.object({
+  practitionerId: z.string().uuid('Invalid practitioner ID'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  reason: z.string().max(255).optional().nullable(),
+});
+
 // --- Appointment ---
 
 const appointmentStatusEnum = z.enum([

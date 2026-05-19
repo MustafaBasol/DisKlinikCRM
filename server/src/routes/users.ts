@@ -4,7 +4,7 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam, validatePassword } from '../utils/helpers.js';
-import { userCreateSchema, userUpdateSchema, availabilityBatchSchema } from '../schemas/index.js';
+import { userCreateSchema, userUpdateSchema, availabilityBatchSchema, doctorOffDaySchema } from '../schemas/index.js';
 
 const router = express.Router();
 
@@ -210,6 +210,86 @@ router.put('/doctor-availabilities/:practitionerId', authorize(['admin', 'doctor
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update doctor availability' });
+  }
+});
+
+// GET /api/doctor-off-days
+router.get('/doctor-off-days', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+  const clinicId = req.user!.clinicId;
+  const { role, id: userId } = req.user!;
+  const requestedPractitionerId = req.query.practitionerId ? String(req.query.practitionerId) : undefined;
+  const practitionerId = role === 'doctor' ? userId : requestedPractitionerId;
+
+  try {
+    const offDays = await prisma.doctorOffDay.findMany({
+      where: {
+        clinicId,
+        ...(practitionerId ? { practitionerId } : {}),
+      },
+      orderBy: { date: 'asc' },
+    });
+    res.json(offDays);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch doctor off days' });
+  }
+});
+
+// POST /api/doctor-off-days
+router.post('/doctor-off-days', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
+  const clinicId = req.user!.clinicId;
+  const { role, id: userId } = req.user!;
+
+  const validation = doctorOffDaySchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+
+  const { practitionerId, date, reason } = validation.data;
+
+  if (role === 'doctor' && practitionerId !== userId) {
+    return res.status(403).json({ error: 'Doctors can only manage their own off days' });
+  }
+
+  try {
+    const practitioner = await prisma.user.findFirst({
+      where: { id: practitionerId, clinicId, role: 'doctor', isActive: true },
+    });
+    if (!practitioner) return res.status(404).json({ error: 'Practitioner not found' });
+
+    const offDay = await prisma.doctorOffDay.upsert({
+      where: { clinicId_practitionerId_date: { clinicId, practitionerId, date } },
+      create: { clinicId, practitionerId, date, reason: reason ?? null },
+      update: { reason: reason ?? null },
+    });
+
+    await logActivity({
+      clinicId, userId, entityType: 'doctor_off_day', entityId: offDay.id,
+      action: 'created',
+      description: `${practitioner.firstName} ${practitioner.lastName} için ${date} tarihinde izin/tatil günü eklendi`,
+    });
+
+    res.status(201).json(offDay);
+  } catch {
+    res.status(500).json({ error: 'Failed to add off day' });
+  }
+});
+
+// DELETE /api/doctor-off-days/:id
+router.delete('/doctor-off-days/:id', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
+  const clinicId = req.user!.clinicId;
+  const { role, id: userId } = req.user!;
+  const id = getParam(req, 'id');
+
+  try {
+    const offDay = await prisma.doctorOffDay.findFirst({ where: { id, clinicId } });
+    if (!offDay) return res.status(404).json({ error: 'Off day not found' });
+
+    if (role === 'doctor' && offDay.practitionerId !== userId) {
+      return res.status(403).json({ error: 'Doctors can only delete their own off days' });
+    }
+
+    await prisma.doctorOffDay.delete({ where: { id } });
+    res.status(204).end();
+  } catch {
+    res.status(500).json({ error: 'Failed to delete off day' });
   }
 });
 

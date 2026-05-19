@@ -384,7 +384,7 @@ const Appointments: React.FC = () => {
           >
             <option value="">{t('appointments:filters.allPractitioners')}</option>
             {doctors.map(d => (
-              <option key={d.id} value={d.id}>Dt. {d.firstName} {d.lastName}</option>
+              <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
             ))}
           </select>
         )}
@@ -420,7 +420,7 @@ const Appointments: React.FC = () => {
                       <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                       <span className="flex items-center gap-1">
                         <User size={14} className="text-primary-500" />
-                        Dt. {appt.practitioner.lastName}
+                        {appt.practitioner.lastName}
                       </span>
                     </div>
                   </div>

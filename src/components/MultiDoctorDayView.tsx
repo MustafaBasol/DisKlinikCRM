@@ -131,7 +131,7 @@ const MultiDoctorDayView: React.FC<MultiDoctorDayViewProps> = ({
               key={doc.id}
               className="bg-gray-50 border-b border-r border-gray-200 p-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wide"
             >
-              Dt. {doc.firstName} {doc.lastName}
+              {doc.firstName} {doc.lastName}
             </div>
           ))}
 

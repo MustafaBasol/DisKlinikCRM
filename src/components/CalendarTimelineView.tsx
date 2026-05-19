@@ -117,7 +117,7 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
           <span className="font-semibold truncate">{info.event.title}</span>
         </div>
         <div className="truncate opacity-90">{appt.appointmentType.name}</div>
-        <div className="truncate opacity-75">Dt. {appt.practitioner.lastName}</div>
+        <div className="truncate opacity-75">{appt.practitioner.lastName}</div>
       </div>
     );
   };

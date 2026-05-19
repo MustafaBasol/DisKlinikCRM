@@ -15,7 +15,7 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
 
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
-    const [services, doctors, availabilities] = await Promise.all([
+    const [services, doctors, availabilities, offDays] = await Promise.all([
       prisma.appointmentType.findMany({
         where: { clinicId, isActive: true, isService: true },
         select: {
@@ -38,6 +38,10 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
         where: { clinicId, isActive: true },
         select: { practitionerId: true, weekday: true, startTime: true, endTime: true },
       }),
+      prisma.doctorOffDay.findMany({
+        where: { clinicId },
+        select: { practitionerId: true, date: true },
+      }),
     ]);
 
     // Build doctor → available weekdays map
@@ -47,12 +51,20 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
       doctorAvailability[av.practitionerId].push(av.weekday);
     }
 
+    // Build doctor → off dates map
+    const doctorOffDates: Record<string, string[]> = {};
+    for (const od of offDays) {
+      if (!doctorOffDates[od.practitionerId]) doctorOffDates[od.practitionerId] = [];
+      doctorOffDates[od.practitionerId].push(od.date);
+    }
+
     return res.json({
       clinic,
       services,
       doctors: doctors.map((d) => ({
         ...d,
         availableWeekdays: doctorAvailability[d.id] ?? [],
+        offDates: doctorOffDates[d.id] ?? [],
       })),
     });
   } catch {

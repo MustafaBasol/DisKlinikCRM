@@ -185,7 +185,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
                 >
                   <option value="">{t('common:selectPlaceholder')}</option>
                   {doctors.map(d => (
-                    <option key={d.id} value={d.id}>Dt. {d.firstName} {d.lastName}</option>
+                    <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
                   ))}
                 </select>
               </div>

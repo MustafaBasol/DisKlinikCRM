@@ -501,7 +501,7 @@ const Dashboard: React.FC = () => {
                           </div>
                           <div>
                             <p className="font-bold text-gray-900 group-hover:text-primary-600 transition-colors">{appt.patient.firstName} {appt.patient.lastName}</p>
-                            <p className="text-[10px] text-gray-500">Dt. {appt.practitioner.firstName}</p>
+                            <p className="text-[10px] text-gray-500">{appt.practitioner.firstName}</p>
                           </div>
                         </div>
                       </td>

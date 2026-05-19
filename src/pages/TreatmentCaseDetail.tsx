@@ -472,7 +472,7 @@ const TreatmentCaseDetail: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-900">
-                    {tCase.practitioner ? `Dt. ${tCase.practitioner.firstName} ${tCase.practitioner.lastName}` : t('common:unassigned')}
+                    {tCase.practitioner ? `${tCase.practitioner.firstName} ${tCase.practitioner.lastName}` : t('common:unassigned')}
                   </p>
                   <p className="text-xs text-gray-500">{t('treatmentCases:form.practitioner')}</p>
                 </div>
@@ -530,7 +530,7 @@ const TreatmentCaseDetail: React.FC = () => {
                       <p className="font-bold">{a.appointmentType?.name}</p>
                       <p className="text-xs text-gray-500">
                         {new Date(a.startTime).toLocaleDateString('tr-TR')} {new Date(a.startTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                        {a.practitioner && <> &bull; Dt. {a.practitioner.lastName}</>}
+                        {a.practitioner && <> &bull; {a.practitioner.lastName}</>}
                       </p>
                     </Link>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -1003,7 +1003,7 @@ const TreatmentCaseDetail: React.FC = () => {
                       <p className="font-semibold text-sm">{a.appointmentType?.name}</p>
                       <p className="text-xs text-gray-500">
                         {new Date(a.startTime).toLocaleDateString('tr-TR')} {new Date(a.startTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                        {a.practitioner && <> &bull; Dt. {a.practitioner.lastName}</>}
+                        {a.practitioner && <> &bull; {a.practitioner.lastName}</>}
                         {a.treatmentCase && <span className="text-amber-600"> &bull; {a.treatmentCase.title}</span>}
                       </p>
                     </div>

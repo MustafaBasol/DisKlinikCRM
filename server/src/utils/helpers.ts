@@ -127,13 +127,25 @@ export const checkPractitionerAvailability = async (
   const end = getZonedDateParts(endTime, timeZone);
 
   if (start.weekday !== end.weekday) {
-    return { ok: false, slots: [], timeZone };
+    return { ok: false, slots: [], timeZone, reason: 'cross_midnight' };
   }
 
-  const slots = await prisma.doctorAvailability.findMany({
-    where: { clinicId, practitionerId, weekday: start.weekday, isActive: true },
-    orderBy: { startTime: 'asc' },
-  });
+  // Build the clinic-local date string (YYYY-MM-DD) for off-day check
+  const { date: localDate } = formatClinicDateTime(startTime, timeZone);
+
+  const [slots, offDay] = await Promise.all([
+    prisma.doctorAvailability.findMany({
+      where: { clinicId, practitionerId, weekday: start.weekday, isActive: true },
+      orderBy: { startTime: 'asc' },
+    }),
+    prisma.doctorOffDay.findFirst({
+      where: { clinicId, practitionerId, date: localDate },
+    }),
+  ]);
+
+  if (offDay) {
+    return { ok: false, slots, timeZone, reason: 'off_day', offDay };
+  }
 
   const ok = slots.some(slot => {
     const slotStart = timeToMinutes(slot.startTime);

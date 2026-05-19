@@ -50,6 +50,19 @@
     "errors": {
       "loadFailed": "Failed to load availability",
       "saveFailed": "Failed to save availability"
+    },
+    "offDays": {
+      "title": "Off Days & Holidays",
+      "subtitle": "Enter specific dates when the practitioner will not accept appointments.",
+      "addDate": "Add Date",
+      "noOffDays": "No off days recorded.",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "Holiday, sick leave, conference...",
+      "confirmDelete": "Are you sure you want to remove this date?",
+      "errors": {
+        "loadFailed": "Failed to load off days",
+        "saveFailed": "Failed to add off day"
+      }
     }
   }
 }

@@ -50,6 +50,19 @@
     "errors": {
       "loadFailed": "Müsaitlik bilgileri yüklenemedi",
       "saveFailed": "Müsaitlik kaydedilemedi"
+    },
+    "offDays": {
+      "title": "İzin ve Tatil Günleri",
+      "subtitle": "Hekimin randevu kabul etmeyeceği belirli tarihleri girin.",
+      "addDate": "Tarih Ekle",
+      "noOffDays": "Kayıtlı izin/tatil günü yok.",
+      "reason": "Açıklama (opsiyonel)",
+      "reasonPlaceholder": "Tatil, hastalık, kongre...",
+      "confirmDelete": "Bu tarihi silmek istediğinizden emin misiniz?",
+      "errors": {
+        "loadFailed": "İzin günleri yüklenemedi",
+        "saveFailed": "İzin günü eklenemedi"
+      }
     }
   }
 }

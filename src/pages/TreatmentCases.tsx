@@ -162,7 +162,7 @@ const TreatmentCases: React.FC = () => {
         <select className="input-field" value={practitionerId} onChange={(e) => setPractitionerId(e.target.value)}>
           <option value="">{t('treatmentCases:filters.allPractitioners')}</option>
           {doctors.map(d => (
-            <option key={d.id} value={d.id}>Dt. {d.firstName} {d.lastName}</option>
+            <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
           ))}
         </select>
 
@@ -205,7 +205,7 @@ const TreatmentCases: React.FC = () => {
                       <p className="font-bold text-gray-900">{c.title}</p>
                       <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                         <Stethoscope size={12} />
-                        {c.practitioner ? `Dt. ${c.practitioner.lastName}` : t('common:unassigned')}
+                        {c.practitioner ? `${c.practitioner.lastName}` : t('common:unassigned')}
                       </p>
                     </td>
                     <td className="p-4">
