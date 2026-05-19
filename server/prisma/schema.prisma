@@ -724,6 +724,7 @@ model TreatmentPlanProcedure {
   status          String           @default("planned")
   notes           String?
   estimatedCost   Float?
+  scheduledDate   DateTime?
   completedAt     DateTime?
   createdById     String
   createdBy       User             @relation("ProcedureCreator", fields: [createdById], references: [id])

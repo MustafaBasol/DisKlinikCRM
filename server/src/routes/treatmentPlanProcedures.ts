@@ -71,7 +71,7 @@ router.post(
     const userId = req.user!.id as string;
     const caseId = getParam(req, 'caseId');
 
-    const { toothFdi, procedureName, serviceId, status, notes, estimatedCost } = req.body;
+    const { toothFdi, procedureName, serviceId, status, notes, estimatedCost, scheduledDate } = req.body;
 
     if (!procedureName || typeof procedureName !== 'string' || !procedureName.trim()) {
       return res.status(400).json({ error: 'procedureName is required' });
@@ -100,6 +100,7 @@ router.post(
           status: status ?? 'planned',
           notes: notes ? String(notes).substring(0, 500) : null,
           estimatedCost: estimatedCost ? Number(estimatedCost) : null,
+          scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
           createdById: userId,
         },
         include: {
@@ -134,7 +135,7 @@ router.put(
     const caseId = getParam(req, 'caseId');
     const id = getParam(req, 'id');
 
-    const { toothFdi, procedureName, serviceId, status, notes, estimatedCost } = req.body;
+    const { toothFdi, procedureName, serviceId, status, notes, estimatedCost, scheduledDate } = req.body;
 
     try {
       const existing = await prisma.treatmentPlanProcedure.findFirst({
@@ -156,6 +157,7 @@ router.put(
           status: status ?? existing.status,
           notes: notes !== undefined ? (notes ? String(notes).substring(0, 500) : null) : existing.notes,
           estimatedCost: estimatedCost !== undefined ? (estimatedCost ? Number(estimatedCost) : null) : existing.estimatedCost,
+          scheduledDate: scheduledDate !== undefined ? (scheduledDate ? new Date(scheduledDate) : null) : (existing as any).scheduledDate,
           completedAt: status === 'completed' && existing.status !== 'completed' ? new Date() : existing.completedAt,
         },
         include: {

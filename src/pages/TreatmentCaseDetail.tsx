@@ -67,6 +67,7 @@ const TreatmentCaseDetail: React.FC = () => {
     status: 'planned',
     estimatedCost: '',
     notes: '',
+    scheduledDate: '',
   });
 
   // Treatment materials
@@ -141,10 +142,11 @@ const TreatmentCaseDetail: React.FC = () => {
         status: proc.status,
         estimatedCost: proc.estimatedCost ? String(proc.estimatedCost) : '',
         notes: proc.notes ?? '',
+        scheduledDate: proc.scheduledDate ? new Date(proc.scheduledDate).toISOString().slice(0, 10) : '',
       });
     } else {
       setEditingProc(null);
-      setProcForm({ procedureName: '', toothFdi: '', status: 'planned', estimatedCost: '', notes: '' });
+      setProcForm({ procedureName: '', toothFdi: '', status: 'planned', estimatedCost: '', notes: '', scheduledDate: '' });
     }
     setIsProcFormOpen(true);
   };
@@ -158,6 +160,7 @@ const TreatmentCaseDetail: React.FC = () => {
       status: procForm.status,
       estimatedCost: procForm.estimatedCost ? parseFloat(procForm.estimatedCost) : null,
       notes: procForm.notes.trim() || null,
+      scheduledDate: procForm.scheduledDate || null,
     };
     try {
       if (editingProc) {
@@ -740,6 +743,11 @@ const TreatmentCaseDetail: React.FC = () => {
                           {proc.estimatedCost && (
                             <p className="text-xs text-gray-400 mt-0.5">Tahmini: {Number(proc.estimatedCost).toLocaleString('tr-TR')} ₺</p>
                           )}
+                          {proc.scheduledDate && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              📅 {new Date(proc.scheduledDate).toLocaleDateString('tr-TR')}
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                           <button
@@ -1037,6 +1045,16 @@ const TreatmentCaseDetail: React.FC = () => {
                     className="input-field"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="label">Planlanan Tarih <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                <input
+                  type="date"
+                  value={procForm.scheduledDate}
+                  onChange={(e) => setProcForm((f) => ({ ...f, scheduledDate: e.target.value }))}
+                  className="input-field"
+                />
               </div>
 
               <div>

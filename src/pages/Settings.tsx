@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings as SettingsIcon, Globe, Shield, Activity, UserCog, Users, CalendarClock } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, Shield, Activity, UserCog, Users, CalendarClock, Link, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ServiceList from '../components/ServiceList';
 import UserList from '../components/UserList';
@@ -10,6 +10,18 @@ const Settings: React.FC = () => {
   const { t, i18n } = useTranslation(['common', 'settings']);
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'users' | 'availability' | 'services'>('general');
+  const [copied, setCopied] = useState(false);
+
+  const bookingUrl = user?.clinic?.id
+    ? `${window.location.origin}/book/${user.clinic.id}`
+    : '';
+
+  const handleCopy = () => {
+    if (!bookingUrl) return;
+    navigator.clipboard.writeText(bookingUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     i18n.changeLanguage(e.target.value);
@@ -121,6 +133,40 @@ const Settings: React.FC = () => {
                     <p className="text-gray-500">Clinic</p>
                     <p className="font-medium">{user?.clinic?.name}</p>
                   </div>
+                </div>
+              </div>
+
+              {/* Online Booking Link */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
+                  <Link size={20} className="text-gray-400" />
+                  <h2 className="text-lg font-bold">Online Randevu Linki</h2>
+                </div>
+                <p className="text-sm text-gray-500 mb-3">
+                  Bu linki hastalarınızla paylaşın. Giriş gerektirmez, randevu talebi oluşturabilirler.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={bookingUrl}
+                    className="input-field flex-1 text-sm font-mono bg-gray-50 text-gray-700 select-all"
+                    onFocus={e => e.target.select()}
+                  />
+                  <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
+                  >
+                    {copied ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
+                    {copied ? 'Kopyalandı' : 'Kopyala'}
+                  </button>
+                  <a
+                    href={bookingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors flex-shrink-0"
+                  >
+                    Aç
+                  </a>
                 </div>
               </div>
             </div>

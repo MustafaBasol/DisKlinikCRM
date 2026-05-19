@@ -122,7 +122,7 @@ router.post('/appointments', authorize(['admin', 'receptionist']), async (req: A
     }
 
     const appointment = await prisma.appointment.create({
-      data: { ...validation.data, clinicId },
+      data: { ...validation.data, clinicId, status: 'confirmed' },
       include: { patient: true, practitioner: true, appointmentType: true },
     });
 
