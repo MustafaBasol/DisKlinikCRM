@@ -69,12 +69,58 @@ export async function validateAndGetScope(
 }
 
 /**
- * Geriye dönük uyumluluk için: clinicId = user.clinicId scope'u.
- * Tek klinikli kullanıcılar için scope oluşturur.
- * allowedClinicIds listesindeki ilk klinik veya defaultClinicId kullanılır.
+ * @deprecated Yetkilendirme için kullanmayın. Geriye dönük uyumluluk içindir.
+ * clinicId = user.clinicId (defaultClinicId) scope'u döndürür.
  */
 export function getLegacyScope(user: NonNullable<AuthRequest['user']>): { clinicId: string } {
   return { clinicId: user.clinicId };
+}
+
+/**
+ * Kullanıcının erişebildiği klinik ID'lerini döndürür.
+ * canAccessAllClinics ise organizasyon altındaki tüm aktif klinikleri döndürür.
+ * Aksi hâlde allowedClinicIds listesini döndürür.
+ * Boş liste → 0 klinik erişimi.
+ */
+export async function getAccessibleClinicIds(
+  user: NonNullable<AuthRequest['user']>
+): Promise<string[]> {
+  if (user.canAccessAllClinics) {
+    const clinics = await prisma.clinic.findMany({
+      where: { organizationId: user.organizationId },
+      select: { id: true },
+    });
+    return clinics.map(c => c.id);
+  }
+  return user.allowedClinicIds;
+}
+
+/**
+ * Mutasyon (POST/PUT/DELETE) endpoint'leri için etkili clinicId'yi çözer.
+ * requestedClinicId (body/query) varsa doğrular, yoksa user.clinicId (defaultClinicId) kullanır.
+ * Her iki durumda da organizasyon ve erişim kontrolü yapılır.
+ * null döndürmesi → 403 verilmeli.
+ */
+export async function resolveEffectiveClinicId(
+  user: NonNullable<AuthRequest['user']>,
+  requestedClinicId?: string
+): Promise<string | null> {
+  const orgId = user.organizationId;
+  const clinicId = requestedClinicId ?? user.clinicId;
+
+  // Klinik organizasyona ait mi? (cross-org koruması)
+  const clinic = await prisma.clinic.findFirst({
+    where: { id: clinicId, organizationId: orgId },
+    select: { id: true },
+  });
+  if (!clinic) return null;
+
+  // Kullanıcının bu klinige erişimi var mı?
+  if (!user.canAccessAllClinics && !user.allowedClinicIds.includes(clinicId)) {
+    return null;
+  }
+
+  return clinicId;
 }
 
 // ─── organizationId olmayan modeller için (MessageTemplate, PaymentPlan vb.) ───

@@ -176,7 +176,11 @@ router.get(
         activeUsers: clinicMetrics.reduce((s, c) => s + c.staffCount, 0),
       };
 
-      // İçgörüler
+      // İçgörüler — boş durum güvenliği
+      if (clinicMetrics.length === 0) {
+        return res.json({ summary, clinics: clinicMetrics, insights: {} });
+      }
+
       const topRevenue = clinicMetrics.reduce((best, c) => c.monthlyRevenue > best.monthlyRevenue ? c : best, clinicMetrics[0]);
       const topAppointments = clinicMetrics.reduce((best, c) => c.monthlyAppointments > best.monthlyAppointments ? c : best, clinicMetrics[0]);
       const topOutstanding = clinicMetrics.reduce((best, c) => c.outstandingBalance > best.outstandingBalance ? c : best, clinicMetrics[0]);

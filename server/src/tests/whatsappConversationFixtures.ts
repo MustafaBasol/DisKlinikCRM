@@ -261,6 +261,7 @@ const run = async () => {
       clinicId,
       text: '19 Mayıs saat 14 ten sonra istiyorum',
       customerName,
+      now: new Date('2026-05-18T10:00:00.000Z'),
       state: {
         selectedAppointmentTypeId: 'svc-1',
         selectedAppointmentTypeName: 'Dis Temizligi',

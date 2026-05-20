@@ -5,7 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { patientSchema, patientUpdateSchema } from '../schemas/index.js';
 import { checkPatientLimit } from '../middleware/planLimits.js';
-import { validateAndGetScope } from '../utils/clinicScope.js';
+import { validateAndGetScope, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -47,11 +47,11 @@ router.get('/patients', authorize(['admin', 'doctor', 'receptionist']), async (r
 // GET /api/patients/:id
 router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const orgId = req.user!.organizationId;
 
   try {
     const patient = await prisma.patient.findFirst({
-      where: { id, clinicId, deletedAt: null },
+      where: { id, organizationId: orgId, deletedAt: null },
       include: {
         appointments: {
           include: { practitioner: true, appointmentType: true },
@@ -78,6 +78,13 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
     });
 
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    // Klinige erişim kontrolü (multi-branch)
+    if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(patient.clinicId)) {
+      return res.status(403).json({ error: 'Access denied to this patient' });
+    }
+
+    const clinicId = patient.clinicId; // İlgili sorguların klinik kapsamı için
 
     // Fetch WhatsApp messages separately — resilient to missing migrations
     let whatsappConversationMessages: any[] = [];
@@ -127,7 +134,9 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
 
 // POST /api/patients
 router.post('/patients', authorize(['admin', 'receptionist']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  // ?clinicId query param varsa doğrula, yoksa defaultClinicId kullan
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = patientSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
@@ -150,15 +159,22 @@ router.post('/patients', authorize(['admin', 'receptionist']), checkPatientLimit
 // PUT /api/patients/:id
 router.put('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const orgId = req.user!.organizationId;
   const { role, id: userId } = req.user!;
 
   const validation = patientUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existingPatient = await prisma.patient.findFirst({ where: { id, clinicId, deletedAt: null } });
+    const existingPatient = await prisma.patient.findFirst({ where: { id, organizationId: orgId, deletedAt: null } });
     if (!existingPatient) return res.status(404).json({ error: 'Patient not found' });
+
+    // Klinige erişim kontrolü
+    if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(existingPatient.clinicId)) {
+      return res.status(403).json({ error: 'Access denied to this patient' });
+    }
+
+    const clinicId = existingPatient.clinicId;
 
     if (role === 'doctor') {
       const hasAppointment = await prisma.appointment.findFirst({
@@ -185,11 +201,18 @@ router.put('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
 // DELETE /api/patients/:id (soft delete)
 router.delete('/patients/:id', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const orgId = req.user!.organizationId;
 
   try {
-    const patient = await prisma.patient.findFirst({ where: { id, clinicId, deletedAt: null } });
+    const patient = await prisma.patient.findFirst({ where: { id, organizationId: orgId, deletedAt: null } });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    // Klinige erişim kontrolü
+    if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(patient.clinicId)) {
+      return res.status(403).json({ error: 'Access denied to this patient' });
+    }
+
+    const clinicId = patient.clinicId;
 
     await prisma.patient.update({
       where: { id },

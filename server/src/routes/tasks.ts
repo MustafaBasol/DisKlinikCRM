@@ -4,7 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { taskSchema } from '../schemas/index.js';
-import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -46,11 +46,13 @@ router.get('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req:
 // GET /api/tasks/:id
 router.get('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const task = await prisma.task.findFirst({
-      where: { id, clinicId },
+      where: { id, clinicId: { in: accessibleIds } },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
         assignedTo: { select: { id: true, firstName: true, lastName: true } },
@@ -67,7 +69,8 @@ router.get('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (
 
 // POST /api/tasks
 router.post('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = taskSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
@@ -94,13 +97,16 @@ router.post('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req
 // PUT /api/tasks/:id
 router.put('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const validation = taskSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.task.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.task.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Task not found' });
+    const clinicId = existing.clinicId;
 
     const updated = await prisma.task.update({
       where: { id },
@@ -125,12 +131,15 @@ router.put('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (
 // PATCH /api/tasks/:id/complete
 router.patch('/tasks/:id/complete', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const existing = await prisma.task.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.task.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Task not found' });
     if (existing.status === 'completed') return res.status(400).json({ error: 'Task is already completed' });
+    const clinicId = existing.clinicId;
 
     const updated = await prisma.task.update({
       where: { id },

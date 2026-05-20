@@ -15,12 +15,11 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // GET isteklerine seçili klinik filtresi ekle
-  if (config.method === 'get' || config.method === 'GET' || !config.method) {
-    const selectedClinicId = localStorage.getItem('hcrm_clinic_id');
-    if (selectedClinicId && selectedClinicId !== 'all') {
-      config.params = { ...config.params, clinicId: selectedClinicId };
-    }
+  // Tüm isteklere seçili klinik filtresi ekle (GET listesi + mutation'lar)
+  // Backend bu değeri doğrular; "all" gönderilmez — backend varsayılanı kullanır
+  const selectedClinicId = localStorage.getItem('hcrm_clinic_id');
+  if (selectedClinicId && selectedClinicId !== 'all') {
+    config.params = { ...config.params, clinicId: selectedClinicId };
   }
 
   return config;

@@ -4,7 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam, checkPractitionerAvailability } from '../utils/helpers.js';
 import { appointmentSchema, appointmentUpdateSchema } from '../schemas/index.js';
-import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -58,12 +58,14 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
 // GET /api/appointments/:id
 router.get('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const appointment = await prisma.appointment.findFirst({
-      where: { id, clinicId, deletedAt: null },
+      where: { id, clinicId: { in: accessibleIds }, deletedAt: null },
       include: {
         patient: true,
         practitioner: true,
@@ -87,7 +89,9 @@ router.get('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), 
 
 // POST /api/appointments
 router.post('/appointments', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  // ?clinicId query param varsa doğrula, yoksa defaultClinicId kullan
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = appointmentSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
@@ -145,15 +149,18 @@ router.post('/appointments', authorize(['admin', 'receptionist']), async (req: A
 // PUT /api/appointments/:id
 router.put('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
 
   const validation = appointmentUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.appointment.findFirst({ where: { id, clinicId, deletedAt: null } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.appointment.findFirst({ where: { id, clinicId: { in: accessibleIds }, deletedAt: null } });
     if (!existing) return res.status(404).json({ error: 'Appointment not found' });
+    const clinicId = existing.clinicId;
 
     if (role === 'doctor' && existing.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -235,12 +242,15 @@ router.put('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), 
 // PATCH /api/appointments/:id/treatment-case — link or unlink a treatment case
 router.patch('/appointments/:id/treatment-case', authorize(['admin', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { treatmentCaseId } = req.body; // null to unlink
 
   try {
-    const existing = await prisma.appointment.findFirst({ where: { id, clinicId, deletedAt: null } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.appointment.findFirst({ where: { id, clinicId: { in: accessibleIds }, deletedAt: null } });
     if (!existing) return res.status(404).json({ error: 'Appointment not found' });
+    const clinicId = existing.clinicId;
 
     if (treatmentCaseId) {
       const tc = await prisma.treatmentCase.findFirst({ where: { id: treatmentCaseId, clinicId } });

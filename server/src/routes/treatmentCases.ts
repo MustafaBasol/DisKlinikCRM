@@ -5,7 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { treatmentCaseSchema } from '../schemas/index.js';
 import { generateEarningFromTreatmentCase } from '../services/earningService.js';
-import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -52,12 +52,14 @@ router.get('/treatment-cases', authorize(['admin', 'doctor', 'receptionist', 'bi
 // GET /api/treatment-cases/:id
 router.get('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const tc = await prisma.treatmentCase.findFirst({
-      where: { id, clinicId },
+      where: { id, clinicId: { in: accessibleIds } },
       include: {
         ...treatmentCaseInclude,
         activityLogs: {
@@ -81,14 +83,15 @@ router.get('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist',
 
 // POST /api/treatment-cases
 router.post('/treatment-cases', authorize(['admin', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = treatmentCaseSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
     const practitionerId = validation.data.practitionerId ?? undefined;
     const [patient, practitioner] = await Promise.all([
-      prisma.patient.findFirst({ where: { id: validation.data.patientId, clinicId, deletedAt: null } }),
+      prisma.patient.findFirst({ where: { id: validation.data.patientId, organizationId: req.user!.organizationId, deletedAt: null } }),
       practitionerId ? prisma.user.findFirst({ where: { id: practitionerId, clinicId, role: 'doctor' } }) : Promise.resolve(null),
     ]);
 
@@ -119,15 +122,18 @@ router.post('/treatment-cases', authorize(['admin', 'receptionist', 'doctor']), 
 // PUT /api/treatment-cases/:id
 router.put('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
 
   const validation = treatmentCaseSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.treatmentCase.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.treatmentCase.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Treatment case not found' });
+    const clinicId = existing.clinicId;
 
     if (role === 'doctor' && existing.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -189,8 +195,15 @@ async function checkAndNotifyLowStock(clinicId: string, itemId: string) {
 // GET /api/treatment-cases/:id/materials
 router.get('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
-  const clinicId = req.user!.clinicId;
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    // Validate treatment case belongs to accessible clinic
+    const tc = await prisma.treatmentCase.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
+    if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+    const clinicId = tc.clinicId;
+
     const materials = await prisma.inventoryTransaction.findMany({
       where: { treatmentCaseId: id, clinicId, type: 'out', reason: 'treatment_use' },
       include: { item: { select: { id: true, name: true, unit: true, category: true } } },
@@ -205,7 +218,6 @@ router.get('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'rece
 // POST /api/treatment-cases/:id/materials
 router.post('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
-  const clinicId = req.user!.clinicId;
   const userId = req.user!.id;
   const { itemId, quantity, notes } = req.body;
 
@@ -214,8 +226,12 @@ router.post('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'rec
   }
 
   try {
-    const tc = await prisma.treatmentCase.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const tc = await prisma.treatmentCase.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+    const clinicId = tc.clinicId;
 
     const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, clinicId, isActive: true } });
     if (!item) return res.status(404).json({ error: 'Inventory item not found' });
@@ -265,14 +281,17 @@ router.post('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'rec
 router.delete('/treatment-cases/:id/materials/:txId', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
   const txId = String(req.params.txId);
-  const clinicId = req.user!.clinicId;
   const userId = req.user!.id;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const tx = await prisma.inventoryTransaction.findFirst({
-      where: { id: txId, treatmentCaseId: id, clinicId, type: 'out', reason: 'treatment_use' },
+      where: { id: txId, treatmentCaseId: id, clinicId: { in: accessibleIds }, type: 'out', reason: 'treatment_use' },
     });
     if (!tx) return res.status(404).json({ error: 'Material record not found' });
+    const clinicId = tx.clinicId;
 
     // Restore stock
     await prisma.inventoryItem.update({

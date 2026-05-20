@@ -5,7 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { paymentSchema } from '../schemas/index.js';
 import { generateEarningFromPayment } from '../services/earningService.js';
-import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -58,12 +58,13 @@ router.get('/payments', authorize(['admin', 'billing', 'receptionist', 'doctor']
 
 // POST /api/payments
 router.post('/payments', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = paymentSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const patient = await prisma.patient.findFirst({ where: { id: validation.data.patientId, clinicId } });
+    const patient = await prisma.patient.findFirst({ where: { id: validation.data.patientId, organizationId: req.user!.organizationId } });
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
 
     if (validation.data.treatmentCaseId) {
@@ -97,14 +98,17 @@ router.post('/payments', authorize(['admin', 'billing', 'receptionist']), async 
 // PUT /api/payments/:id
 router.put('/payments/:id', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   const validation = paymentSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.payment.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.payment.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Payment not found' });
+    const clinicId = existing.clinicId;
 
     const updated = await prisma.payment.update({ where: { id }, data: validation.data });
 
@@ -127,11 +131,14 @@ router.put('/payments/:id', authorize(['admin', 'billing']), async (req: AuthReq
 // PATCH /api/payments/:id/cancel
 router.patch('/payments/:id/cancel', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const existing = await prisma.payment.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.payment.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Payment not found' });
+    const clinicId = existing.clinicId;
 
     const updated = await prisma.payment.update({
       where: { id },
@@ -153,11 +160,13 @@ router.patch('/payments/:id/cancel', authorize(['admin', 'billing']), async (req
 // GET /api/payments/:id/receipt
 router.get('/payments/:id/receipt', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const payment = await prisma.payment.findFirst({
-      where: { id, clinicId },
+      where: { id, clinicId: { in: accessibleIds } },
       include: {
         patient: { select: { firstName: true, lastName: true, phone: true, email: true } },
         treatmentCase: { select: { title: true, estimatedAmount: true, acceptedAmount: true, currency: true } },

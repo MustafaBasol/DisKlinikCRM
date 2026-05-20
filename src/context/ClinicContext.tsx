@@ -36,11 +36,23 @@ export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Kullanıcı değişince veya klinik listesi güncellenince geçersiz seçimi düzelt
   useEffect(() => {
     if (!user) return;
+    const stored = localStorage.getItem(STORAGE_KEY);
+
+    // Tek klinikli ve canAccessAllClinics=false → daima o kliniği seç
+    if (!canAccessAllClinics && availableClinics.length === 1) {
+      const onlyId = availableClinics[0].id;
+      if (selectedClinicId !== onlyId) {
+        setSelectedClinicIdState(onlyId);
+        localStorage.setItem(STORAGE_KEY, onlyId);
+      }
+      return;
+    }
+
     if (selectedClinicId === 'all') return;
     // Seçilen klinik mevcut listede yok ve canAccessAllClinics false ise varsayılana dön
     const valid = availableClinics.some(c => c.id === selectedClinicId);
     if (!valid) {
-      const fallback = availableClinics[0]?.id ?? 'all';
+      const fallback = canAccessAllClinics ? 'all' : (availableClinics[0]?.id ?? 'all');
       setSelectedClinicIdState(fallback);
       localStorage.setItem(STORAGE_KEY, fallback);
     }

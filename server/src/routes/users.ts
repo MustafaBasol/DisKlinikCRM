@@ -6,16 +6,30 @@ import { logActivity } from '../utils/activity.js';
 import { getParam, validatePassword } from '../utils/helpers.js';
 import { userCreateSchema, userUpdateSchema, availabilityBatchSchema, doctorOffDaySchema } from '../schemas/index.js';
 import { checkUserLimit } from '../middleware/planLimits.js';
+import { getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
 // GET /api/users
 router.get('/users', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { role } = req.query;
+  const { role, clinicId: selectedClinicId } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    // selectedClinicId varsa doğrula ve kullan
+    let clinicIdFilter: string | { in: string[] };
+    if (selectedClinicId && String(selectedClinicId) !== 'all') {
+      if (!accessibleIds.includes(String(selectedClinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
+      clinicIdFilter = String(selectedClinicId);
+    } else {
+      clinicIdFilter = accessibleIds.length === 1 ? accessibleIds[0] : { in: accessibleIds };
+    }
+
+    const where: any = { clinicId: clinicIdFilter };
     if (role) where.role = String(role);
 
     const users = await prisma.user.findMany({
@@ -34,7 +48,8 @@ router.get('/users', authorize(['admin', 'receptionist']), async (req: AuthReque
 
 // POST /api/users
 router.post('/users', authorize(['admin']), checkUserLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = userCreateSchema.safeParse(req.body);
 
   if (!validation.success) {
@@ -85,7 +100,6 @@ router.post('/users', authorize(['admin']), checkUserLimit as express.RequestHan
 // PUT /api/users/:id
 router.put('/users/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const validation = userUpdateSchema.safeParse(req.body);
 
   if (!validation.success) {
@@ -100,8 +114,12 @@ router.put('/users/:id', authorize(['admin']), async (req: AuthRequest, res: Res
   }
 
   try {
-    const existing = await prisma.user.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.user.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'User not found' });
+    const clinicId = existing.clinicId;
 
     if (validation.data.email && validation.data.email !== existing.email) {
       const emailOwner = await prisma.user.findFirst({ where: { email: validation.data.email, clinicId } });
@@ -138,15 +156,24 @@ router.put('/users/:id', authorize(['admin']), async (req: AuthRequest, res: Res
 
 // GET /api/doctor-availabilities
 router.get('/doctor-availabilities', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
   const requestedPractitionerId = req.query.practitionerId ? String(req.query.practitionerId) : undefined;
   const practitionerId = role === 'doctor' ? userId : requestedPractitionerId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    let clinicFilter: any = { in: accessibleIds };
+    if (selectedClinicId && selectedClinicId !== 'all') {
+      if (!accessibleIds.includes(selectedClinicId)) return res.status(403).json({ error: 'Access denied to requested clinic' });
+      clinicFilter = selectedClinicId;
+    }
+
     const availabilities = await prisma.doctorAvailability.findMany({
       where: {
-        clinicId,
+        clinicId: clinicFilter,
         ...(practitionerId ? { practitionerId } : {}),
         practitioner: { role: 'doctor', isActive: true },
       },
@@ -165,7 +192,8 @@ router.get('/doctor-availabilities', authorize(['admin', 'doctor', 'receptionist
 
 // PUT /api/doctor-availabilities/:practitionerId
 router.put('/doctor-availabilities/:practitionerId', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const { role, id: userId } = req.user!;
   const practitionerId = getParam(req, 'practitionerId');
 
@@ -217,15 +245,24 @@ router.put('/doctor-availabilities/:practitionerId', authorize(['admin', 'doctor
 
 // GET /api/doctor-off-days
 router.get('/doctor-off-days', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
   const requestedPractitionerId = req.query.practitionerId ? String(req.query.practitionerId) : undefined;
   const practitionerId = role === 'doctor' ? userId : requestedPractitionerId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    let clinicFilter: any = { in: accessibleIds };
+    if (selectedClinicId && selectedClinicId !== 'all') {
+      if (!accessibleIds.includes(selectedClinicId)) return res.status(403).json({ error: 'Access denied to requested clinic' });
+      clinicFilter = selectedClinicId;
+    }
+
     const offDays = await prisma.doctorOffDay.findMany({
       where: {
-        clinicId,
+        clinicId: clinicFilter,
         ...(practitionerId ? { practitionerId } : {}),
       },
       orderBy: { date: 'asc' },
@@ -238,7 +275,8 @@ router.get('/doctor-off-days', authorize(['admin', 'doctor', 'receptionist']), a
 
 // POST /api/doctor-off-days
 router.post('/doctor-off-days', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const { role, id: userId } = req.user!;
 
   const validation = doctorOffDaySchema.safeParse(req.body);
@@ -276,13 +314,16 @@ router.post('/doctor-off-days', authorize(['admin', 'doctor']), async (req: Auth
 
 // DELETE /api/doctor-off-days/:id
 router.delete('/doctor-off-days/:id', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
   const id = getParam(req, 'id');
 
   try {
-    const offDay = await prisma.doctorOffDay.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const offDay = await prisma.doctorOffDay.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!offDay) return res.status(404).json({ error: 'Off day not found' });
+    const clinicId = offDay.clinicId;
 
     if (role === 'doctor' && offDay.practitionerId !== userId) {
       return res.status(403).json({ error: 'Doctors can only delete their own off days' });
