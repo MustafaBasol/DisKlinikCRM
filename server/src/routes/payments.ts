@@ -5,17 +5,20 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { paymentSchema } from '../schemas/index.js';
 import { generateEarningFromPayment } from '../services/earningService.js';
+import { validateAndGetScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
 // GET /api/payments
 router.get('/payments', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
-  const { patientId, treatmentCaseId, paymentStatus, paymentMethod, dateFrom, dateTo } = req.query;
+  const { patientId, treatmentCaseId, paymentStatus, paymentMethod, dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const where: any = { ...scope };
 
     if (role === 'doctor') {
       where.OR = [

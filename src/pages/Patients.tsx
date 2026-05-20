@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Loader2, User } from 'lucide-react';
+import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Loader2, User, Building2 } from 'lucide-react';
 import { patientService } from '../services/api';
 import PatientForm from '../components/PatientForm';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useClinic } from '../context/ClinicContext';
 
 const Patients: React.FC = () => {
   const { t } = useTranslation(['patients', 'common']);
+  const { selectedClinicId, availableClinics, hasMultipleClinics } = useClinic();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -35,7 +37,7 @@ const Patients: React.FC = () => {
       fetchPatients();
     }, 300);
     return () => clearTimeout(timeout);
-  }, [search, status, includeArchived]);
+  }, [search, status, includeArchived, selectedClinicId]);
 
   return (
     <div className="space-y-6">
@@ -97,6 +99,9 @@ const Patients: React.FC = () => {
                 <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-100">
                   <th className="px-4 sm:px-6 py-4">{t('patients:list.name')}</th>
                   <th className="px-4 sm:px-6 py-4 hidden sm:table-cell">{t('patients:list.contact')}</th>
+                  {hasMultipleClinics && selectedClinicId === 'all' && (
+                    <th className="px-4 sm:px-6 py-4 hidden md:table-cell">Şube</th>
+                  )}
                   <th className="px-4 sm:px-6 py-4">{t('patients:list.status')}</th>
                   <th className="px-4 sm:px-6 py-4 hidden md:table-cell">{t('patients:list.createdAt')}</th>
                   <th className="px-4 sm:px-6 py-4"></th>
@@ -129,6 +134,14 @@ const Patients: React.FC = () => {
                         )}
                       </div>
                     </td>
+                    {hasMultipleClinics && selectedClinicId === 'all' && (
+                      <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
+                        <span className="inline-flex items-center gap-1 text-xs bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full px-2 py-0.5">
+                          <Building2 size={10} />
+                          {availableClinics.find(c => c.id === (patient.primaryClinicId ?? patient.clinicId))?.name ?? '—'}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-4 sm:px-6 py-4">
                       <span className={`badge ${
                         patient.patientStatus === 'active' ? 'badge-green' : 
@@ -147,7 +160,7 @@ const Patients: React.FC = () => {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={hasMultipleClinics && selectedClinicId === 'all' ? 6 : 5} className="px-6 py-12 text-center text-gray-500">
                       {t('patients:noPatientsFound')}
                     </td>
                   </tr>

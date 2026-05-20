@@ -5,6 +5,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam, validatePassword } from '../utils/helpers.js';
 import { userCreateSchema, userUpdateSchema, availabilityBatchSchema, doctorOffDaySchema } from '../schemas/index.js';
+import { checkUserLimit } from '../middleware/planLimits.js';
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ router.get('/users', authorize(['admin', 'receptionist']), async (req: AuthReque
 });
 
 // POST /api/users
-router.post('/users', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.post('/users', authorize(['admin']), checkUserLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = userCreateSchema.safeParse(req.body);
 
@@ -48,13 +49,14 @@ router.post('/users', authorize(['admin']), async (req: AuthRequest, res: Respon
   }
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email: validation.data.email } });
-    if (existing) return res.status(409).json({ error: 'Email is already in use' });
+    const existing = await prisma.user.findFirst({ where: { email: validation.data.email, clinicId } });
+    if (existing) return res.status(409).json({ error: 'Email is already in use in this clinic' });
 
     const passwordHash = await bcrypt.hash(validation.data.password, 12);
     const user = await prisma.user.create({
       data: {
         clinicId,
+        organizationId: req.user!.organizationId,
         firstName: validation.data.firstName,
         lastName: validation.data.lastName,
         email: validation.data.email,
@@ -102,8 +104,8 @@ router.put('/users/:id', authorize(['admin']), async (req: AuthRequest, res: Res
     if (!existing) return res.status(404).json({ error: 'User not found' });
 
     if (validation.data.email && validation.data.email !== existing.email) {
-      const emailOwner = await prisma.user.findUnique({ where: { email: validation.data.email } });
-      if (emailOwner) return res.status(409).json({ error: 'Email is already in use' });
+      const emailOwner = await prisma.user.findFirst({ where: { email: validation.data.email, clinicId } });
+      if (emailOwner) return res.status(409).json({ error: 'Email is already in use in this clinic' });
     }
 
     if (id === req.user!.id && validation.data.isActive === false) {

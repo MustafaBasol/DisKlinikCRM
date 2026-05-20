@@ -1,13 +1,13 @@
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
+import { validateAndGetScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
 // GET /api/reports/revenue
 router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { dateFrom, dateTo, groupBy: rawGroupBy, practitionerId, paymentMethod } = req.query;
+  const { dateFrom, dateTo, groupBy: rawGroupBy, practitionerId, paymentMethod, clinicId: selectedClinicId } = req.query;
 
   if (!dateFrom || !dateTo) {
     return res.status(400).json({ error: 'dateFrom and dateTo are required' });
@@ -25,8 +25,11 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
   const groupBy = validGroupByValues.includes(String(rawGroupBy)) ? String(rawGroupBy) : 'month';
 
   try {
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
     const baseWhere: any = {
-      clinicId,
+      ...scope,
       paymentStatus: { in: ['paid', 'partial'] },
       paidAt: { gte: from, lte: to },
     };
@@ -45,7 +48,7 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
         _count: { id: true },
       }),
       prisma.payment.aggregate({
-        where: { clinicId, paymentStatus: 'pending' },
+        where: { ...scope, paymentStatus: 'pending' },
         _sum: { amount: true },
         _count: { id: true },
       }),
@@ -62,7 +65,11 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
     const totalCount = summary._count.id || 0;
 
     // By period — raw SQL for DATE_TRUNC (validated groupBy, parameterized values)
+    // Single-clinic scope için ham SQL kullanılır; çok-klinik scope'ta Prisma toplamı esas alınır
     const groupByTrunc = groupBy; // already validated against whitelist
+    const rawClinicId = ('clinicId' in scope && typeof (scope as any).clinicId === 'string')
+      ? (scope as any).clinicId
+      : req.user!.clinicId;
     const byPeriodQuery = `
       SELECT
         TO_CHAR(DATE_TRUNC('${groupByTrunc}', "paidAt"), 'YYYY-MM-DD') as period,
@@ -77,7 +84,7 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
       ORDER BY DATE_TRUNC('${groupByTrunc}', "paidAt")
     `;
     const byPeriodRaw = await prisma.$queryRawUnsafe<{ period: string; revenue: number; count: number }[]>(
-      byPeriodQuery, clinicId, from, to
+      byPeriodQuery, rawClinicId, from, to
     );
 
     // By practitioner — fetch commission rates separately (avoids select validation on old Prisma client)
@@ -96,7 +103,7 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
         },
       }),
       prisma.user.findMany({
-        where: { clinicId, role: 'doctor', isActive: true },
+        where: { ...scope, role: 'doctor', isActive: true },
         select: { id: true },
       }),
     ]);
@@ -155,8 +162,7 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
 
 // GET /api/reports/revenue/export.csv
 router.get('/reports/revenue/export.csv', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { dateFrom, dateTo, practitionerId, paymentMethod } = req.query;
+  const { dateFrom, dateTo, practitionerId, paymentMethod, clinicId: selectedClinicId } = req.query;
 
   if (!dateFrom || !dateTo) return res.status(400).json({ error: 'dateFrom and dateTo are required' });
 
@@ -165,8 +171,11 @@ router.get('/reports/revenue/export.csv', authorize(['admin', 'billing']), async
   to.setHours(23, 59, 59, 999);
 
   try {
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
     const where: any = {
-      clinicId,
+      ...scope,
       paymentStatus: { in: ['paid', 'partial'] },
       paidAt: { gte: from, lte: to },
     };
@@ -209,8 +218,7 @@ router.get('/reports/revenue/export.csv', authorize(['admin', 'billing']), async
 
 // GET /api/reports/doctor-performance
 router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { dateFrom, dateTo } = req.query;
+  const { dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
   if (!dateFrom || !dateTo) return res.status(400).json({ error: 'dateFrom and dateTo are required' });
 
@@ -223,15 +231,18 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
   }
 
   try {
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
     const doctors = await prisma.user.findMany({
-      where: { clinicId, role: 'doctor', isActive: true },
+      where: { ...scope, role: 'doctor', isActive: true },
       select: { id: true, firstName: true, lastName: true },
     });
 
     // Pre-fetch all treatment case IDs grouped by practitioner (avoids nested relation
     // filter inside aggregate which is unreliable for nullable relations in Prisma)
     const allDoctorCases = await prisma.treatmentCase.findMany({
-      where: { clinicId, practitionerId: { in: doctors.map(d => d.id) } },
+      where: { ...scope, practitionerId: { in: doctors.map(d => d.id) } },
       select: { id: true, practitionerId: true },
     });
     const caseIdsByDoctor = new Map<string, string[]>();
@@ -248,24 +259,24 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
 
       const [appointmentCount, completedAppointments, noShowCount, treatmentCasesOpened, treatmentCasesCompleted, revenueAgg] = await Promise.all([
         prisma.appointment.count({
-          where: { clinicId, practitionerId: doc.id, startTime: { gte: from, lte: to }, status: { not: 'cancelled' } },
+          where: { ...scope, practitionerId: doc.id, startTime: { gte: from, lte: to }, status: { not: 'cancelled' } },
         }),
         prisma.appointment.count({
-          where: { clinicId, practitionerId: doc.id, startTime: { gte: from, lte: to }, status: 'completed' },
+          where: { ...scope, practitionerId: doc.id, startTime: { gte: from, lte: to }, status: 'completed' },
         }),
         prisma.appointment.count({
-          where: { clinicId, practitionerId: doc.id, startTime: { gte: from, lte: to }, status: 'no_show' },
+          where: { ...scope, practitionerId: doc.id, startTime: { gte: from, lte: to }, status: 'no_show' },
         }),
         prisma.treatmentCase.count({
-          where: { clinicId, practitionerId: doc.id, createdAt: { gte: from, lte: to } },
+          where: { ...scope, practitionerId: doc.id, createdAt: { gte: from, lte: to } },
         }),
         prisma.treatmentCase.count({
-          where: { clinicId, practitionerId: doc.id, stage: 'completed', closedAt: { gte: from, lte: to } },
+          where: { ...scope, practitionerId: doc.id, stage: 'completed', closedAt: { gte: from, lte: to } },
         }),
         doctorCaseIds.length > 0
           ? prisma.payment.aggregate({
               where: {
-                clinicId,
+                ...scope,
                 paymentStatus: { in: ['paid', 'partial'] },
                 paidAt: { gte: from, lte: to },
                 treatmentCaseId: { in: doctorCaseIds },
@@ -309,8 +320,7 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
 
 // GET /api/reports/patient-sources
 router.get('/reports/patient-sources', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { dateFrom, dateTo } = req.query;
+  const { dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
   const toDate = dateTo ? new Date(String(dateTo)) : new Date();
   toDate.setHours(23, 59, 59, 999);
@@ -321,22 +331,25 @@ router.get('/reports/patient-sources', authorize(['admin', 'billing']), async (r
   }
 
   try {
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
     const dateFilter = { gte: fromDate, lte: toDate };
 
     const [bySourceCount, allPatientsCount, paymentsWithSource] = await Promise.all([
       // Patient counts per source (by registration date)
       prisma.patient.groupBy({
         by: ['source'],
-        where: { clinicId, createdAt: dateFilter },
+        where: { ...scope, createdAt: dateFilter },
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
       }),
       // Total patients in period
-      prisma.patient.count({ where: { clinicId, createdAt: dateFilter } }),
+      prisma.patient.count({ where: { ...scope, createdAt: dateFilter } }),
       // Revenue grouped by patient source
       prisma.payment.findMany({
         where: {
-          clinicId,
+          ...scope,
           paymentStatus: { in: ['paid', 'partial'] },
           paidAt: dateFilter,
         },

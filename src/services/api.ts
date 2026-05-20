@@ -14,6 +14,15 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // GET isteklerine seçili klinik filtresi ekle
+  if (config.method === 'get' || config.method === 'GET' || !config.method) {
+    const selectedClinicId = localStorage.getItem('hcrm_clinic_id');
+    if (selectedClinicId && selectedClinicId !== 'all') {
+      config.params = { ...config.params, clinicId: selectedClinicId };
+    }
+  }
+
   return config;
 });
 

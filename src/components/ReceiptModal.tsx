@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { X, Loader2, Printer } from 'lucide-react';
 import { paymentService } from '../services/api';
 
@@ -102,23 +101,13 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ paymentId, onClose }) => {
             )}
             {error && <p className="text-red-500 text-center py-8">{error}</p>}
             {!loading && data && (
-              <ReceiptContent data={data} />
+              <div className="receipt-print-portal">
+                <ReceiptContent data={data} />
+              </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* Printable area rendered via portal directly in <body> so print CSS works */}
-      {!loading && data && createPortal(
-        <div
-          className="receipt-print-portal"
-          style={{ position: 'fixed', left: '-200vw', top: 0, width: '100vw' }}
-          aria-hidden="true"
-        >
-          <ReceiptContent data={data} />
-        </div>,
-        document.body
-      )}
     </>
   );
 };

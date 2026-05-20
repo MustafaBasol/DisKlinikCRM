@@ -33,11 +33,67 @@ async function main() {
   await prisma.doctorAvailability.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.clinic.deleteMany({});
+  await prisma.plan.deleteMany({});
+  await prisma.platformAdmin.deleteMany({});
 
   const passwordHash = await bcrypt.hash('password123', 10);
 
+  // ── Platform Plans ──────────────────────────────────────────────────────────
+  const starterPlan = await prisma.plan.create({
+    data: {
+      name: 'starter',
+      displayName: 'Starter',
+      maxUsers: 5,
+      maxPatients: 200,
+      features: { whatsapp: false, reports: true, compensation: false, inventory: false },
+      monthlyPrice: 0,
+    },
+  });
+
+  await prisma.plan.create({
+    data: {
+      name: 'professional',
+      displayName: 'Professional',
+      maxUsers: 15,
+      maxPatients: 2000,
+      features: { whatsapp: true, reports: true, compensation: true, inventory: true },
+      monthlyPrice: 499,
+    },
+  });
+
+  await prisma.plan.create({
+    data: {
+      name: 'enterprise',
+      displayName: 'Enterprise',
+      maxUsers: 999,
+      maxPatients: 999999,
+      features: { whatsapp: true, reports: true, compensation: true, inventory: true, multiLocation: true },
+      monthlyPrice: 1499,
+    },
+  });
+
+  // ── Platform Admin ──────────────────────────────────────────────────────────
+  await prisma.platformAdmin.create({
+    data: {
+      email: 'platform@disklinik.com',
+      passwordHash: await bcrypt.hash('PlatformAdmin2026!', 12),
+      name: 'Platform Admin',
+    },
+  });
+
+  // ── Organization oluştur (multi-branch plan için) ─────────────────────────────
+  const organization = await prisma.organization.create({
+    data: {
+      name: 'Aile Dis',
+      slug: 'aile-dis',
+      status: 'active',
+      planId: starterPlan.id,
+    },
+  });
+
   const clinic = await prisma.clinic.create({
     data: {
+      organizationId: organization.id,
       name: 'Aile Dis',
       legalName: 'Ozel Aile Dis Agiz ve Dis Sagligi Poliklinigi',
       address: 'Osmangazi, Ahmet Yesevi Cd 8/C, 34887 Sancaktepe/Istanbul',
@@ -47,12 +103,16 @@ async function main() {
       timezone: 'Europe/Istanbul',
       currency: 'TRY',
       defaultLanguage: 'tr',
+      slug: 'aile-dis',
+      status: 'active',
+      planId: starterPlan.id,
     },
   });
 
   const admin = await prisma.user.create({
     data: {
       clinicId: clinic.id,
+      organizationId: organization.id,
       firstName: 'Klinik',
       lastName: 'Yoneticisi',
       email: 'admin@ailedis.com',
@@ -65,6 +125,7 @@ async function main() {
   const receptionist = await prisma.user.create({
     data: {
       clinicId: clinic.id,
+      organizationId: organization.id,
       firstName: 'Resepsiyon',
       lastName: 'Ekibi',
       email: 'resepsiyon@ailedis.com',
@@ -77,6 +138,7 @@ async function main() {
   const billing = await prisma.user.create({
     data: {
       clinicId: clinic.id,
+      organizationId: organization.id,
       firstName: 'Muhasebe',
       lastName: 'Ekibi',
       email: 'muhasebe@ailedis.com',
@@ -86,13 +148,13 @@ async function main() {
   });
 
   const dentists = await Promise.all([
-    prisma.user.create({ data: { clinicId: clinic.id, firstName: 'Dt. Kerem', lastName: 'Özgüler', email: 'kerem.ozguler@ailedis.com', role: 'doctor', passwordHash } }),
-    prisma.user.create({ data: { clinicId: clinic.id, firstName: 'Uzm. Dt. Hatice', lastName: 'Erkin', email: 'hatice.erkin@ailedis.com', role: 'doctor', passwordHash } }),
-    prisma.user.create({ data: { clinicId: clinic.id, firstName: 'Dt. Ayşegül', lastName: 'Akmeşe', email: 'aysegul.akmese@ailedis.com', role: 'doctor', passwordHash } }),
-    prisma.user.create({ data: { clinicId: clinic.id, firstName: 'Dt. Yasin', lastName: 'Turgut', email: 'yasin.turgut@ailedis.com', role: 'doctor', passwordHash } }),
-    prisma.user.create({ data: { clinicId: clinic.id, firstName: 'Dt. Salim Fatih', lastName: 'Girgin', email: 'salim.girgin@ailedis.com', role: 'doctor', passwordHash } }),
-    prisma.user.create({ data: { clinicId: clinic.id, firstName: 'Dt. Batıkan', lastName: 'Şirin', email: 'batikan.sirin@ailedis.com', role: 'doctor', passwordHash } }),
-    prisma.user.create({ data: { clinicId: clinic.id, firstName: 'Dt. Uğur', lastName: 'Mester', email: 'ugur.mester@ailedis.com', role: 'doctor', passwordHash } }),
+    prisma.user.create({ data: { clinicId: clinic.id, organizationId: organization.id, firstName: 'Dt. Kerem', lastName: 'Özgüler', email: 'kerem.ozguler@ailedis.com', role: 'doctor', passwordHash } }),
+    prisma.user.create({ data: { clinicId: clinic.id, organizationId: organization.id, firstName: 'Uzm. Dt. Hatice', lastName: 'Erkin', email: 'hatice.erkin@ailedis.com', role: 'doctor', passwordHash } }),
+    prisma.user.create({ data: { clinicId: clinic.id, organizationId: organization.id, firstName: 'Dt. Ayşegül', lastName: 'Akmeşe', email: 'aysegul.akmese@ailedis.com', role: 'doctor', passwordHash } }),
+    prisma.user.create({ data: { clinicId: clinic.id, organizationId: organization.id, firstName: 'Dt. Yasin', lastName: 'Turgut', email: 'yasin.turgut@ailedis.com', role: 'doctor', passwordHash } }),
+    prisma.user.create({ data: { clinicId: clinic.id, organizationId: organization.id, firstName: 'Dt. Salim Fatih', lastName: 'Girgin', email: 'salim.girgin@ailedis.com', role: 'doctor', passwordHash } }),
+    prisma.user.create({ data: { clinicId: clinic.id, organizationId: organization.id, firstName: 'Dt. Batıkan', lastName: 'Şirin', email: 'batikan.sirin@ailedis.com', role: 'doctor', passwordHash } }),
+    prisma.user.create({ data: { clinicId: clinic.id, organizationId: organization.id, firstName: 'Dt. Uğur', lastName: 'Mester', email: 'ugur.mester@ailedis.com', role: 'doctor', passwordHash } }),
   ]);
 
   await prisma.doctorAvailability.createMany({
@@ -235,14 +297,14 @@ async function main() {
   );
 
   const patients = await Promise.all([
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Mehmet', lastName: 'Aydin', email: 'mehmet.aydin@example.com', phone: '+90 532 100 00 01', patientStatus: 'active', source: 'google', communicationConsent: true } }),
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Zeynep', lastName: 'Sahin', email: 'zeynep.sahin@example.com', phone: '+90 532 100 00 02', patientStatus: 'active', source: 'website', communicationConsent: true, marketingConsent: true } }),
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Elif', lastName: 'Kaya', email: 'elif.kaya@example.com', phone: '+90 532 100 00 03', patientStatus: 'new', source: 'instagram', communicationConsent: true } }),
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Burak', lastName: 'Yilmaz', email: 'burak.yilmaz@example.com', phone: '+90 532 100 00 04', patientStatus: 'active', source: 'referral', communicationConsent: true } }),
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Selin', lastName: 'Demir', email: 'selin.demir@example.com', phone: '+90 532 100 00 05', patientStatus: 'active', source: 'phone', communicationConsent: true } }),
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Mert', lastName: 'Arslan', email: 'mert.arslan@example.com', phone: '+90 532 100 00 06', patientStatus: 'new', source: 'walk_in' } }),
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Derya', lastName: 'Ozturk', email: 'derya.ozturk@example.com', phone: '+90 532 100 00 07', patientStatus: 'active', source: 'google', communicationConsent: true } }),
-    prisma.patient.create({ data: { clinicId: clinic.id, firstName: 'Can', lastName: 'Koc', email: 'can.koc@example.com', phone: '+90 532 100 00 08', patientStatus: 'inactive', source: 'website' } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Mehmet', lastName: 'Aydin', email: 'mehmet.aydin@example.com', phone: '+90 532 100 00 01', patientStatus: 'active', source: 'google', communicationConsent: true } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Zeynep', lastName: 'Sahin', email: 'zeynep.sahin@example.com', phone: '+90 532 100 00 02', patientStatus: 'active', source: 'website', communicationConsent: true, marketingConsent: true } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Elif', lastName: 'Kaya', email: 'elif.kaya@example.com', phone: '+90 532 100 00 03', patientStatus: 'new', source: 'instagram', communicationConsent: true } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Burak', lastName: 'Yilmaz', email: 'burak.yilmaz@example.com', phone: '+90 532 100 00 04', patientStatus: 'active', source: 'referral', communicationConsent: true } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Selin', lastName: 'Demir', email: 'selin.demir@example.com', phone: '+90 532 100 00 05', patientStatus: 'active', source: 'phone', communicationConsent: true } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Mert', lastName: 'Arslan', email: 'mert.arslan@example.com', phone: '+90 532 100 00 06', patientStatus: 'new', source: 'walk_in' } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Derya', lastName: 'Ozturk', email: 'derya.ozturk@example.com', phone: '+90 532 100 00 07', patientStatus: 'active', source: 'google', communicationConsent: true } }),
+    prisma.patient.create({ data: { clinicId: clinic.id, organizationId: organization.id, primaryClinicId: clinic.id, firstName: 'Can', lastName: 'Koc', email: 'can.koc@example.com', phone: '+90 532 100 00 08', patientStatus: 'inactive', source: 'website' } }),
   ]);
 
   const today = new Date();

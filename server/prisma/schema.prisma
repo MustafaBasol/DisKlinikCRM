@@ -18,6 +18,15 @@ model Clinic {
   timezone        String   @default("UTC")
   currency        String   @default("USD")
   defaultLanguage String   @default("en")
+  slug            String   // Phase 1b: NOT NULL — @@unique([organizationId, slug]) added below
+  status          String   @default("trial") // trial | active | suspended | cancelled
+  trialEndsAt     DateTime?
+  maxUsers        Int      @default(10)  // Kept for backwards compat; plan limits read from Organization after migration
+  maxPatients     Int      @default(500) // Kept for backwards compat
+  planId          String?               // Staged migration: kept until Organization.planId is validated
+  plan            Plan?    @relation(fields: [planId], references: [id])
+  organizationId  String                // Phase 1b: NOT NULL after backfill
+  organization    Organization          @relation(fields: [organizationId], references: [id])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -49,6 +58,13 @@ model Clinic {
   inventoryTransactions    InventoryTransaction[]
   treatmentPlanProcedures  TreatmentPlanProcedure[]
   notifications            Notification[]
+  invitations              ClinicInvitation[]
+  defaultUsers             User[]            @relation("UserDefaultClinic")
+  primaryPatients          Patient[]         @relation("PatientPrimaryClinic")
+  userClinics              UserClinic[]
+  patientClinics           PatientClinic[]
+
+  @@unique([organizationId, slug])
 }
 
 model User {
@@ -57,13 +73,18 @@ model User {
   clinic       Clinic    @relation(fields: [clinicId], references: [id])
   firstName    String
   lastName     String
-  email        String    @unique
+  email        String
   phone        String?
-  role         String // admin, doctor, receptionist, billing
+  role         String // OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING | ASSISTANT
   passwordHash String
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
   commissionRate Float     @default(0)
+  organizationId      String                // Phase 1b: NOT NULL after backfill
+  organization        Organization          @relation(fields: [organizationId], references: [id])
+  defaultClinicId     String?               // UI default only — NOT used for authorization
+  defaultClinic       Clinic?               @relation("UserDefaultClinic", fields: [defaultClinicId], references: [id])
+  canAccessAllClinics Boolean               @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -89,6 +110,10 @@ model User {
   payoutsCreated       PractitionerPayout[]           @relation("PayoutCreator")
   inventoryTransactions InventoryTransaction[]        @relation("InventoryPerformedBy")
   proceduresCreated     TreatmentPlanProcedure[]      @relation("ProcedureCreator")
+  userClinics           UserClinic[]
+
+  // Phase 1b: changed to organizationId scope for multi-branch
+  @@unique([organizationId, email])
 }
 
 model DoctorAvailability {
@@ -140,6 +165,10 @@ model Patient {
   notes                String?
   communicationConsent Boolean   @default(false)
   marketingConsent     Boolean   @default(false)
+  organizationId       String                // Phase 1b: NOT NULL after backfill
+  organization         Organization          @relation(fields: [organizationId], references: [id])
+  primaryClinicId      String?               // Default/preferred branch (not exclusive)
+  primaryClinic        Clinic?               @relation("PatientPrimaryClinic", fields: [primaryClinicId], references: [id])
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   deletedAt            DateTime?
@@ -158,6 +187,7 @@ model Patient {
   paymentPlans        PaymentPlan[]
   practitionerEarnings PractitionerEarning[]
   treatmentPlanProcedures TreatmentPlanProcedure[]
+  patientClinics          PatientClinic[]
 }
 
 model AppointmentType {
@@ -676,6 +706,8 @@ model InventoryItem {
   barcode      String?
   notes        String?
   isActive     Boolean  @default(true)
+  organizationId String                // Phase 1b: NOT NULL after backfill
+  organization   Organization          @relation(fields: [organizationId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -754,4 +786,100 @@ model Notification {
 
   @@unique([clinicId, externalId])
   @@index([clinicId, isRead])
+}
+
+// ── Multi-Tenant Platform Models ─────────────────────────────────────────────
+
+model Plan {
+  id           String   @id @default(uuid())
+  name         String   @unique // starter | professional | enterprise
+  displayName  String
+  maxUsers     Int
+  maxPatients  Int
+  features     Json     // { "whatsapp": true, "reports": true, "compensation": false }
+  monthlyPrice Decimal  @default(0) @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  clinics       Clinic[]
+  organizations Organization[]
+}
+
+model PlatformAdmin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ClinicInvitation {
+  id             String    @id @default(uuid())
+  clinicId       String
+  clinic         Clinic    @relation(fields: [clinicId], references: [id])
+  email          String
+  role           String
+  token          String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  organizationId String?               // Nullable: set when invitation is org-scoped
+  organization   Organization?         @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime  @default(now())
+
+  @@index([clinicId, email])
+  @@index([token])
+}
+
+// ── Multi-Branch Organization Models ─────────────────────────────────────────────────
+
+model Organization {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  status      String    @default("trial") // trial | active | suspended | cancelled
+  planId      String?
+  plan        Plan?     @relation(fields: [planId], references: [id])
+  trialEndsAt DateTime?
+  ownerId     String?   // ID of the founding user (informational)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  clinics        Clinic[]
+  users          User[]
+  patients       Patient[]
+  invitations    ClinicInvitation[]
+  inventoryItems InventoryItem[]
+}
+
+model UserClinic {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  clinicId  String
+  clinic    Clinic   @relation(fields: [clinicId], references: [id])
+  role      String   // OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING | ASSISTANT
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, clinicId])
+  @@index([clinicId, isActive])
+  @@index([userId, isActive])
+}
+
+model PatientClinic {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  clinicId     String
+  clinic       Clinic   @relation(fields: [clinicId], references: [id])
+  firstVisitAt DateTime?
+  lastVisitAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  @@unique([patientId, clinicId])
+  @@index([clinicId])
+  @@index([patientId])
 }

@@ -22,6 +22,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { reportService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 
 const METHOD_LABELS: Record<string, string> = {
   cash: 'Nakit',
@@ -66,6 +67,7 @@ function defaultDateRange() {
 const Reports: React.FC = () => {
   const { t } = useTranslation(['common']);
   const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
   const [tab, setTab] = useState<'revenue' | 'doctors' | 'sources' | 'noshow'>('revenue');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -159,7 +161,7 @@ const Reports: React.FC = () => {
   React.useEffect(() => {
     loadRevenue();
     loadDoctorList();
-  }, []); // eslint-disable-line
+  }, [selectedClinicId]); // eslint-disable-line
 
   const handleSearch = () => {
     if (tab === 'revenue') loadRevenue();
@@ -172,7 +174,7 @@ const Reports: React.FC = () => {
     if (tab === 'doctors' && !doctorData) loadDoctors();
     else if (tab === 'sources' && !sourcesData) loadSources();
     else if (tab === 'noshow' && !noShowData) loadNoShow();
-  }, [tab]); // eslint-disable-line
+  }, [tab, selectedClinicId]); // eslint-disable-line
 
   const handleExportCSV = () => {
     const params = new URLSearchParams({ dateFrom, dateTo });

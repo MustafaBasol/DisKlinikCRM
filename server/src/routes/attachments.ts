@@ -7,9 +7,9 @@ import prisma from '../db.js';
 
 const router = express.Router();
 
-// ── Yükleme dizini ────────────────────────────────────────────────────
-const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// ── Yükleme dizini (klinik bazında izole) ─────────────────────────────
+const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(BASE_UPLOAD_DIR)) fs.mkdirSync(BASE_UPLOAD_DIR, { recursive: true });
 
 // ── İzin verilen MIME tipleri ─────────────────────────────────────────
 const ALLOWED_MIME = new Set([
@@ -20,7 +20,13 @@ const ALLOWED_MIME = new Set([
 ]);
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  destination: (req: any, _file, cb) => {
+    // req.user is populated by authenticate middleware before this point
+    const clinicId = req.user?.clinicId ?? 'unknown';
+    const clinicDir = path.join(BASE_UPLOAD_DIR, clinicId);
+    fs.mkdirSync(clinicDir, { recursive: true });
+    cb(null, clinicDir);
+  },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);

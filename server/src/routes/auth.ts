@@ -20,9 +20,15 @@ router.post('/login', async (req, res) => {
       return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { email },
-      include: { clinic: true },
+      include: {
+        clinic: true,
+        userClinics: {
+          where: { isActive: true },
+          select: { clinicId: true, role: true },
+        },
+      },
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -37,9 +43,16 @@ router.post('/login', async (req, res) => {
 
     resetLoginAttempts(email);
 
+    // Gerçek klinik erişim listesini UserClinic tablosundan al
+    const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);
+    const canAccessAllClinics = user.canAccessAllClinics;
+
     const token = generateToken({
       id: user.id,
-      clinicId: user.clinicId,
+      clinicId: user.defaultClinicId ?? allowedClinicIds[0] ?? user.clinicId,
+      organizationId: user.organizationId,
+      allowedClinicIds,
+      canAccessAllClinics,
       role: user.role,
     });
 
@@ -60,6 +73,9 @@ router.post('/login', async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         role: user.role,
+        organizationId: user.organizationId,
+        canAccessAllClinics: user.canAccessAllClinics,
+        allowedClinicIds,
         clinic: {
           id: user.clinic.id,
           name: user.clinic.name,
@@ -78,9 +94,22 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
-      include: { clinic: true },
+      include: {
+        clinic: true,
+        organization: { select: { id: true, name: true, slug: true, status: true } },
+        userClinics: {
+          where: { isActive: true },
+          include: {
+            clinic: {
+              select: { id: true, name: true, slug: true, status: true, timezone: true, currency: true },
+            },
+          },
+        },
+      },
     });
     if (!user) return res.status(401).json({ error: 'User not found' });
+
+    const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);
 
     res.json({
       id: user.id,
@@ -88,6 +117,15 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
       lastName: user.lastName,
       email: user.email,
       role: user.role,
+      organizationId: user.organizationId,
+      canAccessAllClinics: user.canAccessAllClinics,
+      allowedClinicIds,
+      organization: user.organization,
+      clinics: user.userClinics.map(uc => ({
+        ...uc.clinic,
+        memberRole: uc.role,
+      })),
+      // Geriye dönük uyumluluk
       clinic: {
         id: user.clinic.id,
         name: user.clinic.name,

@@ -17,10 +17,12 @@ import { useTranslation } from 'react-i18next';
 import { taskService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import TaskForm from '../components/TaskForm';
+import { useClinic } from '../context/ClinicContext';
 
 const Tasks: React.FC = () => {
   const { t } = useTranslation(['tasks', 'common']);
   const { user: currentUser } = useAuth();
+  const { selectedClinicId } = useClinic();
   
   const [tasks, setTasks] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -57,7 +59,7 @@ const Tasks: React.FC = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [status, priority, assignedToId, overdue, dueToday]);
+  }, [status, priority, assignedToId, overdue, dueToday, selectedClinicId]);
 
   // Debounced search
   useEffect(() => {
@@ -65,7 +67,7 @@ const Tasks: React.FC = () => {
       fetchTasks();
     }, 500);
     return () => clearTimeout(timeout);
-  }, [search]);
+  }, [search, selectedClinicId]);
 
   useEffect(() => {
     const fetchUsers = async () => {

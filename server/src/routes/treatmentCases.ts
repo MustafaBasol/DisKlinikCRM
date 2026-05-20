@@ -5,6 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { treatmentCaseSchema } from '../schemas/index.js';
 import { generateEarningFromTreatmentCase } from '../services/earningService.js';
+import { validateAndGetScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -21,12 +22,14 @@ const treatmentCaseInclude = {
 
 // GET /api/treatment-cases
 router.get('/treatment-cases', authorize(['admin', 'doctor', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
-  const { status, patientId, practitionerId } = req.query;
+  const { status, patientId, practitionerId, clinicId: selectedClinicId } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const where: any = { ...scope };
 
     if (role === 'doctor') where.practitionerId = userId;
     else if (practitionerId) where.practitionerId = String(practitionerId);

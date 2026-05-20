@@ -3,15 +3,19 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
+import { validateAndGetScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
 // ── GET /api/inventory ───────────────────────────────────────────────────────
 router.get('/inventory', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { category, lowStock, search, isActive } = req.query;
+  const selectedClinicId = req.query.clinicId as string | undefined;
 
-  const where: any = { clinicId };
+  const clinicScope = await validateAndGetScope(req.user!, selectedClinicId, res);
+  if (clinicScope === false) return;
+
+  const where: any = { ...clinicScope };
   if (isActive !== undefined) {
     where.isActive = isActive === 'true';
   } else {
@@ -47,11 +51,14 @@ router.get('/inventory', authorize(['admin', 'billing', 'receptionist', 'doctor'
 
 // ── GET /api/inventory/alerts ────────────────────────────────────────────────
 router.get('/inventory/alerts', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
+
+  const clinicScope = await validateAndGetScope(req.user!, selectedClinicId, res);
+  if (clinicScope === false) return;
 
   try {
     const items = await prisma.inventoryItem.findMany({
-      where: { clinicId, isActive: true },
+      where: { ...clinicScope, isActive: true },
     });
 
     const lowStock = items.filter((i) => i.currentStock <= i.minimumStock && i.minimumStock > 0);
@@ -107,6 +114,7 @@ router.post('/inventory', authorize(['admin']), async (req: AuthRequest, res: Re
     const item = await prisma.inventoryItem.create({
       data: {
         clinicId,
+        organizationId: req.user!.organizationId,
         name: String(name),
         category: String(category),
         unit: String(unit),

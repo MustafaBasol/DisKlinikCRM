@@ -169,6 +169,7 @@ router.post('/appointment-requests/:id/convert', authorize(['admin', 'receptioni
       const patient = await prisma.patient.create({
         data: {
           clinicId,
+          organizationId: (await prisma.clinic.findUnique({ where: { id: clinicId }, select: { organizationId: true } }))!.organizationId,
           firstName: firstName || request.patientName,
           lastName: lastNameParts.join(' ') || '-',
           phone: request.phone,

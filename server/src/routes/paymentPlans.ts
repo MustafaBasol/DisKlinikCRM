@@ -3,6 +3,7 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -26,11 +27,14 @@ function generateInstallments(totalAmount: number, count: number, firstDueDate: 
 
 // GET /api/payment-plans
 router.get('/payment-plans', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
   const { patientId, status } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId, res);
+    if (clinicScope === false) return;
+
+    const where: any = { ...clinicScope };
     if (patientId) where.patientId = String(patientId);
     if (status) where.status = String(status);
 

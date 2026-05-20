@@ -19,10 +19,12 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { treatmentCaseService, userService } from '../services/api';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
+import { useClinic } from '../context/ClinicContext';
 
 const TreatmentCases: React.FC = () => {
   const { t } = useTranslation(['treatmentCases', 'common']);
   const navigate = useNavigate();
+  const { selectedClinicId } = useClinic();
   
   const [cases, setCases] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
@@ -55,7 +57,7 @@ const TreatmentCases: React.FC = () => {
 
   useEffect(() => {
     fetchCases();
-  }, [stage, practitionerId, openOnly]);
+  }, [stage, practitionerId, openOnly, selectedClinicId]);
 
   useEffect(() => {
     const timeout = setTimeout(fetchCases, 500);

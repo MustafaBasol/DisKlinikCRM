@@ -24,6 +24,7 @@ import AppointmentForm from '../components/AppointmentForm';
 import CalendarTimelineView from '../components/CalendarTimelineView';
 import MultiDoctorDayView from '../components/MultiDoctorDayView';
 import { formatTimeInTimeZone, getDateKeyInTimeZone } from '../utils/dateTime';
+import { useClinic } from '../context/ClinicContext';
 
 const STATUS_BORDER_COLORS: Record<string, string> = {
   scheduled:   '#f59e0b',
@@ -37,6 +38,7 @@ const STATUS_BORDER_COLORS: Record<string, string> = {
 const Appointments: React.FC = () => {
   const { t, i18n } = useTranslation(['appointments', 'common']);
   const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
   const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -97,11 +99,11 @@ const Appointments: React.FC = () => {
 
   useEffect(() => {
     fetchAppointments();
-  }, [selectedDate, status, practitionerId]);
+  }, [selectedDate, status, practitionerId, selectedClinicId]);
 
   useEffect(() => {
     fetchMonthAppointments();
-  }, [calendarMonth, status, practitionerId]);
+  }, [calendarMonth, status, practitionerId, selectedClinicId]);
 
   // Debounced search
   useEffect(() => {

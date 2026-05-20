@@ -26,6 +26,10 @@ import practitionerPayoutsRoutes from './routes/practitionerPayouts.js';
 import inventoryRoutes from './routes/inventory.js';
 import publicBookingRoutes from './routes/publicBooking.js';
 import treatmentPlanProceduresRoutes from './routes/treatmentPlanProcedures.js';
+import platformAdminRoutes from './routes/platformAdmin.js';
+import clinicRegistrationRoutes from './routes/clinicRegistration.js';
+import gdprExportRoutes from './routes/gdprExport.js';
+import organizationDashboardRoutes from './routes/organizationDashboard.js';
 import { startReminderJobs } from './jobs/reminders.js';
 
 dotenv.config();
@@ -40,6 +44,12 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/public/whatsapp', whatsappRoutes);
 app.use('/api/public', publicBookingRoutes);
+
+// Platform admin routes (kendi JWT'si var, global auth dışında)
+app.use('/api/platform', platformAdminRoutes);
+
+// Self-service klinik kaydı (public)
+app.use('/api/register', clinicRegistrationRoutes);
 
 // Global auth middleware for all /api routes below
 app.use('/api', authenticate as express.RequestHandler);
@@ -66,6 +76,8 @@ app.use('/api', practitionerEarningsRoutes);
 app.use('/api', practitionerPayoutsRoutes);
 app.use('/api', inventoryRoutes);
 app.use('/api', treatmentPlanProceduresRoutes);
+app.use('/api', gdprExportRoutes);
+app.use('/api', organizationDashboardRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

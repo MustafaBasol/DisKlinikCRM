@@ -5,6 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';
 import { sendTextMessage } from '../services/evolutionApi.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -36,11 +37,14 @@ async function renderTemplate(text: string, context: any): Promise<string> {
 
 // GET /api/message-templates
 router.get('/message-templates', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
   const { channel, language, isActive } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId, res);
+    if (clinicScope === false) return;
+
+    const where: any = { ...clinicScope };
     if (channel) where.channel = String(channel);
     if (language) where.language = String(language);
     if (isActive === 'true') where.isActive = true;

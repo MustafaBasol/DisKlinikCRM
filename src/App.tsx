@@ -19,12 +19,15 @@ import Messages from './pages/Messages';
 import MessageTemplates from './pages/MessageTemplates';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import Register from './pages/Register';
+import PlatformAdmin from './pages/PlatformAdmin';
 import BookingWidget from './pages/BookingWidget';
 import Reports from './pages/Reports';
 import PaymentPlans from './pages/PaymentPlans';
 import PractitionerEarnings from './pages/PractitionerEarnings';
 import MyEarnings from './pages/MyEarnings';
 import Inventory from './pages/Inventory';
+import OrganizationDashboard from './pages/OrganizationDashboard';
 
 import { useTranslation } from 'react-i18next';
 
@@ -79,6 +82,8 @@ const App: React.FC = () => {
         <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/platform" element={<PlatformAdmin />} />
           <Route path="/book/:clinicId" element={<BookingWidget />} />
 
           <Route element={<ProtectedRoute />}>
@@ -103,6 +108,7 @@ const App: React.FC = () => {
               <Route path="practitioner-earnings" element={<PractitionerEarnings />} />
               <Route path="my-earnings" element={<MyEarnings />} />
               <Route path="inventory" element={<Inventory />} />
+              <Route path="organization/dashboard" element={<OrganizationDashboard />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

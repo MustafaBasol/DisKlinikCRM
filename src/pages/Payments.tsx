@@ -21,9 +21,11 @@ import { useTranslation } from 'react-i18next';
 import { paymentService, patientService } from '../services/api';
 import PaymentForm from '../components/PaymentForm';
 import ReceiptModal from '../components/ReceiptModal';
+import { useClinic } from '../context/ClinicContext';
 
 const Payments: React.FC = () => {
   const { t } = useTranslation(['payments', 'common']);
+  const { selectedClinicId } = useClinic();
   
   const [payments, setPayments] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
@@ -59,7 +61,7 @@ const Payments: React.FC = () => {
 
   useEffect(() => {
     fetchPayments();
-  }, [patientId, status, method, dateFrom, dateTo]);
+  }, [patientId, status, method, dateFrom, dateTo, selectedClinicId]);
 
   useEffect(() => {
     const fetchPatients = async () => {

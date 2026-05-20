@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Package, Plus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, Search, X, Pencil } from 'lucide-react';
 import { inventoryService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<string, string> = {
@@ -407,6 +408,7 @@ type Tab = 'list' | 'alerts' | 'history';
 
 export default function Inventory() {
   const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
   const isAdmin = user?.role === 'admin';
 
   const [activeTab, setActiveTab] = useState<Tab>('list');
@@ -472,7 +474,7 @@ export default function Inventory() {
     if (activeTab === 'list') loadItems();
     else if (activeTab === 'alerts') loadAlerts();
     else if (activeTab === 'history') loadAllTransactions();
-  }, [activeTab, loadItems, loadAlerts, loadAllTransactions]);
+  }, [activeTab, loadItems, loadAlerts, loadAllTransactions, selectedClinicId]);
 
   const handleSaveItem = async (data: any) => {
     if (editItem) {

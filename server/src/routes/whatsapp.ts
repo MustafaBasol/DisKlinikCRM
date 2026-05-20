@@ -667,7 +667,9 @@ const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fu
   }
   const patient = await prisma.patient.create({
     data: {
-      clinicId, firstName: parsedName.firstName, lastName: parsedName.lastName,
+      clinicId,
+      organizationId: (await prisma.clinic.findUnique({ where: { id: clinicId }, select: { organizationId: true } }))!.organizationId,
+      firstName: parsedName.firstName, lastName: parsedName.lastName,
       phone: normalizePhone(phone), source: 'whatsapp', patientStatus: 'new', communicationConsent: false,
       notes: 'WhatsApp üzerinden ilk temas sonrası oluşturuldu.',
     },

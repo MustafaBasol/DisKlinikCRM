@@ -1,17 +1,37 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/api';
 
+interface ClinicInfo {
+  id: string;
+  name: string;
+  slug?: string;
+  status: string;
+  memberRole?: string;
+  currency?: string;
+  timezone?: string;
+}
+
 interface User {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   role: string;
+  organizationId?: string;
+  canAccessAllClinics?: boolean;
+  allowedClinicIds?: string[];
   clinic: {
     id: string;
     name: string;
     currency?: string;
     timezone?: string;
+  };
+  clinics?: ClinicInfo[];
+  organization?: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
   };
 }
 

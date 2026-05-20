@@ -4,17 +4,20 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { taskSchema } from '../schemas/index.js';
+import { validateAndGetScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
 // GET /api/tasks
 router.get('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
-  const { status, assignedToId, patientId } = req.query;
+  const { status, assignedToId, patientId, clinicId: selectedClinicId } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const where: any = { ...scope };
 
     if (role === 'doctor') {
       where.OR = [{ assignedToId: userId }, { createdById: userId }];

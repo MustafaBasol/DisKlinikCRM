@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import { dashboardService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 import { useTranslation } from 'react-i18next';
 import { formatTimeInTimeZone } from '../utils/dateTime';
 import AppointmentForm from '../components/AppointmentForm';
@@ -306,6 +307,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
 const Dashboard: React.FC = () => {
   const { t } = useTranslation(['dashboard', 'common', 'appointments', 'patients', 'tasks', 'messages']);
   const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
   const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   const navigate = useNavigate();
   
@@ -326,7 +328,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [selectedClinicId]);
 
   if (loading && !data) {
     return (

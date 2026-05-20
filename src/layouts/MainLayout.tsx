@@ -28,11 +28,13 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { ClinicProvider } from '../context/ClinicContext';
+import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
 import NotificationBell from '../components/NotificationBell';
 import { useDarkMode } from '../utils/darkMode';
 
-const MainLayout: React.FC = () => {
+const MainLayoutInner: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -200,10 +202,7 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1 sm:gap-4 shrink-0">
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-bold border border-primary-100 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-800">
-              <span className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></span>
-              {user?.clinic.name}
-            </div>
+            <ClinicSwitcher />
             
             {/* Dark Mode Toggle */}
             <button
@@ -278,5 +277,11 @@ const MainLayout: React.FC = () => {
     </div>
   );
 };
+
+const MainLayout: React.FC = () => (
+  <ClinicProvider>
+    <MainLayoutInner />
+  </ClinicProvider>
+);
 
 export default MainLayout;

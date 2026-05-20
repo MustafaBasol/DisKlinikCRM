@@ -4,16 +4,20 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { patientSchema, patientUpdateSchema } from '../schemas/index.js';
+import { checkPatientLimit } from '../middleware/planLimits.js';
+import { validateAndGetScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
 // GET /api/patients
 router.get('/patients', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { search, status, source, includeArchived } = req.query;
+  const { search, status, source, includeArchived, clinicId: selectedClinicId } = req.query;
 
   try {
-    const where: any = { clinicId, deletedAt: null };
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const where: any = { ...scope, deletedAt: null };
 
     if (search) {
       where.OR = [
@@ -122,13 +126,13 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
 });
 
 // POST /api/patients
-router.post('/patients', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/patients', authorize(['admin', 'receptionist']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = patientSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const patient = await prisma.patient.create({ data: { ...validation.data, clinicId } });
+    const patient = await prisma.patient.create({ data: { ...validation.data, clinicId, organizationId: req.user!.organizationId } });
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'patient', entityId: patient.id,
