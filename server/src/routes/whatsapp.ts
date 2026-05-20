@@ -600,6 +600,13 @@ const checkPractitionerAvailability = async (clinicId: string, practitionerId: s
   const start = getZonedDateParts(startTime, timeZone);
   const end = getZonedDateParts(endTime, timeZone);
   if (start.weekday !== end.weekday) return { ok: false, slots: [], timeZone };
+
+  // Klinik o gün kapalıysa randevu kabul etme
+  const clinicHours = await prisma.clinicWorkingHours.findUnique({
+    where: { clinicId_dayOfWeek: { clinicId, dayOfWeek: start.weekday } },
+  });
+  if (clinicHours?.isClosed) return { ok: false, slots: [], timeZone, reason: 'clinic_closed' };
+
   const slots = await prisma.doctorAvailability.findMany({
     where: { clinicId, practitionerId, weekday: start.weekday, isActive: true },
     orderBy: { startTime: 'asc' },

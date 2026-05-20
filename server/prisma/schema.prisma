@@ -895,8 +895,6 @@ model ClinicWorkingHours {
   clinicId       String
   clinic         Clinic       @relation(fields: [clinicId], references: [id])
   dayOfWeek      Int          // 0 Sunday, 1 Monday, ... 6 Saturday
-  openTime       String       // HH:mm  (ignored when isClosed=true)
-  closeTime      String       // HH:mm  (ignored when isClosed=true)
   isClosed       Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt

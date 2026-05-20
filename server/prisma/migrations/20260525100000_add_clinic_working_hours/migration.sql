@@ -4,8 +4,6 @@ CREATE TABLE "ClinicWorkingHours" (
     "organizationId" TEXT NOT NULL,
     "clinicId" TEXT NOT NULL,
     "dayOfWeek" INTEGER NOT NULL,
-    "openTime" TEXT NOT NULL,
-    "closeTime" TEXT NOT NULL,
     "isClosed" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,

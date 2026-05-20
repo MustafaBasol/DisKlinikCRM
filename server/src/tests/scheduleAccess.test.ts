@@ -1,5 +1,5 @@
 /**
- * scheduleAccess.test.ts — Sprint 7: Klinik Çalışma Saati + Şube Randevu Kuralları birim testleri
+ * scheduleAccess.test.ts — Sprint 7 (Revize): Klinik Kapalı Gün + Doktor Müsaitliği birim testleri
  *
  * Koşturma: cd server && npx tsx src/tests/scheduleAccess.test.ts
  *
@@ -7,10 +7,10 @@
  *  - canManageClinicSchedule: OWNER/ORG_ADMIN/CLINIC_MANAGER evet, DENTIST/RECEPTIONIST/BILLING hayır
  *  - canManageDoctorSchedule: yönetim rolleri her doktor için, DENTIST yalnızca kendi
  *  - canViewAvailability: tüm kimlik doğrulamalı kullanıcılar
- *  - ClinicWorkingHours boundary: klinik kapalıysa randevu kabul edilmez
- *  - ClinicWorkingHours boundary: mesai saatleri dışında randevu kabul edilmez
- *  - DoctorAvailability + ClinicWorkingHours kesişim mantığı
- *  - Availability slot hesaplama (müsait / dolu)
+ *  - ClinicWorkingHours: sadece isClosed kontrol edilir (openTime/closeTime kaldırıldı)
+ *  - Klinik kapalı günde randevu kabul edilmez (hem CRM hem WhatsApp)
+ *  - Müsaitlik = doktor program pencerelerinden türetilir
+ *  - Klinik kapalı günde buildAvailableSlots [] döner
  *  - DoctorOffDay: izin günü randevuyu engeller
  *  - Cross-midnight koruması
  *  - Tek klinikli geriye dönük uyumluluk
@@ -153,7 +153,8 @@ function minutesToTime(m: number): string {
 }
 
 type Slot = { startTime: string; endTime: string };
-type ClinicHours = { openTime: string; closeTime: string; isClosed: boolean };
+// Revize: ClinicHours artık sadece isClosed içeriyor
+type ClinicHours = { isClosed: boolean };
 type DoctorWindow = { startTime: string; endTime: string };
 
 function computeSlots(
@@ -162,32 +163,14 @@ function computeSlots(
   existingAppointments: Slot[],
   duration: number,
 ): Array<{ startTime: string; endTime: string; available: boolean }> {
+  // Klinik kapalıysa hiç slot üretme
   if (clinicHours?.isClosed) return [];
 
+  // Müsait pencereler = doktor program pencereleri
   const windows: Array<{ start: number; end: number }> = [];
-
-  if (doctorWindows.length > 0) {
-    doctorWindows.forEach(w => {
-      const start = timeToMinutes(w.startTime);
-      const end = timeToMinutes(w.endTime);
-      if (clinicHours && !clinicHours.isClosed) {
-        const clinicStart = timeToMinutes(clinicHours.openTime);
-        const clinicEnd = timeToMinutes(clinicHours.closeTime);
-        const intersectStart = Math.max(start, clinicStart);
-        const intersectEnd = Math.min(end, clinicEnd);
-        if (intersectStart < intersectEnd) {
-          windows.push({ start: intersectStart, end: intersectEnd });
-        }
-      } else {
-        windows.push({ start, end });
-      }
-    });
-  } else if (clinicHours && !clinicHours.isClosed) {
-    windows.push({
-      start: timeToMinutes(clinicHours.openTime),
-      end: timeToMinutes(clinicHours.closeTime),
-    });
-  }
+  doctorWindows.forEach(w => {
+    windows.push({ start: timeToMinutes(w.startTime), end: timeToMinutes(w.endTime) });
+  });
 
   const bookedRanges = existingAppointments.map(a => ({
     start: timeToMinutes(a.startTime),
@@ -209,18 +192,18 @@ function computeSlots(
 
 test('Klinik kapalıysa hiç slot üretilmez', () => {
   const slots = computeSlots(
-    { openTime: '09:00', closeTime: '18:00', isClosed: true },
-    [],
+    { isClosed: true },
+    [{ startTime: '09:00', endTime: '18:00' }],
     [],
     30,
   );
   assert.equal(slots.length, 0);
 });
 
-test('Klinik 09:00-11:00, 30dk slot → 4 slot üretilir', () => {
+test('Klinik açıksa doktor penceresinden 4 slot üretilir (09:00-11:00, 30dk)', () => {
   const slots = computeSlots(
-    { openTime: '09:00', closeTime: '11:00', isClosed: false },
-    [],
+    { isClosed: false },
+    [{ startTime: '09:00', endTime: '11:00' }],
     [],
     30,
   );
@@ -231,8 +214,8 @@ test('Klinik 09:00-11:00, 30dk slot → 4 slot üretilir', () => {
 
 test('Tüm slotlar müsaittir (randevu yok)', () => {
   const slots = computeSlots(
-    { openTime: '09:00', closeTime: '10:00', isClosed: false },
-    [],
+    { isClosed: false },
+    [{ startTime: '09:00', endTime: '10:00' }],
     [],
     30,
   );
@@ -241,8 +224,8 @@ test('Tüm slotlar müsaittir (randevu yok)', () => {
 
 test('Mevcut randevu 09:00-09:30 → o slot dolu', () => {
   const slots = computeSlots(
-    { openTime: '09:00', closeTime: '11:00', isClosed: false },
-    [],
+    { isClosed: false },
+    [{ startTime: '09:00', endTime: '11:00' }],
     [{ startTime: '09:00', endTime: '09:30' }],
     30,
   );
@@ -250,30 +233,33 @@ test('Mevcut randevu 09:00-09:30 → o slot dolu', () => {
   assert.equal(slots[1].available, true);
 });
 
-test('Doktor penceresi klinik saatlerinin dışındaysa kesişim sıfır → slot yok', () => {
+test('Birden fazla doktor penceresi → birleşik slotlar', () => {
   const slots = computeSlots(
-    { openTime: '09:00', closeTime: '12:00', isClosed: false },
-    [{ startTime: '13:00', endTime: '17:00' }],
+    { isClosed: false },
+    [{ startTime: '09:00', endTime: '10:00' }, { startTime: '14:00', endTime: '15:00' }],
     [],
     30,
   );
+  assert.equal(slots.length, 4); // 2 + 2
+});
+
+test('Birden fazla randevu ile doğru boşluklar hesaplanır', () => {
+  const slots = computeSlots(
+    { isClosed: false },
+    [{ startTime: '09:00', endTime: '12:00' }],
+    [{ startTime: '09:30', endTime: '10:00' }, { startTime: '11:00', endTime: '11:30' }],
+    30,
+  );
+  const booked = slots.filter(s => !s.available);
+  assert.equal(booked.length, 2);
+});
+
+test('Doktor penceresi yok ve klinik açıksa slot yok (hekim programlanmamış)', () => {
+  const slots = computeSlots({ isClosed: false }, [], [], 30);
   assert.equal(slots.length, 0);
 });
 
-test('Doktor penceresi klinik saatlerini kesiyor → yalnızca kesişim slotları', () => {
-  const slots = computeSlots(
-    { openTime: '09:00', closeTime: '12:00', isClosed: false },
-    [{ startTime: '10:00', endTime: '14:00' }],
-    [],
-    30,
-  );
-  // Kesişim 10:00-12:00 → 4 slot
-  assert.equal(slots.length, 4);
-  assert.equal(slots[0].startTime, '10:00');
-  assert.equal(slots[slots.length - 1].endTime, '12:00');
-});
-
-test('Klinik saati yokken doktor penceresi tüm slot kaynağı', () => {
+test('Klinik saati null ise (kapalı gün kaydı yok) → doktor penceresine göre üret', () => {
   const slots = computeSlots(
     null,
     [{ startTime: '08:00', endTime: '10:00' }],
@@ -284,27 +270,14 @@ test('Klinik saati yokken doktor penceresi tüm slot kaynağı', () => {
   assert.equal(slots[0].startTime, '08:00');
 });
 
-test('Birden fazla randevu ile doğru boşluklar hesaplanır', () => {
-  const slots = computeSlots(
-    { openTime: '09:00', closeTime: '12:00', isClosed: false },
-    [],
-    [{ startTime: '09:30', endTime: '10:00' }, { startTime: '11:00', endTime: '11:30' }],
-    30,
-  );
-  const available = slots.filter(s => s.available);
-  const booked = slots.filter(s => !s.available);
-  assert.equal(booked.length, 2);
-  assert.equal(available.length, 4); // 09:00 + 10:00 + 10:30 + 11:30
-});
-
-test('Doktor penceresi yok ve klinik saati yoksa slot yok', () => {
+test('Klinik saati null + doktor penceresi yok → boş (geriye dönük uyumluluk)', () => {
   const slots = computeSlots(null, [], [], 30);
   assert.equal(slots.length, 0);
 });
 
-// ─── ClinicWorkingHours Boundary Checks ──────────────────────────────────────
+// ─── ClinicWorkingHours isClosed Boundary Checks ─────────────────────────────
 
-console.log('\n── ClinicWorkingHours Boundary Checks ──');
+console.log('\n── ClinicWorkingHours isClosed Kontrolleri ──');
 
 function checkAppointmentAgainstHours(
   startMin: number,
@@ -312,17 +285,11 @@ function checkAppointmentAgainstHours(
   clinicHours: ClinicHours | null,
   doctorSlots: DoctorWindow[],
 ): { ok: boolean; reason?: string } {
+  // Klinik kapalıysa direkt reddet
   if (clinicHours?.isClosed) return { ok: false, reason: 'clinic_closed' };
 
-  if (clinicHours && !clinicHours.isClosed) {
-    const clinicStart = timeToMinutes(clinicHours.openTime);
-    const clinicEnd = timeToMinutes(clinicHours.closeTime);
-    if (startMin < clinicStart || endMin > clinicEnd) {
-      return { ok: false, reason: 'outside_clinic_hours' };
-    }
-  }
-
-  if (doctorSlots.length === 0) return { ok: true }; // Müsaitlik yok → kısıtsız (geriye dönük uyumluluk)
+  // Doktor müsaitliği yoksa → geriye dönük uyumlu: geçir
+  if (doctorSlots.length === 0) return { ok: true };
 
   const ok = doctorSlots.some(s => {
     const slotStart = timeToMinutes(s.startTime);
@@ -333,46 +300,36 @@ function checkAppointmentAgainstHours(
   return ok ? { ok: true } : { ok: false, reason: 'outside_doctor_schedule' };
 }
 
-test('Randevu klinik saatleri içindeyse geçerli', () => {
+test('Klinik açık + doktor programı içinde → kabul edilir', () => {
   const res = checkAppointmentAgainstHours(
     timeToMinutes('10:00'), timeToMinutes('10:30'),
-    { openTime: '09:00', closeTime: '18:00', isClosed: false },
+    { isClosed: false },
     [{ startTime: '09:00', endTime: '18:00' }],
   );
   assert.ok(res.ok);
 });
 
-test('Randevu klinik açılışından önce → reddedilir', () => {
-  const res = checkAppointmentAgainstHours(
-    timeToMinutes('08:00'), timeToMinutes('08:30'),
-    { openTime: '09:00', closeTime: '18:00', isClosed: false },
-    [],
-  );
-  assert.equal(res.ok, false);
-  assert.equal(res.reason, 'outside_clinic_hours');
-});
-
-test('Randevu klinik kapanışından sonra → reddedilir', () => {
-  const res = checkAppointmentAgainstHours(
-    timeToMinutes('18:00'), timeToMinutes('18:30'),
-    { openTime: '09:00', closeTime: '18:00', isClosed: false },
-    [],
-  );
-  assert.equal(res.ok, false);
-  assert.equal(res.reason, 'outside_clinic_hours');
-});
-
-test('Klinik pazar kapalı → randevu reddedilir', () => {
+test('Klinik kapalı günde randevu → reddedilir (clinic_closed)', () => {
   const res = checkAppointmentAgainstHours(
     timeToMinutes('10:00'), timeToMinutes('10:30'),
-    { openTime: '09:00', closeTime: '18:00', isClosed: true },
+    { isClosed: true },
+    [{ startTime: '09:00', endTime: '18:00' }],
+  );
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, 'clinic_closed');
+});
+
+test('Klinik kapalı + doktor programı yoksa da → reddedilir', () => {
+  const res = checkAppointmentAgainstHours(
+    timeToMinutes('10:00'), timeToMinutes('10:30'),
+    { isClosed: true },
     [],
   );
   assert.equal(res.ok, false);
   assert.equal(res.reason, 'clinic_closed');
 });
 
-test('Klinik saati tanımlı değilse (null) yalnızca doktor programı kontrol edilir', () => {
+test('Klinik kaydı yok (null) + doktor programı içinde → kabul edilir', () => {
   const res = checkAppointmentAgainstHours(
     timeToMinutes('10:00'), timeToMinutes('10:30'),
     null,
@@ -381,23 +338,34 @@ test('Klinik saati tanımlı değilse (null) yalnızca doktor programı kontrol 
   assert.ok(res.ok);
 });
 
-test('Doktor programı dışında randevu → reddedilir', () => {
+test('Klinik açık + doktor programı dışında → reddedilir (outside_doctor_schedule)', () => {
   const res = checkAppointmentAgainstHours(
     timeToMinutes('07:00'), timeToMinutes('07:30'),
-    null,
+    { isClosed: false },
     [{ startTime: '09:00', endTime: '17:00' }],
   );
   assert.equal(res.ok, false);
   assert.equal(res.reason, 'outside_doctor_schedule');
 });
 
-test('Tek klinikli kurulum (klinik saati yok, doktor programı yok) → izin ver', () => {
+test('Tek klinikli kurulum (klinik kaydı yok, doktor programı yok) → izin ver', () => {
   const res = checkAppointmentAgainstHours(
     timeToMinutes('10:00'), timeToMinutes('10:30'),
     null,
-    [], // Müsaitlik tanımlanmamış → eski sistemle uyumlu: geç
+    [],
   );
   assert.ok(res.ok);
+});
+
+test('WhatsApp botu: klinik kapalı günde buildAvailableSlots [] döner', () => {
+  // isClosed=true → computeSlots [] döner (buildAvailableSlots davranışını simüle ediyor)
+  const slots = computeSlots(
+    { isClosed: true },
+    [{ startTime: '09:00', endTime: '17:00' }],
+    [],
+    30,
+  );
+  assert.equal(slots.length, 0);
 });
 
 // ─── Özet ───────────────────────────────────────────────────────────────────

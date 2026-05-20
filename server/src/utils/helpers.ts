@@ -150,18 +150,9 @@ export const checkPractitionerAvailability = async (
     return { ok: false, slots, timeZone, reason: 'off_day', offDay };
   }
 
-  // Klinik çalışma saatleri tanımlıysa ve o gün kapalıysa randevu kabul etme
+  // Klinik o gün kapalıysa randevu kabul etme
   if (clinicHours?.isClosed) {
     return { ok: false, slots, timeZone, reason: 'clinic_closed' };
-  }
-
-  // Klinik çalışma saatleri dışında randevu kontrolü
-  if (clinicHours && !clinicHours.isClosed) {
-    const clinicStart = timeToMinutes(clinicHours.openTime);
-    const clinicEnd = timeToMinutes(clinicHours.closeTime);
-    if (start.minutes < clinicStart || end.minutes > clinicEnd) {
-      return { ok: false, slots, timeZone, reason: 'outside_clinic_hours', clinicHours };
-    }
   }
 
   const ok = slots.some(slot => {

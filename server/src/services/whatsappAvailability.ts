@@ -174,6 +174,15 @@ export const buildAvailableSlots = async (
 
   const timeZone = clinic?.timezone || 'Europe/Istanbul';
   const weekday = getZonedDateParts(localDateTimeToClinicDate(date, '12:00', timeZone), timeZone).weekday;
+
+  // Klinik o gün kapalıysa hiç slot üretme
+  const clinicHours = await prisma.clinicWorkingHours.findUnique({
+    where: { clinicId_dayOfWeek: { clinicId, dayOfWeek: weekday } },
+  });
+  if (clinicHours?.isClosed) {
+    return [];
+  }
+
   const durationMinutes = service.durationMinutes;
   const results: RawAvailableSlot[] = [];
   const now = new Date();

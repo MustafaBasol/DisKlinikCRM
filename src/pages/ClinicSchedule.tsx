@@ -20,8 +20,6 @@ interface WorkingHoursEntry {
   id: string | null;
   clinicId: string;
   dayOfWeek: number;
-  openTime: string;
-  closeTime: string;
   isClosed: boolean;
 }
 
@@ -40,8 +38,6 @@ const DEFAULT_HOURS: WorkingHoursEntry[] = Array.from({ length: 7 }, (_, i) => (
   id: null,
   clinicId: '',
   dayOfWeek: i,
-  openTime: '09:00',
-  closeTime: '18:00',
   isClosed: i === 0, // Pazar kapalı
 }));
 
@@ -99,7 +95,7 @@ const ClinicSchedule: React.FC = () => {
     else fetchDoctors();
   }, [tab, fetchHours, fetchDoctors]);
 
-  const handleHourChange = (dayOfWeek: number, field: keyof WorkingHoursEntry, value: string | boolean) => {
+  const handleHourChange = (dayOfWeek: number, field: 'isClosed', value: boolean) => {
     setHours(prev =>
       prev.map(h => (h.dayOfWeek === dayOfWeek ? { ...h, [field]: value } : h))
     );
@@ -116,8 +112,6 @@ const ClinicSchedule: React.FC = () => {
         clinicId,
         hours.map(h => ({
           dayOfWeek: h.dayOfWeek,
-          openTime: h.openTime,
-          closeTime: h.closeTime,
           isClosed: h.isClosed,
         }))
       );
@@ -238,24 +232,6 @@ const ClinicSchedule: React.FC = () => {
                   />
                   <span className="text-sm text-gray-500">Kapalı</span>
                 </label>
-
-                {!h.isClosed && (
-                  <div className="flex items-center gap-2 ml-4">
-                    <input
-                      type="time"
-                      value={h.openTime}
-                      onChange={e => handleHourChange(h.dayOfWeek, 'openTime', e.target.value)}
-                      className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="text-gray-400 text-sm">—</span>
-                    <input
-                      type="time"
-                      value={h.closeTime}
-                      onChange={e => handleHourChange(h.dayOfWeek, 'closeTime', e.target.value)}
-                      className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )}
 
                 {h.isClosed && (
                   <span className="ml-4 text-sm text-gray-400 italic">Kapalı gün</span>

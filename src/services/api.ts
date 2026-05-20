@@ -271,7 +271,7 @@ export const userClinicAssignmentService = {
 
 export const scheduleService = {
   getWorkingHours: (clinicId: string) => api.get(`/clinics/${clinicId}/working-hours`),
-  updateWorkingHours: (clinicId: string, hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string; isClosed: boolean }>) =>
+  updateWorkingHours: (clinicId: string, hours: Array<{ dayOfWeek: number; isClosed: boolean }>) =>
     api.put(`/clinics/${clinicId}/working-hours`, { hours }),
   getClinicDoctors: (clinicId: string) => api.get(`/clinics/${clinicId}/doctors`),
   getAvailability: (params: { clinicId: string; doctorId: string; date: string; duration?: number }) =>

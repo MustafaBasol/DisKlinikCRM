@@ -22,8 +22,6 @@ const router = express.Router();
 
 const workingHoursItemSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
-  openTime: z.string().regex(/^\d{2}:\d{2}$/, 'HH:mm formatında olmalı'),
-  closeTime: z.string().regex(/^\d{2}:\d{2}$/, 'HH:mm formatında olmalı'),
   isClosed: z.boolean().default(false),
 });
 
@@ -63,14 +61,14 @@ router.get(
       });
 
       // 7 günlük tam liste döndür; eksik günler için varsayılan doldur
-      const defaults: Record<number, { openTime: string; closeTime: string; isClosed: boolean }> = {
-        0: { openTime: '09:00', closeTime: '18:00', isClosed: true }, // Pazar — kapalı
-        1: { openTime: '09:00', closeTime: '18:00', isClosed: false },
-        2: { openTime: '09:00', closeTime: '18:00', isClosed: false },
-        3: { openTime: '09:00', closeTime: '18:00', isClosed: false },
-        4: { openTime: '09:00', closeTime: '18:00', isClosed: false },
-        5: { openTime: '09:00', closeTime: '18:00', isClosed: false },
-        6: { openTime: '09:00', closeTime: '13:00', isClosed: false }, // Cumartesi
+      const defaults: Record<number, { isClosed: boolean }> = {
+        0: { isClosed: true },  // Pazar — kapalı
+        1: { isClosed: false },
+        2: { isClosed: false },
+        3: { isClosed: false },
+        4: { isClosed: false },
+        5: { isClosed: false },
+        6: { isClosed: false }, // Cumartesi
       };
 
       const result = Array.from({ length: 7 }, (_, day) => {
@@ -121,13 +119,9 @@ router.put(
                 clinicId,
                 organizationId: clinic.organizationId,
                 dayOfWeek: h.dayOfWeek,
-                openTime: h.openTime,
-                closeTime: h.closeTime,
                 isClosed: h.isClosed,
               },
               update: {
-                openTime: h.openTime,
-                closeTime: h.closeTime,
                 isClosed: h.isClosed,
               },
             }),
@@ -284,32 +278,12 @@ router.get(
         return res.json({ date, doctorId, clinicId, slots: [], reason: 'clinic_closed' });
       }
 
-      // Serbest zaman pencerelerini hesapla
-      // Öncelik: doctorSlots varsa onları, yoksa klinik çalışma saatlerini kullan
+      // Sadece doktor müsaitlik pencerelerini kullan
       const windows: Array<{ start: number; end: number }> = [];
 
       if (doctorSlots.length > 0) {
         doctorSlots.forEach(s => {
-          const start = timeToMinutes(s.startTime);
-          const end = timeToMinutes(s.endTime);
-          // Klinik çalışma saatleriyle kesişimi al (eğer tanımlıysa)
-          if (workingHours && !workingHours.isClosed) {
-            const clinicStart = timeToMinutes(workingHours.openTime);
-            const clinicEnd = timeToMinutes(workingHours.closeTime);
-            const intersectStart = Math.max(start, clinicStart);
-            const intersectEnd = Math.min(end, clinicEnd);
-            if (intersectStart < intersectEnd) {
-              windows.push({ start: intersectStart, end: intersectEnd });
-            }
-          } else {
-            windows.push({ start, end });
-          }
-        });
-      } else if (workingHours && !workingHours.isClosed) {
-        // Doktor özel müsaitliği yoksa klinik saatlerini kullan
-        windows.push({
-          start: timeToMinutes(workingHours.openTime),
-          end: timeToMinutes(workingHours.closeTime),
+          windows.push({ start: timeToMinutes(s.startTime), end: timeToMinutes(s.endTime) });
         });
       }
 
