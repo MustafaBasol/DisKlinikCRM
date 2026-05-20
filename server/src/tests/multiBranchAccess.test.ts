@@ -561,6 +561,149 @@ await test('authorize([OWNER,ORG_ADMIN,CLINIC_MANAGER]) — legacy admin + canAl
   assert.equal(simulateAuthorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'], { role: 'admin', canAccessAllClinics: false }), true);
 });
 
+// ─── Billing dashboard yönlendirme davranışı ─────────────────────────────────
+
+function shouldRedirectToDashboard(user: { role: string; canAccessAllClinics: boolean }): string | null {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  if (r === 'BILLING') return '/reports';
+  return null; // Dashboard'u normal görüntüle
+}
+
+console.log('\nBilling dashboard yönlendirme davranışı');
+
+await test('billing kullanıcısı → /reports\'a yönlendirilir', () => {
+  const redirect = shouldRedirectToDashboard({ role: 'billing', canAccessAllClinics: false });
+  assert.equal(redirect, '/reports');
+});
+
+await test('OWNER → yönlendirme yok (dashboard görür)', () => {
+  assert.equal(shouldRedirectToDashboard({ role: 'owner', canAccessAllClinics: true }), null);
+});
+
+await test('receptionist → yönlendirme yok (dashboard görür)', () => {
+  assert.equal(shouldRedirectToDashboard({ role: 'receptionist', canAccessAllClinics: false }), null);
+});
+
+await test('doctor → yönlendirme yok (kendi dashboard\'unu görür)', () => {
+  assert.equal(shouldRedirectToDashboard({ role: 'doctor', canAccessAllClinics: false }), null);
+});
+
+await test('legacy admin + canAll=false (CLINIC_MANAGER) → yönlendirme yok', () => {
+  assert.equal(shouldRedirectToDashboard({ role: 'admin', canAccessAllClinics: false }), null);
+});
+
+// ─── Legacy admin kanonik davranış doğrulama ──────────────────────────────────
+
+console.log('\nLegacy admin kanonik davranış (kapsamlı)');
+
+await test('legacy admin + canAll=true → OWNER gibi davranır', () => {
+  const user = { role: 'admin', canAccessAllClinics: true };
+  assert.equal(normalizeRole(user.role, user.canAccessAllClinics), 'OWNER');
+  assert.equal(canAccessOrgDashboard(user), true);
+  assert.equal(canManageUsers(user), true);
+  assert.equal(canDeletePatient(user), true);
+});
+
+await test('legacy admin + canAll=false → CLINIC_MANAGER gibi davranır', () => {
+  const user = { role: 'admin', canAccessAllClinics: false };
+  assert.equal(normalizeRole(user.role, user.canAccessAllClinics), 'CLINIC_MANAGER');
+  assert.equal(canAccessOrgDashboard(user), false); // ORG erişimi yok
+  assert.equal(canManageUsers(user), true);         // klinik yönetimi var
+  assert.equal(canDeletePatient(user), true);        // silme yetkisi var
+  assert.equal(canAccessReports(user), true);        // raporlara erişim var
+});
+
+// ─── authorize(['admin']) Org-düzeyi tehlike testi ───────────────────────────
+
+console.log('\nauthorize([admin]) Org-düzeyi erişim tehlikesi');
+
+await test('authorize([admin]) — admin+canAll=false GEÇİRİR (tehlike: ham rol)', () => {
+  // Bu testin amacı: legacy authorize(['admin']) artık route larda KULLANILMIYOR
+  // (Tüm admin-only route'lar ['OWNER','ORG_ADMIN','CLINIC_MANAGER'] olarak güncellendi)
+  // authorize(['admin']) ile admin+canAll=false da geçer — ORG-düzeyi route'larda KULLANMAYIN
+  const passes = simulateAuthorize(['admin'], { role: 'admin', canAccessAllClinics: false });
+  assert.equal(passes, true, 'Beklenen davranış: legacy ham rol hâlâ geçer (dual-check)');
+});
+
+await test('authorize([OWNER, ORG_ADMIN]) — admin+canAll=false REDDEDİLİR (güvenli Org-yetki)', () => {
+  // Doğru org-düzeyi guard: canonical roles only
+  const passes = simulateAuthorize(['OWNER', 'ORG_ADMIN'], { role: 'admin', canAccessAllClinics: false });
+  assert.equal(passes, false, 'CLINIC_MANAGER org dashboard\'a erişemez');
+});
+
+// ─── /api/me permission flags simülasyonu ─────────────────────────────────────
+
+function simulateMePermissions(user: { role: string; canAccessAllClinics: boolean }) {
+  return {
+    normalizedRole: normalizeRole(user.role, user.canAccessAllClinics),
+    permissions: {
+      canViewOrganizationDashboard: canAccessOrgDashboard(user),
+      canDeletePatient: canDeletePatient(user),
+      canManageUsers: canManageUsers(user),
+      canViewReports: canAccessReports(user),
+      canManagePayments: canWritePayments(user),
+      canManageInventory: canManageUsers(user), // OWNER/ORG_ADMIN/CLINIC_MANAGER
+    },
+  };
+}
+
+console.log('\n/api/me permission flags');
+
+await test('/api/me — OWNER: tüm bayraklar true', () => {
+  const p = simulateMePermissions({ role: 'owner', canAccessAllClinics: true });
+  assert.equal(p.normalizedRole, 'OWNER');
+  assert.equal(p.permissions.canViewOrganizationDashboard, true);
+  assert.equal(p.permissions.canDeletePatient, true);
+  assert.equal(p.permissions.canManageUsers, true);
+  assert.equal(p.permissions.canViewReports, true);
+  assert.equal(p.permissions.canManagePayments, true);
+  assert.equal(p.permissions.canManageInventory, true);
+});
+
+await test('/api/me — BILLING: yalnızca finansal bayraklar true', () => {
+  const p = simulateMePermissions({ role: 'billing', canAccessAllClinics: false });
+  assert.equal(p.normalizedRole, 'BILLING');
+  assert.equal(p.permissions.canViewOrganizationDashboard, false);
+  assert.equal(p.permissions.canDeletePatient, false);
+  assert.equal(p.permissions.canManageUsers, false);
+  assert.equal(p.permissions.canViewReports, true);
+  assert.equal(p.permissions.canManagePayments, true);
+  assert.equal(p.permissions.canManageInventory, false);
+});
+
+await test('/api/me — legacy admin canAll=false: normalizedRole CLINIC_MANAGER, canViewOrgDash false', () => {
+  const p = simulateMePermissions({ role: 'admin', canAccessAllClinics: false });
+  assert.equal(p.normalizedRole, 'CLINIC_MANAGER');
+  assert.equal(p.permissions.canViewOrganizationDashboard, false);
+  assert.equal(p.permissions.canManageUsers, true);
+});
+
+await test('/api/me — legacy admin canAll=true: normalizedRole OWNER, canViewOrgDash true', () => {
+  const p = simulateMePermissions({ role: 'admin', canAccessAllClinics: true });
+  assert.equal(p.normalizedRole, 'OWNER');
+  assert.equal(p.permissions.canViewOrganizationDashboard, true);
+});
+
+await test('/api/me — DENTIST: tüm yönetim bayrakları false', () => {
+  const p = simulateMePermissions({ role: 'doctor', canAccessAllClinics: false });
+  assert.equal(p.normalizedRole, 'DENTIST');
+  assert.equal(p.permissions.canViewOrganizationDashboard, false);
+  assert.equal(p.permissions.canDeletePatient, false);
+  assert.equal(p.permissions.canManageUsers, false);
+  assert.equal(p.permissions.canViewReports, false);
+  assert.equal(p.permissions.canManagePayments, false);
+  assert.equal(p.permissions.canManageInventory, false);
+});
+
+await test('/api/me — RECEPTIONIST: ödeme ve rapor bayrakları false', () => {
+  const p = simulateMePermissions({ role: 'receptionist', canAccessAllClinics: false });
+  assert.equal(p.normalizedRole, 'RECEPTIONIST');
+  assert.equal(p.permissions.canManagePayments, false);
+  assert.equal(p.permissions.canViewReports, false);
+  assert.equal(p.permissions.canDeletePatient, false);
+});
+
+
 // ─── Tek klinik geriye dönük uyumluluk ────────────────────────────────────────
 
 await test('1 klinikli kullanici — selectedClinicId=all → tek kliniğe scope', async () => {

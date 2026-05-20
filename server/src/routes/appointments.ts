@@ -9,7 +9,7 @@ import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveCl
 const router = express.Router();
 
 // GET /api/appointments
-router.get('/appointments', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { role, id: userId } = req.user!;
 const { start, end, status, practitionerId, patientId, search, treatmentCaseId, clinicId: selectedClinicId } = req.query;
 
@@ -56,7 +56,7 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
 });
 
 // GET /api/appointments/:id
-router.get('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const { role, id: userId } = req.user!;
 
@@ -88,7 +88,7 @@ router.get('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), 
 });
 
 // POST /api/appointments
-router.post('/appointments', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   // ?clinicId query param varsa doğrula, yoksa defaultClinicId kullan
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
@@ -147,7 +147,7 @@ router.post('/appointments', authorize(['admin', 'receptionist']), async (req: A
 });
 
 // PUT /api/appointments/:id
-router.put('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const { role, id: userId } = req.user!;
 
@@ -240,7 +240,7 @@ router.put('/appointments/:id', authorize(['admin', 'doctor', 'receptionist']), 
 });
 
 // PATCH /api/appointments/:id/treatment-case — link or unlink a treatment case
-router.patch('/appointments/:id/treatment-case', authorize(['admin', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.patch('/appointments/:id/treatment-case', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const { treatmentCaseId } = req.body; // null to unlink
 

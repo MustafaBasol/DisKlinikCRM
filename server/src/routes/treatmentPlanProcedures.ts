@@ -9,7 +9,7 @@ const router = express.Router();
 // GET /api/treatment-cases/:caseId/procedures — list procedures
 router.get(
   '/treatment-cases/:caseId/procedures',
-  authorize(['admin', 'doctor', 'receptionist', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId as string;
     const caseId = getParam(req, 'caseId');
@@ -37,7 +37,7 @@ router.get(
 // GET /api/patients/:patientId/treatment-procedures — all procedures for dental chart overlay
 router.get(
   '/patients/:patientId/treatment-procedures',
-  authorize(['admin', 'doctor', 'receptionist', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId as string;
     const patientId = getParam(req, 'patientId');
@@ -65,7 +65,7 @@ router.get(
 // POST /api/treatment-cases/:caseId/procedures — create procedure
 router.post(
   '/treatment-cases/:caseId/procedures',
-  authorize(['admin', 'doctor']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId as string;
     const userId = req.user!.id as string;
@@ -128,7 +128,7 @@ router.post(
 // PUT /api/treatment-cases/:caseId/procedures/:id — update procedure
 router.put(
   '/treatment-cases/:caseId/procedures/:id',
-  authorize(['admin', 'doctor']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId as string;
     const userId = req.user!.id as string;
@@ -185,7 +185,7 @@ router.put(
 // DELETE /api/treatment-cases/:caseId/procedures/:id — delete procedure
 router.delete(
   '/treatment-cases/:caseId/procedures/:id',
-  authorize(['admin', 'doctor']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId as string;
     const userId = req.user!.id as string;

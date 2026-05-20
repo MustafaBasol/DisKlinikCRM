@@ -4,6 +4,15 @@ import prisma from '../db.js';
 import { authenticate, generateToken, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { checkLoginAttempt, recordLoginAttempt, resetLoginAttempts } from '../utils/helpers.js';
+import {
+  normalizeRole,
+  canAccessOrganizationDashboard,
+  canDeletePatient,
+  canManageUsers,
+  canAccessReports,
+  canWriteFinancialData,
+  canManageInventory,
+} from '../utils/roles.js';
 
 const router = express.Router();
 
@@ -111,12 +120,15 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
 
     const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);
 
+    const roleObj = { role: user.role, canAccessAllClinics: user.canAccessAllClinics };
+
     res.json({
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
       role: user.role,
+      normalizedRole: normalizeRole(user.role, user.canAccessAllClinics),
       organizationId: user.organizationId,
       canAccessAllClinics: user.canAccessAllClinics,
       allowedClinicIds,
@@ -131,6 +143,15 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
         name: user.clinic.name,
         currency: user.clinic.currency,
         timezone: user.clinic.timezone,
+      },
+      // Backend tarafından hesaplanmış izin bayrakları (frontend UX için)
+      permissions: {
+        canViewOrganizationDashboard: canAccessOrganizationDashboard(roleObj),
+        canDeletePatient: canDeletePatient(roleObj),
+        canManageUsers: canManageUsers(roleObj),
+        canViewReports: canAccessReports(roleObj),
+        canManagePayments: canWriteFinancialData(roleObj),
+        canManageInventory: canManageInventory(roleObj),
       },
     });
   } catch {

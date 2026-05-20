@@ -21,7 +21,7 @@ const payoutInclude = {
 };
 
 // GET /api/practitioner-payouts
-router.get('/practitioner-payouts', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/practitioner-payouts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { practitionerId, periodMonth, periodYear } = req.query;
 
@@ -43,7 +43,7 @@ router.get('/practitioner-payouts', authorize(['admin', 'billing']), async (req:
 });
 
 // POST /api/practitioner-payouts
-router.post('/practitioner-payouts', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.post('/practitioner-payouts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = practitionerPayoutSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -88,7 +88,7 @@ router.post('/practitioner-payouts', authorize(['admin', 'billing']), async (req
 });
 
 // GET /api/practitioner-payouts/:id
-router.get('/practitioner-payouts/:id', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/practitioner-payouts/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
@@ -102,7 +102,7 @@ router.get('/practitioner-payouts/:id', authorize(['admin', 'billing']), async (
 });
 
 // DELETE /api/practitioner-payouts/:id
-router.delete('/practitioner-payouts/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.delete('/practitioner-payouts/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 

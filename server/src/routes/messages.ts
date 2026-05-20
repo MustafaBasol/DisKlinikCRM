@@ -36,7 +36,7 @@ async function renderTemplate(text: string, context: any): Promise<string> {
 }
 
 // GET /api/message-templates
-router.get('/message-templates', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const selectedClinicId = req.query.clinicId as string | undefined;
   const { channel, language, isActive } = req.query;
 
@@ -58,7 +58,7 @@ router.get('/message-templates', authorize(['admin', 'doctor', 'receptionist']),
 });
 
 // POST /api/message-templates
-router.post('/message-templates', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = messageTemplateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -80,7 +80,7 @@ router.post('/message-templates', authorize(['admin', 'receptionist']), async (r
 });
 
 // PUT /api/message-templates/:id
-router.put('/message-templates/:id', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.put('/message-templates/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const validation = messageTemplateSchema.partial().safeParse(req.body);
@@ -104,7 +104,7 @@ router.put('/message-templates/:id', authorize(['admin', 'receptionist']), async
 });
 
 // POST /api/message-templates/seed
-router.post('/message-templates/seed', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
 
   const defaultTemplates = [
@@ -169,7 +169,7 @@ router.post('/message-templates/seed', authorize(['admin']), async (req: AuthReq
 });
 
 // POST /api/messages/prepare
-router.post('/messages/prepare', authorize(['admin', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = prepareMessageSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -238,7 +238,7 @@ router.post('/messages/prepare', authorize(['admin', 'receptionist', 'doctor']),
 });
 
 // GET /api/messages
-router.get('/messages', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/messages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { patientId, appointmentId, treatmentCaseId, channel, status } = req.query;
 
@@ -262,7 +262,7 @@ router.get('/messages', authorize(['admin', 'doctor', 'receptionist']), async (r
 });
 
 // GET /api/messages/:id
-router.get('/messages/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/messages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
@@ -279,7 +279,7 @@ router.get('/messages/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
 });
 
 // POST /api/messages/:id/send
-router.post('/messages/:id/send', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 

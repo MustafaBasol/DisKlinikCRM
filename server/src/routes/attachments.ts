@@ -71,7 +71,7 @@ function handleUpload(req: AuthRequest, res: Response, next: NextFunction) {
 
 router.post(
   '/patients/:patientId/attachments',
-  authorize(['admin', 'receptionist', 'doctor']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   handleUpload,
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
@@ -134,7 +134,7 @@ router.post(
 // ── GET /api/patients/:patientId/attachments ──────────────────────────
 router.get(
   '/patients/:patientId/attachments',
-  authorize(['admin', 'receptionist', 'doctor', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const clinicId = req.user!.clinicId;
@@ -156,7 +156,7 @@ router.get(
 // ── GET /api/patients/:patientId/attachments/:id/download ─────────────
 router.get(
   '/patients/:patientId/attachments/:id/download',
-  authorize(['admin', 'receptionist', 'doctor', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
@@ -182,7 +182,7 @@ router.get(
 // ── DELETE /api/patients/:patientId/attachments/:id ───────────────────
 router.delete(
   '/patients/:patientId/attachments/:id',
-  authorize(['admin', 'receptionist']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);

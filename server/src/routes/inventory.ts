@@ -8,7 +8,7 @@ import { validateAndGetScope } from '../utils/clinicScope.js';
 const router = express.Router();
 
 // ── GET /api/inventory ───────────────────────────────────────────────────────
-router.get('/inventory', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/inventory', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { category, lowStock, search, isActive } = req.query;
   const selectedClinicId = req.query.clinicId as string | undefined;
 
@@ -50,7 +50,7 @@ router.get('/inventory', authorize(['admin', 'billing', 'receptionist', 'doctor'
 });
 
 // ── GET /api/inventory/alerts ────────────────────────────────────────────────
-router.get('/inventory/alerts', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/inventory/alerts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const selectedClinicId = req.query.clinicId as string | undefined;
 
   const clinicScope = await validateAndGetScope(req.user!, selectedClinicId, res);
@@ -75,7 +75,7 @@ router.get('/inventory/alerts', authorize(['admin', 'billing', 'receptionist']),
 });
 
 // ── GET /api/inventory/:id ───────────────────────────────────────────────────
-router.get('/inventory/:id', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId as string;
 
@@ -101,7 +101,7 @@ router.get('/inventory/:id', authorize(['admin', 'billing', 'receptionist', 'doc
 });
 
 // ── POST /api/inventory ──────────────────────────────────────────────────────
-router.post('/inventory', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.post('/inventory', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const userId = req.user!.id;
   const { name, category, unit, currentStock, minimumStock, unitCost, supplier, barcode, notes } = req.body;
@@ -153,7 +153,7 @@ router.post('/inventory', authorize(['admin']), async (req: AuthRequest, res: Re
 });
 
 // ── PUT /api/inventory/:id ───────────────────────────────────────────────────
-router.put('/inventory/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.put('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId as string;
   const userId = req.user!.id;
@@ -188,7 +188,7 @@ router.put('/inventory/:id', authorize(['admin']), async (req: AuthRequest, res:
 });
 
 // ── POST /api/inventory/:id/transactions ─────────────────────────────────────
-router.post('/inventory/:id/transactions', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId as string;
   const userId = req.user!.id;
@@ -257,7 +257,7 @@ router.post('/inventory/:id/transactions', authorize(['admin', 'receptionist']),
 });
 
 // ── GET /api/inventory/:id/transactions ──────────────────────────────────────
-router.get('/inventory/:id/transactions', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId as string;
   const limit = Math.min(Number(req.query.limit) || 50, 200);

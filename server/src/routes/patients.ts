@@ -10,7 +10,7 @@ import { validateAndGetScope, resolveEffectiveClinicId } from '../utils/clinicSc
 const router = express.Router();
 
 // GET /api/patients
-router.get('/patients', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { search, status, source, includeArchived, clinicId: selectedClinicId } = req.query;
 
   try {
@@ -45,7 +45,7 @@ router.get('/patients', authorize(['admin', 'doctor', 'receptionist']), async (r
 });
 
 // GET /api/patients/:id
-router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const orgId = req.user!.organizationId;
 
@@ -133,7 +133,7 @@ router.get('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
 });
 
 // POST /api/patients
-router.post('/patients', authorize(['admin', 'receptionist']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
+router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
   // ?clinicId query param varsa doğrula, yoksa defaultClinicId kullan
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
@@ -157,7 +157,7 @@ router.post('/patients', authorize(['admin', 'receptionist']), checkPatientLimit
 });
 
 // PUT /api/patients/:id
-router.put('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.put('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const orgId = req.user!.organizationId;
   const { role, id: userId } = req.user!;

@@ -10,7 +10,7 @@ import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveCl
 const router = express.Router();
 
 // GET /api/payments
-router.get('/payments', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { role, id: userId } = req.user!;
   const { patientId, treatmentCaseId, paymentStatus, paymentMethod, dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
@@ -57,7 +57,7 @@ router.get('/payments', authorize(['admin', 'billing', 'receptionist', 'doctor']
 });
 
 // POST /api/payments
-router.post('/payments', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = paymentSchema.safeParse(req.body);
@@ -96,7 +96,7 @@ router.post('/payments', authorize(['admin', 'billing', 'receptionist']), async 
 });
 
 // PUT /api/payments/:id
-router.put('/payments/:id', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.put('/payments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
   const validation = paymentSchema.partial().safeParse(req.body);
@@ -129,7 +129,7 @@ router.put('/payments/:id', authorize(['admin', 'billing']), async (req: AuthReq
 });
 
 // PATCH /api/payments/:id/cancel
-router.patch('/payments/:id/cancel', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.patch('/payments/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
   try {
@@ -158,7 +158,7 @@ router.patch('/payments/:id/cancel', authorize(['admin', 'billing']), async (req
 });
 
 // GET /api/payments/:id/receipt
-router.get('/payments/:id/receipt', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/payments/:id/receipt', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
   try {

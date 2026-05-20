@@ -11,7 +11,7 @@ import { getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clini
 const router = express.Router();
 
 // GET /api/users
-router.get('/users', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { role, clinicId: selectedClinicId } = req.query;
 
   try {
@@ -47,7 +47,7 @@ router.get('/users', authorize(['admin', 'receptionist']), async (req: AuthReque
 });
 
 // POST /api/users
-router.post('/users', authorize(['admin']), checkUserLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
+router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), checkUserLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = userCreateSchema.safeParse(req.body);
@@ -98,7 +98,7 @@ router.post('/users', authorize(['admin']), checkUserLimit as express.RequestHan
 });
 
 // PUT /api/users/:id
-router.put('/users/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.put('/users/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const validation = userUpdateSchema.safeParse(req.body);
 
@@ -155,7 +155,7 @@ router.put('/users/:id', authorize(['admin']), async (req: AuthRequest, res: Res
 });
 
 // GET /api/doctor-availabilities
-router.get('/doctor-availabilities', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/doctor-availabilities', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { role, id: userId } = req.user!;
   const requestedPractitionerId = req.query.practitionerId ? String(req.query.practitionerId) : undefined;
   const practitionerId = role === 'doctor' ? userId : requestedPractitionerId;
@@ -191,7 +191,7 @@ router.get('/doctor-availabilities', authorize(['admin', 'doctor', 'receptionist
 });
 
 // PUT /api/doctor-availabilities/:practitionerId
-router.put('/doctor-availabilities/:practitionerId', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.put('/doctor-availabilities/:practitionerId', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const { role, id: userId } = req.user!;
@@ -244,7 +244,7 @@ router.put('/doctor-availabilities/:practitionerId', authorize(['admin', 'doctor
 });
 
 // GET /api/doctor-off-days
-router.get('/doctor-off-days', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/doctor-off-days', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { role, id: userId } = req.user!;
   const requestedPractitionerId = req.query.practitionerId ? String(req.query.practitionerId) : undefined;
   const practitionerId = role === 'doctor' ? userId : requestedPractitionerId;
@@ -274,7 +274,7 @@ router.get('/doctor-off-days', authorize(['admin', 'doctor', 'receptionist']), a
 });
 
 // POST /api/doctor-off-days
-router.post('/doctor-off-days', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.post('/doctor-off-days', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const { role, id: userId } = req.user!;
@@ -313,7 +313,7 @@ router.post('/doctor-off-days', authorize(['admin', 'doctor']), async (req: Auth
 });
 
 // DELETE /api/doctor-off-days/:id
-router.delete('/doctor-off-days/:id', authorize(['admin', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.delete('/doctor-off-days/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const { role, id: userId } = req.user!;
   const id = getParam(req, 'id');
 

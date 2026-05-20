@@ -4,13 +4,26 @@
  * NOT: Frontend izinleri YALNIZCA UX kapısıdır (menü görünürlüğü, buton durumları).
  * Gerçek erişim kontrolü her zaman backend tarafından yapılır.
  *
+ * Öncelik sırası:
+ *   1. user.permissions (backend /api/me'den gelen bayraklar) — varsa bunlar kullanılır
+ *   2. Local normalizeRole() hesabı — fallback olarak kullanılır
+ *
  * Bu dosya server/src/utils/roles.ts ile senkronize tutulmalıdır.
- * Rol normalizasyon mantığı değişirse burada da güncellenmeli.
  */
+
+type ServerPermissions = {
+  canViewOrganizationDashboard?: boolean;
+  canDeletePatient?: boolean;
+  canManageUsers?: boolean;
+  canViewReports?: boolean;
+  canManagePayments?: boolean;
+  canManageInventory?: boolean;
+};
 
 type UserForPermission = {
   role: string;
   canAccessAllClinics?: boolean;
+  permissions?: ServerPermissions;
 };
 
 // ─── Rol normalizasyonu (server/src/utils/roles.ts ile aynı mantık) ────────
@@ -24,7 +37,7 @@ type CanonicalRole =
   | 'BILLING'
   | 'ASSISTANT';
 
-function normalizeRole(userRole: string, canAccessAllClinics = false): CanonicalRole {
+export function normalizeRole(userRole: string, canAccessAllClinics = false): CanonicalRole {
   switch (userRole.toLowerCase()) {
     case 'owner':
       return 'OWNER';
@@ -67,6 +80,9 @@ export function canViewDashboard(user: UserForPermission | null | undefined): bo
  * Legacy "admin" + canAccessAllClinics=true  → OWNER → EVET.
  */
 export function canViewOrganizationDashboard(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canViewOrganizationDashboard !== undefined) {
+    return user.permissions.canViewOrganizationDashboard;
+  }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN';
 }
@@ -94,6 +110,9 @@ export function canCreatePatient(user: UserForPermission | null | undefined): bo
 
 /** Hasta silme: yalnızca yönetim rolleri */
 export function canDeletePatient(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canDeletePatient !== undefined) {
+    return user.permissions.canDeletePatient;
+  }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
@@ -131,6 +150,9 @@ export function canViewPayments(user: UserForPermission | null | undefined): boo
 }
 
 export function canManagePayments(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canManagePayments !== undefined) {
+    return user.permissions.canManagePayments;
+  }
   const role = getRole(user);
   return (
     role === 'OWNER' ||
@@ -141,6 +163,9 @@ export function canManagePayments(user: UserForPermission | null | undefined): b
 }
 
 export function canViewReports(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canViewReports !== undefined) {
+    return user.permissions.canViewReports;
+  }
   const role = getRole(user);
   return (
     role === 'OWNER' ||
@@ -156,6 +181,9 @@ export function canViewUsers(user: UserForPermission | null | undefined): boolea
 }
 
 export function canManageUsers(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canManageUsers !== undefined) {
+    return user.permissions.canManageUsers;
+  }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
@@ -166,6 +194,9 @@ export function canViewInventory(user: UserForPermission | null | undefined): bo
 }
 
 export function canManageInventory(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canManageInventory !== undefined) {
+    return user.permissions.canManageInventory;
+  }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }

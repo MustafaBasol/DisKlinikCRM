@@ -13,7 +13,7 @@ const router = express.Router();
 // ─── Practitioner Compensation Rules ────────────────────────────────────────
 
 // GET /api/compensation-rules?practitionerId=
-router.get('/compensation-rules', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { practitionerId } = req.query;
 
@@ -33,7 +33,7 @@ router.get('/compensation-rules', authorize(['admin', 'billing']), async (req: A
 });
 
 // POST /api/compensation-rules
-router.post('/compensation-rules', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.post('/compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = practitionerCompensationRuleSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -63,7 +63,7 @@ router.post('/compensation-rules', authorize(['admin']), async (req: AuthRequest
 });
 
 // PUT /api/compensation-rules/:id
-router.put('/compensation-rules/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.put('/compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const validation = practitionerCompensationRuleSchema.partial().safeParse(req.body);
@@ -92,7 +92,7 @@ router.put('/compensation-rules/:id', authorize(['admin']), async (req: AuthRequ
 });
 
 // DELETE /api/compensation-rules/:id
-router.delete('/compensation-rules/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.delete('/compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
@@ -117,7 +117,7 @@ router.delete('/compensation-rules/:id', authorize(['admin']), async (req: AuthR
 // ─── Service Compensation Rules ──────────────────────────────────────────────
 
 // GET /api/service-compensation-rules?practitionerId=
-router.get('/service-compensation-rules', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/service-compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { practitionerId } = req.query;
 
@@ -140,7 +140,7 @@ router.get('/service-compensation-rules', authorize(['admin', 'billing']), async
 });
 
 // POST /api/service-compensation-rules
-router.post('/service-compensation-rules', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.post('/service-compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = serviceCompensationRuleSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -177,7 +177,7 @@ router.post('/service-compensation-rules', authorize(['admin']), async (req: Aut
 });
 
 // DELETE /api/service-compensation-rules/:id
-router.delete('/service-compensation-rules/:id', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.delete('/service-compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 

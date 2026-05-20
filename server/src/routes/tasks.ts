@@ -9,7 +9,7 @@ import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveCl
 const router = express.Router();
 
 // GET /api/tasks
-router.get('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/tasks', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { role, id: userId } = req.user!;
   const { status, assignedToId, patientId, clinicId: selectedClinicId } = req.query;
 
@@ -44,7 +44,7 @@ router.get('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req:
 });
 
 // GET /api/tasks/:id
-router.get('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/tasks/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
   try {
@@ -68,7 +68,7 @@ router.get('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (
 });
 
 // POST /api/tasks
-router.post('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/tasks', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = taskSchema.safeParse(req.body);
@@ -95,7 +95,7 @@ router.post('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req
 });
 
 // PUT /api/tasks/:id
-router.put('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.put('/tasks/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const validation = taskSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -129,7 +129,7 @@ router.put('/tasks/:id', authorize(['admin', 'doctor', 'receptionist']), async (
 });
 
 // PATCH /api/tasks/:id/complete
-router.patch('/tasks/:id/complete', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.patch('/tasks/:id/complete', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
   try {

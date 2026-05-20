@@ -1,7 +1,7 @@
 # Rol ve Yetki Matrisi
 
 **Hazırlanma Tarihi:** 2026-05-20  
-**Son Güncelleme:** 2026-05-20 (Refactor: Kanonik Rol Sistemi)  
+**Son Güncelleme:** 2026-05-20 (Refactor: Kanonik Rol Sistemi + `/api/me` İzin Bayrakları + Billing Yönlendirmesi)  
 **Durum:** Üretim kodu ile senkronize — `server/src/utils/roles.ts` kanonik rol kaynağıdır.
 
 ---
@@ -399,6 +399,12 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 | 2026-05-20 | **`src/utils/permissions.ts`** (YENİ) | Frontend UX izin yardımcıları: `canViewOrganizationDashboard()`, `canDeletePatient()`, `canCreatePatient()`, `canViewReports()`, `canManageInventory()`, `canManageUsers()` vb. |
 | 2026-05-20 | `src/layouts/MainLayout.tsx` | Sidebar menüsü ham `user?.role === 'admin'` kontrollerinden `permissions.ts` yardımcılarına geçirildi. Org. Paneli menüsü yalnızca `canViewOrganizationDashboard()=true` olan kullanıcılara gösterilir. |
 | 2026-05-20 | `server/src/tests/multiBranchAccess.test.ts` | 55 yeni test eklendi (toplam 75): `normalizeRole`, Org Dashboard erişimi, hasta silme, hasta oluşturma, randevu oluşturma, ödeme yazma, rapor erişimi, kullanıcı yönetimi, `authorize()` simülasyonu. |
+| 2026-05-20 | 21× `server/src/routes/*.ts` | `authorize(['admin', ...])` kalıplarının tamamı kanonik rol listeleriyle değiştirildi. `admin` artık organizasyon-düzeyi route'larda geçmez; `['OWNER','ORG_ADMIN']` veya `['OWNER','ORG_ADMIN','CLINIC_MANAGER']` kullanılır. |
+| 2026-05-20 | `server/src/routes/auth.ts` | `GET /api/me` yanıtına `normalizedRole` ve `permissions` objesi eklendi. `roles.ts` yardımcıları import edildi. |
+| 2026-05-20 | `src/context/AuthContext.tsx` | `User` tipine `normalizedRole?` ve `permissions?` alanları eklendi. `initAuth` server'dan dönen bayrakları doğrudan depolar. |
+| 2026-05-20 | `src/utils/permissions.ts` | `normalizeRole` export edildi. 6 izin fonksiyonu (`canViewOrganizationDashboard`, `canDeletePatient`, `canManagePayments`, `canViewReports`, `canManageUsers`, `canManageInventory`) önce `user.permissions.*` server bayraklarını kontrol eder; eksikse yerel hesaplamaya düşer. |
+| 2026-05-20 | `src/pages/Dashboard.tsx` | BILLING rolü `<Navigate to="/reports" replace />` ile yönlendirilir. DENTIST kontrolü kanonik rol kullanacak şekilde güncellendi. |
+| 2026-05-20 | `server/src/tests/multiBranchAccess.test.ts` | 15 yeni test eklendi (toplam **90**): billing redirect simülasyonu, legacy admin OWNER/CLINIC_MANAGER davranış kapsamı, `authorize(['admin'])` org-düzeyi tehlike senaryosu, `/api/me` permission flags simülasyonu. |
 
 ---
 
@@ -413,14 +419,14 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 | ~~Ham rol string karşılaştırmaları frontend'de dağınıktı~~ | ~~`user?.role === 'admin'` gibi kontroller `MainLayout.tsx`'e yayılmıştı~~ | ✅ **Düzeltildi** — `src/utils/permissions.ts` yardımcıları kullanılıyor |
 | **`doctor` vs `DENTIST`** | DB schema `UserClinic.role`'de `DENTIST` kullanırken `authorize()` çağrıları `User.role = doctor` bekliyor | ⚪ **normalizeRole() her ikisini de DENTIST'e eşliyor** — işlevsel hata yok |
 | **`CLINIC_MANAGER` DB'de yok** | `User.role = 'clinic_manager'` DB'de kullanılmıyor; legacy `admin+canAccessAllClinics=false` → normalize ediliyor | ⚪ **MVP kabul** — `normalizeRole()` geçişi şeffaf yönetiyor |
-| **`billing` dashboard erişimi** | Billing kullanıcısı `/api/dashboard` endpoint'ine erişemiyor; frontend `/payments` veya `/reports`'a yönlendirilmeli | 🔜 **İyileştirme adayı** — finance-only widget sprint'i planlanacak |
+| ~~`billing` dashboard erişimi~~ | ~~Billing kullanıcısı `/dashboard`'a girince anlamsız veri görüyordu~~ | ✅ **Düzeltildi** — `Dashboard.tsx` BILLING rolünü `<Navigate to="/reports" replace />` ile yönlendirir |
 | **`doctor` kendi verilerine kısıtlı değil** | Doktorlar tüm hastaları ve randevuları görebiliyor, yalnızca kendi hastalarını değil | 🔜 **MVP kabul** — ince taneli filtreleme ileriki sprintlere bırakıldı |
 
 ---
 
 ## Frontend Rol Kontrolü
 
-### `src/utils/permissions.ts` — Merkezi Yardımcılar (YENİ)
+### `src/utils/permissions.ts` — Merkezi Yardımcılar
 
 Ham `user?.role === 'admin'` karşılaştırmaları yerine bu fonksiyonları kullanın:
 
@@ -453,14 +459,35 @@ if (canViewOrganizationDashboard(user)) { ... }
 {canManagePayments(user) && <EditPaymentButton />}
 ```
 
-> **Not:** `permissions.ts` içindeki `normalizeRole()` ile `server/src/utils/roles.ts` içindekiyle aynı mantığı taşır.
-> Backend değiştiğinde her iki dosya senkronize tutulmalıdır.
+> **Yetki Kaynağı Hiyerarşisi:**
+> `GET /api/me` artık `normalizedRole` ve `permissions` objesi döner (`AuthContext.tsx`'deki `User` tipine eklendi).
+> `permissions.ts` fonksiyonları önce `user.permissions.*` server bayraklarını kontrol eder; eksikse yerel `normalizeRole()` hesaplamasına düşer.
+> **Backend her zaman gerçek otoritedir** — frontend yalnızca UX kapısıdır.
+
+#### `GET /api/me` — Döndürülen İzin Alanları
+
+```json
+{
+  "id": "...",
+  "role": "admin",
+  "normalizedRole": "CLINIC_MANAGER",
+  "canAccessAllClinics": false,
+  "permissions": {
+    "canViewOrganizationDashboard": false,
+    "canDeletePatient": true,
+    "canManageUsers": true,
+    "canViewReports": true,
+    "canManagePayments": false,
+    "canManageInventory": true
+  }
+}
+```
 
 ### Sayfa / Menü Görünürlüğü — Güncel Durum (`MainLayout.tsx`)
 
 | Sayfa / Menü | OWNER | ORG_ADMIN | CLINIC_MANAGER (legacy admin canAll=false) | DENTIST | RECEPTIONIST | BILLING |
 |--------------|-------|-----------|---------------------------------------------|---------|--------------|---------|
-| Dashboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dashboard | ✅ | ✅ | ✅ | ✅ | ✅ | ↪ `/reports` |
 | **Org. Paneli** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Hastalar | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Randevular | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
@@ -479,3 +506,4 @@ if (canViewOrganizationDashboard(user)) { ... }
 | Kullanıcılar | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 > **Not:** Frontend menüsü UX kapısıdır — backend her zaman gerçek otorite olmaya devam eder.
+> `↪ /reports` = BILLING kullanıcısı `/dashboard` rotasına geldiğinde `Dashboard.tsx` otomatik yönlendirir.

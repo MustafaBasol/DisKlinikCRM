@@ -75,11 +75,11 @@ const updateServiceHandler = async (req: AuthRequest, res: Response) => {
   }
 };
 
-router.get('/appointment-types', authorize(['admin', 'doctor', 'receptionist', 'billing']), getServicesHandler);
-router.get('/services', authorize(['admin', 'doctor', 'receptionist', 'billing']), getServicesHandler);
-router.post('/appointment-types', authorize(['admin', 'receptionist']), createServiceHandler);
-router.post('/services', authorize(['admin', 'receptionist']), createServiceHandler);
-router.put('/appointment-types/:id', authorize(['admin', 'receptionist']), updateServiceHandler);
-router.put('/services/:id', authorize(['admin', 'receptionist']), updateServiceHandler);
+router.get('/appointment-types', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), getServicesHandler);
+router.get('/services', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), getServicesHandler);
+router.post('/appointment-types', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), createServiceHandler);
+router.post('/services', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), createServiceHandler);
+router.put('/appointment-types/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), updateServiceHandler);
+router.put('/services/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), updateServiceHandler);
 
 export default router;

@@ -40,7 +40,7 @@ async function upsertNotification(clinicId: string, item: {
 // GET /api/notifications
 router.get(
   '/notifications',
-  authorize(['admin', 'receptionist', 'doctor', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId;
     const role = req.user!.role;
@@ -147,7 +147,7 @@ router.get(
 // POST /api/notifications/mark-all-read
 router.post(
   '/notifications/mark-all-read',
-  authorize(['admin', 'receptionist', 'doctor', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId;
     try {
@@ -165,7 +165,7 @@ router.post(
 // PATCH /api/notifications/:id/toggle-read
 router.patch(
   '/notifications/:id/toggle-read',
-  authorize(['admin', 'receptionist', 'doctor', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId;
     const { id } = req.params;

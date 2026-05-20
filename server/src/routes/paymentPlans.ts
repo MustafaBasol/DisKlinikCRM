@@ -26,7 +26,7 @@ function generateInstallments(totalAmount: number, count: number, firstDueDate: 
 }
 
 // GET /api/payment-plans
-router.get('/payment-plans', authorize(['admin', 'billing', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const selectedClinicId = req.query.clinicId as string | undefined;
   const { patientId, status } = req.query;
 
@@ -54,7 +54,7 @@ router.get('/payment-plans', authorize(['admin', 'billing', 'receptionist', 'doc
 });
 
 // GET /api/payment-plans/:id
-router.get('/payment-plans/:id', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/payment-plans/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
@@ -78,7 +78,7 @@ router.get('/payment-plans/:id', authorize(['admin', 'billing', 'receptionist'])
 });
 
 // POST /api/payment-plans
-router.post('/payment-plans', authorize(['admin', 'billing', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { patientId, treatmentCaseId, totalAmount, currency, installmentCount, firstDueDate, description } = req.body;
 
@@ -142,7 +142,7 @@ router.post('/payment-plans', authorize(['admin', 'billing', 'receptionist']), a
 // POST /api/payment-plans/:id/installments/:installmentId/pay
 router.post(
   '/payment-plans/:id/installments/:installmentId/pay',
-  authorize(['admin', 'billing', 'receptionist']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const planId = getParam(req, 'id');
     const installmentId = getParam(req, 'installmentId');
@@ -209,7 +209,7 @@ router.post(
 );
 
 // PATCH /api/payment-plans/:id/cancel
-router.patch('/payment-plans/:id/cancel', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.patch('/payment-plans/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 

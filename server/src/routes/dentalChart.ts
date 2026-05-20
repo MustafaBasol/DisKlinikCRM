@@ -17,7 +17,7 @@ const VALID_STATUS = new Set(['planned', 'treated', 'issue', 'missing', 'crown',
 // GET /api/patients/:patientId/dental-chart
 router.get(
   '/patients/:patientId/dental-chart',
-  authorize(['admin', 'receptionist', 'doctor', 'billing']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const clinicId = req.user!.clinicId;
@@ -44,7 +44,7 @@ router.get(
 // PUT /api/patients/:patientId/dental-chart/:toothFdi  — upsert
 router.put(
   '/patients/:patientId/dental-chart/:toothFdi',
-  authorize(['admin', 'receptionist', 'doctor']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const toothFdi = parseInt(req.params.toothFdi as string, 10);
@@ -105,7 +105,7 @@ router.put(
 // DELETE /api/patients/:patientId/dental-chart/:toothFdi
 router.delete(
   '/patients/:patientId/dental-chart/:toothFdi',
-  authorize(['admin', 'receptionist', 'doctor']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const toothFdi = parseInt(req.params.toothFdi as string, 10);

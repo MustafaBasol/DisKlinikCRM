@@ -48,7 +48,7 @@ async function validateInsuranceRelations(data: any, clinicId: string) {
 }
 
 // GET /api/insurance-provisions
-router.get('/insurance-provisions', authorize(['admin', 'receptionist', 'billing', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
   const { status, insurance_type, patient_id, treatment_case_id, provider_name } = req.query;
@@ -75,7 +75,7 @@ router.get('/insurance-provisions', authorize(['admin', 'receptionist', 'billing
 });
 
 // GET /api/insurance-provisions/:id
-router.get('/insurance-provisions/:id', authorize(['admin', 'receptionist', 'billing', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
@@ -100,7 +100,7 @@ router.get('/insurance-provisions/:id', authorize(['admin', 'receptionist', 'bil
 });
 
 // POST /api/insurance-provisions
-router.post('/insurance-provisions', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = insuranceProvisionSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -127,7 +127,7 @@ router.post('/insurance-provisions', authorize(['admin', 'receptionist']), async
 });
 
 // PUT /api/insurance-provisions/:id
-router.put('/insurance-provisions/:id', authorize(['admin', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
+router.put('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
@@ -175,7 +175,7 @@ router.put('/insurance-provisions/:id', authorize(['admin', 'receptionist', 'bil
 });
 
 // PATCH /api/insurance-provisions/:id/status
-router.patch('/insurance-provisions/:id/status', authorize(['admin', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
+router.patch('/insurance-provisions/:id/status', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const { id: userId } = req.user!;
@@ -210,7 +210,7 @@ router.patch('/insurance-provisions/:id/status', authorize(['admin', 'receptioni
 });
 
 // PATCH /api/insurance-provisions/:id/cancel
-router.patch('/insurance-provisions/:id/cancel', authorize(['admin', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
+router.patch('/insurance-provisions/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const { id: userId } = req.user!;

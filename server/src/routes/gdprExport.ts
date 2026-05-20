@@ -7,7 +7,7 @@ const router = express.Router();
 // GET /api/clinic/export-data — GDPR: Klinik verisinin tamamını JSON olarak indir
 router.get(
   '/clinic/export-data',
-  authorize(['admin']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId;
 

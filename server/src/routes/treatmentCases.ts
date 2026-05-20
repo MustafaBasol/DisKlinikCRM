@@ -21,7 +21,7 @@ const treatmentCaseInclude = {
 };
 
 // GET /api/treatment-cases
-router.get('/treatment-cases', authorize(['admin', 'doctor', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { role, id: userId } = req.user!;
   const { status, patientId, practitionerId, clinicId: selectedClinicId } = req.query;
 
@@ -50,7 +50,7 @@ router.get('/treatment-cases', authorize(['admin', 'doctor', 'receptionist', 'bi
 });
 
 // GET /api/treatment-cases/:id
-router.get('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const { role, id: userId } = req.user!;
 
@@ -82,7 +82,7 @@ router.get('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist',
 });
 
 // POST /api/treatment-cases
-router.post('/treatment-cases', authorize(['admin', 'receptionist', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.post('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = treatmentCaseSchema.safeParse(req.body);
@@ -120,7 +120,7 @@ router.post('/treatment-cases', authorize(['admin', 'receptionist', 'doctor']), 
 });
 
 // PUT /api/treatment-cases/:id
-router.put('/treatment-cases/:id', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.put('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const { role, id: userId } = req.user!;
 
@@ -193,7 +193,7 @@ async function checkAndNotifyLowStock(clinicId: string, itemId: string) {
 }
 
 // GET /api/treatment-cases/:id/materials
-router.get('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'receptionist', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
   try {
     const accessibleIds = await getAccessibleClinicIds(req.user!);
@@ -216,7 +216,7 @@ router.get('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'rece
 });
 
 // POST /api/treatment-cases/:id/materials
-router.post('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
   const userId = req.user!.id;
   const { itemId, quantity, notes } = req.body;
@@ -278,7 +278,7 @@ router.post('/treatment-cases/:id/materials', authorize(['admin', 'doctor', 'rec
 });
 
 // DELETE /api/treatment-cases/:id/materials/:txId
-router.delete('/treatment-cases/:id/materials/:txId', authorize(['admin', 'doctor', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.delete('/treatment-cases/:id/materials/:txId', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
   const txId = String(req.params.txId);
   const userId = req.user!.id;

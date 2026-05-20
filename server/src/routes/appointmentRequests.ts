@@ -8,7 +8,7 @@ import { appointmentRequestStatusSchema, appointmentRequestConvertSchema } from 
 const router = express.Router();
 
 // GET /api/appointment-requests
-router.get('/appointment-requests', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { status, requestType, source } = req.query;
 
@@ -87,7 +87,7 @@ router.get('/appointment-requests', authorize(['admin', 'receptionist']), async 
 });
 
 // PUT /api/appointment-requests/:id/status
-router.put('/appointment-requests/:id/status', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.put('/appointment-requests/:id/status', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const id = getParam(req, 'id');
   const validation = appointmentRequestStatusSchema.safeParse(req.body);
@@ -127,7 +127,7 @@ router.put('/appointment-requests/:id/status', authorize(['admin', 'receptionist
 });
 
 // POST /api/appointment-requests/:id/convert
-router.post('/appointment-requests/:id/convert', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const id = getParam(req, 'id');
   const validation = appointmentRequestConvertSchema.safeParse(req.body);

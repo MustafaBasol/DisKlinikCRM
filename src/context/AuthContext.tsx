@@ -17,6 +17,7 @@ interface User {
   lastName: string;
   email: string;
   role: string;
+  normalizedRole?: string;
   organizationId?: string;
   canAccessAllClinics?: boolean;
   allowedClinicIds?: string[];
@@ -32,6 +33,15 @@ interface User {
     name: string;
     slug: string;
     status: string;
+  };
+  /** Backend tarafından hesaplanmış izin bayrakları */
+  permissions?: {
+    canViewOrganizationDashboard: boolean;
+    canDeletePatient: boolean;
+    canManageUsers: boolean;
+    canViewReports: boolean;
+    canManagePayments: boolean;
+    canManageInventory: boolean;
   };
 }
 

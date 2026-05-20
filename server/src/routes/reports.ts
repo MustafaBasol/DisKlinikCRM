@@ -6,7 +6,7 @@ import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 const router = express.Router();
 
 // GET /api/reports/revenue
-router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/reports/revenue', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, groupBy: rawGroupBy, practitionerId, paymentMethod, clinicId: selectedClinicId } = req.query;
 
   if (!dateFrom || !dateTo) {
@@ -161,7 +161,7 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
 });
 
 // GET /api/reports/revenue/export.csv
-router.get('/reports/revenue/export.csv', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/reports/revenue/export.csv', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, practitionerId, paymentMethod, clinicId: selectedClinicId } = req.query;
 
   if (!dateFrom || !dateTo) return res.status(400).json({ error: 'dateFrom and dateTo are required' });
@@ -217,7 +217,7 @@ router.get('/reports/revenue/export.csv', authorize(['admin', 'billing']), async
 });
 
 // GET /api/reports/doctor-performance
-router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/reports/doctor-performance', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
   if (!dateFrom || !dateTo) return res.status(400).json({ error: 'dateFrom and dateTo are required' });
@@ -319,7 +319,7 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
 });
 
 // GET /api/reports/patient-sources
-router.get('/reports/patient-sources', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/reports/patient-sources', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
   const toDate = dateTo ? new Date(String(dateTo)) : new Date();
@@ -390,7 +390,7 @@ router.get('/reports/patient-sources', authorize(['admin', 'billing']), async (r
 });
 
 // GET /api/reports/no-show-analysis
-router.get('/reports/no-show-analysis', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { dateFrom, dateTo } = req.query;
 

@@ -22,7 +22,8 @@ import {
   Activity,
   Star,
 } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
+import { normalizeRole } from '../utils/permissions';
 import {
   BarChart,
   Bar,
@@ -338,8 +339,13 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // ── Hekim kendi özel dashboard'unu görür ──────────────────────────
-  if (user?.role === 'doctor') {
+  // ── BILLING: finans paneline yönlendir ─────────────────────────────────
+  if (user && normalizeRole(user.role, user.canAccessAllClinics) === 'BILLING') {
+    return <Navigate to="/reports" replace />;
+  }
+
+  // ── Hekim kendi özel dashboard'unu görür ──────────────────────────────────
+  if (user?.role === 'doctor' || (user && normalizeRole(user.role, user.canAccessAllClinics) === 'DENTIST')) {
     return <DoctorDashboard data={data} user={user} clinicTimeZone={clinicTimeZone} />;
   }
 

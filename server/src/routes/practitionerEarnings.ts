@@ -17,7 +17,7 @@ const earningInclude = {
 
 // GET /api/practitioner-earnings
 // Admin/billing: all earnings; doctor: own only
-router.get('/practitioner-earnings', authorize(['admin', 'billing', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/practitioner-earnings', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
   const { practitionerId, status, periodMonth, periodYear, page, limit } = req.query;
@@ -54,7 +54,7 @@ router.get('/practitioner-earnings', authorize(['admin', 'billing', 'doctor']), 
 });
 
 // GET /api/practitioner-earnings/summary — period-based summary per practitioner
-router.get('/practitioner-earnings/summary', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.get('/practitioner-earnings/summary', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const { periodMonth, periodYear, practitionerId } = req.query;
 
@@ -100,7 +100,7 @@ router.get('/practitioner-earnings/summary', authorize(['admin', 'billing']), as
 });
 
 // GET /api/practitioner-earnings/:id
-router.get('/practitioner-earnings/:id', authorize(['admin', 'billing', 'doctor']), async (req: AuthRequest, res: Response) => {
+router.get('/practitioner-earnings/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const { role, id: userId } = req.user!;
@@ -123,7 +123,7 @@ router.get('/practitioner-earnings/:id', authorize(['admin', 'billing', 'doctor'
 });
 
 // PATCH /api/practitioner-earnings/:id/approve
-router.patch('/practitioner-earnings/:id/approve', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.patch('/practitioner-earnings/:id/approve', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
@@ -151,7 +151,7 @@ router.patch('/practitioner-earnings/:id/approve', authorize(['admin', 'billing'
 });
 
 // PATCH /api/practitioner-earnings/:id/adjust
-router.patch('/practitioner-earnings/:id/adjust', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.patch('/practitioner-earnings/:id/adjust', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
@@ -189,7 +189,7 @@ router.patch('/practitioner-earnings/:id/adjust', authorize(['admin']), async (r
 });
 
 // PATCH /api/practitioner-earnings/:id/cancel
-router.patch('/practitioner-earnings/:id/cancel', authorize(['admin']), async (req: AuthRequest, res: Response) => {
+router.patch('/practitioner-earnings/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
@@ -216,7 +216,7 @@ router.patch('/practitioner-earnings/:id/cancel', authorize(['admin']), async (r
 });
 
 // PATCH /api/practitioner-earnings/:id/mark-paid
-router.patch('/practitioner-earnings/:id/mark-paid', authorize(['admin', 'billing']), async (req: AuthRequest, res: Response) => {
+router.patch('/practitioner-earnings/:id/mark-paid', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
 
