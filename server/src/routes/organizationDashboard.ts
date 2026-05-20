@@ -4,14 +4,18 @@
  * GET /api/organization/dashboard?range=this_month
  *
  * Güvenlik kuralları:
- * 1. Yalnızca OWNER, ORG_ADMIN, admin rolleri erişebilir.
+ * 1. Yalnızca OWNER veya ORG_ADMIN erişebilir.
+ *    - Legacy "admin" + canAccessAllClinics=true → OWNER → erişim verilir.
+ *    - Legacy "admin" + canAccessAllClinics=false → CLINIC_MANAGER → erişim REDDEDİLİR.
  * 2. Tüm sorgular organizationId ile scope edilir.
  * 3. Frontend'den gelen clinicId'ler DB'den doğrulanır.
+ * 4. canAccessOrganizationDashboard() ile çift katmanlı kontrol yapılır.
  */
 
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
+import { canAccessOrganizationDashboard } from '../utils/roles.js';
 
 const router = express.Router();
 
@@ -49,8 +53,14 @@ function getDateRange(range: string, from?: string, to?: string): { from: Date; 
 // GET /api/organization/dashboard
 router.get(
   '/organization/dashboard',
-  authorize(['admin', 'owner', 'org_admin']),
+  // Kanonik roller: yalnızca OWNER veya ORG_ADMIN.
+  // Legacy "admin" + canAccessAllClinics=false → CLINIC_MANAGER → reddedilir.
+  authorize(['OWNER', 'ORG_ADMIN']),
   async (req: AuthRequest, res: Response) => {
+    // Çift katmanlı kontrol: authorize() geçmiş olsa bile ikinci doğrulama
+    if (!canAccessOrganizationDashboard(req.user!)) {
+      return res.status(403).json({ error: 'Organization dashboard requires organization-level access' });
+    }
     const orgId = req.user!.organizationId;
     const { range = 'this_month', from: fromParam, to: toParam } = req.query;
 

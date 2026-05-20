@@ -199,7 +199,8 @@ router.put('/patients/:id', authorize(['admin', 'doctor', 'receptionist']), asyn
 });
 
 // DELETE /api/patients/:id (soft delete)
-router.delete('/patients/:id', authorize(['admin', 'receptionist']), async (req: AuthRequest, res: Response) => {
+// Yalnızca OWNER, ORG_ADMIN, CLINIC_MANAGER silebilir — RECEPTIONIST ve DENTIST silemez.
+router.delete('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const orgId = req.user!.organizationId;
 

@@ -10,8 +10,15 @@
  *  - Kullanıcı başka organizasyonun kliniğine erişemez (cross-org)
  *  - selectedClinicId=all yetkisiz veri sızdırmaz
  *  - POST/PATCH ile yetkisiz clinicId 403 döner
- *  - Organization dashboard roller kontrolü
+ *  - Organization dashboard rol kontrolü (OWNER/ORG_ADMIN only)
+ *  - Hasta silme: yalnızca yönetim rolleri
+ *  - Billing hasta oluşturamaz
+ *  - Receptionist randevu oluşturabilir, billing oluşturamaz
+ *  - Ödeme yazma: yalnızca billing/yönetim
+ *  - Rapor erişimi: yalnızca billing/yönetim
+ *  - Kullanıcı yönetimi: yalnızca yönetim rolleri
  *  - Tek klinik geriye dönük uyumluluk
+ *  - normalizeRole() doğruluğu
  */
 
 import assert from 'node:assert/strict';
@@ -246,7 +253,315 @@ await test('Yalnizca admin/owner/org_admin erisebilir', () => {
   blocked.forEach(r => assert.equal(check(r), false, `${r} engellenebilmeli`));
 });
 
-console.log('\nTek klinik geriye donuk uyumluluk');
+// ─── normalizeRole testleri ───────────────────────────────────────────────────
+
+// Inline normalizeRole (server/src/utils/roles.ts ile aynı mantık)
+type CanonicalRole = 'OWNER' | 'ORG_ADMIN' | 'CLINIC_MANAGER' | 'DENTIST' | 'RECEPTIONIST' | 'BILLING' | 'ASSISTANT';
+
+function normalizeRole(userRole: string, canAccessAllClinics = false): CanonicalRole {
+  switch (userRole.toLowerCase()) {
+    case 'owner': return 'OWNER';
+    case 'org_admin': return 'ORG_ADMIN';
+    case 'clinic_manager': return 'CLINIC_MANAGER';
+    case 'admin': return canAccessAllClinics ? 'OWNER' : 'CLINIC_MANAGER';
+    case 'doctor':
+    case 'dentist': return 'DENTIST';
+    case 'receptionist': return 'RECEPTIONIST';
+    case 'billing': return 'BILLING';
+    case 'assistant': return 'ASSISTANT';
+    default: return 'ASSISTANT';
+  }
+}
+
+console.log('\nnormalizeRole');
+
+await test('admin + canAccessAllClinics=true → OWNER', () => {
+  assert.equal(normalizeRole('admin', true), 'OWNER');
+});
+
+await test('admin + canAccessAllClinics=false → CLINIC_MANAGER', () => {
+  assert.equal(normalizeRole('admin', false), 'CLINIC_MANAGER');
+});
+
+await test('owner → OWNER', () => {
+  assert.equal(normalizeRole('owner', false), 'OWNER');
+});
+
+await test('OWNER (uppercase) → OWNER', () => {
+  assert.equal(normalizeRole('OWNER', false), 'OWNER');
+});
+
+await test('org_admin → ORG_ADMIN', () => {
+  assert.equal(normalizeRole('org_admin', false), 'ORG_ADMIN');
+});
+
+await test('ORG_ADMIN (uppercase) → ORG_ADMIN', () => {
+  assert.equal(normalizeRole('ORG_ADMIN', false), 'ORG_ADMIN');
+});
+
+await test('doctor → DENTIST', () => {
+  assert.equal(normalizeRole('doctor', false), 'DENTIST');
+});
+
+await test('DENTIST (uppercase) → DENTIST', () => {
+  assert.equal(normalizeRole('DENTIST', false), 'DENTIST');
+});
+
+await test('receptionist → RECEPTIONIST', () => {
+  assert.equal(normalizeRole('receptionist', false), 'RECEPTIONIST');
+});
+
+await test('billing → BILLING', () => {
+  assert.equal(normalizeRole('billing', false), 'BILLING');
+});
+
+await test('Bilinmeyen rol → ASSISTANT (en kısıtlayıcı)', () => {
+  assert.equal(normalizeRole('unknown_role', false), 'ASSISTANT');
+});
+
+// ─── Organization Dashboard erişim testleri ───────────────────────────────────
+
+function canAccessOrgDashboard(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN';
+}
+
+console.log('\nOrganization Dashboard erişim (canAccessOrganizationDashboard)');
+
+await test('OWNER → erişim verilir', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+await test('ORG_ADMIN → erişim verilir', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'org_admin', canAccessAllClinics: false }), true);
+});
+
+await test('legacy admin + canAccessAllClinics=true → OWNER → erişim verilir', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('legacy admin + canAccessAllClinics=false → CLINIC_MANAGER → erişim REDDEDİLİR', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'admin', canAccessAllClinics: false }), false);
+});
+
+await test('doctor → erişim REDDEDİLİR', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('receptionist → erişim REDDEDİLİR', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('billing → erişim REDDEDİLİR', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+await test('clinic_manager → erişim REDDEDİLİR', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'clinic_manager', canAccessAllClinics: false }), false);
+});
+
+// ─── Hasta silme yetki testleri ───────────────────────────────────────────────
+
+function canDeletePatient(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER';
+}
+
+console.log('\nHasta silme yetkileri (canDeletePatient)');
+
+await test('OWNER hasta silebilir', () => {
+  assert.equal(canDeletePatient({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+await test('legacy admin + canAccessAllClinics=true → OWNER → silebilir', () => {
+  assert.equal(canDeletePatient({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('legacy admin + canAccessAllClinics=false → CLINIC_MANAGER → silebilir', () => {
+  assert.equal(canDeletePatient({ role: 'admin', canAccessAllClinics: false }), true);
+});
+
+await test('receptionist hasta silemez', () => {
+  assert.equal(canDeletePatient({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('doctor hasta silemez', () => {
+  assert.equal(canDeletePatient({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('billing hasta silemez', () => {
+  assert.equal(canDeletePatient({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+// ─── Hasta oluşturma yetki testleri ───────────────────────────────────────────
+
+function canCreatePatient(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER' || r === 'RECEPTIONIST';
+}
+
+console.log('\nHasta oluşturma yetkileri (canCreatePatient)');
+
+await test('receptionist hasta oluşturabilir', () => {
+  assert.equal(canCreatePatient({ role: 'receptionist', canAccessAllClinics: false }), true);
+});
+
+await test('billing hasta oluşturamaz', () => {
+  assert.equal(canCreatePatient({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+await test('doctor hasta oluşturamaz', () => {
+  assert.equal(canCreatePatient({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('OWNER hasta oluşturabilir', () => {
+  assert.equal(canCreatePatient({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+// ─── Randevu oluşturma yetki testleri ────────────────────────────────────────
+
+function canCreateAppointment(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER' || r === 'RECEPTIONIST';
+}
+
+console.log('\nRandevu oluşturma yetkileri (canCreateAppointment)');
+
+await test('receptionist randevu oluşturabilir', () => {
+  assert.equal(canCreateAppointment({ role: 'receptionist', canAccessAllClinics: false }), true);
+});
+
+await test('billing randevu oluşturamaz', () => {
+  assert.equal(canCreateAppointment({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+await test('doctor randevu oluşturamaz (MVP kısıtlaması)', () => {
+  assert.equal(canCreateAppointment({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+// ─── Ödeme yazma yetki testleri ──────────────────────────────────────────────
+
+function canWritePayments(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER' || r === 'BILLING';
+}
+
+console.log('\nÖdeme yazma yetkileri (canWritePayments)');
+
+await test('billing ödeme yazabilir', () => {
+  assert.equal(canWritePayments({ role: 'billing', canAccessAllClinics: false }), true);
+});
+
+await test('OWNER ödeme yazabilir', () => {
+  assert.equal(canWritePayments({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+await test('doctor ödeme yazamaz', () => {
+  assert.equal(canWritePayments({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('receptionist ödeme yazamaz (düzenleme/iptal)', () => {
+  assert.equal(canWritePayments({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+// ─── Rapor erişim testleri ───────────────────────────────────────────────────
+
+function canAccessReports(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER' || r === 'BILLING';
+}
+
+console.log('\nRapor erişim yetkileri (canAccessReports)');
+
+await test('billing raporlara erişebilir', () => {
+  assert.equal(canAccessReports({ role: 'billing', canAccessAllClinics: false }), true);
+});
+
+await test('OWNER raporlara erişebilir', () => {
+  assert.equal(canAccessReports({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+await test('doctor raporlara erişemez', () => {
+  assert.equal(canAccessReports({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('receptionist raporlara erişemez', () => {
+  assert.equal(canAccessReports({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+// ─── Kullanıcı yönetimi testleri ─────────────────────────────────────────────
+
+function canManageUsers(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER';
+}
+
+console.log('\nKullanıcı yönetimi yetkileri (canManageUsers)');
+
+await test('OWNER kullanıcıları yönetebilir', () => {
+  assert.equal(canManageUsers({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+await test('ORG_ADMIN kullanıcıları yönetebilir', () => {
+  assert.equal(canManageUsers({ role: 'org_admin', canAccessAllClinics: false }), true);
+});
+
+await test('legacy admin (canAccessAllClinics=true) → OWNER → yönetebilir', () => {
+  assert.equal(canManageUsers({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('legacy admin (canAccessAllClinics=false) → CLINIC_MANAGER → yönetebilir', () => {
+  assert.equal(canManageUsers({ role: 'admin', canAccessAllClinics: false }), true);
+});
+
+await test('doctor kullanıcı yönetemez', () => {
+  assert.equal(canManageUsers({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('receptionist kullanıcı yönetemez', () => {
+  assert.equal(canManageUsers({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('billing kullanıcı yönetemez', () => {
+  assert.equal(canManageUsers({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+// ─── authorize() simülasyonu — kanonik + ham rol çift kontrolü ────────────────
+
+function simulateAuthorize(allowedRoles: string[], user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const normalizedList = allowedRoles.map(r => r.toLowerCase());
+  const canonicalRole = normalizeRole(user.role, user.canAccessAllClinics).toLowerCase();
+  const rawRole = user.role.toLowerCase();
+  return normalizedList.includes(canonicalRole) || normalizedList.includes(rawRole);
+}
+
+console.log('\nauthorize() simülasyonu (kanonik + ham rol çift kontrolü)');
+
+await test('authorize([OWNER,ORG_ADMIN]) — legacy admin + canAll=true → geçer', () => {
+  assert.equal(simulateAuthorize(['OWNER', 'ORG_ADMIN'], { role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('authorize([OWNER,ORG_ADMIN]) — legacy admin + canAll=false → REDDEDILIR', () => {
+  assert.equal(simulateAuthorize(['OWNER', 'ORG_ADMIN'], { role: 'admin', canAccessAllClinics: false }), false);
+});
+
+await test('authorize([OWNER,ORG_ADMIN]) — doctor → REDDEDILIR', () => {
+  assert.equal(simulateAuthorize(['OWNER', 'ORG_ADMIN'], { role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('authorize([admin,doctor,receptionist]) — legacy admin → geçer (geriye dönük uyumluluk)', () => {
+  assert.equal(simulateAuthorize(['admin', 'doctor', 'receptionist'], { role: 'admin', canAccessAllClinics: false }), true);
+});
+
+await test('authorize([admin,doctor]) — receptionist → REDDEDILIR', () => {
+  assert.equal(simulateAuthorize(['admin', 'doctor'], { role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('authorize([OWNER,ORG_ADMIN,CLINIC_MANAGER]) — legacy admin + canAll=false → CLINIC_MANAGER → geçer', () => {
+  assert.equal(simulateAuthorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'], { role: 'admin', canAccessAllClinics: false }), true);
+});
+
+// ─── Tek klinik geriye dönük uyumluluk ────────────────────────────────────────
 
 await test('1 klinikli kullanici — selectedClinicId=all → tek kliniğe scope', async () => {
   const user = makeUser({ allowedClinicIds: ['clinic-A'] });
@@ -261,15 +576,15 @@ await test('1 klinikli kullanici — kendi kliniğine erisim', async () => {
   assert.deepEqual(scope, { organizationId: 'org-1', clinicId: 'clinic-A' });
 });
 
-// ─── Sonuc ────────────────────────────────────────────────────────────────────
+// ─── Sonuç ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);
-console.log(`Toplam: ${passed + failed} test | Gecen: ${passed} | Baslayan: ${failed}`);
+console.log(`Toplam: ${passed + failed} test | Geçen: ${passed} | Başarısız: ${failed}`);
 if (failed > 0) {
-  console.error(`\n${failed} test basarisiz!`);
+  console.error(`\n${failed} test başarısız!`);
   process.exit(1);
 } else {
-  console.log('\nTum multi-branch erisim kontrol testleri gecti!');
+  console.log('\nTüm multi-branch erişim ve rol yetki testleri geçti!');
 }
 
 

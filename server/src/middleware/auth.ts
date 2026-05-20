@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../db.js';
+import { normalizeRole } from '../utils/roles.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'health-crm-secret-key-change-this';
 
@@ -67,10 +68,36 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
   }
 };
 
+/**
+ * authorize() — İki katmanlı rol kontrolü
+ *
+ * Katman 1: Kanonik rol kontrolü
+ *   Kullanıcının rolü normalizeRole() ile kanonik forma dönüştürülür.
+ *   authorize(['OWNER', 'ORG_ADMIN']) çağrısı, "admin" rolüne sahip olup
+ *   canAccessAllClinics=true olan kullanıcıyı da kabul eder (OWNER'a normalize olur).
+ *   "admin" + canAccessAllClinics=false → CLINIC_MANAGER'a normalize olur,
+ *   dolayısıyla ['OWNER','ORG_ADMIN'] listesine GİRMEZ — erişim reddedilir.
+ *
+ * Katman 2: Ham rol kontrolü (geriye dönük uyumluluk)
+ *   authorize(['admin','doctor','receptionist']) gibi eski çağrılar
+ *   ham rol string'ini de kontrol ederek mevcut davranışı korur.
+ *
+ * Güvenlik notu:
+ *   Yalnızca kanonik roller kullanılan endpoint'lerde (org dashboard gibi),
+ *   eski rolleri listeye EKLEMEYIN — bu kasıtlı bir kısıtlama mekanizmasıdır.
+ */
 export const authorize = (roles: string[]) => {
-  const normalized = roles.map(r => r.toLowerCase());
+  const normalizedList = roles.map(r => r.toLowerCase());
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !normalized.includes(req.user.role.toLowerCase())) {
+    if (!req.user) {
+      return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
+    }
+    // Kullanıcının kanonik rolünü hesapla
+    const canonicalRole = normalizeRole(req.user.role, req.user.canAccessAllClinics).toLowerCase();
+    // Ham rolü de kontrol et (geriye dönük uyumluluk)
+    const rawRole = req.user.role.toLowerCase();
+
+    if (!normalizedList.includes(canonicalRole) && !normalizedList.includes(rawRole)) {
       return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
     }
     next();

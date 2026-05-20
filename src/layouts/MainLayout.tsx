@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Award,
   Package,
+  Building2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -33,6 +34,15 @@ import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
 import NotificationBell from '../components/NotificationBell';
 import { useDarkMode } from '../utils/darkMode';
+import {
+  canViewOrganizationDashboard,
+  canViewPatients,
+  canViewAppointments,
+  canViewPayments,
+  canViewReports,
+  canManageInventory,
+  canViewUsers,
+} from '../utils/permissions';
 
 const MainLayoutInner: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -63,35 +73,88 @@ const MainLayoutInner: React.FC = () => {
 
   const navItems = [
     { path: '/', icon: <LayoutDashboard size={20} />, label: t('common:dashboard') },
-    { path: '/patients', icon: <Users size={20} />, label: t('common:patients') },
-    { path: '/appointments', icon: <Calendar size={20} />, label: t('common:appointments') },
-    { path: '/treatment-cases', icon: <Briefcase size={20} />, label: t('common:treatmentCases') },
-    { path: '/tasks', icon: <CheckSquare size={20} />, label: t('common:tasks') },
-    { path: '/payments', icon: <CreditCard size={20} />, label: t('common:payments') },
-    { path: '/payment-plans', icon: <CreditCard size={20} />, label: 'Taksit Planları' },
-    { path: '/insurance-provisions', icon: <ShieldCheck size={20} />, label: t('common:insurance') },
-    { path: '/messages', icon: <MessageSquare size={20} />, label: t('common:messages', { defaultValue: 'Messages' }) },
   ];
 
-  if (user?.role === 'admin' || user?.role === 'receptionist') {
-    navItems.splice(3, 0, { path: '/appointment-requests', icon: <CalendarPlus size={20} />, label: t('common:appointmentRequests') });
+  // Organization Dashboard — yalnızca OWNER / ORG_ADMIN (ve legacy admin + canAccessAllClinics=true)
+  if (canViewOrganizationDashboard(user)) {
+    navItems.push({ path: '/organization-dashboard', icon: <Building2 size={20} />, label: 'Organizasyon Paneli' });
   }
 
-  if (user?.role === 'admin' || user?.role === 'receptionist') {
+  // Hastalar
+  if (canViewPatients(user)) {
+    navItems.push({ path: '/patients', icon: <Users size={20} />, label: t('common:patients') });
+  }
+
+  // Randevular
+  if (canViewAppointments(user)) {
+    navItems.push({ path: '/appointments', icon: <Calendar size={20} />, label: t('common:appointments') });
+  }
+
+  // Randevu talepleri — resepsiyon ve üzeri yönetim
+  const canSeeAppointmentRequests =
+    canViewAppointments(user) &&
+    !['DENTIST', 'BILLING'].includes(
+      (() => {
+        if (!user) return 'ASSISTANT';
+        const r = user.role.toLowerCase();
+        if (r === 'admin') return user.canAccessAllClinics ? 'OWNER' : 'CLINIC_MANAGER';
+        if (r === 'doctor' || r === 'dentist') return 'DENTIST';
+        if (r === 'billing') return 'BILLING';
+        return r.toUpperCase();
+      })()
+    );
+  if (canSeeAppointmentRequests) {
+    navItems.push({ path: '/appointment-requests', icon: <CalendarPlus size={20} />, label: t('common:appointmentRequests') });
+  }
+
+  // Tedavi planları — DENTIST ve üzeri yönetim görür; RECEPTIONIST okuma modunda görebilir
+  if (canViewPatients(user)) {
+    navItems.push({ path: '/treatment-cases', icon: <Briefcase size={20} />, label: t('common:treatmentCases') });
+  }
+
+  // Görevler
+  if (canViewPatients(user)) {
+    navItems.push({ path: '/tasks', icon: <CheckSquare size={20} />, label: t('common:tasks') });
+  }
+
+  // Ödemeler — billing, yönetim ve resepsiyon
+  if (canViewPayments(user)) {
+    navItems.push({ path: '/payments', icon: <CreditCard size={20} />, label: t('common:payments') });
+    navItems.push({ path: '/payment-plans', icon: <CreditCard size={20} />, label: 'Taksit Planları' });
+    navItems.push({ path: '/insurance-provisions', icon: <ShieldCheck size={20} />, label: t('common:insurance') });
+  }
+
+  // Mesajlar — resepsiyon ve üzeri yönetim; DENTIST okuma
+  if (canViewPatients(user)) {
+    navItems.push({ path: '/messages', icon: <MessageSquare size={20} />, label: t('common:messages', { defaultValue: 'Messages' }) });
+  }
+
+  // Şablonlar — yönetim ve resepsiyon
+  const canSeeTemplates = user?.role === 'admin' || user?.role === 'receptionist' ||
+    (user?.role === 'admin' && (user?.canAccessAllClinics ?? false));
+  if (canSeeTemplates || canViewOrganizationDashboard(user)) {
     navItems.push({ path: '/templates', icon: <Mail size={20} />, label: t('common:templates', { defaultValue: 'Templates' }) });
   }
 
-  if (user?.role === 'admin' || user?.role === 'billing') {
+  // Raporlar — yönetim ve billing
+  if (canViewReports(user)) {
     navItems.push({ path: '/reports', icon: <BarChart2 size={20} />, label: 'Raporlar' });
     navItems.push({ path: '/practitioner-earnings', icon: <TrendingUp size={20} />, label: 'Hekim Kazançları' });
   }
 
-  if (user?.role === 'doctor') {
+  // Hekim kazançları (kendi verisi) — DENTIST'e özel
+  if (user?.role === 'doctor' || user?.role === 'dentist') {
     navItems.push({ path: '/my-earnings', icon: <Award size={20} />, label: 'Kazançlarım' });
   }
 
-  if (user?.role === 'admin') {
+  // Stok takibi — yönetim rolleri
+  if (canManageInventory(user)) {
     navItems.push({ path: '/inventory', icon: <Package size={20} />, label: 'Stok Takibi' });
+  }
+
+  // Kullanıcı yönetimi — yönetim rolleri
+  if (canViewUsers(user)) {
+    navItems.push({ path: '/users', icon: <Users size={20} />, label: t('common:users', { defaultValue: 'Kullanıcılar' }) });
   }
 
   return (
