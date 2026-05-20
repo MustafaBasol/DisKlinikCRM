@@ -42,7 +42,10 @@ interface User {
     canViewReports: boolean;
     canManagePayments: boolean;
     canManageInventory: boolean;
+    canManageBranches: boolean;
+    canAssignUserClinics: boolean;
   };
+  defaultClinicId?: string | null;
 }
 
 interface AuthContextType {

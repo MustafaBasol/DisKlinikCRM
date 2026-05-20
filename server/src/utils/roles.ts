@@ -203,3 +203,23 @@ export function canAccessReports(user: UserForRole): boolean {
     role === 'BILLING'
   );
 }
+
+/**
+ * Şube yönetimi: Yeni şube oluşturma, şube düzenleme, şube durumu değiştirme.
+ * Yalnızca OWNER ve ORG_ADMIN yapabilir.
+ * CLINIC_MANAGER yalnızca kendi atandığı şubeleri görüntüleyebilir.
+ */
+export function canManageBranches(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+/**
+ * Kullanıcı-klinik atama: Kullanıcıları şubelere atama / rol güncelleme.
+ * OWNER ve ORG_ADMIN: tüm şubelere atama yapabilir.
+ * CLINIC_MANAGER: yalnızca kendi atandığı şubelere, OWNER/ORG_ADMIN rolü hariç atama yapabilir.
+ */
+export function canAssignUserClinics(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}

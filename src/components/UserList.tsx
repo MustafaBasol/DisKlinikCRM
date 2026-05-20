@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, Edit2, Loader2, Plus, UserCog, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Edit2, Loader2, Plus, UserCog, XCircle, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { userService } from '../services/api';
+import UserClinicAssignmentModal from './UserClinicAssignmentModal';
+import { useAuth } from '../context/AuthContext';
+import { canAssignUserClinics } from '../utils/permissions';
 
 const roles = ['admin', 'doctor', 'receptionist', 'billing'];
 
 const UserList: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [assignTarget, setAssignTarget] = useState<{ id: string; name: string; email: string } | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -89,9 +94,20 @@ const UserList: React.FC = () => {
                     </span>
                   </td>
                   <td className="p-4 text-right">
-                    <button onClick={() => openModal(user)} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('common:edit')}>
-                      <Edit2 size={16} />
-                    </button>
+                    <div className="flex justify-end gap-1">
+                      {canAssignUserClinics(currentUser) && (
+                        <button
+                          onClick={() => setAssignTarget({ id: user.id, name: `${user.firstName} ${user.lastName}`, email: user.email })}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Klinik Atamaları"
+                        >
+                          <Building2 size={16} />
+                        </button>
+                      )}
+                      <button onClick={() => openModal(user)} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('common:edit')}>
+                        <Edit2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -113,6 +129,15 @@ const UserList: React.FC = () => {
             setIsModalOpen(false);
             fetchUsers();
           }}
+        />
+      )}
+      {assignTarget && (
+        <UserClinicAssignmentModal
+          userId={assignTarget.id}
+          userName={assignTarget.name}
+          userEmail={assignTarget.email}
+          onClose={() => setAssignTarget(null)}
+          onSaved={() => { setAssignTarget(null); fetchUsers(); }}
         />
       )}
     </div>

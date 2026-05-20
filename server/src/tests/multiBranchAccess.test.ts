@@ -779,6 +779,181 @@ await test('1 klinikli kullanici — kendi kliniğine erisim', async () => {
   assert.deepEqual(scope, { organizationId: 'org-1', clinicId: 'clinic-A' });
 });
 
+// ─── Şube yönetimi yetki testleri ────────────────────────────────────────────
+
+function canManageBranches(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN';
+}
+
+function canAssignUserClinics(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER';
+}
+
+console.log('\nŞube yönetimi yetkileri (canManageBranches)');
+
+await test('OWNER şube oluşturabilir', () => {
+  assert.equal(canManageBranches({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+await test('ORG_ADMIN şube oluşturabilir', () => {
+  assert.equal(canManageBranches({ role: 'org_admin', canAccessAllClinics: false }), true);
+});
+
+await test('legacy admin + canAll=true → OWNER → şube oluşturabilir', () => {
+  assert.equal(canManageBranches({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('CLINIC_MANAGER şube oluşturamaz', () => {
+  assert.equal(canManageBranches({ role: 'admin', canAccessAllClinics: false }), false);
+});
+
+await test('DENTIST şube oluşturamaz', () => {
+  assert.equal(canManageBranches({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('RECEPTIONIST şube oluşturamaz', () => {
+  assert.equal(canManageBranches({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('BILLING şube oluşturamaz', () => {
+  assert.equal(canManageBranches({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+console.log('\nKullanıcı-klinik atama yetkileri (canAssignUserClinics)');
+
+await test('OWNER kullanıcı-klinik atayabilir', () => {
+  assert.equal(canAssignUserClinics({ role: 'owner', canAccessAllClinics: true }), true);
+});
+
+await test('ORG_ADMIN kullanıcı-klinik atayabilir', () => {
+  assert.equal(canAssignUserClinics({ role: 'org_admin', canAccessAllClinics: false }), true);
+});
+
+await test('CLINIC_MANAGER kullanıcı-klinik atayabilir (kısıtlı kapsamda)', () => {
+  assert.equal(canAssignUserClinics({ role: 'admin', canAccessAllClinics: false }), true);
+});
+
+await test('DENTIST kullanıcı-klinik atayamaz', () => {
+  assert.equal(canAssignUserClinics({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('RECEPTIONIST kullanıcı-klinik atayamaz', () => {
+  assert.equal(canAssignUserClinics({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('BILLING kullanıcı-klinik atayamaz', () => {
+  assert.equal(canAssignUserClinics({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+console.log('\nŞube yönetimi güvenlik senaryoları');
+
+// CLINIC_MANAGER org-level rol atama kısıtlaması simülasyonu
+function clinicManagerCanAssignRole(role: string): boolean {
+  const orgLevelRoles = ['OWNER', 'ORG_ADMIN'];
+  return !orgLevelRoles.includes(role.toUpperCase());
+}
+
+await test('CLINIC_MANAGER OWNER rolü atayamaz', () => {
+  assert.equal(clinicManagerCanAssignRole('OWNER'), false);
+});
+
+await test('CLINIC_MANAGER ORG_ADMIN rolü atayamaz', () => {
+  assert.equal(clinicManagerCanAssignRole('ORG_ADMIN'), false);
+});
+
+await test('CLINIC_MANAGER DENTIST rolü atayabilir', () => {
+  assert.equal(clinicManagerCanAssignRole('DENTIST'), true);
+});
+
+await test('CLINIC_MANAGER RECEPTIONIST rolü atayabilir', () => {
+  assert.equal(clinicManagerCanAssignRole('RECEPTIONIST'), true);
+});
+
+await test('CLINIC_MANAGER BILLING rolü atayabilir', () => {
+  assert.equal(clinicManagerCanAssignRole('BILLING'), true);
+});
+
+// defaultClinicId doğrulama simülasyonu
+function validateDefaultClinicId(
+  defaultClinicId: string | null | undefined,
+  assignedClinicIds: string[]
+): boolean {
+  if (!defaultClinicId) return true; // null/undefined geçerli
+  if (assignedClinicIds.length === 0) return true; // Atama yoksa kontrol yapma
+  return assignedClinicIds.includes(defaultClinicId);
+}
+
+await test('defaultClinicId atanmış kliniklerden biri — geçerli', () => {
+  assert.equal(validateDefaultClinicId('clinic-A', ['clinic-A', 'clinic-B']), true);
+});
+
+await test('defaultClinicId atanmış kliniklerden değil — geçersiz', () => {
+  assert.equal(validateDefaultClinicId('clinic-C', ['clinic-A', 'clinic-B']), false);
+});
+
+await test('defaultClinicId null — geçerli (temizleme)', () => {
+  assert.equal(validateDefaultClinicId(null, ['clinic-A']), true);
+});
+
+await test('defaultClinicId boş atama listesiyle — geçerli', () => {
+  assert.equal(validateDefaultClinicId('clinic-A', []), true);
+});
+
+// Slug validasyonu simülasyonu
+function isValidSlug(slug: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug);
+}
+
+console.log('\nSlug doğrulaması');
+
+await test('Geçerli slug: "merkez-klinik"', () => {
+  assert.equal(isValidSlug('merkez-klinik'), true);
+});
+
+await test('Geçerli slug: "dis-klinik-2"', () => {
+  assert.equal(isValidSlug('dis-klinik-2'), true);
+});
+
+await test('Geçersiz slug: büyük harf içeriyor', () => {
+  assert.equal(isValidSlug('Merkez-Klinik'), false);
+});
+
+await test('Geçersiz slug: tire ile başlıyor', () => {
+  assert.equal(isValidSlug('-klinik'), false);
+});
+
+await test('Geçersiz slug: tire ile bitiyor', () => {
+  assert.equal(isValidSlug('klinik-'), false);
+});
+
+await test('Geçersiz slug: özel karakter içeriyor', () => {
+  assert.equal(isValidSlug('klinik@merkez'), false);
+});
+
+// Şube görüntüleme: CLINIC_MANAGER yalnızca atandığı şubeleri görür
+function clinicManagerCanViewBranch(
+  allowedClinicIds: string[],
+  targetClinicId: string
+): boolean {
+  return allowedClinicIds.includes(targetClinicId);
+}
+
+console.log('\nŞube görüntüleme kısıtlamaları (CLINIC_MANAGER)');
+
+await test('CLINIC_MANAGER atandığı şubeyi görebilir', () => {
+  assert.equal(clinicManagerCanViewBranch(['clinic-A', 'clinic-B'], 'clinic-A'), true);
+});
+
+await test('CLINIC_MANAGER atanmadığı şubeyi göremez', () => {
+  assert.equal(clinicManagerCanViewBranch(['clinic-A'], 'clinic-B'), false);
+});
+
+await test('CLINIC_MANAGER — atama listesi boşsa hiçbir şube göremez', () => {
+  assert.equal(clinicManagerCanViewBranch([], 'clinic-A'), false);
+});
+
 // ─── Sonuç ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);

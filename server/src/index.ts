@@ -30,6 +30,7 @@ import platformAdminRoutes from './routes/platformAdmin.js';
 import clinicRegistrationRoutes from './routes/clinicRegistration.js';
 import gdprExportRoutes from './routes/gdprExport.js';
 import organizationDashboardRoutes from './routes/organizationDashboard.js';
+import organizationBranchesRoutes from './routes/organizationBranches.js';
 import { startReminderJobs } from './jobs/reminders.js';
 
 dotenv.config();
@@ -78,6 +79,7 @@ app.use('/api', inventoryRoutes);
 app.use('/api', treatmentPlanProceduresRoutes);
 app.use('/api', gdprExportRoutes);
 app.use('/api', organizationDashboardRoutes);
+app.use('/api', organizationBranchesRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

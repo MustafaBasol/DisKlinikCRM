@@ -36,6 +36,7 @@ import NotificationBell from '../components/NotificationBell';
 import { useDarkMode } from '../utils/darkMode';
 import {
   canViewOrganizationDashboard,
+  canViewBranches,
   canViewPatients,
   canViewAppointments,
   canViewPayments,
@@ -80,6 +81,10 @@ const MainLayoutInner: React.FC = () => {
   // Organization Dashboard — yalnızca OWNER / ORG_ADMIN (ve legacy admin + canAccessAllClinics=true)
   if (canViewOrganizationDashboard(user)) {
     navItems.push({ path: '/organization-dashboard', icon: <Building2 size={20} />, label: 'Organizasyon Paneli' });
+  }
+
+  if (canViewBranches(user)) {
+    navItems.push({ path: '/branches', icon: <Building2 size={20} />, label: 'Şubeler' });
   }
 
   // Hastalar

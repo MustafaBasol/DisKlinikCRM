@@ -12,6 +12,8 @@ import {
   canAccessReports,
   canWriteFinancialData,
   canManageInventory,
+  canManageBranches,
+  canAssignUserClinics,
 } from '../utils/roles.js';
 
 const router = express.Router();
@@ -144,6 +146,7 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
         currency: user.clinic.currency,
         timezone: user.clinic.timezone,
       },
+      defaultClinicId: user.defaultClinicId ?? null,
       // Backend tarafından hesaplanmış izin bayrakları (frontend UX için)
       permissions: {
         canViewOrganizationDashboard: canAccessOrganizationDashboard(roleObj),
@@ -152,6 +155,8 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
         canViewReports: canAccessReports(roleObj),
         canManagePayments: canWriteFinancialData(roleObj),
         canManageInventory: canManageInventory(roleObj),
+        canManageBranches: canManageBranches(roleObj),
+        canAssignUserClinics: canAssignUserClinics(roleObj),
       },
     });
   } catch {

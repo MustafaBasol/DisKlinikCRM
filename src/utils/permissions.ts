@@ -18,6 +18,8 @@ type ServerPermissions = {
   canViewReports?: boolean;
   canManagePayments?: boolean;
   canManageInventory?: boolean;
+  canManageBranches?: boolean;
+  canAssignUserClinics?: boolean;
 };
 
 type UserForPermission = {
@@ -196,6 +198,43 @@ export function canViewInventory(user: UserForPermission | null | undefined): bo
 export function canManageInventory(user: UserForPermission | null | undefined): boolean {
   if (user?.permissions?.canManageInventory !== undefined) {
     return user.permissions.canManageInventory;
+  }
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Şube yönetimi (oluştur / düzenle / durum değiştir):
+ * Yalnızca OWNER ve ORG_ADMIN.
+ */
+export function canManageBranches(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canManageBranches !== undefined) {
+    return user.permissions.canManageBranches;
+  }
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+/**
+ * Şube görüntüleme (listeleme / detay):
+ * OWNER, ORG_ADMIN ve CLINIC_MANAGER (yalnızca atandıkları şubeler).
+ */
+export function canViewBranches(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canManageBranches !== undefined) {
+    return user.permissions.canManageBranches;
+  }
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Kullanıcı-klinik atama:
+ * OWNER ve ORG_ADMIN: tüm şubelere.
+ * CLINIC_MANAGER: kendi yönettiği şubelere, org-level roller hariç.
+ */
+export function canAssignUserClinics(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canAssignUserClinics !== undefined) {
+    return user.permissions.canAssignUserClinics;
   }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';

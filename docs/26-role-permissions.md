@@ -1,7 +1,7 @@
 # Rol ve Yetki Matrisi
 
 **Hazırlanma Tarihi:** 2026-05-20  
-**Son Güncelleme:** 2026-05-20 (Refactor: Kanonik Rol Sistemi + `/api/me` İzin Bayrakları + Billing Yönlendirmesi)  
+**Son Güncelleme:** 2026-05-20 (Sprint 6: Şube Yönetimi + Kullanıcı-Klinik Atama)  
 **Durum:** Üretim kodu ile senkronize — `server/src/utils/roles.ts` kanonik rol kaynağıdır.
 
 ---
@@ -319,6 +319,39 @@ bilinmeyen                         → ASSISTANT (en kısıtlayıcı)
 
 ---
 
+### 🌿 Şube Yönetimi (`/api/organization/clinics`)
+
+| Endpoint | OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING |
+|----------|-------|-----------|----------------|---------|--------------|--------|
+| `GET /organization/clinics` | ✅ | ✅ | 👁 (atandıkları) | ❌ | ❌ | ❌ |
+| `POST /organization/clinics` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `GET /organization/clinics/:id` | ✅ | ✅ | 👁 (atandıkları) | ❌ | ❌ | ❌ |
+| `PUT /organization/clinics/:id` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `PATCH /organization/clinics/:id/status` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+> **Güvenlik Notları:**
+> - Tüm sorgular `req.user.organizationId` ile kapsama alınır; çapraz-organizasyon koruması aktiftir.
+> - `CLINIC_MANAGER` yalnızca kendine atanmış şubeleri görebilir (`allowedClinicIds` kapsamı).
+> - Yeni şube slug'ı organizasyon içinde benzersiz olmalıdır (`@@unique([organizationId, slug])`).
+> - Slug formatı: `^[a-z0-9][a-z0-9-]*[a-z0-9]$` — en az 2 karakter, yalnızca küçük harf/sayı/tire.
+
+---
+
+### 👥 Kullanıcı-Klinik Atama (`/api/organization/users/:userId/clinics`)
+
+| Endpoint | OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING |
+|----------|-------|-----------|----------------|---------|--------------|--------|
+| `GET /organization/users/:userId/clinics` | ✅ | ✅ | 👁 (kendi şubeleri) | ❌ | ❌ | ❌ |
+| `PUT /organization/users/:userId/clinics` | ✅ | ✅ | ✏️ (kısıtlı) | ❌ | ❌ | ❌ |
+
+> **CLINIC_MANAGER Kısıtlamaları:**
+> - Yalnızca kendi yönettiği şubelere kullanıcı atayabilir.
+> - `OWNER` veya `ORG_ADMIN` rolü atayamaz (yalnızca `CLINIC_MANAGER`, `DENTIST`, `RECEPTIONIST`, `BILLING`, `ASSISTANT`).
+> - `defaultClinicId` yalnızca atanmış şubelerden biri olabilir.
+> - Hedef kullanıcı aynı organizasyona ait olmalıdır.
+
+---
+
 ### 🔐 GDPR / Veri Dışa Aktarma (`/api/gdpr`)
 
 | Endpoint | admin | OWNER / ORG_ADMIN | doctor | receptionist | billing |
@@ -415,6 +448,19 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 | 2026-05-21 | `src/pages/Appointments.tsx` | `canEdit = user.role === 'admin' \|\| user.role === 'receptionist'` → `canCreateAppointment(user)`. |
 | 2026-05-21 | `src/pages/Messages.tsx` | `canSend = user.role === 'admin' \|\| user.role === 'receptionist'` → `canCreateAppointment(user)`. |
 | 2026-05-21 | `server/src/tests/multiBranchAccess.test.ts` | 9 yeni test eklendi (toplam **99**): bilinmeyen rol → ASSISTANT + tüm izinler false; resepsiyon klinik izin sınırları (malzeme silme yasak, şablon yazma yasak). |
+| 2026-05-20 | **`server/src/routes/organizationBranches.ts`** (YENİ) | **Sprint 6** — Şube Yönetimi + Kullanıcı-Klinik Atama API'si. 7 endpoint: `GET/POST /organization/clinics`, `GET/PUT/PATCH /organization/clinics/:id`, `GET/PUT /organization/users/:userId/clinics`. Zod doğrulama, çapraz-org koruması, CLINIC_MANAGER kısıtlamaları, slug benzersizliği, Prisma transaction. |
+| 2026-05-20 | **`server/src/utils/roles.ts`** (GÜNCELLENDİ) | `canManageBranches(user)` ve `canAssignUserClinics(user)` yardımcıları eklendi. |
+| 2026-05-20 | `server/src/routes/auth.ts` | `GET /api/me` yanıtına `defaultClinicId`, `permissions.canManageBranches`, `permissions.canAssignUserClinics` eklendi. |
+| 2026-05-20 | `server/src/index.ts` | `organizationBranchesRoutes` `/api` prefix'iyle kaydedildi. |
+| 2026-05-20 | `server/src/tests/multiBranchAccess.test.ts` | 30 yeni test eklendi (toplam **129**): `canManageBranches`, `canAssignUserClinics`, CLINIC_MANAGER rol atama kısıtlamaları, slug doğrulaması, şube görüntüleme kısıtlamaları. |
+| 2026-05-20 | **`src/utils/permissions.ts`** (GÜNCELLENDİ) | `canManageBranches()`, `canViewBranches()`, `canAssignUserClinics()` eklendi. `ServerPermissions` tipine `canManageBranches?` ve `canAssignUserClinics?` alanları eklendi. |
+| 2026-05-20 | `src/context/AuthContext.tsx` | `User` tipine `defaultClinicId?: string \| null` ve `permissions.canManageBranches`, `permissions.canAssignUserClinics` eklendi. |
+| 2026-05-20 | `src/services/api.ts` | `organizationBranchService` (`getAll`, `getById`, `create`, `update`, `updateStatus`) ve `userClinicAssignmentService` (`getUserClinics`, `updateUserClinics`) eklendi. |
+| 2026-05-20 | **`src/pages/Branches.tsx`** (YENİ) | Şube yönetim sayfası — kart grid görünümü, şube oluşturma/düzenleme modalı, durum değiştirme modalı, `canManageBranches`/`canViewBranches` erişim koruması, Türkçe addan slug otomatik üretimi. |
+| 2026-05-20 | **`src/components/UserClinicAssignmentModal.tsx`** (YENİ) | Kullanıcı-klinik atama modalı — klinik checkbox listesi, şubeye özel rol seçici (OWNER/ORG_ADMIN hariç), varsayılan klinik seçimi, satır içi hata bildirimi. |
+| 2026-05-20 | `src/components/UserList.tsx` | Kullanıcı satırına `Building2` ikonlu "Klinik Atamaları" butonu eklendi; `canAssignUserClinics(currentUser)` ile korumalı; `UserClinicAssignmentModal` açar. |
+| 2026-05-20 | `src/layouts/MainLayout.tsx` | `canViewBranches` import edildi; `canViewBranches(user)` kontrolüyle "Şubeler" → `/branches` menü öğesi eklendi. |
+| 2026-05-20 | `src/App.tsx` | `Branches` sayfası import edildi; `<Route path="branches" element={<Branches />} />` eklendi. |
 
 ---
 
@@ -484,13 +530,16 @@ if (canViewOrganizationDashboard(user)) { ... }
   "role": "admin",
   "normalizedRole": "CLINIC_MANAGER",
   "canAccessAllClinics": false,
+  "defaultClinicId": "clinic-uuid-or-null",
   "permissions": {
     "canViewOrganizationDashboard": false,
     "canDeletePatient": true,
     "canManageUsers": true,
     "canViewReports": true,
     "canManagePayments": false,
-    "canManageInventory": true
+    "canManageInventory": true,
+    "canManageBranches": false,
+    "canAssignUserClinics": true
   }
 }
 ```
@@ -500,8 +549,7 @@ if (canViewOrganizationDashboard(user)) { ... }
 | Sayfa / Menü | OWNER | ORG_ADMIN | CLINIC_MANAGER (legacy admin canAll=false) | DENTIST | RECEPTIONIST | BILLING |
 |--------------|-------|-----------|---------------------------------------------|---------|--------------|---------|
 | Dashboard | ✅ | ✅ | ✅ | ✅ | ✅ | ↪ `/reports` |
-| **Org. Paneli** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Hastalar | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Org. Paneli** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ || **Şubeler** | ✅ | ✅ | 👁 | ❌ | ❌ | ❌ || Hastalar | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Randevular | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Randevu Talepleri | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
 | Tedavi Planları | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |

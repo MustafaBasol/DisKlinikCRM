@@ -252,4 +252,21 @@ export const practitionerPayoutService = {
   remove: (id: string) => api.delete(`/practitioner-payouts/${id}`),
 };
 
+export const organizationBranchService = {
+  getAll: () => api.get('/organization/clinics'),
+  getById: (id: string) => api.get(`/organization/clinics/${id}`),
+  create: (data: any) => api.post('/organization/clinics', data),
+  update: (id: string, data: any) => api.put(`/organization/clinics/${id}`, data),
+  updateStatus: (id: string, status: string) =>
+    api.patch(`/organization/clinics/${id}/status`, { status }),
+};
+
+export const userClinicAssignmentService = {
+  getUserClinics: (userId: string) => api.get(`/organization/users/${userId}/clinics`),
+  updateUserClinics: (
+    userId: string,
+    data: { assignments: { clinicId: string; role: string }[]; defaultClinicId?: string | null }
+  ) => api.put(`/organization/users/${userId}/clinics`, data),
+};
+
 export default api;
