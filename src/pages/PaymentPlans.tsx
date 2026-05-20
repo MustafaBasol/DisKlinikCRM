@@ -6,6 +6,7 @@ import {
 import { paymentPlanService } from '../services/api';
 import PaymentPlanForm from '../components/PaymentPlanForm';
 import { useAuth } from '../context/AuthContext';
+import { canManagePayments } from '../utils/permissions';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: 'Bekliyor', color: 'text-amber-600 bg-amber-50' },
@@ -41,7 +42,7 @@ function isOverdue(dueDate: string, status: string) {
 
 const PaymentPlans: React.FC = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'billing';
+  const isAdmin = canManagePayments(user);
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

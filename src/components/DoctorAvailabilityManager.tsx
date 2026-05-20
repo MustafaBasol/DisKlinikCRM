@@ -3,6 +3,7 @@ import { AlertCircle, CalendarClock, CalendarOff, Loader2, Plus, Save, Trash2 } 
 import { useTranslation } from 'react-i18next';
 import { doctorAvailabilityService, doctorOffDayService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { canManageUsers } from '../utils/permissions';
 
 const weekdays = [1, 2, 3, 4, 5, 6, 0];
 
@@ -32,7 +33,7 @@ const DoctorAvailabilityManager: React.FC = () => {
   const [offDaySaving, setOffDaySaving] = useState(false);
   const [offDayError, setOffDayError] = useState('');
 
-  const canSelectDoctor = user?.role === 'admin';
+  const canSelectDoctor = canManageUsers(user);
   const selectedDoctor = useMemo(() => doctors.find(d => d.id === selectedDoctorId), [doctors, selectedDoctorId]);
 
   useEffect(() => {

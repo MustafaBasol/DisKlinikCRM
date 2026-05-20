@@ -116,11 +116,13 @@ bilinmeyen                         → ASSISTANT (en kısıtlayıcı)
 |----------|-------|-------------------|--------|--------------|---------|
 | `GET /treatment-cases` | ✅ | ✅ | 👁 | 👁 | 👁 |
 | `GET /treatment-cases/:id` | ✅ | ✅ | 👁 | 👁 | 👁 |
-| `POST /treatment-cases` | ✅ | ✅ | ✏️ | ✏️ | ❌ |
-| `PUT /treatment-cases/:id` | ✅ | ✅ | ✏️ | ✏️ | ❌ |
+| `POST /treatment-cases` | ✅ | ✅ | ✏️ | ✏️ ¹ | ❌ |
+| `PUT /treatment-cases/:id` | ✅ | ✅ | ✏️ | ✏️ ¹ | ❌ |
 | `GET /:id/materials` | ✅ | ✅ | 👁 | 👁 | 👁 |
-| `POST /:id/materials` | ✅ | ✅ | ✏️ | ✏️ | ❌ |
-| `DELETE /:id/materials/:txId` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `POST /:id/materials` | ✅ | ✅ | ✏️ | ✏️ ¹ | ❌ |
+| `DELETE /:id/materials/:txId` | ✅ | ✅ | ✅ | ❌ | ❌ |
+
+> ¹ **MVP intentional**: Resepsiyon tedavi vakası açabilir/güncelleyebilir. Harici klinik onboardingi öncesinde gözden geçirilmeli; `DENTIST` ile kısıtlanması düşünülmeli (`TODO` işaretli).
 
 ---
 
@@ -201,8 +203,8 @@ bilinmeyen                         → ASSISTANT (en kısıtlayıcı)
 | Endpoint | admin | OWNER / ORG_ADMIN | doctor | receptionist | billing |
 |----------|-------|-------------------|--------|--------------|---------|
 | `GET /message-templates` | ✅ | ✅ | 👁 | 👁 | ❌ |
-| `POST /message-templates` | ✅ | ✅ | ❌ | ✏️ | ❌ |
-| `PUT /message-templates/:id` | ✅ | ✅ | ❌ | ✏️ | ❌ |
+| `POST /message-templates` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `PUT /message-templates/:id` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `POST /message-templates/seed` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `POST /messages/prepare` | ✅ | ✅ | ✏️ | ✏️ | ❌ |
 | `GET /messages` | ✅ | ✅ | 👁 | 👁 | ❌ |
@@ -342,14 +344,12 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 
 ## Rol Özet Kartları
 
-### `admin` (Klinik Yöneticisi / OWNER eşdeğeri)
-- Tüm klinik verilerine tam erişim
-- Kullanıcı yönetimi (oluşturma, düzenleme)
-- Envanter yapılandırması
-- Komisyon kuralı tanımlama
-- GDPR veri dışa aktarma
-- Raporlar ve finansal veriler
-- Multi-branch: `canAccessAllClinics = true`
+### `admin` (Legacy Rol — Kanonik Karşılığı `canAccessAllClinics` Değerine Göre Değişir)
+- **Legacy rol** — Veritabanında `admin` olarak saklanır, kanonik sisteme şu şekilde eşlenir:
+  - `admin + canAccessAllClinics=true` → `OWNER`: Tüm şubelere tam erişim
+  - `admin + canAccessAllClinics=false` → `CLINIC_MANAGER`: Yalnızca atandığı şubeler
+- Yeni kullanıcılar için `owner`, `clinic_manager` veya `org_admin` gibi açık kanonik roller kullanılmalıdır
+- `admin` rolü geriye dönük uyumluluk için desteklenmeye devam eder
 
 ### `OWNER` / `ORG_ADMIN`
 - `admin` rolüyle aynı klinik izinleri + Organization Dashboard
@@ -368,10 +368,10 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 ### `receptionist` (Resepsiyon)
 - Hasta kaydı açar, günceller
 - Randevu oluşturur ve günceller
-- Tedavi planı açar
+- Tedavi planı açar ve günceller (**MVP: klinik onboarding öncesi gözden geçirilmeli**)
 - Ödeme kaydeder (düzenleyemez, iptal edemez)
-- Mesaj şablonu düzenler, mesaj gönderir
-- Stok hareketi girebilir (yeni ürün ekleyemez)
+- Mesaj şablonu **okur** ve mesaj gönderir; şablon **oluşturamaz/düzenleyemez**
+- Stok hareketi girebilir (yeni ürün ekleyemez); malzeme **silemez** (stok geri yükleme yasak)
 - Rapor erişimi yoktur
 
 ### `billing` (Ön Muhasebe)
@@ -405,6 +405,16 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 | 2026-05-20 | `src/utils/permissions.ts` | `normalizeRole` export edildi. 6 izin fonksiyonu (`canViewOrganizationDashboard`, `canDeletePatient`, `canManagePayments`, `canViewReports`, `canManageUsers`, `canManageInventory`) önce `user.permissions.*` server bayraklarını kontrol eder; eksikse yerel hesaplamaya düşer. |
 | 2026-05-20 | `src/pages/Dashboard.tsx` | BILLING rolü `<Navigate to="/reports" replace />` ile yönlendirilir. DENTIST kontrolü kanonik rol kullanacak şekilde güncellendi. |
 | 2026-05-20 | `server/src/tests/multiBranchAccess.test.ts` | 15 yeni test eklendi (toplam **90**): billing redirect simülasyonu, legacy admin OWNER/CLINIC_MANAGER davranış kapsamı, `authorize(['admin'])` org-düzeyi tehlike senaryosu, `/api/me` permission flags simülasyonu. |
+| 2026-05-21 | `server/src/routes/treatmentCases.ts` | `DELETE /:id/materials/:txId`: `RECEPTIONIST` kaldırıldı — stok geri yükleme hassas işlemi yalnızca DENTIST/yönetim rolleri. POST/PUT/POST-materials route'larına `TODO(MVP)` yorumları eklendi. |
+| 2026-05-21 | `server/src/routes/messages.ts` | `POST /message-templates`, `PUT /message-templates/:id`: `RECEPTIONIST` kaldırıldı — şablon yazma yönetim sorumluluğu. RECEPTIONIST okuma ve gönderme haklarını korur. |
+| 2026-05-21 | `src/layouts/MainLayout.tsx` | `canSeeTemplates` hesabı `user.role === 'admin'` tekrarlı koşulundan `canManageUsers(user) \| normalizeRole(...)` yardımcısına geçirildi. `canManageUsers`, `normalizeRole` import eklendi. |
+| 2026-05-21 | `src/components/DoctorAvailabilityManager.tsx` | `user?.role === 'admin'` → `canManageUsers(user)`. `canManageUsers` import eklendi. |
+| 2026-05-21 | `src/pages/Settings.tsx` | 3 ham rol kontrolü `canManageUsers(user)` yardımcısına geçirildi. |
+| 2026-05-21 | `src/pages/PaymentPlans.tsx` | `isAdmin = user.role === 'admin' \|\| user.role === 'billing'` → `canManagePayments(user)`. |
+| 2026-05-21 | `src/pages/Inventory.tsx` | `isAdmin = user.role === 'admin'` → `canManageInventory(user)`. |
+| 2026-05-21 | `src/pages/Appointments.tsx` | `canEdit = user.role === 'admin' \|\| user.role === 'receptionist'` → `canCreateAppointment(user)`. |
+| 2026-05-21 | `src/pages/Messages.tsx` | `canSend = user.role === 'admin' \|\| user.role === 'receptionist'` → `canCreateAppointment(user)`. |
+| 2026-05-21 | `server/src/tests/multiBranchAccess.test.ts` | 9 yeni test eklendi (toplam **99**): bilinmeyen rol → ASSISTANT + tüm izinler false; resepsiyon klinik izin sınırları (malzeme silme yasak, şablon yazma yasak). |
 
 ---
 
@@ -421,6 +431,8 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 | **`CLINIC_MANAGER` DB'de yok** | `User.role = 'clinic_manager'` DB'de kullanılmıyor; legacy `admin+canAccessAllClinics=false` → normalize ediliyor | ⚪ **MVP kabul** — `normalizeRole()` geçişi şeffaf yönetiyor |
 | ~~`billing` dashboard erişimi~~ | ~~Billing kullanıcısı `/dashboard`'a girince anlamsız veri görüyordu~~ | ✅ **Düzeltildi** — `Dashboard.tsx` BILLING rolünü `<Navigate to="/reports" replace />` ile yönlendirir |
 | **`doctor` kendi verilerine kısıtlı değil** | Doktorlar tüm hastaları ve randevuları görebiliyor, yalnızca kendi hastalarını değil | 🔜 **MVP kabul** — ince taneli filtreleme ileriki sprintlere bırakıldı |
+| **Resepsiyon tedavi vakası yazma** | Resepsiyon POST/PUT treatment cases + POST materials yapabilir; harici klinik onboarding öncesinde gözden geçirilmeli | ⚠️ **MVP intentional** — ilgili route'larda `TODO(MVP)` yorumu mevcut |
+| **Frontend test altyapısı yok** | Backend için `tsx` tabanlı birim testleri var; frontend bileşenlerini test eden Jest/Vitest kurulumu bulunmuyor | 🔜 **İleriki sprint** — frontend izin mantığı şimdilik manuel QA |
 
 ---
 

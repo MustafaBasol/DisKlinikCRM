@@ -82,6 +82,8 @@ router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
 });
 
 // POST /api/treatment-cases
+// TODO(MVP): RECEPTIONIST can open treatment cases for intake workflow.
+// Review before onboarding external clinics — consider restricting to DENTIST only.
 router.post('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
@@ -120,6 +122,8 @@ router.post('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
 });
 
 // PUT /api/treatment-cases/:id
+// TODO(MVP): RECEPTIONIST can update treatment cases for status/note updates.
+// Review before onboarding external clinics — consider restricting to DENTIST only.
 router.put('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const { role, id: userId } = req.user!;
@@ -216,6 +220,8 @@ router.get('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', 'C
 });
 
 // POST /api/treatment-cases/:id/materials
+// TODO(MVP): RECEPTIONIST can record material usage during visit intake.
+// Review before onboarding external clinics — consider restricting to DENTIST only.
 router.post('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
   const userId = req.user!.id;
@@ -278,7 +284,9 @@ router.post('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', '
 });
 
 // DELETE /api/treatment-cases/:id/materials/:txId
-router.delete('/treatment-cases/:id/materials/:txId', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+// RECEPTIONIST intentionally excluded: deleting a material restores inventory stock —
+// a sensitive operation that should require clinical authority (DENTIST) or management.
+router.delete('/treatment-cases/:id/materials/:txId', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
   const txId = String(req.params.txId);
   const userId = req.user!.id;

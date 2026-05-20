@@ -58,7 +58,9 @@ router.get('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
 });
 
 // POST /api/message-templates
-router.post('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+// Template authoring is a management responsibility; RECEPTIONIST can READ and SEND
+// but should not create or modify reusable templates.
+router.post('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
   const validation = messageTemplateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -80,7 +82,8 @@ router.post('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
 });
 
 // PUT /api/message-templates/:id
-router.put('/message-templates/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+// Same rationale as POST: template management restricted to management roles.
+router.put('/message-templates/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
   const validation = messageTemplateSchema.partial().safeParse(req.body);

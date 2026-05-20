@@ -17,11 +17,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { messageService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { canCreateAppointment } from '../utils/permissions';
 
 const Messages: React.FC = () => {
   const { t } = useTranslation(['messages', 'common']);
   const { user } = useAuth();
-  const canSend = user?.role === 'admin' || user?.role === 'receptionist';
+  const canSend = canCreateAppointment(user); // OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST
   
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

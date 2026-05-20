@@ -3,6 +3,7 @@ import { Package, Plus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, SlidersHo
 import { inventoryService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
+import { canManageInventory } from '../utils/permissions';
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<string, string> = {
@@ -409,7 +410,7 @@ type Tab = 'list' | 'alerts' | 'history';
 export default function Inventory() {
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canManageInventory(user);
 
   const [activeTab, setActiveTab] = useState<Tab>('list');
   const [items, setItems] = useState<InventoryItem[]>([]);

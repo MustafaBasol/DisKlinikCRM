@@ -703,6 +703,66 @@ await test('/api/me — RECEPTIONIST: ödeme ve rapor bayrakları false', () => 
   assert.equal(p.permissions.canDeletePatient, false);
 });
 
+await test('/api/me — bilinmeyen rol → ASSISTANT, tüm izinler false', () => {
+  const p = simulateMePermissions({ role: 'unknown_xyz', canAccessAllClinics: false });
+  assert.equal(p.normalizedRole, 'ASSISTANT');
+  assert.equal(p.permissions.canViewOrganizationDashboard, false);
+  assert.equal(p.permissions.canDeletePatient, false);
+  assert.equal(p.permissions.canManageUsers, false);
+  assert.equal(p.permissions.canViewReports, false);
+  assert.equal(p.permissions.canManagePayments, false);
+  assert.equal(p.permissions.canManageInventory, false);
+});
+
+// ─── Resepsiyon klinik izin sınırları ─────────────────────────────────────────
+
+function canWriteTreatmentCase(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  // Mevcut MVP: RECEPTIONIST tedavi vakası açabilir (TODO ile işaretli)
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER' || r === 'DENTIST' || r === 'RECEPTIONIST';
+}
+
+function canDeleteTreatmentMaterial(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  // Stok geri yükleme işlemi: RECEPTIONIST kasıtlı olarak dışarıda bırakıldı
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER' || r === 'DENTIST';
+}
+
+function canWriteMessageTemplate(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  // Şablon yönetimi: yalnızca yönetim rolleri (RECEPTIONIST okuyabilir, yazamaz)
+  const r = normalizeRole(user.role, user.canAccessAllClinics);
+  return r === 'OWNER' || r === 'ORG_ADMIN' || r === 'CLINIC_MANAGER';
+}
+
+console.log('\nResepsiyon klinik izin sınırları');
+
+await test('receptionist tedavi vakası açabilir (MVP intentional)', () => {
+  assert.equal(canWriteTreatmentCase({ role: 'receptionist', canAccessAllClinics: false }), true);
+});
+
+await test('billing tedavi vakası açamaz', () => {
+  assert.equal(canWriteTreatmentCase({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+await test('receptionist malzeme SİLEMEZ (stok geri yükleme)', () => {
+  assert.equal(canDeleteTreatmentMaterial({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('DENTIST malzeme silebilir', () => {
+  assert.equal(canDeleteTreatmentMaterial({ role: 'doctor', canAccessAllClinics: false }), true);
+});
+
+await test('receptionist mesaj şablonu yazamaz', () => {
+  assert.equal(canWriteMessageTemplate({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('CLINIC_MANAGER mesaj şablonu yazabilir', () => {
+  assert.equal(canWriteMessageTemplate({ role: 'admin', canAccessAllClinics: false }), true);
+});
+
+await test('OWNER mesaj şablonu yazabilir', () => {
+  assert.equal(canWriteMessageTemplate({ role: 'owner', canAccessAllClinics: true }), true);
+});
 
 // ─── Tek klinik geriye dönük uyumluluk ────────────────────────────────────────
 

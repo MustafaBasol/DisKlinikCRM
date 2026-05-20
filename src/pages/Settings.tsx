@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings as SettingsIcon, Globe, Shield, Activity, UserCog, Users, CalendarClock, Link, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { canManageUsers } from '../utils/permissions';
 import ServiceList from '../components/ServiceList';
 import UserList from '../components/UserList';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
@@ -47,7 +48,7 @@ const Settings: React.FC = () => {
               <UserCog size={18} />
               {t('settings:generalPreferences')}
             </button>
-            {(user?.role === 'admin' || user?.role === 'receptionist') && (
+            {(canManageUsers(user) || user?.role === 'receptionist') && (
               <button 
                 onClick={() => setActiveTab('services')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
@@ -58,7 +59,7 @@ const Settings: React.FC = () => {
                 {t('settings:services.title')}
               </button>
             )}
-            {user?.role === 'admin' && (
+            {canManageUsers(user) && (
               <button
                 onClick={() => setActiveTab('users')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
@@ -69,7 +70,7 @@ const Settings: React.FC = () => {
                 {t('settings:users.title')}
               </button>
             )}
-            {(user?.role === 'admin' || user?.role === 'doctor') && (
+            {(canManageUsers(user) || user?.role === 'doctor') && (
               <button
                 onClick={() => setActiveTab('availability')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${

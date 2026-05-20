@@ -20,6 +20,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { appointmentService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { canCreateAppointment } from '../utils/permissions';
 import AppointmentForm from '../components/AppointmentForm';
 import CalendarTimelineView from '../components/CalendarTimelineView';
 import MultiDoctorDayView from '../components/MultiDoctorDayView';
@@ -164,7 +165,7 @@ const Appointments: React.FC = () => {
     }
   };
 
-  const canEdit = user?.role === 'admin' || user?.role === 'receptionist';
+  const canEdit = canCreateAppointment(user); // OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST
   const isDoctor = user?.role === 'doctor';
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth]);
   const appointmentCounts = useMemo(() => {

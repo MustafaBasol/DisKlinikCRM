@@ -41,7 +41,9 @@ import {
   canViewPayments,
   canViewReports,
   canManageInventory,
+  canManageUsers,
   canViewUsers,
+  normalizeRole,
 } from '../utils/permissions';
 
 const MainLayoutInner: React.FC = () => {
@@ -129,9 +131,8 @@ const MainLayoutInner: React.FC = () => {
     navItems.push({ path: '/messages', icon: <MessageSquare size={20} />, label: t('common:messages', { defaultValue: 'Messages' }) });
   }
 
-  // Şablonlar — yönetim ve resepsiyon
-  const canSeeTemplates = user?.role === 'admin' || user?.role === 'receptionist' ||
-    (user?.role === 'admin' && (user?.canAccessAllClinics ?? false));
+  // Şablonlar — yönetim ve resepsiyon (RECEPTIONIST okuyabilir; yazma yetkisi yoktur)
+  const canSeeTemplates = canManageUsers(user) || normalizeRole(user?.role ?? '', user?.canAccessAllClinics) === 'RECEPTIONIST';
   if (canSeeTemplates || canViewOrganizationDashboard(user)) {
     navItems.push({ path: '/templates', icon: <Mail size={20} />, label: t('common:templates', { defaultValue: 'Templates' }) });
   }
