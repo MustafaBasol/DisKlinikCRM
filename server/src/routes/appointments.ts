@@ -98,15 +98,24 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
   const { patientId, practitionerId, appointmentTypeId, startTime, endTime } = validation.data;
 
   try {
-    const [patient, practitioner, type] = await Promise.all([
+    const [patient, practitionerUser, type] = await Promise.all([
       prisma.patient.findFirst({ where: { id: patientId, clinicId, deletedAt: null } }),
-      prisma.user.findFirst({ where: { id: practitionerId, clinicId, role: 'doctor' } }),
+      prisma.user.findFirst({ where: { id: practitionerId } }),
       prisma.appointmentType.findFirst({ where: { id: appointmentTypeId, clinicId, isActive: true } }),
     ]);
 
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
-    if (!practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
+    if (!practitionerUser) return res.status(400).json({ error: 'Invalid practitioner' });
     if (!type) return res.status(400).json({ error: 'Invalid appointment type' });
+
+    // Çok şubeli kontrol: doktor bu klinikle UserClinic veya legacy User.clinicId üzerinden ilişkili olmalı
+    const isAssigned =
+      practitionerUser.clinicId === clinicId ||
+      !!(await prisma.userClinic.findFirst({ where: { userId: practitionerId, clinicId, isActive: true } }));
+    if (!isAssigned) {
+      return res.status(400).json({ error: 'Practitioner is not assigned to this clinic' });
+    }
+    const practitioner = practitionerUser;
 
     const availability = await checkPractitionerAvailability(clinicId, practitionerId, startTime, endTime);
     if (!availability.ok) {

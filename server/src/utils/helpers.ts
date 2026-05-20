@@ -133,7 +133,7 @@ export const checkPractitionerAvailability = async (
   // Build the clinic-local date string (YYYY-MM-DD) for off-day check
   const { date: localDate } = formatClinicDateTime(startTime, timeZone);
 
-  const [slots, offDay] = await Promise.all([
+  const [slots, offDay, clinicHours] = await Promise.all([
     prisma.doctorAvailability.findMany({
       where: { clinicId, practitionerId, weekday: start.weekday, isActive: true },
       orderBy: { startTime: 'asc' },
@@ -141,10 +141,27 @@ export const checkPractitionerAvailability = async (
     prisma.doctorOffDay.findFirst({
       where: { clinicId, practitionerId, date: localDate },
     }),
+    prisma.clinicWorkingHours.findUnique({
+      where: { clinicId_dayOfWeek: { clinicId, dayOfWeek: start.weekday } },
+    }),
   ]);
 
   if (offDay) {
     return { ok: false, slots, timeZone, reason: 'off_day', offDay };
+  }
+
+  // Klinik çalışma saatleri tanımlıysa ve o gün kapalıysa randevu kabul etme
+  if (clinicHours?.isClosed) {
+    return { ok: false, slots, timeZone, reason: 'clinic_closed' };
+  }
+
+  // Klinik çalışma saatleri dışında randevu kontrolü
+  if (clinicHours && !clinicHours.isClosed) {
+    const clinicStart = timeToMinutes(clinicHours.openTime);
+    const clinicEnd = timeToMinutes(clinicHours.closeTime);
+    if (start.minutes < clinicStart || end.minutes > clinicEnd) {
+      return { ok: false, slots, timeZone, reason: 'outside_clinic_hours', clinicHours };
+    }
   }
 
   const ok = slots.some(slot => {

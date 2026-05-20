@@ -239,3 +239,28 @@ export function canAssignUserClinics(user: UserForPermission | null | undefined)
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
+
+/**
+ * Klinik çalışma saatleri yönetimi:
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER.
+ */
+export function canManageClinicSchedule(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Doktor müsaitlik yönetimi:
+ * Yönetim rolleri tüm doktorlar için; DENTIST yalnızca kendi programı.
+ * doctorId sağlanmazsa yönetim rolü kontrolü yapılır.
+ */
+export function canManageDoctorSchedule(
+  user: UserForPermission | null | undefined,
+  userId?: string,
+  doctorId?: string,
+): boolean {
+  const role = getRole(user);
+  if (role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER') return true;
+  if (role === 'DENTIST' && userId && doctorId && userId === doctorId) return true;
+  return false;
+}

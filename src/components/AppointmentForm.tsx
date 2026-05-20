@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle, Briefcase } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { patientService, userService, serviceService, appointmentService, treatmentCaseService } from '../services/api';
+import { patientService, userService, serviceService, appointmentService, treatmentCaseService, scheduleService } from '../services/api';
 
 interface AppointmentFormProps {
   onClose: () => void;
@@ -35,9 +35,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const clinicId = localStorage.getItem('hcrm_clinic_id');
         const [patientsRes, doctorsRes, typesRes] = await Promise.all([
           patientService.getAll(),
-          userService.getDoctors(),
+          clinicId && clinicId !== 'all'
+            ? scheduleService.getClinicDoctors(clinicId)
+            : userService.getDoctors(),
           serviceService.getAll({ onlyActive: true })
         ]);
         setPatients(patientsRes.data);

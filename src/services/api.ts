@@ -137,7 +137,7 @@ export const userService = {
 };
 
 export const doctorAvailabilityService = {
-  getAll: (params?: { practitionerId?: string }) => api.get('/doctor-availabilities', { params }),
+  getAll: (params?: { practitionerId?: string; clinicId?: string }) => api.get('/doctor-availabilities', { params }),
   updateForPractitioner: (practitionerId: string, slots: any[]) => api.put(`/doctor-availabilities/${practitionerId}`, { slots }),
 };
 
@@ -267,6 +267,15 @@ export const userClinicAssignmentService = {
     userId: string,
     data: { assignments: { clinicId: string; role: string }[]; defaultClinicId?: string | null }
   ) => api.put(`/organization/users/${userId}/clinics`, data),
+};
+
+export const scheduleService = {
+  getWorkingHours: (clinicId: string) => api.get(`/clinics/${clinicId}/working-hours`),
+  updateWorkingHours: (clinicId: string, hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string; isClosed: boolean }>) =>
+    api.put(`/clinics/${clinicId}/working-hours`, { hours }),
+  getClinicDoctors: (clinicId: string) => api.get(`/clinics/${clinicId}/doctors`),
+  getAvailability: (params: { clinicId: string; doctorId: string; date: string; duration?: number }) =>
+    api.get('/availability', { params }),
 };
 
 export default api;

@@ -29,6 +29,7 @@ import MyEarnings from './pages/MyEarnings';
 import Inventory from './pages/Inventory';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import Branches from './pages/Branches';
+import ClinicSchedule from './pages/ClinicSchedule';
 
 import { useTranslation } from 'react-i18next';
 
@@ -111,6 +112,7 @@ const App: React.FC = () => {
               <Route path="inventory" element={<Inventory />} />
               <Route path="organization/dashboard" element={<OrganizationDashboard />} />
               <Route path="branches" element={<Branches />} />
+              <Route path="branches/:clinicId/schedule" element={<ClinicSchedule />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

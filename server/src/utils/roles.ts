@@ -223,3 +223,32 @@ export function canAssignUserClinics(user: UserForRole): boolean {
   const role = normalizeRole(user.role, user.canAccessAllClinics);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
+
+/**
+ * Klinik çalışma saatleri yönetimi.
+ * OWNER, ORG_ADMIN: tüm şubeler.
+ * CLINIC_MANAGER: yalnızca atandığı şubeler.
+ */
+export function canManageClinicSchedule(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Doktor müsaitlik yönetimi.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER: herhangi bir doktor için.
+ * DENTIST: yalnızca kendi programı (doctorId ile kontrol edilir).
+ */
+export function canManageDoctorSchedule(user: UserForRole & { id?: string }, doctorId?: string): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  if (role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER') return true;
+  if (role === 'DENTIST' && user.id && doctorId && user.id === doctorId) return true;
+  return false;
+}
+
+/**
+ * Müsait slot görüntüleme: kimlik doğrulaması yapılmış tüm kullanıcılar.
+ */
+export function canViewAvailability(_user: UserForRole): boolean {
+  return true;
+}

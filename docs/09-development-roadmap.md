@@ -233,3 +233,51 @@ Tasks:
 - Add demo data
 - Add responsive design
 - Prepare demo scenario
+
+---
+
+## Completed Sprints (Post-MVP)
+
+### Sprint 6 — Şube Yönetimi + Kullanıcı-Klinik Atama ✅ (2026-05-20)
+
+Goals:
+
+- Multi-branch (multi-clinic) architecture
+- Organization → Clinic hierarchy
+- Per-clinic user assignment
+- CLINIC_MANAGER scope isolation
+
+Delivered:
+
+- `server/src/routes/organizationBranches.ts` — 7 endpoint (CRUD + status + user-clinic assignment)
+- `UserClinic` Prisma model with `isActive`, `role`, `defaultClinicId`
+- `canManageBranches`, `canAssignUserClinics` permission helpers (backend + frontend)
+- `src/pages/Branches.tsx` — branch card grid UI, create/edit/status modals
+- `src/components/UserClinicAssignmentModal.tsx` — per-branch role assignment UI
+- 30 new unit tests → 129/129 total ✅
+
+---
+
+### Sprint 7 — Klinik Çalışma Takvimi + Şube Bazlı Randevu Kuralları ✅ (2026-05-20)
+
+Goals:
+
+- Define working hours per clinic branch (7-day grid)
+- Validate appointments against clinic open hours
+- Filter available doctors by branch assignment
+- Compute available time slots (doctor window ∩ clinic hours)
+
+Delivered:
+
+- `ClinicWorkingHours` Prisma model + manual migration SQL
+- `server/src/routes/schedules.ts` — 4 endpoints:
+  - `GET/PUT /api/clinics/:clinicId/working-hours` (bulk upsert, 7-day defaults)
+  - `GET /api/clinics/:clinicId/doctors` (UserClinic + legacy dedup)
+  - `GET /api/availability` (slot computation with clinic hours ∩ doctor slots)
+- `checkPractitionerAvailability()` updated — rejects `clinic_closed` and `outside_clinic_hours` before doctor check
+- `POST /api/appointments` multi-branch doctor check — `User.clinicId` OR `UserClinic` active assignment
+- `canManageClinicSchedule`, `canManageDoctorSchedule`, `canViewAvailability` helpers (backend + frontend)
+- `src/pages/ClinicSchedule.tsx` — 2-tab page: working hours grid + branch doctor list
+- `src/pages/Branches.tsx` — "Program Yönet" dropdown action (OWNER/ORG_ADMIN/CLINIC_MANAGER)
+- `src/components/AppointmentForm.tsx` — clinic-aware doctor fetching via `scheduleService.getClinicDoctors`
+- 41 new unit tests (scheduleAccess.test.ts) → 170/170 total ✅

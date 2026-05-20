@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
 import {
   Building2,
   Plus,
@@ -11,6 +12,7 @@ import {
   Phone,
   Mail,
   Calendar,
+  Clock,
   Users,
   LayoutDashboard,
   ChevronRight,
@@ -18,8 +20,7 @@ import {
 import { organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
-import { canManageBranches, canViewBranches } from '../utils/permissions';
-import { Navigate } from 'react-router-dom';
+import { canManageBranches, canViewBranches, canManageClinicSchedule } from '../utils/permissions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -409,6 +410,7 @@ function StatusModal({ branch, onClose, onSaved }: StatusModalProps) {
 export default function Branches() {
   const { user } = useAuth();
   const { setSelectedClinicId } = useClinic();
+  const navigate = useNavigate();
 
   const [branches, setBranches] = useState<ClinicBranch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -573,6 +575,18 @@ export default function Branches() {
                           <Calendar size={14} />
                           Randevuları Gör
                         </button>
+                        {canManageClinicSchedule(user) && (
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              navigate(`/branches/${branch.id}/schedule`);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          >
+                            <Clock size={14} />
+                            Program Yönet
+                          </button>
+                        )}
                         {canManage && (
                           <>
                             <div className="border-t border-gray-100 dark:border-gray-600 my-1" />

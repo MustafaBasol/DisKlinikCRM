@@ -63,6 +63,7 @@ model Clinic {
   primaryPatients          Patient[]         @relation("PatientPrimaryClinic")
   userClinics              UserClinic[]
   patientClinics           PatientClinic[]
+  clinicWorkingHours       ClinicWorkingHours[]
 
   @@unique([organizationId, slug])
 }
@@ -851,6 +852,7 @@ model Organization {
   patients       Patient[]
   invitations    ClinicInvitation[]
   inventoryItems InventoryItem[]
+  clinicWorkingHours ClinicWorkingHours[]
 }
 
 model UserClinic {
@@ -882,4 +884,23 @@ model PatientClinic {
   @@unique([patientId, clinicId])
   @@index([clinicId])
   @@index([patientId])
+}
+
+// ── Şube Çalışma Saatleri ─────────────────────────────────────────────────────
+
+model ClinicWorkingHours {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation(fields: [clinicId], references: [id])
+  dayOfWeek      Int          // 0 Sunday, 1 Monday, ... 6 Saturday
+  openTime       String       // HH:mm  (ignored when isClosed=true)
+  closeTime      String       // HH:mm  (ignored when isClosed=true)
+  isClosed       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([clinicId, dayOfWeek])
+  @@index([clinicId])
 }

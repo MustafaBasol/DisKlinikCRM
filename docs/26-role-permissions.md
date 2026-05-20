@@ -1,7 +1,7 @@
 # Rol ve Yetki Matrisi
 
 **Hazırlanma Tarihi:** 2026-05-20  
-**Son Güncelleme:** 2026-05-20 (Sprint 6: Şube Yönetimi + Kullanıcı-Klinik Atama)  
+**Son Güncelleme:** 2026-05-20 (Sprint 7: Klinik Çalışma Takvimi + Şube Bazlı Randevu Kuralları)  
 **Durum:** Üretim kodu ile senkronize — `server/src/utils/roles.ts` kanonik rol kaynağıdır.
 
 ---
@@ -352,7 +352,44 @@ bilinmeyen                         → ASSISTANT (en kısıtlayıcı)
 
 ---
 
-### 🔐 GDPR / Veri Dışa Aktarma (`/api/gdpr`)
+### �️ Klinik Çalışma Saatleri (`/api/clinics/:clinicId/working-hours`)
+
+| Endpoint | OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING |
+|----------|-------|-----------|----------------|---------|--------------|--------|
+| `GET /clinics/:clinicId/working-hours` | ✅ | ✅ | ✅ | 👁 | 👁 | ❌ |
+| `PUT /clinics/:clinicId/working-hours` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+
+> **Notlar:**
+> - `PUT` bulk upsert — 7 günlük tüm program tek istekte gönderilir.
+> - Her gün için `dayOfWeek` (0=Paz…6=Cmt), `openTime`, `closeTime`, `isClosed` alanları gereklidir.
+> - Kayıt yoksa varsayılanlar: Pzt-Cum 09:00-18:00, Cmt 09:00-13:00, Paz kapalı.
+> - Şube kapsamı `getAccessibleClinicIds` ile zorunlu kılınır — çapraz şube erişimi engellenir.
+
+---
+
+### 👨‍⚕️ Şube Doktorları (`/api/clinics/:clinicId/doctors`)
+
+| Endpoint | OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING |
+|----------|-------|-----------|----------------|---------|--------------|--------|
+| `GET /clinics/:clinicId/doctors` | ✅ | ✅ | ✅ | ❌ | 👁 | ❌ |
+
+> - `UserClinic` tablosundan aktif atamalar + legacy `User.clinicId` eşleşmesi — tekrarsız birleştirme.
+
+---
+
+### 📆 Müsaitlik Slotları (`/api/availability`)
+
+| Endpoint | OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING |
+|----------|-------|-----------|----------------|---------|--------------|--------|
+| `GET /availability?clinicId&doctorId&date&duration` | ✅ | ✅ | ✅ | 👁 | 👁 | ❌ |
+
+> - Klinik kapalı günlerde boş dizi döner.
+> - Slot hesaplama: Doktor programı ∩ Klinik çalışma saatleri → `duration`-dakikalık aralıklar.
+> - Her slot `{ time, available, reason? }` içerir.
+
+---
+
+
 
 | Endpoint | admin | OWNER / ORG_ADMIN | doctor | receptionist | billing |
 |----------|-------|-------------------|--------|--------------|---------|
@@ -461,6 +498,21 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 | 2026-05-20 | `src/components/UserList.tsx` | Kullanıcı satırına `Building2` ikonlu "Klinik Atamaları" butonu eklendi; `canAssignUserClinics(currentUser)` ile korumalı; `UserClinicAssignmentModal` açar. |
 | 2026-05-20 | `src/layouts/MainLayout.tsx` | `canViewBranches` import edildi; `canViewBranches(user)` kontrolüyle "Şubeler" → `/branches` menü öğesi eklendi. |
 | 2026-05-20 | `src/App.tsx` | `Branches` sayfası import edildi; `<Route path="branches" element={<Branches />} />` eklendi. |
+| 2026-05-20 | **Sprint 7 — Klinik Çalışma Takvimi + Şube Bazlı Randevu Kuralları** | |
+| 2026-05-20 | **`server/prisma/schema.prisma`** | `ClinicWorkingHours` modeli eklendi: `organizationId`, `clinicId`, `dayOfWeek Int`, `openTime String`, `closeTime String`, `isClosed Boolean`. `@@unique([clinicId, dayOfWeek])` kısıtı. `Clinic` ve `Organization` modellerine `clinicWorkingHours` ilişkisi eklendi. |
+| 2026-05-20 | **`server/prisma/migrations/20260525100000_add_clinic_working_hours/migration.sql`** (YENİ) | Manuel migration SQL — PostgreSQL kapalıyken oluşturuldu; DB açıldığında `npx prisma migrate deploy` ile uygulanır. |
+| 2026-05-20 | **`server/src/routes/schedules.ts`** (YENİ) | 4 endpoint: `GET/PUT /api/clinics/:clinicId/working-hours`, `GET /api/clinics/:clinicId/doctors`, `GET /api/availability`. Tüm route'larda `assertClinicAccess()` ile şube izolasyonu. Müsaitlik slot hesaplaması: klinik çalışma saati ∩ doktor programı → `duration`-dakikalık slotlar. |
+| 2026-05-20 | **`server/src/utils/helpers.ts`** | `checkPractitionerAvailability()`: `clinicWorkingHours.findUnique` ile üçüncü paralel sorgu eklendi. Doktor kontrolünden önce iki yeni guard: `clinic_closed` ve `outside_clinic_hours`. |
+| 2026-05-20 | **`server/src/routes/appointments.ts`** | `POST /api/appointments`: `User.clinicId === clinicId` tek kontrolü → `User.clinicId` **veya** `UserClinic.findFirst({ userId, clinicId, isActive:true })` çift kontrol. Multi-branch doktor atamasıyla geriye dönük uyumlu. |
+| 2026-05-20 | **`server/src/utils/roles.ts`** | 3 yeni yardımcı eklendi: `canManageClinicSchedule(user)` (OWNER/ORG_ADMIN/CLINIC_MANAGER), `canManageDoctorSchedule(user, userId?, doctorId?)` (yönetim tam; DENTIST yalnızca kendi), `canViewAvailability(_user)` (her zaman true). |
+| 2026-05-20 | **`server/src/index.ts`** | `schedulesRoutes` import edildi; `app.use('/api', schedulesRoutes)` eklendi. |
+| 2026-05-20 | **`server/src/tests/scheduleAccess.test.ts`** (YENİ) | 41 birim testi — `canManageClinicSchedule`, `canManageDoctorSchedule`, `canViewAvailability`, slot hesaplama, `ClinicWorkingHours` sınır koşulları. **41/41 ✅** |
+| 2026-05-20 | **`src/utils/permissions.ts`** | `canManageClinicSchedule(user)` ve `canManageDoctorSchedule(user, userId?, doctorId?)` frontend yardımcıları eklendi. |
+| 2026-05-20 | **`src/services/api.ts`** | `scheduleService` eklendi: `getWorkingHours(clinicId)`, `updateWorkingHours(clinicId, hours[])`, `getClinicDoctors(clinicId)`, `getAvailability(params)`. `doctorAvailabilityService.getAll` imzası `{ practitionerId?, clinicId? }` destekleyecek şekilde genişletildi. |
+| 2026-05-20 | **`src/pages/ClinicSchedule.tsx`** (YENİ) | Şube çalışma takvimi yönetim sayfası. Rota: `/branches/:clinicId/schedule`. 2 sekme: Çalışma Saatleri (7 günlük grid, açık/kapalı toggle, saat girişleri, bulk kaydet) ve Doktorlar (şube doktorları listesi, her doktor için program görüntüleme). `canManageClinicSchedule` erişim koruması. |
+| 2026-05-20 | **`src/App.tsx`** | `ClinicSchedule` import edildi; `<Route path="branches/:clinicId/schedule" element={<ClinicSchedule />} />` eklendi. |
+| 2026-05-20 | **`src/pages/Branches.tsx`** | `useNavigate` + `canManageClinicSchedule` eklendi. Şube dropdown menüsüne "Program Yönet" (Clock ikonu) butonu eklendi — yalnızca OWNER/ORG_ADMIN/CLINIC_MANAGER görebilir. |
+| 2026-05-20 | **`src/components/AppointmentForm.tsx`** | Doktor listesi: `localStorage.getItem('hcrm_clinic_id')` !== `'all'` ise `scheduleService.getClinicDoctors(clinicId)` kullanılır; aksi hâlde `userService.getDoctors()`. |
 
 ---
 
@@ -549,7 +601,8 @@ if (canViewOrganizationDashboard(user)) { ... }
 | Sayfa / Menü | OWNER | ORG_ADMIN | CLINIC_MANAGER (legacy admin canAll=false) | DENTIST | RECEPTIONIST | BILLING |
 |--------------|-------|-----------|---------------------------------------------|---------|--------------|---------|
 | Dashboard | ✅ | ✅ | ✅ | ✅ | ✅ | ↪ `/reports` |
-| **Org. Paneli** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ || **Şubeler** | ✅ | ✅ | 👁 | ❌ | ❌ | ❌ || Hastalar | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Org. Paneli** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ || **Şubeler** | ✅ | ✅ | 👁 | ❌ | ❌ | ❌ |
+| **Şube Program Yönet** | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ || Hastalar | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Randevular | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Randevu Talepleri | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
 | Tedavi Planları | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
