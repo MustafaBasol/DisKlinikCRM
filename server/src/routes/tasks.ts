@@ -4,7 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { taskSchema } from '../schemas/index.js';
-import { validateAndGetScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.get('/tasks', authorize(['admin', 'doctor', 'receptionist']), async (req:
   const { status, assignedToId, patientId, clinicId: selectedClinicId } = req.query;
 
   try {
-    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
     if (scope === false) return;
 
     const where: any = { ...scope };

@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
-import { validateAndGetScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -25,7 +25,7 @@ router.get('/reports/revenue', authorize(['admin', 'billing']), async (req: Auth
   const groupBy = validGroupByValues.includes(String(rawGroupBy)) ? String(rawGroupBy) : 'month';
 
   try {
-    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
     if (scope === false) return;
 
     const baseWhere: any = {
@@ -171,7 +171,7 @@ router.get('/reports/revenue/export.csv', authorize(['admin', 'billing']), async
   to.setHours(23, 59, 59, 999);
 
   try {
-    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
     if (scope === false) return;
 
     const where: any = {
@@ -231,7 +231,7 @@ router.get('/reports/doctor-performance', authorize(['admin', 'billing']), async
   }
 
   try {
-    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
     if (scope === false) return;
 
     const doctors = await prisma.user.findMany({
@@ -331,7 +331,7 @@ router.get('/reports/patient-sources', authorize(['admin', 'billing']), async (r
   }
 
   try {
-    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
     if (scope === false) return;
 
     const dateFilter = { gte: fromDate, lte: toDate };

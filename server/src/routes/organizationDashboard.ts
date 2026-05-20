@@ -49,7 +49,7 @@ function getDateRange(range: string, from?: string, to?: string): { from: Date; 
 // GET /api/organization/dashboard
 router.get(
   '/organization/dashboard',
-  authorize(['admin', 'OWNER', 'ORG_ADMIN']),
+  authorize(['admin', 'owner', 'org_admin']),
   async (req: AuthRequest, res: Response) => {
     const orgId = req.user!.organizationId;
     const { range = 'this_month', from: fromParam, to: toParam } = req.query;

@@ -1,13 +1,16 @@
 # Rol ve Yetki Matrisi
 
 **Hazırlanma Tarihi:** 2026-05-20  
-**Durum:** Mevcut kod tabanından çıkarılmış — `authorize([...])` middleware çağrıları esas alınmıştır.
+**Son Güncelleme:** 2026-05-20  
+**Durum:** Mevcut kod tabanından çıkarılmış — `authorize([...])` middleware çağrıları esas alınmıştır. Tespit edilen teknik hatalar düzeltilmiştir.
 
 ---
 
 ## Sistemdeki Roller
 
 ### Klinik / Organizasyon Rolleri (JWT ile kimlik doğrulama)
+
+> **Önemli:** `User.role` alanı veritabanında ve JWT'de her zaman **küçük harf** saklanır (`admin`, `doctor`, `receptionist`, `billing`). `authorize()` middleware artık case-insensitive karşılaştırma yapar — `authorize(['admin', 'owner'])` hem `'admin'` hem `'ADMIN'` değerlerini kabul eder.
 
 | Rol Kodu | Görünen Ad | Kapsam | Açıklama |
 |----------|-----------|--------|----------|
@@ -358,15 +361,26 @@ Tüm endpoint'ler yalnızca `PlatformAdmin` JWT ile erişilebilir. Klinik kullan
 
 ---
 
+## Düzeltme Geçmişi
+
+| Tarih | Dosya | Düzeltme |
+|-------|-------|----------|
+| 2026-05-20 | `server/src/middleware/auth.ts` | `authorize()` artık case-insensitive: `roles.map(r => r.toLowerCase()).includes(req.user.role.toLowerCase())` |
+| 2026-05-20 | `server/src/routes/organizationDashboard.ts` | `authorize(['admin', 'OWNER', 'ORG_ADMIN'])` → `authorize(['admin', 'owner', 'org_admin'])` (tutarlı küçük harf) |
+| 2026-05-20 | `appointments`, `treatmentCases`, `tasks`, `payments`, `reports` route'ları | `validateAndGetScope` (organizationId zorunlu) → `validateAndGetClinicIdScope` (clinicId tabanlı). Bu modellerin Prisma şemasında `organizationId` alanı bulunmadığından önceki hâl tüm listeleme endpoint'lerinde 500 hatası üretiyordu. |
+
+---
+
 ## Bilinen Tutarsızlıklar ve Teknik Borç
 
-| Sorun | Açıklama | Öneri |
+| Sorun | Açıklama | Durum |
 |-------|----------|-------|
-| **Karma rol formatı** | Klinik rolleri küçük harf (`admin`, `doctor`, `billing`), UserClinic rolleri büyük harf (`OWNER`, `ORG_ADMIN`). `organizationDashboard.ts` her iki formatı da kabul ediyor. | Tüm kontrolleri `role.toLowerCase()` veya sabit bir enum ile normalize et |
-| **`doctor` vs `DENTIST`** | DB schema `UserClinic.role`'de `DENTIST` kullanırken `authorize()` çağrıları `doctor` bekliyor | `UserClinic.role = DENTIST` → `User.role = doctor` eşlemesi seed'de yapılıyor |
-| **`admin` legacy** | `admin` rolü hem klinik admin hem de organization owner için kullanılıyor | Multi-branch geçişinde `admin` → `OWNER` normalize edilmeli |
-| **`billing` dashboard erişimi** | Billing kullanıcısı `/api/dashboard` endpoint'ine erişemiyor ancak raporlara erişebiliyor | Dashboard'a billing read erişimi değerlendirilebilir |
-| **`doctor` kendi verilerine kısıtlı değil** | Doktorlar tüm hastaları ve randevuları görebiliyor, yalnızca kendi hastalarını değil | MVP için yeterli, ileriki sprintlerde ince taneli filtreleme eklenebilir |
+| ~~Karma rol formatı~~ | ~~`authorize()` case-sensitive'di; `OWNER`/`ORG_ADMIN` JWT'deki küçük harf değerlerle eşleşmiyordu~~ | ✅ **Düzeltildi** — `authorize()` artık case-insensitive |
+| ~~`validateAndGetScope` yanlış model kullanımı~~ | ~~`Appointment`, `TreatmentCase`, `Task`, `Payment` modellerinde `organizationId` yokken `validateAndGetScope` bu alanı Prisma WHERE'e ekliyordu → runtime 500~~ | ✅ **Düzeltildi** — `validateAndGetClinicIdScope` kullanılıyor |
+| **`doctor` vs `DENTIST`** | DB schema `UserClinic.role`'de `DENTIST` kullanırken `authorize()` çağrıları `User.role = doctor` bekliyor | ⚪ **Belgeleme farklılığı** — işlevsel hata yok; seed `User.role = 'doctor'` atar |
+| **`admin` legacy** | `admin` rolü hem klinik admin hem de organization owner için kullanılıyor | ⚪ **MVP kabul** — multi-branch'te `canAccessAllClinics = true` ile yönetiliyor |
+| **`billing` dashboard erişimi** | Billing kullanıcısı `/api/dashboard` endpoint'ine erişemiyor ancak raporlara erişebiliyor | 🔜 **İyileştirme adayı** — ileriki sprintlerde değerlendirilebilir |
+| **`doctor` kendi verilerine kısıtlı değil** | Doktorlar tüm hastaları ve randevuları görebiliyor, yalnızca kendi hastalarını değil | 🔜 **MVP kabul** — ince taneli filtreleme ileriki sprintlere bırakıldı |
 
 ---
 

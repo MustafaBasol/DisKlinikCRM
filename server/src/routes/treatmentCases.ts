@@ -5,7 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { treatmentCaseSchema } from '../schemas/index.js';
 import { generateEarningFromTreatmentCase } from '../services/earningService.js';
-import { validateAndGetScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -26,7 +26,7 @@ router.get('/treatment-cases', authorize(['admin', 'doctor', 'receptionist', 'bi
   const { status, patientId, practitionerId, clinicId: selectedClinicId } = req.query;
 
   try {
-    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
     if (scope === false) return;
 
     const where: any = { ...scope };

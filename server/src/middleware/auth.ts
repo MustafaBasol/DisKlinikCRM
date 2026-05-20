@@ -68,8 +68,9 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 };
 
 export const authorize = (roles: string[]) => {
+  const normalized = roles.map(r => r.toLowerCase());
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user || !normalized.includes(req.user.role.toLowerCase())) {
       return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
     }
     next();
