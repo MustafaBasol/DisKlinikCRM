@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
-import { validateAndGetScope } from '../utils/clinicScope.js';
+import { validateAndGetScope, toClinicOnlyScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -14,8 +14,10 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
     const scope = await validateAndGetScope(req.user!, selectedClinicId, res);
     if (scope === false) return;
 
-    // clinicId where clause: scope döndürür { organizationId } veya { organizationId, clinicId } veya { organizationId, clinicId: {in} }
+    // clinicWhere: organizationId içerir — yalnızca organizationId alanı olan modeller için (Patient)
     const clinicWhere = scope;
+    // clinicIdWhere: organizationId içermez — Appointment, Task, Payment, TreatmentCase, ActivityLog vb. için
+    const clinicIdWhere = await toClinicOnlyScope(scope);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -28,13 +30,13 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
     const statsPromises: any = {
       todayAppointments: prisma.appointment.count({
         where: {
-          ...clinicWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
+          ...clinicIdWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
           ...(role === 'doctor' ? { practitionerId: userId } : {}),
         },
       }),
       weekAppointments: prisma.appointment.count({
         where: {
-          ...clinicWhere, startTime: { gte: weekStart }, status: { not: 'cancelled' },
+          ...clinicIdWhere, startTime: { gte: weekStart }, status: { not: 'cancelled' },
           ...(role === 'doctor' ? { practitionerId: userId } : {}),
         },
       }),
@@ -43,45 +45,45 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       }),
       noShowsMonth: prisma.appointment.count({
         where: {
-          ...clinicWhere, status: 'no_show', startTime: { gte: firstDayOfMonth },
+          ...clinicIdWhere, status: 'no_show', startTime: { gte: firstDayOfMonth },
           ...(role === 'doctor' ? { practitionerId: userId } : {}),
         },
       }),
       pendingTasks: prisma.task.count({
         where: {
-          ...clinicWhere, status: { in: ['open', 'in_progress'] },
+          ...clinicIdWhere, status: { in: ['open', 'in_progress'] },
           ...(role === 'doctor' ? { assignedToId: userId } : {}),
         },
       }),
       overdueTasks: prisma.task.count({
         where: {
-          ...clinicWhere, status: { in: ['open', 'in_progress'] }, dueDate: { lt: new Date() },
+          ...clinicIdWhere, status: { in: ['open', 'in_progress'] }, dueDate: { lt: new Date() },
           ...(role === 'doctor' ? { assignedToId: userId } : {}),
         },
       }),
       openTreatments: prisma.treatmentCase.count({
         where: {
-          ...clinicWhere, stage: { notIn: ['completed', 'lost'] },
+          ...clinicIdWhere, stage: { notIn: ['completed', 'lost'] },
           ...(role === 'doctor' ? { practitionerId: userId } : {}),
         },
       }),
       treatmentValues: prisma.treatmentCase.aggregate({
         where: {
-          ...clinicWhere, stage: { notIn: ['completed', 'lost'] },
+          ...clinicIdWhere, stage: { notIn: ['completed', 'lost'] },
           ...(role === 'doctor' ? { practitionerId: userId } : {}),
         },
         _sum: { estimatedAmount: true, acceptedAmount: true },
       }),
       monthlyRevenue: prisma.payment.aggregate({
-        where: { ...clinicWhere, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: firstDayOfMonth } },
+        where: { ...clinicIdWhere, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: firstDayOfMonth } },
         _sum: { amount: true },
       }),
       pendingPayments: prisma.payment.aggregate({
-        where: { ...clinicWhere, paymentStatus: 'pending' },
+        where: { ...clinicIdWhere, paymentStatus: 'pending' },
         _sum: { amount: true },
       }),
       preparedMessagesWeek: prisma.sentMessage.count({
-        where: { ...clinicWhere, status: 'prepared', createdAt: { gte: weekStart } },
+        where: { ...clinicIdWhere, status: 'prepared', createdAt: { gte: weekStart } },
       }),
     };
 
@@ -92,7 +94,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
 
     const agenda = await prisma.appointment.findMany({
       where: {
-        ...clinicWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
+        ...clinicIdWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
         ...(role === 'doctor' ? { practitionerId: userId } : {}),
       },
       include: {
@@ -117,7 +119,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
 
     const activities = await prisma.activityLog.findMany({
       where: {
-        ...clinicWhere,
+        ...clinicIdWhere,
         ...(role === 'doctor' ? {
           OR: [
             { userId },
@@ -141,7 +143,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
         // Next 7 days appointments
         prisma.appointment.findMany({
           where: {
-            ...clinicWhere,
+            ...clinicIdWhere,
             practitionerId: userId,
             startTime: { gte: tomorrow, lt: nextWeek },
             status: { not: 'cancelled' },
@@ -156,13 +158,13 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
         // Active treatment pipeline grouped by stage
         prisma.treatmentCase.groupBy({
           by: ['stage'],
-          where: { ...clinicWhere, practitionerId: userId, stage: { notIn: ['completed', 'lost'] } },
+          where: { ...clinicIdWhere, practitionerId: userId, stage: { notIn: ['completed', 'lost'] } },
           _count: { stage: true },
         }),
         // Recent distinct patients seen by this doctor
         prisma.appointment.findMany({
           where: {
-            ...clinicWhere,
+            ...clinicIdWhere,
             practitionerId: userId,
             startTime: { lt: tomorrow },
             status: { in: ['completed', 'confirmed', 'in_progress'] },
@@ -177,7 +179,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
         // Pending + approved earnings
         prisma.practitionerEarning.groupBy({
           by: ['status'],
-          where: { ...clinicWhere, practitionerId: userId, status: { in: ['pending', 'approved'] } },
+          where: { ...clinicIdWhere, practitionerId: userId, status: { in: ['pending', 'approved'] } },
           _sum: { earningAmount: true },
         }),
       ]);
@@ -227,7 +229,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       alerts,
       activities,
       doctorExtras,
-      charts: role !== 'doctor' ? await buildChartData(prisma, clinicWhere, today, tomorrow, firstDayOfMonth) : null,
+      charts: role !== 'doctor' ? await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth) : null,
     });
   } catch (error) {
     console.error(error);
@@ -237,13 +239,13 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
 
 export default router;
 
-async function buildChartData(prisma: any, clinicWhere: Record<string, any>, today: Date, tomorrow: Date, firstDayOfMonth: Date) {
-  // ── 1) Son 7 günlük günlük randevu sayısı ────────────────────────────────────────
+async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, today: Date, tomorrow: Date, firstDayOfMonth: Date) {
+  // ── 1) Son 7 günlük günlük randevu sayısı ────────────────────────────────────────────
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
   const weekAppts = await prisma.appointment.findMany({
-    where: { ...clinicWhere, startTime: { gte: sevenDaysAgo, lt: tomorrow }, status: { not: 'cancelled' } },
+    where: { ...clinicIdWhere, startTime: { gte: sevenDaysAgo, lt: tomorrow }, status: { not: 'cancelled' } },
     select: { startTime: true },
   });
 
@@ -264,7 +266,7 @@ async function buildChartData(prisma: any, clinicWhere: Record<string, any>, tod
 
   // ── 2) Bu ay hizmet bazlı randevu dağılımı ────────────────────────
   const monthAppts = await prisma.appointment.findMany({
-    where: { ...clinicWhere, startTime: { gte: firstDayOfMonth }, status: { not: 'cancelled' } },
+    where: { ...clinicIdWhere, startTime: { gte: firstDayOfMonth }, status: { not: 'cancelled' } },
     select: { appointmentType: { select: { name: true, color: true } } },
   });
 
@@ -283,7 +285,7 @@ async function buildChartData(prisma: any, clinicWhere: Record<string, any>, tod
   sixMonthsAgo.setHours(0, 0, 0, 0);
 
   const payments6m = await prisma.payment.findMany({
-    where: { ...clinicWhere, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: sixMonthsAgo } },
+    where: { ...clinicIdWhere, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: sixMonthsAgo } },
     select: { paidAt: true, amount: true },
   });
 

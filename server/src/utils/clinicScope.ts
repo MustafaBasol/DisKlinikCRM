@@ -69,6 +69,27 @@ export async function validateAndGetScope(
 }
 
 /**
+ * organizationId alanı olmayan modeller (Appointment, Task, Payment, TreatmentCase,
+ * ActivityLog, PractitionerEarning vb.) için güvenli where filtresi oluşturur.
+ *
+ * ClinicScopeWhere'deki organizationId'yi soyutlayarak yalnızca clinicId bazlı
+ * where döndürür. organizationId-only scope'da tüm klinik id'lerini DB'den çeker.
+ */
+export async function toClinicOnlyScope(
+  scope: ClinicScopeWhere
+): Promise<{ clinicId: string } | { clinicId: { in: string[] } }> {
+  if ('clinicId' in scope) {
+    return { clinicId: (scope as any).clinicId };
+  }
+  // Yalnızca organizationId var → org'a ait tüm klinikler
+  const clinics = await prisma.clinic.findMany({
+    where: { organizationId: scope.organizationId },
+    select: { id: true },
+  });
+  return { clinicId: { in: clinics.map((c: { id: string }) => c.id) } };
+}
+
+/**
  * @deprecated Yetkilendirme için kullanmayın. Geriye dönük uyumluluk içindir.
  * clinicId = user.clinicId (defaultClinicId) scope'u döndürür.
  */
