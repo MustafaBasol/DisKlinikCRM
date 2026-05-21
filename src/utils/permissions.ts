@@ -341,3 +341,18 @@ export function canLinkWhatsAppPatient(user: UserForPermission | null | undefine
     role === 'RECEPTIONIST'
   );
 }
+
+/**
+ * Finans / Fatura Panosu erişimi.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, BILLING.
+ * DENTIST, RECEPTIONIST, ASSISTANT erişemez.
+ */
+export function canViewFinanceDashboard(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'BILLING'
+  );
+}

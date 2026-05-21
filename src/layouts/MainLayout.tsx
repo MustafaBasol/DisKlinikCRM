@@ -28,6 +28,7 @@ import {
   Building2,
   MessageCircle,
   Inbox,
+  BarChart3,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -49,6 +50,7 @@ import {
   normalizeRole,
   canViewWhatsAppStatus,
   canViewWhatsAppInbox,
+  canViewFinanceDashboard,
 } from '../utils/permissions';
 
 const MainLayoutInner: React.FC = () => {
@@ -140,6 +142,11 @@ const MainLayoutInner: React.FC = () => {
     navItems.push({ path: '/payments', icon: <CreditCard size={20} />, label: t('common:payments') });
     navItems.push({ path: '/payment-plans', icon: <CreditCard size={20} />, label: 'Taksit Planları' });
     navItems.push({ path: '/insurance-provisions', icon: <ShieldCheck size={20} />, label: t('common:insurance') });
+  }
+
+  // Finans Paneli — OWNER, ORG_ADMIN, CLINIC_MANAGER, BILLING
+  if (canViewFinanceDashboard(user)) {
+    navItems.push({ path: '/finance', icon: <BarChart3 size={20} />, label: 'Finans Paneli' });
   }
 
   // Mesajlar — resepsiyon ve üzeri yönetim; DENTIST okuma

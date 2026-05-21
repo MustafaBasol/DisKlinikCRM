@@ -341,7 +341,7 @@ const Dashboard: React.FC = () => {
 
   // ── BILLING: finans paneline yönlendir ─────────────────────────────────
   if (user && normalizeRole(user.role, user.canAccessAllClinics) === 'BILLING') {
-    return <Navigate to="/reports" replace />;
+    return <Navigate to="/finance" replace />;
   }
 
   // ── Hekim kendi özel dashboard'unu görür ──────────────────────────────────

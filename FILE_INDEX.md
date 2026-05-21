@@ -32,6 +32,7 @@ health-crm-agent-docs/
 │  ├─ 26-role-permissions.md
 │  ├─ 27-sprint10-whatsapp-provider-abstraction.md  — Sprint 10: provider-agnostic WhatsApp mimarisi
 │  ├─ 28-sprint11-whatsapp-inbox.md  — Sprint 11: paylaşımlı WA gelen kutusu, klinik çözümleme
+│  ├─ 29-sprint12-finance-billing-dashboard.md  — Sprint 12: finans/fatura panosu, BILLING redirect
 │  ├─ crm_improvement_plan.md
 │  ├─ top_5_critical_plan.md
 │  └─ whatsapp-evolution-backend-agent.md
@@ -58,7 +59,11 @@ health-crm-agent-docs/
       │  ├─ insuranceProvisions.ts — Sigorta provizyon CRUD
       │  ├─ payments.ts          — Ödeme CRUD
       │  ├─ messages.ts          — Mesaj şablonları ve mesaj hazırlama
-      │  └─ whatsapp.ts          — WhatsApp public endpoint'leri ve konversasyon state machine
+      │  ├─ whatsapp.ts          — WhatsApp public endpoint'leri ve konversasyon state machine
+      │  ├─ organizationDashboard.ts — Org seviyesi metrikler (Sprint 9); getDateRange export
+      │  ├─ organizationWhatsApp.ts  — WhatsApp bağlantı yönetimi (Sprint 10)
+      │  ├─ whatsappInbox.ts     — Atanmamış WA gelen kutusu endpoint'leri (Sprint 11)
+      │  └─ financeDashboard.ts  — GET /api/finance/dashboard (Sprint 12)
       ├─ schemas/
       │  └─ index.ts             — Tüm Zod doğrulama şemaları
       ├─ services/              — Dış servis entegrasyonları
@@ -73,6 +78,10 @@ health-crm-agent-docs/
       ├─ utils/
       │  ├─ activity.ts          — logActivity yardımcısı
       │  ├─ helpers.ts           — Paylaşılan yardımcılar: zaman, şifre, müsaitlik
+      │  ├─ roles.ts             — Backend rol/izin yardımcıları (canViewFinanceDashboard dahil)
       │  └─ whatsappDate.ts      — Türkçe tarih biçimlendirme
       └─ tests/                 — Birim ve entegrasyon testleri
+         ├─ whatsappProvider.test.ts  — Sprint 10: provider soyutlama testleri (28 test)
+         ├─ whatsappInbox.test.ts     — Sprint 11: gelen kutusu izin + çözümleme testleri (25 test)
+         └─ financeDashboard.test.ts  — Sprint 12: finans panosu erişim + metrik testleri (24 test)
 ```

@@ -32,6 +32,7 @@ import Branches from './pages/Branches';
 import ClinicSchedule from './pages/ClinicSchedule';
 import WhatsAppConnections from './pages/WhatsAppConnections';
 import WhatsAppInbox from './pages/WhatsAppInbox';
+import FinanceDashboard from './pages/FinanceDashboard';
 
 import { useTranslation } from 'react-i18next';
 
@@ -117,6 +118,7 @@ const App: React.FC = () => {
               <Route path="branches/:clinicId/schedule" element={<ClinicSchedule />} />
               <Route path="organization/whatsapp" element={<WhatsAppConnections />} />
               <Route path="whatsapp-inbox" element={<WhatsAppInbox />} />
+              <Route path="finance" element={<FinanceDashboard />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

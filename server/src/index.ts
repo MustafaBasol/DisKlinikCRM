@@ -33,6 +33,7 @@ import organizationDashboardRoutes from './routes/organizationDashboard.js';
 import organizationBranchesRoutes from './routes/organizationBranches.js';
 import organizationWhatsAppRoutes from './routes/organizationWhatsApp.js';
 import whatsappInboxRoutes from './routes/whatsappInbox.js';
+import financeDashboardRoutes from './routes/financeDashboard.js';
 import schedulesRoutes from './routes/schedules.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
@@ -95,6 +96,7 @@ app.use('/api', organizationDashboardRoutes);
 app.use('/api', organizationBranchesRoutes);
 app.use('/api', organizationWhatsAppRoutes);
 app.use('/api', whatsappInboxRoutes);
+app.use('/api', financeDashboardRoutes);
 app.use('/api', schedulesRoutes);
 
 app.listen(port, () => {
