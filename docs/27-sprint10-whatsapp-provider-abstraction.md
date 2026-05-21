@@ -427,13 +427,357 @@ DB'de `ClinicWhatsAppConnection` kaydı yoktur. `resolveConnectionForClinic` env
 
 ---
 
-## 12. Bilinen Kısıtlamalar / Sonraki Adımlar
+## 12. Kalan Geliştirmeler — Etaplı Plan
 
-| Konu | Durum | Notlar |
-|------|-------|--------|
-| `evolutionApiKeyEncrypted` gerçek şifreleme | ⚠️ Dikkat | Mevcut implementasyon anahtar değerini şifrelenmemiş saklar. AES şifreleme eklenmeli (env'deki `ENCRYPTION_KEY` ile). |
-| Meta Cloud API implementasyonu | 🔶 Stub | `MetaCloudWhatsAppProvider.ts` metodları doldurulmalı |
-| `Branches.tsx` WhatsApp durum rozetleri | ❌ Yapılmadı | Şube listesinde bağlantı durumu göstergesi |
-| `Messages.tsx` bağlantı farkındalığı | ❌ Yapılmadı | Aktif bağlantı yoksa gönder butonunu devre dışı bırak |
-| Birim testleri | ❌ Yapılmadı | `whatsappProvider.test.ts` oluşturulmalı |
-| API anahtarlarının şifrelenerek saklanması | ⚠️ Öneri | `evolutionApiKeyEncrypted` ve `metaAccessTokenEncrypted` alanlarına gerçek AES şifreleme eklenmeli |
+Aşağıdaki tablo tüm kalan işlerin öncelik sırasına göre özetini verir.  
+Her etap bağımsız olarak teslim edilebilir; bağımlılıklar etap numarasıyla belirtilmiştir.
+
+| Etap | Başlık | Durum | Öncelik | Bağımlılık |
+|------|--------|-------|---------|------------|
+| E-1 | Frontend tamamlama | ✅ Tamamlandı | 🔴 Yüksek | — |
+| E-2 | API anahtarı şifreleme | ✅ Tamamlandı | 🔴 Yüksek | — |
+| E-3 | Birim testleri | ✅ Tamamlandı (28/28) | 🟡 Orta | E-1, E-2 öncesinde de yazılabilir |
+| E-4 | Meta Cloud API implementasyonu | ⏳ Bekliyor | 🟢 Düşük | Meta Business hesabı gerekir |
+| E-5 | Operasyonel izleme | ⏳ Bekliyor | 🟢 Düşük | E-1, E-2 |
+
+---
+
+### Etap 1 — Frontend Tamamlama
+
+**Hedef:** WhatsApp altyapısının kullanıcıya yansıyan son 2 eksik noktasını kapatmak.  
+**Tahmini efor:** 2–3 saat  
+**Dosyalar:** `src/pages/Branches.tsx`, `src/pages/Messages.tsx`
+
+#### E-1.1 — `Branches.tsx` — WhatsApp Durum Rozeti + Ayarlar Butonu
+
+Her şube satırına eklenecekler:
+
+1. **Durum rozeti** — `clinicWhatsAppService.getAssignments(branch.id)` çağrısı ile her şubenin bağlantı durumunu çek.
+   - Bağlantı yok → `⚫ WhatsApp Yok` (gri rozet)
+   - `status === 'connected'` → `🟢 Bağlı` (yeşil rozet)
+   - `status === 'disconnected'` veya başka → `🔴 Bağlı Değil` (kırmızı rozet)
+
+2. **"WhatsApp Ayarları" butonu** — `canAssignWhatsAppToClinic(user)` izni varsa göster.  
+   Tıklayınca `/organization/whatsapp` rotasına yönlendir.
+
+```tsx
+// Branches.tsx — ek import'lar
+import { MessageCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { clinicWhatsAppService } from '../services/api';
+import { canAssignWhatsAppToClinic } from '../utils/permissions';
+
+// state (mevcut branchList state'ine paralel):
+const [whatsappStatuses, setWhatsappStatuses] = useState<Record<string, string>>({});
+
+// Her branch yüklendiğinde parallel fetch:
+const statusMap: Record<string, string> = {};
+await Promise.allSettled(
+  branches.map(async (b) => {
+    try {
+      const res = await clinicWhatsAppService.getAssignments(b.id);
+      statusMap[b.id] = res.data?.length > 0
+        ? res.data[0].whatsappConnection?.status ?? 'unknown'
+        : 'none';
+    } catch {
+      statusMap[b.id] = 'unknown';
+    }
+  })
+);
+setWhatsappStatuses(statusMap);
+
+// Satır içinde rozet:
+const st = whatsappStatuses[branch.id];
+<span className={`text-xs px-2 py-0.5 rounded-full ${
+  st === 'connected' ? 'bg-green-100 text-green-700'
+  : st === 'none' ? 'bg-gray-100 text-gray-500'
+  : 'bg-red-100 text-red-600'
+}`}>
+  <MessageCircle size={12} className="inline mr-1" />
+  {st === 'connected' ? 'WhatsApp Bağlı' : st === 'none' ? 'WhatsApp Yok' : 'Bağlı Değil'}
+</span>
+
+// Ayarlar butonu (sadece yetkili roller):
+{canAssignWhatsAppToClinic(user) && (
+  <button onClick={() => navigate('/organization/whatsapp')}
+    className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+    <MessageCircle size={12} /> WhatsApp Ayarları
+  </button>
+)}
+```
+
+#### E-1.2 — `Messages.tsx` — Bağlantı Farkındalığı
+
+Mevcut `Messages.tsx` WhatsApp bağlantısından haberdar değil — mesaj gönder butonu her zaman aktif.
+
+Eklenecekler:
+
+1. **Bağlantı durumu kontrolü** — sayfa açıldığında `clinicWhatsAppService.getAssignments(clinicId)` çağır.
+2. **Gönder butonu devre dışı** — bağlantı yoksa veya `status !== 'connected'` ise butonu disable et; tooltip ile açıkla.
+3. **Meta uyarısı** — bağlantı varsa ve `provider === 'meta_cloud_api'` ise altında sarı uyarı bandı göster: _"Bu bağlantı henüz aktif değil (Meta Cloud API)"_.
+4. **Durum bilgi kartı** — mesaj listesinin üstüne küçük bir banner ekle:
+   - Yeşil: `✓ WhatsApp bağlı — [Numara]`
+   - Gri: `WhatsApp bağlantısı yapılandırılmamış`
+
+```tsx
+// Messages.tsx — ek logic
+import { clinicWhatsAppService } from '../services/api';
+import { useClinic } from '../context/ClinicContext';
+
+const { currentClinic } = useClinic();
+const [waConnection, setWaConnection] = useState<{ status: string; provider: string; phoneNumber?: string } | null>(null);
+const [waLoading, setWaLoading] = useState(true);
+
+useEffect(() => {
+  if (!currentClinic?.id) return;
+  clinicWhatsAppService.getAssignments(currentClinic.id)
+    .then(res => {
+      const active = res.data?.find((a: any) => a.isDefault && a.whatsappConnection?.isActive);
+      setWaConnection(active?.whatsappConnection ?? null);
+    })
+    .catch(() => setWaConnection(null))
+    .finally(() => setWaLoading(false));
+}, [currentClinic?.id]);
+
+const canSendNow = canSend
+  && !waLoading
+  && waConnection?.status === 'connected'
+  && waConnection?.provider !== 'meta_cloud_api';
+```
+
+---
+
+### Etap 2 — API Anahtarı Şifreleme (Güvenlik)
+
+**Hedef:** `evolutionApiKeyEncrypted` ve `metaAccessTokenEncrypted` alanlarını gerçekten şifrelenmiş olarak saklamak.  
+**Tahmini efor:** 2–3 saat  
+**Dosyalar:**  
+- `server/src/utils/encryption.ts` *(yeni)*  
+- `server/src/routes/organizationWhatsApp.ts`  
+- `server/src/services/whatsapp/EvolutionWhatsAppProvider.ts`  
+
+**Neden önemli:** Şu anda alan adları `*Encrypted` ile bitiyor ama değerler ham metin saklanıyor. DB sızıntısında kimlik bilgileri doğrudan açığa çıkar.
+
+#### Uygulama planı
+
+1. **`server/src/utils/encryption.ts`** — AES-256-GCM şifreleme utility:
+
+```typescript
+// Ortam değişkeni: ENCRYPTION_KEY=32 byte hex string
+// openssl rand -hex 32  ile üretilir
+
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+
+const ALGORITHM = 'aes-256-gcm';
+
+export function encryptSecret(plaintext: string): string {
+  const key = Buffer.from(process.env.ENCRYPTION_KEY!, 'hex');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  // format: iv(24 hex) + tag(32 hex) + ciphertext(hex)
+  return iv.toString('hex') + tag.toString('hex') + encrypted.toString('hex');
+}
+
+export function decryptSecret(ciphertext: string): string {
+  const key = Buffer.from(process.env.ENCRYPTION_KEY!, 'hex');
+  const iv = Buffer.from(ciphertext.slice(0, 24), 'hex');
+  const tag = Buffer.from(ciphertext.slice(24, 56), 'hex');
+  const data = Buffer.from(ciphertext.slice(56), 'hex');
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(data) + decipher.final('utf8');
+}
+```
+
+2. **`organizationWhatsApp.ts`** — Kaydetme sırasında şifrele:
+
+```typescript
+import { encryptSecret } from '../utils/encryption.js';
+
+// POST / PUT handler içinde:
+if (body.evolutionApiKey) {
+  createData.evolutionApiKeyEncrypted = encryptSecret(body.evolutionApiKey);
+}
+if (body.metaAccessToken) {
+  createData.metaAccessTokenEncrypted = encryptSecret(body.metaAccessToken);
+}
+```
+
+3. **`EvolutionWhatsAppProvider.ts`** — Okuma sırasında çöz:
+
+```typescript
+import { decryptSecret } from '../../utils/encryption.js';
+
+function resolveCredentials(connection) {
+  const rawKey = connection.evolutionApiKeyEncrypted;
+  const apiKey = rawKey
+    ? (() => { try { return decryptSecret(rawKey); } catch { return rawKey; } })()
+    : process.env.EVOLUTION_API_KEY;
+  // ...
+}
+```
+
+> **Not:** `ENCRYPTION_KEY` env değişkeni eksikse sunucu başlamayı reddetmeli (startup validation).  
+> **Migrasyon:** Mevcut ham metin kayıtları için tek seferlik migrasyon scripti gerekir.
+
+#### Yeni env değişkeni
+
+```env
+ENCRYPTION_KEY=<openssl rand -hex 32 ile üretilen 64 karakter>
+```
+
+---
+
+### Etap 3 — Birim Testleri
+
+**Hedef:** WhatsApp altyapısının kritik yollarını test kapsamına almak.  
+**Tahmini efor:** 2–3 saat  
+**Dosya:** `server/src/tests/whatsappProvider.test.ts`
+
+#### Test senaryoları
+
+```
+whatsappProviderFactory
+  ✓ "evolution_api" → EvolutionWhatsAppProvider döner
+  ✓ "meta_cloud_api" → MetaCloudWhatsAppProvider döner
+  ✓ Bilinmeyen sağlayıcı → Error fırlatır
+
+EvolutionWhatsAppProvider
+  ✓ Eksik credentials → { success: false } döner (HTTP isteği yapmaz)
+  ✓ Evolution API 200 → { success: true, externalMessageId } döner
+  ✓ Evolution API 400 → { success: false, error: '...' } döner
+
+MetaCloudWhatsAppProvider
+  ✓ sendMessage → { success: false, message: 'not implemented' } döner
+  ✓ testConnection → { success: false } döner
+  ✓ parseWebhook: Meta format → { eventType: 'unknown' } döner
+
+whatsappService — resolveConnectionForClinic
+  ✓ DB kaydı varsa DB kaydını döner
+  ✓ DB kaydı yoksa + env var varsa legacy fallback döner
+  ✓ DB kaydı yoksa + env var yoksa null döner
+
+organizationWhatsApp — sanitizeConnection
+  ✓ evolutionApiKeyEncrypted alanı response'dan çıkarılır
+  ✓ metaAccessTokenEncrypted alanı response'dan çıkarılır
+  ✓ diğer alanlar korunur
+
+Rol/İzin Yardımcıları
+  ✓ canManageWhatsAppConnections: OWNER → true, RECEPTIONIST → false
+  ✓ canAssignWhatsAppToClinic: CLINIC_MANAGER → true, BILLING → false
+  ✓ canViewWhatsAppStatus: CLINIC_MANAGER → true, ASSISTANT → false
+  ✓ canSendWhatsAppMessages: DENTIST → true, BILLING → false
+```
+
+#### Test kurulumu (mevcut test framework ile)
+
+```bash
+cd server
+# Mevcut test runner'ı kontrol et:
+cat package.json | grep -E '"test"|vitest|jest'
+# Genellikle: npx vitest run src/tests/
+```
+
+---
+
+### Etap 4 — Meta Cloud API Gerçek Implementasyon
+
+**Hedef:** `MetaCloudWhatsAppProvider.ts` metodlarını Meta Graph API ile gerçek işlevselliğe kavuşturmak.  
+**Tahmini efor:** 4–6 saat (+ Meta Business hesabı kurulum süresi)  
+**Bağımlılık:** Meta Business Manager hesabı, onaylı WABA (WhatsApp Business Account), test telefon numarası  
+**Dosya:** `server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts`
+
+#### Uygulama planı
+
+| Metot | Graph API Endpoint | Notlar |
+|-------|--------------------|--------|
+| `sendMessage` | `POST /v19.0/{phone_number_id}/messages` | Bearer token, `type: 'text'` payload |
+| `testConnection` | `GET /v19.0/{phone_number_id}` | 200 → bağlı, 401 → geçersiz token |
+| `parseWebhook` | — | Zaten implement edilmiş |
+| `getQrCode` | — | Meta QR flow kullanmaz; `{ available: false }` döndür |
+| `disconnect` | — | Meta'da logout kavramı yok; sadece `isActive = false` yapılır |
+
+#### Webhook Verify Token Endpoint
+
+Meta'nın doğrulama isteğini karşılamak için yeni public endpoint gerekir:
+
+```
+GET /api/public/whatsapp/meta-webhook
+  ?hub.mode=subscribe
+  &hub.verify_token=<metaWebhookVerifyToken>
+  &hub.challenge=<challenge>
+
+→ 200 OK ile challenge döner
+```
+
+Bu endpoint `server/src/routes/organizationWhatsApp.ts`'e eklenecek (auth gerektirmez, token doğrulaması yapılır).
+
+#### Env değişkenleri (Meta için)
+
+```env
+META_WA_APP_SECRET=<Meta App Secret — webhook imza doğrulama için>
+```
+
+> **Önemli:** Meta access token'ları 60 günde bir yenilenir. Üretimde `System User` token'ı veya otomatik token yenileme mekanizması kurulmalıdır.
+
+---
+
+### Etap 5 — Operasyonel İzleme
+
+**Hedef:** Bağlantı sağlığını pasif izlemek, pano widget'ı eklemek.  
+**Tahmini efor:** 3–4 saat  
+**Öncelik:** Düşük — diğer etaplar tamamlandıktan sonra
+
+#### E-5.1 — Bağlantı Sağlık Sync Job
+
+```
+server/src/jobs/whatsappHealthCheck.ts
+```
+
+- Her 5 dakikada bir `WhatsAppConnection` tablosundaki `isActive=true` kayıtları için `testConnection` çağır.
+- Sonuca göre `status` alanını güncelle: `connected` | `disconnected` | `error`.
+- `ActivityLog`'a yaz (sadece durum değişikliğinde).
+
+```typescript
+// reminders.ts pattern'ı izle — cron ile:
+cron.schedule('*/5 * * * *', whatsappHealthCheckJob);
+```
+
+#### E-5.2 — Dashboard Widget
+
+`src/pages/Dashboard.tsx` veya `src/components/` içine:
+
+```
+WhatsAppStatusCard
+  - Org genelinde toplam bağlantı sayısı
+  - Bağlı / bağlı değil sayıları
+  - Şube bazlı durum listesi
+  - "Yönet" → /organization/whatsapp linki
+```
+
+#### E-5.3 — Mesaj Geçmişi Filtresi
+
+`Messages.tsx`'e bağlantı bazlı filtre ekle:
+
+```
+Filtreler: [Kanal ▾] [Durum ▾] [Bağlantı ▾]  ← yeni
+```
+
+`SentMessage.whatsappConnectionId` alanı zaten var — backend `GET /api/messages?connectionId=...` parametresi eklenmeli.
+
+---
+
+### Etap Özeti ve Sıralama
+
+```
+Etap 1 (Frontend) ──────────► Hemen başlanabilir
+Etap 2 (Şifreleme) ─────────► Hemen başlanabilir (E-1 ile paralel)
+Etap 3 (Testler) ───────────► E-1 + E-2 sonrası veya paralel
+Etap 4 (Meta API) ──────────► Meta hesabı hazır olduğunda
+Etap 5 (İzleme) ────────────► E-1 + E-2 tamamlandıktan sonra
+```
+
+> **Kritik güvenlik notu:** E-2 (şifreleme) olabildiğince erken yapılmalıdır.  
+> Üretim ortamına geçmeden önce `evolutionApiKeyEncrypted` alanında ham metin bulunmamalıdır.

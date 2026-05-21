@@ -32,10 +32,21 @@ import gdprExportRoutes from './routes/gdprExport.js';
 import organizationDashboardRoutes from './routes/organizationDashboard.js';
 import organizationBranchesRoutes from './routes/organizationBranches.js';
 import organizationWhatsAppRoutes from './routes/organizationWhatsApp.js';
+import whatsappInboxRoutes from './routes/whatsappInbox.js';
 import schedulesRoutes from './routes/schedules.js';
 import { startReminderJobs } from './jobs/reminders.js';
+import { isEncryptionKeyConfigured } from './utils/encryption.js';
 
 dotenv.config();
+
+// ── Startup validation ────────────────────────────────────────────────────────
+if (!isEncryptionKeyConfigured()) {
+  console.warn(
+    '[WARN] ENCRYPTION_KEY is not set or invalid. ' +
+    'WhatsApp API keys will be stored unencrypted. ' +
+    'Set ENCRYPTION_KEY=<openssl rand -hex 32> before going to production.',
+  );
+}
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -83,6 +94,7 @@ app.use('/api', gdprExportRoutes);
 app.use('/api', organizationDashboardRoutes);
 app.use('/api', organizationBranchesRoutes);
 app.use('/api', organizationWhatsAppRoutes);
+app.use('/api', whatsappInboxRoutes);
 app.use('/api', schedulesRoutes);
 
 app.listen(port, () => {

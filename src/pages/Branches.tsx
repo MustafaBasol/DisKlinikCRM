@@ -16,11 +16,12 @@ import {
   Users,
   LayoutDashboard,
   ChevronRight,
+  MessageCircle,
 } from 'lucide-react';
-import { organizationBranchService } from '../services/api';
+import { organizationBranchService, clinicWhatsAppService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
-import { canManageBranches, canViewBranches, canManageClinicSchedule } from '../utils/permissions';
+import { canManageBranches, canViewBranches, canManageClinicSchedule, canAssignWhatsAppToClinic } from '../utils/permissions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -418,6 +419,7 @@ export default function Branches() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<ClinicBranch | null>(null);
+  const [whatsappStatuses, setWhatsappStatuses] = useState<Record<string, string>>({});
   const [statusBranch, setStatusBranch] = useState<ClinicBranch | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -434,7 +436,26 @@ export default function Branches() {
     setError(null);
     try {
       const { data } = await organizationBranchService.getAll();
-      setBranches(Array.isArray(data) ? data : []);
+      const list: ClinicBranch[] = Array.isArray(data) ? data : [];
+      setBranches(list);
+
+      // Fetch WhatsApp connection status for each branch in parallel
+      const statusMap: Record<string, string> = {};
+      await Promise.allSettled(
+        list.map(async (b) => {
+          try {
+            const res = await clinicWhatsAppService.getAssignments(b.id);
+            const assignments = Array.isArray(res.data) ? res.data : [];
+            const def = assignments.find((a: any) => a.isDefault);
+            statusMap[b.id] = def
+              ? (def.whatsappConnection?.status ?? 'unknown')
+              : 'none';
+          } catch {
+            statusMap[b.id] = 'unknown';
+          }
+        })
+      );
+      setWhatsappStatuses(statusMap);
     } catch {
       setError('Şubeler yüklenemedi.');
     } finally {
@@ -587,6 +608,18 @@ export default function Branches() {
                             Program Yönet
                           </button>
                         )}
+                        {canAssignWhatsAppToClinic(user) && (
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              navigate('/organization/whatsapp');
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          >
+                            <MessageCircle size={14} />
+                            WhatsApp Ayarları
+                          </button>
+                        )}
                         {canManage && (
                           <>
                             <div className="border-t border-gray-100 dark:border-gray-600 my-1" />
@@ -638,6 +671,37 @@ export default function Branches() {
                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                       <Mail size={13} className="flex-shrink-0" />
                       <span className="truncate">{branch.email}</span>
+                    </div>
+                  )}
+
+                  {/* WhatsApp connection status */}
+                  {whatsappStatuses[branch.id] !== undefined && (
+                    <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-gray-100 dark:border-gray-700/50">
+                      {(() => {
+                        const st = whatsappStatuses[branch.id];
+                        const cls =
+                          st === 'connected'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                            : st === 'none'
+                            ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                            : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300';
+                        const label =
+                          st === 'connected' ? 'WhatsApp Bağlı' : st === 'none' ? 'WhatsApp Yok' : 'Bağlı Değil';
+                        return (
+                          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${cls}`}>
+                            <MessageCircle size={11} />
+                            {label}
+                          </span>
+                        );
+                      })()}
+                      {canAssignWhatsAppToClinic(user) && (
+                        <button
+                          onClick={() => navigate('/organization/whatsapp')}
+                          className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1 ml-2"
+                        >
+                          <MessageCircle size={11} /> Ayarlar
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

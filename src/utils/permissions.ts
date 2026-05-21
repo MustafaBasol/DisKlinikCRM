@@ -305,3 +305,39 @@ export function canSendWhatsAppMessages(user: UserForPermission | null | undefin
     role === 'DENTIST'
   );
 }
+
+// ─── WhatsApp Inbox İzinleri ──────────────────────────────────────────────────
+
+/**
+ * Org düzeyindeki atanmamış WhatsApp gelen kutusunu görüntüleme.
+ */
+export function canViewWhatsAppInbox(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * Atanmamış WhatsApp konuşmasını bir kliniğe çözümleme.
+ */
+export function canResolveWhatsAppConversation(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * WhatsApp konuşmasına mevcut bir hastayı bağlama.
+ */
+export function canLinkWhatsAppPatient(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}

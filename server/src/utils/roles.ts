@@ -296,3 +296,47 @@ export function canSendWhatsAppMessages(user: UserForRole): boolean {
     role === 'DENTIST'
   );
 }
+
+// ── WhatsApp Inbox İzinleri ────────────────────────────────────────────────────
+
+/**
+ * Org düzeyindeki atanmamış WhatsApp gelen kutusunu görüntüleme.
+ * OWNER ve ORG_ADMIN her şeyi görebilir.
+ * CLINIC_MANAGER ve RECEPTIONIST yalnızca kendi şubelerine atanmış konuşmaları görebilir.
+ */
+export function canViewWhatsAppInbox(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * Atanmamış WhatsApp konuşmasını bir kliniğe çözümleme.
+ * OWNER ve ORG_ADMIN tüm kliniklere çözümleyebilir.
+ * CLINIC_MANAGER yalnızca kendi kliniklerine çözümleyebilir.
+ */
+export function canResolveWhatsAppConversation(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * WhatsApp konuşmasına mevcut bir hastayı bağlama.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST yapabilir.
+ */
+export function canLinkWhatsAppPatient(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}

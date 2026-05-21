@@ -299,4 +299,14 @@ export const clinicWhatsAppService = {
     api.delete(`/clinics/${clinicId}/whatsapp/${connectionId}`),
 };
 
+export const whatsappInboxService = {
+  getUnassigned: () => api.get('/whatsapp/inbox/unassigned'),
+  getConversations: (params?: { status?: string; clinicId?: string }) =>
+    api.get('/whatsapp/inbox/conversations', { params }),
+  resolve: (id: string, data: { clinicId: string; patientId?: string }) =>
+    api.post(`/whatsapp/inbox/${id}/resolve`, data),
+  linkPatient: (id: string, patientId: string) =>
+    api.post(`/whatsapp/inbox/${id}/link-patient`, { patientId }),
+};
+
 export default api;

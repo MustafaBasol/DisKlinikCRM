@@ -27,6 +27,7 @@ import {
   Package,
   Building2,
   MessageCircle,
+  Inbox,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -47,6 +48,7 @@ import {
   canViewUsers,
   normalizeRole,
   canViewWhatsAppStatus,
+  canViewWhatsAppInbox,
 } from '../utils/permissions';
 
 const MainLayoutInner: React.FC = () => {
@@ -91,6 +93,9 @@ const MainLayoutInner: React.FC = () => {
 
   if (canViewWhatsAppStatus(user)) {
     navItems.push({ path: '/organization/whatsapp', icon: <MessageCircle size={20} />, label: 'WhatsApp' });
+  }
+  if (canViewWhatsAppInbox(user)) {
+    navItems.push({ path: '/whatsapp-inbox', icon: <Inbox size={20} />, label: 'WA Gelen Kutusu' });
   }
 
   // Hastalar

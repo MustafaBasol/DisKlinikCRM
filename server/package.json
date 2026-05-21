@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "npx prisma generate && tsx src/index.ts",
-    "test": "npm run test:fixtures",
-    "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts"
+    "test": "npm run test:fixtures && npm run test:whatsapp && npm run test:inbox",
+    "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts",
+    "test:whatsapp": "tsx src/tests/whatsappProvider.test.ts",
+    "test:inbox": "tsx src/tests/whatsappInbox.test.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

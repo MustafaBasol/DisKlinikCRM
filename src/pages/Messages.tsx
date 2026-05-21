@@ -15,15 +15,17 @@ import {
   XCircle
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { messageService } from '../services/api';
+import { messageService, clinicWhatsAppService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 import { canCreateAppointment } from '../utils/permissions';
 
 const Messages: React.FC = () => {
   const { t } = useTranslation(['messages', 'common']);
   const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
   const canSend = canCreateAppointment(user); // OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST
-  
+
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState<string | null>(null);
@@ -31,6 +33,35 @@ const Messages: React.FC = () => {
   const [search, setSearch] = useState('');
   const [channel, setChannel] = useState('');
   const [status, setStatus] = useState('');
+
+  // WhatsApp connection awareness
+  const [waConnection, setWaConnection] = useState<{ status: string; provider: string; phoneNumber?: string | null } | null>(null);
+  const [waLoading, setWaLoading] = useState(true);
+
+  useEffect(() => {
+    if (!selectedClinicId || selectedClinicId === 'all') {
+      setWaLoading(false);
+      return;
+    }
+    setWaLoading(true);
+    clinicWhatsAppService
+      .getAssignments(selectedClinicId)
+      .then((res: any) => {
+        const assignments = Array.isArray(res.data) ? res.data : [];
+        const active = assignments.find((a: any) => a.isDefault && a.whatsappConnection?.isActive);
+        setWaConnection(active?.whatsappConnection ?? null);
+      })
+      .catch(() => setWaConnection(null))
+      .finally(() => setWaLoading(false));
+  }, [selectedClinicId]);
+
+  // Can send only if permission + active connected WhatsApp (non-Meta stub)
+  const canSendNow =
+    canSend &&
+    !waLoading &&
+    waConnection !== null &&
+    waConnection.status === 'connected' &&
+    waConnection.provider !== 'meta_cloud_api';
 
   const fetchMessages = async () => {
     setLoading(true);
@@ -129,6 +160,26 @@ const Messages: React.FC = () => {
       </div>
 
       <div className="card overflow-hidden">
+        {/* WhatsApp connection status banner */}
+        {!waLoading && channel !== 'email' && channel !== 'sms' && (
+          <div className={`flex items-center gap-2 px-4 py-2.5 text-xs border-b ${
+            waConnection?.status === 'connected'
+              ? 'bg-green-50 border-green-100 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300'
+              : waConnection?.provider === 'meta_cloud_api'
+              ? 'bg-amber-50 border-amber-100 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300'
+              : 'bg-gray-50 border-gray-100 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'
+          }`}>
+            <MessageSquare size={13} className="flex-shrink-0" />
+            {waConnection?.status === 'connected' && waConnection.provider !== 'meta_cloud_api'
+              ? `WhatsApp bağlı${waConnection.phoneNumber ? ` — ${waConnection.phoneNumber}` : ''}`
+              : waConnection?.provider === 'meta_cloud_api'
+              ? 'Meta Cloud API bağlantısı henüz aktif değil — mesaj gönderimi devre dışı'
+              : selectedClinicId === 'all'
+              ? 'Mesaj göndermek için önce bir şube seçin'
+              : 'WhatsApp bağlantısı yapılandırılmamış — önce bağlantı oluşturun'}
+          </div>
+        )}
+
         {sendError && (
           <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border-b border-red-100 text-sm text-red-700">
             <XCircle size={16} className="flex-shrink-0" />
@@ -201,9 +252,9 @@ const Messages: React.FC = () => {
                         {canSend && message.status === 'prepared' && (
                           <button
                             onClick={() => handleSend(message.id)}
-                            disabled={sending === message.id}
-                            className="p-2 text-gray-400 hover:bg-white hover:text-green-600 rounded-lg transition-all shadow-sm disabled:opacity-50"
-                            title="Şimdi Gönder"
+                            disabled={sending === message.id || !canSendNow}
+                            className="p-2 text-gray-400 hover:bg-white hover:text-green-600 rounded-lg transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={canSendNow ? 'Şimdi Gönder' : 'WhatsApp bağlantısı yok veya bağlı değil'}
                           >
                             {sending === message.id
                               ? <Loader2 size={18} className="animate-spin" />

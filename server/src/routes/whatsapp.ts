@@ -2,6 +2,10 @@ import express from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
+import {
+  resolveClinicForIncomingMessage,
+  upsertInboxEntry,
+} from '../services/whatsapp/clinicResolver.js';
 import { extractAssistantInputWithGoogleAi } from '../services/googleAiStudio.js';
 import {
   buildAvailableSlots,
@@ -1347,6 +1351,80 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
   if (!incomingMessage) return res.status(200).json({ ignored: true, reason: 'no_text_message' });
 
   try {
+    // ── Sprint 11: DB-based connection + clinic resolution (takes precedence) ──
+    if (normalizedPayload.instance?.trim()) {
+      const dbConnection = await prisma.whatsAppConnection.findFirst({
+        where: {
+          evolutionInstanceName: normalizedPayload.instance.trim(),
+          isActive: true,
+        },
+        select: { id: true, organizationId: true },
+      });
+
+      if (dbConnection) {
+        const resolution = await resolveClinicForIncomingMessage(
+          dbConnection.id,
+          dbConnection.organizationId,
+          incomingMessage.phone,
+        );
+
+        if (resolution.needsClinicResolution) {
+          // Priority D — shared connection, cannot determine clinic
+          // Create/update inbox entry for manual staff resolution
+          await upsertInboxEntry({
+            organizationId: dbConnection.organizationId,
+            whatsappConnectionId: dbConnection.id,
+            phone: incomingMessage.phone,
+            displayName: (incomingMessage as any).pushName ?? null,
+            lastMessageText: incomingMessage.text,
+            externalMessageId: incomingMessage.messageId ?? null,
+            rawPayload: normalizedPayload as Record<string, unknown>,
+          });
+          console.info('[whatsapp-assistant] inbox-unassigned', {
+            phone: incomingMessage.phone,
+            instance: normalizedPayload.instance,
+            organizationId: dbConnection.organizationId,
+          });
+          return res.status(200).json({ ok: true, routed: 'inbox_unassigned' });
+        }
+
+        if (resolution.clinicId) {
+          // Priority A/B/C — clinic resolved from DB connection
+          const resolvedClinic = await prisma.clinic.findUnique({
+            where: { id: resolution.clinicId },
+          });
+          if (resolvedClinic) {
+            const duplicate = await hasProcessedWhatsAppProviderMessage(
+              resolvedClinic.id, incomingMessage.phone, incomingMessage.messageId,
+            );
+            if (duplicate) return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+
+            const responseText = await handleIncomingWhatsAppMessage(incomingMessage, resolvedClinic);
+            const patient = await findExistingPatientByPhone(resolvedClinic.id, incomingMessage.phone);
+            await sendWhatsAppMessage(resolvedClinic.id, { phone: incomingMessage.phone, text: responseText });
+            if (patient) {
+              await saveWhatsAppConversationMessage({
+                clinicId: resolvedClinic.id, patientId: patient.id,
+                phone: incomingMessage.phone, direction: 'outgoing', text: responseText,
+              });
+            }
+            await markWhatsAppProviderMessageProcessed(resolvedClinic.id, incomingMessage.phone, incomingMessage.messageId);
+            console.info('[whatsapp-assistant] send-result (db-resolved)', {
+              phone: incomingMessage.phone,
+              instance: normalizedPayload.instance ?? null,
+              resolutionSource: resolution.resolutionSource,
+              clinicId: resolvedClinic.id,
+            });
+            return res.status(200).json({ ok: true });
+          }
+        }
+
+        // no_clinic_links — connection exists in DB but has no clinic assignments
+        // Fall through to legacy resolution below
+      }
+    }
+
+    // ── Legacy resolution (existing single-clinic behavior) ──
     const clinic = await getClinicForWhatsAppInstance(normalizedPayload.instance);
     if (!clinic) return res.status(404).json({ error: 'Clinic not found for WhatsApp instance' });
 

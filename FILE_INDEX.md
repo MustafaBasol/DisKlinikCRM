@@ -31,6 +31,7 @@ health-crm-agent-docs/
 │  ├─ 25-multibranch-plan.md
 │  ├─ 26-role-permissions.md
 │  ├─ 27-sprint10-whatsapp-provider-abstraction.md  — Sprint 10: provider-agnostic WhatsApp mimarisi
+│  ├─ 28-sprint11-whatsapp-inbox.md  — Sprint 11: paylaşımlı WA gelen kutusu, klinik çözümleme
 │  ├─ crm_improvement_plan.md
 │  ├─ top_5_critical_plan.md
 │  └─ whatsapp-evolution-backend-agent.md

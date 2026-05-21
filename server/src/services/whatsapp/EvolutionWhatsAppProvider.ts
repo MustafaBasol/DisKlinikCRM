@@ -15,6 +15,7 @@ import type {
   QrCodeResult,
   ParsedWebhookEvent,
 } from './WhatsAppProvider.js';
+import { decryptSecret } from '../../utils/encryption.js';
 
 const buildEvolutionSendTextUrl = (baseUrl: string, instanceName: string) =>
   `${baseUrl.replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instanceName)}`;
@@ -34,9 +35,22 @@ function resolveCredentials(connection: WhatsAppConnectionRecord): {
   instanceName: string;
 } | null {
   const baseUrl = connection.evolutionApiUrl?.trim() || process.env.EVOLUTION_API_BASE_URL?.trim();
-  const apiKey = connection.evolutionApiKeyEncrypted?.trim() || process.env.EVOLUTION_API_KEY?.trim();
   const instanceName =
     connection.evolutionInstanceName?.trim() || process.env.EVOLUTION_INSTANCE_NAME?.trim();
+
+  // Decrypt stored key; fall back to env var (legacy or unencrypted)
+  let apiKey: string | undefined;
+  const rawKey = connection.evolutionApiKeyEncrypted?.trim();
+  if (rawKey) {
+    try {
+      apiKey = decryptSecret(rawKey);
+    } catch {
+      // Legacy or test records may be stored unencrypted — accept as-is
+      apiKey = rawKey;
+    }
+  } else {
+    apiKey = process.env.EVOLUTION_API_KEY?.trim();
+  }
 
   if (!baseUrl || !apiKey || !instanceName) return null;
   return { baseUrl, apiKey, instanceName };

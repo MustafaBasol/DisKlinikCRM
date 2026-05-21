@@ -65,6 +65,7 @@ model Clinic {
   patientClinics           PatientClinic[]
   clinicWorkingHours       ClinicWorkingHours[]
   clinicWhatsAppConnections ClinicWhatsAppConnection[]
+  whatsappInboxEntries  WhatsAppInboxEntry[] @relation("InboxEntryClinic")
 
   @@unique([organizationId, slug])
 }
@@ -113,6 +114,7 @@ model User {
   inventoryTransactions InventoryTransaction[]        @relation("InventoryPerformedBy")
   proceduresCreated     TreatmentPlanProcedure[]      @relation("ProcedureCreator")
   userClinics           UserClinic[]
+  resolvedInboxEntries  WhatsAppInboxEntry[] @relation("InboxEntryResolver")
 
   // Phase 1b: changed to organizationId scope for multi-branch
   @@unique([organizationId, email])
@@ -190,6 +192,7 @@ model Patient {
   practitionerEarnings PractitionerEarning[]
   treatmentPlanProcedures TreatmentPlanProcedure[]
   patientClinics          PatientClinic[]
+  whatsappInboxEntries    WhatsAppInboxEntry[] @relation("InboxEntryPatient")
 }
 
 model AppointmentType {
@@ -865,6 +868,7 @@ model Organization {
   whatsappConnections   WhatsAppConnection[]
   clinicWhatsAppConnections ClinicWhatsAppConnection[]
   sentMessages          SentMessage[]
+  whatsappInboxEntries  WhatsAppInboxEntry[]
 }
 
 model UserClinic {
@@ -955,8 +959,9 @@ model WhatsAppConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clinics      ClinicWhatsAppConnection[]
-  sentMessages SentMessage[]
+  clinics        ClinicWhatsAppConnection[]
+  sentMessages   SentMessage[]
+  inboxEntries   WhatsAppInboxEntry[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -981,4 +986,38 @@ model ClinicWhatsAppConnection {
   @@index([organizationId])
   @@index([clinicId])
   @@index([whatsappConnectionId])
+}
+
+/// Incoming WhatsApp messages that could not be automatically assigned to a clinic.
+/// Priority A-C resolution routes to existing flow; Priority D creates one of these.
+/// After staff resolution: clinicId is set, needsClinicResolution=false, status=resolved.
+model WhatsAppInboxEntry {
+  id                    String              @id @default(uuid())
+  organizationId        String
+  organization          Organization        @relation(fields: [organizationId], references: [id])
+  whatsappConnectionId  String?
+  whatsappConnection    WhatsAppConnection? @relation(fields: [whatsappConnectionId], references: [id])
+  clinicId              String?             // null = unresolved
+  clinic                Clinic?             @relation("InboxEntryClinic", fields: [clinicId], references: [id])
+  patientId             String?             // null = no matched patient yet
+  patient               Patient?            @relation("InboxEntryPatient", fields: [patientId], references: [id])
+  resolvedByUserId      String?
+  resolvedBy            User?               @relation("InboxEntryResolver", fields: [resolvedByUserId], references: [id])
+  phone                 String
+  displayName           String?
+  lastMessageText       String?
+  messageCount          Int                 @default(1)
+  externalMessageId     String?
+  rawPayload            Json?
+  needsClinicResolution Boolean             @default(false)
+  // open | resolved
+  status                String              @default("open")
+  resolvedAt            DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([organizationId, needsClinicResolution])
+  @@index([organizationId, status])
+  @@index([organizationId, clinicId])
+  @@index([whatsappConnectionId, phone])
 }

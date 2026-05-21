@@ -32,6 +32,7 @@ import {
 } from '../utils/roles.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
+import { encryptSecret } from '../utils/encryption.js';
 import {
   testWhatsAppConnection,
   getWhatsAppQrCode,
@@ -132,8 +133,16 @@ router.post(
     }
 
     try {
+      // Encrypt secrets before persisting
+      const createData: Record<string, unknown> = { organizationId, ...parsed.data };
+      if (typeof createData.evolutionApiKeyEncrypted === 'string' && createData.evolutionApiKeyEncrypted) {
+        createData.evolutionApiKeyEncrypted = encryptSecret(createData.evolutionApiKeyEncrypted as string);
+      }
+      if (typeof createData.metaAccessTokenEncrypted === 'string' && createData.metaAccessTokenEncrypted) {
+        createData.metaAccessTokenEncrypted = encryptSecret(createData.metaAccessTokenEncrypted as string);
+      }
       const connection = await prisma.whatsAppConnection.create({
-        data: { organizationId, ...parsed.data },
+        data: createData as Parameters<typeof prisma.whatsAppConnection.create>[0]['data'],
       });
       await logActivity({
         clinicId: req.user!.clinicId,
@@ -205,9 +214,17 @@ router.put(
       });
       if (!existing) return res.status(404).json({ error: 'Connection not found' });
 
+      // Encrypt secrets before persisting — only if provided (partial update)
+      const updateData: Record<string, unknown> = { ...parsed.data };
+      if (typeof updateData.evolutionApiKeyEncrypted === 'string' && updateData.evolutionApiKeyEncrypted) {
+        updateData.evolutionApiKeyEncrypted = encryptSecret(updateData.evolutionApiKeyEncrypted as string);
+      }
+      if (typeof updateData.metaAccessTokenEncrypted === 'string' && updateData.metaAccessTokenEncrypted) {
+        updateData.metaAccessTokenEncrypted = encryptSecret(updateData.metaAccessTokenEncrypted as string);
+      }
       const updated = await prisma.whatsAppConnection.update({
         where: { id },
-        data: parsed.data,
+        data: updateData as Parameters<typeof prisma.whatsAppConnection.update>[0]['data'],
       });
       await logActivity({
         clinicId: req.user!.clinicId,
