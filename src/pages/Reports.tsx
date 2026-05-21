@@ -177,21 +177,26 @@ const Reports: React.FC = () => {
   }, [tab, selectedClinicId]); // eslint-disable-line
 
   const handleExportCSV = () => {
+    const baseUrl = (import.meta.env.VITE_API_URL as string) || '/api';
     const params = new URLSearchParams({ dateFrom, dateTo });
     if (practitionerId) params.set('practitionerId', practitionerId);
     if (paymentMethod) params.set('paymentMethod', paymentMethod);
+    if (selectedClinicId && selectedClinicId !== 'all') params.set('clinicId', selectedClinicId);
     const token = localStorage.getItem('hcrm_token');
-    const url = `/api/reports/revenue/export.csv?${params.toString()}`;
-    // Use fetch to include auth header, then trigger download
+    const url = `${baseUrl}/reports/revenue/export.csv?${params.toString()}`;
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob())
+      .then(async r => {
+        if (!r.ok) throw new Error('Export failed');
+        return r.blob();
+      })
       .then(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `gelir-raporu-${dateFrom}-${dateTo}.csv`;
         a.click();
         URL.revokeObjectURL(a.href);
-      });
+      })
+      .catch(() => setError('CSV indirilemedi.'));
   };
 
   const summary = revenueData?.summary;
