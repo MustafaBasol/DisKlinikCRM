@@ -1,15 +1,23 @@
 /**
- * organizationDashboard.ts — Şube Yönetimi Dashboard (Sprint 5)
+ * organizationDashboard.ts — Sprint 9: Advanced Metrics + Branch Performance Insights
  *
- * GET /api/organization/dashboard?range=this_month
+ * GET /api/organization/dashboard?range=this_month&from=...&to=...
  *
- * Güvenlik kuralları:
+ * Yetki kuralları:
  * 1. Yalnızca OWNER veya ORG_ADMIN erişebilir.
  *    - Legacy "admin" + canAccessAllClinics=true → OWNER → erişim verilir.
  *    - Legacy "admin" + canAccessAllClinics=false → CLINIC_MANAGER → erişim REDDEDİLİR.
  * 2. Tüm sorgular organizationId ile scope edilir.
- * 3. Frontend'den gelen clinicId'ler DB'den doğrulanır.
- * 4. canAccessOrganizationDashboard() ile çift katmanlı kontrol yapılır.
+ * 3. canAccessOrganizationDashboard() ile çift katmanlı kontrol yapılır.
+ *
+ * Döndürülen metriklere eklenenler (Sprint 9):
+ *  - completedAppointments, cancelledAppointments per branch
+ *  - doctorCount per branch (DENTIST rolü)
+ *  - totalPatients per branch (tüm zamanlar)
+ *  - collectedPayments (revenue ile aynı, explicit)
+ *  - activeClinics, completedTreatmentCases, collectedPayments özet metrikleri
+ *  - lowestRevenueClinic içgörüsü
+ *  - clinicSlug (frontend navigasyon için)
  */
 
 import express, { Response } from 'express';
@@ -19,8 +27,8 @@ import { canAccessOrganizationDashboard } from '../utils/roles.js';
 
 const router = express.Router();
 
-// Tarih aralığı hesapla
-function getDateRange(range: string, from?: string, to?: string): { from: Date; to: Date } {
+// Export edilmiş — birim testlerinden çağrılabilir
+export function getDateRange(range: string, from?: string, to?: string): { from: Date; to: Date } {
   const now = new Date();
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
@@ -31,7 +39,9 @@ function getDateRange(range: string, from?: string, to?: string): { from: Date; 
       return { from: start, to: endOfToday };
     }
     case 'this_week': {
-      const start = new Date(now); start.setDate(now.getDate() - now.getDay()); start.setHours(0, 0, 0, 0);
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0, 0, 0, 0);
       return { from: start, to: endOfToday };
     }
     case 'last_30_days': {
@@ -50,17 +60,32 @@ function getDateRange(range: string, from?: string, to?: string): { from: Date; 
   }
 }
 
+const EMPTY_SUMMARY = {
+  totalClinics: 0,
+  activeClinics: 0,
+  todayAppointments: 0,
+  totalAppointments: 0,
+  completedAppointments: 0,
+  cancelledAppointments: 0,
+  monthlyRevenue: 0,
+  collectedPayments: 0,
+  outstandingBalance: 0,
+  newPatients: 0,
+  activeTreatmentPlans: 0,
+  completedTreatmentCases: 0,
+  averageNoShowRate: 0,
+  staffCount: 0,
+};
+
 // GET /api/organization/dashboard
 router.get(
   '/organization/dashboard',
-  // Kanonik roller: yalnızca OWNER veya ORG_ADMIN.
-  // Legacy "admin" + canAccessAllClinics=false → CLINIC_MANAGER → reddedilir.
   authorize(['OWNER', 'ORG_ADMIN']),
   async (req: AuthRequest, res: Response) => {
-    // Çift katmanlı kontrol: authorize() geçmiş olsa bile ikinci doğrulama
     if (!canAccessOrganizationDashboard(req.user!)) {
       return res.status(403).json({ error: 'Organization dashboard requires organization-level access' });
     }
+
     const orgId = req.user!.organizationId;
     const { range = 'this_month', from: fromParam, to: toParam } = req.query;
 
@@ -76,7 +101,6 @@ router.get(
     }
 
     try {
-      // Kullanıcının erişebildiği klinikleri belirle
       let scopeClinicIds: string[];
       if (req.user!.canAccessAllClinics) {
         const orgClinics = await prisma.clinic.findMany({
@@ -89,120 +113,162 @@ router.get(
       }
 
       if (scopeClinicIds.length === 0) {
-        return res.json({ summary: {}, clinics: [], insights: {} });
+        return res.json({ summary: EMPTY_SUMMARY, clinics: [], insights: {} });
       }
 
-      // Klinik bilgilerini çek
       const clinics = await prisma.clinic.findMany({
         where: { id: { in: scopeClinicIds }, organizationId: orgId },
-        select: { id: true, name: true, status: true },
+        select: { id: true, name: true, slug: true, status: true, address: true },
       });
 
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
 
-      // Her klinik için metrikleri paralel çek
       const clinicMetrics = await Promise.all(
         clinics.map(async (clinic) => {
           const [
             todayAppointments,
-            monthlyAppointments,
+            appointments,
+            completedAppointments,
+            cancelledAppointments,
             noShowCount,
-            totalAppointments,
             newPatients,
+            totalPatients,
             activeTreatmentPlans,
             completedTreatments,
             revenueAgg,
             outstandingAgg,
             staffCount,
+            doctorCount,
           ] = await Promise.all([
+            // Bugünkü randevu (iptal edilmemiş)
             prisma.appointment.count({
               where: { clinicId: clinic.id, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' } },
             }),
+            // Dönem randevusu (iptal edilmemiş)
             prisma.appointment.count({
               where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: { not: 'cancelled' } },
             }),
+            // Tamamlanan randevu
+            prisma.appointment.count({
+              where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: 'completed' },
+            }),
+            // İptal edilen randevu
+            prisma.appointment.count({
+              where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: 'cancelled' },
+            }),
+            // No-show
             prisma.appointment.count({
               where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: 'no_show' },
             }),
-            prisma.appointment.count({
-              where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: { not: 'cancelled' } },
-            }),
+            // Yeni hasta (dönemde)
             prisma.patient.count({
               where: { primaryClinicId: clinic.id, createdAt: { gte: dateRange.from, lte: dateRange.to }, deletedAt: null },
             }),
+            // Toplam hasta (tüm zamanlar)
+            prisma.patient.count({
+              where: { primaryClinicId: clinic.id, deletedAt: null },
+            }),
+            // Aktif tedavi planı
             prisma.treatmentCase.count({
               where: { clinicId: clinic.id, stage: { notIn: ['completed', 'lost'] } },
             }),
+            // Tamamlanan tedavi (dönemde)
             prisma.treatmentCase.count({
               where: { clinicId: clinic.id, stage: 'completed', closedAt: { gte: dateRange.from, lte: dateRange.to } },
             }),
+            // Tahsil edilen ödeme (dönemde)
             prisma.payment.aggregate({
               where: { clinicId: clinic.id, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: dateRange.from, lte: dateRange.to } },
               _sum: { amount: true },
             }),
+            // Bekleyen bakiye (tüm zamanlar)
             prisma.payment.aggregate({
               where: { clinicId: clinic.id, paymentStatus: 'pending' },
               _sum: { amount: true },
             }),
+            // Toplam personel
             prisma.userClinic.count({
               where: { clinicId: clinic.id, isActive: true },
             }),
+            // Doktor sayısı (DENTIST rolü, büyük/küçük harf duyarsız)
+            prisma.userClinic.count({
+              where: { clinicId: clinic.id, isActive: true, role: { equals: 'DENTIST', mode: 'insensitive' } },
+            }),
           ]);
 
-          const monthlyRevenue = Number(revenueAgg._sum.amount) || 0;
+          const revenue = Number(revenueAgg._sum.amount) || 0;
           const outstandingBalance = Number(outstandingAgg._sum.amount) || 0;
-          const noShowRate = totalAppointments > 0 ? Math.round((noShowCount / totalAppointments) * 1000) / 1000 : 0;
+          // noShowRate: 0–1 aralığında ondalık (ör. 0.057 = %5.7)
+          const noShowRate = appointments > 0 ? Math.round((noShowCount / appointments) * 1000) / 1000 : 0;
 
           return {
             clinicId: clinic.id,
             clinicName: clinic.name,
+            clinicSlug: clinic.slug,
             status: clinic.status,
+            address: clinic.address ?? null,
             todayAppointments,
-            monthlyAppointments,
-            monthlyRevenue,
-            outstandingBalance,
+            appointments,
+            completedAppointments,
+            cancelledAppointments,
+            noShowRate,
+            totalPatients,
             newPatients,
+            revenue,
+            collectedPayments: revenue,
+            outstandingBalance,
             activeTreatmentPlans,
             completedTreatments,
-            noShowRate,
             staffCount,
+            doctorCount,
           };
         })
       );
 
-      // Özet toplamlar
+      const activeClinics = clinics.filter(c => c.status === 'active').length;
+      const totalAppointmentsSum = clinicMetrics.reduce((s, c) => s + c.appointments, 0);
+      const avgNoShow = clinicMetrics.length > 0
+        ? Math.round((clinicMetrics.reduce((s, c) => s + c.noShowRate, 0) / clinicMetrics.length) * 1000) / 1000
+        : 0;
+
       const summary = {
         totalClinics: clinics.length,
+        activeClinics,
         todayAppointments: clinicMetrics.reduce((s, c) => s + c.todayAppointments, 0),
-        monthlyAppointments: clinicMetrics.reduce((s, c) => s + c.monthlyAppointments, 0),
-        monthlyRevenue: clinicMetrics.reduce((s, c) => s + c.monthlyRevenue, 0),
+        totalAppointments: totalAppointmentsSum,
+        completedAppointments: clinicMetrics.reduce((s, c) => s + c.completedAppointments, 0),
+        cancelledAppointments: clinicMetrics.reduce((s, c) => s + c.cancelledAppointments, 0),
+        monthlyRevenue: clinicMetrics.reduce((s, c) => s + c.revenue, 0),
+        collectedPayments: clinicMetrics.reduce((s, c) => s + c.revenue, 0),
         outstandingBalance: clinicMetrics.reduce((s, c) => s + c.outstandingBalance, 0),
         newPatients: clinicMetrics.reduce((s, c) => s + c.newPatients, 0),
         activeTreatmentPlans: clinicMetrics.reduce((s, c) => s + c.activeTreatmentPlans, 0),
-        averageNoShowRate: clinicMetrics.length > 0
-          ? Math.round((clinicMetrics.reduce((s, c) => s + c.noShowRate, 0) / clinicMetrics.length) * 1000) / 1000
-          : 0,
-        activeUsers: clinicMetrics.reduce((s, c) => s + c.staffCount, 0),
+        completedTreatmentCases: clinicMetrics.reduce((s, c) => s + c.completedTreatments, 0),
+        averageNoShowRate: avgNoShow,
+        staffCount: clinicMetrics.reduce((s, c) => s + c.staffCount, 0),
       };
 
-      // İçgörüler — boş durum güvenliği
       if (clinicMetrics.length === 0) {
         return res.json({ summary, clinics: clinicMetrics, insights: {} });
       }
 
-      const topRevenue = clinicMetrics.reduce((best, c) => c.monthlyRevenue > best.monthlyRevenue ? c : best, clinicMetrics[0]);
-      const topAppointments = clinicMetrics.reduce((best, c) => c.monthlyAppointments > best.monthlyAppointments ? c : best, clinicMetrics[0]);
-      const topOutstanding = clinicMetrics.reduce((best, c) => c.outstandingBalance > best.outstandingBalance ? c : best, clinicMetrics[0]);
-      const topNoShow = clinicMetrics.reduce((best, c) => c.noShowRate > best.noShowRate ? c : best, clinicMetrics[0]);
-      const topNewPatients = clinicMetrics.reduce((best, c) => c.newPatients > best.newPatients ? c : best, clinicMetrics[0]);
+      const topRevenue    = clinicMetrics.reduce((b, c) => c.revenue > b.revenue ? c : b, clinicMetrics[0]);
+      const lowestRevenue = clinicMetrics.reduce((b, c) => c.revenue < b.revenue ? c : b, clinicMetrics[0]);
+      const topAppts      = clinicMetrics.reduce((b, c) => c.appointments > b.appointments ? c : b, clinicMetrics[0]);
+      const topOutstanding= clinicMetrics.reduce((b, c) => c.outstandingBalance > b.outstandingBalance ? c : b, clinicMetrics[0]);
+      const topNoShow     = clinicMetrics.reduce((b, c) => c.noShowRate > b.noShowRate ? c : b, clinicMetrics[0]);
+      const topNewPts     = clinicMetrics.reduce((b, c) => c.newPatients > b.newPatients ? c : b, clinicMetrics[0]);
+
+      const mk = (m: typeof clinicMetrics[0], val: number) => ({ clinicId: m.clinicId, clinicName: m.clinicName, value: val });
 
       const insights = {
-        topRevenueClinic: { clinicId: topRevenue?.clinicId, clinicName: topRevenue?.clinicName, value: topRevenue?.monthlyRevenue },
-        highestAppointmentClinic: { clinicId: topAppointments?.clinicId, clinicName: topAppointments?.clinicName, value: topAppointments?.monthlyAppointments },
-        highestOutstandingBalanceClinic: { clinicId: topOutstanding?.clinicId, clinicName: topOutstanding?.clinicName, value: topOutstanding?.outstandingBalance },
-        highestNoShowClinic: { clinicId: topNoShow?.clinicId, clinicName: topNoShow?.clinicName, value: topNoShow?.noShowRate },
-        topNewPatientClinic: { clinicId: topNewPatients?.clinicId, clinicName: topNewPatients?.clinicName, value: topNewPatients?.newPatients },
+        topRevenueClinic:               mk(topRevenue,    topRevenue.revenue),
+        lowestRevenueClinic:            mk(lowestRevenue, lowestRevenue.revenue),
+        highestAppointmentClinic:       mk(topAppts,      topAppts.appointments),
+        highestOutstandingBalanceClinic:mk(topOutstanding,topOutstanding.outstandingBalance),
+        highestNoShowClinic:            mk(topNoShow,     topNoShow.noShowRate),
+        topNewPatientClinic:            mk(topNewPts,     topNewPts.newPatients),
       };
 
       res.json({ summary, clinics: clinicMetrics, insights });

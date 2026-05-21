@@ -973,13 +973,35 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       orderBy: { createdAt: 'desc' },
     });
 
-    const targetAppointment = reminderMsg?.appointment
+    let targetAppointment = reminderMsg?.appointment
       && reminderMsg.appointment.deletedAt === null
       && reminderMsg.appointment.status === 'scheduled'
       && reminderMsg.appointment.startTime >= now
       && reminderMsg.appointment.startTime <= windowEnd
       ? reminderMsg.appointment
       : null;
+
+    // Fallback: no sentMessage found (e.g. reminder sent by external system like n8n).
+    // If the patient has exactly one upcoming scheduled appointment in the next 48 h,
+    // treat "evet / hayır" as a reply to that reminder.
+    if (!targetAppointment) {
+      const directAppts = await prisma.appointment.findMany({
+        where: {
+          clinicId: clinic.id,
+          patientId: existingPatient.id,
+          deletedAt: null,
+          status: 'scheduled',
+          startTime: { gte: now, lte: windowEnd },
+        },
+        include: { appointmentType: { select: { name: true } } },
+        orderBy: { startTime: 'asc' },
+        take: 2,
+      });
+      if (directAppts.length === 1) {
+        targetAppointment = directAppts[0];
+        console.log(`[reminders] Reminder confirmation matched via direct appointment lookup for ${inputPhone} (apptId=${directAppts[0].id})`);
+      }
+    }
 
     if (targetAppointment) {
       const start = formatClinicDateTime(targetAppointment.startTime, tz);
