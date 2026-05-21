@@ -313,4 +313,29 @@ export const financeDashboardService = {
     api.get('/finance/dashboard', { params }),
 };
 
+export const operationalMonitoringService = {
+  getHealth: () => api.get('/ops/health'),
+  getAuditLogs: (params?: {
+    clinicId?: string;
+    action?: string;
+    entityType?: string;
+    actorUserId?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/ops/audit-logs', { params }),
+  getEvents: (params?: {
+    clinicId?: string;
+    severity?: string;
+    source?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/ops/events', { params }),
+  resolveEvent: (id: string) => api.patch(`/ops/events/${id}/resolve`),
+};
+
 export default api;

@@ -6,6 +6,7 @@ import { getParam } from '../utils/helpers.js';
 import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { recordOperationalEvent } from '../services/operationalEventService.js';
 
 const router = express.Router();
 
@@ -309,6 +310,14 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
           clinicId, userId: req.user!.id, entityType: 'message', entityId: id,
           action: 'send_failed',
           description: `${message.patient.firstName} ${message.patient.lastName} için WhatsApp gönderilemedi: ${sendErr.message}`,
+        });
+        recordOperationalEvent({
+          organizationId: req.user!.organizationId,
+          clinicId,
+          severity: 'error',
+          source: 'whatsapp',
+          message: `WhatsApp send failed: ${sendErr.message}`,
+          metadata: { messageId: id, recipient: message.recipient, patientId: message.patientId },
         });
         return res.status(502).json({ error: 'WhatsApp send failed', detail: sendErr.message });
       }

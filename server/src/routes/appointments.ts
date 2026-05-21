@@ -5,6 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam, checkPractitionerAvailability } from '../utils/helpers.js';
 import { appointmentSchema, appointmentUpdateSchema } from '../schemas/index.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
 
@@ -149,6 +150,19 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
       metadata: { patientName: `${patient.firstName} ${patient.lastName}`, practitioner: `Dr. ${practitioner.lastName}` },
     });
 
+    writeAuditLog({
+      organizationId: req.user!.organizationId,
+      clinicId,
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'appointment_created',
+      entityType: 'appointment',
+      entityId: appointment.id,
+      description: `Appointment created for ${patient.firstName} ${patient.lastName}`,
+      metadata: { patientId, practitionerId, startTime: String(startTime), endTime: String(endTime) },
+      ...extractRequestMeta(req),
+    });
+
     res.json(appointment);
   } catch {
     res.status(500).json({ error: 'Failed to create appointment' });
@@ -235,10 +249,33 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         action: validation.data.status,
         description: `Randevu durumu güncellendi: ${existing.status} → ${validation.data.status}`,
       });
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: validation.data.status === 'cancelled' ? 'appointment_cancelled' : 'appointment_updated',
+        entityType: 'appointment',
+        entityId: id,
+        description: `Appointment status: ${existing.status} → ${validation.data.status}`,
+        metadata: { previousStatus: existing.status, newStatus: validation.data.status },
+        ...extractRequestMeta(req),
+      });
     } else {
       await logActivity({
         clinicId, userId, entityType: 'appointment', entityId: id,
         action: 'updated', description: 'Randevu bilgileri güncellendi',
+      });
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'appointment_updated',
+        entityType: 'appointment',
+        entityId: id,
+        description: `Appointment updated`,
+        ...extractRequestMeta(req),
       });
     }
 

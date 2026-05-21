@@ -21,6 +21,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import { getParam } from '../utils/helpers.js';
 import { normalizeRole } from '../utils/roles.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
 
@@ -253,6 +254,20 @@ router.post(
       });
 
       res.json({ ok: true, entry: updated });
+
+      // Audit log — non-blocking
+      writeAuditLog({
+        organizationId: user.organizationId,
+        clinicId,
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: 'whatsapp_inbox_resolved',
+        entityType: 'whatsapp_inbox_entry',
+        entityId: entryId,
+        description: `WhatsApp inbox entry resolved to clinic: ${clinic.name}`,
+        metadata: { phone: entry.phone, clinicId, patientId: resolvedPatientId },
+        ...extractRequestMeta(req),
+      });
     } catch (error) {
       console.error('[whatsapp-inbox] resolve error', error);
       res.status(500).json({ error: 'Failed to resolve inbox entry' });

@@ -33,6 +33,8 @@ import {
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { encryptSecret } from '../utils/encryption.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { recordOperationalEvent } from '../services/operationalEventService.js';
 import {
   testWhatsAppConnection,
   getWhatsAppQrCode,
@@ -152,6 +154,17 @@ router.post(
         action: 'created',
         description: `WhatsApp bağlantısı oluşturuldu: ${connection.name} (${connection.provider})`,
       });
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'whatsapp_connection_created',
+        entityType: 'whatsapp_connection',
+        entityId: connection.id,
+        description: `WhatsApp connection created: ${connection.name} (${connection.provider})`,
+        metadata: { name: connection.name, provider: connection.provider },
+        ...extractRequestMeta(req),
+      });
       res.status(201).json(sanitizeConnection(connection as unknown as Record<string, unknown>));
     } catch (err: any) {
       if (err.code === 'P2002') {
@@ -234,6 +247,17 @@ router.put(
         action: 'updated',
         description: `WhatsApp bağlantısı güncellendi: ${updated.name}`,
       });
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'whatsapp_connection_updated',
+        entityType: 'whatsapp_connection',
+        entityId: updated.id,
+        description: `WhatsApp connection updated: ${updated.name}`,
+        metadata: { name: updated.name, provider: updated.provider },
+        ...extractRequestMeta(req),
+      });
       res.json(sanitizeConnection(updated as unknown as Record<string, unknown>));
     } catch (err: any) {
       if (err.code === 'P2002') {
@@ -262,6 +286,26 @@ router.post(
       if (!existing) return res.status(404).json({ error: 'Connection not found' });
 
       const result = await testWhatsAppConnection(id);
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'whatsapp_connection_tested',
+        entityType: 'whatsapp_connection',
+        entityId: id,
+        description: `WhatsApp connection test: ${existing.name}`,
+        metadata: { success: (result as any)?.success ?? null },
+        ...extractRequestMeta(req),
+      });
+      if ((result as any)?.success === false) {
+        recordOperationalEvent({
+          organizationId: req.user!.organizationId,
+          severity: 'warning',
+          source: 'whatsapp',
+          message: `WhatsApp connection test failed: ${existing.name}`,
+          metadata: { connectionId: id, name: existing.name, provider: existing.provider },
+        });
+      }
       res.json(result);
     } catch {
       res.status(500).json({ error: 'Failed to test connection' });
@@ -319,6 +363,17 @@ router.post(
         entityId: id,
         action: 'disconnected',
         description: `WhatsApp bağlantısı kesildi: ${existing.name}`,
+      });
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'whatsapp_connection_disconnected',
+        entityType: 'whatsapp_connection',
+        entityId: id,
+        description: `WhatsApp connection disconnected: ${existing.name}`,
+        metadata: { name: existing.name, provider: existing.provider },
+        ...extractRequestMeta(req),
       });
       res.json({ success: true, message: 'Connection disconnected' });
     } catch {

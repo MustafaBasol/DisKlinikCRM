@@ -6,6 +6,7 @@ import { getParam } from '../utils/helpers.js';
 import { paymentSchema } from '../schemas/index.js';
 import { generateEarningFromPayment } from '../services/earningService.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
 
@@ -84,6 +85,19 @@ router.post('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BIL
       description: `Payment of ${payment.amount} ${payment.currency} recorded for ${patient.firstName} ${patient.lastName}`,
     });
 
+    writeAuditLog({
+      organizationId: req.user!.organizationId,
+      clinicId,
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'payment_created',
+      entityType: 'payment',
+      entityId: payment.id,
+      description: `Payment created: ${payment.amount} ${payment.currency} (${payment.paymentStatus})`,
+      metadata: { amount: payment.amount, currency: payment.currency, paymentMethod: payment.paymentMethod, paymentStatus: payment.paymentStatus },
+      ...extractRequestMeta(req),
+    });
+
     // Auto-generate practitioner earning for paid payments
     if (payment.paymentStatus === 'paid') {
       generateEarningFromPayment(payment.id, clinicId, req.user!.id).catch(console.error);
@@ -115,6 +129,19 @@ router.put('/payments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'payment', entityId: id,
       action: 'updated', description: `Ödeme güncellendi`,
+    });
+
+    writeAuditLog({
+      organizationId: req.user!.organizationId,
+      clinicId,
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'payment_updated',
+      entityType: 'payment',
+      entityId: id,
+      description: `Payment updated`,
+      metadata: { paymentStatus: validation.data.paymentStatus },
+      ...extractRequestMeta(req),
     });
 
     // Auto-generate practitioner earning if payment was just moved to 'paid'
@@ -149,6 +176,19 @@ router.patch('/payments/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
       clinicId, userId: req.user!.id, entityType: 'payment', entityId: id,
       action: 'cancelled',
       description: `${existing.amount} ${existing.currency} tutarındaki ödeme iptal edildi`,
+    });
+
+    writeAuditLog({
+      organizationId: req.user!.organizationId,
+      clinicId,
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'payment_cancelled',
+      entityType: 'payment',
+      entityId: id,
+      description: `Payment cancelled: ${existing.amount} ${existing.currency}`,
+      metadata: { amount: existing.amount, currency: existing.currency },
+      ...extractRequestMeta(req),
     });
 
     res.json(updated);

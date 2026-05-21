@@ -1,6 +1,7 @@
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
 
@@ -56,6 +57,19 @@ router.get(
 
       res.setHeader('Content-Disposition', `attachment; filename="clinic-export-${clinicId}-${Date.now()}.json"`);
       res.setHeader('Content-Type', 'application/json');
+
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'gdpr_export',
+        entityType: 'clinic',
+        entityId: clinicId,
+        description: `GDPR data export triggered for clinic`,
+        ...extractRequestMeta(req),
+      });
+
       res.json(exportData);
     } catch {
       res.status(500).json({ error: 'Export failed. Please try again.' });

@@ -357,3 +357,28 @@ export function canViewFinanceDashboard(user: UserForRole | null | undefined): b
   );
 }
 
+// ── Sprint 13: Operational Monitoring İzinleri ────────────────────────────────
+
+/**
+ * Denetim günlüklerini ve operasyonel olayları görüntüleme.
+ * OWNER / ORG_ADMIN: organizasyon genelinde.
+ * CLINIC_MANAGER: yalnızca atandığı şubeler.
+ * DENTIST / RECEPTIONIST / BILLING / ASSISTANT: erişim yok.
+ */
+export function canViewOperations(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Operasyonel olayı çözüldü olarak işaretleme.
+ * OWNER / ORG_ADMIN: tüm olaylar.
+ * CLINIC_MANAGER: yalnızca kendi şubesindeki olaylar (rota içinde kontrol edilir).
+ */
+export function canResolveOperationalEvents(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+

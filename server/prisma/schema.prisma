@@ -1021,3 +1021,52 @@ model WhatsAppInboxEntry {
   @@index([organizationId, clinicId])
   @@index([whatsappConnectionId, phone])
 }
+
+// ── Sprint 13: Operational Monitoring ────────────────────────────────────────
+
+/// Immutable audit trail of important admin/system actions.
+/// Separate from ActivityLog (clinic-scoped, FK-heavy) — AuditLog is org-scoped
+/// and designed for compliance, security reviews and operational investigations.
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  clinicId       String?
+  actorUserId    String?
+  actorRole      String?
+  action         String   // user_login | branch_created | payment_created | ...
+  entityType     String   // user | branch | appointment | payment | whatsapp_connection | ...
+  entityId       String?
+  description    String?
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([clinicId])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+/// System-level operational events: integration failures, webhook errors, etc.
+/// Separate from AuditLog — these are monitorable / resolvable events.
+model OperationalEvent {
+  id             String    @id @default(uuid())
+  organizationId String
+  clinicId       String?
+  // info | warning | error | critical
+  severity       String    @default("info")
+  // whatsapp | appointment | finance | auth | system
+  source         String
+  message        String
+  metadata       Json?
+  resolvedAt     DateTime?
+  resolvedById   String?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, severity])
+  @@index([organizationId, source])
+  @@index([organizationId, resolvedAt])
+  @@index([createdAt])
+}

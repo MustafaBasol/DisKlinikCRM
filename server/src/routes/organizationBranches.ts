@@ -27,6 +27,7 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { normalizeRole, canManageBranches, canAssignUserClinics } from '../utils/roles.js';
 import { logActivity } from '../utils/activity.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
 
@@ -213,6 +214,19 @@ router.post(
         description: `Yeni şube oluşturuldu: ${clinic.name}`,
       });
 
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId: clinic.id,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'branch_created',
+        entityType: 'branch',
+        entityId: clinic.id,
+        description: `Branch created: ${clinic.name} (${slug})`,
+        metadata: { name, slug, status },
+        ...extractRequestMeta(req),
+      });
+
       res.status(201).json(clinic);
     } catch {
       res.status(500).json({ error: 'Failed to create clinic branch' });
@@ -342,6 +356,19 @@ router.put(
         description: `Şube güncellendi: ${clinic.name}`,
       });
 
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId: clinic.id,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'branch_updated',
+        entityType: 'branch',
+        entityId: clinic.id,
+        description: `Branch updated: ${clinic.name}`,
+        metadata: updateData,
+        ...extractRequestMeta(req),
+      });
+
       res.json(clinic);
     } catch {
       res.status(500).json({ error: 'Failed to update clinic branch' });
@@ -389,6 +416,19 @@ router.patch(
         entityId: clinic.id,
         action: 'updated',
         description: `Şube durumu değiştirildi: ${clinic.name} → ${clinic.status}`,
+      });
+
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId: clinic.id,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'branch_status_changed',
+        entityType: 'branch',
+        entityId: clinic.id,
+        description: `Branch status changed: ${existing.name} → ${clinic.status}`,
+        metadata: { newStatus: clinic.status },
+        ...extractRequestMeta(req),
       });
 
       res.json(clinic);
@@ -589,6 +629,21 @@ router.put(
         entityId: userId,
         action: 'updated',
         description: `Kullanıcı klinik atamaları güncellendi: ${targetUser.email}`,
+      });
+
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'user_clinic_assignment_changed',
+        entityType: 'user',
+        entityId: userId,
+        description: `User clinic assignments updated: ${targetUser.email}`,
+        metadata: {
+          targetEmail: targetUser.email,
+          assignedClinics: assignments.map(a => ({ clinicId: a.clinicId, role: a.role })),
+        },
+        ...extractRequestMeta(req),
       });
 
       res.json({

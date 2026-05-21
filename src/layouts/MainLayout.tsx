@@ -29,6 +29,7 @@ import {
   MessageCircle,
   Inbox,
   BarChart3,
+  Activity,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -51,6 +52,7 @@ import {
   canViewWhatsAppStatus,
   canViewWhatsAppInbox,
   canViewFinanceDashboard,
+  canViewOperations,
 } from '../utils/permissions';
 
 const MainLayoutInner: React.FC = () => {
@@ -147,6 +149,11 @@ const MainLayoutInner: React.FC = () => {
   // Finans Paneli — OWNER, ORG_ADMIN, CLINIC_MANAGER, BILLING
   if (canViewFinanceDashboard(user)) {
     navItems.push({ path: '/finance', icon: <BarChart3 size={20} />, label: 'Finans Paneli' });
+  }
+
+  // Operasyonel İzleme — OWNER, ORG_ADMIN, CLINIC_MANAGER
+  if (canViewOperations(user)) {
+    navItems.push({ path: '/operations', icon: <Activity size={20} />, label: 'Operasyon İzleme' });
   }
 
   // Mesajlar — resepsiyon ve üzeri yönetim; DENTIST okuma

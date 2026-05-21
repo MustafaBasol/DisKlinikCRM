@@ -35,6 +35,7 @@ import organizationWhatsAppRoutes from './routes/organizationWhatsApp.js';
 import whatsappInboxRoutes from './routes/whatsappInbox.js';
 import financeDashboardRoutes from './routes/financeDashboard.js';
 import schedulesRoutes from './routes/schedules.js';
+import operationalMonitoringRoutes from './routes/operationalMonitoring.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 
@@ -98,6 +99,7 @@ app.use('/api', organizationWhatsAppRoutes);
 app.use('/api', whatsappInboxRoutes);
 app.use('/api', financeDashboardRoutes);
 app.use('/api', schedulesRoutes);
+app.use('/api', operationalMonitoringRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
