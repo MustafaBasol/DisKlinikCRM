@@ -64,6 +64,7 @@ model Clinic {
   userClinics              UserClinic[]
   patientClinics           PatientClinic[]
   clinicWorkingHours       ClinicWorkingHours[]
+  clinicWhatsAppConnections ClinicWhatsAppConnection[]
 
   @@unique([organizationId, slug])
 }
@@ -471,11 +472,19 @@ model SentMessage {
   subject           String?
   body              String
   status            String           @default("prepared") // prepared, sent, failed, delivered, read
-  providerMessageId String?
-  sentAt            DateTime?
-  createdById       String?
-  createdBy         User?            @relation(fields: [createdById], references: [id])
-  createdAt         DateTime         @default(now())
+  providerMessageId     String?
+  sentAt                DateTime?
+  createdById           String?
+  createdBy             User?            @relation(fields: [createdById], references: [id])
+  // Provider-agnostic WhatsApp extension fields
+  organizationId        String?
+  organization          Organization?    @relation(fields: [organizationId], references: [id])
+  whatsappConnectionId  String?
+  whatsappConnection    WhatsAppConnection? @relation(fields: [whatsappConnectionId], references: [id])
+  provider              String?          // evolution_api | meta_cloud_api
+  direction             String?          // outgoing | incoming
+  externalMessageId     String?          // Provider message ID for tracking
+  createdAt             DateTime         @default(now())
 }
 
 model ActivityLog {
@@ -847,12 +856,15 @@ model Organization {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  clinics        Clinic[]
-  users          User[]
-  patients       Patient[]
-  invitations    ClinicInvitation[]
-  inventoryItems InventoryItem[]
-  clinicWorkingHours ClinicWorkingHours[]
+  clinics               Clinic[]
+  users                 User[]
+  patients              Patient[]
+  invitations           ClinicInvitation[]
+  inventoryItems        InventoryItem[]
+  clinicWorkingHours    ClinicWorkingHours[]
+  whatsappConnections   WhatsAppConnection[]
+  clinicWhatsAppConnections ClinicWhatsAppConnection[]
+  sentMessages          SentMessage[]
 }
 
 model UserClinic {
@@ -901,4 +913,72 @@ model ClinicWorkingHours {
 
   @@unique([clinicId, dayOfWeek])
   @@index([clinicId])
+}
+
+// ── Provider-Agnostic WhatsApp Infrastructure ─────────────────────────────────
+
+/// Organization-level WhatsApp connection. One connection can be shared by multiple branches.
+model WhatsAppConnection {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  // evolution_api | meta_cloud_api
+  provider       String   @default("evolution_api")
+  // disconnected | connecting | connected | error
+  status         String   @default("disconnected")
+  phoneNumber    String?
+  displayName    String?
+
+  // Evolution API fields
+  evolutionApiUrl          String?
+  evolutionInstanceName    String?
+  // TODO: encrypt before storing (no encryption utility in this project yet)
+  evolutionApiKeyEncrypted String?
+
+  // Meta Cloud API foundation fields
+  metaBusinessId           String?
+  metaWabaId               String?
+  metaPhoneNumberId        String?
+  metaAppId                String?
+  // TODO: encrypt before storing
+  metaAccessTokenEncrypted String?
+  metaWebhookVerifyToken   String?
+  metaWebhookSecret        String?
+
+  // Shared webhook secret for this connection
+  webhookSecret    String?
+  lastConnectedAt  DateTime?
+  lastError        String?
+  isActive         Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinics      ClinicWhatsAppConnection[]
+  sentMessages SentMessage[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([provider])
+}
+
+/// Maps one WhatsAppConnection to one Clinic. Supports shared (one connection → many clinics)
+/// and dedicated (one connection → one clinic) topology.
+model ClinicWhatsAppConnection {
+  id                   String   @id @default(uuid())
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  clinicId             String
+  clinic               Clinic   @relation(fields: [clinicId], references: [id])
+  whatsappConnectionId String
+  whatsappConnection   WhatsAppConnection @relation(fields: [whatsappConnectionId], references: [id])
+  isDefault            Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([clinicId, whatsappConnectionId])
+  @@index([organizationId])
+  @@index([clinicId])
+  @@index([whatsappConnectionId])
 }

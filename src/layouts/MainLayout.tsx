@@ -26,6 +26,7 @@ import {
   Award,
   Package,
   Building2,
+  MessageCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -45,6 +46,7 @@ import {
   canManageUsers,
   canViewUsers,
   normalizeRole,
+  canViewWhatsAppStatus,
 } from '../utils/permissions';
 
 const MainLayoutInner: React.FC = () => {
@@ -85,6 +87,10 @@ const MainLayoutInner: React.FC = () => {
 
   if (canViewBranches(user)) {
     navItems.push({ path: '/branches', icon: <Building2 size={20} />, label: 'Şubeler' });
+  }
+
+  if (canViewWhatsAppStatus(user)) {
+    navItems.push({ path: '/organization/whatsapp', icon: <MessageCircle size={20} />, label: 'WhatsApp' });
   }
 
   // Hastalar

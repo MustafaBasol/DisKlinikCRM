@@ -1,7 +1,7 @@
 import express from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
-import { sendTextMessage } from '../services/evolutionApi.js';
+import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { extractAssistantInputWithGoogleAi } from '../services/googleAiStudio.js';
 import {
   buildAvailableSlots,
@@ -1355,7 +1355,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
 
     const responseText = await handleIncomingWhatsAppMessage(incomingMessage, clinic);
     const patient = await findExistingPatientByPhone(clinic.id, incomingMessage.phone);
-    await sendTextMessage(incomingMessage.phone, responseText, normalizedPayload.instance);
+    await sendWhatsAppMessage(clinic.id, { phone: incomingMessage.phone, text: responseText });
     if (patient) {
       await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: patient.id, phone: incomingMessage.phone, direction: 'outgoing', text: responseText });
     }

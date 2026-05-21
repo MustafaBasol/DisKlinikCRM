@@ -26,6 +26,11 @@ health-crm-agent-docs/
 │  ├─ 20-aile-dis-adaptation-plan.md
 │  ├─ 21-whatsapp-n8n-clinic-integration.md
 │  ├─ 22-hostinger-vps-postgres-deploy-plan.md
+│  ├─ 23-finansal-yonetim-plan.md
+│  ├─ 24-multitenant-plan.md
+│  ├─ 25-multibranch-plan.md
+│  ├─ 26-role-permissions.md
+│  ├─ 27-sprint10-whatsapp-provider-abstraction.md  — Sprint 10: provider-agnostic WhatsApp mimarisi
 │  ├─ crm_improvement_plan.md
 │  ├─ top_5_critical_plan.md
 │  └─ whatsapp-evolution-backend-agent.md

@@ -252,3 +252,47 @@ export function canManageDoctorSchedule(user: UserForRole & { id?: string }, doc
 export function canViewAvailability(_user: UserForRole): boolean {
   return true;
 }
+
+// ── WhatsApp Bağlantısı Yetkileri ─────────────────────────────────────────────
+
+/**
+ * Organizasyon düzeyinde WhatsApp bağlantısı yönetme (oluştur / düzenle / sil).
+ * Yalnızca OWNER ve ORG_ADMIN.
+ */
+export function canManageWhatsAppConnections(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+/**
+ * Şubeye WhatsApp bağlantısı atama.
+ * OWNER, ORG_ADMIN: tüm şubeler. CLINIC_MANAGER: yalnızca kendi şubesi.
+ */
+export function canAssignWhatsAppToClinic(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * WhatsApp bağlantı durumunu görüntüleme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER görüntüleyebilir.
+ */
+export function canViewWhatsAppStatus(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * WhatsApp mesajı gönderme.
+ * Mesaj gönderme yetkisi olan tüm roller.
+ */
+export function canSendWhatsAppMessages(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST'
+  );
+}

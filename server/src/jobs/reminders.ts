@@ -13,7 +13,7 @@
 
 import cron from 'node-cron';
 import prisma from '../db.js';
-import { sendTextMessage } from '../services/evolutionApi.js';
+import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { logActivity } from '../utils/activity.js';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -190,9 +190,10 @@ async function runDailyReminderJob(): Promise<void> {
           },
         });
 
-        // Send via Evolution API
+        // Send via WhatsApp (provider-agnostic)
         try {
-          await sendTextMessage(phone, body);
+          const sendResult = await sendWhatsAppMessage(clinic.id, { phone, text: body });
+          if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
           await prisma.sentMessage.update({
             where: { id: sentMessage.id },
             data: { status: 'sent', sentAt: new Date() },

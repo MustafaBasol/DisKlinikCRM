@@ -264,3 +264,44 @@ export function canManageDoctorSchedule(
   if (role === 'DENTIST' && userId && doctorId && userId === doctorId) return true;
   return false;
 }
+
+// ─── WhatsApp Bağlantısı İzinleri ─────────────────────────────────────────────
+
+/**
+ * Organizasyon düzeyinde WhatsApp bağlantısı yönetme.
+ * Yalnızca OWNER ve ORG_ADMIN.
+ */
+export function canManageWhatsAppConnections(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+/**
+ * Şubeye WhatsApp bağlantısı atama.
+ */
+export function canAssignWhatsAppToClinic(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * WhatsApp bağlantı durumunu görüntüleme.
+ */
+export function canViewWhatsAppStatus(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * WhatsApp mesajı gönderme.
+ */
+export function canSendWhatsAppMessages(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST'
+  );
+}

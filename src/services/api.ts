@@ -278,4 +278,25 @@ export const scheduleService = {
     api.get('/availability', { params }),
 };
 
+// ─── WhatsApp Connection Services ─────────────────────────────────────────────
+
+export const whatsappConnectionService = {
+  list: () => api.get('/organization/whatsapp-connections'),
+  get: (id: string) => api.get(`/organization/whatsapp-connections/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/organization/whatsapp-connections', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put(`/organization/whatsapp-connections/${id}`, data),
+  test: (id: string) => api.post(`/organization/whatsapp-connections/${id}/test`),
+  getQr: (id: string) => api.get(`/organization/whatsapp-connections/${id}/qr`),
+  disconnect: (id: string) => api.post(`/organization/whatsapp-connections/${id}/disconnect`),
+};
+
+export const clinicWhatsAppService = {
+  getAssignments: (clinicId: string) => api.get(`/clinics/${clinicId}/whatsapp`),
+  assign: (clinicId: string, whatsappConnectionId: string) =>
+    api.put(`/clinics/${clinicId}/whatsapp`, { whatsappConnectionId }),
+  unassign: (clinicId: string, connectionId: string) =>
+    api.delete(`/clinics/${clinicId}/whatsapp/${connectionId}`),
+};
+
 export default api;

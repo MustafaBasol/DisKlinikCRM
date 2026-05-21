@@ -4,7 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';
-import { sendTextMessage } from '../services/evolutionApi.js';
+import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
@@ -301,7 +301,8 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
 
     if (message.channel === 'whatsapp') {
       try {
-        await sendTextMessage(message.recipient, message.body);
+        const sendResult = await sendWhatsAppMessage(clinicId, { phone: message.recipient, text: message.body });
+        if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
       } catch (sendErr: any) {
         await prisma.sentMessage.update({ where: { id }, data: { status: 'failed' } });
         await logActivity({
