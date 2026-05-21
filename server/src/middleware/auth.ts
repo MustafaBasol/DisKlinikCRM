@@ -59,7 +59,11 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       clinicId: decoded.clinicId,
       role: decoded.role,
       organizationId: clinicInfo.organizationId,
-      allowedClinicIds: decoded.allowedClinicIds ?? [],
+      // Eski token uyumluluğu: allowedClinicIds yoksa veya boşsa, clinicId'yi fallback kullan.
+      // Yeni tokenlar login sırasında UserClinic tablosundan doldurulur.
+      allowedClinicIds: decoded.allowedClinicIds?.length > 0
+        ? decoded.allowedClinicIds
+        : [decoded.clinicId],
       canAccessAllClinics: decoded.canAccessAllClinics ?? false,
     };
     next();
