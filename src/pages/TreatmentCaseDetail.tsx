@@ -25,7 +25,7 @@ import {
   Package
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService } from '../services/api';
+import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService, serviceService } from '../services/api';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
@@ -58,11 +58,13 @@ const TreatmentCaseDetail: React.FC = () => {
 
   // Treatment procedures
   const [procedures, setProcedures] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
   const [isProcFormOpen, setIsProcFormOpen] = useState(false);
   const [editingProc, setEditingProc] = useState<any | null>(null);
   const [procSaving, setProcSaving] = useState(false);
   const [procForm, setProcForm] = useState({
     procedureName: '',
+    serviceId: '',
     toothFdi: '',
     status: 'planned',
     estimatedCost: '',
@@ -94,6 +96,9 @@ const TreatmentCaseDetail: React.FC = () => {
 
       const procRes = await treatmentPlanProceduresService.getByCaseId(id);
       setProcedures(procRes.data);
+
+      const svcRes = await serviceService.getAll({ onlyActive: true });
+      setServices(svcRes.data);
 
       const matRes = await treatmentCaseService.getMaterials(id);
       setMaterials(matRes.data);
@@ -138,6 +143,7 @@ const TreatmentCaseDetail: React.FC = () => {
       setEditingProc(proc);
       setProcForm({
         procedureName: proc.procedureName,
+        serviceId: proc.serviceId ?? '',
         toothFdi: proc.toothFdi ? String(proc.toothFdi) : '',
         status: proc.status,
         estimatedCost: proc.estimatedCost ? String(proc.estimatedCost) : '',
@@ -146,7 +152,7 @@ const TreatmentCaseDetail: React.FC = () => {
       });
     } else {
       setEditingProc(null);
-      setProcForm({ procedureName: '', toothFdi: '', status: 'planned', estimatedCost: '', notes: '', scheduledDate: '' });
+      setProcForm({ procedureName: '', serviceId: '', toothFdi: '', status: 'planned', estimatedCost: '', notes: '', scheduledDate: '' });
     }
     setIsProcFormOpen(true);
   };
@@ -156,6 +162,7 @@ const TreatmentCaseDetail: React.FC = () => {
     setProcSaving(true);
     const payload = {
       procedureName: procForm.procedureName.trim(),
+      serviceId: procForm.serviceId || null,
       toothFdi: procForm.toothFdi ? parseInt(procForm.toothFdi) : null,
       status: procForm.status,
       estimatedCost: procForm.estimatedCost ? parseFloat(procForm.estimatedCost) : null,
@@ -1020,6 +1027,34 @@ const TreatmentCaseDetail: React.FC = () => {
                   autoFocus
                 />
               </div>
+
+              {services.length > 0 && (
+                <div>
+                  <label className="label">Klinik Hizmeti <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                  <select
+                    className="input-field"
+                    value={procForm.serviceId}
+                    onChange={(e) => {
+                      const svcId = e.target.value;
+                      const svc = services.find((s: any) => s.id === svcId);
+                      setProcForm((f) => ({
+                        ...f,
+                        serviceId: svcId,
+                        estimatedCost: svcId && svc?.basePrice != null && f.estimatedCost === ''
+                          ? String(svc.basePrice)
+                          : f.estimatedCost,
+                      }));
+                    }}
+                  >
+                    <option value="">— Hizmet seçiniz —</option>
+                    {services.map((svc: any) => (
+                      <option key={svc.id} value={svc.id}>
+                        {svc.name}{svc.basePrice != null ? ` — ${svc.basePrice.toLocaleString('tr-TR')} ${svc.currency || 'TRY'}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

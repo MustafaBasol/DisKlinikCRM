@@ -83,8 +83,10 @@ const ServiceList: React.FC = () => {
                   </td>
                   <td className="p-4 text-sm text-gray-600">{service.category || '-'}</td>
                   <td className="p-4 text-sm text-gray-600">{service.durationMinutes} min</td>
-                  <td className="p-4 text-sm font-medium text-primary-600">{service.basePrice ?? '-'}</td>
-                  <td className="p-4 text-sm text-gray-600">{service.currency || '-'}</td>
+                  <td className="p-4 text-sm font-medium text-primary-600">
+                    {service.basePrice != null ? service.basePrice.toLocaleString('tr-TR') : <span className="text-gray-400 italic text-xs">Fiyat girilmemiş</span>}
+                  </td>
+                  <td className="p-4 text-sm text-gray-600">{service.currency || <span className="text-gray-300">—</span>}</td>
                   <td className="p-4">
                     <span className={`badge ${service.isActive ? 'badge-green' : 'badge-gray'}`}>
                       {service.isActive ? t('services:status.active') : t('services:status.inactive')}

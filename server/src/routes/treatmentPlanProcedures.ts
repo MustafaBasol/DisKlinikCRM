@@ -21,7 +21,7 @@ router.get(
       const procedures = await prisma.treatmentPlanProcedure.findMany({
         where: { treatmentCaseId: caseId, clinicId },
         include: {
-          service: { select: { id: true, name: true } },
+          service: { select: { id: true, name: true, basePrice: true, currency: true } },
           createdBy: { select: { id: true, firstName: true, lastName: true } },
         },
         orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
@@ -49,7 +49,7 @@ router.get(
       const procedures = await prisma.treatmentPlanProcedure.findMany({
         where: { patientId, clinicId },
         include: {
-          service: { select: { id: true, name: true } },
+          service: { select: { id: true, name: true, basePrice: true, currency: true } },
           treatmentCase: { select: { id: true, title: true, stage: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -104,7 +104,7 @@ router.post(
           createdById: userId,
         },
         include: {
-          service: { select: { id: true, name: true } },
+          service: { select: { id: true, name: true, basePrice: true, currency: true } },
           createdBy: { select: { id: true, firstName: true, lastName: true } },
         },
       });
@@ -161,7 +161,7 @@ router.put(
           completedAt: status === 'completed' && existing.status !== 'completed' ? new Date() : existing.completedAt,
         },
         include: {
-          service: { select: { id: true, name: true } },
+          service: { select: { id: true, name: true, basePrice: true, currency: true } },
           createdBy: { select: { id: true, firstName: true, lastName: true } },
         },
       });
