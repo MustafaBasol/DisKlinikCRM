@@ -44,6 +44,10 @@ interface User {
     canManageInventory: boolean;
     canManageBranches: boolean;
     canAssignUserClinics: boolean;
+    // WhatsApp izinleri
+    canManageWhatsAppConnections?: boolean;
+    canViewWhatsAppStatus?: boolean;
+    canAssignWhatsAppToClinic?: boolean;
   };
   defaultClinicId?: string | null;
 }

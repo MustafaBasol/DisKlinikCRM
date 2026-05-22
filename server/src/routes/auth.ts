@@ -14,6 +14,9 @@ import {
   canManageInventory,
   canManageBranches,
   canAssignUserClinics,
+  canManageWhatsAppConnections,
+  canViewWhatsAppStatus,
+  canAssignWhatsAppToClinic,
 } from '../utils/roles.js';
 
 const router = express.Router();
@@ -157,6 +160,10 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
         canManageInventory: canManageInventory(roleObj),
         canManageBranches: canManageBranches(roleObj),
         canAssignUserClinics: canAssignUserClinics(roleObj),
+        // WhatsApp izinleri
+        canManageWhatsAppConnections: canManageWhatsAppConnections(roleObj),
+        canViewWhatsAppStatus: canViewWhatsAppStatus(roleObj),
+        canAssignWhatsAppToClinic: canAssignWhatsAppToClinic(roleObj),
       },
     });
   } catch {

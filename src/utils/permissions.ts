@@ -20,6 +20,10 @@ type ServerPermissions = {
   canManageInventory?: boolean;
   canManageBranches?: boolean;
   canAssignUserClinics?: boolean;
+  // WhatsApp izinleri
+  canManageWhatsAppConnections?: boolean;
+  canViewWhatsAppStatus?: boolean;
+  canAssignWhatsAppToClinic?: boolean;
 };
 
 type UserForPermission = {
@@ -48,7 +52,9 @@ export function normalizeRole(userRole: string, canAccessAllClinics = false): Ca
     case 'clinic_manager':
       return 'CLINIC_MANAGER';
     case 'admin':
-      return canAccessAllClinics ? 'OWNER' : 'CLINIC_MANAGER';
+      // Admin her zaman organizasyon seviyesinde bir yöneticidir;
+      // canAccessAllClinics yalnızca OWNER vs ORG_ADMIN ayrımını belirler.
+      return canAccessAllClinics ? 'OWNER' : 'ORG_ADMIN';
     case 'doctor':
     case 'dentist':
       return 'DENTIST';
@@ -272,6 +278,9 @@ export function canManageDoctorSchedule(
  * Yalnızca OWNER ve ORG_ADMIN.
  */
 export function canManageWhatsAppConnections(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canManageWhatsAppConnections !== undefined) {
+    return user.permissions.canManageWhatsAppConnections;
+  }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN';
 }
@@ -280,6 +289,9 @@ export function canManageWhatsAppConnections(user: UserForPermission | null | un
  * Şubeye WhatsApp bağlantısı atama.
  */
 export function canAssignWhatsAppToClinic(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canAssignWhatsAppToClinic !== undefined) {
+    return user.permissions.canAssignWhatsAppToClinic;
+  }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
@@ -288,6 +300,9 @@ export function canAssignWhatsAppToClinic(user: UserForPermission | null | undef
  * WhatsApp bağlantı durumunu görüntüleme.
  */
 export function canViewWhatsAppStatus(user: UserForPermission | null | undefined): boolean {
+  if (user?.permissions?.canViewWhatsAppStatus !== undefined) {
+    return user.permissions.canViewWhatsAppStatus;
+  }
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }

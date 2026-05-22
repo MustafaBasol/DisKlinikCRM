@@ -80,10 +80,10 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
  *
  * Katman 1: Kanonik rol kontrolü
  *   Kullanıcının rolü normalizeRole() ile kanonik forma dönüştürülür.
- *   authorize(['OWNER', 'ORG_ADMIN']) çağrısı, "admin" rolüne sahip olup
- *   canAccessAllClinics=true olan kullanıcıyı da kabul eder (OWNER'a normalize olur).
- *   "admin" + canAccessAllClinics=false → CLINIC_MANAGER'a normalize olur,
- *   dolayısıyla ['OWNER','ORG_ADMIN'] listesine GİRMEZ — erişim reddedilir.
+ *   authorize(['OWNER', 'ORG_ADMIN']) çağrısı, "admin" rolüne sahip
+ *   kullanıcıyı kabul eder (ORG_ADMIN veya OWNER'a normalize olur).
+ *   "admin" + canAccessAllClinics=true → OWNER
+ *   "admin" + canAccessAllClinics=false → ORG_ADMIN
  *
  * Katman 2: Ham rol kontrolü (geriye dönük uyumluluk)
  *   authorize(['admin','doctor','receptionist']) gibi eski çağrılar

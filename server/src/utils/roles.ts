@@ -54,8 +54,10 @@ export function normalizeRole(
     case 'clinic_manager':
       return 'CLINIC_MANAGER';
     case 'admin':
-      // Legacy admin: canAccessAllClinics varsa OWNER, yoksa CLINIC_MANAGER
-      return canAccessAllClinics ? 'OWNER' : 'CLINIC_MANAGER';
+      // Legacy admin: canAccessAllClinics varsa OWNER, yoksa ORG_ADMIN.
+      // Admin her zaman organizasyon seviyesinde bir yöneticidir;
+      // canAccessAllClinics yalnızca OWNER vs ORG_ADMIN ayrımını belirler.
+      return canAccessAllClinics ? 'OWNER' : 'ORG_ADMIN';
     case 'doctor':
     case 'dentist':
       return 'DENTIST';

@@ -144,6 +144,8 @@ export default function WhatsAppConnections() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importingLegacy, setImportingLegacy] = useState(false);
   const [metaConnecting, setMetaConnecting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const canManage = canManageWhatsAppConnections(user);
   const canView = canViewWhatsAppStatus(user);
@@ -281,9 +283,10 @@ export default function WhatsAppConnections() {
     setDisconnectingId(id);
     try {
       await whatsappConnectionService.disconnect(id);
+      setSuccessMessage(`"${name}" bağlantısı kesildi.`);
       fetchConnections();
     } catch {
-      alert('Bağlantı kesilemedi.');
+      setImportError('Bağlantı kesilemedi.');
     } finally {
       setDisconnectingId(null);
     }
@@ -292,14 +295,18 @@ export default function WhatsAppConnections() {
   async function handleImportLegacy() {
     if (!confirm('Mevcut ortam değişkenlerindeki Evolution API ayarları veritabanına aktarılacak. Devam edilsin mi?')) return;
     setImportingLegacy(true);
+    setImportError(null);
+    setSuccessMessage(null);
     try {
       const res = await whatsappConnectionService.importLegacy();
       if (res.data.alreadyImported) {
-        alert('Bu bağlantı daha önce zaten aktarılmıştı.');
+        setSuccessMessage('Bu bağlantı daha önce zaten aktarılmıştı.');
+      } else {
+        setSuccessMessage('Evolution API bağlantısı başarıyla veritabanına aktarıldı!');
       }
       fetchConnections();
     } catch (err: any) {
-      alert(err?.response?.data?.error ?? 'Aktarım başarısız.');
+      setImportError(err?.response?.data?.error ?? 'Aktarım başarısız.');
     } finally {
       setImportingLegacy(false);
     }
@@ -443,7 +450,7 @@ export default function WhatsAppConnections() {
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Plus size={16} />
-            Yeni Bağlantı
+            Yeni Bağlantı Ekle
           </button>
         )}
       </div>
@@ -498,6 +505,20 @@ export default function WhatsAppConnections() {
         </div>
       )}
 
+      {importError && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300 flex items-center justify-between">
+          <span>{importError}</span>
+          <button onClick={() => setImportError(null)} className="ml-3 text-red-400 hover:text-red-600 font-bold">✕</button>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-300 flex items-center justify-between">
+          <span className="flex items-center gap-2"><CheckCircle2 size={16} className="shrink-0" />{successMessage}</span>
+          <button onClick={() => setSuccessMessage(null)} className="ml-3 text-green-400 hover:text-green-600 font-bold">✕</button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="animate-spin text-gray-400" size={32} />
@@ -507,8 +528,12 @@ export default function WhatsAppConnections() {
           <MessageCircle size={40} className="mx-auto mb-3 opacity-40" />
           <p>Henüz WhatsApp bağlantısı eklenmemiş.</p>
           {canManage && (
-            <button onClick={openCreate} className="mt-3 text-green-600 dark:text-green-400 hover:underline text-sm">
-              İlk bağlantıyı ekle
+            <button
+              onClick={openCreate}
+              className="mt-4 flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors mx-auto"
+            >
+              <Plus size={16} />
+              Yeni Bağlantı Ekle
             </button>
           )}
         </div>
