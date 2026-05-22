@@ -954,6 +954,81 @@ await test('CLINIC_MANAGER — atama listesi boşsa hiçbir şube göremez', () 
   assert.equal(clinicManagerCanViewBranch([], 'clinic-A'), false);
 });
 
+// ─── WhatsApp / Şube Yönetimi Rol Ayrımı ────────────────────────────────────
+
+function canManageWhatsAppConnections(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+function canAssignWhatsAppToClinic(user: { role: string; canAccessAllClinics: boolean }): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+console.log('\nWhatsApp ve şube yönetimi yetkileri (OWNER vs CLINIC_MANAGER)');
+
+await test('OWNER (admin + canAccessAllClinics=true) → WhatsApp bağlantısı yönetebilir', () => {
+  assert.equal(canManageWhatsAppConnections({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('CLINIC_MANAGER (admin + canAccessAllClinics=false) → WhatsApp bağlantısı YÖNETEMEz', () => {
+  assert.equal(canManageWhatsAppConnections({ role: 'admin', canAccessAllClinics: false }), false);
+});
+
+await test('OWNER → şube yönetebilir', () => {
+  assert.equal(canManageBranches({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('CLINIC_MANAGER → şube YÖNETEMEz', () => {
+  assert.equal(canManageBranches({ role: 'admin', canAccessAllClinics: false }), false);
+});
+
+await test('OWNER → şubeye WhatsApp bağlantısı atayabilir', () => {
+  assert.equal(canAssignWhatsAppToClinic({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('CLINIC_MANAGER → yalnızca kendi şubesine WhatsApp atayabilir (fonksiyon izin verir)', () => {
+  assert.equal(canAssignWhatsAppToClinic({ role: 'admin', canAccessAllClinics: false }), true);
+});
+
+await test('DENTIST → WhatsApp bağlantısı yönetemez', () => {
+  assert.equal(canManageWhatsAppConnections({ role: 'doctor', canAccessAllClinics: false }), false);
+});
+
+await test('RECEPTIONIST → WhatsApp bağlantısı yönetemez', () => {
+  assert.equal(canManageWhatsAppConnections({ role: 'receptionist', canAccessAllClinics: false }), false);
+});
+
+await test('BILLING → şube yönetemez', () => {
+  assert.equal(canManageBranches({ role: 'billing', canAccessAllClinics: false }), false);
+});
+
+// ─── Seed Admin Doğrulama Senaryoları ────────────────────────────────────────
+
+console.log('\nSeed admin kullanıcısı doğrulama (canAccessAllClinics zorunluluğu)');
+
+await test('Seed admin: canAccessAllClinics=true olduğunda OWNER rolü alır', () => {
+  const seedAdmin = { role: 'admin', canAccessAllClinics: true };
+  assert.equal(normalizeRole(seedAdmin.role, seedAdmin.canAccessAllClinics), 'OWNER');
+});
+
+await test('Seed admin: canAccessAllClinics=false olursa CLINIC_MANAGER olur (hata senaryosu)', () => {
+  const brokenAdmin = { role: 'admin', canAccessAllClinics: false };
+  assert.equal(normalizeRole(brokenAdmin.role, brokenAdmin.canAccessAllClinics), 'CLINIC_MANAGER');
+});
+
+await test('OWNER → org dashboard erişimi var', () => {
+  assert.equal(canAccessOrgDashboard({ role: 'admin', canAccessAllClinics: true }), true);
+});
+
+await test('OWNER → WhatsApp bağlantısı ve şube yönetimi tam yetki', () => {
+  const owner = { role: 'admin', canAccessAllClinics: true };
+  assert.equal(canManageWhatsAppConnections(owner), true);
+  assert.equal(canManageBranches(owner), true);
+  assert.equal(canAssignWhatsAppToClinic(owner), true);
+});
+
 // ─── Sonuç ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);

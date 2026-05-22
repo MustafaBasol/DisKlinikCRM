@@ -119,8 +119,18 @@ async function main() {
       phone: '+90 216 311 08 88',
       role: 'admin',
       passwordHash,
+      canAccessAllClinics: true,   // role=admin + canAccessAllClinics=true → OWNER
+      defaultClinicId: clinic.id,
     },
   });
+
+  // UserClinic membership record for the admin (required for token allowedClinicIds)
+  await prisma.userClinic.create({
+    data: { userId: admin.id, clinicId: clinic.id, role: 'ADMIN', isActive: true },
+  });
+
+  // Set organization owner
+  await prisma.organization.update({ where: { id: organization.id }, data: { ownerId: admin.id } });
 
   const receptionist = await prisma.user.create({
     data: {
