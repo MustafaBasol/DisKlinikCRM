@@ -59,6 +59,16 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
         setPatients(patientsRes.data);
         setDoctors(doctorsRes.data);
         setTypes(typesRes.data);
+
+        // Validate prefill practitionerId — if doctor is not in the loaded list, clear it
+        if (prefill?.practitionerId) {
+          const doctorList: any[] = doctorsRes.data;
+          const found = doctorList.some((d: any) => d.id === prefill.practitionerId);
+          if (!found) {
+            setFormData(prev => ({ ...prev, practitionerId: '' }));
+            console.warn('[AppointmentForm] prefill practitionerId not found in clinic doctor list — ignored');
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch form data:', err);
       }
@@ -129,6 +139,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
               status: 'recovered',
               note: 'Yeni randevu oluşturuldu.',
             });
+            // Notify NoShows page (if mounted) to refresh its data
+            window.dispatchEvent(new CustomEvent('noShowRecovered'));
           } catch {
             // Non-fatal — appointment was created, just warn via console
             console.warn('Could not auto-update no-show recovery status to recovered');

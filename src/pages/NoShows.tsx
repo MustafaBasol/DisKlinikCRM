@@ -57,7 +57,9 @@ interface RecentNoShow {
   patientName: string;
   clinicId: string;
   clinicName: string;
+  practitionerId: string | null;
   doctorName: string;
+  appointmentTypeId: string | null;
   date: string;
   time: string;
   serviceName: string | null;
@@ -191,6 +193,13 @@ export default function NoShows() {
     }
     fetchData();
   }, [fetchData, user, navigate]);
+
+  // Refresh when another page dispatches 'noShowRecovered' (e.g., AppointmentForm after reschedule)
+  useEffect(() => {
+    const handler = () => fetchData();
+    window.addEventListener('noShowRecovered', handler);
+    return () => window.removeEventListener('noShowRecovered', handler);
+  }, [fetchData]);
 
   const handleMarkContacted = async (appointmentId: string) => {
     setActionLoading(prev => ({ ...prev, [`contact_${appointmentId}`]: true }));
@@ -532,16 +541,22 @@ export default function NoShows() {
                         {/* Reschedule */}
                         {(() => {
                           const canReschedule = !!row.patientId && !!row.clinicId;
-                          const rescheduleUrl = canReschedule
-                            ? `/appointments?source=no_show&patientId=${row.patientId}&clinicId=${row.clinicId}&doctorId=${row.doctorName ? '' : ''}&previousAppointmentId=${row.appointmentId}${row.serviceName ? '' : ''}`
-                            : '';
+                          const buildRescheduleUrl = () => {
+                            const params = new URLSearchParams({
+                              source: 'no_show',
+                              patientId: row.patientId,
+                              clinicId: row.clinicId,
+                              previousAppointmentId: row.appointmentId,
+                            });
+                            if (row.practitionerId) params.set('doctorId', row.practitionerId);
+                            if (row.appointmentTypeId) params.set('appointmentTypeId', row.appointmentTypeId);
+                            return `/appointments?${params.toString()}`;
+                          };
                           return (
                             <button
                               title={canReschedule ? 'Yeniden Randevu Oluştur' : 'Hasta veya klinik bilgisi eksik.'}
                               disabled={!canReschedule}
-                              onClick={() => canReschedule && navigate(
-                                `/appointments?source=no_show&patientId=${row.patientId}&clinicId=${row.clinicId}&previousAppointmentId=${row.appointmentId}`
-                              )}
+                              onClick={() => canReschedule && navigate(buildRescheduleUrl())}
                               className={`p-1.5 rounded-lg transition-colors ${
                                 canReschedule
                                   ? 'text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20'

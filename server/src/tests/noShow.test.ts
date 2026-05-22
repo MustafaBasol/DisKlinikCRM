@@ -625,6 +625,216 @@ await test("range='custom' without from — undefined döner", () => {
   assert.equal(filter, undefined);
 });
 
+// ─── 14. Dashboard recentNoShows — practitionerId ve appointmentTypeId ────────
+
+section('14. Dashboard recentNoShows — practitionerId ve appointmentTypeId alanları');
+
+// Simulate the recentNoShows mapper used in noShows.ts
+function mapRecentNoShow(a: {
+  id: string;
+  patientId: string;
+  patient: { firstName: string; lastName: string };
+  clinicId: string;
+  clinic: { name: string };
+  practitionerId: string | null;
+  practitioner: { firstName: string; lastName: string };
+  appointmentTypeId: string | null;
+  appointmentType?: { name: string; basePrice?: number; currency?: string } | null;
+  startTime: Date;
+  recoveryStatus?: string;
+  sentMessages: { createdAt: Date }[];
+}) {
+  return {
+    appointmentId: a.id,
+    patientId: a.patientId,
+    patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+    clinicId: a.clinicId,
+    clinicName: a.clinic.name,
+    practitionerId: a.practitionerId ?? null,
+    doctorName: `${a.practitioner.firstName} ${a.practitioner.lastName}`,
+    appointmentTypeId: a.appointmentTypeId ?? null,
+    date: a.startTime.toISOString().split('T')[0],
+    time: a.startTime.toISOString().split('T')[1]?.substring(0, 5),
+    serviceName: a.appointmentType?.name ?? null,
+    estimatedValue: a.appointmentType?.basePrice ?? 0,
+    currency: a.appointmentType?.currency ?? null,
+    recoveryStatus: a.recoveryStatus ?? 'unresolved',
+    lastContactAt: a.sentMessages[0]?.createdAt ?? null,
+  };
+}
+
+const baseAppointment = {
+  id: 'appt-1',
+  patientId: 'pat-1',
+  patient: { firstName: 'Ayşe', lastName: 'Yılmaz' },
+  clinicId: 'clinic-A',
+  clinic: { name: 'Merkez Klinik' },
+  practitionerId: 'doctor-99',
+  practitioner: { firstName: 'Dr.', lastName: 'Kaya' },
+  appointmentTypeId: 'type-5',
+  appointmentType: { name: 'Kanal Tedavisi', basePrice: 500, currency: 'TRY' },
+  startTime: new Date('2026-05-22T10:00:00Z'),
+  recoveryStatus: 'unresolved',
+  sentMessages: [],
+};
+
+await test('recentNoShows item — practitionerId alanı mevcut', () => {
+  const item = mapRecentNoShow(baseAppointment);
+  assert.equal(item.practitionerId, 'doctor-99');
+});
+
+await test('recentNoShows item — appointmentTypeId alanı mevcut', () => {
+  const item = mapRecentNoShow(baseAppointment);
+  assert.equal(item.appointmentTypeId, 'type-5');
+});
+
+await test('recentNoShows item — practitionerId null ise null döner', () => {
+  const item = mapRecentNoShow({ ...baseAppointment, practitionerId: null });
+  assert.equal(item.practitionerId, null);
+});
+
+await test('recentNoShows item — appointmentTypeId null ise null döner', () => {
+  const item = mapRecentNoShow({ ...baseAppointment, appointmentTypeId: null, appointmentType: null });
+  assert.equal(item.appointmentTypeId, null);
+});
+
+await test('recentNoShows item — doctorName her zaman string', () => {
+  const item = mapRecentNoShow(baseAppointment);
+  assert.equal(typeof item.doctorName, 'string');
+  assert.ok(item.doctorName.length > 0);
+});
+
+await test('recentNoShows item — appointmentType yoksa estimatedValue 0', () => {
+  const item = mapRecentNoShow({ ...baseAppointment, appointmentTypeId: null, appointmentType: null });
+  assert.equal(item.estimatedValue, 0);
+});
+
+// ─── 15. Reschedule URL — practitionerId ve appointmentTypeId dahil edilir ────
+
+section('15. Reschedule URL oluşturma');
+
+function buildRescheduleUrl(row: {
+  patientId: string;
+  clinicId: string;
+  appointmentId: string;
+  practitionerId?: string | null;
+  appointmentTypeId?: string | null;
+}): string | null {
+  if (!row.patientId || !row.clinicId) return null;
+  const params = new URLSearchParams({
+    source: 'no_show',
+    patientId: row.patientId,
+    clinicId: row.clinicId,
+    previousAppointmentId: row.appointmentId,
+  });
+  if (row.practitionerId) params.set('doctorId', row.practitionerId);
+  if (row.appointmentTypeId) params.set('appointmentTypeId', row.appointmentTypeId);
+  return `/appointments?${params.toString()}`;
+}
+
+await test('practitionerId mevcut — doctorId URL\'de yer alır', () => {
+  const url = buildRescheduleUrl({
+    patientId: 'pat-1', clinicId: 'clinic-A', appointmentId: 'appt-1',
+    practitionerId: 'doctor-99', appointmentTypeId: 'type-5',
+  });
+  assert.ok(url!.includes('doctorId=doctor-99'), `URL: ${url}`);
+});
+
+await test('appointmentTypeId mevcut — appointmentTypeId URL\'de yer alır', () => {
+  const url = buildRescheduleUrl({
+    patientId: 'pat-1', clinicId: 'clinic-A', appointmentId: 'appt-1',
+    practitionerId: 'doctor-99', appointmentTypeId: 'type-5',
+  });
+  assert.ok(url!.includes('appointmentTypeId=type-5'), `URL: ${url}`);
+});
+
+await test('practitionerId null — doctorId URL\'de yer almaz', () => {
+  const url = buildRescheduleUrl({
+    patientId: 'pat-1', clinicId: 'clinic-A', appointmentId: 'appt-1',
+    practitionerId: null,
+  });
+  assert.ok(!url!.includes('doctorId'), `URL should not have doctorId: ${url}`);
+});
+
+await test('appointmentTypeId null — appointmentTypeId URL\'de yer almaz', () => {
+  const url = buildRescheduleUrl({
+    patientId: 'pat-1', clinicId: 'clinic-A', appointmentId: 'appt-1',
+    appointmentTypeId: null,
+  });
+  assert.ok(!url!.includes('appointmentTypeId'), `URL should not have appointmentTypeId: ${url}`);
+});
+
+await test('patientId yoksa null döner', () => {
+  const url = buildRescheduleUrl({
+    patientId: '', clinicId: 'clinic-A', appointmentId: 'appt-1',
+  });
+  assert.equal(url, null);
+});
+
+await test('clinicId yoksa null döner', () => {
+  const url = buildRescheduleUrl({
+    patientId: 'pat-1', clinicId: '', appointmentId: 'appt-1',
+  });
+  assert.equal(url, null);
+});
+
+await test('source=no_show her zaman URL\'de yer alır', () => {
+  const url = buildRescheduleUrl({
+    patientId: 'pat-1', clinicId: 'clinic-A', appointmentId: 'appt-1',
+  });
+  assert.ok(url!.includes('source=no_show'), `URL: ${url}`);
+});
+
+await test('previousAppointmentId her zaman URL\'de yer alır', () => {
+  const url = buildRescheduleUrl({
+    patientId: 'pat-1', clinicId: 'clinic-A', appointmentId: 'appt-99',
+  });
+  assert.ok(url!.includes('previousAppointmentId=appt-99'), `URL: ${url}`);
+});
+
+// ─── 16. Doctor prefill doğrulama (safe ignore) ───────────────────────────────
+
+section('16. Doctor prefill doğrulama — geçersiz doctorId güvenle yok sayılır');
+
+function validateDoctorPrefill(
+  prefillPractitionerId: string | undefined,
+  loadedDoctors: { id: string; firstName: string; lastName: string }[]
+): { practitionerId: string; valid: boolean } {
+  if (!prefillPractitionerId) return { practitionerId: '', valid: true };
+  const found = loadedDoctors.some(d => d.id === prefillPractitionerId);
+  if (!found) return { practitionerId: '', valid: false }; // silently clear
+  return { practitionerId: prefillPractitionerId, valid: true };
+}
+
+const doctors = [
+  { id: 'doctor-1', firstName: 'Dr.', lastName: 'Kaya' },
+  { id: 'doctor-2', firstName: 'Dr.', lastName: 'Demir' },
+];
+
+await test('geçerli doctorId — preselected', () => {
+  const result = validateDoctorPrefill('doctor-1', doctors);
+  assert.equal(result.practitionerId, 'doctor-1');
+  assert.equal(result.valid, true);
+});
+
+await test('geçersiz doctorId — temizlenir (valid=false)', () => {
+  const result = validateDoctorPrefill('unknown-doctor', doctors);
+  assert.equal(result.practitionerId, '');
+  assert.equal(result.valid, false);
+});
+
+await test('doctorId undefined — empty string döner', () => {
+  const result = validateDoctorPrefill(undefined, doctors);
+  assert.equal(result.practitionerId, '');
+  assert.equal(result.valid, true);
+});
+
+await test('boş doktor listesi — doctorId temizlenir', () => {
+  const result = validateDoctorPrefill('doctor-1', []);
+  assert.equal(result.practitionerId, '');
+  assert.equal(result.valid, false);
+});
+
 // ─── Sonuç ────────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(60)}`);
