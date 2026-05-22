@@ -13,8 +13,10 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  Download,
+  AlertTriangle,
 } from 'lucide-react';
-import { whatsappConnectionService } from '../services/api';
+import { whatsappConnectionService, organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { canManageWhatsAppConnections, canViewWhatsAppStatus } from '../utils/permissions';
 
@@ -35,12 +37,18 @@ interface WhatsAppConnection {
   metaPhoneNumberId?: string | null;
   metaBusinessId?: string | null;
   createdAt: string;
+  isLegacy?: boolean; // Virtual entry: not yet saved to DB
   clinics?: Array<{
     id: string;
     clinicId: string;
     clinic: { id: string; name: string };
     isDefault: boolean;
   }>;
+}
+
+interface ClinicOption {
+  id: string;
+  name: string;
 }
 
 interface ConnectionFormData {
@@ -59,6 +67,8 @@ interface ConnectionFormData {
   metaAppId: string;
   metaAccessTokenEncrypted: string;
   metaWebhookVerifyToken: string;
+  // Clinic assignment
+  linkedClinicIds: string[];
 }
 
 const EMPTY_FORM: ConnectionFormData = {
@@ -75,6 +85,7 @@ const EMPTY_FORM: ConnectionFormData = {
   metaAppId: '',
   metaAccessTokenEncrypted: '',
   metaWebhookVerifyToken: '',
+  linkedClinicIds: [],
 };
 
 const PROVIDER_LABELS: Record<Provider, string> = {
@@ -97,6 +108,9 @@ export default function WhatsAppConnections() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Available clinics for assignment
+  const [clinicOptions, setClinicOptions] = useState<ClinicOption[]>([]);
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -111,6 +125,7 @@ export default function WhatsAppConnections() {
   const [showQrFor, setShowQrFor] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [importingLegacy, setImportingLegacy] = useState(false);
 
   const canManage = canManageWhatsAppConnections(user);
   const canView = canViewWhatsAppStatus(user);
@@ -129,7 +144,19 @@ export default function WhatsAppConnections() {
     }
   }, []);
 
-  useEffect(() => { fetchConnections(); }, [fetchConnections]);
+  const fetchClinics = useCallback(async () => {
+    try {
+      const res = await organizationBranchService.getAll();
+      setClinicOptions((res.data ?? []).map((c: any) => ({ id: c.id, name: c.name })));
+    } catch {
+      // Non-critical; clinic assignment still works via existing routes
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConnections();
+    fetchClinics();
+  }, [fetchConnections, fetchClinics]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -156,6 +183,7 @@ export default function WhatsAppConnections() {
       metaAppId: '',
       metaAccessTokenEncrypted: '', // Don't pre-fill secrets
       metaWebhookVerifyToken: '',
+      linkedClinicIds: (conn.clinics ?? []).map((c) => c.clinicId),
     });
     setFormError(null);
     setShowModal(true);
@@ -169,8 +197,11 @@ export default function WhatsAppConnections() {
     setSaving(true);
     setFormError(null);
     try {
-      // Build clean payload — omit empty strings for optional fields
-      const payload: Record<string, unknown> = { name: form.name.trim(), provider: form.provider };
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        provider: form.provider,
+        linkedClinicIds: form.linkedClinicIds,
+      };
       if (form.phoneNumber) payload.phoneNumber = form.phoneNumber;
       if (form.displayName) payload.displayName = form.displayName;
 
@@ -236,6 +267,31 @@ export default function WhatsAppConnections() {
     }
   }
 
+  async function handleImportLegacy() {
+    if (!confirm('Mevcut ortam değişkenlerindeki Evolution API ayarları veritabanına aktarılacak. Devam edilsin mi?')) return;
+    setImportingLegacy(true);
+    try {
+      const res = await whatsappConnectionService.importLegacy();
+      if (res.data.alreadyImported) {
+        alert('Bu bağlantı daha önce zaten aktarılmıştı.');
+      }
+      fetchConnections();
+    } catch (err: any) {
+      alert(err?.response?.data?.error ?? 'Aktarım başarısız.');
+    } finally {
+      setImportingLegacy(false);
+    }
+  }
+
+  function toggleClinicId(id: string) {
+    setForm((f) => ({
+      ...f,
+      linkedClinicIds: f.linkedClinicIds.includes(id)
+        ? f.linkedClinicIds.filter((x) => x !== id)
+        : [...f.linkedClinicIds, id],
+    }));
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -291,181 +347,244 @@ export default function WhatsAppConnections() {
         </div>
       ) : (
         <div className="space-y-3">
-          {connections.map((conn) => (
-            <div
-              key={conn.id}
-              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden"
-            >
-              {/* Main row */}
-              <div className="p-4 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-gray-900 dark:text-white truncate">{conn.name}</span>
-                    <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full">
-                      {PROVIDER_LABELS[conn.provider]}
-                    </span>
-                    {conn.isActive ? (
-                      <span className="flex items-center gap-1 text-xs">
-                        <Wifi size={12} className={STATUS_COLOR[conn.status] ?? 'text-gray-500'} />
-                        <span className={STATUS_COLOR[conn.status] ?? 'text-gray-500 dark:text-gray-400'}>
-                          {conn.status}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-xs text-gray-400">
-                        <WifiOff size={12} />
-                        inactive
-                      </span>
-                    )}
-                  </div>
-                  {(conn.phoneNumber || conn.displayName) && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                      {conn.displayName ?? ''} {conn.phoneNumber ? `(${conn.phoneNumber})` : ''}
-                    </p>
-                  )}
-                  {conn.clinics && conn.clinics.length > 0 && (
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                      Şubeler: {conn.clinics.map((c) => c.clinic.name).join(', ')}
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {canManage && (
-                    <>
-                      <button
-                        onClick={() => handleTest(conn.id)}
-                        disabled={testingId === conn.id}
-                        title="Bağlantıyı Test Et"
-                        className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                      >
-                        {testingId === conn.id ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                          <CheckCircle2 size={16} />
-                        )}
-                      </button>
-                      {conn.provider === 'evolution_api' && (
+          {connections.map((conn) => {
+            // ── Legacy virtual entry ─────────────────────────────────────────
+            if (conn.isLegacy) {
+              return (
+                <div
+                  key="__legacy__"
+                  className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl overflow-hidden"
+                >
+                  <div className="p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-amber-900 dark:text-amber-100 text-sm">
+                          Ortam Değişkenlerinde Mevcut Evolution API Bağlantısı Bulundu
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                          Bu bağlantı şu anda env değişkenlerinden çalışıyor ve mesaj gönderimi aktif.
+                          Yönetim panelinde görünmesi için aşağıdaki butona tıklayarak veritabanına aktarın.
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-amber-700 dark:text-amber-300">
+                          {conn.evolutionApiUrl && (
+                            <>
+                              <span className="font-medium">API URL</span>
+                              <span className="truncate">{conn.evolutionApiUrl}</span>
+                            </>
+                          )}
+                          {conn.evolutionInstanceName && (
+                            <>
+                              <span className="font-medium">Instance</span>
+                              <span>{conn.evolutionInstanceName}</span>
+                            </>
+                          )}
+                          <span className="font-medium">API Key</span>
+                          <span>Yapılandırılmış (gizli)</span>
+                        </div>
+                      </div>
+                      {canManage && (
                         <button
-                          onClick={() => handleGetQr(conn.id)}
-                          title="QR Kodu Al"
-                          className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          onClick={handleImportLegacy}
+                          disabled={importingLegacy}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50 shrink-0"
                         >
-                          <QrCode size={16} />
+                          {importingLegacy ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Download size={13} />
+                          )}
+                          Veritabanına Aktar
                         </button>
                       )}
-                      <button
-                        onClick={() => openEdit(conn)}
-                        title="Düzenle"
-                        className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDisconnect(conn.id, conn.name)}
-                        disabled={disconnectingId === conn.id}
-                        title="Bağlantıyı Kes"
-                        className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                      >
-                        {disconnectingId === conn.id ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={16} />
-                        )}
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => setExpandedId(expandedId === conn.id ? null : conn.id)}
-                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    {expandedId === conn.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Test result */}
-              {testResults[conn.id] && (
-                <div
-                  className={`px-4 pb-3 text-sm flex items-start gap-2 ${
-                    testResults[conn.id].success
-                      ? 'text-green-700 dark:text-green-400'
-                      : 'text-red-700 dark:text-red-400'
-                  }`}
-                >
-                  {testResults[conn.id].success ? (
-                    <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
-                  ) : (
-                    <XCircle size={14} className="mt-0.5 shrink-0" />
-                  )}
-                  <span>{testResults[conn.id].message}</span>
-                </div>
-              )}
-
-              {/* QR Code display */}
-              {showQrFor === conn.id && (
-                <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
-                  {qrData[conn.id] ? (
-                    <div className="flex flex-col items-start gap-2">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        WhatsApp'ı QR kod ile bağlayın:
-                      </p>
-                      <img
-                        src={`data:image/png;base64,${qrData[conn.id]}`}
-                        alt="QR Code"
-                        className="w-48 h-48 border border-gray-200 dark:border-gray-600 rounded-lg"
-                      />
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      QR kodu mevcut değil — bağlantı zaten aktif olabilir.
-                    </p>
-                  )}
-                  <button
-                    onClick={() => setShowQrFor(null)}
-                    className="mt-2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    Kapat
-                  </button>
+                  </div>
                 </div>
-              )}
+              );
+            }
 
-              {/* Expanded details */}
-              {expandedId === conn.id && (
-                <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                    {conn.evolutionApiUrl && (
+            // ── Regular connection card ──────────────────────────────────────
+            return (
+              <div
+                key={conn.id}
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden"
+              >
+                {/* Main row */}
+                <div className="p-4 flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-900 dark:text-white truncate">{conn.name}</span>
+                      <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full">
+                        {PROVIDER_LABELS[conn.provider]}
+                      </span>
+                      {conn.isActive ? (
+                        <span className="flex items-center gap-1 text-xs">
+                          <Wifi size={12} className={STATUS_COLOR[conn.status] ?? 'text-gray-500'} />
+                          <span className={STATUS_COLOR[conn.status] ?? 'text-gray-500 dark:text-gray-400'}>
+                            {conn.status}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs text-gray-400">
+                          <WifiOff size={12} />
+                          inactive
+                        </span>
+                      )}
+                    </div>
+                    {(conn.phoneNumber || conn.displayName) && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                        {conn.displayName ?? ''} {conn.phoneNumber ? `(${conn.phoneNumber})` : ''}
+                      </p>
+                    )}
+                    {conn.clinics && conn.clinics.length > 0 && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Şubeler: {conn.clinics.map((c) => c.clinic.name).join(', ')}
+                      </p>
+                    )}
+                    {conn.clinics && conn.clinics.length === 0 && (
+                      <p className="text-xs text-amber-500 dark:text-amber-400 mt-1">
+                        ⚠ Henüz hiçbir şubeye atanmadı
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {canManage && (
                       <>
-                        <dt>API URL</dt>
-                        <dd className="truncate text-gray-700 dark:text-gray-300">{conn.evolutionApiUrl}</dd>
+                        <button
+                          onClick={() => handleTest(conn.id)}
+                          disabled={testingId === conn.id}
+                          title="Bağlantıyı Test Et"
+                          className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                          {testingId === conn.id ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <CheckCircle2 size={16} />
+                          )}
+                        </button>
+                        {conn.provider === 'evolution_api' && (
+                          <button
+                            onClick={() => handleGetQr(conn.id)}
+                            title="QR Kodu Al"
+                            className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <QrCode size={16} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => openEdit(conn)}
+                          title="Düzenle"
+                          className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDisconnect(conn.id, conn.name)}
+                          disabled={disconnectingId === conn.id}
+                          title="Bağlantıyı Kes"
+                          className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                          {disconnectingId === conn.id ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
+                        </button>
                       </>
                     )}
-                    {conn.evolutionInstanceName && (
-                      <>
-                        <dt>Instance</dt>
-                        <dd className="text-gray-700 dark:text-gray-300">{conn.evolutionInstanceName}</dd>
-                      </>
-                    )}
-                    {conn.metaPhoneNumberId && (
-                      <>
-                        <dt>Phone Number ID</dt>
-                        <dd className="text-gray-700 dark:text-gray-300">{conn.metaPhoneNumberId}</dd>
-                      </>
-                    )}
-                    {conn.metaBusinessId && (
-                      <>
-                        <dt>Business ID</dt>
-                        <dd className="text-gray-700 dark:text-gray-300">{conn.metaBusinessId}</dd>
-                      </>
-                    )}
-                    <dt>Oluşturuldu</dt>
-                    <dd>{new Date(conn.createdAt).toLocaleDateString('tr-TR')}</dd>
-                  </dl>
+                    <button
+                      onClick={() => setExpandedId(expandedId === conn.id ? null : conn.id)}
+                      className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      {expandedId === conn.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* Test result */}
+                {testResults[conn.id] && (
+                  <div
+                    className={`px-4 pb-3 text-sm flex items-start gap-2 ${
+                      testResults[conn.id].success
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-red-700 dark:text-red-400'
+                    }`}
+                  >
+                    {testResults[conn.id].success ? (
+                      <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
+                    ) : (
+                      <XCircle size={14} className="mt-0.5 shrink-0" />
+                    )}
+                    <span>{testResults[conn.id].message}</span>
+                  </div>
+                )}
+
+                {/* QR Code display */}
+                {showQrFor === conn.id && (
+                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
+                    {qrData[conn.id] ? (
+                      <div className="flex flex-col items-start gap-2">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          WhatsApp'ı QR kod ile bağlayın:
+                        </p>
+                        <img
+                          src={`data:image/png;base64,${qrData[conn.id]}`}
+                          alt="QR Code"
+                          className="w-48 h-48 border border-gray-200 dark:border-gray-600 rounded-lg"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        QR kodu mevcut değil — bağlantı zaten aktif olabilir.
+                      </p>
+                    )}
+                    <button
+                      onClick={() => setShowQrFor(null)}
+                      className="mt-2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      Kapat
+                    </button>
+                  </div>
+                )}
+
+                {/* Expanded details */}
+                {expandedId === conn.id && (
+                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                      {conn.evolutionApiUrl && (
+                        <>
+                          <dt>API URL</dt>
+                          <dd className="truncate text-gray-700 dark:text-gray-300">{conn.evolutionApiUrl}</dd>
+                        </>
+                      )}
+                      {conn.evolutionInstanceName && (
+                        <>
+                          <dt>Instance</dt>
+                          <dd className="text-gray-700 dark:text-gray-300">{conn.evolutionInstanceName}</dd>
+                        </>
+                      )}
+                      {conn.metaPhoneNumberId && (
+                        <>
+                          <dt>Phone Number ID</dt>
+                          <dd className="text-gray-700 dark:text-gray-300">{conn.metaPhoneNumberId}</dd>
+                        </>
+                      )}
+                      {conn.metaBusinessId && (
+                        <>
+                          <dt>Business ID</dt>
+                          <dd className="text-gray-700 dark:text-gray-300">{conn.metaBusinessId}</dd>
+                        </>
+                      )}
+                      <dt>Oluşturuldu</dt>
+                      <dd>{new Date(conn.createdAt).toLocaleDateString('tr-TR')}</dd>
+                    </dl>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -602,7 +721,7 @@ export default function WhatsAppConnections() {
                         {label}
                       </label>
                       <input
-                        value={form[key as keyof ConnectionFormData]}
+                        value={form[key as keyof ConnectionFormData] as string}
                         onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                         className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                       />
@@ -619,6 +738,34 @@ export default function WhatsAppConnections() {
                       placeholder={editingId ? '••••••••' : 'Meta Access Token'}
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                     />
+                  </div>
+                </div>
+              )}
+
+              {/* Clinic assignment */}
+              {clinicOptions.length > 0 && (
+                <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                    Şube Ataması
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+                    Bu bağlantının hangi şubelerde kullanılacağını seçin. Birden fazla şube seçilebilir (paylaşımlı hat).
+                  </p>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {clinicOptions.map((clinic) => (
+                      <label
+                        key={clinic.id}
+                        className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 px-2 py-1 rounded"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.linkedClinicIds.includes(clinic.id)}
+                          onChange={() => toggleClinicId(clinic.id)}
+                          className="accent-green-600"
+                        />
+                        {clinic.name}
+                      </label>
+                    ))}
                   </div>
                 </div>
               )}

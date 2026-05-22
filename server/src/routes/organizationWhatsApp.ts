@@ -82,6 +82,9 @@ const connectionCreateSchema = z.object({
   metaAccessTokenEncrypted: z.string().max(1000).optional().nullable(),
   metaWebhookVerifyToken: z.string().max(120).optional().nullable(),
   metaWebhookSecret: z.string().max(120).optional().nullable(),
+
+  // Clinic assignment (optional) — UUIDs of clinics to link this connection to
+  linkedClinicIds: z.array(z.string().uuid()).optional(),
 });
 
 const connectionUpdateSchema = connectionCreateSchema.partial();
@@ -111,7 +114,38 @@ router.get(
           },
         },
       });
-      res.json(connections.map((c) => sanitizeConnection(c as unknown as Record<string, unknown>)));
+      const sanitized = connections.map((c) => sanitizeConnection(c as unknown as Record<string, unknown>));
+
+      // Surface legacy env-var config as a virtual read-only entry when DB has no records.
+      // This ensures the page is never empty for deployments that have not yet run backfill.
+      // The virtual entry is safe: it never includes the raw API key.
+      if (sanitized.length === 0) {
+        const legacyUrl = process.env.EVOLUTION_API_BASE_URL?.trim();
+        const legacyInstance = process.env.EVOLUTION_INSTANCE_NAME?.trim();
+        const legacyKeySet = Boolean(process.env.EVOLUTION_API_KEY?.trim());
+        if (legacyUrl && legacyInstance && legacyKeySet) {
+          sanitized.unshift({
+            id: '__legacy__',
+            isLegacy: true,
+            organizationId,
+            name: 'Mevcut Evolution API Bağlantısı (Ortam Değişkenlerinden)',
+            provider: 'evolution_api',
+            status: 'connected',
+            phoneNumber: null,
+            displayName: null,
+            evolutionApiUrl: legacyUrl,
+            evolutionInstanceName: legacyInstance,
+            isActive: true,
+            clinics: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastConnectedAt: null,
+            lastError: null,
+          } as unknown as ReturnType<typeof sanitizeConnection>);
+        }
+      }
+
+      res.json(sanitized);
     } catch {
       res.status(500).json({ error: 'Failed to fetch WhatsApp connections' });
     }
@@ -135,8 +169,9 @@ router.post(
     }
 
     try {
-      // Encrypt secrets before persisting
-      const createData: Record<string, unknown> = { organizationId, ...parsed.data };
+      // Encrypt secrets before persisting — strip linkedClinicIds from DB fields
+      const { linkedClinicIds, ...connectionFields } = parsed.data;
+      const createData: Record<string, unknown> = { organizationId, ...connectionFields };
       if (typeof createData.evolutionApiKeyEncrypted === 'string' && createData.evolutionApiKeyEncrypted) {
         createData.evolutionApiKeyEncrypted = encryptSecret(createData.evolutionApiKeyEncrypted as string);
       }
@@ -146,6 +181,26 @@ router.post(
       const connection = await prisma.whatsAppConnection.create({
         data: createData as Parameters<typeof prisma.whatsAppConnection.create>[0]['data'],
       });
+
+      // Link to specified clinics (all must belong to same organization — cross-org guard)
+      if (Array.isArray(linkedClinicIds) && linkedClinicIds.length > 0) {
+        const validClinics = await prisma.clinic.findMany({
+          where: { id: { in: linkedClinicIds }, organizationId },
+          select: { id: true },
+        });
+        if (validClinics.length > 0) {
+          await prisma.clinicWhatsAppConnection.createMany({
+            data: validClinics.map((c) => ({
+              organizationId,
+              clinicId: c.id,
+              whatsappConnectionId: connection.id,
+              isDefault: true,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
       await logActivity({
         clinicId: req.user!.clinicId,
         userId: req.user!.id,
@@ -165,7 +220,13 @@ router.post(
         metadata: { name: connection.name, provider: connection.provider },
         ...extractRequestMeta(req),
       });
-      res.status(201).json(sanitizeConnection(connection as unknown as Record<string, unknown>));
+
+      // Fetch with clinics for response
+      const full = await prisma.whatsAppConnection.findUnique({
+        where: { id: connection.id },
+        include: { clinics: { include: { clinic: { select: { id: true, name: true } } } } },
+      });
+      res.status(201).json(sanitizeConnection(full as unknown as Record<string, unknown>));
     } catch (err: any) {
       if (err.code === 'P2002') {
         return res
@@ -228,7 +289,8 @@ router.put(
       if (!existing) return res.status(404).json({ error: 'Connection not found' });
 
       // Encrypt secrets before persisting — only if provided (partial update)
-      const updateData: Record<string, unknown> = { ...parsed.data };
+      const { linkedClinicIds, ...updateFields } = parsed.data;
+      const updateData: Record<string, unknown> = { ...updateFields };
       if (typeof updateData.evolutionApiKeyEncrypted === 'string' && updateData.evolutionApiKeyEncrypted) {
         updateData.evolutionApiKeyEncrypted = encryptSecret(updateData.evolutionApiKeyEncrypted as string);
       }
@@ -239,6 +301,40 @@ router.put(
         where: { id },
         data: updateData as Parameters<typeof prisma.whatsAppConnection.update>[0]['data'],
       });
+
+      // Sync clinic assignments if linkedClinicIds is provided
+      if (Array.isArray(linkedClinicIds)) {
+        if (linkedClinicIds.length === 0) {
+          // Empty array = remove all assignments
+          await prisma.clinicWhatsAppConnection.deleteMany({
+            where: { whatsappConnectionId: id, organizationId },
+          });
+        } else {
+          // Validate clinic IDs belong to same org (cross-org guard)
+          const validClinics = await prisma.clinic.findMany({
+            where: { id: { in: linkedClinicIds }, organizationId },
+            select: { id: true },
+          });
+          const validIds = validClinics.map((c) => c.id);
+          // Remove assignments not in new list
+          await prisma.clinicWhatsAppConnection.deleteMany({
+            where: { whatsappConnectionId: id, organizationId, clinicId: { notIn: validIds } },
+          });
+          // Add new assignments
+          if (validIds.length > 0) {
+            await prisma.clinicWhatsAppConnection.createMany({
+              data: validIds.map((clinicId) => ({
+                organizationId,
+                clinicId,
+                whatsappConnectionId: id,
+                isDefault: true,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      }
+
       await logActivity({
         clinicId: req.user!.clinicId,
         userId: req.user!.id,
@@ -258,7 +354,12 @@ router.put(
         metadata: { name: updated.name, provider: updated.provider },
         ...extractRequestMeta(req),
       });
-      res.json(sanitizeConnection(updated as unknown as Record<string, unknown>));
+      // Return with updated clinic assignments
+      const full = await prisma.whatsAppConnection.findUnique({
+        where: { id },
+        include: { clinics: { include: { clinic: { select: { id: true, name: true } } } } },
+      });
+      res.json(sanitizeConnection(full as unknown as Record<string, unknown>));
     } catch (err: any) {
       if (err.code === 'P2002') {
         return res.status(409).json({ error: 'Connection name already in use' });
@@ -378,6 +479,121 @@ router.post(
       res.json({ success: true, message: 'Connection disconnected' });
     } catch {
       res.status(500).json({ error: 'Failed to disconnect connection' });
+    }
+  },
+);
+
+// POST /api/organization/whatsapp-connections/import-legacy
+// Imports the legacy env-var Evolution API config into the DB.
+// Idempotent: returns existing record if already imported.
+router.post(
+  '/organization/whatsapp-connections/import-legacy',
+  authorize(['OWNER', 'ORG_ADMIN']),
+  async (req: AuthRequest, res: Response) => {
+    if (!canManageWhatsAppConnections(req.user!)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    const organizationId = req.user!.organizationId;
+    if (!organizationId) return res.status(400).json({ error: 'No organization context' });
+
+    const apiUrl = process.env.EVOLUTION_API_BASE_URL?.trim();
+    const apiKey = process.env.EVOLUTION_API_KEY?.trim();
+    const instanceName = process.env.EVOLUTION_INSTANCE_NAME?.trim();
+
+    if (!apiUrl || !apiKey || !instanceName) {
+      return res.status(400).json({
+        error:
+          'EVOLUTION_API_BASE_URL, EVOLUTION_API_KEY ve EVOLUTION_INSTANCE_NAME ortam değişkenleri bulunamadı.',
+      });
+    }
+
+    try {
+      // Idempotency: return existing record if already imported
+      const existing = await prisma.whatsAppConnection.findFirst({
+        where: { organizationId, evolutionInstanceName: instanceName },
+        include: { clinics: { include: { clinic: { select: { id: true, name: true } } } } },
+      });
+      if (existing) {
+        return res.status(200).json({
+          alreadyImported: true,
+          connection: sanitizeConnection(existing as unknown as Record<string, unknown>),
+        });
+      }
+
+      // Get organization name for the connection label
+      const org = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true },
+      });
+      const connectionName = `${org?.name ?? 'Ana'} WhatsApp Hattı`;
+
+      // Get all clinics in organization for auto-assignment
+      const clinics = await prisma.clinic.findMany({
+        where: { organizationId },
+        select: { id: true, name: true },
+      });
+
+      // Create WhatsAppConnection
+      const connection = await prisma.whatsAppConnection.create({
+        data: {
+          organizationId,
+          name: connectionName,
+          provider: 'evolution_api',
+          status: 'connected',
+          evolutionApiUrl: apiUrl,
+          evolutionInstanceName: instanceName,
+          evolutionApiKeyEncrypted: encryptSecret(apiKey),
+          isActive: true,
+          lastConnectedAt: new Date(),
+        },
+      });
+
+      // Link to all clinics in the organization
+      if (clinics.length > 0) {
+        await prisma.clinicWhatsAppConnection.createMany({
+          data: clinics.map((c) => ({
+            organizationId,
+            clinicId: c.id,
+            whatsappConnectionId: connection.id,
+            isDefault: true,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      await logActivity({
+        clinicId: req.user!.clinicId,
+        userId: req.user!.id,
+        entityType: 'whatsapp_connection',
+        entityId: connection.id,
+        action: 'imported',
+        description: `Evolution API ortam değişkenleri bağlantıya aktarıldı: ${connection.name}`,
+      });
+      writeAuditLog({
+        organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'whatsapp_connection_imported',
+        entityType: 'whatsapp_connection',
+        entityId: connection.id,
+        description: `Legacy Evolution API config imported as WhatsApp connection: ${connection.name}`,
+        metadata: { name: connection.name, instanceName, clinicCount: clinics.length },
+        ...extractRequestMeta(req),
+      });
+
+      const full = await prisma.whatsAppConnection.findUnique({
+        where: { id: connection.id },
+        include: { clinics: { include: { clinic: { select: { id: true, name: true } } } } },
+      });
+      res.status(201).json({
+        alreadyImported: false,
+        connection: sanitizeConnection(full as unknown as Record<string, unknown>),
+      });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        return res.status(409).json({ error: 'Bu adla bir bağlantı zaten mevcut.' });
+      }
+      res.status(500).json({ error: 'Failed to import legacy configuration' });
     }
   },
 );

@@ -289,6 +289,7 @@ export const whatsappConnectionService = {
   test: (id: string) => api.post(`/organization/whatsapp-connections/${id}/test`),
   getQr: (id: string) => api.get(`/organization/whatsapp-connections/${id}/qr`),
   disconnect: (id: string) => api.post(`/organization/whatsapp-connections/${id}/disconnect`),
+  importLegacy: () => api.post('/organization/whatsapp-connections/import-legacy'),
 };
 
 export const clinicWhatsAppService = {
