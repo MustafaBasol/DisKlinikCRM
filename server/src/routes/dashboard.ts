@@ -113,8 +113,9 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
     if (stats.noShowsMonth > 0) {
       alerts.push({ type: 'warning', icon: 'UserMinus', title: 'noShowFollowUp', count: stats.noShowsMonth, link: '/appointments?status=no_show' });
     }
-    if (stats.pendingPayments._sum.amount > 0) {
-      alerts.push({ type: 'info', icon: 'DollarSign', title: 'pendingCollections', value: stats.pendingPayments._sum.amount, link: '/payments?status=pending' });
+    const pendingAmount = stats.pendingPayments?._sum?.amount ?? 0;
+    if (pendingAmount > 0) {
+      alerts.push({ type: 'info', icon: 'DollarSign', title: 'pendingCollections', value: pendingAmount, link: '/payments?status=pending' });
     }
 
     const activities = await prisma.activityLog.findMany({
@@ -188,6 +189,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       const seen = new Set<string>();
       const recentPatients = recentPatientsRaw
         .filter((a: any) => {
+          if (!a.patient) return false; // null-safe guard
           if (seen.has(a.patient.id)) return false;
           seen.add(a.patient.id);
           return true;
@@ -195,7 +197,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
         .slice(0, 5)
         .map((a: any) => ({
           ...a.patient,
-          lastService: a.appointmentType.name,
+          lastService: a.appointmentType?.name ?? null, // null-safe: appointmentType may be missing
           lastVisit: a.startTime,
         }));
 
@@ -212,18 +214,18 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
 
     res.json({
       stats: {
-        todayAppointments: stats.todayAppointments,
-        weekAppointments: stats.weekAppointments,
-        newPatientsMonth: stats.newPatientsMonth,
-        noShowsMonth: stats.noShowsMonth,
-        pendingTasks: stats.pendingTasks,
-        overdueTasks: stats.overdueTasks,
-        openTreatments: stats.openTreatments,
-        estimatedValue: stats.treatmentValues._sum.estimatedAmount || 0,
-        acceptedValue: stats.treatmentValues._sum.acceptedAmount || 0,
-        monthlyRevenue: stats.monthlyRevenue._sum.amount || 0,
-        pendingAmount: stats.pendingPayments._sum.amount || 0,
-        preparedMessages: stats.preparedMessagesWeek,
+        todayAppointments: stats.todayAppointments ?? 0,
+        weekAppointments: stats.weekAppointments ?? 0,
+        newPatientsMonth: stats.newPatientsMonth ?? 0,
+        noShowsMonth: stats.noShowsMonth ?? 0,
+        pendingTasks: stats.pendingTasks ?? 0,
+        overdueTasks: stats.overdueTasks ?? 0,
+        openTreatments: stats.openTreatments ?? 0,
+        estimatedValue: stats.treatmentValues?._sum?.estimatedAmount ?? 0,
+        acceptedValue: stats.treatmentValues?._sum?.acceptedAmount ?? 0,
+        monthlyRevenue: stats.monthlyRevenue?._sum?.amount ?? 0,
+        pendingAmount: stats.pendingPayments?._sum?.amount ?? 0,
+        preparedMessages: stats.preparedMessagesWeek ?? 0,
       },
       agenda,
       alerts,
@@ -238,6 +240,40 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+
+/**
+ * Converts raw Prisma aggregate results into the safe stats response shape.
+ * All counts default to 0, all sums default to 0 when null.
+ * Exported for unit testing.
+ */
+export function buildSafeStats(raw: {
+  todayAppointments?: number | null;
+  weekAppointments?: number | null;
+  newPatientsMonth?: number | null;
+  noShowsMonth?: number | null;
+  pendingTasks?: number | null;
+  overdueTasks?: number | null;
+  openTreatments?: number | null;
+  treatmentValues?: { _sum?: { estimatedAmount?: number | null; acceptedAmount?: number | null } } | null;
+  monthlyRevenue?: { _sum?: { amount?: number | null } } | null;
+  pendingPayments?: { _sum?: { amount?: number | null } } | null;
+  preparedMessagesWeek?: number | null;
+}) {
+  return {
+    todayAppointments: raw.todayAppointments ?? 0,
+    weekAppointments: raw.weekAppointments ?? 0,
+    newPatientsMonth: raw.newPatientsMonth ?? 0,
+    noShowsMonth: raw.noShowsMonth ?? 0,
+    pendingTasks: raw.pendingTasks ?? 0,
+    overdueTasks: raw.overdueTasks ?? 0,
+    openTreatments: raw.openTreatments ?? 0,
+    estimatedValue: raw.treatmentValues?._sum?.estimatedAmount ?? 0,
+    acceptedValue: raw.treatmentValues?._sum?.acceptedAmount ?? 0,
+    monthlyRevenue: raw.monthlyRevenue?._sum?.amount ?? 0,
+    pendingAmount: raw.pendingPayments?._sum?.amount ?? 0,
+    preparedMessages: raw.preparedMessagesWeek ?? 0,
+  };
+}
 
 async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, today: Date, tomorrow: Date, firstDayOfMonth: Date) {
   // ── 1) Son 7 günlük günlük randevu sayısı ────────────────────────────────────────────
@@ -271,7 +307,8 @@ async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, t
   });
 
   const typeMap: Record<string, { name: string; color: string; value: number }> = {};
-  monthAppts.forEach((a: { appointmentType: { name: string; color: string | null } }) => {
+  monthAppts.forEach((a: { appointmentType: { name: string; color: string | null } | null }) => {
+    if (!a.appointmentType) return; // null-safe: data inconsistency guard
     const key = a.appointmentType.name;
     if (!typeMap[key]) typeMap[key] = { name: key, color: a.appointmentType.color || '#6366f1', value: 0 };
     typeMap[key].value++;
