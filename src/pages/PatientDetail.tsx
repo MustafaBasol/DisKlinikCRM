@@ -39,12 +39,14 @@ import PaymentForm from '../components/PaymentForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '../utils/dateTime';
+import { normalizeRole } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases']);
   const { user } = useAuth();
+  const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
   const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   const [patient, setPatient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -904,7 +906,7 @@ const PatientDetail: React.FC = () => {
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold flex items-center gap-2"><Paperclip size={18} /> Dosyalar</h3>
-              {['admin', 'receptionist', 'doctor'].includes(user?.role || '') && (
+              {(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const).includes(userCanonicalRole as any) && (
                 <>
                   <input
                     ref={fileInputRef}
@@ -967,7 +969,7 @@ const PatientDetail: React.FC = () => {
                     >
                       <Download size={16} />
                     </button>
-                    {['admin', 'receptionist'].includes(user?.role || '') && (
+                    {(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'] as const).includes(userCanonicalRole as any) && (
                       <button
                         onClick={async () => {
                           if (!id || !confirm('Bu dosyayı silmek istediğinizden emin misiniz?')) return;

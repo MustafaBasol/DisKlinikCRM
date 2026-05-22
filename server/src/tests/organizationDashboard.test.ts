@@ -270,6 +270,8 @@ test('Legacy admin + canAccessAllClinics=true → true (OWNER\'a normalize)', ()
 });
 
 test('Legacy admin + canAccessAllClinics=false → false (CLINIC_MANAGER\'a normalize)', () => {
+  // normalizeRole: admin + canAccessAllClinics=false → CLINIC_MANAGER
+  // CLINIC_MANAGER organizasyon paneline erişemez.
   assert.equal(canAccessOrganizationDashboard(makeUser('admin', false)), false);
 });
 

@@ -416,8 +416,8 @@ await test('admin + canAccessAllClinics=true → OWNER', () => {
   assert.equal(normalizeRole('admin', true), 'OWNER');
 });
 
-await test('admin + canAccessAllClinics=false → ORG_ADMIN', () => {
-  assert.equal(normalizeRole('admin', false), 'ORG_ADMIN');
+await test('admin + canAccessAllClinics=false → CLINIC_MANAGER', () => {
+  assert.equal(normalizeRole('admin', false), 'CLINIC_MANAGER');
 });
 
 await test('dentist → DENTIST', () => {

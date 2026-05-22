@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings as SettingsIcon, Globe, Shield, Activity, UserCog, Users, CalendarClock, Link, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { canManageUsers } from '../utils/permissions';
+import { canManageUsers, normalizeRole } from '../utils/permissions';
 import ServiceList from '../components/ServiceList';
 import UserList from '../components/UserList';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
@@ -12,6 +12,8 @@ const Settings: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'users' | 'availability' | 'services'>('general');
   const [copied, setCopied] = useState(false);
+
+  const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
 
   const bookingUrl = user?.clinic?.id
     ? `${window.location.origin}/book/${user.clinic.id}`
@@ -48,7 +50,7 @@ const Settings: React.FC = () => {
               <UserCog size={18} />
               {t('settings:generalPreferences')}
             </button>
-            {(canManageUsers(user) || user?.role === 'receptionist') && (
+            {(canManageUsers(user) || userCanonicalRole === 'RECEPTIONIST') && (
               <button 
                 onClick={() => setActiveTab('services')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
@@ -70,7 +72,7 @@ const Settings: React.FC = () => {
                 {t('settings:users.title')}
               </button>
             )}
-            {(canManageUsers(user) || user?.role === 'doctor') && (
+            {(canManageUsers(user) || userCanonicalRole === 'DENTIST') && (
               <button
                 onClick={() => setActiveTab('availability')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${

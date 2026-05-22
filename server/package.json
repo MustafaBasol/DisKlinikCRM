@@ -7,14 +7,17 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "npx prisma generate && tsx src/index.ts",
-    "test": "npm run test:fixtures && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing",
+    "test": "npm run test:fixtures && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash",
     "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts",
     "test:whatsapp": "tsx src/tests/whatsappProvider.test.ts",
     "test:inbox": "tsx src/tests/whatsappInbox.test.ts",
     "test:finance": "tsx src/tests/financeDashboard.test.ts",
     "test:ops": "tsx src/tests/operationalMonitoring.test.ts",
     "test:no-shows": "tsx src/tests/noShow.test.ts",
-    "test:pricing": "tsx src/tests/servicePricing.test.ts"
+    "test:pricing": "tsx src/tests/servicePricing.test.ts",
+    "test:roles": "tsx src/tests/multiBranchAccess.test.ts",
+    "test:schedule": "tsx src/tests/scheduleAccess.test.ts",
+    "test:orgdash": "tsx src/tests/organizationDashboard.test.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

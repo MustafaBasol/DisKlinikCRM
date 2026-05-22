@@ -804,7 +804,7 @@ router.post(
       const graphVersion = process.env.META_GRAPH_API_VERSION || 'v23.0';
 
       if (!appId || !appSecret || !redirectUri) {
-        return res.status(500).json({
+        return res.status(503).json({
           error:
             'Meta Embedded Signup is not fully configured on this server. ' +
             'META_APP_ID, META_APP_SECRET and META_REDIRECT_URI must be set.',
