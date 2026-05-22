@@ -26,6 +26,10 @@ const buildEvolutionFetchInstanceUrl = (baseUrl: string, instanceName: string) =
 const buildEvolutionQrCodeUrl = (baseUrl: string, instanceName: string) =>
   `${baseUrl.replace(/\/$/, '')}/instance/connect/${encodeURIComponent(instanceName)}`;
 
+// Some Evolution API deployments use /instance/qrcode instead of /instance/connect
+const buildEvolutionQrCodeAltUrl = (baseUrl: string, instanceName: string) =>
+  `${baseUrl.replace(/\/$/, '')}/instance/qrcode/${encodeURIComponent(instanceName)}`;
+
 const buildEvolutionLogoutUrl = (baseUrl: string, instanceName: string) =>
   `${baseUrl.replace(/\/$/, '')}/instance/logout/${encodeURIComponent(instanceName)}`;
 
@@ -144,31 +148,45 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
       return { available: false, message: 'Evolution API credentials are not configured' };
     }
 
-    try {
-      const response = await fetch(buildEvolutionQrCodeUrl(creds.baseUrl, creds.instanceName), {
-        headers: { apikey: creds.apiKey },
-      });
+    // Try the primary endpoint first; fall back to the alternate path used by some deployments.
+    const urlsToTry = [
+      buildEvolutionQrCodeUrl(creds.baseUrl, creds.instanceName),
+      buildEvolutionQrCodeAltUrl(creds.baseUrl, creds.instanceName),
+    ];
 
-      if (!response.ok) {
+    for (const url of urlsToTry) {
+      try {
+        const response = await fetch(url, { headers: { apikey: creds.apiKey } });
+
+        // 404 or 405 → this path doesn't exist on this deployment; try the next one
+        if (response.status === 404 || response.status === 405) continue;
+
+        if (!response.ok) {
+          return {
+            available: false,
+            message: `Evolution API QR fetch failed with status ${response.status}`,
+          };
+        }
+
+        const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+        const qrcodeObj = data?.qrcode as Record<string, unknown> | undefined;
+        const qrCode = (qrcodeObj?.base64 ?? data?.base64) as string | undefined ?? null;
+
         return {
-          available: false,
-          message: `Evolution API QR fetch failed with status ${response.status}`,
+          available: Boolean(qrCode),
+          qrCode: typeof qrCode === 'string' ? qrCode : null,
+          message: qrCode ? undefined : 'No QR code available — instance may already be connected',
         };
+      } catch {
+        // Network error on this URL — try the next one
+        continue;
       }
-
-      const data = await response.json().catch(() => ({})) as Record<string, unknown>;
-      const qrcodeObj = data?.qrcode as Record<string, unknown> | undefined;
-      const qrCode = (qrcodeObj?.base64 ?? data?.base64) as string | undefined ?? null;
-
-      return {
-        available: Boolean(qrCode),
-        qrCode: typeof qrCode === 'string' ? qrCode : null,
-        message: qrCode ? undefined : 'No QR code available — instance may already be connected',
-      };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { available: false, message: `Evolution API QR request error: ${msg}` };
     }
+
+    return {
+      available: false,
+      message: 'QR endpoint is not available for this Evolution API deployment.',
+    };
   }
 
   async disconnect(connection: WhatsAppConnectionRecord): Promise<void> {

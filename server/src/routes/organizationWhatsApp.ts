@@ -83,6 +83,9 @@ const connectionCreateSchema = z.object({
   metaWebhookVerifyToken: z.string().max(120).optional().nullable(),
   metaWebhookSecret: z.string().max(120).optional().nullable(),
 
+  // Shared webhook secret (applies to any provider)
+  webhookSecret: z.string().max(120).optional().nullable(),
+
   // Clinic assignment (optional) — UUIDs of clinics to link this connection to
   linkedClinicIds: z.array(z.string().uuid()).optional(),
 });
@@ -305,7 +308,7 @@ router.put(
       // Sync clinic assignments if linkedClinicIds is provided
       if (Array.isArray(linkedClinicIds)) {
         if (linkedClinicIds.length === 0) {
-          // Empty array = remove all assignments
+          // Empty array = remove all assignments from this connection
           await prisma.clinicWhatsAppConnection.deleteMany({
             where: { whatsappConnectionId: id, organizationId },
           });
@@ -316,12 +319,22 @@ router.put(
             select: { id: true },
           });
           const validIds = validClinics.map((c) => c.id);
-          // Remove assignments not in new list
+          // Remove assignments from this connection for clinics no longer in the list
           await prisma.clinicWhatsAppConnection.deleteMany({
             where: { whatsappConnectionId: id, organizationId, clinicId: { notIn: validIds } },
           });
-          // Add new assignments
+          // For each clinic being assigned to this connection:
+          // delete its existing default assignment to any OTHER connection first (reassignment)
           if (validIds.length > 0) {
+            await prisma.clinicWhatsAppConnection.deleteMany({
+              where: {
+                organizationId,
+                clinicId: { in: validIds },
+                whatsappConnectionId: { not: id },
+                isDefault: true,
+              },
+            });
+            // Now add new assignments (skipDuplicates handles already-linked clinics)
             await prisma.clinicWhatsAppConnection.createMany({
               data: validIds.map((clinicId) => ({
                 organizationId,

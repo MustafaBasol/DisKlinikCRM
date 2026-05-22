@@ -67,6 +67,8 @@ interface ConnectionFormData {
   metaAppId: string;
   metaAccessTokenEncrypted: string;
   metaWebhookVerifyToken: string;
+  // Shared
+  webhookSecret: string;
   // Clinic assignment
   linkedClinicIds: string[];
 }
@@ -85,6 +87,7 @@ const EMPTY_FORM: ConnectionFormData = {
   metaAppId: '',
   metaAccessTokenEncrypted: '',
   metaWebhookVerifyToken: '',
+  webhookSecret: '',
   linkedClinicIds: [],
 };
 
@@ -183,6 +186,7 @@ export default function WhatsAppConnections() {
       metaAppId: '',
       metaAccessTokenEncrypted: '', // Don't pre-fill secrets
       metaWebhookVerifyToken: '',
+      webhookSecret: '', // Don't pre-fill secrets
       linkedClinicIds: (conn.clinics ?? []).map((c) => c.clinicId),
     });
     setFormError(null);
@@ -204,6 +208,7 @@ export default function WhatsAppConnections() {
       };
       if (form.phoneNumber) payload.phoneNumber = form.phoneNumber;
       if (form.displayName) payload.displayName = form.displayName;
+      if (form.webhookSecret) payload.webhookSecret = form.webhookSecret;
 
       if (form.provider === 'evolution_api') {
         if (form.evolutionApiUrl) payload.evolutionApiUrl = form.evolutionApiUrl;
@@ -472,8 +477,7 @@ export default function WhatsAppConnections() {
                           >
                             <QrCode size={16} />
                           </button>
-                        )}
-                        <button
+                        )}                        <button
                           onClick={() => openEdit(conn)}
                           title="Düzenle"
                           className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -524,7 +528,11 @@ export default function WhatsAppConnections() {
                 {/* QR Code display */}
                 {showQrFor === conn.id && (
                   <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
-                    {qrData[conn.id] ? (
+                    {conn.provider === 'meta_cloud_api' ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Meta Cloud API, Evolution tarzı QR kod kullanmaz. Meta Embedded Signup ileride eklenecektir.
+                      </p>
+                    ) : qrData[conn.id] ? (
                       <div className="flex flex-col items-start gap-2">
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                           WhatsApp'ı QR kod ile bağlayın:
@@ -696,7 +704,24 @@ export default function WhatsAppConnections() {
                       type="password"
                       value={form.evolutionApiKeyEncrypted}
                       onChange={(e) => setForm((f) => ({ ...f, evolutionApiKeyEncrypted: e.target.value }))}
-                      placeholder={editingId ? '••••••••' : 'Evolution API anahtarı'}
+                      placeholder={editingId ? '•••••••• (Yapılandırılmış)' : 'Evolution API anahtarı'}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                    />
+                    {editingId && (
+                      <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                        API key sunucu tarafında AES-256-GCM ile şifreli saklanır. Yeni değer girilirse eski key kalıcı olarak değişir.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Webhook Secret <span className="text-gray-400">(opsiyonel)</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={form.webhookSecret}
+                      onChange={(e) => setForm((f) => ({ ...f, webhookSecret: e.target.value }))}
+                      placeholder={editingId ? '•••••••• (Yapılandırılmış ise)' : 'Webhook doğrulama gizli anahtarı'}
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                     />
                   </div>
@@ -767,6 +792,11 @@ export default function WhatsAppConnections() {
                       </label>
                     ))}
                   </div>
+                  {form.linkedClinicIds.length === 0 && (
+                    <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                      ⚠ Hiçbir şube seçilmedi. Bu bağlantı kaydedilir ama mesaj gönderiminde kullanılmaz.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

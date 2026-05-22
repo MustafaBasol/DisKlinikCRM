@@ -217,7 +217,25 @@ const isBotIdentityQuestion = (text: string) => {
 
 const isClosingMessage = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
-  return ['tesekkurler', 'tesekkur ederim', 'sag olun', 'tamam', 'iyi gunler'].includes(normalized);
+  // Exact standalone phrases
+  const exact = [
+    'tesekkurler', 'tesekkur ederim', 'tesekkurler cok guzel', 'tesekkur ederim cok guzel',
+    'sag olun', 'sag ol', 'eyvallah', 'eyval',
+    'iyi gunler', 'iyi aksamlar', 'iyi geceler', 'iyi calismalar',
+    'gule gule', 'gorusuruz', 'gorusmek uzere', 'hosca kalin', 'hosca kal',
+    'bay bay', 'bye', 'bye bye', 'bb',
+    'ihtiyacim kalmadi', 'gerek kalmadi', 'gerek yok', 'gerek yok artik',
+    'olsun', 'iptal olsun', 'bos ver', 'neyse',
+  ];
+  if (exact.includes(normalized)) return true;
+  // Phrases that start with farewell words
+  const startsWithFarewell = [
+    'tesekkurler', 'tesekkur ederim', 'sag olun', 'sag ol',
+    'gule gule', 'gorusuruz', 'hosca kal', 'iyi gunler', 'iyi aksam', 'iyi gece',
+    'tamam tesekkur', 'tamam sag ol', 'tamam iyi', 'tamam gorusuruz',
+    'anladim tesekkur', 'oldu tesekkur', 'ihtiyacim kalmadi',
+  ];
+  return startsWithFarewell.some(prefix => normalized.startsWith(prefix));
 };
 
 const extractNumericSelection = (text: string) => {
@@ -1097,6 +1115,19 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     return formatAppointmentLookupForMessage(appointments);
   }
 
+  // ── GLOBAL EXIT: closing/farewell detected at any step ───────────────────
+  if (isClosingMessage(input.text)) {
+    logGlobalIntent(input.phone, input.text, currentStep, 'conversation_end');
+    logStateTransition(input.phone, currentStep, null, 'global_farewell');
+    await upsertWhatsAppConversationState(clinic.id, input.phone, {
+      customerName, currentIntent: null, step: null, lastMessage: input.text, ...clearBookingState(),
+    });
+    const firstName = getFirstNameFromCustomerName(customerName);
+    return firstName
+      ? `Rica ederim ${firstName}. Sağlıklı günler dilerim. Tekrar görüşmek üzere! 😊`
+      : 'Rica ederim. Sağlıklı günler dilerim. Tekrar görüşmek üzere! 😊';
+  }
+
   if (isBookingFlowCancelCommand(input.text, state)) {
     logGlobalIntent(input.phone, input.text, currentStep, 'cancel_booking_flow');
     logStateTransition(input.phone, currentStep, 'main_menu', 'cancel_booking_flow');
@@ -1312,9 +1343,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     });
   }
 
+  // (Closing message now handled globally above — this branch is kept as a safety fallback)
   if ((!currentStep || currentStep === 'main_menu') && isClosingMessage(input.text)) {
     const firstName = getFirstNameFromCustomerName(customerName);
-    return firstName ? `Rica ederim ${firstName}. Sağlıklı günler dilerim.` : 'Rica ederim. Sağlıklı günler dilerim.';
+    return firstName ? `Rica ederim ${firstName}. Sağlıklı günler dilerim. Tekrar görüşmek üzere! 😊` : 'Rica ederim. Sağlıklı günler dilerim. Tekrar görüşmek üzere! 😊';
   }
 
   const extracted = await resolveAssistantExtraction(input.text, services, {

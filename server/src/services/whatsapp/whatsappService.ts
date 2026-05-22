@@ -47,10 +47,15 @@ export async function resolveConnectionForClinic(
   const mapping = await prisma.clinicWhatsAppConnection.findFirst({
     where: { clinicId, isDefault: true },
     include: { whatsappConnection: true },
+    orderBy: { createdAt: 'desc' },
   });
 
   if (mapping) {
-    return mapping.whatsappConnection as WhatsAppConnectionRecord;
+    const conn = mapping.whatsappConnection as WhatsAppConnectionRecord & { isActive?: boolean };
+    if (!conn.isActive) {
+      return null; // Connection exists but was disconnected/deactivated
+    }
+    return conn;
   }
 
   // Fallback: legacy single-clinic env-var config
@@ -73,6 +78,14 @@ export async function sendWhatsAppMessage(
   payload: SendMessagePayload,
   connectionId?: string,
 ): Promise<SendMessageResult> {
+  // Guard: 'all' is a UI sentinel value, not a valid clinic for sending
+  if (!clinicId || clinicId === 'all') {
+    return {
+      success: false,
+      error: 'Please select a clinic before sending a WhatsApp message.',
+    };
+  }
+
   let connection: WhatsAppConnectionRecord | null = null;
 
   if (connectionId) {
@@ -88,6 +101,15 @@ export async function sendWhatsAppMessage(
       success: false,
       error:
         'No active WhatsApp connection found for this clinic. Please configure one in Organization Settings.',
+    };
+  }
+
+  // Guard: reject if connection has been deactivated/disconnected
+  const activeCheck = connection as Record<string, unknown>;
+  if (activeCheck.isActive === false) {
+    return {
+      success: false,
+      error: 'WhatsApp connection is inactive or disconnected. Please reconnect in Organization Settings.',
     };
   }
 
