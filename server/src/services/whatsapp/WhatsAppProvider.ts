@@ -58,6 +58,24 @@ export type WhatsAppConnectionRecord = {
   metaWebhookVerifyToken?: string | null;
   metaWebhookSecret?: string | null;
   webhookSecret?: string | null;
+  // Token lifecycle
+  metaTokenStatus?: string | null;
+  metaTokenExpiresAt?: Date | null;
+  metaTokenLastCheckedAt?: Date | null;
+};
+
+export type TemplateSendPayload = {
+  phone: string;
+  templateName: string;
+  languageCode: string;
+  components?: unknown[];
+};
+
+export type TemplateSendResult = {
+  supported: boolean;
+  success?: boolean;
+  externalMessageId?: string | null;
+  error?: string;
 };
 
 export interface WhatsAppProvider {
@@ -66,6 +84,12 @@ export interface WhatsAppProvider {
     connection: WhatsAppConnectionRecord,
     payload: SendMessagePayload,
   ): Promise<SendMessageResult>;
+
+  /** Send a template message (for out-of-window / business-initiated messages). */
+  sendTemplateMessage(
+    connection: WhatsAppConnectionRecord,
+    payload: TemplateSendPayload,
+  ): Promise<TemplateSendResult>;
 
   /** Verify connectivity / credentials. */
   testConnection(connection: WhatsAppConnectionRecord): Promise<TestConnectionResult>;

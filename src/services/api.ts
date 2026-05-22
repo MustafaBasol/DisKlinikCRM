@@ -290,6 +290,8 @@ export const whatsappConnectionService = {
   getQr: (id: string) => api.get(`/organization/whatsapp-connections/${id}/qr`),
   disconnect: (id: string) => api.post(`/organization/whatsapp-connections/${id}/disconnect`),
   importLegacy: () => api.post('/organization/whatsapp-connections/import-legacy'),
+  metaCallback: (data: Record<string, unknown>) =>
+    api.post('/organization/whatsapp-connections/meta/callback', data),
 };
 
 export const clinicWhatsAppService = {

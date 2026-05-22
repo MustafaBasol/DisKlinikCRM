@@ -36,6 +36,7 @@ import whatsappInboxRoutes from './routes/whatsappInbox.js';
 import financeDashboardRoutes from './routes/financeDashboard.js';
 import schedulesRoutes from './routes/schedules.js';
 import operationalMonitoringRoutes from './routes/operationalMonitoring.js';
+import metaWhatsAppWebhookRoutes from './routes/metaWhatsAppWebhook.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 
@@ -59,6 +60,7 @@ app.use(express.json());
 // Unprotected routes
 app.use('/api/auth', authRoutes);
 app.use('/api/public/whatsapp', whatsappRoutes);
+app.use('/api/public', metaWhatsAppWebhookRoutes);
 app.use('/api/public', publicBookingRoutes);
 
 // Platform admin routes (kendi JWT'si var, global auth dışında)

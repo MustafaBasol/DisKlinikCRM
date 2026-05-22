@@ -14,6 +14,8 @@ import type {
   TestConnectionResult,
   QrCodeResult,
   ParsedWebhookEvent,
+  TemplateSendPayload,
+  TemplateSendResult,
 } from './WhatsAppProvider.js';
 import { decryptSecret } from '../../utils/encryption.js';
 
@@ -239,5 +241,23 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
     }
 
     return { eventType: 'unknown', raw: payload };
+  }
+
+  /**
+   * Template messages are not natively supported by Evolution API in the same way
+   * as Meta Cloud API. Evolution API may support custom template-like messages via
+   * its own mechanisms, but this is not implemented in the current MVP.
+   *
+   * NOTE: If your Evolution API deployment supports template messages, implement
+   * the send logic here using the Evolution API documentation.
+   */
+  async sendTemplateMessage(
+    _connection: WhatsAppConnectionRecord,
+    _payload: TemplateSendPayload,
+  ): Promise<TemplateSendResult> {
+    return {
+      supported: false,
+      error: 'Template messages are not implemented for Evolution API in this version.',
+    };
   }
 }

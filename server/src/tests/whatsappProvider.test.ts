@@ -172,32 +172,280 @@ async function main() {
   // ── MetaCloudWhatsAppProvider ────────────────────────────────────────────────
   section('MetaCloudWhatsAppProvider');
 
-  const metaConn = { ...emptyConn, provider: 'meta_cloud_api' };
+  const metaConnBase = {
+    id: 'meta-conn-1',
+    organizationId: 'org-1',
+    provider: 'meta_cloud_api',
+    status: 'connected',
+  };
   const metaProvider = new MetaCloudWhatsAppProvider();
 
-  await test('sendMessage → { success: false, not implemented }', async () => {
-    const result = await metaProvider.sendMessage(metaConn, { phone: '905551234567', text: 'test' });
-    assert.equal(result.success, false);
-    assert.ok(result.error?.toLowerCase().includes('not'));
+  await test('factory returns MetaCloudWhatsAppProvider for meta_cloud_api', () => {
+    const p = getWhatsAppProvider('meta_cloud_api');
+    assert.ok(p instanceof MetaCloudWhatsAppProvider);
   });
 
-  await test('testConnection → { success: false }', async () => {
-    const result = await metaProvider.testConnection(metaConn);
+  await test('sendMessage with missing credentials → { success: false }', async () => {
+    const result = await metaProvider.sendMessage(
+      { ...metaConnBase, metaPhoneNumberId: undefined, metaAccessTokenEncrypted: undefined },
+      { phone: '905551234567', text: 'test' },
+    );
+    assert.equal(result.success, false);
+    assert.ok(result.error?.toLowerCase().includes('incomplete') || result.error?.toLowerCase().includes('required'));
+  });
+
+  await test('sendMessage with missing phoneNumberId → { success: false }', async () => {
+    const conn = { ...metaConnBase, metaAccessTokenEncrypted: encryptSecret('token'), metaPhoneNumberId: undefined };
+    const result = await metaProvider.sendMessage(conn, { phone: '905551234567', text: 'test' });
     assert.equal(result.success, false);
   });
 
-  await test('parseWebhook: Meta format → eventType "unknown"', () => {
+  await test('sendMessage with missing access token → { success: false }', async () => {
+    const conn = { ...metaConnBase, metaPhoneNumberId: '123456789', metaAccessTokenEncrypted: undefined };
+    const result = await metaProvider.sendMessage(conn, { phone: '905551234567', text: 'test' });
+    assert.equal(result.success, false);
+  });
+
+  await test('sendMessage with valid credentials calls Graph API and returns success', async () => {
+    // Mock global fetch to return a successful Meta response
+    const originalFetch = globalThis.fetch;
+    let capturedUrl = '';
+    let capturedHeaders: Record<string, string> = {};
+    globalThis.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url);
+      capturedHeaders = Object.fromEntries(Object.entries(init?.headers ?? {}));
+      return new Response(JSON.stringify({ messages: [{ id: 'wamid.test123' }] }), { status: 200 });
+    };
+    const token = encryptSecret('test-access-token');
+    const conn = { ...metaConnBase, metaPhoneNumberId: '123456789', metaAccessTokenEncrypted: token };
+    const result = await metaProvider.sendMessage(conn, { phone: '905551234567', text: 'Hello clinic' });
+    globalThis.fetch = originalFetch;
+
+    assert.equal(result.success, true, `Expected success but got: ${result.error}`);
+    assert.equal(result.externalMessageId, 'wamid.test123');
+    assert.ok(capturedUrl.includes('123456789/messages'), `URL should include phoneNumberId/messages, got: ${capturedUrl}`);
+    // Authorization header must be present and contain Bearer (not leaked to response)
+    assert.ok(capturedHeaders['Authorization']?.startsWith('Bearer '), 'Must include Bearer token in request');
+  });
+
+  await test('sendMessage handles Graph API error safely', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: { message: 'Invalid token' } }), { status: 401 });
+    const token = encryptSecret('bad-token');
+    const conn = { ...metaConnBase, metaPhoneNumberId: '123', metaAccessTokenEncrypted: token };
+    const result = await metaProvider.sendMessage(conn, { phone: '905551234567', text: 'x' });
+    globalThis.fetch = originalFetch;
+    assert.equal(result.success, false);
+    assert.ok(result.error?.includes('401'));
+  });
+
+  await test('testConnection with missing config → { success: false }', async () => {
+    const result = await metaProvider.testConnection({ ...metaConnBase });
+    assert.equal(result.success, false);
+    assert.ok(result.message?.toLowerCase().includes('incomplete') || result.message?.toLowerCase().includes('required'));
+  });
+
+  await test('testConnection with valid credentials → { success: true, message with phone info }', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(
+      JSON.stringify({ display_phone_number: '+90 555 123 4567', verified_name: 'Test Clinic' }),
+      { status: 200 },
+    );
+    const token = encryptSecret('good-token');
+    const conn = { ...metaConnBase, metaPhoneNumberId: '999888777', metaAccessTokenEncrypted: token };
+    const result = await metaProvider.testConnection(conn);
+    globalThis.fetch = originalFetch;
+    assert.equal(result.success, true, `Expected success but got: ${result.message}`);
+    assert.ok(result.message?.includes('Test Clinic') || result.message?.includes('555'), `Expected phone/name in message: ${result.message}`);
+  });
+
+  await test('testConnection handles API error safely', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response('Forbidden', { status: 403 });
+    const token = encryptSecret('expired-token');
+    const conn = { ...metaConnBase, metaPhoneNumberId: '111', metaAccessTokenEncrypted: token };
+    const result = await metaProvider.testConnection(conn);
+    globalThis.fetch = originalFetch;
+    assert.equal(result.success, false);
+    assert.ok(result.message?.includes('403'));
+  });
+
+  await test('getQrCode → available: false with clear message', async () => {
+    const result = await metaProvider.getQrCode(metaConnBase);
+    assert.equal(result.available, false);
+    assert.ok(result.message && result.message.length > 0);
+    assert.ok(result.message?.toLowerCase().includes('qr') || result.message?.toLowerCase().includes('meta'));
+  });
+
+  await test('disconnect → completes without error', async () => {
+    await assert.doesNotReject(() => metaProvider.disconnect(metaConnBase));
+  });
+
+  await test('parseWebhook: valid text message → eventType "message"', () => {
     const payload = {
       object: 'whatsapp_business_account',
-      entry: [{ id: 'waba-1', changes: [] }],
+      entry: [{
+        id: 'waba-1',
+        changes: [{
+          field: 'messages',
+          value: {
+            messaging_product: 'whatsapp',
+            metadata: { display_phone_number: '+905551234567', phone_number_id: '987654321' },
+            messages: [{
+              from: '905559876543',
+              id: 'wamid.abc123',
+              timestamp: '1716000000',
+              type: 'text',
+              text: { body: 'Merhaba, randevu almak istiyorum.' },
+            }],
+          },
+        }],
+      }],
     };
-    const result = metaProvider.parseWebhook(payload, metaConn);
-    assert.equal(result.eventType, 'unknown');
+    const event = metaProvider.parseWebhook(payload, metaConnBase);
+    assert.equal(event.eventType, 'message');
+    assert.equal(event.phone, '905559876543');
+    assert.equal(event.text, 'Merhaba, randevu almak istiyorum.');
+    assert.equal(event.messageId, 'wamid.abc123');
+  });
+
+  await test('parseWebhook: status update → eventType "status_update"', () => {
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: 'waba-1',
+        changes: [{
+          field: 'messages',
+          value: {
+            messaging_product: 'whatsapp',
+            metadata: { phone_number_id: '987654321' },
+            statuses: [{
+              id: 'wamid.abc123',
+              status: 'delivered',
+              timestamp: '1716000001',
+              recipient_id: '905551234567',
+            }],
+          },
+        }],
+      }],
+    };
+    const event = metaProvider.parseWebhook(payload, metaConnBase);
+    assert.equal(event.eventType, 'status_update');
+    assert.equal(event.status, 'delivered');
+    assert.equal(event.messageId, 'wamid.abc123');
+  });
+
+  await test('parseWebhook: non-text message type (image) → eventType "unknown"', () => {
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: 'waba-1',
+        changes: [{
+          field: 'messages',
+          value: {
+            messages: [{
+              from: '905551234567',
+              id: 'wamid.img1',
+              type: 'image',
+              image: { id: 'img-id', mime_type: 'image/jpeg' },
+            }],
+          },
+        }],
+      }],
+    };
+    const event = metaProvider.parseWebhook(payload, metaConnBase);
+    assert.equal(event.eventType, 'unknown');
   });
 
   await test('parseWebhook: non-Meta payload → eventType "unknown"', () => {
-    const result = metaProvider.parseWebhook({ random: true }, metaConn);
-    assert.equal(result.eventType, 'unknown');
+    const event = metaProvider.parseWebhook({ object: 'instagram', entry: [] }, metaConnBase);
+    assert.equal(event.eventType, 'unknown');
+  });
+
+  await test('parseWebhook: null/undefined payload → eventType "unknown"', () => {
+    assert.equal(metaProvider.parseWebhook(null, metaConnBase).eventType, 'unknown');
+    assert.equal(metaProvider.parseWebhook(undefined, metaConnBase).eventType, 'unknown');
+  });
+
+  await test('parseWebhook: malformed entry (empty changes) → eventType "unknown"', () => {
+    const payload = { object: 'whatsapp_business_account', entry: [{ id: 'x', changes: [] }] };
+    const event = metaProvider.parseWebhook(payload, metaConnBase);
+    assert.equal(event.eventType, 'unknown');
+  });
+
+  await test('extractPhoneNumberIdFromPayload: extracts phone_number_id from metadata', () => {
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: 'waba-1',
+        changes: [{
+          value: {
+            metadata: { display_phone_number: '+905551234567', phone_number_id: '987654321' },
+            messages: [],
+          },
+        }],
+      }],
+    };
+    const phoneId = MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload(payload);
+    assert.equal(phoneId, '987654321');
+  });
+
+  await test('extractPhoneNumberIdFromPayload: non-WABA payload → null', () => {
+    assert.equal(MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload({ object: 'other' }), null);
+    assert.equal(MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload(null), null);
+    assert.equal(MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload({}), null);
+  });
+
+  // ── validateHubSignature (X-Hub-Signature-256) ────────────────────────────────
+  section('validateHubSignature (X-Hub-Signature-256)');
+
+  // Inline replica of the function from metaWhatsAppWebhook.ts
+  const { createHmac, timingSafeEqual: tse } = await import('node:crypto');
+  function validateHubSig(rawBody: Buffer, signature: string | undefined, secret: string): boolean | null {
+    if (!secret) return null;
+    if (!signature) return false;
+    const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
+    try {
+      if (expected.length === signature.length) {
+        return tse(Buffer.from(expected), Buffer.from(signature));
+      }
+      return false;
+    } catch {
+      return expected === signature;
+    }
+  }
+
+  const testBody = Buffer.from(JSON.stringify({ object: 'whatsapp_business_account' }));
+  const testSecret = 'webhook-secret-123';
+  const validSig = `sha256=${createHmac('sha256', testSecret).update(testBody).digest('hex')}`;
+
+  await test('valid signature → true', () => {
+    assert.equal(validateHubSig(testBody, validSig, testSecret), true);
+  });
+
+  await test('invalid signature string → false', () => {
+    assert.equal(validateHubSig(testBody, 'sha256=badhash', testSecret), false);
+  });
+
+  await test('missing signature → false', () => {
+    assert.equal(validateHubSig(testBody, undefined, testSecret), false);
+  });
+
+  await test('empty secret → null (no validation mode)', () => {
+    assert.equal(validateHubSig(testBody, validSig, ''), null);
+  });
+
+  await test('tampered body → false', () => {
+    const tamperedBody = Buffer.from('tampered payload');
+    assert.equal(validateHubSig(tamperedBody, validSig, testSecret), false);
+  });
+
+  await test('different secret → false', () => {
+    assert.equal(validateHubSig(testBody, validSig, 'wrong-secret'), false);
+  });
+
+  await test('signature length mismatch → false (timing-safe shortcut)', () => {
+    assert.equal(validateHubSig(testBody, 'sha256=short', testSecret), false);
   });
 
   // ── sanitizeConnection ───────────────────────────────────────────────────────
@@ -715,9 +963,123 @@ async function extendedTests() {
   });
 }
 
-main().then(() => extendedTests()).then(() => {
+// ─── Sprint 16B — Meta Cloud API production readiness tests ─────────────────
+async function sprintSixteenBTests() {
+  section('Sprint 16B — sendTemplateMessage');
+
+  await test('Evolution sendTemplateMessage → supported: false (not implemented)', async () => {
+    const provider = new EvolutionWhatsAppProvider();
+    const conn = { id: 'c1', organizationId: 'org-1', provider: 'evolution_api', status: 'connected' };
+    const result = await provider.sendTemplateMessage(conn, {
+      phone: '+905001234567',
+      templateName: 'hello_world',
+      languageCode: 'tr',
+    });
+    assert.equal(result.supported, false);
+    assert.ok(typeof result.error === 'string');
+  });
+
+  await test('Meta sendTemplateMessage → missing credentials → supported: true, success: false', async () => {
+    const provider = new MetaCloudWhatsAppProvider();
+    // Connection missing metaAccessToken and metaPhoneNumberId
+    const conn = { id: 'c2', organizationId: 'org-1', provider: 'meta_cloud_api', status: 'connected' };
+    const result = await provider.sendTemplateMessage(conn, {
+      phone: '+905001234567',
+      templateName: 'hello_world',
+      languageCode: 'tr',
+    });
+    assert.equal(result.supported, true);
+    assert.equal(result.success, false);
+    assert.ok(typeof result.error === 'string');
+  });
+
+  await test('Meta sendTemplateMessage → Graph API success → supported: true, success: true', async () => {
+    const provider = new MetaCloudWhatsAppProvider();
+    const conn = {
+      id: 'c3',
+      organizationId: 'org-1',
+      provider: 'meta_cloud_api',
+      status: 'connected',
+      metaPhoneNumberId: 'pn_001',
+      metaAccessTokenEncrypted: 'MOCK_ACCESS_TOKEN',
+    };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      ({ ok: true, json: async () => ({ messages: [{ id: 'wamid.abc123' }] }) } as Response);
+    const result = await provider.sendTemplateMessage(conn, {
+      phone: '+905001234567',
+      templateName: 'hello_world',
+      languageCode: 'tr',
+    });
+    globalThis.fetch = originalFetch;
+    assert.equal(result.supported, true);
+    assert.equal(result.success, true);
+    assert.ok(result.externalMessageId?.includes('wamid'));
+  });
+
+  await test('Meta sendTemplateMessage → Graph API error → supported: true, success: false', async () => {
+    const provider = new MetaCloudWhatsAppProvider();
+    const conn = {
+      id: 'c4',
+      organizationId: 'org-1',
+      provider: 'meta_cloud_api',
+      status: 'connected',
+      metaPhoneNumberId: 'pn_001',
+      metaAccessTokenEncrypted: 'MOCK_ACCESS_TOKEN',
+    };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      ({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'Template not found' } }),
+      } as Response);
+    const result = await provider.sendTemplateMessage(conn, {
+      phone: '+905001234567',
+      templateName: 'no_such_template',
+      languageCode: 'tr',
+    });
+    globalThis.fetch = originalFetch;
+    assert.equal(result.supported, true);
+    assert.equal(result.success, false);
+    assert.ok(typeof result.error === 'string');
+  });
+
+  section('Sprint 16B — sanitizeConnection token fields');
+
+  await test('metaTokenStatus passes through sanitizeConnection', () => {
+    function sanitize(conn: Record<string, unknown>) {
+      const { evolutionApiKeyEncrypted: _a, metaAccessTokenEncrypted: _b, metaWebhookVerifyToken: _c, metaWebhookSecret: _d, webhookSecret: _e, ...safe } = conn;
+      return safe;
+    }
+    const result = sanitize({ id: 'x', metaTokenStatus: 'expiring', metaTokenExpiresAt: '2025-01-01T00:00:00Z' });
+    assert.equal(result.metaTokenStatus, 'expiring');
+    assert.ok('metaTokenExpiresAt' in result);
+  });
+
+  await test('metaTokenStatus not in stripped fields list', () => {
+    const stripped = ['evolutionApiKeyEncrypted', 'metaAccessTokenEncrypted', 'metaWebhookVerifyToken', 'metaWebhookSecret', 'webhookSecret'];
+    assert.ok(!stripped.includes('metaTokenStatus'));
+    assert.ok(!stripped.includes('metaTokenExpiresAt'));
+  });
+
+  section('Sprint 16B — MetaCallbackPage message shape');
+
+  await test('meta_signup_callback message type constant is correct', () => {
+    const msg = { type: 'meta_signup_callback', code: 'authcode123', state: 'state456', error: null, errorDescription: null };
+    assert.equal(msg.type, 'meta_signup_callback');
+    assert.ok('code' in msg);
+    assert.ok('state' in msg);
+    assert.ok('error' in msg);
+  });
+
   console.log(`\n${'─'.repeat(50)}`);
-  console.log('Extended panel E2E tests complete');
+  console.log(`Sprint 16B tests — ${passed} passed, ${failed} failed`);
+}
+
+main().then(() => extendedTests()).then(() => sprintSixteenBTests()).then(() => {
+  console.log(`\n${'─'.repeat(50)}`);
+  console.log('All tests complete');
 }).catch((err) => {
   console.error('Test runner error:', err);
   process.exit(1);

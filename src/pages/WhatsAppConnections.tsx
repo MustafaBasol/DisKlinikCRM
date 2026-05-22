@@ -15,10 +15,18 @@ import {
   Trash2,
   Download,
   AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import { whatsappConnectionService, organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { canManageWhatsAppConnections, canViewWhatsAppStatus } from '../utils/permissions';
+
+// ── Meta Embedded Signup env config (frontend-safe vars only) ─────────────────
+const META_APP_ID = import.meta.env.VITE_META_APP_ID?.trim() || '';
+const META_CONFIG_ID = import.meta.env.VITE_META_EMBEDDED_SIGNUP_CONFIG_ID?.trim() || '';
+const META_GRAPH_VERSION = import.meta.env.VITE_META_GRAPH_API_VERSION?.trim() || 'v23.0';
+const META_REDIRECT_URI = import.meta.env.VITE_META_REDIRECT_URI?.trim() || '';
+const META_ENV_READY = Boolean(META_APP_ID && META_CONFIG_ID);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +44,10 @@ interface WhatsAppConnection {
   evolutionInstanceName?: string | null;
   metaPhoneNumberId?: string | null;
   metaBusinessId?: string | null;
+  metaWabaId?: string | null;
+  metaAppId?: string | null;
+  metaTokenStatus?: string | null;    // valid | expiring | expired | unknown
+  metaTokenExpiresAt?: string | null; // ISO string from API
   createdAt: string;
   isLegacy?: boolean; // Virtual entry: not yet saved to DB
   clinics?: Array<{
@@ -67,6 +79,7 @@ interface ConnectionFormData {
   metaAppId: string;
   metaAccessTokenEncrypted: string;
   metaWebhookVerifyToken: string;
+  metaWebhookSecret: string;
   // Shared
   webhookSecret: string;
   // Clinic assignment
@@ -87,6 +100,7 @@ const EMPTY_FORM: ConnectionFormData = {
   metaAppId: '',
   metaAccessTokenEncrypted: '',
   metaWebhookVerifyToken: '',
+  metaWebhookSecret: '',
   webhookSecret: '',
   linkedClinicIds: [],
 };
@@ -129,6 +143,7 @@ export default function WhatsAppConnections() {
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importingLegacy, setImportingLegacy] = useState(false);
+  const [metaConnecting, setMetaConnecting] = useState(false);
 
   const canManage = canManageWhatsAppConnections(user);
   const canView = canViewWhatsAppStatus(user);
@@ -181,11 +196,12 @@ export default function WhatsAppConnections() {
       evolutionInstanceName: conn.evolutionInstanceName ?? '',
       evolutionApiKeyEncrypted: '', // Don't pre-fill secrets
       metaBusinessId: conn.metaBusinessId ?? '',
-      metaWabaId: '',
+      metaWabaId: conn.metaWabaId ?? '',
       metaPhoneNumberId: conn.metaPhoneNumberId ?? '',
-      metaAppId: '',
+      metaAppId: conn.metaAppId ?? '',
       metaAccessTokenEncrypted: '', // Don't pre-fill secrets
       metaWebhookVerifyToken: '',
+      metaWebhookSecret: '',
       webhookSecret: '', // Don't pre-fill secrets
       linkedClinicIds: (conn.clinics ?? []).map((c) => c.clinicId),
     });
@@ -221,6 +237,7 @@ export default function WhatsAppConnections() {
         if (form.metaAppId) payload.metaAppId = form.metaAppId;
         if (form.metaAccessTokenEncrypted) payload.metaAccessTokenEncrypted = form.metaAccessTokenEncrypted;
         if (form.metaWebhookVerifyToken) payload.metaWebhookVerifyToken = form.metaWebhookVerifyToken;
+        if (form.metaWebhookSecret) payload.metaWebhookSecret = form.metaWebhookSecret;
       }
 
       if (editingId) {
@@ -288,6 +305,113 @@ export default function WhatsAppConnections() {
     }
   }
 
+  /**
+   * Launch Meta Embedded Signup using the Facebook JS SDK OAuth flow.
+   * Opens a popup — the user logs in, selects/creates WABA and phone number,
+   * then Meta redirects with a code or fields we can pass to our callback endpoint.
+   */
+  async function handleMetaEmbeddedSignup(linkedClinicIds: string[] = []) {
+    if (!META_ENV_READY) return;
+    setMetaConnecting(true);
+    try {
+      // Build the OAuth URL to open in a popup
+      const redirectUri = META_REDIRECT_URI || `${window.location.origin}/auth/meta/callback`;
+      const params = new URLSearchParams({
+        client_id: META_APP_ID,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'whatsapp_business_management,whatsapp_business_messaging',
+      });
+      if (META_CONFIG_ID) {
+        params.set('extras', JSON.stringify({ setup: {}, featureType: '', sessionInfoVersion: '3' }));
+        params.set('config_id', META_CONFIG_ID);
+      }
+
+      const authUrl = `https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth?${params.toString()}`;
+
+      // Open popup — if popup is blocked, fall back to same-tab redirect
+      const popup = window.open(authUrl, 'meta_signup', 'width=600,height=700,noopener=no');
+
+      if (!popup) {
+        // Popup blocked — open in same tab
+        window.location.href = authUrl;
+        return;
+      }
+
+      let settled = false;
+
+      const handleMessage = async (event: MessageEvent) => {
+        // Strict origin check — only accept from same origin (our callback page)
+        if (event.origin !== window.location.origin) return;
+
+        const data = event.data as {
+          type?: string;
+          code?: string;
+          state?: string;
+          error?: string;
+          errorDescription?: string;
+          wabaId?: string;
+          phoneNumberId?: string;
+          phoneNumber?: string;
+          displayName?: string;
+          businessId?: string;
+        };
+
+        if (data?.type !== 'meta_signup_callback') return;
+
+        settled = true;
+        window.removeEventListener('message', handleMessage);
+        clearTimeout(timeoutId);
+        popup?.close();
+
+        // Handle errors reported by the callback page
+        if (data.error) {
+          const humanError = data.errorDescription ?? data.error;
+          setFormError(`Meta bağlantısı reddedildi: ${humanError}`);
+          setMetaConnecting(false);
+          return;
+        }
+
+        if (!data.code) {
+          setFormError('Meta yetkilendirmesi tamamlanamadı: kod alınamadı.');
+          setMetaConnecting(false);
+          return;
+        }
+
+        try {
+          await whatsappConnectionService.metaCallback({
+            code: data.code,
+            wabaId: data.wabaId,
+            phoneNumberId: data.phoneNumberId,
+            phoneNumber: data.phoneNumber,
+            displayName: data.displayName,
+            businessId: data.businessId,
+            linkedClinicIds,
+          });
+          fetchConnections();
+        } catch (err: unknown) {
+          const apiErr = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          setFormError(apiErr ?? 'Meta bağlantısı oluşturulamadı.');
+        } finally {
+          setMetaConnecting(false);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // Timeout after 5 minutes
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          window.removeEventListener('message', handleMessage);
+          popup?.close();
+          setMetaConnecting(false);
+        }
+      }, 5 * 60 * 1000);
+    } catch {
+      setMetaConnecting(false);
+    }
+  }
+
   function toggleClinicId(id: string) {
     setForm((f) => ({
       ...f,
@@ -326,9 +450,47 @@ export default function WhatsAppConnections() {
 
       {/* Provider info banner */}
       <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
-        <strong>Evolution API</strong> aktif olarak kullanılmaktadır.{' '}
-        <strong>Meta Cloud API</strong> desteği gelecek sürümde eklenecektir.
+        <strong>Evolution API</strong> ve <strong>Meta Cloud API</strong> desteklenmektedir.
+        Evolution API için manuel yapılandırma, Meta için Embedded Signup veya manuel token girişi kullanılabilir.
       </div>
+
+      {/* Meta Embedded Signup quick-connect panel */}
+      {canManage && (
+        <div className="mb-4 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white text-sm">
+                Meta (WhatsApp Business) Bağlantısı
+              </p>
+              {META_ENV_READY ? (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Meta Embedded Signup yapılandırıldı. Hesabınızı bağlamak için butona tıklayın.
+                </p>
+              ) : (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                  Meta Embedded Signup bu sunucuda yapılandırılmamış.{' '}
+                  <span className="font-mono">VITE_META_APP_ID</span> ve{' '}
+                  <span className="font-mono">VITE_META_EMBEDDED_SIGNUP_CONFIG_ID</span> ortam değişkenlerini ayarlayın.
+                  Manuel yapılandırma için "Yeni Bağlantı" &gt; "Meta Cloud API" seçin.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => handleMetaEmbeddedSignup()}
+              disabled={!META_ENV_READY || metaConnecting}
+              title={META_ENV_READY ? 'Meta Embedded Signup ile bağlan' : 'Meta Embedded Signup yapılandırılmamış'}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed shrink-0"
+            >
+              {metaConnecting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <ExternalLink size={14} />
+              )}
+              Meta ile Bağlan
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
@@ -451,6 +613,22 @@ export default function WhatsAppConnections() {
                         ⚠ Henüz hiçbir şubeye atanmadı
                       </p>
                     )}
+                    {/* Meta token expiry warning */}
+                    {conn.provider === 'meta_cloud_api' && conn.metaTokenStatus === 'expired' && (
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                        ⚠ Meta access token süresi doldu — bağlantıyı yenileyin
+                      </p>
+                    )}
+                    {conn.provider === 'meta_cloud_api' && conn.metaTokenStatus === 'expiring' && (
+                      <p className="text-xs text-amber-500 dark:text-amber-400 mt-1">
+                        ⚠ Meta access token yakında dolacak — token yenilemeyi planlayın
+                      </p>
+                    )}
+                    {conn.provider === 'meta_cloud_api' && !conn.metaTokenExpiresAt && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Token geçerlilik tarihi bilinmiyor — token bilgisi girilmemiş
+                      </p>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -530,7 +708,8 @@ export default function WhatsAppConnections() {
                   <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
                     {conn.provider === 'meta_cloud_api' ? (
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Meta Cloud API, Evolution tarzı QR kod kullanmaz. Meta Embedded Signup ileride eklenecektir.
+                        Meta Cloud API, QR kodu kullanmaz. Hesabınızı "Meta ile Bağlan" butonu veya
+                        manuel yapılandırma ile bağlayın.
                       </p>
                     ) : qrData[conn.id] ? (
                       <div className="flex flex-col items-start gap-2">
@@ -561,28 +740,68 @@ export default function WhatsAppConnections() {
                 {expandedId === conn.id && (
                   <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                      {conn.evolutionApiUrl && (
+                      {conn.provider === 'evolution_api' && (
                         <>
-                          <dt>API URL</dt>
-                          <dd className="truncate text-gray-700 dark:text-gray-300">{conn.evolutionApiUrl}</dd>
+                          {conn.evolutionApiUrl && (
+                            <>
+                              <dt>API URL</dt>
+                              <dd className="truncate text-gray-700 dark:text-gray-300">{conn.evolutionApiUrl}</dd>
+                            </>
+                          )}
+                          {conn.evolutionInstanceName && (
+                            <>
+                              <dt>Instance</dt>
+                              <dd className="text-gray-700 dark:text-gray-300">{conn.evolutionInstanceName}</dd>
+                            </>
+                          )}
                         </>
                       )}
-                      {conn.evolutionInstanceName && (
+                      {conn.provider === 'meta_cloud_api' && (
                         <>
-                          <dt>Instance</dt>
-                          <dd className="text-gray-700 dark:text-gray-300">{conn.evolutionInstanceName}</dd>
-                        </>
-                      )}
-                      {conn.metaPhoneNumberId && (
-                        <>
-                          <dt>Phone Number ID</dt>
-                          <dd className="text-gray-700 dark:text-gray-300">{conn.metaPhoneNumberId}</dd>
-                        </>
-                      )}
-                      {conn.metaBusinessId && (
-                        <>
-                          <dt>Business ID</dt>
-                          <dd className="text-gray-700 dark:text-gray-300">{conn.metaBusinessId}</dd>
+                          {conn.metaPhoneNumberId && (
+                            <>
+                              <dt>Phone Number ID</dt>
+                              <dd className="text-gray-700 dark:text-gray-300">{conn.metaPhoneNumberId}</dd>
+                            </>
+                          )}
+                          {conn.metaWabaId && (
+                            <>
+                              <dt>WABA ID</dt>
+                              <dd className="text-gray-700 dark:text-gray-300">{conn.metaWabaId}</dd>
+                            </>
+                          )}
+                          {conn.metaBusinessId && (
+                            <>
+                              <dt>Business ID</dt>
+                              <dd className="text-gray-700 dark:text-gray-300">{conn.metaBusinessId}</dd>
+                            </>
+                          )}
+                          {conn.metaAppId && (
+                            <>
+                              <dt>App ID</dt>
+                              <dd className="text-gray-700 dark:text-gray-300">{conn.metaAppId}</dd>
+                            </>
+                          )}
+                          {conn.metaTokenExpiresAt && (
+                            <>
+                              <dt>Token geçerlilik</dt>
+                              <dd className={
+                                conn.metaTokenStatus === 'expired' ? 'text-red-500' :
+                                conn.metaTokenStatus === 'expiring' ? 'text-amber-500' :
+                                'text-gray-700 dark:text-gray-300'
+                              }>
+                                {new Date(conn.metaTokenExpiresAt).toLocaleDateString('tr-TR')}
+                                {conn.metaTokenStatus === 'expired' && ' — Süresi doldu'}
+                                {conn.metaTokenStatus === 'expiring' && ' — Yakında dolacak'}
+                              </dd>
+                            </>
+                          )}
+                          {!conn.metaTokenExpiresAt && conn.provider === 'meta_cloud_api' && (
+                            <>
+                              <dt>Token geçerlilik</dt>
+                              <dd className="text-amber-600 dark:text-amber-400">Bilinmiyor — token bilgisi girilmemiş</dd>
+                            </>
+                          )}
                         </>
                       )}
                       <dt>Oluşturuldu</dt>
@@ -633,12 +852,12 @@ export default function WhatsAppConnections() {
                   onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value as Provider }))}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                 >
-                  <option value="evolution_api">Evolution API (Aktif)</option>
-                  <option value="meta_cloud_api">Meta Cloud API (Yakında)</option>
+                  <option value="evolution_api">Evolution API</option>
+                  <option value="meta_cloud_api">Meta Cloud API</option>
                 </select>
-                {form.provider === 'meta_cloud_api' && (
-                  <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
-                    Meta Cloud API mesaj gönderimi henüz aktif değil. Bilgiler kaydedilebilir.
+                {form.provider === 'meta_cloud_api' && !META_ENV_READY && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    Sunucuda Meta Embedded Signup yapılandırılmamış. Manuel token girişi ile yine de bağlantı oluşturabilirsiniz.
                   </p>
                 )}
               </div>
@@ -732,11 +951,28 @@ export default function WhatsAppConnections() {
               {form.provider === 'meta_cloud_api' && (
                 <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Meta Cloud API Ayarları
+                    Meta Cloud API — Manuel Yapılandırma
+                  </p>
+                  {META_ENV_READY && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModal(false);
+                        handleMetaEmbeddedSignup(form.linkedClinicIds);
+                      }}
+                      disabled={metaConnecting}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {metaConnecting ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+                      Meta Embedded Signup ile Bağlan (Otomatik)
+                    </button>
+                  )}
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    Ya da aşağıya Meta Business Manager &gt; WhatsApp &gt; API Setup bilgilerini manuel girin.
                   </p>
                   {[
                     { key: 'metaBusinessId', label: 'Business ID' },
-                    { key: 'metaWabaId', label: 'WhatsApp Business Account ID' },
+                    { key: 'metaWabaId', label: 'WhatsApp Business Account ID (WABA ID)' },
                     { key: 'metaPhoneNumberId', label: 'Phone Number ID' },
                     { key: 'metaAppId', label: 'App ID' },
                     { key: 'metaWebhookVerifyToken', label: 'Webhook Verify Token' },
@@ -748,10 +984,22 @@ export default function WhatsAppConnections() {
                       <input
                         value={form[key as keyof ConnectionFormData] as string}
                         onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     </div>
                   ))}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Webhook Secret <span className="text-gray-400">(opsiyonel — X-Hub-Signature-256 doğrulama)</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={form.metaWebhookSecret}
+                      onChange={(e) => setForm((f) => ({ ...f, metaWebhookSecret: e.target.value }))}
+                      placeholder={editingId ? '•••••••• (Yapılandırılmış ise)' : 'Meta webhook secret'}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Access Token {editingId && <span className="text-gray-400">(boş bırakılırsa değişmez)</span>}
@@ -761,8 +1009,13 @@ export default function WhatsAppConnections() {
                       value={form.metaAccessTokenEncrypted}
                       onChange={(e) => setForm((f) => ({ ...f, metaAccessTokenEncrypted: e.target.value }))}
                       placeholder={editingId ? '••••••••' : 'Meta Access Token'}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                     />
+                    {editingId && (
+                      <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                        Access token sunucu tarafında AES-256-GCM ile şifreli saklanır. Yeni değer girilirse eski token kalıcı olarak değişir.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

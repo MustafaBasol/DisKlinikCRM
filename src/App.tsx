@@ -35,6 +35,7 @@ import WhatsAppInbox from './pages/WhatsAppInbox';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Operations from './pages/Operations';
 import Users from './pages/Users';
+import MetaCallbackPage from './pages/MetaCallbackPage';
 
 import { useTranslation } from 'react-i18next';
 
@@ -92,6 +93,8 @@ const App: React.FC = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/platform" element={<PlatformAdmin />} />
           <Route path="/book/:clinicId" element={<BookingWidget />} />
+          {/* Public Meta OAuth redirect handler — must be outside ProtectedRoute */}
+          <Route path="/auth/meta/callback" element={<MetaCallbackPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<MainLayout />}>

@@ -949,6 +949,11 @@ model WhatsAppConnection {
   metaAccessTokenEncrypted String?
   metaWebhookVerifyToken   String?
   metaWebhookSecret        String?
+  // Token lifecycle tracking — Meta tokens expire ~60 days unless refreshed
+  // valid | expiring | expired | unknown
+  metaTokenStatus          String?  @default("unknown")
+  metaTokenExpiresAt       DateTime?
+  metaTokenLastCheckedAt   DateTime?
 
   // Shared webhook secret for this connection
   webhookSecret    String?
