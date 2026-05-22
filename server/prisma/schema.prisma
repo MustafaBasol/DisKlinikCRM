@@ -232,10 +232,17 @@ model Appointment {
   title              String?
   startTime          DateTime
   endTime            DateTime
-  status             String          @default("scheduled") // scheduled, confirmed, completed, cancelled, etc.
+  status             String          @default("scheduled") // scheduled, confirmed, completed, cancelled, no_show, etc.
   notes              String?
   cancellationReason String?
   noShowReason       String?
+  // No-show recovery fields (Sprint 18)
+  noShowMarkedAt     DateTime?
+  noShowMarkedById   String?
+  recoveryStatus     String?         // unresolved | contacted | recovered
+  recoveryNote       String?
+  recoveredAt        DateTime?
+  recoveredById      String?
   createdById        String?
   updatedById        String?
   createdAt          DateTime        @default(now())

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, 
   Plus, 
@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { appointmentService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { canCreateAppointment } from '../utils/permissions';
-import AppointmentForm from '../components/AppointmentForm';
+import AppointmentForm, { AppointmentFormPrefill } from '../components/AppointmentForm';
 import CalendarTimelineView from '../components/CalendarTimelineView';
 import MultiDoctorDayView from '../components/MultiDoctorDayView';
 import { formatTimeInTimeZone, getDateKeyInTimeZone } from '../utils/dateTime';
@@ -40,6 +40,7 @@ const Appointments: React.FC = () => {
   const { t, i18n } = useTranslation(['appointments', 'common']);
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
+  const [searchParams, setSearchParams] = useSearchParams();
   const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -49,6 +50,7 @@ const Appointments: React.FC = () => {
   const [calendarLoading, setCalendarLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<any>(null);
+  const [formPrefill, setFormPrefill] = useState<AppointmentFormPrefill | undefined>(undefined);
   
   // View mode
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'multidoctor'>('list');
@@ -59,6 +61,31 @@ const Appointments: React.FC = () => {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [status, setStatus] = useState('');
   const [practitionerId, setPractitionerId] = useState('');
+
+  // Auto-open form with prefill when URL search params are present (e.g., from no-show reschedule)
+  useEffect(() => {
+    const source = searchParams.get('source');
+    const patientId = searchParams.get('patientId');
+    const clinicId = searchParams.get('clinicId');
+    const doctorId = searchParams.get('doctorId');
+    const previousAppointmentId = searchParams.get('previousAppointmentId');
+    const appointmentTypeId = searchParams.get('appointmentTypeId');
+
+    if (source || patientId || doctorId || previousAppointmentId) {
+      setFormPrefill({
+        patientId: patientId ?? undefined,
+        practitionerId: doctorId ?? undefined,
+        appointmentTypeId: appointmentTypeId ?? undefined,
+        source: source ?? undefined,
+        previousAppointmentId: previousAppointmentId ?? undefined,
+      });
+      setEditingAppointment(null);
+      setIsFormOpen(true);
+      // Clear params from URL after reading them so refresh doesn't re-open the form
+      setSearchParams({}, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -526,12 +553,14 @@ const Appointments: React.FC = () => {
 
       {isFormOpen && (
         <AppointmentForm 
-          onClose={() => setIsFormOpen(false)} 
+          onClose={() => { setIsFormOpen(false); setFormPrefill(undefined); }} 
           onSuccess={() => {
             setIsFormOpen(false);
+            setFormPrefill(undefined);
             fetchAppointments();
           }}
           initialData={editingAppointment}
+          prefill={editingAppointment ? undefined : formPrefill}
         />
       )}
     </div>

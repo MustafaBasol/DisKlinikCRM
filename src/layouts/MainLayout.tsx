@@ -30,6 +30,7 @@ import {
   Inbox,
   BarChart3,
   Activity,
+  UserX,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -53,6 +54,7 @@ import {
   canViewWhatsAppInbox,
   canViewFinanceDashboard,
   canViewOperations,
+  canViewNoShowDashboard,
 } from '../utils/permissions';
 
 type NavItem = { path: string; icon: React.ReactNode; label: string };
@@ -148,6 +150,9 @@ const MainLayoutInner: React.FC = () => {
     }
     if (canViewPayments(user)) {
       items.push({ path: '/insurance-provisions', icon: <ShieldCheck size={18} />, label: 'Sigorta' });
+    }
+    if (canViewNoShowDashboard(user)) {
+      items.push({ path: '/no-shows', icon: <UserX size={18} />, label: 'No-show Takibi' });
     }
     if (items.length > 0) {
       navGroups.push({ id: 'hasta', label: 'Hasta Yönetimi', collapsible: true, items });

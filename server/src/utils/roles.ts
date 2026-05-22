@@ -384,3 +384,72 @@ export function canResolveOperationalEvents(user: UserForRole | null | undefined
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
 
+// ── Sprint 18: No-show Tracking İzinleri ─────────────────────────────────────
+
+/**
+ * No-show panosunu görüntüleme.
+ * OWNER, ORG_ADMIN: organizasyon genelinde.
+ * CLINIC_MANAGER, RECEPTIONIST: yalnızca atandığı şubeler.
+ * DENTIST: yalnızca kendi randevuları (rota içinde kontrol edilir).
+ * BILLING, ASSISTANT: erişim yok.
+ */
+export function canViewNoShowDashboard(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST'
+  );
+}
+
+/**
+ * No-show olarak işaretleme ve recovery durumu güncelleme.
+ * DENTIST yalnızca kendi randevularını işaretleyebilir (rota içinde kontrol edilir).
+ * BILLING ve ASSISTANT yapamaz.
+ */
+export function canManageNoShows(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST'
+  );
+}
+
+/**
+ * No-show recovery WhatsApp mesajı gönderme.
+ * BILLING ve ASSISTANT yapamaz.
+ */
+export function canSendNoShowRecoveryMessage(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * No-show takip görevi oluşturma.
+ * BILLING ve ASSISTANT yapamaz.
+ */
+export function canCreateNoShowFollowUpTask(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST'
+  );
+}
+

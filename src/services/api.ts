@@ -344,4 +344,23 @@ export const operationalMonitoringService = {
   resolveEvent: (id: string) => api.patch(`/ops/events/${id}/resolve`),
 };
 
+export const noShowService = {
+  markNoShow: (appointmentId: string) =>
+    api.patch(`/appointments/${appointmentId}/no-show`),
+  updateRecoveryStatus: (appointmentId: string, data: { status: string; note?: string }) =>
+    api.patch(`/appointments/${appointmentId}/recovery-status`, data),
+  getDashboard: (params?: {
+    clinicId?: string;
+    range?: string;
+    from?: string;
+    to?: string;
+    doctorId?: string;
+    recoveryStatus?: string;
+  }) => api.get('/no-shows/dashboard', { params }),
+  sendRecoveryMessage: (appointmentId: string, data?: { message?: string }) =>
+    api.post(`/appointments/${appointmentId}/no-show/send-message`, data ?? {}),
+  createFollowUpTask: (appointmentId: string, data?: { dueDate?: string; assignedToId?: string }) =>
+    api.post(`/appointments/${appointmentId}/no-show/create-task`, data ?? {}),
+};
+
 export default api;

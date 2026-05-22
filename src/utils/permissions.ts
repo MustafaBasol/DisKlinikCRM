@@ -392,3 +392,65 @@ export function canResolveOperationalEvents(user: UserForPermission | null | und
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
+
+// ── Sprint 18: No-show Tracking ───────────────────────────────────────────────
+
+/**
+ * No-show panosu görüntüleme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST, DENTIST (read-only).
+ * BILLING ve ASSISTANT erişemez.
+ */
+export function canViewNoShowDashboard(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST'
+  );
+}
+
+/**
+ * No-show olarak işaretleme ve kurtarma durumu güncelleme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ * DENTIST kendi randevularını işaretleyebilir (backend'de ayrıca kontrol edilir).
+ */
+export function canManageNoShows(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST'
+  );
+}
+
+/**
+ * No-show kurtarma WhatsApp mesajı gönderme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ */
+export function canSendNoShowRecoveryMessage(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * No-show takip görevi oluşturma.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ */
+export function canCreateNoShowFollowUpTask(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}

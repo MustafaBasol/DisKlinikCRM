@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle, Briefcase } from 'lucide-react';
+import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle, Briefcase, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { patientService, userService, serviceService, appointmentService, treatmentCaseService, scheduleService } from '../services/api';
+import { patientService, userService, serviceService, appointmentService, treatmentCaseService, scheduleService, noShowService } from '../services/api';
+
+export interface AppointmentFormPrefill {
+  patientId?: string;
+  practitionerId?: string;
+  appointmentTypeId?: string;
+  source?: string;
+  previousAppointmentId?: string;
+}
 
 interface AppointmentFormProps {
   onClose: () => void;
   onSuccess: () => void;
   initialData?: any;
+  prefill?: AppointmentFormPrefill;
 }
 
-const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, initialData }) => {
+const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, initialData, prefill }) => {
   const { t } = useTranslation(['appointments', 'common']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,15 +28,19 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
   const [doctors, setDoctors] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
+
+  // When source=no_show, try to load previous appointment for context banner
+  const [prevAppointment, setPrevAppointment] = useState<any>(null);
+  const isNoShowReschedule = prefill?.source === 'no_show' && !!prefill?.previousAppointmentId;
   
   const [formData, setFormData] = useState({
-    patientId: initialData?.patientId || '',
-    practitionerId: initialData?.practitionerId || '',
-    appointmentTypeId: initialData?.appointmentTypeId || '',
+    patientId: initialData?.patientId || prefill?.patientId || '',
+    practitionerId: initialData?.practitionerId || prefill?.practitionerId || '',
+    appointmentTypeId: initialData?.appointmentTypeId || prefill?.appointmentTypeId || '',
     date: initialData?.startTime ? new Date(initialData.startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     startTime: initialData?.startTime ? new Date(initialData.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '09:00',
     endTime: initialData?.endTime ? new Date(initialData.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '09:30',
-    notes: initialData?.notes || '',
+    notes: initialData?.notes || (isNoShowReschedule && prefill?.previousAppointmentId ? `Rescheduled from no-show appointment: ${prefill.previousAppointmentId}` : ''),
     treatmentCaseId: initialData?.treatmentCaseId || '',
   });
   const selectedService = types.find(t => t.id === formData.appointmentTypeId);
@@ -52,6 +65,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     };
     fetchData();
   }, []);
+
+  // Load previous appointment for no-show context banner
+  useEffect(() => {
+    if (!isNoShowReschedule || !prefill?.previousAppointmentId) return;
+    appointmentService.getById(prefill.previousAppointmentId)
+      .then(res => setPrevAppointment(res.data))
+      .catch(() => { /* silently ignore — banner is optional */ });
+  }, [isNoShowReschedule, prefill?.previousAppointmentId]);
 
   // Load treatment cases when patientId changes
   useEffect(() => {
@@ -101,6 +122,18 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
         await appointmentService.update(initialData.id, payload);
       } else {
         await appointmentService.create(payload);
+        // If this is a reschedule from a no-show, auto-update recovery status
+        if (isNoShowReschedule && prefill?.previousAppointmentId) {
+          try {
+            await noShowService.updateRecoveryStatus(prefill.previousAppointmentId, {
+              status: 'recovered',
+              note: 'Yeni randevu oluşturuldu.',
+            });
+          } catch {
+            // Non-fatal — appointment was created, just warn via console
+            console.warn('Could not auto-update no-show recovery status to recovered');
+          }
+        }
       }
       onSuccess();
     } catch (err: any) {
@@ -129,6 +162,26 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* No-show reschedule context banner */}
+          {isNoShowReschedule && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-700/50 dark:text-amber-200">
+              <Info size={16} className="mt-0.5 flex-shrink-0" />
+              <div>
+                <div className="font-semibold mb-0.5">No-show randevudan yeniden oluşturuluyor</div>
+                <div className="text-xs text-amber-700 dark:text-amber-300">
+                  Bu randevu, no-show olarak işaretlenen önceki randevudan yeniden oluşturuluyor.
+                  {prevAppointment && (
+                    <span>
+                      {' '}Önceki tarih:{' '}
+                      {new Date(prevAppointment.startTime).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.
+                    </span>
+                  )}
+                  {' '}Randevu oluşturulduğunda önceki no-show otomatik olarak "Geri Kazanıldı" durumuna alınacak.
+                </div>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm">
               <AlertCircle size={18} />

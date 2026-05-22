@@ -36,6 +36,7 @@ import FinanceDashboard from './pages/FinanceDashboard';
 import Operations from './pages/Operations';
 import Users from './pages/Users';
 import MetaCallbackPage from './pages/MetaCallbackPage';
+import NoShows from './pages/NoShows';
 
 import { useTranslation } from 'react-i18next';
 
@@ -126,6 +127,7 @@ const App: React.FC = () => {
               <Route path="finance" element={<FinanceDashboard />} />
               <Route path="operations" element={<Operations />} />
               <Route path="users" element={<Users />} />
+              <Route path="no-shows" element={<NoShows />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>
