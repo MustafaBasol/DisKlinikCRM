@@ -9,12 +9,17 @@
  *   2. From there follow to WhatsAppConnection.provider
  *   3. Use getWhatsAppProvider(provider) to get the right implementation
  *
- * If no DB connection record exists, fall back to env-var Evolution API config
- * (backwards compatibility with pre-Sprint-10 single-clinic deployments).
+ * If no DB connection record exists AND ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=true
+ * (the default), fall back to env-var Evolution API config for backwards
+ * compatibility with pre-Sprint-10 single-clinic deployments.
+ *
+ * Set ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=false in production once all
+ * connections have been imported via the panel. See legacyWhatsApp.ts.
  */
 
 import prisma from '../../db.js';
 import { getWhatsAppProvider } from './whatsappProviderFactory.js';
+import { getLegacyEvolutionConfig } from '../../utils/legacyWhatsApp.js';
 import type {
   SendMessagePayload,
   SendMessageResult,
@@ -23,17 +28,19 @@ import type {
   WhatsAppConnectionRecord,
 } from './WhatsAppProvider.js';
 
-// Fallback legacy connection record built from env vars (no DB record needed).
+// Build a legacy connection record from env vars (never exposes key in logs).
 function buildLegacyConnectionRecord(): WhatsAppConnectionRecord {
+  const cfg = getLegacyEvolutionConfig();
+  // cfg is guaranteed non-null here — caller must check getLegacyEvolutionConfig() first
   return {
     id: 'legacy',
     organizationId: '',
     provider: 'evolution_api',
     status: 'connected',
-    evolutionApiUrl: process.env.EVOLUTION_API_BASE_URL ?? null,
-    evolutionInstanceName: process.env.EVOLUTION_INSTANCE_NAME ?? null,
-    // apiKey is not stored encrypted in legacy mode — stored raw in env var
-    evolutionApiKeyEncrypted: process.env.EVOLUTION_API_KEY ?? null,
+    evolutionApiUrl: cfg?.url ?? null,
+    evolutionInstanceName: cfg?.instanceName ?? null,
+    // apiKey stored raw in env var (legacy mode — no DB encryption round-trip)
+    evolutionApiKeyEncrypted: cfg?.key ?? null,
   };
 }
 
@@ -58,11 +65,16 @@ export async function resolveConnectionForClinic(
     return conn;
   }
 
-  // Fallback: legacy single-clinic env-var config
-  const hasLegacyConfig =
-    process.env.EVOLUTION_API_BASE_URL && process.env.EVOLUTION_API_KEY;
+  // No DB record — check if legacy env-var fallback is permitted.
+  const legacyCfg = getLegacyEvolutionConfig();
+  if (!legacyCfg) {
+    // Fallback disabled (ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=false) or env vars missing.
+    return null;
+  }
 
-  return hasLegacyConfig ? buildLegacyConnectionRecord() : null;
+  // Legacy fallback active — build a transient connection record from env vars.
+  // This path is only reached when no DB-backed connection is assigned to the clinic.
+  return buildLegacyConnectionRecord();
 }
 
 /**

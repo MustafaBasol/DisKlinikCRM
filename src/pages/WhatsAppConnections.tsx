@@ -16,6 +16,9 @@ import {
   Download,
   AlertTriangle,
   ExternalLink,
+  Power,
+  PowerOff,
+  Unplug,
 } from 'lucide-react';
 import { whatsappConnectionService, organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -146,6 +149,9 @@ export default function WhatsAppConnections() {
   const [metaConnecting, setMetaConnecting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteConn, setConfirmDeleteConn] = useState<WhatsAppConnection | null>(null);
 
   const canManage = canManageWhatsAppConnections(user);
   const canView = canViewWhatsAppStatus(user);
@@ -309,6 +315,52 @@ export default function WhatsAppConnections() {
       setImportError(err?.response?.data?.error ?? 'Aktarım başarısız.');
     } finally {
       setImportingLegacy(false);
+    }
+  }
+
+  async function handleToggleActive(conn: WhatsAppConnection) {
+    const newActive = !conn.isActive;
+    setTogglingId(conn.id);
+    setImportError(null);
+    setSuccessMessage(null);
+    try {
+      await whatsappConnectionService.setStatus(conn.id, {
+        isActive: newActive,
+        status: newActive ? 'connected' : 'disconnected',
+      });
+      setSuccessMessage(
+        `"${conn.name}" ${newActive ? 'aktifleştirildi' : 'devre dışı bırakıldı'}.`,
+      );
+      fetchConnections();
+    } catch {
+      setImportError(`Durum güncellenemedi.`);
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!confirmDeleteConn) return;
+    const conn = confirmDeleteConn;
+    setDeletingId(conn.id);
+    setConfirmDeleteConn(null);
+    setImportError(null);
+    setSuccessMessage(null);
+    try {
+      await whatsappConnectionService.deleteConnection(conn.id);
+      setSuccessMessage(`"${conn.name}" bağlantısı silindi.`);
+      fetchConnections();
+    } catch (err: any) {
+      const errCode = err?.response?.data?.code;
+      if (errCode === 'HAS_MESSAGE_HISTORY') {
+        setImportError(
+          `"${conn.name}" silinemedi: mesaj geçmişi mevcut. Silmek yerine "Devre Dışı Bırak" butonunu kullanın.`,
+        );
+      } else {
+        setImportError(err?.response?.data?.error ?? 'Bağlantı silinemedi.');
+      }
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -555,8 +607,8 @@ export default function WhatsAppConnections() {
                           Ortam Değişkenlerinde Mevcut Evolution API Bağlantısı Bulundu
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                          Bu bağlantı şu anda env değişkenlerinden çalışıyor ve mesaj gönderimi aktif.
-                          Yönetim panelinde görünmesi için aşağıdaki butona tıklayarak veritabanına aktarın.
+                          Bu bağlantı şu anda sunucu ortam değişkenlerinden çalışıyor. Panelden düzenlemek,
+                          test etmek ve şubelere atamak için panele aktarın.
                         </p>
                         <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-amber-700 dark:text-amber-300">
                           {conn.evolutionApiUrl && (
@@ -574,6 +626,13 @@ export default function WhatsAppConnections() {
                           <span className="font-medium">API Key</span>
                           <span>Yapılandırılmış (gizli)</span>
                         </div>
+                        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 italic">
+                          Not: Ortam değişkenlerinden gelen bağlantı panelden doğrudan silinemez.
+                          Tamamen kaldırmak için sunucu ortam değişkenlerini temizleyin.
+                        </p>
+                        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400 italic">
+                          Aktardıktan sonra: Düzenle, Test Et, Şube Ata, Devre Dışı Bırak işlemleri kullanılabilir olur.
+                        </p>
                       </div>
                       {canManage && (
                         <button
@@ -586,7 +645,7 @@ export default function WhatsAppConnections() {
                           ) : (
                             <Download size={13} />
                           )}
-                          Veritabanına Aktar
+                          Panel Yönetimine Aktar
                         </button>
                       )}
                     </div>
@@ -617,9 +676,9 @@ export default function WhatsAppConnections() {
                           </span>
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <WifiOff size={12} />
-                          inactive
+                        <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                          <PowerOff size={12} />
+                          Devre Dışı
                         </span>
                       )}
                     </div>
@@ -654,12 +713,25 @@ export default function WhatsAppConnections() {
                         Token geçerlilik tarihi bilinmiyor — token bilgisi girilmemiş
                       </p>
                     )}
+                    {/* Meta does not use QR */}
+                    {conn.provider === 'meta_cloud_api' && (
+                      <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
+                        ℹ Meta Cloud API QR kullanmaz — hesap doğrulama "Meta ile Bağlan" üzerinden yapılır.
+                      </p>
+                    )}
+                    {/* Inactive warning */}
+                    {!conn.isActive && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        ⚠ Bağlantı devre dışı — bu hattan mesaj gönderilemez.
+                      </p>
+                    )}
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
                     {canManage && (
                       <>
+                        {/* Test */}
                         <button
                           onClick={() => handleTest(conn.id)}
                           disabled={testingId === conn.id}
@@ -672,28 +744,64 @@ export default function WhatsAppConnections() {
                             <CheckCircle2 size={16} />
                           )}
                         </button>
+                        {/* QR — Evolution only */}
                         {conn.provider === 'evolution_api' && (
                           <button
                             onClick={() => handleGetQr(conn.id)}
-                            title="QR Kodu Al"
+                            title="QR Kodu Al / Bağlan"
                             className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                           >
                             <QrCode size={16} />
                           </button>
-                        )}                        <button
+                        )}
+                        {/* Edit */}
+                        <button
                           onClick={() => openEdit(conn)}
                           title="Düzenle"
                           className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                         >
                           <Pencil size={16} />
                         </button>
+                        {/* Disconnect */}
                         <button
                           onClick={() => handleDisconnect(conn.id, conn.name)}
                           disabled={disconnectingId === conn.id}
-                          title="Bağlantıyı Kes"
-                          className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                          title="Bağlantıyı Kes (WhatsApp oturumunu sonlandır)"
+                          className="p-2 text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                         >
                           {disconnectingId === conn.id ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <Unplug size={16} />
+                          )}
+                        </button>
+                        {/* Deactivate / Activate */}
+                        <button
+                          onClick={() => handleToggleActive(conn)}
+                          disabled={togglingId === conn.id}
+                          title={conn.isActive ? 'Devre Dışı Bırak' : 'Aktifleştir'}
+                          className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 ${
+                            conn.isActive
+                              ? 'text-gray-400 hover:text-amber-600 dark:hover:text-amber-400'
+                              : 'text-gray-400 hover:text-green-600 dark:hover:text-green-400'
+                          }`}
+                        >
+                          {togglingId === conn.id ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : conn.isActive ? (
+                            <PowerOff size={16} />
+                          ) : (
+                            <Power size={16} />
+                          )}
+                        </button>
+                        {/* Delete */}
+                        <button
+                          onClick={() => setConfirmDeleteConn(conn)}
+                          disabled={deletingId === conn.id}
+                          title="Sil"
+                          className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                          {deletingId === conn.id ? (
                             <Loader2 size={16} className="animate-spin" />
                           ) : (
                             <Trash2 size={16} />
@@ -837,6 +945,45 @@ export default function WhatsAppConnections() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ────────────────────────────────────────── */}
+      {confirmDeleteConn && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Trash2 size={18} className="text-red-500" />
+                Bağlantıyı Sil
+              </h2>
+            </div>
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                <strong className="text-gray-900 dark:text-white">"{confirmDeleteConn.name}"</strong> bağlantısını
+                silmek istediğinizden emin misiniz?
+              </p>
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <p>⚠ Bu bağlantı silinirse bağlı şubeler WhatsApp gönderimi yapamaz.</p>
+                <p>ℹ Mesaj geçmişi varsa silme işlemi engellenir — bunun yerine "Devre Dışı Bırak" kullanın.</p>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteConn(null)}
+                className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Trash2 size={14} />
+                Sil
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

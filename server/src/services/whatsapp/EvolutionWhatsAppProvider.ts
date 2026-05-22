@@ -18,6 +18,7 @@ import type {
   TemplateSendResult,
 } from './WhatsAppProvider.js';
 import { decryptSecret } from '../../utils/encryption.js';
+import { getLegacyEvolutionConfig } from '../../utils/legacyWhatsApp.js';
 
 const buildEvolutionSendTextUrl = (baseUrl: string, instanceName: string) =>
   `${baseUrl.replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instanceName)}`;
@@ -40,11 +41,19 @@ function resolveCredentials(connection: WhatsAppConnectionRecord): {
   apiKey: string;
   instanceName: string;
 } | null {
-  const baseUrl = connection.evolutionApiUrl?.trim() || process.env.EVOLUTION_API_BASE_URL?.trim();
-  const instanceName =
-    connection.evolutionInstanceName?.trim() || process.env.EVOLUTION_INSTANCE_NAME?.trim();
+  // Primary source: DB connection record fields
+  const dbBaseUrl = connection.evolutionApiUrl?.trim();
+  const dbInstanceName = connection.evolutionInstanceName?.trim();
 
-  // Decrypt stored key; fall back to env var (legacy or unencrypted)
+  // Per-field env fallback — only allowed when legacy fallback is enabled.
+  // This covers partially-migrated records that have a DB row but were imported
+  // before all fields were populated (e.g., URL stored, key stored via env).
+  const legacy = getLegacyEvolutionConfig(); // null when fallback disabled
+
+  const baseUrl = dbBaseUrl || legacy?.url;
+  const instanceName = dbInstanceName || legacy?.instanceName;
+
+  // Decrypt stored key; fall back to legacy env key only if fallback is enabled
   let apiKey: string | undefined;
   const rawKey = connection.evolutionApiKeyEncrypted?.trim();
   if (rawKey) {
@@ -55,7 +64,8 @@ function resolveCredentials(connection: WhatsAppConnectionRecord): {
       apiKey = rawKey;
     }
   } else {
-    apiKey = process.env.EVOLUTION_API_KEY?.trim();
+    // No key in DB record — use env var only if fallback is permitted
+    apiKey = legacy?.key;
   }
 
   if (!baseUrl || !apiKey || !instanceName) return null;

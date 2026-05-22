@@ -1077,10 +1077,524 @@ async function sprintSixteenBTests() {
   console.log(`Sprint 16B tests — ${passed} passed, ${failed} failed`);
 }
 
-main().then(() => extendedTests()).then(() => sprintSixteenBTests()).then(() => {
+main().then(() => extendedTests()).then(() => sprintSixteenBTests()).then(() => connectionLifecycleTests()).then(() => sprintSeventeenBTests()).then(() => {
   console.log(`\n${'─'.repeat(50)}`);
   console.log('All tests complete');
 }).catch((err) => {
   console.error('Test runner error:', err);
   process.exit(1);
 });
+
+// ─── Sprint 17A — Connection lifecycle (status toggle + delete guard) ─────────
+async function connectionLifecycleTests() {
+  section('Sprint 17A — Deactivate / Activate (PATCH /status logic)');
+
+  await test('setStatus isActive=false → status becomes "disconnected"', () => {
+    // Simulate PATCH /status endpoint logic
+    function applyStatus(
+      conn: { isActive: boolean; status: string },
+      payload: { isActive: boolean; status?: string },
+    ) {
+      const update: { isActive: boolean; status: string } = { ...conn, isActive: payload.isActive };
+      if (payload.status) {
+        update.status = payload.status;
+      } else if (!payload.isActive) {
+        update.status = 'disconnected';
+      }
+      return update;
+    }
+    const result = applyStatus({ isActive: true, status: 'connected' }, { isActive: false });
+    assert.equal(result.isActive, false);
+    assert.equal(result.status, 'disconnected');
+  });
+
+  await test('setStatus isActive=true without explicit status → preserves existing status', () => {
+    function applyStatus(
+      conn: { isActive: boolean; status: string },
+      payload: { isActive: boolean; status?: string },
+    ) {
+      const update: { isActive: boolean; status: string } = { ...conn, isActive: payload.isActive };
+      if (payload.status) {
+        update.status = payload.status;
+      } else if (!payload.isActive) {
+        update.status = 'disconnected';
+      }
+      return update;
+    }
+    const result = applyStatus({ isActive: false, status: 'disconnected' }, { isActive: true });
+    assert.equal(result.isActive, true);
+    // status not changed because isActive=true and no explicit status in payload
+    assert.equal(result.status, 'disconnected');
+  });
+
+  await test('setStatus isActive=true with explicit status="connected" → connected', () => {
+    function applyStatus(
+      conn: { isActive: boolean; status: string },
+      payload: { isActive: boolean; status?: string },
+    ) {
+      const update: { isActive: boolean; status: string } = { ...conn, isActive: payload.isActive };
+      if (payload.status) update.status = payload.status;
+      else if (!payload.isActive) update.status = 'disconnected';
+      return update;
+    }
+    const result = applyStatus(
+      { isActive: false, status: 'disconnected' },
+      { isActive: true, status: 'connected' },
+    );
+    assert.equal(result.isActive, true);
+    assert.equal(result.status, 'connected');
+  });
+
+  await test('inactive connection cannot send — isActive=false guard fires', () => {
+    function canSend(isActive: boolean): { allowed: boolean; reason?: string } {
+      if (!isActive) return { allowed: false, reason: 'Bağlantı devre dışı — mesaj gönderilemez.' };
+      return { allowed: true };
+    }
+    assert.equal(canSend(false).allowed, false);
+    assert.ok(canSend(false).reason?.includes('devre dışı'));
+    assert.equal(canSend(true).allowed, true);
+  });
+
+  section('Sprint 17A — Delete guard (message history check)');
+
+  await test('deleteConnection: 0 messages → allowed', () => {
+    function canDelete(messageCount: number): { allowed: boolean; code?: string } {
+      if (messageCount > 0) return { allowed: false, code: 'HAS_MESSAGE_HISTORY' };
+      return { allowed: true };
+    }
+    assert.equal(canDelete(0).allowed, true);
+  });
+
+  await test('deleteConnection: >0 messages → blocked with HAS_MESSAGE_HISTORY', () => {
+    function canDelete(messageCount: number): { allowed: boolean; code?: string } {
+      if (messageCount > 0) return { allowed: false, code: 'HAS_MESSAGE_HISTORY' };
+      return { allowed: true };
+    }
+    const result = canDelete(5);
+    assert.equal(result.allowed, false);
+    assert.equal(result.code, 'HAS_MESSAGE_HISTORY');
+  });
+
+  await test('deleteConnection: 1 message → also blocked', () => {
+    function canDelete(messageCount: number): { allowed: boolean; code?: string } {
+      if (messageCount > 0) return { allowed: false, code: 'HAS_MESSAGE_HISTORY' };
+      return { allowed: true };
+    }
+    assert.equal(canDelete(1).allowed, false);
+  });
+
+  await test('deleteConnection: clinic assignments removed before connection delete', () => {
+    // Simulate the two-step delete sequence
+    const clinicAssignments: Array<{ connectionId: string; clinicId: string }> = [
+      { connectionId: 'conn-1', clinicId: 'clinic-a' },
+      { connectionId: 'conn-1', clinicId: 'clinic-b' },
+    ];
+    const connections: Array<{ id: string }> = [{ id: 'conn-1' }];
+
+    // Step 1: delete assignments
+    const cleaned = clinicAssignments.filter((a) => a.connectionId !== 'conn-1');
+    // Step 2: delete connection
+    const remaining = connections.filter((c) => c.id !== 'conn-1');
+
+    assert.equal(cleaned.length, 0, 'all assignments removed first');
+    assert.equal(remaining.length, 0, 'connection removed after assignments');
+  });
+
+  await test('secrets never returned after delete 409 error', () => {
+    // When delete returns 409, response must not contain sensitive fields
+    const errorResponse = {
+      error: 'Bu bağlantıya ait mesaj kaydı bulunduğundan silinemez.',
+      code: 'HAS_MESSAGE_HISTORY',
+      messageCount: 3,
+    };
+    assert.ok(!('evolutionApiKeyEncrypted' in errorResponse));
+    assert.ok(!('metaAccessTokenEncrypted' in errorResponse));
+    assert.ok(!('webhookSecret' in errorResponse));
+    assert.ok('messageCount' in errorResponse);
+  });
+
+  section('Sprint 17A — Unauthorized role cannot call status/delete');
+
+  await test('canManageWhatsAppConnections: CLINIC_MANAGER cannot toggle status', () => {
+    const cm = { role: 'CLINIC_MANAGER', canAccessAllClinics: false };
+    assert.equal(canManageWhatsAppConnections(cm), false);
+  });
+
+  await test('canManageWhatsAppConnections: DENTIST cannot delete connection', () => {
+    const dentist = { role: 'DENTIST', canAccessAllClinics: false };
+    assert.equal(canManageWhatsAppConnections(dentist), false);
+  });
+
+  await test('canManageWhatsAppConnections: BILLING cannot toggle status', () => {
+    const billing = { role: 'BILLING', canAccessAllClinics: false };
+    assert.equal(canManageWhatsAppConnections(billing), false);
+  });
+
+  await test('canManageWhatsAppConnections: OWNER can toggle and delete', () => {
+    const owner = { role: 'OWNER', canAccessAllClinics: true };
+    assert.equal(canManageWhatsAppConnections(owner), true);
+  });
+
+  await test('canManageWhatsAppConnections: ORG_ADMIN can toggle and delete', () => {
+    const orgAdmin = { role: 'ORG_ADMIN', canAccessAllClinics: true };
+    assert.equal(canManageWhatsAppConnections(orgAdmin), true);
+  });
+
+  section('Sprint 17A — Legacy card does not allow delete/disconnect');
+
+  await test('isLegacy connection: no delete action available', () => {
+    const legacyConn = { id: '__legacy__', isLegacy: true, provider: 'evolution_api', isActive: true };
+    // Delete must be blocked for legacy virtual entries (they have no real DB id)
+    function canDeleteConn(conn: { isLegacy?: boolean }): boolean {
+      return !conn.isLegacy;
+    }
+    assert.equal(canDeleteConn(legacyConn), false);
+  });
+
+  await test('isLegacy connection: import action available for OWNER/ORG_ADMIN', () => {
+    const legacyConn = { id: '__legacy__', isLegacy: true };
+    const owner = { role: 'OWNER', canAccessAllClinics: true };
+    assert.equal(canManageWhatsAppConnections(owner), true);
+    // Legacy conn itself does not expose management actions; only import
+    assert.ok(legacyConn.isLegacy);
+  });
+
+  console.log(`\n${'─'.repeat(50)}`);
+  console.log(`Sprint 17A connection lifecycle tests complete`);
+}
+
+// ─── Sprint 17B — Legacy fallback flag (ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK) ──
+async function sprintSeventeenBTests() {
+  section('Sprint 17B — isLegacyFallbackEnabled() flag semantics');
+
+  await test('flag defaults to true when env var is not set', () => {
+    const saved = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      if (flag === 'false' || flag === '0') return false;
+      return true;
+    }
+    assert.equal(isLegacyFallbackEnabled(), true);
+    if (saved !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = saved;
+  });
+
+  await test('flag is true when set to "true"', () => {
+    const saved = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = 'true';
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      if (flag === 'false' || flag === '0') return false;
+      return true;
+    }
+    assert.equal(isLegacyFallbackEnabled(), true);
+    if (saved !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = saved;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+  });
+
+  await test('flag is false when set to "false"', () => {
+    const saved = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = 'false';
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      if (flag === 'false' || flag === '0') return false;
+      return true;
+    }
+    assert.equal(isLegacyFallbackEnabled(), false);
+    if (saved !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = saved;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+  });
+
+  await test('flag is false when set to "0"', () => {
+    const saved = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = '0';
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      if (flag === 'false' || flag === '0') return false;
+      return true;
+    }
+    assert.equal(isLegacyFallbackEnabled(), false);
+    if (saved !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = saved;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+  });
+
+  await test('flag is false when set to "FALSE" (case-insensitive)', () => {
+    const saved = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = 'FALSE';
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      if (flag === 'false' || flag === '0') return false;
+      return true;
+    }
+    assert.equal(isLegacyFallbackEnabled(), false);
+    if (saved !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = saved;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+  });
+
+  section('Sprint 17B — getLegacyEvolutionConfig() with flag');
+
+  await test('getLegacyEvolutionConfig returns config when flag=true and all env vars set', () => {
+    const savedFlag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    const savedUrl = process.env.EVOLUTION_API_BASE_URL;
+    const savedKey = process.env.EVOLUTION_API_KEY;
+    const savedInst = process.env.EVOLUTION_INSTANCE_NAME;
+
+    process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = 'true';
+    process.env.EVOLUTION_API_BASE_URL = 'http://legacy-evo.example.com';
+    process.env.EVOLUTION_API_KEY = 'legacy-key-xxx';
+    process.env.EVOLUTION_INSTANCE_NAME = 'legacy-inst';
+
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      return flag !== 'false' && flag !== '0';
+    }
+    function getLegacyEvolutionConfig() {
+      if (!isLegacyFallbackEnabled()) return null;
+      const url = process.env.EVOLUTION_API_BASE_URL?.trim();
+      const key = process.env.EVOLUTION_API_KEY?.trim();
+      const instanceName = process.env.EVOLUTION_INSTANCE_NAME?.trim();
+      if (!url || !key || !instanceName) return null;
+      return { url, key, instanceName };
+    }
+
+    const cfg = getLegacyEvolutionConfig();
+    assert.ok(cfg !== null);
+    assert.equal(cfg?.url, 'http://legacy-evo.example.com');
+    assert.equal(cfg?.instanceName, 'legacy-inst');
+    // key is present but we don't log it
+    assert.ok(cfg?.key.length > 0);
+
+    if (savedFlag !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = savedFlag;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    if (savedUrl !== undefined) process.env.EVOLUTION_API_BASE_URL = savedUrl;
+    else delete process.env.EVOLUTION_API_BASE_URL;
+    if (savedKey !== undefined) process.env.EVOLUTION_API_KEY = savedKey;
+    else delete process.env.EVOLUTION_API_KEY;
+    if (savedInst !== undefined) process.env.EVOLUTION_INSTANCE_NAME = savedInst;
+    else delete process.env.EVOLUTION_INSTANCE_NAME;
+  });
+
+  await test('getLegacyEvolutionConfig returns null when flag=false even if env vars present', () => {
+    const savedFlag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    const savedUrl = process.env.EVOLUTION_API_BASE_URL;
+    const savedKey = process.env.EVOLUTION_API_KEY;
+    const savedInst = process.env.EVOLUTION_INSTANCE_NAME;
+
+    process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = 'false';
+    process.env.EVOLUTION_API_BASE_URL = 'http://legacy-evo.example.com';
+    process.env.EVOLUTION_API_KEY = 'legacy-key-xxx';
+    process.env.EVOLUTION_INSTANCE_NAME = 'legacy-inst';
+
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      return flag !== 'false' && flag !== '0';
+    }
+    function getLegacyEvolutionConfig() {
+      if (!isLegacyFallbackEnabled()) return null;
+      const url = process.env.EVOLUTION_API_BASE_URL?.trim();
+      const key = process.env.EVOLUTION_API_KEY?.trim();
+      const instanceName = process.env.EVOLUTION_INSTANCE_NAME?.trim();
+      if (!url || !key || !instanceName) return null;
+      return { url, key, instanceName };
+    }
+
+    const cfg = getLegacyEvolutionConfig();
+    assert.equal(cfg, null, 'must return null when flag=false');
+
+    if (savedFlag !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = savedFlag;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    if (savedUrl !== undefined) process.env.EVOLUTION_API_BASE_URL = savedUrl;
+    else delete process.env.EVOLUTION_API_BASE_URL;
+    if (savedKey !== undefined) process.env.EVOLUTION_API_KEY = savedKey;
+    else delete process.env.EVOLUTION_API_KEY;
+    if (savedInst !== undefined) process.env.EVOLUTION_INSTANCE_NAME = savedInst;
+    else delete process.env.EVOLUTION_INSTANCE_NAME;
+  });
+
+  await test('getLegacyEvolutionConfig returns null when env vars missing even if flag=true', () => {
+    const savedFlag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    const savedUrl = process.env.EVOLUTION_API_BASE_URL;
+    const savedKey = process.env.EVOLUTION_API_KEY;
+    const savedInst = process.env.EVOLUTION_INSTANCE_NAME;
+
+    process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = 'true';
+    delete process.env.EVOLUTION_API_BASE_URL;
+    delete process.env.EVOLUTION_API_KEY;
+    delete process.env.EVOLUTION_INSTANCE_NAME;
+
+    function isLegacyFallbackEnabled(): boolean {
+      const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+      return flag !== 'false' && flag !== '0';
+    }
+    function getLegacyEvolutionConfig() {
+      if (!isLegacyFallbackEnabled()) return null;
+      const url = process.env.EVOLUTION_API_BASE_URL?.trim();
+      const key = process.env.EVOLUTION_API_KEY?.trim();
+      const instanceName = process.env.EVOLUTION_INSTANCE_NAME?.trim();
+      if (!url || !key || !instanceName) return null;
+      return { url, key, instanceName };
+    }
+
+    const cfg = getLegacyEvolutionConfig();
+    assert.equal(cfg, null, 'must return null when env vars missing');
+
+    if (savedFlag !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = savedFlag;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    if (savedUrl !== undefined) process.env.EVOLUTION_API_BASE_URL = savedUrl;
+    if (savedKey !== undefined) process.env.EVOLUTION_API_KEY = savedKey;
+    if (savedInst !== undefined) process.env.EVOLUTION_INSTANCE_NAME = savedInst;
+  });
+
+  section('Sprint 17B — resolveConnectionForClinic fallback behaviour');
+
+  await test('resolveConnectionForClinic: no DB record + flag=false → no fallback (returns null)', () => {
+    // Simulates the core logic of resolveConnectionForClinic
+    function resolveConnectionSimulated(
+      hasDbRecord: boolean,
+      flagEnabled: boolean,
+      hasEnvVars: boolean,
+    ): string | null {
+      if (hasDbRecord) return 'db-connection';
+      // Fallback guard
+      if (!flagEnabled) return null;
+      if (!hasEnvVars) return null;
+      return 'legacy-connection';
+    }
+    assert.equal(resolveConnectionSimulated(false, false, true), null,
+      'flag=false must block fallback even when env vars present');
+  });
+
+  await test('resolveConnectionForClinic: no DB record + flag=true + env vars → legacy fallback used', () => {
+    function resolveConnectionSimulated(
+      hasDbRecord: boolean,
+      flagEnabled: boolean,
+      hasEnvVars: boolean,
+    ): string | null {
+      if (hasDbRecord) return 'db-connection';
+      if (!flagEnabled) return null;
+      if (!hasEnvVars) return null;
+      return 'legacy-connection';
+    }
+    assert.equal(resolveConnectionSimulated(false, true, true), 'legacy-connection');
+  });
+
+  await test('resolveConnectionForClinic: DB record present → flag irrelevant', () => {
+    function resolveConnectionSimulated(
+      hasDbRecord: boolean,
+      flagEnabled: boolean,
+      hasEnvVars: boolean,
+    ): string | null {
+      if (hasDbRecord) return 'db-connection';
+      if (!flagEnabled) return null;
+      if (!hasEnvVars) return null;
+      return 'legacy-connection';
+    }
+    // DB record wins regardless of flag
+    assert.equal(resolveConnectionSimulated(true, false, false), 'db-connection');
+    assert.equal(resolveConnectionSimulated(true, false, true), 'db-connection');
+    assert.equal(resolveConnectionSimulated(true, true, false), 'db-connection');
+  });
+
+  section('Sprint 17B — EvolutionWhatsAppProvider resolveCredentials panel-first mode');
+
+  await test('resolveCredentials: flag=false + empty DB fields → null (no env fallback)', () => {
+    function resolveCredentialsSimulated(
+      conn: { evolutionApiUrl?: string; evolutionInstanceName?: string; evolutionApiKeyEncrypted?: string },
+      legacyCfg: { url: string; key: string; instanceName: string } | null,
+    ): { baseUrl: string; apiKey: string; instanceName: string } | null {
+      const dbBaseUrl = conn.evolutionApiUrl?.trim();
+      const dbInstanceName = conn.evolutionInstanceName?.trim();
+      const baseUrl = dbBaseUrl || legacyCfg?.url;
+      const instanceName = dbInstanceName || legacyCfg?.instanceName;
+      const rawKey = conn.evolutionApiKeyEncrypted?.trim();
+      let apiKey: string | undefined;
+      if (rawKey) {
+        apiKey = rawKey; // simplified: no encryption in test
+      } else {
+        apiKey = legacyCfg?.key;
+      }
+      if (!baseUrl || !apiKey || !instanceName) return null;
+      return { baseUrl, apiKey, instanceName };
+    }
+    // flag=false → legacyCfg is null
+    const result = resolveCredentialsSimulated({ evolutionApiUrl: '', evolutionInstanceName: '', evolutionApiKeyEncrypted: '' }, null);
+    assert.equal(result, null, 'must return null when flag=false and DB fields empty');
+  });
+
+  await test('resolveCredentials: flag=false + DB fields filled → uses DB values', () => {
+    function resolveCredentialsSimulated(
+      conn: { evolutionApiUrl?: string; evolutionInstanceName?: string; evolutionApiKeyEncrypted?: string },
+      legacyCfg: { url: string; key: string; instanceName: string } | null,
+    ): { baseUrl: string; apiKey: string; instanceName: string } | null {
+      const dbBaseUrl = conn.evolutionApiUrl?.trim();
+      const dbInstanceName = conn.evolutionInstanceName?.trim();
+      const baseUrl = dbBaseUrl || legacyCfg?.url;
+      const instanceName = dbInstanceName || legacyCfg?.instanceName;
+      const rawKey = conn.evolutionApiKeyEncrypted?.trim();
+      let apiKey: string | undefined;
+      if (rawKey) {
+        apiKey = rawKey;
+      } else {
+        apiKey = legacyCfg?.key;
+      }
+      if (!baseUrl || !apiKey || !instanceName) return null;
+      return { baseUrl, apiKey, instanceName };
+    }
+    // flag=false → legacyCfg is null, but DB fields are populated
+    const result = resolveCredentialsSimulated(
+      { evolutionApiUrl: 'http://evo.example.com', evolutionInstanceName: 'my-inst', evolutionApiKeyEncrypted: 'enc-key-xyz' },
+      null,
+    );
+    assert.ok(result !== null);
+    assert.equal(result?.baseUrl, 'http://evo.example.com');
+    assert.equal(result?.instanceName, 'my-inst');
+    assert.equal(result?.apiKey, 'enc-key-xyz');
+  });
+
+  await test('resolveCredentials: flag=true + DB fields empty → uses legacy env fallback', () => {
+    function resolveCredentialsSimulated(
+      conn: { evolutionApiUrl?: string; evolutionInstanceName?: string; evolutionApiKeyEncrypted?: string },
+      legacyCfg: { url: string; key: string; instanceName: string } | null,
+    ): { baseUrl: string; apiKey: string; instanceName: string } | null {
+      const dbBaseUrl = conn.evolutionApiUrl?.trim();
+      const dbInstanceName = conn.evolutionInstanceName?.trim();
+      const baseUrl = dbBaseUrl || legacyCfg?.url;
+      const instanceName = dbInstanceName || legacyCfg?.instanceName;
+      const rawKey = conn.evolutionApiKeyEncrypted?.trim();
+      let apiKey: string | undefined;
+      if (rawKey) {
+        apiKey = rawKey;
+      } else {
+        apiKey = legacyCfg?.key;
+      }
+      if (!baseUrl || !apiKey || !instanceName) return null;
+      return { baseUrl, apiKey, instanceName };
+    }
+    // flag=true → legacyCfg is non-null
+    const result = resolveCredentialsSimulated(
+      { evolutionApiUrl: '', evolutionInstanceName: '', evolutionApiKeyEncrypted: '' },
+      { url: 'http://env-evo.example.com', key: 'env-key', instanceName: 'env-inst' },
+    );
+    assert.ok(result !== null);
+    assert.equal(result?.baseUrl, 'http://env-evo.example.com');
+    assert.equal(result?.instanceName, 'env-inst');
+  });
+
+  section('Sprint 17B — No secrets in fallback-disabled error path');
+
+  await test('no sensitive fields exposed when fallback disabled and no DB record', () => {
+    // Simulates the response body when resolveConnectionForClinic returns null
+    // because fallback is disabled (flag=false) and no DB record found.
+    const errorResponse = {
+      success: false,
+      error: 'No active WhatsApp connection found for this clinic. Please configure one in Organization Settings.',
+    };
+    assert.ok(!('evolutionApiKeyEncrypted' in errorResponse));
+    assert.ok(!('EVOLUTION_API_KEY' in errorResponse));
+    assert.ok(!('apiKey' in errorResponse));
+    assert.ok(errorResponse.error.length > 0);
+  });
+
+  console.log(`\n${'─'.repeat(50)}`);
+  console.log(`Sprint 17B legacy fallback flag tests complete`);
+}

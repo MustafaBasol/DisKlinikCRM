@@ -35,6 +35,7 @@ import { getParam } from '../utils/helpers.js';
 import { encryptSecret } from '../utils/encryption.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { recordOperationalEvent } from '../services/operationalEventService.js';
+import { isLegacyFallbackEnabled, hasLegacyEnvVars } from '../utils/legacyWhatsApp.js';
 import {
   testWhatsAppConnection,
   getWhatsAppQrCode,
@@ -120,13 +121,12 @@ router.get(
       const sanitized = connections.map((c) => sanitizeConnection(c as unknown as Record<string, unknown>));
 
       // Surface legacy env-var config as a virtual read-only entry when DB has no records.
-      // This ensures the page is never empty for deployments that have not yet run backfill.
+      // Only shown when ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK is not disabled and all 3 env vars are set.
       // The virtual entry is safe: it never includes the raw API key.
-      if (sanitized.length === 0) {
+      if (sanitized.length === 0 && isLegacyFallbackEnabled() && hasLegacyEnvVars()) {
         const legacyUrl = process.env.EVOLUTION_API_BASE_URL?.trim();
         const legacyInstance = process.env.EVOLUTION_INSTANCE_NAME?.trim();
-        const legacyKeySet = Boolean(process.env.EVOLUTION_API_KEY?.trim());
-        if (legacyUrl && legacyInstance && legacyKeySet) {
+        if (legacyUrl && legacyInstance) {
           sanitized.unshift({
             id: '__legacy__',
             isLegacy: true,
@@ -492,6 +492,142 @@ router.post(
       res.json({ success: true, message: 'Connection disconnected' });
     } catch {
       res.status(500).json({ error: 'Failed to disconnect connection' });
+    }
+  },
+);
+
+// PATCH /api/organization/whatsapp-connections/:id/status
+// Deactivates (isActive=false) or activates (isActive=true) a connection.
+// Safe to call at any time — does not delete records or message history.
+router.patch(
+  '/organization/whatsapp-connections/:id/status',
+  authorize(['OWNER', 'ORG_ADMIN']),
+  async (req: AuthRequest, res: Response) => {
+    if (!canManageWhatsAppConnections(req.user!)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    const organizationId = req.user!.organizationId;
+    const id = getParam(req, 'id');
+
+    const parsed = z
+      .object({
+        isActive: z.boolean(),
+        status: z.enum(['connected', 'disconnected', 'connecting', 'error']).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+
+    try {
+      const existing = await prisma.whatsAppConnection.findFirst({
+        where: { id, organizationId },
+      });
+      if (!existing) return res.status(404).json({ error: 'Connection not found' });
+
+      const updateData: Record<string, unknown> = { isActive: parsed.data.isActive };
+      // Auto-set status if not explicitly provided
+      if (parsed.data.status) {
+        updateData.status = parsed.data.status;
+      } else if (!parsed.data.isActive) {
+        updateData.status = 'disconnected';
+      }
+
+      const updated = await prisma.whatsAppConnection.update({
+        where: { id },
+        data: updateData as Parameters<typeof prisma.whatsAppConnection.update>[0]['data'],
+        include: { clinics: { include: { clinic: { select: { id: true, name: true } } } } },
+      });
+
+      const action = parsed.data.isActive ? 'activated' : 'deactivated';
+      await logActivity({
+        clinicId: req.user!.clinicId,
+        userId: req.user!.id,
+        entityType: 'whatsapp_connection',
+        entityId: id,
+        action,
+        description: `WhatsApp bağlantısı ${parsed.data.isActive ? 'aktifleştirildi' : 'devre dışı bırakıldı'}: ${existing.name}`,
+      });
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: `whatsapp_connection_${action}`,
+        entityType: 'whatsapp_connection',
+        entityId: id,
+        description: `WhatsApp connection ${action}: ${existing.name}`,
+        metadata: { name: existing.name, isActive: parsed.data.isActive, provider: existing.provider },
+        ...extractRequestMeta(req),
+      });
+
+      res.json(sanitizeConnection(updated as unknown as Record<string, unknown>));
+    } catch {
+      res.status(500).json({ error: 'Failed to update connection status' });
+    }
+  },
+);
+
+// DELETE /api/organization/whatsapp-connections/:id
+// Safe hard-delete: blocked when sent message history exists (preserves audit trail).
+// When messages exist, the frontend should offer "Devre Dışı Bırak" instead.
+router.delete(
+  '/organization/whatsapp-connections/:id',
+  authorize(['OWNER', 'ORG_ADMIN']),
+  async (req: AuthRequest, res: Response) => {
+    if (!canManageWhatsAppConnections(req.user!)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    const organizationId = req.user!.organizationId;
+    const id = getParam(req, 'id');
+
+    try {
+      const existing = await prisma.whatsAppConnection.findFirst({
+        where: { id, organizationId },
+        include: { _count: { select: { sentMessages: true } } },
+      });
+      if (!existing) return res.status(404).json({ error: 'Connection not found' });
+
+      // Guard: preserve message history by blocking hard delete
+      const messageCount = (existing as unknown as { _count: { sentMessages: number } })._count.sentMessages;
+      if (messageCount > 0) {
+        return res.status(409).json({
+          error:
+            'Bu bağlantıya ait mesaj kaydı bulunduğundan silinemez. Mesaj geçmişini korumak için "Devre Dışı Bırak" ile devre dışı bırakın.',
+          code: 'HAS_MESSAGE_HISTORY',
+          messageCount,
+        });
+      }
+
+      // Remove clinic assignments first (FK constraint — no DB-level cascade for this relation)
+      await prisma.clinicWhatsAppConnection.deleteMany({
+        where: { whatsappConnectionId: id, organizationId },
+      });
+
+      await prisma.whatsAppConnection.delete({ where: { id } });
+
+      await logActivity({
+        clinicId: req.user!.clinicId,
+        userId: req.user!.id,
+        entityType: 'whatsapp_connection',
+        entityId: id,
+        action: 'deleted',
+        description: `WhatsApp bağlantısı silindi: ${existing.name}`,
+      });
+      writeAuditLog({
+        organizationId: req.user!.organizationId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'whatsapp_connection_deleted',
+        entityType: 'whatsapp_connection',
+        entityId: id,
+        description: `WhatsApp connection deleted: ${existing.name}`,
+        metadata: { name: existing.name, provider: existing.provider },
+        ...extractRequestMeta(req),
+      });
+
+      res.json({ success: true, message: 'Connection deleted' });
+    } catch {
+      res.status(500).json({ error: 'Failed to delete connection' });
     }
   },
 );
