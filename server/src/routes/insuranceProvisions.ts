@@ -50,12 +50,12 @@ async function validateInsuranceRelations(data: any, clinicId: string) {
 // GET /api/insurance-provisions
 router.get('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const { status, insurance_type, patient_id, treatment_case_id, provider_name } = req.query;
 
   try {
     const where: any = { clinicId };
-    if (role === 'doctor') Object.assign(where, getInsuranceDoctorScope(userId));
+    if (normalizedRole === 'DENTIST') Object.assign(where, getInsuranceDoctorScope(userId));
     if (status) where.status = String(status);
     if (insurance_type) where.insuranceType = String(insurance_type);
     if (patient_id) where.patientId = String(patient_id);
@@ -78,11 +78,11 @@ router.get('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
 router.get('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   try {
     const where: any = { id, clinicId };
-    if (role === 'doctor') Object.assign(where, getInsuranceDoctorScope(userId));
+    if (normalizedRole === 'DENTIST') Object.assign(where, getInsuranceDoctorScope(userId));
 
     const provision = await prisma.insuranceProvision.findFirst({
       where,
@@ -130,7 +130,7 @@ router.post('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
 router.put('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   const validation = insuranceProvisionUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -140,7 +140,7 @@ router.put('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
     if (!existing) return res.status(404).json({ error: 'Insurance provision not found' });
 
     const updateData: any = { ...validation.data };
-    if (role === 'billing') {
+    if (normalizedRole === 'BILLING') {
       const allowed = ['status', 'approvedAmount', 'patientResponsibilityAmount', 'currency', 'respondedAt', 'rejectionReason', 'notes', 'provisionNumber'];
       for (const key of Object.keys(updateData)) {
         if (!allowed.includes(key)) delete updateData[key];

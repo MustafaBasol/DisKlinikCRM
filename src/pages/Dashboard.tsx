@@ -23,7 +23,7 @@ import {
   Star,
 } from 'lucide-react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
-import { normalizeRole } from '../utils/permissions';
+import { normalizeRole, canViewWhatsAppInbox, canViewFinanceDashboard, canViewPatients, canCreateAppointment } from '../utils/permissions';
 import {
   BarChart,
   Bar,
@@ -402,14 +402,30 @@ const Dashboard: React.FC = () => {
           <p className="text-gray-500 mt-1">{t('dashboard:welcome', { name: user?.firstName })}. {t('dashboard:subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/appointments" className="btn-primary">
-            <Plus size={18} />
-            {t('common:newAppointment')}
-          </Link>
-          <Link to="/patients" className="btn-secondary">
-            <Plus size={18} />
-            {t('common:newPatient')}
-          </Link>
+          {canCreateAppointment(user) && (
+            <Link to="/appointments" className="btn-primary">
+              <Plus size={18} />
+              {t('common:newAppointment')}
+            </Link>
+          )}
+          {canViewPatients(user) && (
+            <Link to="/patients" className="btn-secondary">
+              <Plus size={18} />
+              {t('common:newPatient')}
+            </Link>
+          )}
+          {canViewWhatsAppInbox(user) && (
+            <Link to="/whatsapp-inbox" className="btn-secondary">
+              <MessageSquare size={18} />
+              WhatsApp Gelen Kutusu
+            </Link>
+          )}
+          {canViewFinanceDashboard(user) && (
+            <Link to="/finance" className="btn-secondary">
+              <BarChart2 size={18} />
+              Finans Paneli
+            </Link>
+          )}
         </div>
       </div>
 

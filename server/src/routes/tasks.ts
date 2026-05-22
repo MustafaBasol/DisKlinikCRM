@@ -10,7 +10,7 @@ const router = express.Router();
 
 // GET /api/tasks
 router.get('/tasks', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const { status, assignedToId, patientId, clinicId: selectedClinicId } = req.query;
 
   try {
@@ -19,7 +19,7 @@ router.get('/tasks', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST
 
     const where: any = { ...scope };
 
-    if (role === 'doctor') {
+    if (normalizedRole === 'DENTIST') {
       where.OR = [{ assignedToId: userId }, { createdById: userId }];
     }
 

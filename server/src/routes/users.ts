@@ -156,9 +156,9 @@ router.put('/users/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), as
 
 // GET /api/doctor-availabilities
 router.get('/doctor-availabilities', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const requestedPractitionerId = req.query.practitionerId ? String(req.query.practitionerId) : undefined;
-  const practitionerId = role === 'doctor' ? userId : requestedPractitionerId;
+  const practitionerId = normalizedRole === 'DENTIST' ? userId : requestedPractitionerId;
   const selectedClinicId = req.query.clinicId as string | undefined;
 
   try {
@@ -194,10 +194,10 @@ router.get('/doctor-availabilities', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
 router.put('/doctor-availabilities/:practitionerId', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const practitionerId = getParam(req, 'practitionerId');
 
-  if (role === 'doctor' && practitionerId !== userId) {
+  if (normalizedRole === 'DENTIST' && practitionerId !== userId) {
     return res.status(403).json({ error: 'Doctors can only update their own availability' });
   }
 
@@ -245,9 +245,9 @@ router.put('/doctor-availabilities/:practitionerId', authorize(['OWNER', 'ORG_AD
 
 // GET /api/doctor-off-days
 router.get('/doctor-off-days', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const requestedPractitionerId = req.query.practitionerId ? String(req.query.practitionerId) : undefined;
-  const practitionerId = role === 'doctor' ? userId : requestedPractitionerId;
+  const practitionerId = normalizedRole === 'DENTIST' ? userId : requestedPractitionerId;
   const selectedClinicId = req.query.clinicId as string | undefined;
 
   try {
@@ -277,14 +277,14 @@ router.get('/doctor-off-days', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
 router.post('/doctor-off-days', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   const validation = doctorOffDaySchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   const { practitionerId, date, reason } = validation.data;
 
-  if (role === 'doctor' && practitionerId !== userId) {
+  if (normalizedRole === 'DENTIST' && practitionerId !== userId) {
     return res.status(403).json({ error: 'Doctors can only manage their own off days' });
   }
 
@@ -314,7 +314,7 @@ router.post('/doctor-off-days', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
 
 // DELETE /api/doctor-off-days/:id
 router.delete('/doctor-off-days/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST']), async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const id = getParam(req, 'id');
 
   try {
@@ -325,7 +325,7 @@ router.delete('/doctor-off-days/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_M
     if (!offDay) return res.status(404).json({ error: 'Off day not found' });
     const clinicId = offDay.clinicId;
 
-    if (role === 'doctor' && offDay.practitionerId !== userId) {
+    if (normalizedRole === 'DENTIST' && offDay.practitionerId !== userId) {
       return res.status(403).json({ error: 'Doctors can only delete their own off days' });
     }
 

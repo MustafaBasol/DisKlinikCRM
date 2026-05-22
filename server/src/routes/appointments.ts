@@ -11,7 +11,7 @@ const router = express.Router();
 
 // GET /api/appointments
 router.get('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 const { start, end, status, practitionerId, patientId, search, treatmentCaseId, clinicId: selectedClinicId } = req.query;
 
   try {
@@ -20,7 +20,7 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
 
     const where: any = { ...scope, deletedAt: null };
 
-    if (role === 'doctor') {
+    if (normalizedRole === 'DENTIST') {
       where.practitionerId = userId;
     } else if (practitionerId) {
       where.practitionerId = String(practitionerId);
@@ -59,7 +59,7 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
 // GET /api/appointments/:id
 router.get('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   try {
     const accessibleIds = await getAccessibleClinicIds(req.user!);
@@ -78,7 +78,7 @@ router.get('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
 
     if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
 
-    if (role === 'doctor' && appointment.practitionerId !== userId) {
+    if (normalizedRole === 'DENTIST' && appointment.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden: Access to other doctors appointments is restricted' });
     }
 
@@ -172,7 +172,7 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
 // PUT /api/appointments/:id
 router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   const validation = appointmentUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -185,7 +185,7 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
     if (!existing) return res.status(404).json({ error: 'Appointment not found' });
     const clinicId = existing.clinicId;
 
-    if (role === 'doctor' && existing.practitionerId !== userId) {
+    if (normalizedRole === 'DENTIST' && existing.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -203,7 +203,7 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         return res.status(400).json({ error: `Invalid status transition from ${existing.status} to ${validation.data.status}` });
       }
 
-      if (role === 'doctor' && validation.data.status !== 'completed') {
+      if (normalizedRole === 'DENTIST' && validation.data.status !== 'completed') {
         return res.status(403).json({ error: 'Doctors can only mark appointments as completed' });
       }
     }

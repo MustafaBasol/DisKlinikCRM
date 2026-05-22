@@ -7,7 +7,7 @@ const router = express.Router();
 
 // GET /api/dashboard/stats
 router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const selectedClinicId = req.query.clinicId as string | undefined;
 
   try {
@@ -31,13 +31,13 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       todayAppointments: prisma.appointment.count({
         where: {
           ...clinicIdWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
-          ...(role === 'doctor' ? { practitionerId: userId } : {}),
+          ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
         },
       }),
       weekAppointments: prisma.appointment.count({
         where: {
           ...clinicIdWhere, startTime: { gte: weekStart }, status: { not: 'cancelled' },
-          ...(role === 'doctor' ? { practitionerId: userId } : {}),
+          ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
         },
       }),
       newPatientsMonth: prisma.patient.count({
@@ -46,31 +46,31 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       noShowsMonth: prisma.appointment.count({
         where: {
           ...clinicIdWhere, status: 'no_show', startTime: { gte: firstDayOfMonth },
-          ...(role === 'doctor' ? { practitionerId: userId } : {}),
+          ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
         },
       }),
       pendingTasks: prisma.task.count({
         where: {
           ...clinicIdWhere, status: { in: ['open', 'in_progress'] },
-          ...(role === 'doctor' ? { assignedToId: userId } : {}),
+          ...(normalizedRole === 'DENTIST' ? { assignedToId: userId } : {}),
         },
       }),
       overdueTasks: prisma.task.count({
         where: {
           ...clinicIdWhere, status: { in: ['open', 'in_progress'] }, dueDate: { lt: new Date() },
-          ...(role === 'doctor' ? { assignedToId: userId } : {}),
+          ...(normalizedRole === 'DENTIST' ? { assignedToId: userId } : {}),
         },
       }),
       openTreatments: prisma.treatmentCase.count({
         where: {
           ...clinicIdWhere, stage: { notIn: ['completed', 'lost'] },
-          ...(role === 'doctor' ? { practitionerId: userId } : {}),
+          ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
         },
       }),
       treatmentValues: prisma.treatmentCase.aggregate({
         where: {
           ...clinicIdWhere, stage: { notIn: ['completed', 'lost'] },
-          ...(role === 'doctor' ? { practitionerId: userId } : {}),
+          ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
         },
         _sum: { estimatedAmount: true, acceptedAmount: true },
       }),
@@ -95,7 +95,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
     const agenda = await prisma.appointment.findMany({
       where: {
         ...clinicIdWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
-        ...(role === 'doctor' ? { practitionerId: userId } : {}),
+        ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
       },
       include: {
         patient: { select: { firstName: true, lastName: true, phone: true } },
@@ -120,7 +120,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
     const activities = await prisma.activityLog.findMany({
       where: {
         ...clinicIdWhere,
-        ...(role === 'doctor' ? {
+        ...(normalizedRole === 'DENTIST' ? {
           OR: [
             { userId },
             { entityType: 'appointment', appointment: { practitionerId: userId } },
@@ -135,7 +135,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
 
     // ── Doctor-specific extra data ─────────────────────────────────────
     let doctorExtras: any = null;
-    if (role === 'doctor') {
+    if (normalizedRole === 'DENTIST') {
       const nextWeek = new Date(tomorrow);
       nextWeek.setDate(nextWeek.getDate() + 7);
 
@@ -229,7 +229,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       alerts,
       activities,
       doctorExtras,
-      charts: role !== 'doctor' ? await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth) : null,
+      charts: normalizedRole !== 'DENTIST' ? await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth) : null,
     });
   } catch (error) {
     console.error(error);

@@ -43,21 +43,21 @@ router.get(
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId;
-    const role = req.user!.role;
+    const role = req.user!.normalizedRole;
     const userId = req.user!.id;
     const now = new Date();
 
     // ── 1. Upsert computed notifications ─────────────────────────────────────
 
     // Upcoming appointments (next 2h)
-    if (['admin', 'receptionist', 'doctor'].includes(role)) {
+    if (['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'].includes(role)) {
       const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
       const apptWhere: any = {
         clinicId,
         startTime: { gte: now, lte: inTwoHours },
         status: { in: ['scheduled', 'confirmed'] },
       };
-      if (role === 'doctor') apptWhere.practitionerId = userId;
+      if (role === 'DENTIST') apptWhere.practitionerId = userId;
 
       try {
         const upcomingAppts = await prisma.appointment.findMany({
@@ -84,13 +84,13 @@ router.get(
     }
 
     // Overdue tasks
-    if (['admin', 'receptionist', 'doctor'].includes(role)) {
+    if (['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'].includes(role)) {
       const taskWhere: any = {
         clinicId,
         dueDate: { lt: now },
         status: { notIn: ['completed', 'cancelled'] },
       };
-      if (role === 'doctor') taskWhere.assignedToId = userId;
+      if (role === 'DENTIST') taskWhere.assignedToId = userId;
       try {
         const overdueTasks = await prisma.task.findMany({ where: taskWhere, orderBy: { dueDate: 'asc' }, take: 5 });
         for (const t of overdueTasks) {

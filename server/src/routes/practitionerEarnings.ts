@@ -19,7 +19,7 @@ const earningInclude = {
 // Admin/billing: all earnings; doctor: own only
 router.get('/practitioner-earnings', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const { practitionerId, status, periodMonth, periodYear, page, limit } = req.query;
 
   const take = Math.min(Number(limit) || 50, 200);
@@ -28,7 +28,7 @@ router.get('/practitioner-earnings', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
   try {
     const where: any = { clinicId };
 
-    if (role === 'doctor') {
+    if (normalizedRole === 'DENTIST') {
       where.practitionerId = userId;
     } else if (practitionerId) {
       where.practitionerId = String(practitionerId);
@@ -103,7 +103,7 @@ router.get('/practitioner-earnings/summary', authorize(['OWNER', 'ORG_ADMIN', 'C
 router.get('/practitioner-earnings/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   try {
     const earning = await prisma.practitionerEarning.findFirst({
@@ -112,7 +112,7 @@ router.get('/practitioner-earnings/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINI
     });
     if (!earning) return res.status(404).json({ error: 'Earning not found' });
 
-    if (role === 'doctor' && earning.practitionerId !== userId) {
+    if (normalizedRole === 'DENTIST' && earning.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

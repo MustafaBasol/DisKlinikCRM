@@ -24,7 +24,8 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     clinicId: string;             // defaultClinicId — sadece UI varsayılanı, yetkilendirme değil
-    role: string;
+    role: string;                 // Ham rol (logging ve eski uyumluluk için)
+    normalizedRole: string;       // Kanonik rol (güvenlik kontrolleri için kullanın)
     organizationId: string;
     allowedClinicIds: string[];   // Gerçek klinik erişim listesi (UserClinic'ten)
     canAccessAllClinics: boolean; // OWNER/ORG_ADMIN için true
@@ -54,17 +55,19 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(403).json({ error: 'Clinic subscription cancelled.' });
     }
 
+    const canAccessAllClinics = decoded.canAccessAllClinics ?? false;
     req.user = {
       id: decoded.id,
       clinicId: decoded.clinicId,
       role: decoded.role,
+      normalizedRole: normalizeRole(decoded.role, canAccessAllClinics),
       organizationId: clinicInfo.organizationId,
       // Eski token uyumluluğu: allowedClinicIds yoksa veya boşsa, clinicId'yi fallback kullan.
       // Yeni tokenlar login sırasında UserClinic tablosundan doldurulur.
       allowedClinicIds: decoded.allowedClinicIds?.length > 0
         ? decoded.allowedClinicIds
         : [decoded.clinicId],
-      canAccessAllClinics: decoded.canAccessAllClinics ?? false,
+      canAccessAllClinics,
     };
     next();
   } catch (error) {

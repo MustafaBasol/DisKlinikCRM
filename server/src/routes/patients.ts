@@ -160,7 +160,7 @@ router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'REC
 router.put('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const orgId = req.user!.organizationId;
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   const validation = patientUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -176,7 +176,7 @@ router.put('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 
     const clinicId = existingPatient.clinicId;
 
-    if (role === 'doctor') {
+    if (normalizedRole === 'DENTIST') {
       const hasAppointment = await prisma.appointment.findFirst({
         where: { patientId: id, practitionerId: userId, clinicId },
       });

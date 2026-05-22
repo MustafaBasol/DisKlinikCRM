@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Calendar, 
-  CheckSquare, 
-  CreditCard, 
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  CheckSquare,
+  CreditCard,
   ShieldCheck,
-  Settings, 
+  Settings,
   LogOut,
   Search,
   Globe,
@@ -55,6 +55,9 @@ import {
   canViewOperations,
 } from '../utils/permissions';
 
+type NavItem = { path: string; icon: React.ReactNode; label: string };
+type NavGroup = { id: string; label: string; collapsible: boolean; items: NavItem[] };
+
 const MainLayoutInner: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
@@ -64,13 +67,22 @@ const MainLayoutInner: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
 
+  // Collapsible group state — persisted in localStorage
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sidebar_groups_collapsed') ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+
   // Detect mobile breakpoint (< lg = 1024px) and adjust sidebar accordingly
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1023px)');
     const handler = (e: MediaQueryList | MediaQueryListEvent) => {
       const mobile = e.matches;
       setIsMobile(mobile);
-      setIsSidebarOpen(!mobile); // open by default on desktop, closed on mobile
+      setIsSidebarOpen(!mobile);
     };
     handler(mq);
     mq.addEventListener('change', handler as (e: MediaQueryListEvent) => void);
@@ -82,111 +94,139 @@ const MainLayoutInner: React.FC = () => {
     if (isMobile) setIsSidebarOpen(false);
   };
 
-  const navItems = [
-    { path: '/', icon: <LayoutDashboard size={20} />, label: t('common:dashboard') },
-  ];
+  const toggleGroup = (id: string) => {
+    setCollapsedGroups(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem('sidebar_groups_collapsed', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
-  // Organization Dashboard — yalnızca OWNER / ORG_ADMIN (ve legacy admin + canAccessAllClinics=true)
-  if (canViewOrganizationDashboard(user)) {
-    navItems.push({ path: '/organization-dashboard', icon: <Building2 size={20} />, label: 'Organizasyon Paneli' });
-  }
-
-  if (canViewBranches(user)) {
-    navItems.push({ path: '/branches', icon: <Building2 size={20} />, label: 'Şubeler' });
-  }
-
-  if (canViewWhatsAppStatus(user)) {
-    navItems.push({ path: '/organization/whatsapp', icon: <MessageCircle size={20} />, label: 'WhatsApp' });
-  }
-  if (canViewWhatsAppInbox(user)) {
-    navItems.push({ path: '/whatsapp-inbox', icon: <Inbox size={20} />, label: 'WA Gelen Kutusu' });
-  }
-
-  // Hastalar
-  if (canViewPatients(user)) {
-    navItems.push({ path: '/patients', icon: <Users size={20} />, label: t('common:patients') });
-  }
-
-  // Randevular
-  if (canViewAppointments(user)) {
-    navItems.push({ path: '/appointments', icon: <Calendar size={20} />, label: t('common:appointments') });
-  }
-
-  // Randevu talepleri — resepsiyon ve üzeri yönetim
-  const canSeeAppointmentRequests =
-    canViewAppointments(user) &&
-    !['DENTIST', 'BILLING'].includes(
-      (() => {
-        if (!user) return 'ASSISTANT';
-        const r = user.role.toLowerCase();
-        if (r === 'admin') return user.canAccessAllClinics ? 'OWNER' : 'CLINIC_MANAGER';
-        if (r === 'doctor' || r === 'dentist') return 'DENTIST';
-        if (r === 'billing') return 'BILLING';
-        return r.toUpperCase();
-      })()
+  const isGroupActive = (group: NavGroup) =>
+    group.items.some(
+      item =>
+        item.path === '/'
+          ? location.pathname === '/'
+          : location.pathname === item.path || location.pathname.startsWith(item.path + '/'),
     );
-  if (canSeeAppointmentRequests) {
-    navItems.push({ path: '/appointment-requests', icon: <CalendarPlus size={20} />, label: t('common:appointmentRequests') });
+
+  const isGroupExpanded = (group: NavGroup) => {
+    if (!group.collapsible) return true;
+    if (isGroupActive(group)) return true;
+    return !collapsedGroups[group.id];
+  };
+
+  // Pre-compute derived permissions
+  const userRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
+  const canSeeAppointmentRequests = canViewAppointments(user) && userRole !== 'DENTIST' && userRole !== 'BILLING';
+  const canSeeTemplates = canManageUsers(user) || userRole === 'RECEPTIONIST';
+
+  // ── Build navGroups ──────────────────────────────────────────────────────────
+  const navGroups: NavGroup[] = [];
+
+  // Genel
+  {
+    const items: NavItem[] = [{ path: '/', icon: <LayoutDashboard size={18} />, label: 'Panel' }];
+    if (canViewOperations(user)) {
+      items.push({ path: '/operations', icon: <Activity size={18} />, label: 'Operasyon İzleme' });
+    }
+    navGroups.push({ id: 'genel', label: 'Genel', collapsible: false, items });
   }
 
-  // Tedavi planları — DENTIST ve üzeri yönetim görür; RECEPTIONIST okuma modunda görebilir
-  if (canViewPatients(user)) {
-    navItems.push({ path: '/treatment-cases', icon: <Briefcase size={20} />, label: t('common:treatmentCases') });
+  // Hasta Yönetimi
+  {
+    const items: NavItem[] = [];
+    if (canViewPatients(user)) {
+      items.push({ path: '/patients', icon: <Users size={18} />, label: 'Hastalar' });
+    }
+    if (canViewAppointments(user)) {
+      items.push({ path: '/appointments', icon: <Calendar size={18} />, label: 'Randevular' });
+    }
+    if (canViewPatients(user)) {
+      items.push({ path: '/treatment-cases', icon: <Briefcase size={18} />, label: 'Tedavi Dosyaları' });
+      items.push({ path: '/tasks', icon: <CheckSquare size={18} />, label: 'Görevler' });
+    }
+    if (canViewPayments(user)) {
+      items.push({ path: '/insurance-provisions', icon: <ShieldCheck size={18} />, label: 'Sigorta' });
+    }
+    if (items.length > 0) {
+      navGroups.push({ id: 'hasta', label: 'Hasta Yönetimi', collapsible: true, items });
+    }
   }
 
-  // Görevler
-  if (canViewPatients(user)) {
-    navItems.push({ path: '/tasks', icon: <CheckSquare size={20} />, label: t('common:tasks') });
+  // İletişim
+  {
+    const items: NavItem[] = [];
+    if (canViewWhatsAppInbox(user)) {
+      items.push({ path: '/whatsapp-inbox', icon: <Inbox size={18} />, label: 'WhatsApp Gelen Kutusu' });
+    }
+    if (canSeeAppointmentRequests) {
+      items.push({ path: '/appointment-requests', icon: <CalendarPlus size={18} />, label: 'WhatsApp Talepleri' });
+    }
+    if (canViewPatients(user)) {
+      items.push({ path: '/messages', icon: <MessageSquare size={18} />, label: 'Mesajlar' });
+    }
+    if (canSeeTemplates) {
+      items.push({ path: '/templates', icon: <Mail size={18} />, label: 'Mesaj Şablonları' });
+    }
+    if (canViewWhatsAppStatus(user)) {
+      items.push({ path: '/organization/whatsapp', icon: <MessageCircle size={18} />, label: 'WhatsApp Bağlantıları' });
+    }
+    if (items.length > 0) {
+      navGroups.push({ id: 'iletisim', label: 'İletişim', collapsible: true, items });
+    }
   }
 
-  // Ödemeler — billing, yönetim ve resepsiyon
-  if (canViewPayments(user)) {
-    navItems.push({ path: '/payments', icon: <CreditCard size={20} />, label: t('common:payments') });
-    navItems.push({ path: '/payment-plans', icon: <CreditCard size={20} />, label: 'Taksit Planları' });
-    navItems.push({ path: '/insurance-provisions', icon: <ShieldCheck size={20} />, label: t('common:insurance') });
+  // Finans
+  {
+    const items: NavItem[] = [];
+    if (canViewFinanceDashboard(user)) {
+      items.push({ path: '/finance', icon: <BarChart3 size={18} />, label: 'Finans Paneli' });
+    }
+    if (canViewPayments(user)) {
+      items.push({ path: '/payments', icon: <CreditCard size={18} />, label: 'Ödemeler' });
+      items.push({ path: '/payment-plans', icon: <CreditCard size={18} />, label: 'Taksit Planları' });
+    }
+    if (canViewReports(user)) {
+      items.push({ path: '/reports', icon: <BarChart2 size={18} />, label: 'Raporlar' });
+      items.push({ path: '/practitioner-earnings', icon: <TrendingUp size={18} />, label: 'Hekim Kazançları' });
+    }
+    if (userRole === 'DENTIST') {
+      items.push({ path: '/my-earnings', icon: <Award size={18} />, label: 'Kazançlarım' });
+    }
+    if (items.length > 0) {
+      navGroups.push({ id: 'finans', label: 'Finans', collapsible: true, items });
+    }
   }
 
-  // Finans Paneli — OWNER, ORG_ADMIN, CLINIC_MANAGER, BILLING
-  if (canViewFinanceDashboard(user)) {
-    navItems.push({ path: '/finance', icon: <BarChart3 size={20} />, label: 'Finans Paneli' });
-  }
-
-  // Operasyonel İzleme — OWNER, ORG_ADMIN, CLINIC_MANAGER
-  if (canViewOperations(user)) {
-    navItems.push({ path: '/operations', icon: <Activity size={20} />, label: 'Operasyon İzleme' });
-  }
-
-  // Mesajlar — resepsiyon ve üzeri yönetim; DENTIST okuma
-  if (canViewPatients(user)) {
-    navItems.push({ path: '/messages', icon: <MessageSquare size={20} />, label: t('common:messages', { defaultValue: 'Messages' }) });
-  }
-
-  // Şablonlar — yönetim ve resepsiyon (RECEPTIONIST okuyabilir; yazma yetkisi yoktur)
-  const canSeeTemplates = canManageUsers(user) || normalizeRole(user?.role ?? '', user?.canAccessAllClinics) === 'RECEPTIONIST';
-  if (canSeeTemplates || canViewOrganizationDashboard(user)) {
-    navItems.push({ path: '/templates', icon: <Mail size={20} />, label: t('common:templates', { defaultValue: 'Templates' }) });
-  }
-
-  // Raporlar — yönetim ve billing
-  if (canViewReports(user)) {
-    navItems.push({ path: '/reports', icon: <BarChart2 size={20} />, label: 'Raporlar' });
-    navItems.push({ path: '/practitioner-earnings', icon: <TrendingUp size={20} />, label: 'Hekim Kazançları' });
-  }
-
-  // Hekim kazançları (kendi verisi) — DENTIST'e özel
-  if (user?.role === 'doctor' || user?.role === 'dentist') {
-    navItems.push({ path: '/my-earnings', icon: <Award size={20} />, label: 'Kazançlarım' });
-  }
-
-  // Stok takibi — yönetim rolleri
+  // Stok
   if (canManageInventory(user)) {
-    navItems.push({ path: '/inventory', icon: <Package size={20} />, label: 'Stok Takibi' });
+    navGroups.push({
+      id: 'stok',
+      label: 'Stok',
+      collapsible: false,
+      items: [{ path: '/inventory', icon: <Package size={18} />, label: 'Stok Takibi' }],
+    });
   }
 
-  // Kullanıcı yönetimi — yönetim rolleri
-  if (canViewUsers(user)) {
-    navItems.push({ path: '/users', icon: <Users size={20} />, label: t('common:users', { defaultValue: 'Kullanıcılar' }) });
+  // Yönetim
+  {
+    const items: NavItem[] = [];
+    if (canViewOrganizationDashboard(user)) {
+      items.push({ path: '/organization/dashboard', icon: <Building2 size={18} />, label: 'Organizasyon Paneli' });
+    }
+    if (canViewBranches(user)) {
+      items.push({ path: '/branches', icon: <Building2 size={18} />, label: 'Şubeler' });
+    }
+    if (canViewUsers(user)) {
+      items.push({ path: '/users', icon: <Users size={18} />, label: 'Kullanıcılar' });
+    }
+    if (items.length > 0) {
+      navGroups.push({ id: 'yonetim', label: 'Yönetim', collapsible: true, items });
+    }
   }
+
+  const showLabels = isSidebarOpen || isMobile;
 
   return (
     <div className="min-h-screen bg-page dark:bg-gray-950 flex">
@@ -203,19 +243,18 @@ const MainLayoutInner: React.FC = () => {
       <aside
         className={[
           'bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col fixed inset-y-0 z-50',
-          // Width: always 64 on mobile (full drawer), 64 or 20 icon-only on desktop
           isMobile ? 'w-64' : (isSidebarOpen ? 'w-64' : 'w-20'),
-          // Slide in/out on mobile; always visible on desktop
           isMobile ? (isSidebarOpen ? 'translate-x-0' : '-translate-x-full') : 'translate-x-0',
         ].join(' ')}
       >
-        <div className="p-6 flex items-center justify-between">
-          {isSidebarOpen ? (
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
+        {/* Logo */}
+        <div className="px-4 h-16 flex items-center border-b border-gray-200 dark:border-gray-700 shrink-0">
+          {showLabels ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold shrink-0">
                 H
               </div>
-              <span className="font-bold text-xl tracking-tight">{t('common:appName')}</span>
+              <span className="font-bold text-lg tracking-tight truncate">{t('common:appName')}</span>
             </div>
           ) : (
             <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold mx-auto">
@@ -224,44 +263,97 @@ const MainLayoutInner: React.FC = () => {
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={handleNavClick}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
-                  isActive 
-                    ? 'bg-primary-50 text-primary-600 font-medium shadow-sm border border-primary-100 dark:bg-primary-900/30 dark:border-primary-800' 
-                    : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800'
-                }`}
-              >
-                <span className={isActive ? 'text-primary-600' : 'text-gray-400'}>
-                  {item.icon}
-                </span>
-                {(isSidebarOpen || isMobile) && <span>{item.label}</span>}
-              </Link>
-            );
-          })}
+        {/* Grouped Nav */}
+        <nav className="flex-1 px-3 py-3 overflow-y-auto overflow-x-hidden">
+          {navGroups.filter(g => g.items.length > 0).map((group, groupIdx) => (
+            <div key={group.id} className={groupIdx > 0 ? 'mt-1' : ''}>
+              {/* Icon-only: thin divider between groups */}
+              {!showLabels && groupIdx > 0 && (
+                <div className="my-2 border-t border-gray-100 dark:border-gray-800" />
+              )}
+
+              {/* Group header — full sidebar only */}
+              {showLabels && (
+                group.collapsible ? (
+                  <button
+                    onClick={() => toggleGroup(group.id)}
+                    className="w-full flex items-center justify-between px-2 py-1.5 mb-0.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest hover:text-gray-600 dark:hover:text-gray-300 transition-colors rounded"
+                  >
+                    <span>{group.label}</span>
+                    <ChevronDown
+                      size={12}
+                      className={`transition-transform duration-200 ${isGroupExpanded(group) ? 'rotate-0' : '-rotate-90'}`}
+                    />
+                  </button>
+                ) : (
+                  <div className="px-2 py-1.5 mb-0.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                    {group.label}
+                  </div>
+                )
+              )}
+
+              {/* Group items — always shown in icon-only mode; respect collapsed state in full mode */}
+              {(isGroupExpanded(group) || !showLabels) && (
+                <div className="space-y-0.5">
+                  {group.items.map(item => {
+                    const isActive =
+                      item.path === '/'
+                        ? location.pathname === '/'
+                        : location.pathname === item.path ||
+                          location.pathname.startsWith(item.path + '/');
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={handleNavClick}
+                        title={!showLabels ? item.label : undefined}
+                        className={[
+                          'flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-sm',
+                          !showLabels ? 'justify-center' : '',
+                          isActive
+                            ? 'bg-primary-50 text-primary-600 font-medium shadow-sm border border-primary-100 dark:bg-primary-900/30 dark:border-primary-800'
+                            : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800',
+                        ].join(' ')}
+                      >
+                        <span className={`shrink-0 ${isActive ? 'text-primary-600' : 'text-gray-400'}`}>
+                          {item.icon}
+                        </span>
+                        {showLabels && (
+                          <span className="truncate leading-snug">{item.label}</span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        {/* Bottom: Settings & Logout */}
+        <div className="px-3 py-3 border-t border-gray-200 dark:border-gray-700 space-y-0.5 shrink-0">
           <Link
             to="/settings"
             onClick={handleNavClick}
-            className="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800 rounded-lg transition-all mb-2"
+            title={!showLabels ? t('common:settings') : undefined}
+            className={[
+              'flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800 rounded-lg transition-all text-sm',
+              !showLabels ? 'justify-center' : '',
+            ].join(' ')}
           >
-            <Settings size={20} className="text-gray-400" />
-            {(isSidebarOpen || isMobile) && <span>{t('common:settings')}</span>}
+            <Settings size={18} className="shrink-0 text-gray-400" />
+            {showLabels && <span>{t('common:settings')}</span>}
           </Link>
           <button
             onClick={logout}
-            className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+            title={!showLabels ? t('common:logout') : undefined}
+            className={[
+              'w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all text-sm',
+              !showLabels ? 'justify-center' : '',
+            ].join(' ')}
           >
-            <LogOut size={20} />
-            {(isSidebarOpen || isMobile) && <span>{t('common:logout')}</span>}
+            <LogOut size={18} className="shrink-0" />
+            {showLabels && <span>{t('common:logout')}</span>}
           </button>
         </div>
       </aside>

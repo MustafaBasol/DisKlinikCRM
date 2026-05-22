@@ -34,6 +34,7 @@ import WhatsAppConnections from './pages/WhatsAppConnections';
 import WhatsAppInbox from './pages/WhatsAppInbox';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Operations from './pages/Operations';
+import Users from './pages/Users';
 
 import { useTranslation } from 'react-i18next';
 
@@ -121,6 +122,7 @@ const App: React.FC = () => {
               <Route path="whatsapp-inbox" element={<WhatsAppInbox />} />
               <Route path="finance" element={<FinanceDashboard />} />
               <Route path="operations" element={<Operations />} />
+              <Route path="users" element={<Users />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

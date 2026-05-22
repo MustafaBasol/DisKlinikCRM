@@ -12,7 +12,7 @@ const router = express.Router();
 
 // GET /api/payments
 router.get('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const { patientId, treatmentCaseId, paymentStatus, paymentMethod, dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
   try {
@@ -21,7 +21,7 @@ router.get('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILL
 
     const where: any = { ...scope };
 
-    if (role === 'doctor') {
+    if (normalizedRole === 'DENTIST') {
       where.OR = [
         { patient: { appointments: { some: { practitionerId: userId } } } },
         { treatmentCase: { practitionerId: userId } },

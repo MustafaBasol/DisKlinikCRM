@@ -22,7 +22,7 @@ const treatmentCaseInclude = {
 
 // GET /api/treatment-cases
 router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
   const { status, patientId, practitionerId, clinicId: selectedClinicId } = req.query;
 
   try {
@@ -31,7 +31,7 @@ router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
 
     const where: any = { ...scope };
 
-    if (role === 'doctor') where.practitionerId = userId;
+    if (normalizedRole === 'DENTIST') where.practitionerId = userId;
     else if (practitionerId) where.practitionerId = String(practitionerId);
 
     if (patientId) where.patientId = String(patientId);
@@ -52,7 +52,7 @@ router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
 // GET /api/treatment-cases/:id
 router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   try {
     const accessibleIds = await getAccessibleClinicIds(req.user!);
@@ -71,7 +71,7 @@ router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
 
     if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
 
-    if (role === 'doctor' && tc.practitionerId !== userId) {
+    if (normalizedRole === 'DENTIST' && tc.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -126,7 +126,7 @@ router.post('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
 // Review before onboarding external clinics — consider restricting to DENTIST only.
 router.put('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const { role, id: userId } = req.user!;
+  const { normalizedRole, id: userId } = req.user!;
 
   const validation = treatmentCaseSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -139,7 +139,7 @@ router.put('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
     if (!existing) return res.status(404).json({ error: 'Treatment case not found' });
     const clinicId = existing.clinicId;
 
-    if (role === 'doctor' && existing.practitionerId !== userId) {
+    if (normalizedRole === 'DENTIST' && existing.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
