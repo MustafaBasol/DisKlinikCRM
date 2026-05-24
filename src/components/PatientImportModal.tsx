@@ -49,7 +49,21 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
   const [result, setResult] = useState<ConfirmResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const selectFile = (f: File) => {
+    if (!f.name.endsWith('.xlsx')) {
+      setError('Yalnızca .xlsx dosyaları kabul edilir');
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setError('Dosya 5 MB sınırını aşıyor');
+      return;
+    }
+    setError('');
+    setFile(f);
+  };
 
   const handleDownloadTemplate = async () => {
     try {
@@ -67,17 +81,7 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (!f) return;
-    if (!f.name.endsWith('.xlsx')) {
-      setError('Yalnızca .xlsx dosyaları kabul edilir');
-      return;
-    }
-    if (f.size > 5 * 1024 * 1024) {
-      setError('Dosya 5 MB sınırını aşıyor');
-      return;
-    }
-    setError('');
-    setFile(f);
+    if (f) selectFile(f);
   };
 
   const handlePreview = async () => {
@@ -157,8 +161,21 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
                   Excel Dosyası Seç
                 </label>
                 <div
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-primary-400 transition-colors"
+                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                    isDragging
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-300 hover:border-primary-400'
+                  }`}
                   onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const f = e.dataTransfer.files?.[0];
+                    if (f) selectFile(f);
+                  }}
                 >
                   <Upload size={32} className="mx-auto text-gray-400 mb-2" />
                   <p className="text-sm text-gray-600">
