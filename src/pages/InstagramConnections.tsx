@@ -1,0 +1,735 @@
+import { useState, useEffect, useCallback } from 'react';
+import { Navigate } from 'react-router-dom';
+import {
+  Instagram,
+  Plus,
+  Pencil,
+  Wifi,
+  WifiOff,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  Power,
+  PowerOff,
+  Copy,
+  RefreshCw,
+  ExternalLink,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
+import { instagramConnectionService, organizationBranchService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import {
+  canManageInstagramConnections,
+  canViewInstagramStatus,
+} from '../utils/permissions';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface InstagramConnection {
+  id: string;
+  name: string;
+  status: string;
+  instagramAccountId?: string | null;
+  instagramUsername?: string | null;
+  facebookPageId?: string | null;
+  metaAppId?: string | null;
+  metaBusinessId?: string | null;
+  webhookVerifyToken?: string | null;
+  tokenStatus?: string | null;
+  tokenExpiresAt?: string | null;
+  isActive: boolean;
+  lastConnectedAt?: string | null;
+  lastError?: string | null;
+  createdAt: string;
+  clinics?: Array<{
+    id: string;
+    clinicId: string;
+    clinic: { id: string; name: string };
+    isDefault: boolean;
+  }>;
+}
+
+interface ClinicOption {
+  id: string;
+  name: string;
+}
+
+interface ConnectionFormData {
+  name: string;
+  instagramAccountId: string;
+  instagramUsername: string;
+  facebookPageId: string;
+  accessTokenEncrypted: string;
+  webhookVerifyToken: string;
+  webhookSecret: string;
+  metaAppId: string;
+  metaBusinessId: string;
+  linkedClinicIds: string[];
+}
+
+const EMPTY_FORM: ConnectionFormData = {
+  name: '',
+  instagramAccountId: '',
+  instagramUsername: '',
+  facebookPageId: '',
+  accessTokenEncrypted: '',
+  webhookVerifyToken: '',
+  webhookSecret: '',
+  metaAppId: '',
+  metaBusinessId: '',
+  linkedClinicIds: [],
+};
+
+const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
+const WEBHOOK_BASE = `${API_BASE_URL}/api/public/instagram`;
+
+// ── Helper: copy to clipboard ─────────────────────────────────────────────────
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="ml-1 text-gray-400 hover:text-primary-600 transition-colors"
+      title="Kopyala"
+      type="button"
+    >
+      {copied ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
+    </button>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
+
+export default function InstagramConnections() {
+  const { user } = useAuth();
+  const [connections, setConnections] = useState<InstagramConnection[]>([]);
+  const [clinics, setClinics] = useState<ClinicOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingConnection, setEditingConnection] = useState<InstagramConnection | null>(null);
+  const [form, setForm] = useState<ConnectionFormData>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, { success: boolean; message: string }>>({});
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const canManage = canManageInstagramConnections(user);
+  const canView = canViewInstagramStatus(user);
+
+  if (!canView) return <Navigate to="/" replace />;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [connRes, branchRes] = await Promise.all([
+        instagramConnectionService.list(),
+        organizationBranchService.getAll(),
+      ]);
+      setConnections(connRes.data.connections ?? []);
+      setClinics(branchRes.data.clinics ?? branchRes.data.branches ?? []);
+    } catch {
+      setError('Instagram bağlantıları yüklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openCreate() {
+    setEditingConnection(null);
+    setForm(EMPTY_FORM);
+    setFormError('');
+    setModalOpen(true);
+  }
+
+  function openEdit(conn: InstagramConnection) {
+    setEditingConnection(conn);
+    setForm({
+      name: conn.name,
+      instagramAccountId: conn.instagramAccountId ?? '',
+      instagramUsername: conn.instagramUsername ?? '',
+      facebookPageId: conn.facebookPageId ?? '',
+      accessTokenEncrypted: '',   // Never pre-filled — user must re-enter to change
+      webhookVerifyToken: conn.webhookVerifyToken ?? '',
+      webhookSecret: '',           // Same: empty = keep existing
+      metaAppId: conn.metaAppId ?? '',
+      metaBusinessId: conn.metaBusinessId ?? '',
+      linkedClinicIds: conn.clinics?.map(c => c.clinicId) ?? [],
+    });
+    setFormError('');
+    setModalOpen(true);
+  }
+
+  async function handleSave() {
+    if (!form.name.trim()) {
+      setFormError('Bağlantı adı gereklidir.');
+      return;
+    }
+    setSaving(true);
+    setFormError('');
+    try {
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        instagramAccountId: form.instagramAccountId.trim() || null,
+        instagramUsername: form.instagramUsername.trim() || null,
+        facebookPageId: form.facebookPageId.trim() || null,
+        metaAppId: form.metaAppId.trim() || null,
+        metaBusinessId: form.metaBusinessId.trim() || null,
+        linkedClinicIds: form.linkedClinicIds,
+      };
+      if (form.accessTokenEncrypted.trim()) {
+        payload.accessTokenEncrypted = form.accessTokenEncrypted.trim();
+      }
+      if (form.webhookVerifyToken.trim()) {
+        payload.webhookVerifyToken = form.webhookVerifyToken.trim();
+      }
+      if (form.webhookSecret.trim()) {
+        payload.webhookSecret = form.webhookSecret.trim();
+      }
+
+      if (editingConnection) {
+        await instagramConnectionService.update(editingConnection.id, payload);
+      } else {
+        await instagramConnectionService.create(payload);
+      }
+      setModalOpen(false);
+      await load();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setFormError(msg ?? 'Kayıt başarısız.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest(id: string) {
+    setTesting(id);
+    try {
+      const res = await instagramConnectionService.test(id);
+      setTestResult(prev => ({ ...prev, [id]: res.data }));
+      await load();
+    } catch {
+      setTestResult(prev => ({ ...prev, [id]: { success: false, message: 'Test başarısız.' } }));
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  async function handleDisconnect(id: string) {
+    if (!window.confirm('Bu bağlantıyı devre dışı bırakmak istiyor musunuz?')) return;
+    setDisconnecting(id);
+    try {
+      await instagramConnectionService.disconnect(id);
+      await load();
+    } catch {
+      setError('Bağlantı kesilemedi.');
+    } finally {
+      setDisconnecting(null);
+    }
+  }
+
+  async function handleToggleActive(conn: InstagramConnection) {
+    try {
+      await instagramConnectionService.setStatus(conn.id, { isActive: !conn.isActive });
+      await load();
+    } catch {
+      setError('Durum güncellenemedi.');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!window.confirm('Bu bağlantıyı kalıcı olarak silmek istiyor musunuz?')) return;
+    setDeleting(id);
+    try {
+      await instagramConnectionService.deleteConnection(id);
+      await load();
+    } catch {
+      setError('Bağlantı silinemedi.');
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  // ── Status badge ──────────────────────────────────────────────────────────────
+
+  function StatusBadge({ status }: { status: string }) {
+    const map: Record<string, { cls: string; label: string }> = {
+      connected: { cls: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', label: 'Bağlı' },
+      connecting: { cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300', label: 'Bağlanıyor' },
+      error: { cls: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300', label: 'Hata' },
+      disconnected: { cls: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', label: 'Bağlantı Yok' },
+    };
+    const { cls, label } = map[status] ?? map.disconnected;
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <Instagram size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Instagram Bağlantıları</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Klinik için Instagram DM kanalı yönetimi</p>
+          </div>
+        </div>
+        {canManage && (
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+          >
+            <Plus size={16} />
+            Yeni Bağlantı
+          </button>
+        )}
+      </div>
+
+      {/* Meta Setup Info Banner */}
+      <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+        <div className="flex items-start gap-3">
+          <Info size={18} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+          <div className="text-sm text-blue-800 dark:text-blue-200">
+            <p className="font-semibold mb-1">Meta Geliştirici Paneli'nde yapılacak kurulum:</p>
+            <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
+              <li>Instagram hesabının <strong>Profesyonel</strong> hesap olması gerekir.</li>
+              <li>Instagram hesabı bir Facebook Sayfasına bağlı olmalıdır.</li>
+              <li>Meta App'in <strong>instagram_manage_messages</strong> izni olmalıdır.</li>
+              <li>Webhook Callback URL: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{WEBHOOK_BASE}/webhook</code></li>
+              <li>Webhook alanı: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">messages</code> abone edilmeli.</li>
+              <li>Verify Token: Bağlantı kartındaki token Meta paneline girilmeli.</li>
+            </ul>
+            <a
+              href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 mt-2 text-blue-600 dark:text-blue-400 hover:underline font-medium"
+            >
+              Meta Instagram Messaging Docs
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg text-sm flex items-center gap-2">
+          <XCircle size={16} />
+          {error}
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="animate-spin text-primary-600" size={32} />
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && connections.length === 0 && (
+        <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+          <Instagram size={48} className="mx-auto mb-4 opacity-30" />
+          <p className="font-medium">Henüz Instagram bağlantısı yok.</p>
+          {canManage && (
+            <button
+              onClick={openCreate}
+              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium transition-colors"
+            >
+              İlk Bağlantıyı Ekle
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Connection Cards */}
+      <div className="space-y-3">
+        {connections.map(conn => {
+          const isExpanded = expandedId === conn.id;
+          const tr = testResult[conn.id];
+          const webhookUrl = `${WEBHOOK_BASE}/${conn.id}/webhook`;
+
+          return (
+            <div
+              key={conn.id}
+              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm"
+            >
+              {/* Card header */}
+              <div className="px-5 py-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+                  {conn.status === 'connected' ? (
+                    <Wifi size={18} className="text-white" />
+                  ) : (
+                    <WifiOff size={18} className="text-white opacity-70" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900 dark:text-white truncate">{conn.name}</span>
+                    <StatusBadge status={conn.status} />
+                    {!conn.isActive && (
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                        Devre Dışı
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {conn.instagramUsername && <span>@{conn.instagramUsername} · </span>}
+                    {conn.clinics && conn.clinics.length > 0 && (
+                      <span>{conn.clinics.map(c => c.clinic.name).join(', ')}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {canManage && (
+                    <>
+                      <button
+                        onClick={() => handleTest(conn.id)}
+                        disabled={testing === conn.id}
+                        className="p-2 text-gray-400 hover:text-primary-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                        title="Bağlantıyı Test Et"
+                      >
+                        {testing === conn.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                      </button>
+                      <button
+                        onClick={() => openEdit(conn)}
+                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                        title="Düzenle"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleToggleActive(conn)}
+                        className="p-2 text-gray-400 hover:text-yellow-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                        title={conn.isActive ? 'Devre Dışı Bırak' : 'Etkinleştir'}
+                      >
+                        {conn.isActive ? <PowerOff size={16} /> : <Power size={16} />}
+                      </button>
+                      {conn.status === 'connected' && (
+                        <button
+                          onClick={() => handleDisconnect(conn.id)}
+                          disabled={disconnecting === conn.id}
+                          className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                          title="Bağlantıyı Kes"
+                        >
+                          {disconnecting === conn.id ? <Loader2 size={16} className="animate-spin" /> : <WifiOff size={16} />}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(conn.id)}
+                        disabled={deleting === conn.id}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                        title="Sil"
+                      >
+                        {deleting === conn.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : conn.id)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Test result */}
+              {tr && (
+                <div className={`mx-5 mb-3 px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${tr.success ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300'}`}>
+                  {tr.success ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                  {tr.message}
+                </div>
+              )}
+
+              {/* Expanded details */}
+              {isExpanded && (
+                <div className="px-5 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
+                  {/* Webhook info */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Webhook Yapılandırması</p>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                        <span className="font-medium">Callback URL:</span>
+                        <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600 truncate max-w-md">
+                          {webhookUrl}
+                        </code>
+                        <CopyButton value={webhookUrl} />
+                      </div>
+                      {conn.webhookVerifyToken && (
+                        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                          <span className="font-medium">Verify Token:</span>
+                          <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600">
+                            {conn.webhookVerifyToken}
+                          </code>
+                          <CopyButton value={conn.webhookVerifyToken} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Connection details */}
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    {conn.instagramAccountId && (
+                      <div>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">Instagram Hesap ID:</span>
+                        <span className="ml-1">{conn.instagramAccountId}</span>
+                      </div>
+                    )}
+                    {conn.facebookPageId && (
+                      <div>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">Facebook Sayfa ID:</span>
+                        <span className="ml-1">{conn.facebookPageId}</span>
+                      </div>
+                    )}
+                    {conn.metaAppId && (
+                      <div>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">Meta App ID:</span>
+                        <span className="ml-1">{conn.metaAppId}</span>
+                      </div>
+                    )}
+                    {conn.lastConnectedAt && (
+                      <div>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">Son Bağlantı:</span>
+                        <span className="ml-1">{new Date(conn.lastConnectedAt).toLocaleString('tr-TR')}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {conn.lastError && (
+                    <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs text-red-600 dark:text-red-300">
+                      <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                      <span>{conn.lastError}</span>
+                    </div>
+                  )}
+
+                  {/* Assigned clinics */}
+                  {conn.clinics && conn.clinics.length > 0 && (
+                    <div className="text-xs">
+                      <span className="font-medium text-gray-500 dark:text-gray-400">Bağlı Şubeler: </span>
+                      {conn.clinics.map(c => c.clinic.name).join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Create / Edit Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
+              <h2 className="font-semibold text-gray-900 dark:text-white">
+                {editingConnection ? 'Bağlantıyı Düzenle' : 'Yeni Instagram Bağlantısı'}
+              </h2>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-4 flex-1 space-y-4">
+              {formError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg text-sm">
+                  {formError}
+                </div>
+              )}
+
+              {/* Connection Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Bağlantı Adı <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: Ana Klinik Instagram"
+                />
+              </div>
+
+              {/* Instagram Account ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Instagram Hesap ID
+                </label>
+                <input
+                  type="text"
+                  value={form.instagramAccountId}
+                  onChange={e => setForm(f => ({ ...f, instagramAccountId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Sayısal Instagram hesap ID"
+                />
+              </div>
+
+              {/* Instagram Username */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Instagram Kullanıcı Adı
+                </label>
+                <input
+                  type="text"
+                  value={form.instagramUsername}
+                  onChange={e => setForm(f => ({ ...f, instagramUsername: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="@kullaniciadi (@ olmadan)"
+                />
+              </div>
+
+              {/* Facebook Page ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Facebook Sayfa ID
+                </label>
+                <input
+                  type="text"
+                  value={form.facebookPageId}
+                  onChange={e => setForm(f => ({ ...f, facebookPageId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Bağlı Facebook Sayfasının ID'si"
+                />
+              </div>
+
+              {/* Access Token */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Erişim Tokeni
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.accessTokenEncrypted}
+                  onChange={e => setForm(f => ({ ...f, accessTokenEncrypted: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder={editingConnection ? '(Boş bırak = mevcut token korunur)' : 'Meta erişim tokeni'}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Token kaydedilir ve şifrelenerek saklanır. Bir daha gösterilmez.
+                </p>
+              </div>
+
+              {/* Webhook Verify Token */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Webhook Verify Token
+                </label>
+                <input
+                  type="text"
+                  value={form.webhookVerifyToken}
+                  onChange={e => setForm(f => ({ ...f, webhookVerifyToken: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="(Otomatik oluşturulur)"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Boş bırakılırsa otomatik oluşturulur. Meta Geliştirici Paneli'ne girilmelidir.
+                </p>
+              </div>
+
+              {/* Webhook Secret */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Webhook Gizli Anahtarı (App Secret)
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.webhookSecret}
+                  onChange={e => setForm(f => ({ ...f, webhookSecret: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder={editingConnection ? '(Boş bırak = mevcut anahtar korunur)' : 'X-Hub-Signature doğrulaması için'}
+                />
+              </div>
+
+              {/* Meta App ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Meta App ID
+                </label>
+                <input
+                  type="text"
+                  value={form.metaAppId}
+                  onChange={e => setForm(f => ({ ...f, metaAppId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Meta Uygulama ID'si (isteğe bağlı)"
+                />
+              </div>
+
+              {/* Clinic assignments */}
+              {clinics.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Bağlı Şubeler
+                  </label>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {clinics.map(c => (
+                      <label key={c.id} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.linkedClinicIds.includes(c.id)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setForm(f => ({ ...f, linkedClinicIds: [...f.linkedClinicIds, c.id] }));
+                            } else {
+                              setForm(f => ({ ...f, linkedClinicIds: f.linkedClinicIds.filter(id => id !== c.id) }));
+                            }
+                          }}
+                          className="rounded text-primary-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 shrink-0">
+              <button
+                onClick={() => setModalOpen(false)}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {editingConnection ? 'Güncelle' : 'Oluştur'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

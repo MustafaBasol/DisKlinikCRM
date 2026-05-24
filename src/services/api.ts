@@ -397,4 +397,55 @@ export const noShowService = {
     api.post(`/appointments/${appointmentId}/no-show/create-task`, data ?? {}),
 };
 
+// ── Instagram Connection Services ──────────────────────────────────────────────
+
+export const instagramConnectionService = {
+  list: () => api.get('/organization/instagram-connections'),
+  get: (id: string) => api.get(`/organization/instagram-connections/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/organization/instagram-connections', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put(`/organization/instagram-connections/${id}`, data),
+  test: (id: string) => api.post(`/organization/instagram-connections/${id}/test`),
+  disconnect: (id: string) => api.post(`/organization/instagram-connections/${id}/disconnect`),
+  setStatus: (id: string, data: { isActive: boolean }) =>
+    api.patch(`/organization/instagram-connections/${id}/status`, data),
+  deleteConnection: (id: string) => api.delete(`/organization/instagram-connections/${id}`),
+};
+
+export const clinicInstagramService = {
+  getAssignments: (clinicId: string) => api.get(`/clinics/${clinicId}/instagram`),
+  assign: (clinicId: string, instagramConnectionId: string) =>
+    api.put(`/clinics/${clinicId}/instagram`, { instagramConnectionId }),
+  unassign: (clinicId: string, connectionId: string) =>
+    api.delete(`/clinics/${clinicId}/instagram/${connectionId}`),
+};
+
+export const instagramInboxService = {
+  getUnassigned: () => api.get('/instagram/inbox/unassigned'),
+  getConversations: (params?: { status?: string; clinicId?: string }) =>
+    api.get('/instagram/inbox/conversations', { params }),
+  resolve: (id: string, data: { clinicId: string; patientId?: string }) =>
+    api.post(`/instagram/inbox/${id}/resolve`, data),
+  linkPatient: (id: string, patientId: string) =>
+    api.post(`/instagram/inbox/${id}/link-patient`, { patientId }),
+  assignClinic: (id: string, clinicId: string) =>
+    api.post(`/instagram/inbox/${id}/assign-clinic`, { clinicId }),
+  reply: (id: string, message: string) =>
+    api.post(`/instagram/conversations/${id}/reply`, { message }),
+  createAppointmentRequest: (id: string) =>
+    api.post(`/instagram/inbox/${id}/create-appointment-request`),
+  createAppointment: (id: string, data: {
+    patientId: string;
+    clinicId: string;
+    practitionerId: string;
+    appointmentTypeId: string;
+    date: string;
+    time: string;
+    endTime?: string;
+    notes?: string;
+  }) => api.post(`/instagram/inbox/${id}/create-appointment`, data),
+  markConverted: (id: string) =>
+    api.patch(`/instagram/inbox/${id}/status`, { status: 'converted' }),
+};
+
 export default api;

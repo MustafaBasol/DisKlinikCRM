@@ -1,0 +1,849 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Instagram,
+  AlertCircle,
+  CheckCircle2,
+  RefreshCw,
+  User,
+  Building2,
+  Send,
+  Loader2,
+  MessageSquare,
+  XCircle,
+  CalendarPlus,
+  Calendar,
+  UserPlus,
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { instagramInboxService, patientService, organizationBranchService, userService, serviceService } from '../services/api';
+import {
+  canViewInstagramInbox,
+  canResolveInstagramConversation,
+  canReplyInstagramMessages,
+} from '../utils/permissions';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface PossiblePatient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+}
+
+interface InboxEntry {
+  id: string;
+  externalSenderId: string;
+  senderUsername?: string | null;
+  lastMessageText?: string | null;
+  messageCount: number;
+  needsClinicResolution: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  clinicId?: string | null;
+  patientId?: string | null;
+  instagramConnectionId?: string | null;
+  instagramConnection?: { id: string; name: string; instagramUsername?: string | null } | null;
+  clinic?: { id: string; name: string } | null;
+  patient?: { id: string; firstName: string; lastName: string } | null;
+  resolvedBy?: { id: string; firstName: string; lastName: string } | null;
+}
+
+interface ClinicOption {
+  id: string;
+  name: string;
+}
+
+interface ResolveModal {
+  entry: InboxEntry;
+  clinicId: string;
+  patientId: string;
+  patientSearch: string;
+  patients: PossiblePatient[];
+}
+
+interface ReplyModal {
+  entry: InboxEntry;
+  message: string;
+}
+
+interface AppointmentModal {
+  entry: InboxEntry;
+  patientId: string;
+  clinicId: string;
+  practitionerId: string;
+  appointmentTypeId: string;
+  date: string;
+  time: string;
+  notes: string;
+  doctors: Array<{ id: string; firstName: string; lastName: string }>;
+  services: Array<{ id: string; name: string; durationMinutes: number }>;
+  loadingData: boolean;
+}
+
+export default function InstagramInbox() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'unassigned' | 'all'>('unassigned');
+  const [unassigned, setUnassigned] = useState<InboxEntry[]>([]);
+  const [conversations, setConversations] = useState<InboxEntry[]>([]);
+  const [clinics, setClinics] = useState<ClinicOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterClinic, setFilterClinic] = useState('');
+  const [resolveModal, setResolveModal] = useState<ResolveModal | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [replyModal, setReplyModal] = useState<ReplyModal | null>(null);
+  const [replying, setReplying] = useState(false);
+  const [replyResult, setReplyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [apptModal, setApptModal] = useState<AppointmentModal | null>(null);
+  const [savingAppt, setSavingAppt] = useState(false);
+  const [toast, setToast] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!canViewInstagramInbox(user)) {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    organizationBranchService.getAll().then((r: import('axios').AxiosResponse) => {
+      setClinics(r.data.clinics ?? r.data.branches ?? []);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'unassigned') {
+      loadUnassigned();
+    } else {
+      loadConversations();
+    }
+  }, [activeTab, filterStatus, filterClinic]);
+
+  async function loadUnassigned() {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await instagramInboxService.getUnassigned();
+      setUnassigned(res.data.entries ?? []);
+    } catch {
+      setError('Atanmamış DM\'ler yüklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadConversations() {
+    setLoading(true);
+    setError('');
+    try {
+      const params: { status?: string; clinicId?: string } = {};
+      if (filterStatus) params.status = filterStatus;
+      if (filterClinic) params.clinicId = filterClinic;
+      const res = await instagramInboxService.getConversations(params);
+      setConversations(res.data.entries ?? []);
+    } catch {
+      setError('Konuşmalar yüklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function reload() {
+    if (activeTab === 'unassigned') loadUnassigned();
+    else loadConversations();
+  }
+
+  // ── Resolve modal ──────────────────────────────────────────────────────────
+
+  async function searchPatients(query: string, modal: ResolveModal) {
+    if (!query.trim()) {
+      setResolveModal({ ...modal, patients: [] });
+      return;
+    }
+    try {
+      const res = await patientService.getAll({ search: query, limit: 10 });
+      setResolveModal({ ...modal, patients: res.data.patients ?? [] });
+    } catch {
+      // Ignore search errors
+    }
+  }
+
+  async function handleResolve() {
+    if (!resolveModal) return;
+    if (!resolveModal.clinicId) {
+      return;
+    }
+    setResolving(true);
+    try {
+      await instagramInboxService.resolve(resolveModal.entry.id, {
+        clinicId: resolveModal.clinicId,
+        patientId: resolveModal.patientId || undefined,
+      });
+      setResolveModal(null);
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? 'Çözümleme başarısız.');
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function handleLinkPatient(entryId: string, patientId: string) {
+    try {
+      await instagramInboxService.linkPatient(entryId, patientId);
+      reload();
+    } catch {
+      setError('Hasta bağlantısı kurulamadı.');
+    }
+  }
+
+  // ── Reply ──────────────────────────────────────────────────────────────────
+
+  async function handleReply() {
+    if (!replyModal || !replyModal.message.trim()) return;
+    setReplying(true);
+    setReplyResult(null);
+    try {
+      await instagramInboxService.reply(replyModal.entry.id, replyModal.message);
+      setReplyResult({ success: true, message: 'Mesaj gönderildi.' });
+      setReplyModal(prev => prev ? { ...prev, message: '' } : null);
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setReplyResult({ success: false, message: msg ?? 'Mesaj gönderilemedi.' });
+    } finally {
+      setReplying(false);
+    }
+  }
+
+  // ── Convert to appointment request ────────────────────────────────────────
+
+  async function handleConvertToRequest(entry: InboxEntry) {
+    if (!entry.clinicId) {
+      setError('Önce şube atayın.');
+      return;
+    }
+    if (!window.confirm('Bu Instagram DM\'i randevu talebine dönüştürmek istiyor musunuz?')) return;
+    setConvertingId(entry.id);
+    try {
+      await instagramInboxService.createAppointmentRequest(entry.id);
+      setToast({ success: true, message: 'Randevu talebi oluşturuldu.' });
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? 'Randevu talebi oluşturulamadı.');
+    } finally {
+      setConvertingId(null);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }
+
+  // ── Open direct appointment modal ──────────────────────────────────────────
+
+  async function openAppointmentModal(entry: InboxEntry) {
+    if (!entry.clinicId || !entry.patientId) {
+      setError('Randevu oluşturmak için önce şube ve hasta atayın.');
+      return;
+    }
+    const modal: AppointmentModal = {
+      entry,
+      patientId: entry.patientId,
+      clinicId: entry.clinicId,
+      practitionerId: '',
+      appointmentTypeId: '',
+      date: new Date().toISOString().split('T')[0],
+      time: '09:00',
+      notes: `Instagram DM'den oluşturuldu. Gönderen: ${entry.senderUsername ? '@' + entry.senderUsername : entry.externalSenderId}`,
+      doctors: [],
+      services: [],
+      loadingData: true,
+    };
+    setApptModal(modal);
+    try {
+      const [docRes, svcRes] = await Promise.all([
+        userService.getDoctors(),
+        serviceService.getAll({ onlyActive: true }),
+      ]);
+      setApptModal(prev => prev ? { ...prev, doctors: docRes.data ?? [], services: svcRes.data ?? [], loadingData: false } : null);
+    } catch {
+      setApptModal(prev => prev ? { ...prev, loadingData: false } : null);
+    }
+  }
+
+  async function handleCreateAppointment() {
+    if (!apptModal) return;
+    const { entry, patientId, clinicId, practitionerId, appointmentTypeId, date, time, notes } = apptModal;
+    if (!practitionerId || !appointmentTypeId || !date || !time) {
+      setError('Hekim, hizmet, tarih ve saat zorunludur.');
+      return;
+    }
+    setSavingAppt(true);
+    try {
+      await instagramInboxService.createAppointment(entry.id, {
+        patientId, clinicId, practitionerId, appointmentTypeId, date, time, notes,
+      });
+      setApptModal(null);
+      setToast({ success: true, message: 'Randevu oluşturuldu.' });
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? 'Randevu oluşturulamadı.');
+    } finally {
+      setSavingAppt(false);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }
+
+  // ── Navigate to appointment form with prefill ──────────────────────────────
+
+  function goToAppointmentForm(entry: InboxEntry) {
+    const params = new URLSearchParams({ source: 'instagram', instagramInboxEntryId: entry.id });
+    if (entry.patientId) params.set('patientId', entry.patientId);
+    if (entry.clinicId) params.set('clinicId', entry.clinicId);
+    navigate(`/appointments?${params.toString()}`);
+  }
+
+  // ── Status badge ──────────────────────────────────────────────────────────
+
+
+  function StatusBadge({ entry }: { entry: InboxEntry }) {
+    if (entry.status === 'converted') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+          <CalendarPlus size={10} />
+          Dönüştürüldü
+        </span>
+      );
+    }
+    if (entry.needsClinicResolution) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+          <AlertCircle size={10} />
+          Şube Atanacak
+        </span>
+      );
+    }
+    if (entry.status === 'resolved') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+          <CheckCircle2 size={10} />
+          Çözümlendi
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+        <MessageSquare size={10} />
+        Açık
+      </span>
+    );
+  }
+
+  const entries = activeTab === 'unassigned' ? unassigned : conversations;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <Instagram size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Instagram Gelen Kutusu</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Gelen DM'leri yönetin ve yanıtlayın</p>
+          </div>
+        </div>
+        <button
+          onClick={reload}
+          className="p-2 text-gray-400 hover:text-primary-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+          title="Yenile"
+        >
+          <RefreshCw size={18} />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 border-b border-gray-200 dark:border-gray-700">
+        {[
+          { key: 'unassigned', label: 'Atanmamış', count: unassigned.length },
+          { key: 'all', label: 'Tüm Konuşmalar', count: null },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as 'unassigned' | 'all')}
+            className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === tab.key
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {tab.label}
+            {tab.count !== null && tab.count > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Filters (all tab) */}
+      {activeTab === 'all' && (
+        <div className="flex gap-3 mb-4 flex-wrap">
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          >
+            <option value="">Tüm Durumlar</option>
+            <option value="open">Açık</option>
+            <option value="resolved">Çözümlendi</option>
+            <option value="ignored">Yok Sayıldı</option>
+          </select>
+          {clinics.length > 0 && (
+            <select
+              value={filterClinic}
+              onChange={e => setFilterClinic(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            >
+              <option value="">Tüm Şubeler</option>
+              {clinics.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg text-sm flex items-center gap-2">
+          <XCircle size={16} />
+          {error}
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="animate-spin text-primary-600" size={32} />
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && entries.length === 0 && (
+        <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+          <Instagram size={48} className="mx-auto mb-4 opacity-30" />
+          <p className="font-medium">
+            {activeTab === 'unassigned' ? 'Atanmayı bekleyen DM yok.' : 'Konuşma bulunamadı.'}
+          </p>
+        </div>
+      )}
+
+      {/* Entry list */}
+      <div className="space-y-3">
+        {entries.map(entry => (
+          <div
+            key={entry.id}
+            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+          >
+            <div className="flex items-start gap-3">
+              {/* Avatar */}
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shrink-0">
+                <User size={18} className="text-white" />
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="font-medium text-gray-900 dark:text-white text-sm">
+                    {entry.senderUsername ? `@${entry.senderUsername}` : entry.externalSenderId}
+                  </span>
+                  <StatusBadge entry={entry} />
+                  {entry.instagramConnection && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      via {entry.instagramConnection.name}
+                    </span>
+                  )}
+                </div>
+
+                {/* Last message */}
+                {entry.lastMessageText && (
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-2 line-clamp-2">
+                    {entry.lastMessageText}
+                  </p>
+                )}
+
+                {/* Meta info */}
+                <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 flex-wrap">
+                  <span>{entry.messageCount} mesaj</span>
+                  <span>{new Date(entry.updatedAt).toLocaleString('tr-TR')}</span>
+                  {entry.clinic && (
+                    <span className="flex items-center gap-1">
+                      <Building2 size={10} />
+                      {entry.clinic.name}
+                    </span>
+                  )}
+                  {entry.patient && (
+                    <span className="flex items-center gap-1">
+                      <User size={10} />
+                      {entry.patient.firstName} {entry.patient.lastName}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                {/* Reply */}
+                {canReplyInstagramMessages(user) && entry.status !== 'converted' && (
+                  <button
+                    onClick={() => setReplyModal({ entry, message: '' })}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 rounded-lg text-xs font-medium hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                  >
+                    <Send size={12} />
+                    Yanıtla
+                  </button>
+                )}
+
+                {/* Resolve / assign clinic */}
+                {canResolveInstagramConversation(user) && entry.needsClinicResolution && (
+                  <button
+                    onClick={() => setResolveModal({
+                      entry,
+                      clinicId: '',
+                      patientId: '',
+                      patientSearch: '',
+                      patients: [],
+                    })}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-lg text-xs font-medium hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition-colors"
+                  >
+                    <Building2 size={12} />
+                    Şube Ata
+                  </button>
+                )}
+
+                {/* Link patient */}
+                {canResolveInstagramConversation(user) && !entry.patientId && entry.status !== 'converted' && (
+                  <button
+                    onClick={() => setResolveModal({
+                      entry,
+                      clinicId: entry.clinicId ?? '',
+                      patientId: '',
+                      patientSearch: '',
+                      patients: [],
+                    })}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                  >
+                    <User size={12} />
+                    Hasta Bağla
+                  </button>
+                )}
+
+                {/* Convert to appointment request */}
+                {canViewInstagramInbox(user) && entry.status !== 'converted' && (
+                  <button
+                    onClick={() => handleConvertToRequest(entry)}
+                    disabled={convertingId === entry.id || !entry.clinicId}
+                    title={!entry.clinicId ? 'Önce şube atayın' : 'Randevu Talebine Dönüştür'}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {convertingId === entry.id ? <Loader2 size={12} className="animate-spin" /> : <CalendarPlus size={12} />}
+                    Talep Oluştur
+                  </button>
+                )}
+
+                {/* Direct appointment creation (needs clinic + patient) */}
+                {canViewInstagramInbox(user) && entry.status !== 'converted' && (
+                  <button
+                    onClick={() => entry.clinicId && entry.patientId ? openAppointmentModal(entry) : goToAppointmentForm(entry)}
+                    title={!entry.clinicId || !entry.patientId ? 'Şube ve hasta atandıktan sonra kullanılabilir' : 'Randevu Oluştur'}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-lg text-xs font-medium hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+                  >
+                    <Calendar size={12} />
+                    Randevu
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Resolve Modal */}
+      {resolveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900 dark:text-white">Konuşmayı Çözümle</h2>
+              <button
+                onClick={() => setResolveModal(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              {/* Clinic */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Şube <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={resolveModal.clinicId}
+                  onChange={e => setResolveModal({ ...resolveModal, clinicId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Şube seçin...</option>
+                  {clinics.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Patient search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Hasta Ara (isteğe bağlı)
+                </label>
+                <input
+                  type="text"
+                  value={resolveModal.patientSearch}
+                  onChange={e => {
+                    setResolveModal({ ...resolveModal, patientSearch: e.target.value });
+                    searchPatients(e.target.value, resolveModal);
+                  }}
+                  placeholder="Ad veya telefon..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                {resolveModal.patients.length > 0 && (
+                  <div className="mt-1 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden max-h-32 overflow-y-auto">
+                    {resolveModal.patients.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setResolveModal({ ...resolveModal, patientId: p.id, patientSearch: `${p.firstName} ${p.lastName}`, patients: [] })}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        {p.firstName} {p.lastName} — {p.phone}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                onClick={() => setResolveModal(null)}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleResolve}
+                disabled={resolving || !resolveModal.clinicId}
+                className="flex items-center gap-2 px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                {resolving && <Loader2 size={14} className="animate-spin" />}
+                Çözümle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reply Modal */}
+      {replyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900 dark:text-white">Instagram DM Yanıtla</h2>
+              <button
+                onClick={() => { setReplyModal(null); setReplyResult(null); }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Alıcı: <strong>{replyModal.entry.senderUsername ? `@${replyModal.entry.senderUsername}` : replyModal.entry.externalSenderId}</strong>
+              </p>
+
+              {replyResult && (
+                <div className={`p-2 rounded-lg text-sm flex items-center gap-2 ${replyResult.success ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300'}`}>
+                  {replyResult.success ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                  {replyResult.message}
+                </div>
+              )}
+
+              <textarea
+                value={replyModal.message}
+                onChange={e => setReplyModal({ ...replyModal, message: e.target.value })}
+                placeholder="Mesajınızı yazın..."
+                rows={4}
+                maxLength={1000}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              />
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-right">
+                {replyModal.message.length}/1000
+              </p>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                onClick={() => { setReplyModal(null); setReplyResult(null); }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
+              >
+                Kapat
+              </button>
+              <button
+                onClick={handleReply}
+                disabled={replying || !replyModal.message.trim()}
+                className="flex items-center gap-2 px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                {replying ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                Gönder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Appointment Modal */}
+      {apptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
+              <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Calendar size={18} className="text-green-600" />
+                Randevu Oluştur
+              </h2>
+              <button onClick={() => setApptModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-4 flex-1 space-y-4">
+              {/* Instagram DM source banner */}
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-xs text-purple-700 dark:text-purple-300 flex items-start gap-2">
+                <Instagram size={14} className="mt-0.5 shrink-0" />
+                <span>Bu randevu Instagram DM görüşmesinden oluşturuluyor.{apptModal.entry.senderUsername ? ` Gönderen: @${apptModal.entry.senderUsername}` : ''}</span>
+              </div>
+
+              {apptModal.loadingData ? (
+                <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary-600" size={24} /></div>
+              ) : (
+                <>
+                  {/* Practitioner */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Hekim <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={apptModal.practitionerId}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, practitionerId: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Hekim seçin...</option>
+                      {apptModal.doctors.map(d => (
+                        <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Service */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Hizmet <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={apptModal.appointmentTypeId}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, appointmentTypeId: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Hizmet seçin...</option>
+                      {apptModal.services.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Tarih <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={apptModal.date}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, date: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* Time */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Saat <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={apptModal.time}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, time: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Not</label>
+                    <textarea
+                      rows={2}
+                      value={apptModal.notes}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, notes: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 shrink-0">
+              <button onClick={() => setApptModal(null)} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm">
+                İptal
+              </button>
+              <button
+                onClick={handleCreateAppointment}
+                disabled={savingAppt || apptModal.loadingData || !apptModal.practitionerId || !apptModal.appointmentTypeId}
+                className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                {savingAppt ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
+                Randevu Oluştur
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[60] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-in slide-in-from-bottom-2 ${toast.success ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+          {toast.success ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+          {toast.message}
+        </div>
+      )}
+    </div>
+  );
+}

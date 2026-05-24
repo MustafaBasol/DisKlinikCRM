@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "npx prisma generate && tsx src/index.ts",
-    "test": "npm run test:fixtures && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports",
+    "test": "npm run test:fixtures && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:instagram",
     "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts",
     "test:whatsapp": "tsx src/tests/whatsappProvider.test.ts",
     "test:inbox": "tsx src/tests/whatsappInbox.test.ts",
@@ -19,7 +19,8 @@
     "test:schedule": "tsx src/tests/scheduleAccess.test.ts",
     "test:orgdash": "tsx src/tests/organizationDashboard.test.ts",
     "test:dashboard": "tsx src/tests/dashboard.test.ts",
-    "test:imports": "tsx src/tests/excelImport.test.ts"
+    "test:imports": "tsx src/tests/excelImport.test.ts",
+    "test:instagram": "tsx src/tests/instagramProvider.test.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

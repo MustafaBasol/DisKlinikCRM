@@ -481,3 +481,45 @@ export function canCreateNoShowFollowUpTask(user: UserForPermission | null | und
     role === 'RECEPTIONIST'
   );
 }
+
+// ── Sprint 23: Instagram DM Integration ──────────────────────────────────────
+
+export function canManageInstagramConnections(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+export function canAssignInstagramToClinic(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+export function canViewInstagramStatus(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+export function canViewInstagramInbox(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+export function canReplyInstagramMessages(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+export function canResolveInstagramConversation(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}

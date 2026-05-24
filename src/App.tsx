@@ -40,6 +40,8 @@ import Branches from './pages/Branches';
 import ClinicSchedule from './pages/ClinicSchedule';
 import WhatsAppConnections from './pages/WhatsAppConnections';
 import WhatsAppInbox from './pages/WhatsAppInbox';
+import InstagramConnections from './pages/InstagramConnections';
+import InstagramInbox from './pages/InstagramInbox';
 import FinanceDashboard from './pages/FinanceDashboard';
 import Operations from './pages/Operations';
 import Users from './pages/Users';
@@ -150,6 +152,8 @@ const App: React.FC = () => {
               <Route path="branches/:clinicId/schedule" element={<ClinicSchedule />} />
               <Route path="organization/whatsapp" element={<WhatsAppConnections />} />
               <Route path="whatsapp-inbox" element={<WhatsAppInbox />} />
+              <Route path="organization/instagram" element={<InstagramConnections />} />
+              <Route path="instagram-inbox" element={<InstagramInbox />} />
               <Route path="finance" element={<FinanceDashboard />} />
               <Route path="operations" element={<Operations />} />
               <Route path="users" element={<Users />} />

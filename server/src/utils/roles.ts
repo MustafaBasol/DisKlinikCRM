@@ -454,3 +454,77 @@ export function canCreateNoShowFollowUpTask(user: UserForRole | null | undefined
   );
 }
 
+// ── Sprint 23: Instagram DM Integration İzinleri ──────────────────────────────
+
+/**
+ * Instagram bağlantısı oluşturma / düzenleme / silme.
+ * Yalnızca OWNER ve ORG_ADMIN.
+ */
+export function canManageInstagramConnections(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+/**
+ * Şubeye Instagram bağlantısı atama.
+ * OWNER, ORG_ADMIN: tüm şubeler. CLINIC_MANAGER: yalnızca kendi şubesi.
+ */
+export function canAssignInstagramToClinic(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Instagram bağlantı durumunu görüntüleme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER görüntüleyebilir.
+ */
+export function canViewInstagramStatus(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Instagram gelen kutusunu görüntüleme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ */
+export function canViewInstagramInbox(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * Instagram DM'ye yanıt gönderme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ */
+export function canReplyInstagramMessages(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * Instagram konuşmasını bir kliniğe veya hastaya çözümleme.
+ * OWNER ve ORG_ADMIN tüm kliniklere çözümleyebilir.
+ * CLINIC_MANAGER yalnızca kendi kliniklerine.
+ */
+export function canResolveInstagramConversation(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+

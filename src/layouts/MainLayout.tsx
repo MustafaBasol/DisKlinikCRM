@@ -31,6 +31,7 @@ import {
   BarChart3,
   Activity,
   UserX,
+  Instagram,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -55,6 +56,8 @@ import {
   canViewFinanceDashboard,
   canViewOperations,
   canViewNoShowDashboard,
+  canViewInstagramStatus,
+  canViewInstagramInbox,
 } from '../utils/permissions';
 
 type NavItem = { path: string; icon: React.ReactNode; label: string };
@@ -176,6 +179,12 @@ const MainLayoutInner: React.FC = () => {
     }
     if (canViewWhatsAppStatus(user)) {
       items.push({ path: '/organization/whatsapp', icon: <MessageCircle size={18} />, label: 'WhatsApp Bağlantıları' });
+    }
+    if (canViewInstagramInbox(user)) {
+      items.push({ path: '/instagram-inbox', icon: <Instagram size={18} />, label: 'Instagram Gelen Kutusu' });
+    }
+    if (canViewInstagramStatus(user)) {
+      items.push({ path: '/organization/instagram', icon: <Instagram size={18} />, label: 'Instagram Bağlantıları' });
     }
     if (items.length > 0) {
       navGroups.push({ id: 'iletisim', label: 'İletişim', collapsible: true, items });

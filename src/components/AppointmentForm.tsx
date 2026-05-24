@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle, Briefcase, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { patientService, userService, serviceService, appointmentService, treatmentCaseService, scheduleService, noShowService } from '../services/api';
+import { patientService, userService, serviceService, appointmentService, treatmentCaseService, scheduleService, noShowService, instagramInboxService } from '../services/api';
 
 export interface AppointmentFormPrefill {
   patientId?: string;
   practitionerId?: string;
   appointmentTypeId?: string;
+  clinicId?: string;
   source?: string;
   previousAppointmentId?: string;
+  instagramInboxEntryId?: string;
 }
 
 interface AppointmentFormProps {
@@ -32,6 +34,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
   // When source=no_show, try to load previous appointment for context banner
   const [prevAppointment, setPrevAppointment] = useState<any>(null);
   const isNoShowReschedule = prefill?.source === 'no_show' && !!prefill?.previousAppointmentId;
+  const isInstagramSource = prefill?.source === 'instagram' && !!prefill?.instagramInboxEntryId;
   
   const [formData, setFormData] = useState({
     patientId: initialData?.patientId || prefill?.patientId || '',
@@ -40,7 +43,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     date: initialData?.startTime ? new Date(initialData.startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     startTime: initialData?.startTime ? new Date(initialData.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '09:00',
     endTime: initialData?.endTime ? new Date(initialData.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '09:30',
-    notes: initialData?.notes || (isNoShowReschedule && prefill?.previousAppointmentId ? `Rescheduled from no-show appointment: ${prefill.previousAppointmentId}` : ''),
+    notes: initialData?.notes || (isNoShowReschedule && prefill?.previousAppointmentId ? `Rescheduled from no-show appointment: ${prefill.previousAppointmentId}` : isInstagramSource ? `Instagram DM'den oluşturuldu.` : ''),
     treatmentCaseId: initialData?.treatmentCaseId || '',
   });
   const selectedService = types.find(t => t.id === formData.appointmentTypeId);
@@ -146,6 +149,15 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
             console.warn('Could not auto-update no-show recovery status to recovered');
           }
         }
+        // If this is from an Instagram DM, mark the inbox entry as converted
+        if (isInstagramSource && prefill?.instagramInboxEntryId) {
+          try {
+            await instagramInboxService.markConverted(prefill.instagramInboxEntryId);
+          } catch {
+            // Non-fatal — appointment was created, inbox status update is best-effort
+            console.warn('Could not mark Instagram inbox entry as converted');
+          }
+        }
       }
       onSuccess();
     } catch (err: any) {
@@ -189,6 +201,19 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
                     </span>
                   )}
                   {' '}Randevu oluşturulduğunda önceki no-show otomatik olarak "Geri Kazanıldı" durumuna alınacak.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Instagram DM source banner */}
+          {isInstagramSource && (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-start gap-2.5 text-sm text-purple-800 dark:bg-purple-900/20 dark:border-purple-700/50 dark:text-purple-200">
+              <Info size={16} className="mt-0.5 flex-shrink-0" />
+              <div>
+                <div className="font-semibold mb-0.5">Instagram DM görüşmesinden oluşturuluyor</div>
+                <div className="text-xs text-purple-700 dark:text-purple-300">
+                  Bu randevu bir Instagram DM görüşmesinden oluşturuluyor. Randevu kaydedildiğinde ilgili DM "Dönüştürüldü" olarak işaretlenecek.
                 </div>
               </div>
             </div>
