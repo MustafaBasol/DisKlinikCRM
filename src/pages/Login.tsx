@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/api';
 import { Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
@@ -126,6 +126,11 @@ const Login: React.FC = () => {
 
         <p className="text-center text-gray-500 mt-8 text-sm">
           &copy; 2026 Aile Diş CRM. Güvenli MVP altyapısı.
+        </p>
+        <p className="text-center mt-3">
+          <Link to="/platform/login" className="text-xs text-gray-400 hover:text-gray-500 transition-colors">
+            Platform Yöneticisi Girişi
+          </Link>
         </p>
       </div>
     </div>
