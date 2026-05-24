@@ -200,7 +200,311 @@ When a webhook arrives:
 
 - **Text messages only** — media (images, audio, stickers, video) are ingested as `unsupported` event type (not displayed to staff, not blocked).
 - **No AI parsing** of appointment intent — staff must manually identify appointment requests.
-- **No appointment conversion button** yet — staff can link to a patient, then create the appointment separately.
 - **No read receipts** — the CRM does not send `seen` events back to Meta.
 - **External Meta approval required** — `instagram_manage_messages` requires Meta business verification for non-sandbox use.
 - **Token refresh** — long-lived tokens should be refreshed before expiry; no automated refresh in this sprint.
+
+---
+
+---
+
+# Sprint 23B — Instagram DM → Randevu Dönüşüm Akışı
+
+## Overview
+
+Bu sprint, Sprint 23'ün iş akışı tamamlayıcısıdır. Instagram DM görüşmeleri artık doğrudan **randevu talebine** veya **randevuya** dönüştürülebilir. Tüm dönüşüm işlemleri ilgili inbox entry'yi `converted` statüsüne geçirir ve çift dönüşümü engeller.
+
+---
+
+## Yeni Backend Endpoint'leri (`server/src/routes/instagramInbox.ts`)
+
+### İnbox Dönüşüm Endpoint'leri
+
+| Method | Path | Yetki | Açıklama |
+|---|---|---|---|
+| POST | `/api/instagram/inbox/:id/create-appointment-request` | canViewInstagramInbox | DM'i AppointmentRequest'e dönüştürür (`source='instagram'`) |
+| POST | `/api/instagram/inbox/:id/create-appointment` | canViewInstagramInbox | DM'den doğrudan Appointment oluşturur |
+| PATCH | `/api/instagram/inbox/:id/status` | OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST, DOCTOR | Entry statüsünü günceller (`open`/`resolved`/`ignored`/`converted`) |
+
+### `POST /instagram/inbox/:id/create-appointment-request`
+
+**Validasyon kuralları:**
+- Entry kendi organizasyonuna ait olmalı (404 değilse)
+- `clinicId` atanmış olmalı (400 — "clinicId is required — assign clinic first")
+- Entry `status !== 'converted'` olmalı (400 — "Entry already converted")
+
+**Davranış:**
+- `AppointmentRequest` oluşturur: `source='instagram'`, `status='pending'`
+- Hasta bağlıysa: `patientName/phone` hasta kaydından alınır
+- Hasta bağlı değilse: `patientName = '@username'` veya `externalSenderId`, `phone = externalSenderId`
+- Entry `status = 'converted'` yapılır
+- Audit log yazılır: `instagram_inbox_converted_to_request`
+
+**Request body:** Yok (tüm veriler entry'den türetilir)
+
+**Response (201):**
+```json
+{ "appointmentRequest": { "id": "...", "status": "pending", "source": "instagram", ... } }
+```
+
+---
+
+### `POST /instagram/inbox/:id/create-appointment`
+
+**Validasyon kuralları:**
+- Entry org doğrulaması (404)
+- Body alanları zorunlu: `patientId`, `clinicId`, `practitionerId`, `appointmentTypeId`, `date`, `time`
+- `date` + `time` → geçerli ISO DateTime olmalı
+- Hasta organizasyona ait olmalı
+- Pratisyen kliniğe atanmış olmalı
+- Çakışma kontrolü (başlangıç/bitiş zamanı)
+- Entry `status !== 'converted'` olmalı
+
+**Davranış:**
+- `Appointment` oluşturur (mevcut appointment endpoint'i ile aynı mantık)
+- Entry `status = 'converted'` yapılır
+- Audit log yazılır: `instagram_inbox_converted_to_appointment`
+
+**Request body:**
+```json
+{
+  "patientId": "string",
+  "clinicId": "string",
+  "practitionerId": "string",
+  "appointmentTypeId": "string",
+  "date": "2025-06-20",
+  "time": "14:30",
+  "endTime": "15:00",  // opsiyonel
+  "notes": "string"   // opsiyonel
+}
+```
+
+---
+
+### `PATCH /instagram/inbox/:id/status`
+
+Genel statü güncelleme endpoint'i. AppointmentForm'daki markConverted çağrısı tarafından kullanılır.
+
+**Geçerli statüler:** `open`, `resolved`, `ignored`, `converted`
+
+---
+
+## Frontend Değişiklikleri
+
+### `src/pages/InstagramInbox.tsx`
+
+Her konuşma kartına iki yeni aksiyon butonu eklendi (yalnızca `status !== 'converted'` olduğunda görünür):
+
+#### "Talep Oluştur" Butonu
+- **Yetki:** `canViewInstagramInbox` (RECEPTIONIST dahil)
+- **Klinik yoksa:** `disabled` + tooltip "Önce şube atayın"
+- **Akış:** `window.confirm` → `instagramInboxService.createAppointmentRequest(id)` → toast + reload
+- **Renk:** Mor (purple)
+
+#### "Randevu" Butonu
+- **Yetki:** `canViewInstagramInbox`
+- **Hasta + klinik atanmışsa:** Inline randevu modalı açılır (hekim/hizmet/tarih/saat formu)
+- **Atanmamışsa:** `/appointments?source=instagram&instagramInboxEntryId=...&patientId=...&clinicId=...` URL'ye yönlendirir
+- **Renk:** Yeşil (green)
+
+#### Dönüştürüldü Rozeti
+`status === 'converted'` olduğunda aksiyonlar yerine mor "Dönüştürüldü" rozeti gösterilir; Yanıtla/Talep/Randevu butonları gizlenir.
+
+#### Inline Randevu Modalı (`AppointmentModal`)
+- Hekim listesi: `userService.getDoctors()`
+- Hizmet listesi: `serviceService.getAll({ onlyActive: true })`
+- Tarih + saat inputları
+- Not alanı (Instagram DM kaynağından otomatik doldurulur)
+- Kaydet → `instagramInboxService.createAppointment(id, data)` → entry `converted` + toast
+
+#### Toast Bildirimleri
+- Sağ alt köşede slide-in toast (başarı: yeşil, hata: kırmızı), 3 saniye sonra kaybolur
+
+---
+
+### `src/components/AppointmentForm.tsx`
+
+#### `AppointmentFormPrefill` Arayüzü Güncellemesi
+
+```typescript
+export interface AppointmentFormPrefill {
+  patientId?: string;
+  practitionerId?: string;
+  appointmentTypeId?: string;
+  clinicId?: string;                 // YENİ — Instagram DM'den şube prefill
+  source?: string;
+  previousAppointmentId?: string;
+  instagramInboxEntryId?: string;    // YENİ — markConverted için
+}
+```
+
+#### Instagram Kaynak Banner'ı
+`source === 'instagram' && instagramInboxEntryId` koşulu sağlandığında mor bilgi banner'ı gösterilir:
+
+> "Bu randevu Instagram DM görüşmesinden oluşturuluyor. Randevu kaydedildiğinde ilgili DM 'Dönüştürüldü' olarak işaretlenecek."
+
+#### Otomatik Not
+Instagram kaynağı için `notes` alanı otomatik olarak `"Instagram DM'den oluşturuldu."` ile doldurulur.
+
+#### Randevu Sonrası markConverted
+Başarılı randevu oluşturma sonrası `instagramInboxEntryId` varsa:
+```typescript
+await instagramInboxService.markConverted(prefill.instagramInboxEntryId);
+// fire-and-forget — hata randevu oluşturmayı etkilemez
+```
+
+---
+
+### `src/services/api.ts`
+
+`instagramInboxService`'e eklenen metodlar:
+
+```typescript
+createAppointmentRequest: (id: string) =>
+  api.post(`/instagram/inbox/${id}/create-appointment-request`),
+
+createAppointment: (id: string, data: {
+  patientId: string; clinicId: string; practitionerId: string;
+  appointmentTypeId: string; date: string; time: string;
+  endTime?: string; notes?: string;
+}) => api.post(`/instagram/inbox/${id}/create-appointment`, data),
+
+markConverted: (id: string) =>
+  api.patch(`/instagram/inbox/${id}/status`, { status: 'converted' }),
+```
+
+---
+
+## Yetki Matrisi Güncellemesi
+
+| İşlem | OWNER | ORG_ADMIN | CLINIC_MANAGER | RECEPTIONIST | BILLING | DOCTOR |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Randevu talebine dönüştür | ✓ | ✓ | ✓ | ✓ | — | — |
+| Doğrudan randevu oluştur | ✓ | ✓ | ✓ | ✓ | — | — |
+| Entry statüsü güncelle | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+
+> RECEPTIONIST artık `canViewInstagramInbox` kapsamında randevu talebi oluşturabilir. Ancak `canResolveInstagramConversation` (şube/hasta atama) hâlâ CLINIC_MANAGER ve üstüne aittir.
+
+---
+
+## Dönüşüm Çift-Engel Mantığı
+
+```
+entry.status === 'converted' → 400 "Entry already converted"
+```
+
+Hem `create-appointment-request` hem `create-appointment` endpoint'leri bu kontrolü yapar. Böylece bir DM iki kez dönüştürülemez.
+
+---
+
+## Tests — Sprint 23B
+
+Dosya: `server/src/tests/instagramConversion.test.ts`  
+Çalıştır: `npx tsx src/tests/instagramConversion.test.ts` (server/ dizininden)
+
+**41 test, tamamı geçiyor:**
+
+| Bölüm | Test Sayısı | Konu |
+|---|---|---|
+| §1 Yetki kontrolleri | 9 | canViewInstagramInbox / canResolveInstagramConversation rollere göre |
+| §2 create-appointment-request validasyonu | 5 | Eksik clinicId, çapraz-org, çift dönüşüm, geçerli payload |
+| §3 create-appointment validasyonu | 8 | Her zorunlu alan eksikliği + geçersiz tarih + başarılı payload |
+| §4 PATCH status validasyonu | 7 | Geçerli/geçersiz statü değerleri |
+| §5 Instagram kaynak alan mantığı | 5 | source='instagram', anonim kullanıcı fallback |
+| §6 Frontend UI durum mantığı | 7 | Buton disable/enable, converted rozeti, aksiyon gizleme |
+
+---
+
+---
+
+# Sprint 23B Hotfix — Instagram Webhook URL Hatası
+
+## Sorun
+
+`InstagramConnections.tsx` dosyasında `VITE_API_URL = https://api-klinik.autoviseo.com/api` değeri ile webhook URL'si yanlış üretiliyordu:
+
+```typescript
+// YANLIŞ — JavaScript .replace() ilk eşleşmeyi bulur
+const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
+```
+
+`'https://api-klinik.autoviseo.com/api'` dizesinde `/api` ilk olarak **pos 7**'de bulunur: `://[/api]-klinik...`. Bu yüzden:
+
+```
+'https://api-klinik.autoviseo.com/api'
+         ↑ burası eşleşiyor (pos 7)
+→ 'https:/-klinik.autoviseo.com/api'   ← YANLIŞ hostname
+```
+
+Sonuç olarak `WEBHOOK_BASE + '/webhook'` şöyle bir URL üretiyordu:
+```
+https:/-klinik.autoviseo.com/api/api/public/instagram/webhook  ← /api/api duplikasyonu
+```
+
+## Düzeltme
+
+Yalnızca sondaki `/api` suffix'ini kaldıran regex:
+
+```typescript
+// DOĞRU — sadece string sonundaki /api'yi kaldırır
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
+const WEBHOOK_BASE = `${API_BASE_URL}/api/public/instagram`;
+const GLOBAL_WEBHOOK_URL = `${WEBHOOK_BASE}/webhook`;
+```
+
+**Sonuç:**
+```
+https://api-klinik.autoviseo.com/api → https://api-klinik.autoviseo.com
+GLOBAL_WEBHOOK_URL = https://api-klinik.autoviseo.com/api/public/instagram/webhook ✓
+```
+
+Regex `/\/api\/?$/` uç örnekleri:
+| Giriş | Çıkış |
+|---|---|
+| `https://api-klinik.autoviseo.com/api` | `https://api-klinik.autoviseo.com` ✓ |
+| `http://localhost:5000/api` | `http://localhost:5000` ✓ |
+| `/api` (varsayılan) | `''` (relative, local dev) ✓ |
+| `https://example.com/api/` | `https://example.com` ✓ |
+
+## UI İyileştirmeleri
+
+### Bilgi Banner'ı (Kurulum Rehberi)
+
+- **Callback URL** yanına kopyalama butonu eklendi
+- Açıklama metni eklendi:
+  > "Bu global webhook URL tüm klinikler için aynıdır. Sistem gelen mesajdaki Instagram Account ID üzerinden doğru bağlantı ve şubeyi bulur."
+
+### Kart Detay Paneli — Webhook Yapılandırması
+
+Önceki yapı (tek URL, connection-specific):
+```
+Callback URL: https://.../{connectionId}/webhook  [kopyala]
+Verify Token: abc123  [kopyala]
+```
+
+Yeni yapı:
+```
+Global Callback URL (önerilen):
+  https://api-klinik.autoviseo.com/api/public/instagram/webhook  [kopyala]
+
+Verify Token: abc123  [kopyala]
+
+▶ Bağlantıya özel URL (gelişmiş, opsiyonel)
+  https://.../{connectionId}/webhook  [kopyala]
+  "Yalnızca bu bağlantıya özel yönlendirme gerekiyorsa kullanın."
+```
+
+Connection-specific URL `<details>` collapse içine taşındı — Meta panelinde kullanılmaması gereken gelişmiş bir seçenek olarak işaretlendi.
+
+---
+
+## Dosya Değişiklikleri Özeti
+
+| Dosya | Sprint | Değişiklik |
+|---|---|---|
+| `server/src/routes/instagramInbox.ts` | 23B | `create-appointment-request`, `create-appointment`, `PATCH status` endpoint'leri eklendi |
+| `server/src/tests/instagramConversion.test.ts` | 23B | YENİ — 41 test dosyası |
+| `src/services/api.ts` | 23B | `instagramInboxService`'e 3 yeni metod eklendi |
+| `src/pages/InstagramInbox.tsx` | 23B | Talep/Randevu butonları, inline modal, converted rozeti, toast |
+| `src/components/AppointmentForm.tsx` | 23B | `clinicId`/`instagramInboxEntryId` prefill, Instagram banner, markConverted |
+| `src/pages/InstagramConnections.tsx` | 23B Hotfix | URL regex düzeltmesi, `GLOBAL_WEBHOOK_URL`, geliştirilmiş webhook UI |

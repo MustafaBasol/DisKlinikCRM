@@ -84,8 +84,9 @@ const EMPTY_FORM: ConnectionFormData = {
   linkedClinicIds: [],
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
 const WEBHOOK_BASE = `${API_BASE_URL}/api/public/instagram`;
+const GLOBAL_WEBHOOK_URL = `${WEBHOOK_BASE}/webhook`;
 
 // ── Helper: copy to clipboard ─────────────────────────────────────────────────
 
@@ -316,10 +317,20 @@ export default function InstagramConnections() {
               <li>Instagram hesabının <strong>Profesyonel</strong> hesap olması gerekir.</li>
               <li>Instagram hesabı bir Facebook Sayfasına bağlı olmalıdır.</li>
               <li>Meta App'in <strong>instagram_manage_messages</strong> izni olmalıdır.</li>
-              <li>Webhook Callback URL: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{WEBHOOK_BASE}/webhook</code></li>
+              <li>
+                Webhook Callback URL:
+                <span className="inline-flex items-center gap-1 ml-1">
+                  <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{GLOBAL_WEBHOOK_URL}</code>
+                  <CopyButton value={GLOBAL_WEBHOOK_URL} />
+                </span>
+              </li>
               <li>Webhook alanı: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">messages</code> abone edilmeli.</li>
               <li>Verify Token: Bağlantı kartındaki token Meta paneline girilmeli.</li>
             </ul>
+            <div className="mt-3 p-2.5 bg-blue-100/60 dark:bg-blue-800/40 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+              <span className="font-semibold">ℹ️ Bu global webhook URL tüm klinikler için aynıdır.</span>{' '}
+              Sistem gelen mesajdaki Instagram Account ID üzerinden doğru bağlantı ve şubeyi bulur.
+            </div>
             <a
               href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api"
               target="_blank"
@@ -369,7 +380,6 @@ export default function InstagramConnections() {
         {connections.map(conn => {
           const isExpanded = expandedId === conn.id;
           const tr = testResult[conn.id];
-          const webhookUrl = `${WEBHOOK_BASE}/${conn.id}/webhook`;
 
           return (
             <div
@@ -470,13 +480,16 @@ export default function InstagramConnections() {
                   {/* Webhook info */}
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
                     <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Webhook Yapılandırması</p>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
-                        <span className="font-medium">Callback URL:</span>
-                        <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600 truncate max-w-md">
-                          {webhookUrl}
-                        </code>
-                        <CopyButton value={webhookUrl} />
+                    <div className="space-y-1.5">
+                      {/* Global webhook URL (primary — use this in Meta Developer Console) */}
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Global Callback URL <span className="text-green-600 dark:text-green-400 font-semibold">(önerilen)</span>:</span>
+                        <div className="flex items-center gap-1">
+                          <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600 truncate max-w-md flex-1">
+                            {GLOBAL_WEBHOOK_URL}
+                          </code>
+                          <CopyButton value={GLOBAL_WEBHOOK_URL} />
+                        </div>
                       </div>
                       {conn.webhookVerifyToken && (
                         <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
@@ -487,6 +500,19 @@ export default function InstagramConnections() {
                           <CopyButton value={conn.webhookVerifyToken} />
                         </div>
                       )}
+                      {/* Per-connection URL — advanced/optional */}
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 select-none">
+                          Bağlantıya özel URL (gelişmiş, opsiyonel) ▾
+                        </summary>
+                        <div className="mt-1 flex items-center gap-1">
+                          <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600 truncate max-w-md">
+                            {`${WEBHOOK_BASE}/${conn.id}/webhook`}
+                          </code>
+                          <CopyButton value={`${WEBHOOK_BASE}/${conn.id}/webhook`} />
+                        </div>
+                        <p className="mt-0.5 text-gray-400 dark:text-gray-500">Yalnızca bu bağlantıya özel yönlendirme gerekiyorsa kullanın.</p>
+                      </details>
                     </div>
                   </div>
 
