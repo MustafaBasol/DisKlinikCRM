@@ -1,7 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { PlatformAuthProvider, usePlatformAuth } from './context/PlatformAuthContext';
 import MainLayout from './layouts/MainLayout';
+import PlatformAdminLayout from './layouts/PlatformAdminLayout';
 import GlobalSearch from './components/GlobalSearch';
 import Dashboard from './pages/Dashboard';
 import Patients from './pages/Patients';
@@ -20,7 +22,13 @@ import MessageTemplates from './pages/MessageTemplates';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import PlatformAdmin from './pages/PlatformAdmin';
+import PlatformLogin from './pages/platform/PlatformLogin';
+import PlatformDashboard from './pages/platform/PlatformDashboard';
+import PlatformOrganizations from './pages/platform/PlatformOrganizations';
+import PlatformClinics from './pages/platform/PlatformClinics';
+import PlatformUsers from './pages/platform/PlatformUsers';
+import PlatformPlans from './pages/platform/PlatformPlans';
+import PlatformSystem from './pages/platform/PlatformSystem';
 import BookingWidget from './pages/BookingWidget';
 import Reports from './pages/Reports';
 import PaymentPlans from './pages/PaymentPlans';
@@ -43,6 +51,11 @@ import { useTranslation } from 'react-i18next';
 const ProtectedRoute = () => {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+};
+
+const PlatformRoute = () => {
+  const { isAuthenticated } = usePlatformAuth();
+  return isAuthenticated ? <Outlet /> : <Navigate to="/platform/login" replace />;
 };
 
 const ToastContainer = () => {
@@ -86,19 +99,32 @@ const App: React.FC = () => {
 
   return (
     <AuthProvider>
-      <Router>
-        <ToastContainer />
-        <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/platform" element={<PlatformAdmin />} />
-          <Route path="/book/:clinicId" element={<BookingWidget />} />
-          {/* Public Meta OAuth redirect handler — must be outside ProtectedRoute */}
-          <Route path="/auth/meta/callback" element={<MetaCallbackPage />} />
+      <PlatformAuthProvider>
+        <Router>
+          <ToastContainer />
+          <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/platform/login" element={<PlatformLogin />} />
+            <Route path="/book/:clinicId" element={<BookingWidget />} />
+            {/* Public Meta OAuth redirect handler — must be outside ProtectedRoute */}
+            <Route path="/auth/meta/callback" element={<MetaCallbackPage />} />
 
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<MainLayout />}>
+            {/* Platform admin area — separate auth */}
+            <Route element={<PlatformRoute />}>
+              <Route path="/platform" element={<PlatformAdminLayout />}>
+                <Route index element={<PlatformDashboard />} />
+                <Route path="organizations" element={<PlatformOrganizations />} />
+                <Route path="clinics" element={<PlatformClinics />} />
+                <Route path="users" element={<PlatformUsers />} />
+                <Route path="plans" element={<PlatformPlans />} />
+                <Route path="system" element={<PlatformSystem />} />
+              </Route>
+            </Route>
+
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<MainLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="patients" element={<Patients />} />
               <Route path="patients/:id" element={<PatientDetail />} />
@@ -129,10 +155,11 @@ const App: React.FC = () => {
               <Route path="users" element={<Users />} />
               <Route path="no-shows" element={<NoShows />} />
               <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
             </Route>
-          </Route>
-        </Routes>
-      </Router>
+          </Routes>
+        </Router>
+      </PlatformAuthProvider>
     </AuthProvider>
   );
 };
