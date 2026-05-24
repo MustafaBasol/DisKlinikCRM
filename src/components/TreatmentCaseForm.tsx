@@ -218,6 +218,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
                   className="input-field"
                   value={formData.estimatedAmount}
                   onChange={(e) => setFormData({ ...formData, estimatedAmount: Number(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
               </div>
               <div className="space-y-1">
@@ -231,6 +232,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
                   className="input-field"
                   value={formData.acceptedAmount}
                   onChange={(e) => setFormData({ ...formData, acceptedAmount: Number(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
               </div>
             </div>

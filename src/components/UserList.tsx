@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, Edit2, Loader2, Plus, UserCog, XCircle, Building2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Edit2, Loader2, Plus, UserCog, XCircle, Building2, FileUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { userService } from '../services/api';
 import UserClinicAssignmentModal from './UserClinicAssignmentModal';
+import UserImportModal from './UserImportModal';
 import { useAuth } from '../context/AuthContext';
-import { canAssignUserClinics } from '../utils/permissions';
+import { canAssignUserClinics, canImportUsers } from '../utils/permissions';
 
 const roles = ['admin', 'doctor', 'receptionist', 'billing'];
 
@@ -17,6 +18,7 @@ const UserList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [assignTarget, setAssignTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -55,10 +57,21 @@ const UserList: React.FC = () => {
           <h2 className="text-lg font-bold">{t('settings:users.title')}</h2>
           <p className="text-sm text-gray-500">{t('settings:users.subtitle')}</p>
         </div>
-        <button onClick={() => openModal()} className="btn-primary">
-          <Plus size={18} />
-          {t('settings:users.newUser')}
-        </button>
+        <div className="flex items-center gap-2">
+          {canImportUsers(currentUser) && (
+            <button
+              onClick={() => setIsImportOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 font-medium rounded-lg border border-green-200 transition-colors text-sm"
+            >
+              <FileUp size={16} />
+              Excel ile Personel Ekle
+            </button>
+          )}
+          <button onClick={() => openModal()} className="btn-primary">
+            <Plus size={18} />
+            {t('settings:users.newUser')}
+          </button>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -138,6 +151,15 @@ const UserList: React.FC = () => {
           userEmail={assignTarget.email}
           onClose={() => setAssignTarget(null)}
           onSaved={() => { setAssignTarget(null); fetchUsers(); }}
+        />
+      )}
+      {isImportOpen && (
+        <UserImportModal
+          onClose={() => setIsImportOpen(false)}
+          onSuccess={() => {
+            setIsImportOpen(false);
+            fetchUsers();
+          }}
         />
       )}
     </div>

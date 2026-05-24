@@ -298,6 +298,31 @@ export function canAssignWhatsAppToClinic(user: UserForPermission | null | undef
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
 
+// ─── Excel İçe Aktarma İzinleri ───────────────────────────────────────────────
+
+/**
+ * Hasta Excel içe aktarma:
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST
+ */
+export function canImportPatients(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * Kullanıcı/personel Excel içe aktarma:
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER
+ */
+export function canImportUsers(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
 /**
  * WhatsApp bağlantı durumunu görüntüleme.
  */

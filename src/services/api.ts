@@ -46,6 +46,24 @@ export const patientService = {
   create: (data: any) => api.post('/patients', data),
   update: (id: string, data: any) => api.put(`/patients/${id}`, data),
   archive: (id: string) => api.delete(`/patients/${id}`),
+  downloadImportTemplate: () =>
+    api.get('/patients/import-template', { responseType: 'blob' }),
+  importPreview: (file: File, clinicId?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/patients/import-preview', fd, {
+      params: clinicId && clinicId !== 'all' ? { clinicId } : {},
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  importConfirm: (file: File, clinicId?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/patients/import-confirm', fd, {
+      params: clinicId && clinicId !== 'all' ? { clinicId } : {},
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const appointmentTypeService = {
@@ -134,6 +152,22 @@ export const userService = {
   getAll: () => api.get('/users'),
   create: (data: any) => api.post('/users', data),
   update: (id: string, data: any) => api.put(`/users/${id}`, data),
+  downloadImportTemplate: () =>
+    api.get('/users/import-template', { responseType: 'blob' }),
+  importPreview: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/users/import-preview', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  importConfirm: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/users/import-confirm', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const doctorAvailabilityService = {

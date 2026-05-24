@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Loader2, User, Building2 } from 'lucide-react';
+import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Loader2, User, Building2, FileUp } from 'lucide-react';
 import { patientService } from '../services/api';
 import PatientForm from '../components/PatientForm';
+import PatientImportModal from '../components/PatientImportModal';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
+import { useAuth } from '../context/AuthContext';
+import { canImportPatients } from '../utils/permissions';
 
 const Patients: React.FC = () => {
   const { t } = useTranslation(['patients', 'common']);
   const { selectedClinicId, availableClinics, hasMultipleClinics } = useClinic();
+  const { user: currentUser } = useAuth();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -46,10 +51,21 @@ const Patients: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">{t('patients:title')}</h1>
           <p className="text-gray-500 mt-1">{t('patients:subtitle')}</p>
         </div>
-        <button onClick={() => setIsFormOpen(true)} className="btn-primary shrink-0">
-          <Plus size={20} />
-          {t('patients:addPatient')}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {canImportPatients(currentUser) && (
+            <button
+              onClick={() => setIsImportOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 font-medium rounded-lg border border-green-200 transition-colors text-sm"
+            >
+              <FileUp size={16} />
+              Excel ile İçe Aktar
+            </button>
+          )}
+          <button onClick={() => setIsFormOpen(true)} className="btn-primary">
+            <Plus size={20} />
+            {t('patients:addPatient')}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4">
@@ -178,6 +194,17 @@ const Patients: React.FC = () => {
             setIsFormOpen(false);
             fetchPatients();
           }} 
+        />
+      )}
+
+      {isImportOpen && (
+        <PatientImportModal
+          onClose={() => setIsImportOpen(false)}
+          onSuccess={() => {
+            setIsImportOpen(false);
+            fetchPatients();
+          }}
+          selectedClinicId={selectedClinicId}
         />
       )}
     </div>
