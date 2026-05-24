@@ -117,7 +117,7 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
         orderBy: { updatedAt: 'desc' },
         include: {
           practitioner: { select: { firstName: true, lastName: true } },
-          treatmentPlanProcedures: { select: { id: true, status: true } },
+          procedures: { select: { id: true, status: true } },
         },
       });
       treatmentCasesEnriched = enriched;
