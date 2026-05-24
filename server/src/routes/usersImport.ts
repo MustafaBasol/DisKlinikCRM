@@ -293,21 +293,6 @@ router.post(
           const data = row.data;
           const primaryClinicId = (data.clinicIds as string[])[0] ?? user.clinicId;
 
-          // Plan limiti kontrolü
-          const clinic = await prisma.clinic.findUnique({
-            where: { id: primaryClinicId },
-            select: { maxUsers: true },
-          });
-          const userCount = await prisma.user.count({ where: { clinicId: primaryClinicId } });
-          if (clinic && userCount >= clinic.maxUsers) {
-            skipped.push({
-              rowNumber: row.rowNumber,
-              status: 'invalid',
-              errors: [`${primaryClinicId} kliniği kullanıcı limitine ulaştı`],
-            });
-            continue;
-          }
-
           const passwordHash = await bcrypt.hash(data.password as string, 12);
 
           const newUser = await prisma.user.create({

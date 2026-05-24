@@ -27,8 +27,8 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
     title: initialData?.title || '',
     description: initialData?.description || '',
     stage: initialData?.stage || 'new',
-    estimatedAmount: initialData?.estimatedAmount || 0,
-    acceptedAmount: initialData?.acceptedAmount || 0,
+    estimatedAmount: initialData?.estimatedAmount != null ? String(initialData.estimatedAmount) : '',
+    acceptedAmount: initialData?.acceptedAmount != null ? String(initialData.acceptedAmount) : '',
     currency: initialData?.currency || 'TRY',
     expectedStartDate: initialData?.expectedStartDate ? new Date(initialData.expectedStartDate).toISOString().split('T')[0] : '',
     lostReason: initialData?.lostReason || '',
@@ -66,9 +66,17 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
 
     try {
       if (initialData?.id) {
-        await treatmentCaseService.update(initialData.id, formData);
+        await treatmentCaseService.update(initialData.id, {
+          ...formData,
+          estimatedAmount: parseFloat(formData.estimatedAmount as any) || 0,
+          acceptedAmount: parseFloat(formData.acceptedAmount as any) || 0,
+        });
       } else {
-        await treatmentCaseService.create(formData);
+        await treatmentCaseService.create({
+          ...formData,
+          estimatedAmount: parseFloat(formData.estimatedAmount as any) || 0,
+          acceptedAmount: parseFloat(formData.acceptedAmount as any) || 0,
+        });
       }
       onSuccess();
     } catch (err: any) {
@@ -123,7 +131,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
                         ...prev,
                         appointmentTypeId: val,
                         title: prev.title || service.name,
-                        estimatedAmount: prev.estimatedAmount || service.basePrice || 0,
+                        estimatedAmount: prev.estimatedAmount || String(service.basePrice || ''),
                         currency: service.currency || prev.currency
                       }));
                     } else {
@@ -213,12 +221,13 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
                   {t('treatmentCases:form.estimatedAmount')}
                 </label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   className="input-field"
+                  placeholder="0"
                   value={formData.estimatedAmount}
-                  onChange={(e) => setFormData({ ...formData, estimatedAmount: Number(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setFormData({ ...formData, estimatedAmount: e.target.value })}
+                  onFocus={(e) => { if (e.target.value === '0') e.target.select(); }}
                 />
               </div>
               <div className="space-y-1">
@@ -227,12 +236,13 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
                   {t('treatmentCases:form.acceptedAmount')}
                 </label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   className="input-field"
+                  placeholder="0"
                   value={formData.acceptedAmount}
-                  onChange={(e) => setFormData({ ...formData, acceptedAmount: Number(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setFormData({ ...formData, acceptedAmount: e.target.value })}
+                  onFocus={(e) => { if (e.target.value === '0') e.target.select(); }}
                 />
               </div>
             </div>

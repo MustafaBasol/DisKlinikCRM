@@ -27,6 +27,10 @@ export function cellToString(value: ExcelJS.CellValue): string {
   if (typeof value === 'object' && 'richText' in (value as any)) {
     return ((value as any).richText as any[]).map((rt: any) => rt.text ?? '').join('').trim();
   }
+  // Hyperlink hücresi (Excel'in otomatik köprü yaptığı e-posta/URL alanları)
+  if (typeof value === 'object' && 'text' in (value as any) && 'hyperlink' in (value as any)) {
+    return cellToString((value as any).text);
+  }
   // Formül hücresi — yalnızca sonucu al, formülü çalıştırma
   if (typeof value === 'object' && 'result' in (value as any)) {
     return cellToString((value as any).result);

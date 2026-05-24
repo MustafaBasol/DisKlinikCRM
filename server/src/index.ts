@@ -76,6 +76,8 @@ app.use('/api/register', clinicRegistrationRoutes);
 app.use('/api', authenticate as express.RequestHandler);
 
 // Protected routes
+app.use('/api', patientsImportRoutes);
+app.use('/api', usersImportRoutes);
 app.use('/api', usersRoutes);
 app.use('/api', dashboardRoutes);
 app.use('/api', patientsRoutes);
@@ -106,7 +108,6 @@ app.use('/api', financeDashboardRoutes);
 app.use('/api', schedulesRoutes);
 app.use('/api', operationalMonitoringRoutes);
 app.use('/api', noShowsRoutes);
-app.use('/api', patientsImportRoutes);
 app.use('/api', usersImportRoutes);
 
 app.listen(port, () => {
