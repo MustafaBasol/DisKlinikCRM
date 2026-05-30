@@ -1,0 +1,279 @@
+{
+  "meta": {
+    "title": "Aile Diş CRM | WhatsApp ve Instagram dahil klinik operasyonları"
+  },
+  "brand": {
+    "name": "Aile Diş CRM",
+    "description": "Diş klinikleri için operasyon, şube ve iletişim kontrol paneli."
+  },
+  "nav": {
+    "features": "Özellikler",
+    "multiClinic": "Çoklu Klinik",
+    "integrations": "Entegrasyonlar",
+    "workflow": "Nasıl Çalışır",
+    "faq": "SSS",
+    "login": "Giriş Yap",
+    "themeToggle": "Temayı değiştir",
+    "languageSelector": "Dil seçin"
+  },
+  "actions": {
+    "requestDemo": "Demo Talep Et",
+    "reviewFeatures": "Özellikleri İncele"
+  },
+  "hero": {
+    "eyebrow": "Diş Klinik CRM",
+    "title": "Kliniğinizi tek panelden yönetin",
+    "description": "Randevularınızı, hasta kayıtlarınızı, tedavi süreçlerinizi, ödemelerinizi, ekip görevlerinizi, şube performansınızı ve WhatsApp / Instagram iletişim akışınızı modern bir CRM ekranında toplayın.",
+    "highlights": {
+      "roles": "Rol bazlı erişim",
+      "branches": "Çoklu klinik görünümü",
+      "channels": "WhatsApp + Instagram hazır",
+      "reporting": "Ölçülebilir operasyon"
+    }
+  },
+  "dashboard": {
+    "label": "Örnek ürün görünümü",
+    "title": "Operasyon Paneli",
+    "period": "Bugün",
+    "metrics": {
+      "appointments": "Bugünkü Randevular",
+      "patients": "Yeni Hastalar",
+      "collections": "Tahsilat Durumu",
+      "noShow": "No-show Oranı"
+    },
+    "branchesTitle": "Şube karşılaştırması",
+    "branchesCount": "3 aktif şube",
+    "occupancy": "Doluluk",
+    "appointmentFlow": "Randevu akışı",
+    "appointmentFlowSummary": "Planlanan operasyon yoğunluğu",
+    "slots": {
+      "morning": "Sabah",
+      "afternoon": "Öğleden sonra",
+      "evening": "Akşam"
+    }
+  },
+  "problem": {
+    "label": "Operasyonel yük",
+    "title": "Klinik operasyonları dağınık olduğunda büyümek zorlaşır",
+    "description": "Randevu defteri, iletişim trafiği, tedavi takibi, ödemeler ve ekip işleri farklı yerlerde kaldığında görünürlük azalır.",
+    "items": {
+      "appointments": {
+        "title": "Dağınık randevu akışı",
+        "description": "Günlük plan ve değişikliklerin takibi zaman kaybettirebilir."
+      },
+      "history": {
+        "title": "Zor bulunan geçmiş",
+        "description": "Hasta ve tedavi süreci bilgileri operasyonda kopuk kalabilir."
+      },
+      "payments": {
+        "title": "Kopuk tahsilat takibi",
+        "description": "Bakiye ve ödeme görünürlüğü klinik yönetimini zorlaştırabilir."
+      },
+      "noShow": {
+        "title": "Ölçülmeyen no-show",
+        "description": "İptal ve gelmeme nedenleri aksiyon üretmeden kaybolabilir."
+      }
+    }
+  },
+  "features": {
+    "label": "Çözüm",
+    "title": "Diş klinikleri için operasyon merkezi",
+    "description": "Aile Diş CRM, günlük operasyon, iletişim ve performans görünürlüğü için gereken temel araçları bir araya getirir.",
+    "items": {
+      "appointments": {
+        "title": "Akıllı randevu yönetimi",
+        "description": "Günlük, haftalık ve şube bazlı randevu akışını tek düzende takip edin."
+      },
+      "patientHistory": {
+        "title": "Hasta ve tedavi geçmişi",
+        "description": "Tedavi süreçlerini ve ilgili operasyon notlarını tek kart üzerinden görüntüleyin."
+      },
+      "collections": {
+        "title": "Ödeme ve tahsilat takibi",
+        "description": "Ödemeleri, kalan bakiyeleri ve tahsilat durumunu düzenli izleyin."
+      },
+      "noShow": {
+        "title": "No-show ve iptal analizi",
+        "description": "İptal ve gelmeme eğilimlerini ölçülebilir operasyon verisine dönüştürün."
+      },
+      "branches": {
+        "title": "Çoklu klinik yönetimi",
+        "description": "Şubelerinizi ortak metriklerle karşılaştırarak merkezi görünürlük kazanın."
+      },
+      "tasks": {
+        "title": "Ekip görevleri",
+        "description": "Resepsiyon, hekim ve yönetim görevlerini daha şeffaf yönetin."
+      }
+    }
+  },
+  "multiClinic": {
+    "label": "Temel fark",
+    "title": "Birden fazla kliniği tek ekrandan yönetin",
+    "description": "Klinik sahibi veya yöneticisi olarak şubelerinizin yoğunluğunu, hasta artışını, tahsilat durumunu ve no-show oranlarını karşılaştırmalı görün.",
+    "points": {
+      "comparison": "Şube bazlı günlük performans karşılaştırması",
+      "visibility": "Tahsilat ve doluluk görünürlüğü",
+      "teams": "Ekip ve randevu yoğunluğu değerlendirmesi"
+    },
+    "tableLabel": "Örnek çoklu klinik karşılaştırma paneli",
+    "columns": {
+      "branch": "Şube",
+      "appointments": "Randevu",
+      "patients": "Yeni hasta",
+      "collections": "Tahsilat",
+      "noShow": "No-show",
+      "occupancy": "Doluluk"
+    },
+    "branches": {
+      "center": "Merkez Klinik",
+      "atasehir": "Ataşehir Şube",
+      "bakirkoy": "Bakırköy Şube"
+    },
+    "sampleNote": "Gösterilen değerler ürün arayüzü örneğidir."
+  },
+  "integrations": {
+    "label": "Hazır entegrasyonlar",
+    "title": "WhatsApp ve Instagram görüşmelerini operasyon akışınıza bağlayın",
+    "description": "Aile Diş CRM, iki önemli iletişim kanalını mevcut klinik iş akışınızla bir araya getirmek için hazır bağlantı ve gelen kutusu yüzeyleri sunar.",
+    "ready": "Hazır",
+    "points": {
+      "connection": "Kanal bağlantılarını yönetme görünümü",
+      "inbox": "Gelen konuşmaları merkezi kutudan izleme",
+      "workflow": "Mesajı randevu ve hasta operasyonuna yönlendirme"
+    },
+    "channels": {
+      "whatsapp": {
+        "title": "WhatsApp Entegrasyonu",
+        "description": "WhatsApp bağlantılarını ve gelen konuşmaları klinik operasyonu içinde takip edin.",
+        "details": {
+          "connections": "Bağlantı yönetimi",
+          "inbox": "WhatsApp gelen kutusu",
+          "branches": "Şube bazlı takip desteği"
+        }
+      },
+      "instagram": {
+        "title": "Instagram DM Entegrasyonu",
+        "description": "Instagram mesajlarını karşılayın ve ilgili talepleri randevu akışına taşıyın.",
+        "details": {
+          "connections": "Bağlantı yönetimi",
+          "inbox": "Instagram DM gelen kutusu",
+          "conversion": "Randevu akışına dönüştürme"
+        }
+      }
+    }
+  },
+  "workflow": {
+    "label": "Nasıl çalışır",
+    "title": "Üç adımda daha görünür klinik operasyonu",
+    "items": {
+      "setup": {
+        "title": "Kliniğinizi ve ekibinizi tanımlayın",
+        "description": "Klinik bilgilerinizi, kullanıcı rollerini ve ekip üyelerinizi düzenleyin."
+      },
+      "operations": {
+        "title": "Günlük operasyonu yönetin",
+        "description": "Randevu, hasta, tedavi, ödeme ve görev sürecini ortak ekrandan takip edin."
+      },
+      "performance": {
+        "title": "Performansı ölçün",
+        "description": "Dashboard üzerinden klinik ve şube görünürlüğünü düzenli değerlendirin."
+      }
+    }
+  },
+  "trust": {
+    "label": "Kontrollü yapı",
+    "title": "Klinik verileri için düzenli ve sorumlu yaklaşım",
+    "description": "Operasyonel verinin yönetimi, erişim kontrolü ve geliştirilebilir yapı ilkeleriyle ele alınır.",
+    "items": {
+      "roles": {
+        "title": "Rol bazlı erişim",
+        "description": "Kullanıcıların görevlerine göre uygun operasyon alanlarına erişmesini destekler."
+      },
+      "separation": {
+        "title": "Klinik bazlı veri ayrımı",
+        "description": "Çoklu şube organizasyonlarında klinik görünürlüğünü kontrollü kurgulamaya yöneliktir."
+      },
+      "architecture": {
+        "title": "Modüler entegrasyon altyapısı",
+        "description": "Hazır WhatsApp ve Instagram akışlarının kontrollü biçimde yönetilmesini destekler."
+      },
+      "compliance": {
+        "title": "Uyum süreçleri için yapı",
+        "description": "KVKK/GDPR uyum süreçlerine göre yapılandırılabilir."
+      }
+    }
+  },
+  "demo": {
+    "label": "Demo",
+    "title": "Kliniğiniz için uygun yapıyı birlikte değerlendirelim",
+    "description": "Ürünün günlük operasyonunuza, çoklu klinik ihtiyaçlarınıza ve iletişim kanallarınıza nasıl uyarlanabileceğini görmek için demo talebi oluşturun.",
+    "formTitle": "Demo talebi",
+    "formNote": "Bu ön izleme formu hiçbir bilgi göndermez veya kaydetmez.",
+    "fields": {
+      "name": "Ad Soyad",
+      "clinic": "Klinik adı",
+      "city": "Şehir",
+      "branches": "Şube sayısı",
+      "contact": "Telefon veya e-posta",
+      "note": "Not"
+    },
+    "placeholders": {
+      "name": "Adınız ve soyadınız",
+      "clinic": "Klinik adınız",
+      "city": "Şehir",
+      "branches": "Örn. 2",
+      "contact": "Size ulaşabileceğimiz iletişim bilgisi",
+      "note": "İhtiyacınızla ilgili kısa bilgi"
+    },
+    "submit": "Demo Talebi Oluştur",
+    "successTitle": "Talebiniz ön izleme olarak hazırlandı.",
+    "successDescription": "Bu sürümde bilgiler herhangi bir yere gönderilmedi veya kaydedilmedi."
+  },
+  "faq": {
+    "label": "SSS",
+    "title": "Karar öncesi sık sorulan sorular",
+    "items": {
+      "smallClinics": {
+        "question": "Bu sistem küçük klinikler için uygun mu?",
+        "answer": "Evet. Tek klinik için sade bir operasyon yapısı sunacak şekilde kullanılabilir ve ihtiyaç arttıkça çoklu kullanıcı veya çoklu klinik yapısına genişleyebilir."
+      },
+      "branches": {
+        "question": "Birden fazla şubeyi yönetebilir miyim?",
+        "answer": "Evet. Çoklu klinik görünümü, farklı şubelerin temel operasyon metriklerini tek ekranda karşılaştırmayı hedefler."
+      },
+      "roles": {
+        "question": "Kullanıcı rolleri olacak mı?",
+        "answer": "Evet. Yönetici, hekim, resepsiyon ve ilgili operasyon rolleri için erişim seviyeleri ayrılabilir."
+      },
+      "migration": {
+        "question": "Mevcut hasta verileri aktarılabilir mi?",
+        "answer": "Veri formatına göre aktarım süreci değerlendirilir. Yapılandırılmış veriler için kontrollü bir aktarım planı hazırlanabilir."
+      },
+      "integrations": {
+        "question": "WhatsApp ve Instagram entegrasyonları hazır mı?",
+        "answer": "Evet. Uygulamada WhatsApp bağlantı ve gelen kutusu ile Instagram bağlantı ve DM gelen kutusu akışları hazırdır. Kullanılabilir özellikler kanal kurulumuna ve kullanıcı yetkilerine bağlıdır."
+      },
+      "demo": {
+        "question": "Demo veya erken erişim alabilir miyim?",
+        "answer": "Demo talepleri ürün tanıtım sürecinin parçası olarak değerlendirilebilir. Bu ön izleme sayfasındaki form henüz veri göndermez."
+      }
+    }
+  },
+  "footer": {
+    "product": "Ürün",
+    "company": "Bilgi",
+    "links": {
+      "features": "Özellikler",
+      "multiClinic": "Çoklu Klinik",
+      "integrations": "Entegrasyonlar",
+      "demo": "Demo",
+      "login": "Giriş Yap",
+      "legal": "Yasal Bilgilendirme",
+      "privacy": "Gizlilik ve Aydınlatma",
+      "cookies": "Çerez Politikası",
+      "communications": "İletişim Kanalları"
+    },
+    "privacyNote": "Hatırlatma iletişimlerinde hassas sağlık verisi paylaşılmaması ilkesiyle tasarlanır.",
+    "copyright": "Aile Diş CRM. Klinik operasyon yönetimi için MVP ürün deneyimi."
+  }
+}

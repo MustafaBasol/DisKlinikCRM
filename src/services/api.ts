@@ -80,6 +80,8 @@ export const serviceService = {
 
 export const appointmentService = {
   getAll: (params?: any) => api.get('/appointments', { params }),
+  getAvailableSlots: (params: { doctorId: string; serviceId: string; date: string; excludeAppointmentId?: string }) =>
+    api.get('/appointments/available-slots', { params }),
   getById: (id: string) => api.get(`/appointments/${id}`),
   create: (data: any) => api.post('/appointments', data),
   update: (id: string, data: any) => api.put(`/appointments/${id}`, data),

@@ -1,0 +1,279 @@
+{
+  "meta": {
+    "title": "Aile Diş CRM | Opérations cliniques avec WhatsApp et Instagram"
+  },
+  "brand": {
+    "name": "Aile Diş CRM",
+    "description": "Tableau de bord des opérations, des établissements et des communications pour cabinets dentaires."
+  },
+  "nav": {
+    "features": "Fonctionnalités",
+    "multiClinic": "Multi-clinique",
+    "integrations": "Intégrations",
+    "workflow": "Fonctionnement",
+    "faq": "FAQ",
+    "login": "Connexion",
+    "themeToggle": "Changer le thème",
+    "languageSelector": "Choisir la langue"
+  },
+  "actions": {
+    "requestDemo": "Demander une démo",
+    "reviewFeatures": "Voir les fonctionnalités"
+  },
+  "hero": {
+    "eyebrow": "CRM pour cabinet dentaire",
+    "title": "Gérez votre clinique depuis un tableau de bord",
+    "description": "Regroupez rendez-vous, dossiers patients, parcours de traitement, paiements, tâches de l'équipe, performances des établissements et échanges WhatsApp / Instagram dans un CRM moderne.",
+    "highlights": {
+      "roles": "Accès par rôle",
+      "branches": "Vue multi-clinique",
+      "channels": "WhatsApp + Instagram prêts",
+      "reporting": "Opérations mesurables"
+    }
+  },
+  "dashboard": {
+    "label": "Aperçu du produit",
+    "title": "Tableau de bord opérationnel",
+    "period": "Aujourd'hui",
+    "metrics": {
+      "appointments": "Rendez-vous du jour",
+      "patients": "Nouveaux patients",
+      "collections": "État des encaissements",
+      "noShow": "Taux d'absence"
+    },
+    "branchesTitle": "Comparaison des établissements",
+    "branchesCount": "3 établissements actifs",
+    "occupancy": "Occupation",
+    "appointmentFlow": "Flux des rendez-vous",
+    "appointmentFlowSummary": "Charge opérationnelle planifiée",
+    "slots": {
+      "morning": "Matin",
+      "afternoon": "Après-midi",
+      "evening": "Soir"
+    }
+  },
+  "problem": {
+    "label": "Charge opérationnelle",
+    "title": "La croissance devient difficile lorsque les opérations sont dispersées",
+    "description": "La visibilité diminue lorsque rendez-vous, communications, suivi des traitements, paiements et tâches d'équipe restent séparés.",
+    "items": {
+      "appointments": {
+        "title": "Flux de rendez-vous dispersé",
+        "description": "Le suivi du planning quotidien et des changements peut faire perdre du temps."
+      },
+      "history": {
+        "title": "Historique difficile à retrouver",
+        "description": "Les informations patient et traitement peuvent rester déconnectées des opérations."
+      },
+      "payments": {
+        "title": "Suivi des paiements fragmenté",
+        "description": "Le manque de visibilité sur soldes et paiements complique la gestion."
+      },
+      "noShow": {
+        "title": "Absences non mesurées",
+        "description": "Les raisons d'annulation ou d'absence peuvent se perdre sans action."
+      }
+    }
+  },
+  "features": {
+    "label": "Solution",
+    "title": "Le centre opérationnel des cabinets dentaires",
+    "description": "Aile Diş CRM réunit les outils essentiels à la visibilité quotidienne des opérations, des communications et des performances.",
+    "items": {
+      "appointments": {
+        "title": "Gestion intelligente des rendez-vous",
+        "description": "Suivez les rendez-vous quotidiens, hebdomadaires et par établissement dans une même vue."
+      },
+      "patientHistory": {
+        "title": "Historique patient et traitement",
+        "description": "Consultez les parcours de traitement et les notes opérationnelles associées depuis une fiche."
+      },
+      "collections": {
+        "title": "Suivi des paiements et encaissements",
+        "description": "Surveillez paiements, soldes restants et situation des encaissements."
+      },
+      "noShow": {
+        "title": "Analyse des absences et annulations",
+        "description": "Transformez les tendances d'annulation et d'absence en données opérationnelles."
+      },
+      "branches": {
+        "title": "Gestion multi-clinique",
+        "description": "Obtenez une visibilité centrale en comparant vos établissements avec des indicateurs communs."
+      },
+      "tasks": {
+        "title": "Tâches d'équipe",
+        "description": "Gérez plus clairement les tâches d'accueil, des praticiens et de direction."
+      }
+    }
+  },
+  "multiClinic": {
+    "label": "Différence clé",
+    "title": "Gérez plusieurs cliniques depuis un seul écran",
+    "description": "En tant que propriétaire ou responsable, comparez l'activité, la progression des patients, les encaissements et les taux d'absence de vos établissements.",
+    "points": {
+      "comparison": "Comparaison quotidienne des performances par établissement",
+      "visibility": "Visibilité sur les encaissements et l'occupation",
+      "teams": "Évaluation de la charge des équipes et des rendez-vous"
+    },
+    "tableLabel": "Exemple de tableau de comparaison multi-clinique",
+    "columns": {
+      "branch": "Établissement",
+      "appointments": "Rendez-vous",
+      "patients": "Nouveaux patients",
+      "collections": "Encaissements",
+      "noShow": "Absence",
+      "occupancy": "Occupation"
+    },
+    "branches": {
+      "center": "Clinique centrale",
+      "atasehir": "Établissement Ataşehir",
+      "bakirkoy": "Établissement Bakırköy"
+    },
+    "sampleNote": "Les valeurs affichées illustrent l'interface du produit."
+  },
+  "integrations": {
+    "label": "Intégrations prêtes",
+    "title": "Reliez les conversations WhatsApp et Instagram à vos opérations",
+    "description": "Aile Diş CRM propose des surfaces de connexion et de messagerie prêtes à intégrer deux canaux essentiels dans le flux de votre clinique.",
+    "ready": "Prêt",
+    "points": {
+      "connection": "Vue de gestion des connexions de canaux",
+      "inbox": "Suivi des conversations reçues depuis une boîte centrale",
+      "workflow": "Orientation des messages vers les opérations de rendez-vous et patients"
+    },
+    "channels": {
+      "whatsapp": {
+        "title": "Intégration WhatsApp",
+        "description": "Suivez les connexions WhatsApp et conversations reçues dans les opérations cliniques.",
+        "details": {
+          "connections": "Gestion des connexions",
+          "inbox": "Boîte WhatsApp",
+          "branches": "Suivi par établissement"
+        }
+      },
+      "instagram": {
+        "title": "Intégration Instagram DM",
+        "description": "Recevez les messages Instagram et orientez les demandes pertinentes vers les rendez-vous.",
+        "details": {
+          "connections": "Gestion des connexions",
+          "inbox": "Boîte Instagram DM",
+          "conversion": "Conversion en rendez-vous"
+        }
+      }
+    }
+  },
+  "workflow": {
+    "label": "Fonctionnement",
+    "title": "Des opérations cliniques plus visibles en trois étapes",
+    "items": {
+      "setup": {
+        "title": "Définissez votre clinique et votre équipe",
+        "description": "Configurez les informations, rôles utilisateurs et membres de l'équipe."
+      },
+      "operations": {
+        "title": "Gérez les opérations quotidiennes",
+        "description": "Suivez rendez-vous, patients, traitements, paiements et tâches dans une vue commune."
+      },
+      "performance": {
+        "title": "Mesurez la performance",
+        "description": "Évaluez régulièrement la visibilité des cliniques et établissements depuis le tableau de bord."
+      }
+    }
+  },
+  "trust": {
+    "label": "Structure contrôlée",
+    "title": "Une approche organisée et responsable des données cliniques",
+    "description": "La gestion des données opérationnelles repose sur le contrôle des accès et une structure évolutive.",
+    "items": {
+      "roles": {
+        "title": "Accès par rôle",
+        "description": "Permet aux utilisateurs d'accéder aux domaines opérationnels correspondant à leurs fonctions."
+      },
+      "separation": {
+        "title": "Séparation des données par clinique",
+        "description": "Conçue pour maîtriser la visibilité des cliniques dans les organisations multi-établissements."
+      },
+      "architecture": {
+        "title": "Infrastructure d'intégration modulaire",
+        "description": "Soutient la gestion contrôlée des flux WhatsApp et Instagram prêts."
+      },
+      "compliance": {
+        "title": "Structure pour les processus de conformité",
+        "description": "Configurable selon les processus de conformité KVKK/RGPD."
+      }
+    }
+  },
+  "demo": {
+    "label": "Démo",
+    "title": "Évaluons la structure adaptée à votre clinique",
+    "description": "Créez une demande de démo pour voir comment le produit pourrait s'adapter à vos opérations, besoins multi-cliniques et canaux de communication.",
+    "formTitle": "Demande de démo",
+    "formNote": "Ce formulaire d'aperçu n'envoie et n'enregistre aucune information.",
+    "fields": {
+      "name": "Nom complet",
+      "clinic": "Nom de la clinique",
+      "city": "Ville",
+      "branches": "Nombre d'établissements",
+      "contact": "Téléphone ou e-mail",
+      "note": "Note"
+    },
+    "placeholders": {
+      "name": "Votre nom complet",
+      "clinic": "Nom de votre clinique",
+      "city": "Ville",
+      "branches": "Ex. 2",
+      "contact": "Coordonnées pour vous joindre",
+      "note": "Brève information sur votre besoin"
+    },
+    "submit": "Créer une demande de démo",
+    "successTitle": "Votre demande a été préparée en aperçu.",
+    "successDescription": "Aucune information n'a été envoyée ou enregistrée dans cette version."
+  },
+  "faq": {
+    "label": "FAQ",
+    "title": "Questions fréquentes avant décision",
+    "items": {
+      "smallClinics": {
+        "question": "Ce système convient-il aux petites cliniques ?",
+        "answer": "Oui. Il peut offrir une structure opérationnelle simple pour une clinique et s'étendre à plusieurs utilisateurs ou établissements selon les besoins."
+      },
+      "branches": {
+        "question": "Puis-je gérer plusieurs établissements ?",
+        "answer": "Oui. La vue multi-clinique vise à comparer les principaux indicateurs opérationnels de plusieurs établissements sur un écran."
+      },
+      "roles": {
+        "question": "Y aura-t-il des rôles utilisateurs ?",
+        "answer": "Oui. Les niveaux d'accès peuvent être séparés pour direction, praticiens, accueil et rôles opérationnels concernés."
+      },
+      "migration": {
+        "question": "Les données patients existantes peuvent-elles être transférées ?",
+        "answer": "Le processus est évalué selon le format des données. Un plan de migration contrôlé peut être préparé pour les données structurées."
+      },
+      "integrations": {
+        "question": "Les intégrations WhatsApp et Instagram sont-elles prêtes ?",
+        "answer": "Oui. Les flux de connexion et boîte WhatsApp ainsi que de connexion et boîte DM Instagram sont disponibles dans l'application. Les fonctions utilisables dépendent de la configuration du canal et des autorisations."
+      },
+      "demo": {
+        "question": "Puis-je obtenir une démo ou un accès anticipé ?",
+        "answer": "Les demandes de démo peuvent être évaluées dans le cadre de la présentation du produit. Le formulaire de cette page d'aperçu n'envoie pas encore de données."
+      }
+    }
+  },
+  "footer": {
+    "product": "Produit",
+    "company": "Informations",
+    "links": {
+      "features": "Fonctionnalités",
+      "multiClinic": "Multi-clinique",
+      "integrations": "Intégrations",
+      "demo": "Démo",
+      "login": "Connexion",
+      "legal": "Informations juridiques",
+      "privacy": "Confidentialité",
+      "cookies": "Politique des cookies",
+      "communications": "Canaux de communication"
+    },
+    "privacyNote": "Conçu selon le principe qu'aucune donnée de santé sensible ne doit être partagée dans les communications de rappel.",
+    "copyright": "Aile Diş CRM. Expérience MVP pour la gestion des opérations cliniques."
+  }
+}

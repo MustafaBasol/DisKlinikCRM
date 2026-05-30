@@ -1,0 +1,36 @@
+:root {
+  --dental-bg: #f8fafc;
+  --dental-surface: #ffffff;
+  --dental-surface-muted: #f1f5f9;
+
+  --dental-primary: #0f2742;
+  --dental-primary-soft: #17395f;
+  --dental-teal: #0e9384;
+  --dental-teal-soft: #e6fffa;
+  --dental-blue: #2563eb;
+
+  --dental-text: #102033;
+  --dental-text-muted: #667085;
+  --dental-border: #e5e7eb;
+
+  --dental-success: #12b76a;
+  --dental-warning: #f79009;
+  --dental-error: #f04438;
+
+  --dental-radius-sm: 0.5rem;
+  --dental-radius-md: 0.875rem;
+  --dental-radius-lg: 1.25rem;
+  --dental-radius-xl: 1.5rem;
+  --dental-radius-2xl: 2rem;
+
+  --dental-shadow-sm: 0 1px 2px rgba(15, 39, 66, 0.06);
+  --dental-shadow-md: 0 10px 30px rgba(15, 39, 66, 0.08);
+  --dental-shadow-lg: 0 24px 60px rgba(15, 39, 66, 0.12);
+
+  --dental-container: 1120px;
+}
+
+/*
+Tailwind kullanıyorsan bu tokenları doğrudan CSS variable olarak kullanabilir
+veya tailwind.config içindeki theme.extend.colors alanına taşıyabilirsin.
+*/

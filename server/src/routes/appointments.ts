@@ -2,12 +2,30 @@ import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
-import { getParam, checkPractitionerAvailability } from '../utils/helpers.js';
+import {
+  checkPractitionerAvailability,
+  getParam,
+  getZonedDateParts,
+  localDateTimeToClinicDate,
+  minutesToTime,
+  timeToMinutes,
+} from '../utils/helpers.js';
 import { appointmentSchema, appointmentUpdateSchema } from '../schemas/index.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
+const SLOT_STEP_MINUTES = 30;
+
+const addDaysToDateString = (date: string, days: number) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const result = new Date(Date.UTC(year, month - 1, day + days));
+  const nextYear = result.getUTCFullYear();
+  const nextMonth = String(result.getUTCMonth() + 1).padStart(2, '0');
+  const nextDay = String(result.getUTCDate()).padStart(2, '0');
+
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+};
 
 // GET /api/appointments
 router.get('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
@@ -53,6 +71,162 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
     res.json(appointments);
   } catch {
     res.status(500).json({ error: 'Failed to fetch appointments' });
+  }
+});
+
+// GET /api/appointments/available-slots
+router.get('/appointments/available-slots', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+  const doctorId = typeof req.query.doctorId === 'string' ? req.query.doctorId : '';
+  const serviceId = typeof req.query.serviceId === 'string' ? req.query.serviceId : '';
+  const date = typeof req.query.date === 'string' ? req.query.date : '';
+  const excludeAppointmentId = typeof req.query.excludeAppointmentId === 'string' ? req.query.excludeAppointmentId : undefined;
+
+  if (!doctorId || !serviceId || !date) {
+    return res.status(400).json({ error: 'doctorId, serviceId and date are required' });
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date must use YYYY-MM-DD format' });
+  }
+
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
+  try {
+    const [clinic, service, practitionerUser] = await Promise.all([
+      prisma.clinic.findFirst({ where: { id: clinicId }, select: { id: true, timezone: true } }),
+      prisma.appointmentType.findFirst({ where: { id: serviceId, clinicId, isActive: true } }),
+      prisma.user.findFirst({ where: { id: doctorId, isActive: true } }),
+    ]);
+
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    if (!service) return res.status(400).json({ error: 'Invalid service' });
+    if (!practitionerUser) return res.status(400).json({ error: 'Invalid practitioner' });
+
+    const isAssigned =
+      practitionerUser.clinicId === clinicId ||
+      !!(await prisma.userClinic.findFirst({ where: { userId: doctorId, clinicId, isActive: true } }));
+
+    if (!isAssigned) {
+      return res.status(400).json({ error: 'Practitioner is not assigned to this clinic' });
+    }
+
+    const timeZone = clinic.timezone || 'Europe/Istanbul';
+    const weekday = getZonedDateParts(localDateTimeToClinicDate(date, '12:00', timeZone), timeZone).weekday;
+    const dayStart = localDateTimeToClinicDate(date, '00:00', timeZone);
+    const nextDay = localDateTimeToClinicDate(addDaysToDateString(date, 1), '00:00', timeZone);
+
+    const [clinicHours, offDay, doctorSlots, existingAppointments] = await Promise.all([
+      prisma.clinicWorkingHours.findUnique({
+        where: { clinicId_dayOfWeek: { clinicId, dayOfWeek: weekday } },
+      }),
+      prisma.doctorOffDay.findFirst({
+        where: { clinicId, practitionerId: doctorId, date },
+      }),
+      prisma.doctorAvailability.findMany({
+        where: { clinicId, practitionerId: doctorId, weekday, isActive: true },
+        orderBy: { startTime: 'asc' },
+      }),
+      prisma.appointment.findMany({
+        where: {
+          clinicId,
+          practitionerId: doctorId,
+          deletedAt: null,
+          status: { notIn: ['cancelled'] },
+          ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
+          startTime: { lt: nextDay },
+          endTime: { gt: dayStart },
+        },
+        select: { id: true, startTime: true, endTime: true },
+        orderBy: { startTime: 'asc' },
+      }),
+    ]);
+
+    if (clinicHours?.isClosed) {
+      return res.json({
+        date,
+        doctorId,
+        serviceId,
+        serviceDuration: service.durationMinutes,
+        slotStepMinutes: SLOT_STEP_MINUTES,
+        timeZone,
+        slots: [],
+        reason: 'clinic_closed',
+      });
+    }
+
+    if (offDay) {
+      return res.json({
+        date,
+        doctorId,
+        serviceId,
+        serviceDuration: service.durationMinutes,
+        slotStepMinutes: SLOT_STEP_MINUTES,
+        timeZone,
+        slots: [],
+        reason: 'off_day',
+      });
+    }
+
+    if (doctorSlots.length === 0) {
+      return res.json({
+        date,
+        doctorId,
+        serviceId,
+        serviceDuration: service.durationMinutes,
+        slotStepMinutes: SLOT_STEP_MINUTES,
+        timeZone,
+        slots: [],
+        reason: 'doctor_availability_missing',
+      });
+    }
+
+    const slots: Array<{ start: string; end: string; startTime: string; endTime: string }> = [];
+    const now = new Date();
+
+    for (const availability of doctorSlots) {
+      const availabilityStart = timeToMinutes(availability.startTime);
+      const availabilityEnd = timeToMinutes(availability.endTime);
+
+      for (
+        let cursor = availabilityStart;
+        cursor + service.durationMinutes <= availabilityEnd;
+        cursor += SLOT_STEP_MINUTES
+      ) {
+        const slotEnd = cursor + service.durationMinutes;
+        const start = minutesToTime(cursor);
+        const end = minutesToTime(slotEnd);
+        const startTime = localDateTimeToClinicDate(date, start, timeZone);
+        const endTime = localDateTimeToClinicDate(date, end, timeZone);
+
+        if (startTime <= now) continue;
+
+        const overlaps = existingAppointments.some(appointment =>
+          startTime < appointment.endTime && endTime > appointment.startTime
+        );
+
+        if (!overlaps) {
+          slots.push({
+            start,
+            end,
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+          });
+        }
+      }
+    }
+
+    res.json({
+      date,
+      doctorId,
+      serviceId,
+      serviceDuration: service.durationMinutes,
+      slotStepMinutes: SLOT_STEP_MINUTES,
+      timeZone,
+      slots,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to compute available slots' });
   }
 });
 
@@ -123,6 +297,7 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
       return res.status(409).json({
         error: 'Appointment is outside practitioner availability',
         code: 'APPOINTMENT_OUTSIDE_AVAILABILITY',
+        reason: availability.reason,
         availability: availability.slots,
       });
     }
@@ -222,6 +397,7 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         return res.status(409).json({
           error: 'Appointment is outside practitioner availability',
           code: 'APPOINTMENT_OUTSIDE_AVAILABILITY',
+          reason: availability.reason,
           availability: availability.slots,
         });
       }

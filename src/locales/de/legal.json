@@ -1,0 +1,323 @@
+{
+  "brand": {
+    "name": "Aile Diş CRM",
+    "legal": "Rechtliche Informationen"
+  },
+  "meta": {
+    "center": "Rechtliche Informationen | Aile Diş CRM",
+    "privacy": "Datenschutzhinweise | Aile Diş CRM",
+    "cookies": "Cookie- und lokale Speicherrichtlinie | Aile Diş CRM",
+    "communications": "Elektronische Kommunikation und Integrationen | Aile Diş CRM"
+  },
+  "nav": {
+    "label": "Rechtliche Seiten",
+    "center": "Rechtliche Informationen",
+    "privacy": "Datenschutzhinweise",
+    "cookies": "Cookie-Richtlinie",
+    "communications": "Kommunikationskanäle"
+  },
+  "shared": {
+    "label": "Entwurf rechtlicher Informationen",
+    "back": "Zurück zur Präsentationsseite",
+    "themeToggle": "Design wechseln",
+    "languageSelector": "Sprache auswählen",
+    "draftTitle": "Vor Veröffentlichung zu vervollständigen",
+    "draftBody": "Diese Seiten sind Umsetzungsentwürfe, die anhand der wesentlichen Informationspflichten türkischer und europäischer Vorschriften erstellt wurden; sie sind keine Rechtsberatung und keine Garantie für Konformität. Nach Festlegung der Angaben zum Verantwortlichen, der tatsächlichen Dienstleister, Aufbewahrungsfristen, Übermittlungsmechanismen und Einwilligungsverfahren für Kommunikation müssen sie rechtlich geprüft werden.",
+    "reviewDate": "Letzte Prüfung der Rechtsquellen: 25. Mai 2026",
+    "sources": "Maßgebliche amtliche Quellen",
+    "sourcesDescription": "Die folgenden amtlichen Rechtsvorschriften und Veröffentlichungen von Behörden wurden bei der Festlegung des Umfangs dieses Entwurfs berücksichtigt."
+  },
+  "center": {
+    "title": "Rechtliche Informationsstelle",
+    "description": "Bereich zur Vorbereitung der Veröffentlichung von Datenschutz- und elektronischen Kommunikationstexten für die öffentliche Präsentationsseite und das WhatsApp- und Instagram-gestützte Produkt für Klinikabläufe.",
+    "pagesTitle": "Informationsseiten",
+    "pagesDescription": "Jeder Text erläutert gesondert das derzeitige öffentliche Verhalten des Produkts und die vor der Produktivsetzung zu erfüllenden Pflichten.",
+    "open": "Seite ansehen",
+    "cards": [
+      {
+        "path": "/legal/privacy",
+        "title": "Datenschutzhinweise",
+        "description": "Datenverarbeitung, Übermittlung, Aufbewahrung und Rechte betroffener Personen nach KVKK und, soweit anwendbar, DSGVO."
+      },
+      {
+        "path": "/legal/cookies",
+        "title": "Cookie- und lokale Speicherrichtlinie",
+        "description": "Derzeitiges funktionales Browserverhalten und künftige Regeln für Cookie-Einwilligungen."
+      },
+      {
+        "path": "/legal/communications",
+        "title": "Hinweise zu Kommunikationskanälen",
+        "description": "WhatsApp- und Instagram-Abläufe, Genehmigungen für kommerzielle Kommunikation und der Grundsatz, keine sensiblen Daten zu teilen."
+      }
+    ],
+    "scope": {
+      "title": "Umfang und Grenze",
+      "body": "Aile Diş CRM ist ein CRM-Produkt zur Verwaltung von Klinikabläufen; es ist nicht als Plattform für Diagnose, Verschreibung oder vollständige elektronische Patientenakte positioniert. Da Patienten-, Termin- und Kommunikationsabläufe jedoch personenbezogene Daten und in bestimmten Nutzungen sensible Gesundheitsdaten enthalten können, sind Datenminimierung und autorisierter Zugriff erforderlich."
+    },
+    "checklist": {
+      "title": "Vor Veröffentlichung zu erledigen",
+      "description": "Damit diese Texte in einem tatsächlichen Dienst verwendet werden können, muss Ihre Organisation die folgenden Informationen und Kontrollen abschließen.",
+      "items": [
+        "Firmenname des Verantwortlichen, MERSIS-/Steuerangaben, Postanschrift und Datenschutzkontakt müssen eingetragen werden.",
+        "Tatsächliche Datenkategorien, Zwecke, Rechtsgrundlagen und Aufbewahrungs-/Löschfristen müssen mit dem Datenverzeichnis abgeglichen werden.",
+        "Auftragsverarbeiterrollen, Verträge und etwaige Mechanismen für internationale Übermittlungen bei Hosting-, Messaging- und Meta-/WhatsApp-/Instagram-Anbietern müssen dokumentiert werden.",
+        "Für elektronische Marketingkommunikation in der Türkei müssen Genehmigungs-/Widerspruchs- und gegebenenfalls IYS-Verfahren umgesetzt werden; für EU-Zielgruppen sind ePrivacy/DSGVO und einschlägige mitgliedstaatliche Regeln anzuwenden.",
+        "Der Ausschluss sensibler Gesundheitsdaten aus Kommunikationsnachrichten, Zugriffskontrollen, Protokollierung und Verfahren zur Reaktion auf Datenschutzverletzungen müssen betrieblich geprüft werden."
+      ]
+    },
+    "sources": {
+      "kvkk": "Türkische Datenschutzbehörde - KVKK-Informationen",
+      "gdpr": "EUR-Lex - Datenschutz-Grundverordnung (DSGVO/GDPR)",
+      "commercial": "Handelsministerium der Republik Türkiye - Vorschriften zum elektronischen Handel"
+    }
+  },
+  "privacy": {
+    "title": "Datenschutz- und Informationshinweise zur Verarbeitung personenbezogener Daten",
+    "description": "Textentwurf für Informationspflichten nach KVKK in der Türkei und nach DSGVO, wenn Personen in der Europäischen Union Dienstleistungen angeboten werden oder ihr Verhalten beobachtet wird.",
+    "controller": {
+      "title": "1. Verantwortlicher und Kontakt",
+      "body": "Die Klinik oder das Unternehmen, das Zwecke und Methoden der Verarbeitung personenbezogener Daten bestimmt, ist im jeweiligen Nutzungskontext der Verantwortliche. Die Rolle des Plattformanbieters als Verantwortlicher oder Auftragsverarbeiter muss nach Dienstleistung und Vertrag gesondert bestimmt werden.",
+      "requiredTitle": "Verpflichtende Veröffentlichungsangaben fehlen",
+      "requiredBody": "[Firmenname des Verantwortlichen], [Postanschrift], [MERSIS-/Steuerangaben], [E-Mail- oder KEP-Adresse für Anträge] sowie gegebenenfalls [Kontakt des EU-Vertreters / Datenschutzbeauftragten] müssen vor Inbetriebnahme hier eingefügt werden."
+    },
+    "data": {
+      "title": "2. Möglicherweise verarbeitete Datenkategorien",
+      "body": "Der folgende Umfang beruht auf der aktuellen Präsentationsseite und den beschriebenen betrieblichen Funktionen des Produkts. Vor einer vertraglichen Nutzung muss er anhand des tatsächlichen Datenverzeichnisses eingegrenzt oder aktualisiert werden.",
+      "rows": [
+        {
+          "label": "Nutzung der öffentlichen Website",
+          "value": "Funktionale Browserspeicherdaten wie Sprach- und Designeinstellungen; in dieser Version wurde kein Analyse- oder Werbetrackingwerkzeug identifiziert."
+        },
+        {
+          "label": "Bereich für Demoanfragen",
+          "value": "In das aktuelle Vorschauformular eingegebene Informationen werden weder gesendet noch gespeichert. Wird eine tatsächliche Antragsfunktion aktiviert, muss für Kontaktdaten ein eigener Hinweis bereitgestellt werden."
+        },
+        {
+          "label": "Konto für Klinikabläufe",
+          "value": "Bei Aktivierung des Dienstes können Benutzer-/Rollen-, Klinik- und Standort-, Patientenkontakt-, Termin-, Behandlungschancen-, Aufgaben-, Zahlungsnachverfolgungs- und Aktivitätsprotokolldaten verarbeitet werden."
+        },
+        {
+          "label": "WhatsApp- und Instagram-Abläufe",
+          "value": "Bei Aktivierung eines Kanals können Verbindungsdaten, Nachrichtenmetadaten und Gesprächsinhalte in betriebliche Abläufe eingehen. Sensible Gesundheitsinformationen dürfen nicht in Nachrichten geteilt werden."
+        },
+        {
+          "label": "Sicherheits- und Prüfprotokolle",
+          "value": "Berechtigungs-, Aktivitäts-/Prüf- und Sicherheitsdaten können für Zugriffskontrolle und Vorfalluntersuchung verarbeitet werden."
+        }
+      ]
+    },
+    "purposes": {
+      "title": "3. Zwecke der Verarbeitung",
+      "items": [
+        "Betriebsverwaltung nach Klinik, Standort, Team und Rolle bereitstellen.",
+        "Übersicht über Termine, Nachverfolgungsaufgaben, Behandlungs-/Dienstleistungsabläufe und Zahlungen verwalten.",
+        "Soweit aktiviert, autorisierten Teams ermöglichen, WhatsApp- und Instagram-Gespräche in Betriebsabläufe zu überführen.",
+        "Konto- und Dienstsicherheit schützen, unberechtigten Zugriff verhindern und Prüfprotokolle führen.",
+        "Anfragen betroffener Personen, rechtliche Pflichten und vertragliche Prozesse erfüllen."
+      ]
+    },
+    "basis": {
+      "title": "4. Rechtsgrundlagen und sensible Daten",
+      "body": "Die Rechtsgrundlage jeder Datenkategorie muss nach tatsächlicher Nutzung, Rolle des Verantwortlichen und Zielstaat gesondert im Datenverzeichnis festgelegt werden. Eine Einwilligung darf nicht als allgemein angenommene Grundlage behandelt werden, wenn eine andere Rechtsgrundlage erforderlich ist.",
+      "rows": [
+        {
+          "label": "Dienst- und Kontovorgänge",
+          "value": "Geeignete Grundlagen wie Vertragserfüllung, rechtliche Verpflichtung oder bei erfüllten Bedingungen berechtigte Interessen werden nach Artikel 5 KVKK und Artikel 6 DSGVO bewertet."
+        },
+        {
+          "label": "Sicherheit und Prüfung",
+          "value": "Die Grundlage rechtlicher Verpflichtung oder verhältnismäßiger berechtigter Interessen für autorisierten Zugriff und Vorfallmanagement wird durch eine konkrete Risikobewertung dokumentiert."
+        },
+        {
+          "label": "Marketingkommunikation",
+          "value": "Vor Einrichtung des erforderlichen Einwilligungs-/Widerspruchsmechanismus nach türkischen Vorschriften zur kommerziellen elektronischen Kommunikation und gegebenenfalls IYS oder für die EU nach ePrivacy, DSGVO und einschlägigem mitgliedstaatlichem Recht werden keine Nachrichten gesendet."
+        }
+      ],
+      "special": "Gesundheitsdaten sind nach KVKK besondere personenbezogene Daten und nach DSGVO besondere Kategorien personenbezogener Daten. Sie dürfen nur bei tatsächlicher Notwendigkeit, mit festgelegter anwendbarer Verarbeitungsbedingung, geeigneten technischen und organisatorischen Maßnahmen und beschränktem Zugriff verarbeitet werden; für Marketingnachrichten dürfen sie nicht verwendet werden."
+    },
+    "transfers": {
+      "title": "5. Empfänger und internationale Übermittlungen",
+      "body": "Hosting, Unterstützung oder WhatsApp-/Instagram-Verbindungen können zur Weitergabe personenbezogener Daten an Anbieter im Ausland führen. Dieser Entwurf erklärt nicht, dass ein Anbieter für den Produktivbetrieb gewählt wurde oder eine Übermittlung bereit ist.",
+      "actions": [
+        "Name, Rolle, Land und Umfang verarbeiteter Daten der Empfänger oder Auftragsverarbeiter müssen abschließend bestimmt werden.",
+        "Bei Übermittlungen aus der Türkei darf keine Übermittlung beginnen, bevor eine aktuelle Übermittlungsmethode nach Artikel 9 KVKK, beispielsweise Standardverträge bei erfüllten Voraussetzungen, angewandt wurde.",
+        "Soweit die DSGVO gilt, müssen Angemessenheitsbeschlüsse oder geeignete Garantien und zusätzliche Bewertungen nach Kapitel V für Drittlandübermittlungen dokumentiert werden.",
+        "Vor Aktivierung von Meta-, WhatsApp- oder Instagram-Funktionen müssen klinik- und personenbezogene Übermittlungsinformationen angezeigt werden."
+      ]
+    },
+    "retention": {
+      "title": "6. Aufbewahrung und Löschung",
+      "body": "Daten dürfen nur so lange aufbewahrt werden, wie es für ihren Zweck erforderlich ist; Verfahren zur Löschung, Vernichtung oder Anonymisierung müssen nach tatsächlichen rechtlichen und vertraglichen Pflichten dokumentiert werden. Die nachstehenden Fristen sind noch nicht festgelegt.",
+      "rows": [
+        {
+          "label": "Einstellungen der öffentlichen Website",
+          "value": "Als funktionale Einstellungen im Browser gespeichert und durch Nutzer löschbar. Der genaue Lebenszyklus ist vor Veröffentlichung zu bestätigen."
+        },
+        {
+          "label": "Demoformular",
+          "value": "Da diese Vorschauversion keine Daten übermittelt oder aufzeichnet, werden keine Anfragedaten gespeichert."
+        },
+        {
+          "label": "Konto- und Klinikbetriebsdaten",
+          "value": "[Aufbewahrungsfrist und Löschzyklus werden nach Abschluss des Datenverzeichnisses eingetragen.]"
+        },
+        {
+          "label": "Nachrichten- und Prüfprotokolle",
+          "value": "[Eine an Erforderlichkeit, Gesetzgebung, Streitfälle und Sicherheitszwecke angepasste Frist wird festgelegt und eingetragen.]"
+        }
+      ]
+    },
+    "rights": {
+      "title": "7. Rechte betroffener Personen und Anträge",
+      "body": "Je nach Umfang können betroffene Personen Rechte nach Artikel 11 KVKK und Artikel 15-22 DSGVO ausüben. Dazu gehören insbesondere Anträge auf:",
+      "items": [
+        "Auskunft, ob ihre Daten verarbeitet werden, sowie Information und Zugang.",
+        "Berichtigung unvollständiger oder unrichtiger Daten.",
+        "Löschung, Vernichtung, Einschränkung der Verarbeitung oder Widerspruch, soweit die anwendbaren Bedingungen erfüllt sind.",
+        "Information über Dritte, an die Daten übermittelt wurden, und gegebenenfalls Datenübertragbarkeit.",
+        "Widerruf der Einwilligung bei einwilligungsbasierten Verarbeitungen und Beschwerde bei der zuständigen Aufsichtsbehörde."
+      ],
+      "contact": "Anträge werden über die vor Veröffentlichung anzugebende [Antragsadresse des Verantwortlichen / KEP / E-Mail] entgegengenommen. Beschwerdewege in der Türkei richten sich nach KVKK-Verfahren; Anträge im Anwendungsbereich der DSGVO nach den Verfahren der zuständigen EU-Aufsichtsbehörde."
+    },
+    "publish": {
+      "title": "8. Vor Veröffentlichung dieses Textes",
+      "items": [
+        "Datenverzeichnis, Bewertung der VERBIS-Pflicht und Aufbewahrungs-/Löschrichtlinie müssen anhand des tatsächlichen Unternehmens geprüft werden.",
+        "Rollen mit Zugriff auf sensible Daten und Regeln für Nachrichteninhalte müssen getestet werden.",
+        "Lieferantenverträge, Übermittlungsdokumente und Sicherheitsmaßnahmen müssen mit den Aussagen des Textes übereinstimmen.",
+        "Der Text muss bei neuen Funktionen oder Anbietern aktualisiert werden und ein aktuelles Gültigkeitsdatum anzeigen."
+      ]
+    },
+    "sources": {
+      "notice": "KVKK - Leitfaden zur Erfüllung der Informationspflicht",
+      "transfer": "KVKK - Bekanntmachung zu Standardverträgen für internationale Übermittlungen (10.07.2024)",
+      "gdpr": "EUR-Lex - DSGVO/GDPR (insbesondere Artikel 9, 13-14 und Kapitel V)"
+    }
+  },
+  "cookies": {
+    "title": "Cookie- und lokale Speicherrichtlinie",
+    "description": "Entwurf einer Information über den aktuellen Stand und künftige Nutzungsregeln für Browserspeichermethoden auf der Präsentationsseite und im angemeldeten Produktbereich.",
+    "current": {
+      "title": "Aktueller Stand der öffentlichen Seite",
+      "body": "Nach Prüfung des Codes enthält die Seite `/landing` keine Werbe-, Analysepixel- oder Marketing-Cookies. Die Anwendung nutzt lokalen Speicher für Oberflächeinstellungen; im angemeldeten Produktbereich können zusätzlich funktionale Daten wie Sitzung und Klinikauswahl verwendet werden."
+    },
+    "scope": {
+      "title": "1. Was erläutert diese Richtlinie?",
+      "body": "Cookies und ähnliche Browserspeichermethoden können Informationen auf einem Gerät speichern oder auf gespeicherte Informationen zugreifen. Soweit dies eine Verarbeitung personenbezogener Daten darstellt, gelten Datenschutzpflichten nach KVKK; bei EU-Nutzern sind außerdem ePrivacy-Regeln und bei personenbezogenen Daten DSGVO-Vorschriften zu bewerten."
+    },
+    "storage": {
+      "title": "2. Derzeitige funktionale Speichernutzung",
+      "body": "Die folgende Tabelle beschreibt funktionale Speicherbereiche, die im aktuellen Code der Anwendung beobachtet wurden. Sie muss vor dem Produktivbetrieb und vor der Ergänzung von Drittanbieterwerkzeugen erneut geprüft werden.",
+      "rows": [
+        {
+          "label": "Designeinstellung",
+          "value": "Wird aus dem lokalen Speicher gelesen, um die helle/dunkle Erscheinungsform der Oberfläche anzuwenden. Sie kann bestehen bleiben, bis sie in den Browsereinstellungen gelöscht wird."
+        },
+        {
+          "label": "Spracheinstellung",
+          "value": "Die i18next-Konfiguration zur Spracherkennung nutzt lokalen Speicher, um die Oberflächensprache zu merken. Dies ist funktionale Nutzung."
+        },
+        {
+          "label": "Angemeldeter Produktbereich",
+          "value": "Nach der Anmeldung können funktionale lokale Speicherwerte genutzt werden, um die Sitzung zu betreiben, autorisierte Ansichten bereitzustellen und die gewählte Klinikeinstellung zu erhalten; sie sind für die öffentliche Präsentationsnavigation nicht erforderlich."
+        }
+      ]
+    },
+    "future": {
+      "title": "3. Wenn optionale Werkzeuge hinzugefügt werden",
+      "body": "Werden künftig Analyse-, Werbe-, Retargeting- oder ähnliche nicht notwendige Werkzeuge ergänzt, reicht diese aktuelle Richtlinie allein nicht aus.",
+      "items": [
+        "Vor Aktivierung eines Werkzeugs müssen Name, Anbieter, Zweck, Dauer, Empfänger und jede internationale Übermittlung in das Verzeichnis und auf diese Seite aufgenommen werden.",
+        "Soweit erforderlich, darf nicht notwendige Speicherung oder Zugriff nicht vor einer Nutzerentscheidung beginnen; Ablehnen muss ebenso einfach sein wie Annehmen.",
+        "Eine Oberfläche zur späteren Änderung von Einstellungen und zur Führung von Einwilligungsnachweisen muss vorbereitet werden.",
+        "Verarbeiten Drittanbieterwerkzeuge personenbezogene Daten, müssen gleichzeitig die Datenschutzhinweise aktualisiert werden."
+      ]
+    },
+    "controls": {
+      "title": "4. Einstellungen und Fragen",
+      "items": [
+        "Nutzer können bestehende lokale Speicherdaten in den Browsereinstellungen löschen; dies kann Sprach-, Design- oder Sitzungsverhalten zurücksetzen.",
+        "Werden nicht notwendige Cookies eingeführt, stellt diese Seite einen Link zum Einstellungsbereich bereit.",
+        "Vor Veröffentlichung muss eine Kontaktadresse des Verantwortlichen für Fragen zur Datenverarbeitung oder zum Browserspeicher hinzugefügt werden."
+      ]
+    },
+    "sources": {
+      "guide": "KVKK - Leitfaden zu Cookie-Praktiken",
+      "eprivacy": "EUR-Lex - ePrivacy-Richtlinie 2002/58/EG (Artikel 5(3))",
+      "edpb": "EDPB - Leitlinien 2/2023 zum technischen Anwendungsbereich von Artikel 5(3), endgültige Fassung (16.10.2024)"
+    }
+  },
+  "communications": {
+    "title": "Hinweise zu elektronischer Kommunikation und Kanalintegrationen",
+    "description": "Textentwurf zu Datenschutz, Genehmigungen für kommerzielle Kommunikation und Grundsätzen für sichere Nachrichteninhalte bei der Nutzung von WhatsApp- und Instagram-Funktionen im Klinikbetrieb.",
+    "status": {
+      "title": "Integrationsflächen bestehen; Produktivreife ist gesondert abzuschließen",
+      "body": "WhatsApp-Verbindungs-/Posteingangs- sowie Instagram-Verbindungs-/DM-Posteingangsabläufe sind im Produkt bereit. Vor einer tatsächlichen klinischen Nutzung müssen jedoch Kanalkontoeinrichtung, Verantwortlichenrollen, Bedingungen der Datenübermittlung, Anbieterverträge und erforderlichenfalls Kommunikationsgenehmigungen geprüft werden."
+    },
+    "channels": {
+      "title": "1. Unterstützte Kanalabläufe",
+      "body": "Die vorgesehenen Abläufe, über die autorisierte Nutzer Kommunikationsanfragen im Betrieb verwalten können, sind nachstehend aufgeführt.",
+      "rows": [
+        {
+          "label": "WhatsApp",
+          "value": "Gespräche können über Verbindungsverwaltung und Posteingang mit Klinik- oder Standortabläufen verbunden werden."
+        },
+        {
+          "label": "Instagram DM",
+          "value": "Relevante Anfragen aus Verbindungsverwaltung und DM-Posteingang können in den Terminablauf überführt werden."
+        },
+        {
+          "label": "Möglicherweise verarbeitete Informationen",
+          "value": "Kanalkontoinformationen, Kommunikationskennungen des Absenders, Nachrichtendatum und -inhalt, zugewiesener Standort oder Bearbeitungsstatus; die Information muss anhand der tatsächlichen Konfiguration aktualisiert werden."
+        }
+      ]
+    },
+    "roles": {
+      "title": "2. Verantwortlichkeit und Anbieter",
+      "body": "Die Klinik handelt als Verantwortlicher, soweit sie Zwecke für ihre Patienten und Kommunikationsanfragen bestimmt. Ob der Anbieter von Aile Diş CRM Auftragsverarbeiter oder unabhängiger/gemeinsamer Verantwortlicher ist, muss im Dienstleistungsvertrag bestimmt werden. Rollen, Datenstandorte und Übermittlungsbedingungen von Meta, WhatsApp, Instagram und Hosting-Anbietern sind vor Aktivierung einer Funktion zu dokumentieren."
+    },
+    "messages": {
+      "title": "3. Betriebsnachrichten von Marketingkommunikation trennen",
+      "body": "Die technische Bereitschaft eines Kanals bedeutet nicht, dass jede Nachrichtenart ohne Genehmigung gesendet werden darf.",
+      "rows": [
+        {
+          "label": "Termin-/Betriebsinformation",
+          "value": "Wird gesondert als erforderliche und verhältnismäßige Dienstkommunikation bewertet. Eine Nachricht sollte nur Mindestinhalt, beispielsweise eine Terminerinnerung, enthalten und keine Diagnose, Behandlungsdetails oder sensiblen Gesundheitsinformationen umfassen."
+        },
+        {
+          "label": "Kampagne oder Werbung",
+          "value": "In der Türkei werden vor Abschluss der nach Gesetz Nr. 6563, den Regeln für kommerzielle elektronische Kommunikation und gegebenenfalls IYS erforderlichen Verfahren keine Nachrichten gesendet; Genehmigungen und Ablehnungen müssen verwaltet werden."
+        },
+        {
+          "label": "Direktmarketing an EU-Empfänger",
+          "value": "Vor Einrichtung des erforderlichen Genehmigungs- oder Widerspruchsmechanismus nach Bewertung der ePrivacy-Regeln, der DSGVO und der Umsetzungsregeln des Zielmitgliedstaates werden keine Nachrichten gesendet."
+        }
+      ]
+    },
+    "protection": {
+      "title": "4. Datenminimierung in klinischer Kommunikation",
+      "items": [
+        "In WhatsApp- oder Instagram-Nachrichtentexten dürfen keine Diagnose, Behandlungspläne, Bilder, Rezepte oder andere sensiblen Gesundheitsinhalte versendet werden.",
+        "Eingehende Nachrichten dürfen nur von Rollen eingesehen werden, die sie für ihre Aufgaben benötigen; Zugriffs- und Aktivitätsprotokolle sind zu führen.",
+        "Wird eine Terminanfrage in einen Betriebsdatensatz überführt, dürfen nur notwendige Informationen übertragen werden; unnötige Gesprächsinhalte dürfen nicht vervielfältigt werden.",
+        "Für Sendungen an falsche Empfänger, Kontoübernahmen oder unberechtigte Zugriffe muss ein Verfahren zur Vorfallreaktion und Bewertung von Datenschutzverletzungen bestehen."
+      ]
+    },
+    "activation": {
+      "title": "5. Vor Live-Aktivierung eines Kanals",
+      "body": "Für jede Klinik und jeden aktivierten Kanal darf diese Seite nicht als endgültige Nutzungszusage dargestellt werden, bevor die folgenden Kontrollen dokumentiert sind.",
+      "items": [
+        "Inhaber des Kanalkontos, autorisierte Nutzer, Nutzungszweck und Datenkategorien müssen bestimmt werden.",
+        "Hinweise, Verarbeitungsbedingung, erforderliche Verwaltung von Genehmigung/Ablehnung und Aufbewahrungsfrist müssen für die Kanalnutzung vervollständigt werden.",
+        "Entsteht eine internationale Datenweitergabe, müssen KVKK- und, soweit anwendbar, DSGVO-Übermittlungsmechanismen angewandt werden.",
+        "Nachrichtenvorlagen müssen nach dem Grundsatz geprüft werden, keine sensiblen Daten zu teilen; Marketing- und Dienstnachrichten sind zu trennen."
+      ]
+    },
+    "sources": {
+      "commercial": "Handelsministerium der Republik Türkiye - Vorschriften zum elektronischen Handel und zur kommerziellen elektronischen Kommunikation",
+      "transfer": "KVKK - Amtliche Dokumente zur internationalen Übermittlung personenbezogener Daten",
+      "eprivacy": "EUR-Lex - ePrivacy-Richtlinie 2002/58/EG (Artikel 13 für Direktmarketing)",
+      "gdpr": "EUR-Lex - DSGVO/GDPR"
+    }
+  }
+}

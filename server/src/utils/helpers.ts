@@ -38,6 +38,44 @@ export const getZonedDateParts = (date: Date, timeZone: string) => {
   };
 };
 
+export const getZonedDateTimeParts = (date: Date, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  return {
+    year: Number(parts.find(part => part.type === 'year')?.value ?? '0'),
+    month: Number(parts.find(part => part.type === 'month')?.value ?? '0'),
+    day: Number(parts.find(part => part.type === 'day')?.value ?? '0'),
+    hour: Number(parts.find(part => part.type === 'hour')?.value ?? '0'),
+    minute: Number(parts.find(part => part.type === 'minute')?.value ?? '0'),
+  };
+};
+
+export const localDateTimeToClinicDate = (date: string, time: string, timeZone: string) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute);
+  const zonedGuess = getZonedDateTimeParts(new Date(utcGuess), timeZone);
+  const zonedGuessUtc = Date.UTC(
+    zonedGuess.year,
+    zonedGuess.month - 1,
+    zonedGuess.day,
+    zonedGuess.hour,
+    zonedGuess.minute,
+  );
+  const desiredUtc = utcGuess - (zonedGuessUtc - utcGuess);
+
+  return new Date(desiredUtc);
+};
+
 export const formatClinicDateTime = (date: Date, timeZone: string) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -153,6 +191,10 @@ export const checkPractitionerAvailability = async (
   // Klinik o gün kapalıysa randevu kabul etme
   if (clinicHours?.isClosed) {
     return { ok: false, slots, timeZone, reason: 'clinic_closed' };
+  }
+
+  if (slots.length === 0) {
+    return { ok: false, slots, timeZone, reason: 'doctor_availability_missing' };
   }
 
   const ok = slots.some(slot => {

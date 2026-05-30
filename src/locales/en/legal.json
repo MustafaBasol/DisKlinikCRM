@@ -1,0 +1,323 @@
+{
+  "brand": {
+    "name": "Aile Diş CRM",
+    "legal": "Legal information"
+  },
+  "meta": {
+    "center": "Legal Information | Aile Diş CRM",
+    "privacy": "Privacy Notice | Aile Diş CRM",
+    "cookies": "Cookies and Local Storage Policy | Aile Diş CRM",
+    "communications": "Electronic Communications and Integrations | Aile Diş CRM"
+  },
+  "nav": {
+    "label": "Legal pages",
+    "center": "Legal Information",
+    "privacy": "Privacy Notice",
+    "cookies": "Cookie Policy",
+    "communications": "Communication Channels"
+  },
+  "shared": {
+    "label": "Legal information draft",
+    "back": "Back to marketing page",
+    "themeToggle": "Change theme",
+    "languageSelector": "Select language",
+    "draftTitle": "Must be completed before publication",
+    "draftBody": "These pages are implementation drafts prepared according to the core information headings in Turkish and European Union regulations; they are not legal advice or a guarantee of compliance. After controller details, actual service providers, retention periods, transfer mechanisms and communications consent processes are determined, they must be reviewed by legal counsel.",
+    "reviewDate": "Regulatory sources last reviewed: 25 May 2026",
+    "sources": "Primary official sources",
+    "sourcesDescription": "The following official legislation and authority publications were considered when defining the scope of this draft text."
+  },
+  "center": {
+    "title": "Legal Information Centre",
+    "description": "Publication preparation area for data protection and electronic communications texts for the public marketing page and the WhatsApp- and Instagram-enabled clinic operations product.",
+    "pagesTitle": "Information pages",
+    "pagesDescription": "Each text separately explains the product's current public-facing behaviour and the obligations to be completed before production activation.",
+    "open": "Review page",
+    "cards": [
+      {
+        "path": "/legal/privacy",
+        "title": "Privacy Notice",
+        "description": "Data processing, transfer, retention and data subject rights under KVKK and, where applicable, GDPR."
+      },
+      {
+        "path": "/legal/cookies",
+        "title": "Cookies and Local Storage Policy",
+        "description": "Current functional browser storage behaviour and future cookie consent rules."
+      },
+      {
+        "path": "/legal/communications",
+        "title": "Communication Channels Notice",
+        "description": "WhatsApp and Instagram flows, commercial communication permissions and the principle of not sharing sensitive data."
+      }
+    ],
+    "scope": {
+      "title": "Scope and limitation",
+      "body": "Aile Diş CRM is a CRM product for managing clinic operations; it is not positioned as a diagnosis, prescription or full electronic health record platform. However, because patient, appointment and communication flows may contain personal data and, in some uses, special category health-related data, data minimisation and authorised access are required."
+    },
+    "checklist": {
+      "title": "Items to complete before publication",
+      "description": "For these texts to be used for a real service, your organisation must finalise the following information and controls.",
+      "items": [
+        "The controller's business name, MERSIS/tax details, postal address and data protection contact channel must be entered.",
+        "Actual data categories, purposes, legal bases and retention/deletion periods must be matched to the data inventory.",
+        "Processor roles, contracts and any international transfer mechanisms for hosting, messaging and Meta/WhatsApp/Instagram providers must be documented.",
+        "For marketing electronic communications in Turkey, approval/opt-out and, where applicable, IYS processes must be applied; for EU audiences, ePrivacy/GDPR and relevant member state rules must be applied.",
+        "The exclusion of special category health data from communications messages, access controls, logging and breach response processes must be operationally verified."
+      ]
+    },
+    "sources": {
+      "kvkk": "Personal Data Protection Authority - KVKK information",
+      "gdpr": "EUR-Lex - General Data Protection Regulation (GDPR)",
+      "commercial": "Republic of Türkiye Ministry of Trade - Electronic commerce legislation"
+    }
+  },
+  "privacy": {
+    "title": "Privacy and Personal Data Processing Notice",
+    "description": "Draft text for notification obligations under KVKK in Turkey and GDPR where services are offered to people in the European Union or their behaviour is monitored.",
+    "controller": {
+      "title": "1. Controller and contact",
+      "body": "The clinic or business that determines the purposes and methods of personal data processing will be the controller in the relevant context of use. The platform provider's role as controller or processor must be determined separately according to the supplied service and contract.",
+      "requiredTitle": "Mandatory publication information missing",
+      "requiredBody": "[Controller business name], [postal address], [MERSIS/tax details], [email or registered electronic mail application address] and, where applicable, [EU representative / data protection officer contact] must be inserted here before the service is launched."
+    },
+    "data": {
+      "title": "2. Data categories that may be processed",
+      "body": "The following scope is based on the current marketing page and the described operational features of the product. It must be narrowed or updated against the actual data inventory before contracted use begins.",
+      "rows": [
+        {
+          "label": "Public web use",
+          "value": "Functional browser storage data such as language and theme preferences; no analytics or advertising tracking tool has been identified in this version."
+        },
+        {
+          "label": "Demo request area",
+          "value": "Information typed into the current preview form is not sent or stored. If an actual application feature is enabled, a separate notice for contact data must be supplied."
+        },
+        {
+          "label": "Clinic operations account",
+          "value": "When service is activated, user/role, clinic and branch, patient contact, appointment, treatment opportunity, task, payment tracking and activity log data may be processed."
+        },
+        {
+          "label": "WhatsApp and Instagram flows",
+          "value": "When a channel is enabled, connection details, message metadata and conversation content may enter operational flows. Sensitive health information must not be shared in messages."
+        },
+        {
+          "label": "Security and audit logs",
+          "value": "Authorisation, activity/audit and security records may be processed for access control and incident investigation."
+        }
+      ]
+    },
+    "purposes": {
+      "title": "3. Purposes of processing",
+      "items": [
+        "Provide operations management by clinic, branch, team and role.",
+        "Manage visibility of appointments, follow-up tasks, treatment/service workflows and payments.",
+        "Where enabled, allow authorised teams to route WhatsApp and Instagram conversations into operational flows.",
+        "Protect account and service security, prevent unauthorised access and maintain audit records.",
+        "Fulfil data subject requests, regulatory obligations and contractual processes."
+      ]
+    },
+    "basis": {
+      "title": "4. Legal bases and sensitive data",
+      "body": "The legal basis for each data category must be determined separately in the data inventory according to actual use, the controller's role and targeted country. Consent must not be treated as a general assumed basis where another legal basis would be required.",
+      "rows": [
+        {
+          "label": "Service and account operations",
+          "value": "Appropriate bases such as performance of a contract, legal obligation or, where conditions are met, legitimate interests are assessed under KVKK Article 5 and GDPR Article 6."
+        },
+        {
+          "label": "Security and audit",
+          "value": "The basis of legal obligation or proportionate legitimate interests for authorised access and incident management is documented by a concrete risk assessment."
+        },
+        {
+          "label": "Marketing communications",
+          "value": "No message is sent before the required permission/objection mechanism is established under Turkish commercial electronic communications rules and IYS where required, or ePrivacy, GDPR and relevant member state rules for the EU."
+        }
+      ],
+      "special": "Health data is special category personal data under KVKK and special category data under GDPR. It may be processed only where genuinely necessary, with an applicable special processing condition determined and suitable technical and organisational controls and restricted access; it must not be used in marketing messages."
+    },
+    "transfers": {
+      "title": "5. Recipients and international transfers",
+      "body": "Hosting, support or WhatsApp/Instagram connections may result in sharing personal data with providers abroad. This draft does not state that any provider has been selected for production or that a transfer is ready.",
+      "actions": [
+        "The name, role, country and processed data scope of recipients or processor providers must be finalised.",
+        "For transfers from Turkey, no transfer must begin before applying a current transfer method under KVKK Article 9, such as standard contracts where appropriate conditions are met.",
+        "Where GDPR applies, adequacy decisions or appropriate safeguards and additional assessments under Chapter V must be documented for third-country transfers.",
+        "Before Meta, WhatsApp or Instagram features are enabled, transfer information specific to clinics and data subjects must be shown."
+      ]
+    },
+    "retention": {
+      "title": "6. Retention and deletion",
+      "body": "Data must be kept only as long as needed for its purpose; deletion, destruction or anonymisation procedures must be documented according to actual legal and contractual obligations. The periods below have not yet been defined.",
+      "rows": [
+        {
+          "label": "Public site preferences",
+          "value": "Stored in the browser as functional preferences and removable by the user. The exact lifecycle must be confirmed before publication."
+        },
+        {
+          "label": "Demo form",
+          "value": "Because this preview version does not submit or record data, it retains no request data."
+        },
+        {
+          "label": "Account and clinic operations data",
+          "value": "[Retention period and deletion cycle will be entered after completion of the data inventory.]"
+        },
+        {
+          "label": "Messaging and audit records",
+          "value": "[A period aligned with necessity, legislation, dispute and security purposes will be defined and entered.]"
+        }
+      ]
+    },
+    "rights": {
+      "title": "7. Data subject rights and applications",
+      "body": "Depending on scope, data subjects may exercise rights under KVKK Article 11 and GDPR Articles 15-22. In particular, these include requests to:",
+      "items": [
+        "Learn whether their data is processed and request information and access.",
+        "Request correction of incomplete or inaccurate data.",
+        "Request deletion, destruction, restriction of processing or object where applicable conditions are met.",
+        "Learn the third parties to which data has been transferred and request data portability where appropriate.",
+        "Withdraw consent for consent-based processing and lodge a complaint with the competent supervisory authority."
+      ],
+      "contact": "Applications will be accepted through the [controller application address / registered electronic mail / email] to be specified before publication. Complaint avenues in Turkey are subject to KVKK procedures; GDPR-scope requests are subject to the processes of the competent EU supervisory authority."
+    },
+    "publish": {
+      "title": "8. Before publishing this text",
+      "items": [
+        "The data inventory, VERBIS obligation assessment and retention/deletion policy must be checked against the actual business.",
+        "Roles accessing special category data and message content rules must be tested.",
+        "Supplier contracts, transfer documents and security measures must align with the statements in the text.",
+        "The text must be updated as new features or providers are added and display a current effective date."
+      ]
+    },
+    "sources": {
+      "notice": "KVKK - Guide on Fulfilling the Information Obligation",
+      "transfer": "KVKK - Announcement on standard contracts for international transfers (10.07.2024)",
+      "gdpr": "EUR-Lex - GDPR (particularly Articles 9, 13-14 and Chapter V)"
+    }
+  },
+  "cookies": {
+    "title": "Cookies and Local Storage Policy",
+    "description": "Draft information on the current position and future use rules for browser storage methods used in the marketing page and signed-in product area.",
+    "current": {
+      "title": "Current public page position",
+      "body": "Based on a code review, the `/landing` page contains no advertising, analytics pixel or marketing cookie. The application includes local storage behaviour for interface preferences; the signed-in product area may additionally use functional data such as session and clinic selection."
+    },
+    "scope": {
+      "title": "1. What does this policy explain?",
+      "body": "Cookies and similar browser storage methods may be used to store information on a device or access stored information. Where this constitutes personal data processing, data protection duties under KVKK apply; for EU users, ePrivacy rules and, where personal data is involved, GDPR provisions must also be assessed."
+    },
+    "storage": {
+      "title": "2. Current functional storage use",
+      "body": "The table below describes functional storage areas observed in the current application code. It must be verified again before production deployment and before adding third-party tools.",
+      "rows": [
+        {
+          "label": "Theme preference",
+          "value": "Read from local storage to apply the interface light/dark appearance preference. It may remain until the user clears it through browser settings."
+        },
+        {
+          "label": "Language preference",
+          "value": "The i18next language detection configuration uses local storage to remember the interface language. This is functional use."
+        },
+        {
+          "label": "Signed-in product area",
+          "value": "After sign-in, functional local storage values may be used to run the session, provide authorised views and maintain the selected clinic preference; they are not necessary for public marketing browsing."
+        }
+      ]
+    },
+    "future": {
+      "title": "3. If optional tools are added",
+      "body": "If analytics, advertising, retargeting or similar non-essential tools are added in future, this current policy alone will not be sufficient.",
+      "items": [
+        "Before tools are enabled, their name, provider, purpose, duration, recipient and any international transfer must be added to the inventory and this page.",
+        "Where required, non-essential storage or access must not begin before obtaining a user's choice; rejecting must be as easy as accepting.",
+        "A management surface for later preference changes and consent records must be prepared.",
+        "If third-party tools process personal data, the Privacy Notice must be updated at the same time."
+      ]
+    },
+    "controls": {
+      "title": "4. Preferences and questions",
+      "items": [
+        "Users can clear existing local storage data through browser settings; this may reset language, theme or session behaviour.",
+        "If non-essential cookies are introduced, this page will provide a link to access the preference panel.",
+        "A controller contact address must be added before publication for questions on data processing or browser storage."
+      ]
+    },
+    "sources": {
+      "guide": "KVKK - Guide on Cookie Practices",
+      "eprivacy": "EUR-Lex - ePrivacy Directive 2002/58/EC (Article 5(3))",
+      "edpb": "EDPB - Guidelines 2/2023 on the technical scope of Article 5(3), final version (16.10.2024)"
+    }
+  },
+  "communications": {
+    "title": "Electronic Communications and Channel Integrations Notice",
+    "description": "Draft text for data protection, commercial communications permissions and secure message-content principles when WhatsApp and Instagram features are used in clinic operations.",
+    "status": {
+      "title": "Integration surfaces exist; production readiness must be completed separately",
+      "body": "WhatsApp connection/inbox and Instagram connection/DM inbox flows are ready in the product. However, before real clinic use, channel account setup, controller roles, data transfer conditions, provider contracts and communications permissions where required must be verified."
+    },
+    "channels": {
+      "title": "1. Supported channel flows",
+      "body": "The intended flows for authorised users to manage communications requests within operations are set out below.",
+      "rows": [
+        {
+          "label": "WhatsApp",
+          "value": "Ability to associate conversations with clinic/branch operations through connection management and an inbox."
+        },
+        {
+          "label": "Instagram DM",
+          "value": "Ability to route relevant requests from connection management and the DM inbox into appointment flows."
+        },
+        {
+          "label": "Potential information processed",
+          "value": "Channel account information, sender communications identifiers, message date and content, assigned branch or processing status; the notice must be updated according to actual configuration."
+        }
+      ]
+    },
+    "roles": {
+      "title": "2. Controller responsibility and providers",
+      "body": "The clinic acts as controller to the extent it determines purposes for its patients and communications requests. Whether the Aile Diş CRM provider is a processor or independent/joint controller must be determined in the service contract. Roles, data locations and transfer conditions of Meta, WhatsApp, Instagram and hosting providers must be documented before a feature is enabled."
+    },
+    "messages": {
+      "title": "3. Separate operational messages from marketing communications",
+      "body": "A channel being technically ready does not mean every type of message can be sent without permission.",
+      "rows": [
+        {
+          "label": "Appointment/operational information",
+          "value": "Assessed separately as necessary and proportionate service communication. A message should carry minimum content, such as an appointment reminder only, and must not contain diagnosis, treatment detail or sensitive health information."
+        },
+        {
+          "label": "Campaign or promotion",
+          "value": "In Turkey, no message is sent before completing the processes required by Law No. 6563, Commercial Electronic Communication rules and IYS where applicable; approval and opt-out preferences must be managed."
+        },
+        {
+          "label": "Direct marketing to EU recipients",
+          "value": "No message is sent without establishing the permission or objection mechanism required after assessment of ePrivacy rules, GDPR and the implementation rules of the target member state."
+        }
+      ]
+    },
+    "protection": {
+      "title": "4. Data minimisation in clinical communications",
+      "items": [
+        "No diagnosis, treatment plan, image, prescription or other sensitive health content should be sent in a WhatsApp or Instagram message body.",
+        "Incoming messages should only be viewed by roles that need access for their duties, and access/activity logs should be kept.",
+        "When an appointment request is converted to an operational record, only necessary information should be transferred; unnecessary conversation content should not be duplicated.",
+        "An incident response and personal data breach assessment process should exist for messages sent to the wrong recipient, account takeover or unauthorised access."
+      ]
+    },
+    "activation": {
+      "title": "5. Before activating a channel for live use",
+      "body": "For each clinic and enabled channel, this page must not be presented as a definitive use commitment until the following controls are documented.",
+      "items": [
+        "The channel account owner, authorised users, purpose of use and data categories must be identified.",
+        "The notice, processing condition, required approval/opt-out management and retention period must be completed for channel use.",
+        "Where international sharing of data occurs, KVKK and, where applicable, GDPR transfer mechanisms must be applied.",
+        "Message templates must be reviewed under the principle of not sharing sensitive data, and marketing messages must be separated from service messages."
+      ]
+    },
+    "sources": {
+      "commercial": "Republic of Türkiye Ministry of Trade - Electronic commerce legislation and Commercial Electronic Communications rules",
+      "transfer": "KVKK - Official documents on international transfers of personal data",
+      "eprivacy": "EUR-Lex - ePrivacy Directive 2002/58/EC (Article 13 for direct marketing)",
+      "gdpr": "EUR-Lex - GDPR"
+    }
+  }
+}

@@ -7,6 +7,7 @@ interface ClinicOption {
   slug?: string;
   status: string;
   memberRole?: string;
+  timezone?: string;
 }
 
 interface ClinicContextType {
