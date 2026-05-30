@@ -1,0 +1,323 @@
+{
+  "brand": {
+    "name": "Aile Diş CRM",
+    "legal": "Yasal bilgilendirme"
+  },
+  "meta": {
+    "center": "Yasal Bilgilendirme | Aile Diş CRM",
+    "privacy": "Gizlilik ve Aydınlatma Metni | Aile Diş CRM",
+    "cookies": "Çerez ve Yerel Depolama Politikası | Aile Diş CRM",
+    "communications": "Elektronik İletişim ve Entegrasyonlar | Aile Diş CRM"
+  },
+  "nav": {
+    "label": "Yasal sayfalar",
+    "center": "Yasal Bilgilendirme",
+    "privacy": "Gizlilik ve Aydınlatma",
+    "cookies": "Çerez Politikası",
+    "communications": "İletişim Kanalları"
+  },
+  "shared": {
+    "label": "Hukuki bilgi taslağı",
+    "back": "Tanıtım sayfasına dön",
+    "themeToggle": "Temayı değiştir",
+    "languageSelector": "Dil seçin",
+    "draftTitle": "Yayına alma öncesi tamamlanmalıdır",
+    "draftBody": "Bu sayfalar Türkiye ve Avrupa Birliği düzenlemelerindeki temel bilgilendirme başlıklarına göre hazırlanmış uygulama taslaklarıdır; hukuki görüş veya uyumluluk garantisi değildir. Veri sorumlusu bilgileri, gerçek hizmet sağlayıcılar, saklama süreleri, aktarım mekanizmaları ve iletişim izin süreçleri belirlendikten sonra hukuk danışmanı tarafından gözden geçirilmelidir.",
+    "reviewDate": "Mevzuat kaynaklarının son gözden geçirilme tarihi: 25 Mayıs 2026",
+    "sources": "Esas alınan resmi kaynaklar",
+    "sourcesDescription": "Bu taslak metnin kapsamı belirlenirken aşağıdaki resmi mevzuat ve kurum yayınları esas alınmıştır."
+  },
+  "center": {
+    "title": "Yasal Bilgilendirme Merkezi",
+    "description": "Kamuya açık tanıtım sayfası ile WhatsApp ve Instagram destekli klinik operasyon ürünü için veri koruma ve elektronik iletişim metinlerinin yayına hazırlık alanı.",
+    "pagesTitle": "Bilgilendirme sayfaları",
+    "pagesDescription": "Her metin, ürünün mevcut kamuya açık davranışını ve üretimde etkinleştirilmeden önce tamamlanması gereken yükümlülükleri ayrı biçimde açıklar.",
+    "open": "Sayfayı incele",
+    "cards": [
+      {
+        "path": "/legal/privacy",
+        "title": "Gizlilik ve Aydınlatma Metni",
+        "description": "KVKK ve uygulanabildiği ölçüde GDPR kapsamında veri işleme, aktarım, saklama ve ilgili kişi hakları."
+      },
+      {
+        "path": "/legal/cookies",
+        "title": "Çerez ve Yerel Depolama Politikası",
+        "description": "Mevcut işlevsel tarayıcı saklama davranışı ile gelecekteki çerez rızası kuralları."
+      },
+      {
+        "path": "/legal/communications",
+        "title": "İletişim Kanalları Bilgilendirmesi",
+        "description": "WhatsApp ve Instagram akışları, ticari ileti izinleri ve hassas veri paylaşmama ilkesi."
+      }
+    ],
+    "scope": {
+      "title": "Kapsam ve sınır",
+      "body": "Aile Diş CRM, klinik operasyonlarını yönetmeye yönelik bir CRM ürünüdür; tanı, reçete veya tam elektronik sağlık kaydı platformu olarak konumlandırılmaz. Bununla birlikte hasta, randevu ve iletişim akışları kişisel veri, bazı kullanımlarda ise sağlıkla ilişkili özel nitelikli veri içerebileceğinden veri minimizasyonu ve yetkili erişim yaklaşımı zorunludur."
+    },
+    "checklist": {
+      "title": "Yayına almadan önce tamamlanacaklar",
+      "description": "Bu metinlerin gerçek bir hizmette kullanılabilmesi için aşağıdaki bilgiler ve kontroller kurumunuzca kesinleştirilmelidir.",
+      "items": [
+        "Veri sorumlusunun ticari unvanı, MERSİS/vergi bilgisi, posta adresi ve veri koruma irtibat kanalı girilmelidir.",
+        "İşlenen gerçek veri kategorileri, amaçlar, hukuki sebepler ve saklama/imha süreleri veri envanteriyle eşleştirilmelidir.",
+        "Barındırma, mesajlaşma ve Meta/WhatsApp/Instagram sağlayıcıları için veri işleyen rolleri, sözleşmeler ve varsa yurt dışı aktarım mekanizmaları belgelendirilmelidir.",
+        "Türkiye'de pazarlama niteliğindeki elektronik iletiler için onay/ret ve uygulanabildiği ölçüde İYS süreçleri, AB hedef kitlesi için ePrivacy/GDPR ve ilgili üye ülke kuralları uygulanmalıdır.",
+        "Özel nitelikli sağlık verisinin iletişim mesajlarında yer almaması, erişim kontrolleri, kayıt tutma ve ihlal müdahale süreçleri operasyonel olarak doğrulanmalıdır."
+      ]
+    },
+    "sources": {
+      "kvkk": "Kişisel Verileri Koruma Kurumu - KVKK bilgilendirmeleri",
+      "gdpr": "EUR-Lex - Genel Veri Koruma Tüzüğü (GDPR)",
+      "commercial": "T.C. Ticaret Bakanlığı - Elektronik ticaret mevzuatı"
+    }
+  },
+  "privacy": {
+    "title": "Gizlilik ve Kişisel Verilerin İşlenmesi Aydınlatma Metni",
+    "description": "Türkiye'de KVKK ve Avrupa Birliği'ndeki kişilere hizmet sunulması veya davranışlarının izlenmesi halinde uygulanabilecek GDPR aydınlatma yükümlülükleri için taslak metin.",
+    "controller": {
+      "title": "1. Veri sorumlusu ve iletişim",
+      "body": "Kişisel verilerin hangi amaç ve yöntemle işlendiğini belirleyen klinik veya işletme, ilgili kullanım bağlamında veri sorumlusu olacaktır. Platform sağlayıcısının veri sorumlusu ya da veri işleyen rolü, sunulan hizmete ve sözleşmeye göre ayrıca belirlenmelidir.",
+      "requiredTitle": "Zorunlu yayın bilgisi eksik",
+      "requiredBody": "[Veri sorumlusu ticari unvanı], [posta adresi], [MERSİS/vergi bilgisi], [e-posta veya KEP başvuru adresi] ve varsa [AB temsilcisi / veri koruma görevlisi iletişimi] hizmet yayına alınmadan önce burada yer almalıdır."
+    },
+    "data": {
+      "title": "2. İşlenebilecek veri kategorileri",
+      "body": "Aşağıdaki kapsam, mevcut tanıtım sayfası ile ürünün tanımlanan operasyon özelliklerini esas alır. Sözleşmeli kullanım başlamadan önce gerçek veri envanteriyle daraltılmalı veya güncellenmelidir.",
+      "rows": [
+        {
+          "label": "Kamuya açık web kullanımı",
+          "value": "Dil ve tema tercihi gibi işlevsel tarayıcı saklama verileri; bu sürümde analitik veya reklam izleme aracı tespit edilmemiştir."
+        },
+        {
+          "label": "Demo talep alanı",
+          "value": "Mevcut ön izleme formuna yazılan bilgiler gönderilmez veya kaydedilmez. Gerçek başvuru özelliği etkinleştirilirse iletişim verileri için ayrı aydınlatma sunulmalıdır."
+        },
+        {
+          "label": "Klinik operasyon hesabı",
+          "value": "Hizmet etkinleştirildiğinde kullanıcı/rol, klinik ve şube, hasta iletişim, randevu, tedavi fırsatı, görev, ödeme takibi ve işlem kayıtları işlenebilir."
+        },
+        {
+          "label": "WhatsApp ve Instagram akışları",
+          "value": "Kanal etkinleştirildiğinde bağlantı bilgileri, mesaj meta verileri ve konuşma içeriği operasyon akışına dahil olabilir. Mesajlarda hassas sağlık bilgisi paylaşılmamalıdır."
+        },
+        {
+          "label": "Güvenlik ve denetim kayıtları",
+          "value": "Yetkilendirme, işlem/audit ve güvenlik kayıtları, erişim kontrolü ve olay incelemesi amacıyla işlenebilir."
+        }
+      ]
+    },
+    "purposes": {
+      "title": "3. İşleme amaçları",
+      "items": [
+        "Klinik, şube, ekip ve rol bazlı operasyon yönetimi sağlamak.",
+        "Randevu, takip görevi, tedavi/hizmet süreci ve ödeme görünürlüğünü yönetmek.",
+        "Etkinleştirilmesi halinde WhatsApp ve Instagram görüşmelerini yetkili ekiplerin operasyon akışına yönlendirmesi.",
+        "Hesap ve hizmet güvenliğini korumak, yetkisiz erişimi önlemek ve denetim kayıtlarını yürütmek.",
+        "İlgili kişi taleplerini, mevzuattan doğan yükümlülükleri ve sözleşmesel süreçleri yerine getirmek."
+      ]
+    },
+    "basis": {
+      "title": "4. Hukuki sebepler ve hassas veriler",
+      "body": "Her veri kategorisinin hukuki sebebi gerçek kullanım senaryosu, veri sorumlusunun rolü ve hedeflenen ülkeye göre veri envanterinde ayrıca belirlenmelidir. Açık rıza, başka bir hukuki sebep mevcutmuş gibi varsayılan genel bir dayanak olarak kullanılmamalıdır.",
+      "rows": [
+        {
+          "label": "Hizmet ve hesap işlemleri",
+          "value": "KVKK Madde 5 ve GDPR Madde 6 kapsamında sözleşmenin ifası, hukuki yükümlülük veya koşulları sağlandığında meşru menfaat gibi uygun dayanaklar değerlendirilir."
+        },
+        {
+          "label": "Güvenlik ve denetim",
+          "value": "Yetkili erişim ve olay yönetimi için hukuki yükümlülük veya ölçülü meşru menfaat dayanağı, somut risk değerlendirmesiyle belgelenir."
+        },
+        {
+          "label": "Pazarlama iletişimi",
+          "value": "Türkiye için ticari elektronik ileti kuralları ve gerekiyorsa İYS; AB için ePrivacy, GDPR ve ilgili üye devlet kuralı uyarınca gerekli izin/itiraz mekanizması kurulmadan gönderim yapılmaz."
+        }
+      ],
+      "special": "Sağlık verileri KVKK bakımından özel nitelikli kişisel veri, GDPR bakımından özel kategori veridir. Yalnızca gerçekten gerekli olduğunda, uygulanabilir özel işleme şartı belirlenerek, erişim kısıtı ve uygun teknik/idari tedbirlerle işlenebilir; pazarlama mesajlarında kullanılmamalıdır."
+    },
+    "transfers": {
+      "title": "5. Alıcılar ve yurt dışı aktarımları",
+      "body": "Barındırma, destek veya WhatsApp/Instagram bağlantıları yurt dışındaki sağlayıcılarla kişisel veri paylaşımı doğurabilir. Bu taslak herhangi bir sağlayıcının üretimde seçildiğini ya da aktarımın hazır olduğunu beyan etmez.",
+      "actions": [
+        "Alıcı veya veri işleyen sağlayıcıların adı, rolü, ülkesi ve işlenen veri kapsamı kesinleştirilmelidir.",
+        "Türkiye çıkışlı aktarımlar için KVKK Madde 9 kapsamındaki güncel aktarım yöntemi, örneğin uygun şartlarda standart sözleşme, uygulanmadan aktarım başlatılmamalıdır.",
+        "GDPR uygulanıyorsa üçüncü ülke aktarımlarında Bölüm V kapsamındaki yeterlilik kararı veya uygun güvence ve ek değerlendirmeler belgelenmelidir.",
+        "Meta, WhatsApp veya Instagram özellikleri açılmadan önce kliniklere ve ilgili kişilere özgü aktarım bilgisi gösterilmelidir."
+      ]
+    },
+    "retention": {
+      "title": "6. Saklama ve imha",
+      "body": "Veriler amaç için gereken süreyle sınırlı tutulmalı; silme, yok etme veya anonim hale getirme süreçleri gerçek mevzuat ve sözleşme yükümlülüklerine göre belgelenmelidir. Aşağıdaki süreler henüz tanımlanmamıştır.",
+      "rows": [
+        {
+          "label": "Kamuya açık site tercihleri",
+          "value": "Tarayıcı üzerinde işlevsel tercih olarak tutulur; kullanıcı tarafından temizlenebilir. Kesin yaşam döngüsü yayından önce teyit edilmelidir."
+        },
+        {
+          "label": "Demo formu",
+          "value": "Bu ön izleme sürümünde gönderim veya kayıt yapılmadığından saklanan talep verisi bulunmaz."
+        },
+        {
+          "label": "Hesap ve klinik operasyon verileri",
+          "value": "[Saklama süresi ve imha periyodu veri envanteri tamamlandıktan sonra girilecektir.]"
+        },
+        {
+          "label": "Mesajlaşma ve audit kayıtları",
+          "value": "[İhtiyaç, mevzuat, uyuşmazlık ve güvenlik amaçlarıyla uyumlu süre belirlenerek girilecektir.]"
+        }
+      ]
+    },
+    "rights": {
+      "title": "7. İlgili kişi hakları ve başvuru",
+      "body": "Kapsama göre ilgili kişiler KVKK Madde 11 ile GDPR Madde 15-22 kapsamındaki haklarını kullanabilir. Bunlar özellikle aşağıdaki talepleri içerir:",
+      "items": [
+        "Verisinin işlenip işlenmediğini öğrenme, bilgi ve erişim talep etme.",
+        "Eksik veya yanlış verinin düzeltilmesini isteme.",
+        "Uygulanabilir şartlarda silme, yok etme, işlemenin kısıtlanması veya itiraz talep etme.",
+        "Aktarım yapılan üçüncü kişileri öğrenme ve uygun durumlarda veri taşınabilirliği talep etme.",
+        "Rızaya dayalı işlemlerde rızayı geri çekme ve yetkili denetim makamına şikayette bulunma."
+      ],
+      "contact": "Başvurular yayından önce belirlenecek [veri sorumlusu başvuru adresi / KEP / e-posta] üzerinden alınacaktır. Türkiye'deki şikayet yolları KVKK usullerine, GDPR kapsamındaki talepler ise yetkili AB denetim makamı süreçlerine tabidir."
+    },
+    "publish": {
+      "title": "8. Bu metni yayımlamadan önce",
+      "items": [
+        "Veri envanteri, VERBİS yükümlülüğü değerlendirmesi ve saklama/imha politikası gerçek işletme üzerinden kontrol edilmelidir.",
+        "Özel nitelikli veriye erişen roller ve mesaj içerik kuralları test edilmelidir.",
+        "Tedarikçi sözleşmeleri, aktarım belgeleri ve güvenlik tedbirleri metindeki beyanlarla aynı hale getirilmelidir.",
+        "Metin yeni özellik veya sağlayıcı eklendikçe güncellenmeli ve güncel yürürlük tarihi gösterilmelidir."
+      ]
+    },
+    "sources": {
+      "notice": "KVKK - Aydınlatma Yükümlülüğünün Yerine Getirilmesi Rehberi",
+      "transfer": "KVKK - Yurt dışı aktarımlarında standart sözleşmeler duyurusu (10.07.2024)",
+      "gdpr": "EUR-Lex - GDPR (özellikle Madde 9, 13-14 ve Bölüm V)"
+    }
+  },
+  "cookies": {
+    "title": "Çerez ve Yerel Depolama Politikası",
+    "description": "Tanıtım sayfası ve giriş yapılan ürün alanında kullanılan tarayıcı saklama yöntemlerine ilişkin mevcut durum ve gelecek kullanım kuralları için taslak bilgilendirme.",
+    "current": {
+      "title": "Mevcut kamuya açık sayfa durumu",
+      "body": "Kod incelemesine göre `/landing` sayfasında reklam, analiz pikseli veya pazarlama çerezi bulunmamaktadır. Uygulama, arayüz tercihlerine yönelik yerel depolama davranışları içerir; giriş yapılan ürün alanı ayrıca oturum ve klinik seçimi gibi işlevsel veriler kullanabilir."
+    },
+    "scope": {
+      "title": "1. Bu politika neyi açıklar?",
+      "body": "Çerezler ve benzeri tarayıcı saklama yöntemleri, cihazda bilgi saklamak veya saklanan bilgiye erişmek için kullanılabilir. KVKK açısından kişisel veri işlenmesi oluştuğunda veri koruma yükümlülükleri; AB kullanıcıları bakımından ePrivacy kuralları ve kişisel veri söz konusuysa GDPR hükümleri ayrıca değerlendirilmelidir."
+    },
+    "storage": {
+      "title": "2. Mevcut işlevsel saklama kullanımı",
+      "body": "Aşağıdaki tablo, bu uygulamanın mevcut kodunda gözlenen işlevsel saklama alanlarını açıklamak üzere hazırlanmıştır. Üretim kurulumu ve üçüncü taraf araçlar eklenmeden önce yeniden doğrulanmalıdır.",
+      "rows": [
+        {
+          "label": "Tema tercihi",
+          "value": "Arayüzün açık/koyu görünüm tercihini uygulamak için yerel depolamadan okunur. Kullanıcının tarayıcı ayarlarından temizlemesine kadar tutulabilir."
+        },
+        {
+          "label": "Dil tercihi",
+          "value": "Arayüz dilini hatırlamak için i18next dil algılama yapılandırması yerel depolama kullanır. İşlevsel kullanım kapsamındadır."
+        },
+        {
+          "label": "Giriş yapılan ürün alanı",
+          "value": "Kullanıcı giriş yaptıktan sonra oturumun yürütülmesi, yetkili görünüm ve seçili klinik tercihinin sağlanması için işlevsel yerel depolama değerleri kullanılabilir; kamuya açık tanıtım gezinmesi için gerekli değildir."
+        }
+      ]
+    },
+    "future": {
+      "title": "3. İsteğe bağlı araçlar eklenirse",
+      "body": "Analiz, reklam, yeniden hedefleme veya zorunlu olmayan benzeri araçlar ileride eklenirse bu mevcut politika tek başına yeterli olmayacaktır.",
+      "items": [
+        "Araçlar etkinleştirilmeden önce ad, sağlayıcı, amaç, süre, alıcı ve varsa yurt dışı aktarımı envantere ve bu sayfaya eklenmelidir.",
+        "Gerekli durumlarda kullanıcı tercihi alınmadan zorunlu olmayan saklama veya erişim başlatılmamalı; ret seçeneği kabul kadar kolay sunulmalıdır.",
+        "Tercihlerin sonradan değiştirilebileceği bir yönetim yüzeyi ve rıza kayıtları hazırlanmalıdır.",
+        "Üçüncü taraf araçlarla kişisel veri işleniyorsa Gizlilik ve Aydınlatma Metni de aynı anda güncellenmelidir."
+      ]
+    },
+    "controls": {
+      "title": "4. Tercihler ve sorular",
+      "items": [
+        "Kullanıcı, tarayıcı ayarları üzerinden mevcut yerel depolama verilerini temizleyebilir; bu işlem dil, tema veya oturum davranışını sıfırlayabilir.",
+        "Zorunlu olmayan çerezler kullanıma alınırsa bu sayfada tercih paneline erişim bağlantısı sağlanacaktır.",
+        "Veri işleme veya tarayıcı saklama soruları için yayına alma öncesinde veri sorumlusu irtibat adresi eklenmelidir."
+      ]
+    },
+    "sources": {
+      "guide": "KVKK - Çerez Uygulamaları Hakkında Rehber",
+      "eprivacy": "EUR-Lex - ePrivacy Directive 2002/58/EC (Madde 5(3))",
+      "edpb": "EDPB - Madde 5(3)'ün teknik kapsamı hakkında Guidelines 2/2023, nihai sürüm (16.10.2024)"
+    }
+  },
+  "communications": {
+    "title": "Elektronik İletişim ve Kanal Entegrasyonları Bilgilendirmesi",
+    "description": "WhatsApp ve Instagram özelliklerinin klinik operasyonlarında kullanılması halinde veri koruma, ticari ileti izinleri ve güvenli mesaj içeriği ilkeleri için taslak metin.",
+    "status": {
+      "title": "Entegrasyon yüzeyleri mevcut, üretim uygunluğu ayrıca tamamlanır",
+      "body": "Üründe WhatsApp bağlantı/gelen kutusu ile Instagram bağlantı/DM gelen kutusu akışları hazırdır. Bununla birlikte gerçek klinik kullanımından önce kanal hesabı kurulumu, veri sorumlusu rolleri, veri aktarım şartları, sağlayıcı sözleşmeleri ve gerekliyse ileti izinleri doğrulanmalıdır."
+    },
+    "channels": {
+      "title": "1. Desteklenen kanal akışları",
+      "body": "Yetkili kullanıcıların iletişim taleplerini operasyon sürecinde yönetebilmesi için öngörülen akışlar aşağıdadır.",
+      "rows": [
+        {
+          "label": "WhatsApp",
+          "value": "Bağlantı yönetimi ve gelen kutusu üzerinden konuşmaların klinik/şube operasyonuyla ilişkilendirilebilmesi."
+        },
+        {
+          "label": "Instagram DM",
+          "value": "Bağlantı yönetimi ve DM gelen kutusundan ilgili taleplerin randevu akışına yönlendirilebilmesi."
+        },
+        {
+          "label": "İşlenen olası bilgi",
+          "value": "Kanal hesabı bilgisi, gönderici iletişim tanımlayıcıları, mesaj tarihi ve içeriği, atanan şube veya işlem durumu; gerçek yapılandırmaya göre aydınlatma güncellenmelidir."
+        }
+      ]
+    },
+    "roles": {
+      "title": "2. Veri sorumluluğu ve sağlayıcılar",
+      "body": "Klinik, kendi hastaları ve iletişim talepleri için amaçları belirlediği ölçüde veri sorumlusu olarak hareket eder. Aile Diş CRM sağlayıcısının veri işleyen veya bağımsız/ortak veri sorumlusu olup olmadığı hizmet sözleşmesinde belirlenmelidir. Meta, WhatsApp, Instagram ve barındırma sağlayıcılarının rolleri, veri lokasyonları ve aktarım koşulları özellik etkinleştirilmeden önce kayıt altına alınmalıdır."
+    },
+    "messages": {
+      "title": "3. Operasyon mesajı ile pazarlama iletişimini ayırın",
+      "body": "Bir kanalın teknik olarak hazır olması, her türlü mesajın izin almadan gönderilebileceği anlamına gelmez.",
+      "rows": [
+        {
+          "label": "Randevu/operasyon bilgilendirmesi",
+          "value": "Gerekli ve ölçülü hizmet iletişimi olarak ayrıca değerlendirilir. Mesaj, örneğin yalnızca randevu hatırlatması gibi asgari içeriği taşımalı; teşhis, tedavi ayrıntısı veya hassas sağlık bilgisi içermemelidir."
+        },
+        {
+          "label": "Kampanya veya tanıtım",
+          "value": "Türkiye'de 6563 sayılı Kanun ile Ticari Elektronik İleti düzenlemeleri ve uygulanabildiği durumda İYS süreci tamamlanmadan gönderilmez; onay ve ret tercihleri yönetilmelidir."
+        },
+        {
+          "label": "AB alıcılarına doğrudan pazarlama",
+          "value": "ePrivacy kuralları, GDPR ve hedef üye devletin uygulama kuralları değerlendirilerek gereken izin veya itiraz mekanizması kurulmadan gönderilmez."
+        }
+      ]
+    },
+    "protection": {
+      "title": "4. Klinik iletişiminde veri minimizasyonu",
+      "items": [
+        "WhatsApp veya Instagram mesaj gövdesinde tanı, tedavi planı, görüntü, reçete veya başka hassas sağlık içeriği gönderilmemelidir.",
+        "Gelen mesajlar yalnızca görev gereği erişmesi gereken rollerce görüntülenmeli ve erişim/işlem kayıtları tutulmalıdır.",
+        "Randevu talebi operasyon kaydına dönüştürülürken sadece gerekli bilgiler aktarılmalı; gereksiz konuşma içeriği çoğaltılmamalıdır.",
+        "Yanlış alıcıya gönderim, hesap ele geçirilmesi veya yetkisiz erişim durumları için olay müdahale ve veri ihlali değerlendirme süreci bulunmalıdır."
+      ]
+    },
+    "activation": {
+      "title": "5. Kanalı canlı kullanıma almadan önce",
+      "body": "Her klinik ve etkinleştirilen kanal için aşağıdaki kontroller belgelenmeden bu sayfa kesin kullanım taahhüdü olarak sunulmamalıdır.",
+      "items": [
+        "Kanal hesabı sahibi, yetkili kullanıcılar, kullanım amacı ve veri kategorileri belirlenmelidir.",
+        "Aydınlatma metni, işleme şartı, gerekli onay/ret yönetimi ve saklama süresi kanal kullanımına göre tamamlanmalıdır.",
+        "Yurt dışı veri paylaşımı oluşuyorsa KVKK ve uygulanıyorsa GDPR aktarım mekanizmaları uygulanmalıdır.",
+        "Mesaj şablonları hassas veri paylaşmama ilkesi açısından incelenmeli; pazarlama ile hizmet mesajları ayrılmalıdır."
+      ]
+    },
+    "sources": {
+      "commercial": "T.C. Ticaret Bakanlığı - Elektronik ticaret mevzuatı ve Ticari Elektronik İleti düzenlemeleri",
+      "transfer": "KVKK - Kişisel verilerin yurt dışına aktarımına ilişkin resmi dokümanlar",
+      "eprivacy": "EUR-Lex - ePrivacy Directive 2002/58/EC (doğrudan pazarlama için Madde 13)",
+      "gdpr": "EUR-Lex - GDPR"
+    }
+  }
+}

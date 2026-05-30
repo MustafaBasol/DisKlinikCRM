@@ -1,0 +1,323 @@
+{
+  "brand": {
+    "name": "Aile Diş CRM",
+    "legal": "Informations juridiques"
+  },
+  "meta": {
+    "center": "Informations juridiques | Aile Diş CRM",
+    "privacy": "Avis de confidentialité | Aile Diş CRM",
+    "cookies": "Politique des cookies et du stockage local | Aile Diş CRM",
+    "communications": "Communications électroniques et intégrations | Aile Diş CRM"
+  },
+  "nav": {
+    "label": "Pages juridiques",
+    "center": "Informations juridiques",
+    "privacy": "Confidentialité",
+    "cookies": "Politique des cookies",
+    "communications": "Canaux de communication"
+  },
+  "shared": {
+    "label": "Projet d'information juridique",
+    "back": "Retour à la page de présentation",
+    "themeToggle": "Changer le thème",
+    "languageSelector": "Choisir la langue",
+    "draftTitle": "À compléter avant publication",
+    "draftBody": "Ces pages sont des projets de mise en oeuvre préparés selon les principales obligations d'information des réglementations turques et de l'Union européenne ; elles ne constituent ni un avis juridique ni une garantie de conformité. Lorsque les coordonnées du responsable du traitement, les prestataires réels, les durées de conservation, les mécanismes de transfert et les procédures de consentement aux communications auront été déterminés, elles devront être revues par un conseil juridique.",
+    "reviewDate": "Dernier examen des sources réglementaires : 25 mai 2026",
+    "sources": "Principales sources officielles",
+    "sourcesDescription": "Les textes officiels et publications d'autorités ci-dessous ont servi à définir le périmètre de ce projet."
+  },
+  "center": {
+    "title": "Centre d'informations juridiques",
+    "description": "Espace de préparation à la publication des textes relatifs à la protection des données et aux communications électroniques pour la page publique et le produit d'opérations cliniques intégrant WhatsApp et Instagram.",
+    "pagesTitle": "Pages d'information",
+    "pagesDescription": "Chaque texte explique séparément le comportement public actuel du produit et les obligations à finaliser avant activation en production.",
+    "open": "Consulter la page",
+    "cards": [
+      {
+        "path": "/legal/privacy",
+        "title": "Avis de confidentialité",
+        "description": "Traitement, transfert, conservation et droits des personnes selon la KVKK et, le cas échéant, le RGPD."
+      },
+      {
+        "path": "/legal/cookies",
+        "title": "Politique des cookies et du stockage local",
+        "description": "Comportement actuel du stockage fonctionnel du navigateur et futures règles de consentement aux cookies."
+      },
+      {
+        "path": "/legal/communications",
+        "title": "Information sur les canaux de communication",
+        "description": "Flux WhatsApp et Instagram, autorisations de communications commerciales et principe d'absence de partage de données sensibles."
+      }
+    ],
+    "scope": {
+      "title": "Périmètre et limite",
+      "body": "Aile Diş CRM est un produit CRM destiné à gérer les opérations cliniques ; il n'est pas présenté comme une plateforme de diagnostic, de prescription ou de dossier médical électronique complet. Toutefois, les flux de patients, rendez-vous et communications pouvant contenir des données personnelles et, dans certains usages, des données de santé sensibles, la minimisation des données et l'accès autorisé sont indispensables."
+    },
+    "checklist": {
+      "title": "Éléments à finaliser avant publication",
+      "description": "Pour utiliser ces textes dans un service réel, votre organisation doit finaliser les informations et contrôles suivants.",
+      "items": [
+        "La raison sociale du responsable du traitement, les données MERSIS/fiscales, l'adresse postale et le canal de contact protection des données doivent être indiqués.",
+        "Les catégories réelles de données, finalités, bases juridiques et durées de conservation/suppression doivent être alignées sur l'inventaire des données.",
+        "Les rôles de sous-traitants, contrats et éventuels mécanismes de transfert international pour l'hébergement, la messagerie et les prestataires Meta/WhatsApp/Instagram doivent être documentés.",
+        "Pour les communications électroniques marketing en Turquie, les processus d'accord/refus et, le cas échéant, IYS doivent être appliqués ; pour un public UE, ePrivacy/RGPD et les règles de l'État membre concerné doivent être appliqués.",
+        "L'absence de données de santé sensibles dans les messages, les contrôles d'accès, la journalisation et les procédures de réponse aux violations doivent être vérifiés opérationnellement."
+      ]
+    },
+    "sources": {
+      "kvkk": "Autorité turque de protection des données - Informations KVKK",
+      "gdpr": "EUR-Lex - Règlement général sur la protection des données (RGPD/GDPR)",
+      "commercial": "Ministère du Commerce de la République de Türkiye - Réglementation du commerce électronique"
+    }
+  },
+  "privacy": {
+    "title": "Avis de confidentialité et de traitement des données personnelles",
+    "description": "Projet de texte pour les obligations d'information au titre de la KVKK en Turquie et du RGPD lorsque des services sont proposés à des personnes dans l'Union européenne ou que leur comportement est suivi.",
+    "controller": {
+      "title": "1. Responsable du traitement et contact",
+      "body": "La clinique ou l'entreprise qui détermine les finalités et moyens du traitement des données personnelles sera responsable du traitement dans le contexte d'utilisation concerné. Le rôle du fournisseur de la plateforme, responsable ou sous-traitant, devra être établi séparément selon le service et le contrat.",
+      "requiredTitle": "Informations obligatoires de publication manquantes",
+      "requiredBody": "[Raison sociale du responsable], [adresse postale], [données MERSIS/fiscales], [adresse e-mail ou KEP pour les demandes] et, le cas échéant, [contact représentant UE / délégué à la protection des données] doivent être insérés ici avant le lancement du service."
+    },
+    "data": {
+      "title": "2. Catégories de données susceptibles d'être traitées",
+      "body": "Le périmètre ci-dessous repose sur la page de présentation actuelle et les fonctions opérationnelles décrites du produit. Il doit être limité ou mis à jour selon l'inventaire réel avant tout usage contractuel.",
+      "rows": [
+        {
+          "label": "Utilisation du site public",
+          "value": "Données de stockage fonctionnel du navigateur telles que les préférences de langue et de thème ; aucun outil de suivi analytique ou publicitaire n'a été identifié dans cette version."
+        },
+        {
+          "label": "Zone de demande de démo",
+          "value": "Les informations saisies dans le formulaire d'aperçu actuel ne sont ni envoyées ni enregistrées. Si une fonctionnalité réelle est activée, une information distincte sur les coordonnées devra être fournie."
+        },
+        {
+          "label": "Compte d'opérations cliniques",
+          "value": "Lorsque le service est activé, des données d'utilisateur/rôle, clinique et établissement, contact patient, rendez-vous, opportunité de traitement, tâche, suivi de paiement et journal d'activité peuvent être traitées."
+        },
+        {
+          "label": "Flux WhatsApp et Instagram",
+          "value": "Lorsqu'un canal est activé, les informations de connexion, métadonnées de message et contenus de conversation peuvent entrer dans le flux opérationnel. Aucune donnée de santé sensible ne doit être partagée dans les messages."
+        },
+        {
+          "label": "Journaux de sécurité et d'audit",
+          "value": "Les données d'autorisation, d'activité/audit et de sécurité peuvent être traitées aux fins de contrôle d'accès et d'analyse d'incident."
+        }
+      ]
+    },
+    "purposes": {
+      "title": "3. Finalités du traitement",
+      "items": [
+        "Fournir la gestion opérationnelle par clinique, établissement, équipe et rôle.",
+        "Gérer la visibilité des rendez-vous, tâches de suivi, parcours de traitement/service et paiements.",
+        "Lorsqu'ils sont activés, permettre aux équipes autorisées d'intégrer les conversations WhatsApp et Instagram aux opérations.",
+        "Protéger la sécurité des comptes et services, prévenir les accès non autorisés et tenir des journaux d'audit.",
+        "Répondre aux demandes des personnes, obligations réglementaires et processus contractuels."
+      ]
+    },
+    "basis": {
+      "title": "4. Bases juridiques et données sensibles",
+      "body": "La base juridique de chaque catégorie de données doit être établie séparément dans l'inventaire selon l'usage réel, le rôle du responsable et le pays ciblé. Le consentement ne doit pas être considéré comme une base générale présumée lorsqu'une autre base juridique est requise.",
+      "rows": [
+        {
+          "label": "Service et opérations de compte",
+          "value": "Des bases appropriées telles que l'exécution d'un contrat, une obligation légale ou, lorsque les conditions sont remplies, l'intérêt légitime sont évaluées au titre de l'article 5 de la KVKK et de l'article 6 du RGPD."
+        },
+        {
+          "label": "Sécurité et audit",
+          "value": "La base d'obligation légale ou d'intérêt légitime proportionné pour les accès autorisés et la gestion d'incidents est documentée par une évaluation concrète des risques."
+        },
+        {
+          "label": "Communications marketing",
+          "value": "Aucun message n'est envoyé avant mise en place du mécanisme d'autorisation/opposition requis par les règles turques de communication électronique commerciale et IYS si nécessaire, ou par ePrivacy, le RGPD et la règle nationale concernée dans l'UE."
+        }
+      ],
+      "special": "Les données de santé sont des données personnelles sensibles au titre de la KVKK et des catégories particulières au titre du RGPD. Elles ne peuvent être traitées que si cela est réellement nécessaire, avec une condition de traitement applicable déterminée, des mesures techniques et organisationnelles adaptées et un accès restreint ; elles ne doivent pas servir aux messages marketing."
+    },
+    "transfers": {
+      "title": "5. Destinataires et transferts internationaux",
+      "body": "L'hébergement, le support ou les connexions WhatsApp/Instagram peuvent entraîner un partage de données personnelles avec des prestataires à l'étranger. Ce projet n'affirme pas qu'un prestataire a été retenu pour la production ni qu'un transfert est prêt.",
+      "actions": [
+        "Le nom, le rôle, le pays et le périmètre de données traitées de chaque destinataire ou sous-traitant doivent être finalisés.",
+        "Pour les transferts depuis la Turquie, aucun transfert ne doit débuter avant application d'une méthode actuelle prévue par l'article 9 de la KVKK, par exemple des clauses contractuelles standard lorsque les conditions sont réunies.",
+        "Lorsque le RGPD s'applique, les décisions d'adéquation ou garanties appropriées et évaluations complémentaires du chapitre V doivent être documentées pour les transferts vers des pays tiers.",
+        "Avant activation de fonctions Meta, WhatsApp ou Instagram, des informations de transfert propres aux cliniques et personnes concernées doivent être présentées."
+      ]
+    },
+    "retention": {
+      "title": "6. Conservation et suppression",
+      "body": "Les données ne doivent être conservées que pendant la durée nécessaire à leur finalité ; les procédures de suppression, destruction ou anonymisation doivent être documentées selon les obligations juridiques et contractuelles réelles. Les durées ci-dessous ne sont pas encore définies.",
+      "rows": [
+        {
+          "label": "Préférences du site public",
+          "value": "Stockées dans le navigateur en tant que préférences fonctionnelles et supprimables par l'utilisateur. Le cycle de vie exact doit être confirmé avant publication."
+        },
+        {
+          "label": "Formulaire de démo",
+          "value": "Cette version d'aperçu ne soumettant ni n'enregistrant de données, aucune donnée de demande n'est conservée."
+        },
+        {
+          "label": "Données de compte et d'opérations cliniques",
+          "value": "[La durée de conservation et le cycle de suppression seront indiqués après finalisation de l'inventaire des données.]"
+        },
+        {
+          "label": "Messages et journaux d'audit",
+          "value": "[Une durée conforme aux besoins, à la réglementation, aux litiges et à la sécurité sera définie et indiquée.]"
+        }
+      ]
+    },
+    "rights": {
+      "title": "7. Droits des personnes et demandes",
+      "body": "Selon le périmètre, les personnes concernées peuvent exercer les droits prévus à l'article 11 de la KVKK et aux articles 15 à 22 du RGPD. Ces droits incluent notamment les demandes visant à :",
+      "items": [
+        "Savoir si leurs données sont traitées et demander information et accès.",
+        "Demander la rectification de données incomplètes ou inexactes.",
+        "Demander la suppression, destruction, limitation du traitement ou s'opposer lorsque les conditions applicables sont réunies.",
+        "Connaître les tiers destinataires et demander, lorsque pertinent, la portabilité des données.",
+        "Retirer un consentement pour les traitements fondés sur celui-ci et introduire une réclamation auprès de l'autorité de contrôle compétente."
+      ],
+      "contact": "Les demandes seront reçues via [adresse de demande du responsable / KEP / e-mail] à indiquer avant publication. Les voies de réclamation en Turquie relèvent des procédures KVKK ; les demandes entrant dans le champ du RGPD relèvent des procédures de l'autorité de contrôle UE compétente."
+    },
+    "publish": {
+      "title": "8. Avant publication de ce texte",
+      "items": [
+        "L'inventaire des données, l'évaluation de l'obligation VERBIS et la politique de conservation/suppression doivent être vérifiés pour l'entreprise réelle.",
+        "Les rôles accédant aux données sensibles et les règles de contenu des messages doivent être testés.",
+        "Les contrats fournisseurs, documents de transfert et mesures de sécurité doivent être cohérents avec les déclarations du texte.",
+        "Le texte doit être mis à jour lorsque des fonctions ou prestataires sont ajoutés et afficher une date d'entrée en vigueur actuelle."
+      ]
+    },
+    "sources": {
+      "notice": "KVKK - Guide relatif à l'obligation d'information",
+      "transfer": "KVKK - Annonce relative aux contrats standard pour les transferts internationaux (10.07.2024)",
+      "gdpr": "EUR-Lex - RGPD/GDPR (notamment articles 9, 13-14 et chapitre V)"
+    }
+  },
+  "cookies": {
+    "title": "Politique des cookies et du stockage local",
+    "description": "Projet d'information sur la situation actuelle et les règles d'utilisation futures des méthodes de stockage du navigateur dans la page de présentation et la zone produit connectée.",
+    "current": {
+      "title": "Situation actuelle de la page publique",
+      "body": "Selon l'examen du code, la page `/landing` ne contient aucun cookie publicitaire, pixel d'analyse ou cookie marketing. L'application comprend un stockage local pour les préférences d'interface ; la zone produit connectée peut également utiliser des données fonctionnelles telles que la session et la sélection de clinique."
+    },
+    "scope": {
+      "title": "1. Que décrit cette politique ?",
+      "body": "Les cookies et méthodes similaires peuvent servir à stocker des informations sur un appareil ou à accéder à des informations enregistrées. Lorsque cela constitue un traitement de données personnelles, les obligations KVKK s'appliquent ; pour les utilisateurs UE, les règles ePrivacy et, en présence de données personnelles, le RGPD doivent également être évalués."
+    },
+    "storage": {
+      "title": "2. Utilisation actuelle du stockage fonctionnel",
+      "body": "Le tableau ci-dessous décrit les zones de stockage fonctionnel observées dans le code actuel de l'application. Il doit être revérifié avant déploiement en production et ajout d'outils tiers.",
+      "rows": [
+        {
+          "label": "Préférence de thème",
+          "value": "Lue depuis le stockage local pour appliquer l'apparence claire/sombre de l'interface. Elle peut rester jusqu'à sa suppression par l'utilisateur dans les réglages du navigateur."
+        },
+        {
+          "label": "Préférence de langue",
+          "value": "La configuration de détection de langue i18next utilise le stockage local pour mémoriser la langue de l'interface. Cet usage est fonctionnel."
+        },
+        {
+          "label": "Zone produit connectée",
+          "value": "Après connexion, des valeurs fonctionnelles de stockage local peuvent servir à gérer la session, fournir les vues autorisées et maintenir la préférence de clinique sélectionnée ; elles ne sont pas nécessaires à la navigation publique."
+        }
+      ]
+    },
+    "future": {
+      "title": "3. Si des outils facultatifs sont ajoutés",
+      "body": "Si des outils d'analyse, publicité, reciblage ou similaires non essentiels sont ajoutés à l'avenir, cette politique actuelle ne suffira pas à elle seule.",
+      "items": [
+        "Avant activation d'un outil, son nom, prestataire, objectif, durée, destinataire et tout transfert international doivent être ajoutés à l'inventaire et à cette page.",
+        "Lorsque requis, aucun stockage ou accès non essentiel ne doit commencer avant le choix de l'utilisateur ; refuser doit être aussi facile qu'accepter.",
+        "Une interface permettant de modifier ultérieurement les préférences et de tenir les preuves de consentement doit être préparée.",
+        "Si des outils tiers traitent des données personnelles, l'avis de confidentialité doit être mis à jour simultanément."
+      ]
+    },
+    "controls": {
+      "title": "4. Préférences et questions",
+      "items": [
+        "L'utilisateur peut effacer les données de stockage local via les réglages de son navigateur ; cela peut réinitialiser la langue, le thème ou la session.",
+        "Si des cookies non essentiels sont mis en service, cette page fournira un lien d'accès au panneau de préférences.",
+        "Une adresse de contact du responsable doit être ajoutée avant publication pour les questions relatives au traitement des données ou au stockage du navigateur."
+      ]
+    },
+    "sources": {
+      "guide": "KVKK - Guide sur les pratiques en matière de cookies",
+      "eprivacy": "EUR-Lex - Directive ePrivacy 2002/58/CE (article 5(3))",
+      "edpb": "EDPB - Lignes directrices 2/2023 sur le champ technique de l'article 5(3), version finale (16.10.2024)"
+    }
+  },
+  "communications": {
+    "title": "Information sur les communications électroniques et intégrations de canaux",
+    "description": "Projet de texte relatif à la protection des données, aux autorisations de communication commerciale et aux principes de contenu sûr lorsque WhatsApp et Instagram sont utilisés dans les opérations cliniques.",
+    "status": {
+      "title": "Les surfaces d'intégration existent ; l'aptitude à la production doit être finalisée séparément",
+      "body": "Les flux de connexion/boîte WhatsApp et de connexion/boîte DM Instagram sont prêts dans le produit. Toutefois, avant toute utilisation réelle par une clinique, la configuration des comptes, les rôles de responsable, les conditions de transfert, les contrats prestataires et, si nécessaire, les autorisations de communication doivent être vérifiés."
+    },
+    "channels": {
+      "title": "1. Flux de canaux pris en charge",
+      "body": "Les flux prévus pour permettre aux utilisateurs autorisés de gérer les demandes de communication dans les opérations sont présentés ci-dessous.",
+      "rows": [
+        {
+          "label": "WhatsApp",
+          "value": "Possibilité d'associer les conversations aux opérations de la clinique ou de l'établissement via la gestion de connexion et une boîte de réception."
+        },
+        {
+          "label": "Instagram DM",
+          "value": "Possibilité d'orienter les demandes pertinentes de la gestion de connexion et de la boîte DM vers le flux des rendez-vous."
+        },
+        {
+          "label": "Informations potentiellement traitées",
+          "value": "Informations du compte canal, identifiants de communication de l'expéditeur, date et contenu du message, établissement attribué ou état de traitement ; l'information doit être mise à jour selon la configuration réelle."
+        }
+      ]
+    },
+    "roles": {
+      "title": "2. Responsabilité du traitement et prestataires",
+      "body": "La clinique agit comme responsable du traitement dans la mesure où elle détermine les finalités concernant ses patients et demandes de communication. Le statut du fournisseur Aile Diş CRM, sous-traitant ou responsable indépendant/conjoint, doit être établi dans le contrat de service. Les rôles, emplacements des données et conditions de transfert de Meta, WhatsApp, Instagram et des prestataires d'hébergement doivent être documentés avant activation."
+    },
+    "messages": {
+      "title": "3. Distinguer les messages opérationnels des communications marketing",
+      "body": "La disponibilité technique d'un canal ne signifie pas que tout type de message peut être envoyé sans autorisation.",
+      "rows": [
+        {
+          "label": "Information de rendez-vous/opérationnelle",
+          "value": "Évaluée séparément comme communication de service nécessaire et proportionnée. Le message doit être minimal, par exemple un simple rappel de rendez-vous, et ne doit contenir ni diagnostic, ni détail de traitement, ni donnée de santé sensible."
+        },
+        {
+          "label": "Campagne ou promotion",
+          "value": "En Turquie, aucun message n'est envoyé avant finalisation des processus requis par la loi n° 6563, les règles relatives aux communications électroniques commerciales et IYS le cas échéant ; les choix d'accord et de refus doivent être gérés."
+        },
+        {
+          "label": "Marketing direct destiné à des destinataires UE",
+          "value": "Aucun message n'est envoyé avant établissement du mécanisme d'autorisation ou d'opposition requis après évaluation d'ePrivacy, du RGPD et des règles de mise en oeuvre de l'État membre ciblé."
+        }
+      ]
+    },
+    "protection": {
+      "title": "4. Minimisation des données dans les communications cliniques",
+      "items": [
+        "Aucun diagnostic, plan de traitement, image, ordonnance ou autre contenu de santé sensible ne doit être envoyé dans le corps d'un message WhatsApp ou Instagram.",
+        "Les messages reçus ne doivent être consultés que par les rôles qui en ont besoin pour leurs fonctions, avec conservation de journaux d'accès et d'activité.",
+        "Lorsqu'une demande de rendez-vous devient un enregistrement opérationnel, seules les informations nécessaires doivent être transférées ; le contenu inutile de conversation ne doit pas être dupliqué.",
+        "Une procédure de réponse à incident et d'évaluation de violation de données doit exister pour les envois au mauvais destinataire, prises de contrôle de compte ou accès non autorisés."
+      ]
+    },
+    "activation": {
+      "title": "5. Avant activation d'un canal en utilisation réelle",
+      "body": "Pour chaque clinique et canal activé, cette page ne doit pas être présentée comme un engagement définitif tant que les contrôles suivants ne sont pas documentés.",
+      "items": [
+        "Le propriétaire du compte canal, les utilisateurs autorisés, la finalité d'utilisation et les catégories de données doivent être identifiés.",
+        "L'information, la condition de traitement, la gestion nécessaire des accords/refus et la durée de conservation doivent être finalisées pour l'usage du canal.",
+        "Lorsqu'un partage international de données se produit, les mécanismes de transfert KVKK et, le cas échéant, RGPD doivent être appliqués.",
+        "Les modèles de messages doivent être examinés au regard du principe de non-partage de données sensibles, et les messages marketing distingués des messages de service."
+      ]
+    },
+    "sources": {
+      "commercial": "Ministère du Commerce de la République de Türkiye - Réglementation du commerce électronique et des communications électroniques commerciales",
+      "transfer": "KVKK - Documents officiels relatifs aux transferts internationaux de données personnelles",
+      "eprivacy": "EUR-Lex - Directive ePrivacy 2002/58/CE (article 13 pour le marketing direct)",
+      "gdpr": "EUR-Lex - RGPD/GDPR"
+    }
+  }
+}

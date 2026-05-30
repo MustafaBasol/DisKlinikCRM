@@ -1,0 +1,279 @@
+{
+  "meta": {
+    "title": "Aile Diş CRM | Clinic operations with WhatsApp and Instagram"
+  },
+  "brand": {
+    "name": "Aile Diş CRM",
+    "description": "Operations, branch and communications dashboard for dental clinics."
+  },
+  "nav": {
+    "features": "Features",
+    "multiClinic": "Multi-Clinic",
+    "integrations": "Integrations",
+    "workflow": "How It Works",
+    "faq": "FAQ",
+    "login": "Sign In",
+    "themeToggle": "Change theme",
+    "languageSelector": "Select language"
+  },
+  "actions": {
+    "requestDemo": "Request a Demo",
+    "reviewFeatures": "Explore Features"
+  },
+  "hero": {
+    "eyebrow": "Dental Clinic CRM",
+    "title": "Manage your clinic from one dashboard",
+    "description": "Bring your appointments, patient records, treatment workflows, payments, team tasks, branch performance and WhatsApp / Instagram communications together in a modern CRM.",
+    "highlights": {
+      "roles": "Role-based access",
+      "branches": "Multi-clinic view",
+      "channels": "WhatsApp + Instagram ready",
+      "reporting": "Measurable operations"
+    }
+  },
+  "dashboard": {
+    "label": "Sample product view",
+    "title": "Operations Dashboard",
+    "period": "Today",
+    "metrics": {
+      "appointments": "Today's Appointments",
+      "patients": "New Patients",
+      "collections": "Collections Status",
+      "noShow": "No-show Rate"
+    },
+    "branchesTitle": "Branch comparison",
+    "branchesCount": "3 active branches",
+    "occupancy": "Occupancy",
+    "appointmentFlow": "Appointment flow",
+    "appointmentFlowSummary": "Planned operations workload",
+    "slots": {
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "evening": "Evening"
+    }
+  },
+  "problem": {
+    "label": "Operational workload",
+    "title": "Growth gets harder when clinic operations are fragmented",
+    "description": "Visibility decreases when appointments, communications, treatment follow-up, payments and team work remain in separate places.",
+    "items": {
+      "appointments": {
+        "title": "Fragmented appointment flow",
+        "description": "Tracking daily plans and changes can consume valuable time."
+      },
+      "history": {
+        "title": "Hard-to-find history",
+        "description": "Patient and treatment workflow information can become disconnected in operations."
+      },
+      "payments": {
+        "title": "Disconnected collection tracking",
+        "description": "Limited visibility of balances and payments can complicate clinic management."
+      },
+      "noShow": {
+        "title": "Unmeasured no-shows",
+        "description": "Cancellation and absence reasons can disappear without driving action."
+      }
+    }
+  },
+  "features": {
+    "label": "Solution",
+    "title": "An operations centre for dental clinics",
+    "description": "Aile Diş CRM brings together the essential tools for daily operations, communications and performance visibility.",
+    "items": {
+      "appointments": {
+        "title": "Smart appointment management",
+        "description": "Track daily, weekly and branch-based appointment flows in one organised view."
+      },
+      "patientHistory": {
+        "title": "Patient and treatment history",
+        "description": "Review treatment workflows and related operational notes from one record."
+      },
+      "collections": {
+        "title": "Payments and collections tracking",
+        "description": "Monitor payments, outstanding balances and collection status consistently."
+      },
+      "noShow": {
+        "title": "No-show and cancellation analysis",
+        "description": "Turn cancellation and absence trends into measurable operational data."
+      },
+      "branches": {
+        "title": "Multi-clinic management",
+        "description": "Gain central visibility by comparing your branches through shared metrics."
+      },
+      "tasks": {
+        "title": "Team tasks",
+        "description": "Manage reception, practitioner and management tasks with greater clarity."
+      }
+    }
+  },
+  "multiClinic": {
+    "label": "Key difference",
+    "title": "Manage multiple clinics from one screen",
+    "description": "As a clinic owner or manager, compare your branches' workload, patient growth, collections status and no-show rates.",
+    "points": {
+      "comparison": "Daily branch-level performance comparison",
+      "visibility": "Collections and occupancy visibility",
+      "teams": "Team and appointment workload assessment"
+    },
+    "tableLabel": "Sample multi-clinic comparison dashboard",
+    "columns": {
+      "branch": "Branch",
+      "appointments": "Appointments",
+      "patients": "New patients",
+      "collections": "Collections",
+      "noShow": "No-show",
+      "occupancy": "Occupancy"
+    },
+    "branches": {
+      "center": "Central Clinic",
+      "atasehir": "Ataşehir Branch",
+      "bakirkoy": "Bakırköy Branch"
+    },
+    "sampleNote": "Values shown are sample product interface data."
+  },
+  "integrations": {
+    "label": "Ready integrations",
+    "title": "Connect WhatsApp and Instagram conversations to your workflow",
+    "description": "Aile Diş CRM provides ready connection and inbox surfaces to bring two key communication channels into your existing clinic workflow.",
+    "ready": "Ready",
+    "points": {
+      "connection": "View for managing channel connections",
+      "inbox": "Monitor incoming conversations from a central inbox",
+      "workflow": "Route messages into appointment and patient operations"
+    },
+    "channels": {
+      "whatsapp": {
+        "title": "WhatsApp Integration",
+        "description": "Track WhatsApp connections and incoming conversations within clinic operations.",
+        "details": {
+          "connections": "Connection management",
+          "inbox": "WhatsApp inbox",
+          "branches": "Branch-level tracking support"
+        }
+      },
+      "instagram": {
+        "title": "Instagram DM Integration",
+        "description": "Receive Instagram messages and direct relevant requests into appointment flow.",
+        "details": {
+          "connections": "Connection management",
+          "inbox": "Instagram DM inbox",
+          "conversion": "Conversion to appointment flow"
+        }
+      }
+    }
+  },
+  "workflow": {
+    "label": "How it works",
+    "title": "More visible clinic operations in three steps",
+    "items": {
+      "setup": {
+        "title": "Define your clinic and team",
+        "description": "Set up your clinic details, user roles and team members."
+      },
+      "operations": {
+        "title": "Manage daily operations",
+        "description": "Track appointments, patients, treatments, payments and tasks in a shared view."
+      },
+      "performance": {
+        "title": "Measure performance",
+        "description": "Regularly assess clinic and branch visibility through the dashboard."
+      }
+    }
+  },
+  "trust": {
+    "label": "Controlled structure",
+    "title": "An organised and responsible approach to clinic data",
+    "description": "Operational data management is addressed through access control and an extensible structure.",
+    "items": {
+      "roles": {
+        "title": "Role-based access",
+        "description": "Supports users accessing operational areas appropriate to their duties."
+      },
+      "separation": {
+        "title": "Clinic-based data separation",
+        "description": "Designed to establish controlled clinic visibility in multi-branch organisations."
+      },
+      "architecture": {
+        "title": "Modular integration infrastructure",
+        "description": "Supports controlled management of ready WhatsApp and Instagram workflows."
+      },
+      "compliance": {
+        "title": "Structure for compliance processes",
+        "description": "Configurable according to KVKK/GDPR compliance processes."
+      }
+    }
+  },
+  "demo": {
+    "label": "Demo",
+    "title": "Let us evaluate a suitable structure for your clinic",
+    "description": "Create a demo request to see how the product could be adapted to your daily operations, multi-clinic needs and communications channels.",
+    "formTitle": "Demo request",
+    "formNote": "This preview form does not send or store any information.",
+    "fields": {
+      "name": "Full name",
+      "clinic": "Clinic name",
+      "city": "City",
+      "branches": "Number of branches",
+      "contact": "Phone or email",
+      "note": "Note"
+    },
+    "placeholders": {
+      "name": "Your full name",
+      "clinic": "Your clinic name",
+      "city": "City",
+      "branches": "E.g. 2",
+      "contact": "Contact details where we can reach you",
+      "note": "Brief information about your need"
+    },
+    "submit": "Create Demo Request",
+    "successTitle": "Your request was prepared as a preview.",
+    "successDescription": "No information was sent or stored anywhere in this version."
+  },
+  "faq": {
+    "label": "FAQ",
+    "title": "Frequently asked questions before deciding",
+    "items": {
+      "smallClinics": {
+        "question": "Is this system suitable for small clinics?",
+        "answer": "Yes. It can provide a straightforward operations structure for a single clinic and expand to multiple users or multiple clinics as needs grow."
+      },
+      "branches": {
+        "question": "Can I manage more than one branch?",
+        "answer": "Yes. The multi-clinic view is designed to compare essential operational metrics across branches on one screen."
+      },
+      "roles": {
+        "question": "Will there be user roles?",
+        "answer": "Yes. Access levels can be separated for managers, practitioners, reception and relevant operations roles."
+      },
+      "migration": {
+        "question": "Can existing patient data be transferred?",
+        "answer": "The transfer process is assessed according to the data format. A controlled migration plan can be prepared for structured data."
+      },
+      "integrations": {
+        "question": "Are WhatsApp and Instagram integrations ready?",
+        "answer": "Yes. WhatsApp connection and inbox flows, and Instagram connection and DM inbox flows, are available in the application. Available capabilities depend on channel setup and user permissions."
+      },
+      "demo": {
+        "question": "Can I get a demo or early access?",
+        "answer": "Demo requests may be assessed as part of the product introduction process. The form on this preview page does not send data yet."
+      }
+    }
+  },
+  "footer": {
+    "product": "Product",
+    "company": "Information",
+    "links": {
+      "features": "Features",
+      "multiClinic": "Multi-Clinic",
+      "integrations": "Integrations",
+      "demo": "Demo",
+      "login": "Sign In",
+      "legal": "Legal Information",
+      "privacy": "Privacy Notice",
+      "cookies": "Cookie Policy",
+      "communications": "Communication Channels"
+    },
+    "privacyNote": "Designed on the principle that sensitive health data must not be shared in reminder communications.",
+    "copyright": "Aile Diş CRM. MVP product experience for clinic operations management."
+  }
+}

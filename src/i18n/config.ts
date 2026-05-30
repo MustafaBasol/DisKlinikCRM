@@ -19,6 +19,8 @@ import messageTemplatesEn from '../locales/en/messageTemplates.json';
 import servicesEn from '../locales/en/services.json';
 import settingsEn from '../locales/en/settings.json';
 import insuranceEn from '../locales/en/insurance.json';
+import landingEn from '../locales/en/landing.json';
+import legalEn from '../locales/en/legal.json';
 
 import commonTr from '../locales/tr/common.json';
 import authTr from '../locales/tr/auth.json';
@@ -34,6 +36,8 @@ import messageTemplatesTr from '../locales/tr/messageTemplates.json';
 import servicesTr from '../locales/tr/services.json';
 import settingsTr from '../locales/tr/settings.json';
 import insuranceTr from '../locales/tr/insurance.json';
+import landingTr from '../locales/tr/landing.json';
+import legalTr from '../locales/tr/legal.json';
 
 import commonFr from '../locales/fr/common.json';
 import authFr from '../locales/fr/auth.json';
@@ -41,12 +45,16 @@ import dashboardFr from '../locales/fr/dashboard.json';
 import patientsFr from '../locales/fr/patients.json';
 import paymentsFr from '../locales/fr/payments.json';
 import insuranceFr from '../locales/fr/insurance.json';
+import landingFr from '../locales/fr/landing.json';
+import legalFr from '../locales/fr/legal.json';
 
 import commonDe from '../locales/de/common.json';
 import authDe from '../locales/de/auth.json';
 import dashboardDe from '../locales/de/dashboard.json';
 import patientsDe from '../locales/de/patients.json';
 import paymentsDe from '../locales/de/payments.json';
+import landingDe from '../locales/de/landing.json';
+import legalDe from '../locales/de/legal.json';
 
 const resources = {
   en: {
@@ -64,6 +72,8 @@ const resources = {
     services: servicesEn,
     settings: settingsEn,
     insurance: insuranceEn,
+    landing: landingEn,
+    legal: legalEn,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -82,6 +92,8 @@ const resources = {
     services: servicesTr,
     settings: settingsTr,
     insurance: insuranceTr,
+    landing: landingTr,
+    legal: legalTr,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -96,6 +108,8 @@ const resources = {
     services: servicesEn,
     settings: settingsEn,
     insurance: insuranceFr,
+    landing: landingFr,
+    legal: legalFr,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -110,6 +124,8 @@ const resources = {
     services: servicesEn,
     settings: settingsEn,
     insurance: insuranceEn,
+    landing: landingDe,
+    legal: legalDe,
     validation: validationEn,
     errors: errorsEn,
   }

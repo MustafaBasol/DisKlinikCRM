@@ -47,6 +47,11 @@ import Operations from './pages/Operations';
 import Users from './pages/Users';
 import MetaCallbackPage from './pages/MetaCallbackPage';
 import NoShows from './pages/NoShows';
+import LandingPage from './pages/LandingPage';
+import LegalCenterPage from './pages/legal/LegalCenterPage';
+import PrivacyNoticePage from './pages/legal/PrivacyNoticePage';
+import CookiePolicyPage from './pages/legal/CookiePolicyPage';
+import CommunicationsNoticePage from './pages/legal/CommunicationsNoticePage';
 
 import { useTranslation } from 'react-i18next';
 
@@ -85,7 +90,7 @@ const ToastContainer = () => {
   );
 };
 
-const App: React.FC = () => {
+const ProductApplication: React.FC = () => {
   const [searchOpen, setSearchOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -102,7 +107,7 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <PlatformAuthProvider>
-        <Router>
+        <>
           <ToastContainer />
           <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
           <Routes>
@@ -162,10 +167,23 @@ const App: React.FC = () => {
               </Route>
             </Route>
           </Routes>
-        </Router>
+        </>
       </PlatformAuthProvider>
     </AuthProvider>
   );
 };
+
+const App: React.FC = () => (
+  <Router>
+    <Routes>
+      <Route path="/landing" element={<LandingPage />} />
+      <Route path="/legal" element={<LegalCenterPage />} />
+      <Route path="/legal/privacy" element={<PrivacyNoticePage />} />
+      <Route path="/legal/cookies" element={<CookiePolicyPage />} />
+      <Route path="/legal/communications" element={<CommunicationsNoticePage />} />
+      <Route path="*" element={<ProductApplication />} />
+    </Routes>
+  </Router>
+);
 
 export default App;

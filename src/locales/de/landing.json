@@ -1,0 +1,279 @@
+{
+  "meta": {
+    "title": "Aile Diş CRM | Klinikbetrieb mit WhatsApp und Instagram"
+  },
+  "brand": {
+    "name": "Aile Diş CRM",
+    "description": "Betriebs-, Standort- und Kommunikationsdashboard für Zahnarztpraxen."
+  },
+  "nav": {
+    "features": "Funktionen",
+    "multiClinic": "Mehrere Kliniken",
+    "integrations": "Integrationen",
+    "workflow": "So funktioniert es",
+    "faq": "FAQ",
+    "login": "Anmelden",
+    "themeToggle": "Design wechseln",
+    "languageSelector": "Sprache auswählen"
+  },
+  "actions": {
+    "requestDemo": "Demo anfragen",
+    "reviewFeatures": "Funktionen ansehen"
+  },
+  "hero": {
+    "eyebrow": "CRM für Zahnkliniken",
+    "title": "Verwalten Sie Ihre Klinik über ein Dashboard",
+    "description": "Führen Sie Termine, Patientendaten, Behandlungsabläufe, Zahlungen, Teamaufgaben, Standortleistung und WhatsApp- / Instagram-Kommunikation in einem modernen CRM zusammen.",
+    "highlights": {
+      "roles": "Rollenbasierter Zugriff",
+      "branches": "Mehrkliniken-Ansicht",
+      "channels": "WhatsApp + Instagram bereit",
+      "reporting": "Messbarer Betrieb"
+    }
+  },
+  "dashboard": {
+    "label": "Produktbeispiel",
+    "title": "Betriebsdashboard",
+    "period": "Heute",
+    "metrics": {
+      "appointments": "Heutige Termine",
+      "patients": "Neue Patienten",
+      "collections": "Zahlungseingänge",
+      "noShow": "Nichterscheinen"
+    },
+    "branchesTitle": "Standortvergleich",
+    "branchesCount": "3 aktive Standorte",
+    "occupancy": "Auslastung",
+    "appointmentFlow": "Terminablauf",
+    "appointmentFlowSummary": "Geplante Betriebsauslastung",
+    "slots": {
+      "morning": "Vormittag",
+      "afternoon": "Nachmittag",
+      "evening": "Abend"
+    }
+  },
+  "problem": {
+    "label": "Betrieblicher Aufwand",
+    "title": "Wachstum wird schwieriger, wenn Klinikabläufe verteilt sind",
+    "description": "Die Übersicht sinkt, wenn Termine, Kommunikation, Behandlungsnachverfolgung, Zahlungen und Teamaufgaben getrennt bleiben.",
+    "items": {
+      "appointments": {
+        "title": "Verteilter Terminablauf",
+        "description": "Die Nachverfolgung täglicher Pläne und Änderungen kann wertvolle Zeit kosten."
+      },
+      "history": {
+        "title": "Schwer auffindbare Historie",
+        "description": "Informationen zu Patienten und Behandlungsabläufen können im Betrieb getrennt bleiben."
+      },
+      "payments": {
+        "title": "Getrennte Zahlungsnachverfolgung",
+        "description": "Fehlende Übersicht über Salden und Zahlungen kann die Klinikverwaltung erschweren."
+      },
+      "noShow": {
+        "title": "Nicht gemessene Nichterscheinen",
+        "description": "Gründe für Absagen und Nichterscheinen können ohne Maßnahmen verloren gehen."
+      }
+    }
+  },
+  "features": {
+    "label": "Lösung",
+    "title": "Die Betriebszentrale für Zahnkliniken",
+    "description": "Aile Diş CRM vereint die wichtigsten Werkzeuge für Tagesbetrieb, Kommunikation und Leistungsübersicht.",
+    "items": {
+      "appointments": {
+        "title": "Intelligente Terminverwaltung",
+        "description": "Verfolgen Sie tägliche, wöchentliche und standortbezogene Terminabläufe in einer Ansicht."
+      },
+      "patientHistory": {
+        "title": "Patienten- und Behandlungshistorie",
+        "description": "Sehen Sie Behandlungsabläufe und zugehörige Betriebsnotizen in einem Datensatz ein."
+      },
+      "collections": {
+        "title": "Zahlungs- und Zahlungseingangsverfolgung",
+        "description": "Überwachen Sie Zahlungen, offene Beträge und den Status der Eingänge regelmäßig."
+      },
+      "noShow": {
+        "title": "Analyse von Absagen und Nichterscheinen",
+        "description": "Machen Sie Trends bei Absagen und Nichterscheinen zu messbaren Betriebsdaten."
+      },
+      "branches": {
+        "title": "Mehrkliniken-Verwaltung",
+        "description": "Gewinnen Sie zentrale Übersicht, indem Sie Standorte mit gemeinsamen Kennzahlen vergleichen."
+      },
+      "tasks": {
+        "title": "Teamaufgaben",
+        "description": "Verwalten Sie Aufgaben von Empfang, Behandlern und Leitung transparenter."
+      }
+    }
+  },
+  "multiClinic": {
+    "label": "Entscheidender Unterschied",
+    "title": "Verwalten Sie mehrere Kliniken auf einem Bildschirm",
+    "description": "Vergleichen Sie als Inhaber oder Leitung Arbeitsaufkommen, Patientenzuwachs, Zahlungseingänge und Nichterscheinungsraten Ihrer Standorte.",
+    "points": {
+      "comparison": "Täglicher Leistungsvergleich pro Standort",
+      "visibility": "Übersicht über Zahlungseingänge und Auslastung",
+      "teams": "Bewertung der Team- und Terminauslastung"
+    },
+    "tableLabel": "Beispiel eines Mehrkliniken-Vergleichsdashboards",
+    "columns": {
+      "branch": "Standort",
+      "appointments": "Termine",
+      "patients": "Neue Patienten",
+      "collections": "Eingänge",
+      "noShow": "Nicht erschienen",
+      "occupancy": "Auslastung"
+    },
+    "branches": {
+      "center": "Zentralklinik",
+      "atasehir": "Standort Ataşehir",
+      "bakirkoy": "Standort Bakırköy"
+    },
+    "sampleNote": "Die angezeigten Werte sind Beispieldaten der Produktoberfläche."
+  },
+  "integrations": {
+    "label": "Bereite Integrationen",
+    "title": "Verbinden Sie WhatsApp- und Instagram-Gespräche mit Ihren Abläufen",
+    "description": "Aile Diş CRM bietet vorbereitete Verbindungs- und Posteingangsflächen, um zwei wichtige Kommunikationskanäle in bestehende Klinikabläufe einzubinden.",
+    "ready": "Bereit",
+    "points": {
+      "connection": "Ansicht zur Verwaltung von Kanalverbindungen",
+      "inbox": "Eingehende Gespräche in einem zentralen Posteingang verfolgen",
+      "workflow": "Nachrichten an Termin- und Patientenabläufe weiterleiten"
+    },
+    "channels": {
+      "whatsapp": {
+        "title": "WhatsApp-Integration",
+        "description": "Verfolgen Sie WhatsApp-Verbindungen und eingehende Gespräche im Klinikbetrieb.",
+        "details": {
+          "connections": "Verbindungsverwaltung",
+          "inbox": "WhatsApp-Posteingang",
+          "branches": "Standortbezogene Nachverfolgung"
+        }
+      },
+      "instagram": {
+        "title": "Instagram-DM-Integration",
+        "description": "Empfangen Sie Instagram-Nachrichten und leiten Sie passende Anfragen in den Terminablauf.",
+        "details": {
+          "connections": "Verbindungsverwaltung",
+          "inbox": "Instagram-DM-Posteingang",
+          "conversion": "Überführung in den Terminablauf"
+        }
+      }
+    }
+  },
+  "workflow": {
+    "label": "So funktioniert es",
+    "title": "Mehr Übersicht im Klinikbetrieb in drei Schritten",
+    "items": {
+      "setup": {
+        "title": "Definieren Sie Klinik und Team",
+        "description": "Richten Sie Klinikdaten, Benutzerrollen und Teammitglieder ein."
+      },
+      "operations": {
+        "title": "Verwalten Sie den Tagesbetrieb",
+        "description": "Verfolgen Sie Termine, Patienten, Behandlungen, Zahlungen und Aufgaben in einer gemeinsamen Ansicht."
+      },
+      "performance": {
+        "title": "Messen Sie die Leistung",
+        "description": "Bewerten Sie Klinik- und Standortübersicht regelmäßig im Dashboard."
+      }
+    }
+  },
+  "trust": {
+    "label": "Kontrollierte Struktur",
+    "title": "Ein geordneter und verantwortungsvoller Ansatz für Klinikdaten",
+    "description": "Betriebliche Daten werden mit Zugriffskontrolle und einer erweiterbaren Struktur verwaltet.",
+    "items": {
+      "roles": {
+        "title": "Rollenbasierter Zugriff",
+        "description": "Unterstützt den Zugriff auf Betriebsbereiche entsprechend den Aufgaben der Nutzer."
+      },
+      "separation": {
+        "title": "Datenabgrenzung nach Klinik",
+        "description": "Für kontrollierte Klinikübersicht in Organisationen mit mehreren Standorten ausgelegt."
+      },
+      "architecture": {
+        "title": "Modulare Integrationsinfrastruktur",
+        "description": "Unterstützt die kontrollierte Verwaltung vorbereiteter WhatsApp- und Instagram-Abläufe."
+      },
+      "compliance": {
+        "title": "Struktur für Compliance-Prozesse",
+        "description": "An KVKK-/DSGVO-Konformitätsprozesse anpassbar."
+      }
+    }
+  },
+  "demo": {
+    "label": "Demo",
+    "title": "Bewerten wir gemeinsam eine passende Struktur für Ihre Klinik",
+    "description": "Erstellen Sie eine Demoanfrage, um zu sehen, wie das Produkt an Ihren Tagesbetrieb, Mehrkliniken-Bedarf und Ihre Kommunikationskanäle angepasst werden könnte.",
+    "formTitle": "Demoanfrage",
+    "formNote": "Dieses Vorschauformular sendet oder speichert keine Informationen.",
+    "fields": {
+      "name": "Vollständiger Name",
+      "clinic": "Name der Klinik",
+      "city": "Stadt",
+      "branches": "Anzahl der Standorte",
+      "contact": "Telefon oder E-Mail",
+      "note": "Notiz"
+    },
+    "placeholders": {
+      "name": "Ihr vollständiger Name",
+      "clinic": "Name Ihrer Klinik",
+      "city": "Stadt",
+      "branches": "Z. B. 2",
+      "contact": "Kontaktdaten, unter denen wir Sie erreichen",
+      "note": "Kurze Information zu Ihrem Bedarf"
+    },
+    "submit": "Demoanfrage erstellen",
+    "successTitle": "Ihre Anfrage wurde als Vorschau vorbereitet.",
+    "successDescription": "In dieser Version wurden keine Informationen versendet oder gespeichert."
+  },
+  "faq": {
+    "label": "FAQ",
+    "title": "Häufig gestellte Fragen vor einer Entscheidung",
+    "items": {
+      "smallClinics": {
+        "question": "Ist dieses System für kleine Kliniken geeignet?",
+        "answer": "Ja. Es kann eine einfache Betriebsstruktur für eine Klinik bieten und bei Bedarf auf mehrere Nutzer oder Kliniken erweitert werden."
+      },
+      "branches": {
+        "question": "Kann ich mehr als einen Standort verwalten?",
+        "answer": "Ja. Die Mehrkliniken-Ansicht soll zentrale Betriebskennzahlen verschiedener Standorte auf einem Bildschirm vergleichbar machen."
+      },
+      "roles": {
+        "question": "Wird es Benutzerrollen geben?",
+        "answer": "Ja. Zugriffsebenen können für Leitung, Behandler, Empfang und weitere betriebliche Rollen getrennt werden."
+      },
+      "migration": {
+        "question": "Können vorhandene Patientendaten übertragen werden?",
+        "answer": "Der Übertragungsprozess wird abhängig vom Datenformat bewertet. Für strukturierte Daten kann ein kontrollierter Migrationsplan erstellt werden."
+      },
+      "integrations": {
+        "question": "Sind WhatsApp- und Instagram-Integrationen bereit?",
+        "answer": "Ja. WhatsApp-Verbindungs- und Posteingangsabläufe sowie Instagram-Verbindungs- und DM-Posteingangsabläufe sind in der Anwendung vorhanden. Nutzbare Funktionen hängen von Kanaleinrichtung und Benutzerrechten ab."
+      },
+      "demo": {
+        "question": "Kann ich eine Demo oder frühzeitigen Zugang erhalten?",
+        "answer": "Demoanfragen können im Rahmen der Produktvorstellung bewertet werden. Das Formular auf dieser Vorschauseite sendet noch keine Daten."
+      }
+    }
+  },
+  "footer": {
+    "product": "Produkt",
+    "company": "Informationen",
+    "links": {
+      "features": "Funktionen",
+      "multiClinic": "Mehrere Kliniken",
+      "integrations": "Integrationen",
+      "demo": "Demo",
+      "login": "Anmelden",
+      "legal": "Rechtliche Informationen",
+      "privacy": "Datenschutzhinweise",
+      "cookies": "Cookie-Richtlinie",
+      "communications": "Kommunikationskanäle"
+    },
+    "privacyNote": "Nach dem Grundsatz gestaltet, dass in Erinnerungskommunikation keine sensiblen Gesundheitsdaten geteilt werden.",
+    "copyright": "Aile Diş CRM. MVP-Produkterlebnis für die Verwaltung des Klinikbetriebs."
+  }
+}
