@@ -114,6 +114,20 @@ export const doctorOffDaySchema = z.object({
 
 // --- Appointment ---
 
+const dateTimeSchema = z.string().min(1, 'Date/time is required').transform((value, ctx) => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Invalid date/time',
+    });
+    return z.NEVER;
+  }
+
+  return date;
+});
+
 const appointmentStatusEnum = z.enum([
   'scheduled',
   'confirmed',
@@ -127,8 +141,8 @@ const appointmentBaseSchema = z.object({
   patientId: z.string().uuid('Invalid patient ID'),
   practitionerId: z.string().uuid('Invalid practitioner ID'),
   appointmentTypeId: z.string().uuid('Invalid appointment type ID'),
-  startTime: z.string().transform(val => new Date(val)),
-  endTime: z.string().transform(val => new Date(val)),
+  startTime: dateTimeSchema,
+  endTime: dateTimeSchema,
   status: appointmentStatusEnum.default('scheduled'),
   notes: z.string().optional().nullable(),
   treatmentCaseId: z.string().uuid().optional().nullable(),
