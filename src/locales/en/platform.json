@@ -1,0 +1,184 @@
+{
+  "statuses": {
+    "active": "Active",
+    "trial": "Trial",
+    "suspended": "Suspended",
+    "cancelled": "Cancelled",
+    "inactive": "Inactive",
+    "healthy": "System Healthy",
+    "degraded": "System Degraded",
+    "ok": "OK",
+    "error": "ERROR"
+  },
+  "actions": {
+    "activate": "Activate",
+    "suspend": "Suspend",
+    "deactivate": "Deactivate",
+    "viewAll": "View all",
+    "save": "Save",
+    "cancel": "Cancel",
+    "refresh": "Refresh"
+  },
+  "filters": {
+    "all": "All",
+    "allStatuses": "All Statuses",
+    "allRoles": "All Roles"
+  },
+  "pagination": "{{total}} {{item}} - Page {{page}}/{{pages}}",
+  "items": {
+    "clinic": "clinic",
+    "user": "user",
+    "organization": "organization"
+  },
+  "counts": {
+    "clinicsUsers": "{{clinics}} clinics - {{users}} users",
+    "organizationsClinics": "{{organizations}} organizations - {{clinics}} clinics"
+  },
+  "errors": {
+    "dashboardLoadFailed": "Dashboard could not be loaded",
+    "dataUnavailable": "Data could not be retrieved",
+    "clinicsLoadFailed": "Clinics could not be loaded",
+    "organizationsLoadFailed": "Organizations could not be loaded",
+    "usersLoadFailed": "Users could not be loaded",
+    "plansLoadFailed": "Plans could not be loaded",
+    "systemLoadFailed": "System status could not be retrieved",
+    "loginFailed": "Login failed",
+    "statusUpdateFailed": "Status could not be updated",
+    "planUpdateFailed": "Plan could not be updated",
+    "trialUpdateFailed": "Trial period could not be updated",
+    "saveFailed": "Save failed"
+  },
+  "login": {
+    "title": "Platform Management",
+    "subtitle": "Super admin login",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Log In",
+    "restricted": "This area is only for platform administrators."
+  },
+  "layout": {
+    "brandPrimary": "Platform",
+    "brandSecondary": "Management",
+    "topbarTitle": "Platform Admin",
+    "logout": "Logout",
+    "nav": {
+      "dashboard": "Dashboard",
+      "organizations": "Organizations",
+      "clinics": "Clinics",
+      "users": "Users",
+      "plans": "Plans",
+      "system": "System"
+    }
+  },
+  "dashboard": {
+    "title": "Platform Dashboard",
+    "totalOrganizations": "Total Organizations",
+    "activeOrganizations": "Active Organizations",
+    "suspendedOrganizations": "Suspended",
+    "trialEndingSoon": "Trial Ending (7d)",
+    "totalClinics": "Total Clinics",
+    "totalUsers": "Total Users",
+    "totalPatients": "Total Patients",
+    "whatsappConnections": "WhatsApp Connections",
+    "recentOrganizations": "Recent Organizations",
+    "emptyOrganizations": "No organizations yet"
+  },
+  "clinics": {
+    "title": "Clinics",
+    "searchPlaceholder": "Search name, slug or email...",
+    "empty": "No clinics found",
+    "columns": {
+      "clinic": "Clinic",
+      "organization": "Organization",
+      "plan": "Plan",
+      "status": "Status",
+      "users": "Users",
+      "patients": "Patients",
+      "created": "Created",
+      "actions": "Actions"
+    }
+  },
+  "organizations": {
+    "title": "Organizations",
+    "searchPlaceholder": "Search name or slug...",
+    "empty": "No organizations found",
+    "columns": {
+      "organization": "Organization",
+      "plan": "Plan",
+      "status": "Status",
+      "clinics": "Clinics",
+      "users": "Users",
+      "patients": "Patients",
+      "trialEnds": "Trial Ends",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "planAction": "Plan",
+    "trialAction": "Trial",
+    "changePlanTitle": "Change Plan - {{name}}",
+    "extendTrialTitle": "Extend Trial - {{name}}",
+    "selectPlan": "Select plan..."
+  },
+  "users": {
+    "title": "Users",
+    "searchPlaceholder": "Search name or email...",
+    "empty": "No users found",
+    "pageInfo": "{{total}} users - Page {{page}}/{{pages}}",
+    "columns": {
+      "user": "User",
+      "role": "Role",
+      "organization": "Organization",
+      "defaultClinic": "Default Clinic",
+      "allClinics": "All Clinics",
+      "status": "Status",
+      "lastLogin": "Last Login",
+      "actions": "Actions"
+    },
+    "roles": {
+      "OWNER": "Owner",
+      "ORG_ADMIN": "Org. Admin",
+      "CLINIC_MANAGER": "Clinic Mgr.",
+      "DENTIST": "Dentist",
+      "RECEPTIONIST": "Reception",
+      "BILLING": "Billing",
+      "ASSISTANT": "Assistant"
+    }
+  },
+  "plans": {
+    "title": "Plans",
+    "newPlan": "New Plan",
+    "editPlan": "Edit Plan",
+    "empty": "No plans yet",
+    "code": "Code (unique)",
+    "displayName": "Display Name",
+    "displayNamePlaceholder": "Starter",
+    "maxUsers": "Max Users",
+    "maxPatients": "Max Patients",
+    "monthlyPrice": "Monthly Price",
+    "price": "Price",
+    "features": "Features",
+    "featuresList": {
+      "whatsapp": "WhatsApp",
+      "reports": "Reports",
+      "compensation": "Commission System",
+      "inventory": "Inventory"
+    }
+  },
+  "system": {
+    "title": "System Status",
+    "database": "Database",
+    "api": "API",
+    "whatsapp": "WhatsApp",
+    "status": "Status",
+    "failedMessages": "Failed Messages",
+    "failedMessagesSub": "Total failed",
+    "connected": "Connected"
+  },
+  "admin": {
+    "title": "Platform Admin",
+    "logout": "Logout",
+    "clinics": "Clinics",
+    "totalAppointments": "Total Appointments",
+    "usersPatients": "Users / Patients"
+  }
+}

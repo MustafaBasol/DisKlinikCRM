@@ -1,0 +1,115 @@
+{
+  "title": "Raporlar",
+  "subtitle": "Gelir analizi ve hekim performansı",
+  "export": {
+    "csv": "CSV İndir",
+    "filePrefix": "gelir-raporu"
+  },
+  "tabs": {
+    "revenue": "Gelir Raporu",
+    "doctors": "Hekim Performansı",
+    "sources": "Hasta Kaynakları",
+    "noshow": "No-Show Analizi"
+  },
+  "filters": {
+    "startDate": "Başlangıç Tarihi",
+    "endDate": "Bitiş Tarihi",
+    "grouping": "Gruplama",
+    "day": "Günlük",
+    "week": "Haftalık",
+    "month": "Aylık",
+    "paymentMethod": "Ödeme Yöntemi",
+    "all": "Tümü",
+    "doctor": "Hekim",
+    "allDoctors": "Tüm Hekimler",
+    "runReport": "Raporu Getir"
+  },
+  "errors": {
+    "revenueLoadFailed": "Rapor yüklenemedi.",
+    "doctorLoadFailed": "Hekim raporu yüklenemedi.",
+    "sourcesLoadFailed": "Hasta kaynak raporu yüklenemedi.",
+    "noShowLoadFailed": "No-show raporu yüklenemedi.",
+    "csvFailed": "CSV indirilemedi."
+  },
+  "empty": {
+    "prompt": "Raporu görüntülemek için \"{{button}}\" butonuna tıklayın."
+  },
+  "revenue": {
+    "totalRevenue": "Toplam Gelir",
+    "paymentCount": "{{count}} ödeme",
+    "avgPayment": "Ortalama Ödeme",
+    "pendingCollection": "Bekleyen Tahsilat",
+    "pendingCount": "{{count}} bekleyen",
+    "paymentCountTitle": "Ödeme Sayısı",
+    "periodicRevenue": "Dönemsel Gelir",
+    "revenue": "Gelir",
+    "paymentMethodDistribution": "Ödeme Yöntemi Dağılımı",
+    "revenueByDoctor": "Hekim Bazlı Gelir",
+    "doctorPaymentCount": "{{count}} ödeme",
+    "detailTable": "Detay Tablosu",
+    "period": "Dönem",
+    "average": "Ortalama",
+    "total": "Toplam",
+    "empty": "Seçili tarih aralığında tahsilat kaydı bulunamadı."
+  },
+  "sources": {
+    "referral": "Referans",
+    "social_media": "Sosyal Medya",
+    "instagram": "Instagram",
+    "website": "Web Sitesi",
+    "phone": "Telefon",
+    "walk_in": "Yürüyerek Gelen",
+    "google": "Google",
+    "facebook": "Facebook",
+    "whatsapp": "WhatsApp",
+    "other": "Diğer",
+    "totalPatientsInRange": "Toplam Kayıtlı Hasta (Dönem)",
+    "sourceCount": "{{count}} farklı kaynak",
+    "rankedSource": "#{{rank}} Kaynak",
+    "patients": "hasta",
+    "patientCountValue": "{{count}} hasta",
+    "patientDistribution": "Kaynak Bazlı Hasta Dağılımı",
+    "revenueBySource": "Kaynak Bazlı Gelir",
+    "detailTable": "Kaynak Detay Tablosu",
+    "source": "Kaynak",
+    "patientCount": "Hasta Sayısı",
+    "share": "Pay %"
+  },
+  "noshow": {
+    "totalNoShow": "Toplam No-Show",
+    "noShowRate": "No-Show Oranı",
+    "cancellationCount": "İptal Sayısı",
+    "totalAppointments": "Toplam Randevu",
+    "monthlyTrend": "Aylık No-Show Trendi",
+    "noShow": "No-Show",
+    "cancelled": "İptal",
+    "rate": "Oran",
+    "ratePercent": "Oran %",
+    "byDay": "Gün Bazlı Dağılım",
+    "byHour": "Saat Dilimi Dağılımı",
+    "doctorRate": "Hekim Bazlı No-Show Oranı",
+    "doctor": "Hekim",
+    "total": "Toplam"
+  },
+  "doctors": {
+    "empty": "Aktif hekim bulunamadı.",
+    "commissionRate": "Komisyon oranı: %{{rate}}",
+    "totalRevenue": "Toplam Gelir",
+    "commission": "Komisyon",
+    "totalAppointments": "Toplam Randevu",
+    "completed": "Tamamlanan",
+    "noShow": "No-Show",
+    "completionRate": "Tamamlanma %",
+    "openedTreatment": "Açılan Tedavi",
+    "avgPayment": "Ort. Ödeme"
+  },
+  "daysShort": {
+    "sun": "Paz",
+    "mon": "Pzt",
+    "tue": "Sal",
+    "wed": "Çar",
+    "thu": "Per",
+    "fri": "Cum",
+    "sat": "Cmt"
+  }
+}

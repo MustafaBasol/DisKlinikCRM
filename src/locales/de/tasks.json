@@ -1,0 +1,49 @@
+{
+  "title": "Aufgaben und Nachfassaktionen",
+  "subtitle": "Verwalten Sie Nachfassaufgaben und Zuweisungen der Klinik.",
+  "noRelatedTasks": "Keine verknüpften Aufgaben gefunden.",
+  "newTask": "Neue Aufgabe",
+  "editTask": "Aufgabe bearbeiten",
+  "filters": {
+    "allStatus": "Alle Status",
+    "allPriorities": "Alle Prioritäten",
+    "allUsers": "Alle Benutzer",
+    "dueToday": "Heute fällig",
+    "overdue": "Überfällig"
+  },
+  "status": {
+    "open": "Offen",
+    "in_progress": "In Bearbeitung",
+    "completed": "Abgeschlossen",
+    "cancelled": "Storniert"
+  },
+  "priority": {
+    "low": "Niedrig",
+    "normal": "Normal",
+    "high": "Hoch",
+    "urgent": "Dringend"
+  },
+  "list": {
+    "task": "Aufgabe",
+    "patient": "Patient",
+    "assignedTo": "Zugewiesen an",
+    "dueDate": "Fälligkeitsdatum",
+    "priority": "Priorität",
+    "status": "Status"
+  },
+  "form": {
+    "title": "Aufgabentitel",
+    "description": "Beschreibung",
+    "assignedTo": "Zuweisen an",
+    "patient": "Zugehöriger Patient",
+    "appointment": "Zugehöriger Termin",
+    "dueDate": "Fälligkeitsdatum",
+    "priority": "Priorität",
+    "status": "Status"
+  },
+  "actions": {
+    "complete": "Abschließen",
+    "cancel": "Stornieren",
+    "edit": "Bearbeiten"
+  }
+}

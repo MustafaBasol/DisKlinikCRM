@@ -1,0 +1,52 @@
+{
+  "header": {
+    "subtitle": "Online-Termin"
+  },
+  "errors": {
+    "invalidLink": "Ungültiger Link.",
+    "loadClinic": "Klinikinformationen konnten nicht geladen werden.",
+    "loading": "Ladefehler",
+    "namePhoneRequired": "Vollständiger Name und Telefon sind erforderlich.",
+    "submitFailed": "Terminanfrage konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+  },
+  "service": {
+    "title": "Leistung auswählen",
+    "subtitle": "Für welche Behandlung möchten Sie einen Termin buchen?",
+    "duration": "{{minutes}} Min.",
+    "empty": "Es wurden noch keine Leistungen definiert.",
+    "continueWithoutService": "Ohne Leistungsauswahl fortfahren"
+  },
+  "schedule": {
+    "title": "Behandler und Datum auswählen",
+    "optional": "Optional",
+    "doctorOptional": "Behandler (optional)",
+    "anyDoctor": "Keine Präferenz",
+    "dateOptional": "Gewünschtes Datum (optional)",
+    "timeOptional": "Gewünschte Uhrzeit (optional)"
+  },
+  "contact": {
+    "title": "Kontaktinformationen",
+    "subtitle": "Bitte füllen Sie dies aus, damit wir Sie anrufen können",
+    "fullName": "Vollständiger Name",
+    "fullNamePlaceholder": "Ihr vollständiger Name",
+    "phone": "Telefon",
+    "emailOptional": "E-Mail (optional)",
+    "noteOptional": "Notiz (optional)",
+    "notePlaceholder": "Ihr Anliegen, besonderer Wunsch...",
+    "disclaimer": "Nachdem Ihre Anfrage eingegangen ist, ruft die Klinik Sie an, um den Termin zu bestätigen."
+  },
+  "actions": {
+    "continue": "Weiter",
+    "submitting": "Wird gesendet...",
+    "submit": "Terminanfrage senden"
+  },
+  "success": {
+    "title": "Ihre Anfrage wurde empfangen!",
+    "body": "Das Team von {{clinic}} ruft {{phone}} so bald wie möglich an, um Ihren Termin zu bestätigen.",
+    "questions": "Bei Fragen",
+    "newAppointment": "Neuen Termin buchen"
+  },
+  "footer": {
+    "poweredBy": "Powered by Klinik CRM"
+  }
+}

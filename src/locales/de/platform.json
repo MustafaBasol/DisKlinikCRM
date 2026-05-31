@@ -1,0 +1,184 @@
+{
+  "statuses": {
+    "active": "Aktiv",
+    "trial": "Testphase",
+    "suspended": "Gesperrt",
+    "cancelled": "Storniert",
+    "inactive": "Inaktiv",
+    "healthy": "System gesund",
+    "degraded": "System gestört",
+    "ok": "OK",
+    "error": "FEHLER"
+  },
+  "actions": {
+    "activate": "Aktivieren",
+    "suspend": "Sperren",
+    "deactivate": "Deaktivieren",
+    "viewAll": "Alle anzeigen",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "refresh": "Aktualisieren"
+  },
+  "filters": {
+    "all": "Alle",
+    "allStatuses": "Alle Status",
+    "allRoles": "Alle Rollen"
+  },
+  "pagination": "{{total}} {{item}} - Seite {{page}}/{{pages}}",
+  "items": {
+    "clinic": "Klinik",
+    "user": "Benutzer",
+    "organization": "Organisation"
+  },
+  "counts": {
+    "clinicsUsers": "{{clinics}} Kliniken - {{users}} Benutzer",
+    "organizationsClinics": "{{organizations}} Organisationen - {{clinics}} Kliniken"
+  },
+  "errors": {
+    "dashboardLoadFailed": "Dashboard konnte nicht geladen werden",
+    "dataUnavailable": "Daten konnten nicht abgerufen werden",
+    "clinicsLoadFailed": "Kliniken konnten nicht geladen werden",
+    "organizationsLoadFailed": "Organisationen konnten nicht geladen werden",
+    "usersLoadFailed": "Benutzer konnten nicht geladen werden",
+    "plansLoadFailed": "Pläne konnten nicht geladen werden",
+    "systemLoadFailed": "Systemstatus konnte nicht abgerufen werden",
+    "loginFailed": "Anmeldung fehlgeschlagen",
+    "statusUpdateFailed": "Status konnte nicht aktualisiert werden",
+    "planUpdateFailed": "Plan konnte nicht aktualisiert werden",
+    "trialUpdateFailed": "Testzeitraum konnte nicht aktualisiert werden",
+    "saveFailed": "Speichern fehlgeschlagen"
+  },
+  "login": {
+    "title": "Plattformverwaltung",
+    "subtitle": "Super-Admin-Anmeldung",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "submit": "Anmelden",
+    "restricted": "Dieser Bereich ist nur für Plattformadministratoren."
+  },
+  "layout": {
+    "brandPrimary": "Plattform",
+    "brandSecondary": "Verwaltung",
+    "topbarTitle": "Plattform-Admin",
+    "logout": "Abmelden",
+    "nav": {
+      "dashboard": "Dashboard",
+      "organizations": "Organisationen",
+      "clinics": "Kliniken",
+      "users": "Benutzer",
+      "plans": "Pläne",
+      "system": "System"
+    }
+  },
+  "dashboard": {
+    "title": "Plattform-Dashboard",
+    "totalOrganizations": "Organisationen gesamt",
+    "activeOrganizations": "Aktive Organisationen",
+    "suspendedOrganizations": "Gesperrt",
+    "trialEndingSoon": "Testphase endet (7T)",
+    "totalClinics": "Kliniken gesamt",
+    "totalUsers": "Benutzer gesamt",
+    "totalPatients": "Patienten gesamt",
+    "whatsappConnections": "WhatsApp-Verbindungen",
+    "recentOrganizations": "Neueste Organisationen",
+    "emptyOrganizations": "Noch keine Organisationen"
+  },
+  "clinics": {
+    "title": "Kliniken",
+    "searchPlaceholder": "Name, Slug oder E-Mail suchen...",
+    "empty": "Keine Klinik gefunden",
+    "columns": {
+      "clinic": "Klinik",
+      "organization": "Organisation",
+      "plan": "Plan",
+      "status": "Status",
+      "users": "Benutzer",
+      "patients": "Patienten",
+      "created": "Erstellt",
+      "actions": "Aktionen"
+    }
+  },
+  "organizations": {
+    "title": "Organisationen",
+    "searchPlaceholder": "Name oder Slug suchen...",
+    "empty": "Keine Organisation gefunden",
+    "columns": {
+      "organization": "Organisation",
+      "plan": "Plan",
+      "status": "Status",
+      "clinics": "Kliniken",
+      "users": "Benutzer",
+      "patients": "Patienten",
+      "trialEnds": "Testphase endet",
+      "created": "Erstellt",
+      "actions": "Aktionen"
+    },
+    "planAction": "Plan",
+    "trialAction": "Testphase",
+    "changePlanTitle": "Plan ändern - {{name}}",
+    "extendTrialTitle": "Testphase verlängern - {{name}}",
+    "selectPlan": "Plan auswählen..."
+  },
+  "users": {
+    "title": "Benutzer",
+    "searchPlaceholder": "Name oder E-Mail suchen...",
+    "empty": "Kein Benutzer gefunden",
+    "pageInfo": "{{total}} Benutzer - Seite {{page}}/{{pages}}",
+    "columns": {
+      "user": "Benutzer",
+      "role": "Rolle",
+      "organization": "Organisation",
+      "defaultClinic": "Standardklinik",
+      "allClinics": "Alle Kliniken",
+      "status": "Status",
+      "lastLogin": "Letzte Anmeldung",
+      "actions": "Aktionen"
+    },
+    "roles": {
+      "OWNER": "Eigentümer",
+      "ORG_ADMIN": "Org.-Admin",
+      "CLINIC_MANAGER": "Klinikmanager",
+      "DENTIST": "Zahnarzt",
+      "RECEPTIONIST": "Empfang",
+      "BILLING": "Abrechnung",
+      "ASSISTANT": "Assistent"
+    }
+  },
+  "plans": {
+    "title": "Pläne",
+    "newPlan": "Neuer Plan",
+    "editPlan": "Plan bearbeiten",
+    "empty": "Noch keine Pläne",
+    "code": "Code (eindeutig)",
+    "displayName": "Anzeigename",
+    "displayNamePlaceholder": "Starter",
+    "maxUsers": "Max. Benutzer",
+    "maxPatients": "Max. Patienten",
+    "monthlyPrice": "Monatspreis",
+    "price": "Preis",
+    "features": "Funktionen",
+    "featuresList": {
+      "whatsapp": "WhatsApp",
+      "reports": "Berichte",
+      "compensation": "Provisionssystem",
+      "inventory": "Bestand"
+    }
+  },
+  "system": {
+    "title": "Systemstatus",
+    "database": "Datenbank",
+    "api": "API",
+    "whatsapp": "WhatsApp",
+    "status": "Status",
+    "failedMessages": "Fehlgeschlagene Nachrichten",
+    "failedMessagesSub": "Total failed",
+    "connected": "Verbunden"
+  },
+  "admin": {
+    "title": "Platform Admin",
+    "logout": "Abmelden",
+    "clinics": "Kliniken",
+    "totalAppointments": "Termine gesamt",
+    "usersPatients": "Benutzer / Patienten"
+  }
+}

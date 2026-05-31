@@ -44,7 +44,7 @@ import { normalizeRole } from '../utils/permissions';
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases']);
+  const { t, i18n } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases', 'appointments']);
   const { user } = useAuth();
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
   const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
@@ -118,7 +118,7 @@ const PatientDetail: React.FC = () => {
       await patientService.archive(id!);
       fetchPatient();
     } catch (error) {
-      alert('Failed to archive patient');
+      alert(t('patients:detail.archiveFailed'));
     }
   };
 
@@ -169,8 +169,8 @@ const PatientDetail: React.FC = () => {
 
   const filteredWhatsappMessages = (patient.whatsappConversationMessages || []).filter((message: any) => {
     const matchesDirection = whatsappDirection === 'all' || message.direction === whatsappDirection;
-    const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase('tr-TR');
-    const matchesSearch = !normalizedSearch || message.text.toLocaleLowerCase('tr-TR').includes(normalizedSearch);
+    const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase(i18n.language);
+    const matchesSearch = !normalizedSearch || message.text.toLocaleLowerCase(i18n.language).includes(normalizedSearch);
     return matchesDirection && matchesSearch;
   });
 
@@ -224,7 +224,7 @@ const PatientDetail: React.FC = () => {
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : tab === 'files' ? t('patients:detail.filesTab', { defaultValue: 'Dosyalar' }) : tab === 'dental' ? 'Diş Haritası' : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'dental' ? t('patients:dentalChart.title') : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -257,7 +257,7 @@ const PatientDetail: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Calendar size={18} className="text-gray-400" />
-                <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString() : t('common:noData')}</span>
+                <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString(i18n.language) : t('common:noData')}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <MapPin size={18} className="text-gray-400" />
@@ -324,7 +324,7 @@ const PatientDetail: React.FC = () => {
                 const remaining = Math.max(0, totalTreatment - totalPaid);
                 const lastPmt = payments.find((p: any) => p.paymentStatus === 'paid');
                 const currency = paymentCurrency;
-                const fmt = (n: number) => n.toLocaleString('tr-TR', { minimumFractionDigits: 0 }) + ' ' + currency;
+                const fmt = (n: number) => n.toLocaleString(i18n.language, { minimumFractionDigits: 0 }) + ' ' + currency;
                 if (totalTreatment === 0 && payments.length === 0) {
                   return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
                 }
@@ -343,7 +343,7 @@ const PatientDetail: React.FC = () => {
                       <span className={`font-bold ${remaining > 0 ? 'text-amber-600' : 'text-green-600'}`}>{fmt(remaining)}</span>
                     </div>
                     {lastPmt && (
-                      <p className="text-xs text-gray-400 pt-1">{t('patients:detail.overview.lastPayment')}: {new Date(lastPmt.paidAt || lastPmt.createdAt).toLocaleDateString('tr-TR')}</p>
+                      <p className="text-xs text-gray-400 pt-1">{t('patients:detail.overview.lastPayment')}: {new Date(lastPmt.paidAt || lastPmt.createdAt).toLocaleDateString(i18n.language)}</p>
                     )}
                   </div>
                 );
@@ -386,16 +386,16 @@ const PatientDetail: React.FC = () => {
                         >
                           <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-center ${idx === 0 ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
                             <span className="text-[10px] leading-none font-bold uppercase">
-                              {formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone, { month: 'short' })}
+                              {formatDateInTimeZone(appt.startTime, i18n.language, clinicTimeZone, { month: 'short' })}
                             </span>
                             <span className="text-lg leading-none font-extrabold">
-                              {formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone, { day: 'numeric' })}
+                              {formatDateInTimeZone(appt.startTime, i18n.language, clinicTimeZone, { day: 'numeric' })}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-gray-900 truncate">{appt.appointmentType?.name}</p>
                             <p className="text-xs text-gray-500">
-                              {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)} &middot; {appt.practitioner ? `${appt.practitioner.firstName} ${appt.practitioner.lastName}` : t('patients:detail.overview.unassigned')}
+                              {formatTimeInTimeZone(appt.startTime, i18n.language, clinicTimeZone)} &middot; {appt.practitioner ? `${appt.practitioner.firstName} ${appt.practitioner.lastName}` : t('patients:detail.overview.unassigned')}
                             </p>
                           </div>
                           <span className={`badge text-xs flex-shrink-0 ${appt.status === 'completed' ? 'badge-green' : appt.status === 'confirmed' ? 'badge-blue' : 'badge-yellow'}`}>
@@ -524,11 +524,15 @@ const PatientDetail: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-gray-700 line-clamp-2">
                             {item.type === 'whatsapp-session'
-                              ? `WhatsApp: ${item.payload.count} mesaj (${item.payload.incomingCount} gelen · ${item.payload.outgoingCount} giden)`
+                              ? t('patients:detail.whatsappSessionSummary', {
+                                  count: item.payload.count,
+                                  incoming: item.payload.incomingCount,
+                                  outgoing: item.payload.outgoingCount,
+                                })
                               : item.payload?.description}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            {new Date(item.createdAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}
+                            {new Date(item.createdAt).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' })}
                           </p>
                         </div>
                       </div>
@@ -553,11 +557,11 @@ const PatientDetail: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-900">{appt.appointmentType.name}</p>
-                        <p className="text-xs text-gray-500">with {appt.practitioner.firstName} {appt.practitioner.lastName}</p>
+                        <p className="text-xs text-gray-500">{t('patients:detail.appointmentWith', { practitioner: `${appt.practitioner.firstName} ${appt.practitioner.lastName}` })}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-700">{formatDateInTimeZone(appt.startTime, undefined, clinicTimeZone)}</p>
+                      <p className="text-sm text-gray-700">{formatDateInTimeZone(appt.startTime, i18n.language, clinicTimeZone)}</p>
                       <span className={`badge ${
                         appt.status === 'completed' ? 'badge-green' : 'badge-blue'
                       }`}>
@@ -593,7 +597,7 @@ const PatientDetail: React.FC = () => {
                      }`}></div>
                      <div className="flex-1">
                        <p className={`font-semibold ${task.status === 'completed' ? 'line-through' : ''}`}>{task.title}</p>
-                       <p className="text-xs text-gray-500">{t('tasks:form.dueDate')}: {new Date(task.dueDate).toLocaleDateString()}</p>
+                       <p className="text-xs text-gray-500">{t('tasks:form.dueDate')}: {new Date(task.dueDate).toLocaleDateString(i18n.language)}</p>
                      </div>
                      <span className={`badge ${task.status === 'completed' ? 'badge-green' : 'badge-yellow'}`}>
                        {t(`tasks:status.${task.status}`)}
@@ -635,7 +639,7 @@ const PatientDetail: React.FC = () => {
                         <p className="font-bold text-gray-900">{tc.title}</p>
                         <p className="text-xs text-gray-500">{t(`treatmentCases:stages.${tc.stage}`)}</p>
                         <p className="text-xs text-primary-600 font-medium mt-0.5">
-                          Tedavi planı prosedürleri için tıkla → Vaka Detayı
+                          {t('patients:detail.treatmentProcedureLinkHint')}
                         </p>
                       </div>
                     </div>
@@ -649,13 +653,13 @@ const PatientDetail: React.FC = () => {
                 )) : (
                   <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">
                     <p>{t('common:noData')}</p>
-                    <p className="text-xs mt-1">Tedavi planı eklemek için önce "Yeni Vaka" oluşturun</p>
+                    <p className="text-xs mt-1">{t('patients:detail.createTreatmentCaseHint')}</p>
                   </div>
                 )}
               </div>
               {treatmentCases.length > 0 && (
                 <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
-                  <strong>Tedavi Planı Prosedürü Eklemek İçin:</strong> Yukarıdaki vakalardan birine tıklayın → Açılan sayfada "Tedavi Planı Prosedürleri" bölümündeki <strong>+</strong> butonuna tıklayın.
+                  <strong>{t('patients:detail.addProcedureInstructionTitle')}</strong> {t('patients:detail.addProcedureInstructionBody')}
                 </div>
               )}
             </div>
@@ -684,18 +688,23 @@ const PatientDetail: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="card p-4 bg-green-50 border-green-100">
                       <p className="text-[10px] font-bold text-green-600 uppercase mb-1">{t('payments:summary.totalPaid')}</p>
-                      <p className="text-xl font-bold text-green-700">{paidTotal.toLocaleString()} {paymentCurrency}</p>
+                      <p className="text-xl font-bold text-green-700">{paidTotal.toLocaleString(i18n.language)} {paymentCurrency}</p>
                     </div>
                     <div className="card p-4 bg-amber-50 border-amber-100">
                       <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">{t('payments:summary.totalPending')}</p>
-                      <p className="text-xl font-bold text-amber-700">{totalPending.toLocaleString()} {paymentCurrency}</p>
+                      <p className="text-xl font-bold text-amber-700">{totalPending.toLocaleString(i18n.language)} {paymentCurrency}</p>
                       {unpaidInstallments > 0 && (
-                        <p className="text-[10px] text-amber-500 mt-1">• {unpaidInstallments.toLocaleString()} taksit + {pendingPayments.toLocaleString()} ödeme bekleyen</p>
+                        <p className="text-[10px] text-amber-500 mt-1">
+                          {t('payments:summary.pendingBreakdown', {
+                            installments: unpaidInstallments.toLocaleString(i18n.language),
+                            payments: pendingPayments.toLocaleString(i18n.language),
+                          })}
+                        </p>
                       )}
                     </div>
                     <div className="card p-4 bg-red-50 border-red-100">
                       <p className="text-[10px] font-bold text-red-600 uppercase mb-1">{t('payments:summary.totalRefunded')}</p>
-                      <p className="text-xl font-bold text-red-700">{refundedTotal.toLocaleString()} {paymentCurrency}</p>
+                      <p className="text-xl font-bold text-red-700">{refundedTotal.toLocaleString(i18n.language)} {paymentCurrency}</p>
                     </div>
                   </div>
                 );
@@ -726,8 +735,8 @@ const PatientDetail: React.FC = () => {
                     <tbody className="divide-y divide-gray-50">
                       {payments.length > 0 ? payments.map(p => (
                         <tr key={p.id}>
-                          <td className="p-3 font-bold">{p.amount.toLocaleString()} {p.currency}</td>
-                          <td className="p-3 text-gray-600 capitalize">{p.paymentMethod.replace('_', ' ')}</td>
+                          <td className="p-3 font-bold">{p.amount.toLocaleString(i18n.language)} {p.currency}</td>
+                          <td className="p-3 text-gray-600 capitalize">{t(`payments:methods.${p.paymentMethod}`, { defaultValue: p.paymentMethod.replace('_', ' ') })}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
                               p.paymentStatus === 'paid' ? 'bg-green-50 text-green-700 border-green-100' :
@@ -736,7 +745,7 @@ const PatientDetail: React.FC = () => {
                               {t(`payments:status.${p.paymentStatus}`)}
                             </span>
                           </td>
-                          <td className="p-3 text-gray-500">{new Date(p.paidAt).toLocaleDateString()}</td>
+                          <td className="p-3 text-gray-500">{new Date(p.paidAt).toLocaleDateString(i18n.language)}</td>
                         </tr>
                       )) : (
                         <tr>
@@ -751,7 +760,7 @@ const PatientDetail: React.FC = () => {
               {/* Payment Plans / Installment Schedule */}
               {paymentPlans.length > 0 && (
                 <div className="space-y-4">
-                  <h3 className="font-bold text-lg">Taksit Planları &amp; Ödeme Takvimi</h3>
+                  <h3 className="font-bold text-lg">{t('payments:planForm.paymentPlansTitle')}</h3>
                   {paymentPlans.map((plan: any) => {
                     const unpaid = (plan.installments || []).filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled');
                     const paidAmount = (plan.installments || []).filter((i: any) => i.status === 'paid').reduce((a: number, i: any) => a + i.amount, 0);
@@ -760,12 +769,12 @@ const PatientDetail: React.FC = () => {
                       <div key={plan.id} className="card p-4">
                         <div className="flex items-center justify-between mb-2">
                           <div>
-                            <p className="font-semibold text-gray-900 dark:text-white">{plan.description || 'Taksit Planı'}</p>
-                            <p className="text-xs text-gray-500">{plan.installments?.length || 0} taksit • Toplam: {plan.totalAmount?.toLocaleString()} {plan.currency || paymentCurrency}</p>
+                            <p className="font-semibold text-gray-900 dark:text-white">{plan.description || t('payments:planForm.paymentPlan')}</p>
+                            <p className="text-xs text-gray-500">{t('payments:planForm.installmentSummary', { count: plan.installments?.length || 0, amount: plan.totalAmount?.toLocaleString(i18n.language), currency: plan.currency || paymentCurrency })}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-green-600 font-bold">Ödenen: {paidAmount.toLocaleString()}</p>
-                            <p className="text-xs text-amber-600 font-bold">Kalan: {(plan.totalAmount - paidAmount).toLocaleString()}</p>
+                            <p className="text-xs text-green-600 font-bold">{t('payments:planForm.paid')}: {paidAmount.toLocaleString(i18n.language)}</p>
+                            <p className="text-xs text-amber-600 font-bold">{t('payments:summary.remaining')}: {(plan.totalAmount - paidAmount).toLocaleString(i18n.language)}</p>
                           </div>
                         </div>
                         {/* Progress bar */}
@@ -776,10 +785,10 @@ const PatientDetail: React.FC = () => {
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="text-gray-400 text-xs">
-                                <th className="text-left py-1 pr-3">Taksit No</th>
-                                <th className="text-left py-1 pr-3">Vade Tarihi</th>
-                                <th className="text-right py-1 pr-3">Tutar</th>
-                                <th className="text-right py-1">Durum</th>
+                                <th className="text-left py-1 pr-3">{t('payments:planForm.installmentNo')}</th>
+                                <th className="text-left py-1 pr-3">{t('payments:planForm.dueDate')}</th>
+                                <th className="text-right py-1 pr-3">{t('payments:list.amount')}</th>
+                                <th className="text-right py-1">{t('payments:list.status')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -787,9 +796,9 @@ const PatientDetail: React.FC = () => {
                                 const isOverdue = inst.status !== 'paid' && inst.status !== 'cancelled' && new Date(inst.dueDate) < new Date();
                                 return (
                                   <tr key={inst.id} className="border-t border-gray-50">
-                                    <td className="py-1.5 pr-3 text-gray-500 text-xs">{inst.installmentNo}. Taksit</td>
-                                    <td className="py-1.5 pr-3 text-gray-700">{new Date(inst.dueDate).toLocaleDateString('tr-TR')}</td>
-                                    <td className="py-1.5 pr-3 text-right font-medium">{inst.amount.toLocaleString()} {plan.currency || paymentCurrency}</td>
+                                    <td className="py-1.5 pr-3 text-gray-500 text-xs">{t('payments:planForm.installmentLabel', { number: inst.installmentNo })}</td>
+                                    <td className="py-1.5 pr-3 text-gray-700">{new Date(inst.dueDate).toLocaleDateString(i18n.language)}</td>
+                                    <td className="py-1.5 pr-3 text-right font-medium">{inst.amount.toLocaleString(i18n.language)} {plan.currency || paymentCurrency}</td>
                                     <td className="py-1.5 text-right">
                                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                                         inst.status === 'paid' ? 'bg-green-50 text-green-700' :
@@ -797,9 +806,9 @@ const PatientDetail: React.FC = () => {
                                         isOverdue ? 'bg-red-50 text-red-700' :
                                         'bg-amber-50 text-amber-700'
                                       }`}>
-                                        {inst.status === 'paid' ? 'Ödendi' :
-                                         inst.status === 'cancelled' ? 'İptal' :
-                                         isOverdue ? 'Gecikmiş' : 'Bekliyor'}
+                                        {inst.status === 'paid' ? t('payments:status.paid') :
+                                         inst.status === 'cancelled' ? t('payments:status.cancelled') :
+                                         isOverdue ? t('payments:planForm.installmentStatus.overdue') : t('payments:status.pending')}
                                       </span>
                                     </td>
                                   </tr>
@@ -833,12 +842,12 @@ const PatientDetail: React.FC = () => {
                       </div>
                       <div>
                         <p className="font-bold text-gray-900">{provision.insuranceProviderName}</p>
-                        <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`, { defaultValue: provision.insuranceType })} • {provision.treatmentCase?.title || '-'}</p>
+                        <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`, { defaultValue: provision.insuranceType })} &bull; {provision.treatmentCase?.title || '-'}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <span className="badge badge-blue">{t(`insurance:statuses.${provision.status}`, { defaultValue: provision.status })}</span>
-                      <p className="text-xs text-gray-500 mt-2">{provision.requestedAmount?.toLocaleString()} {provision.currency}</p>
+                      <p className="text-xs text-gray-500 mt-2">{provision.requestedAmount?.toLocaleString(i18n.language)} {provision.currency}</p>
                     </div>
                   </Link>
                 )) : (
@@ -853,7 +862,9 @@ const PatientDetail: React.FC = () => {
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
                     <h3 className="font-bold text-lg">{t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' })}</h3>
-                    <p className="text-sm text-gray-500">{patient.whatsappConversationMessages?.length || 0} mesaj kaydı</p>
+                    <p className="text-sm text-gray-500">
+                      {t('patients:detail.whatsappMessagesCount', { count: patient.whatsappConversationMessages?.length || 0 })}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(['all', 'incoming', 'outgoing'] as const).map(direction => (
@@ -892,7 +903,7 @@ const PatientDetail: React.FC = () => {
                         </p>
                         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-900">{message.text}</p>
                       </div>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(message.createdAt).toLocaleString()}</span>
+                      <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(message.createdAt).toLocaleString(i18n.language)}</span>
                     </div>
                   </div>
                 )) : (
@@ -905,7 +916,7 @@ const PatientDetail: React.FC = () => {
         {activeTab === 'files' && (
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold flex items-center gap-2"><Paperclip size={18} /> Dosyalar</h3>
+              <h3 className="font-bold flex items-center gap-2"><Paperclip size={18} /> {t('patients:detail.filesTab')}</h3>
               {(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const).includes(userCanonicalRole as any) && (
                 <>
                   <input
@@ -924,7 +935,7 @@ const PatientDetail: React.FC = () => {
                         const res = await attachmentService.getAll(id);
                         setAttachments(res.data);
                       } catch {
-                        alert('Dosya yüklenemedi');
+                        alert(t('patients:detail.files.uploadFailed'));
                       } finally {
                         setUploadingFile(false);
                         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -937,7 +948,7 @@ const PatientDetail: React.FC = () => {
                     className="btn-primary flex items-center gap-2 text-sm"
                   >
                     {uploadingFile ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                    {uploadingFile ? 'Yükleniyor...' : 'Dosya Ekle'}
+                    {uploadingFile ? t('common:loading') : t('patients:detail.files.addFile')}
                   </button>
                 </>
               )}
@@ -947,7 +958,7 @@ const PatientDetail: React.FC = () => {
             ) : attachments.length === 0 ? (
               <div className="text-center py-10 text-gray-400">
                 <Paperclip size={36} className="mx-auto mb-2 opacity-30" />
-                <p>Henüz dosya eklenmemiş</p>
+                <p>{t('patients:detail.files.empty')}</p>
               </div>
             ) : (
               <div className="divide-y">
@@ -959,25 +970,25 @@ const PatientDetail: React.FC = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{att.originalName}</p>
                       <p className="text-xs text-gray-400">
-                        {(att.fileSize / 1024).toFixed(1)} KB • {new Date(att.createdAt).toLocaleDateString('tr-TR')} • {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
+                        {(att.fileSize / 1024).toFixed(1)} KB &bull; {new Date(att.createdAt).toLocaleDateString(i18n.language)} &bull; {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
                       </p>
                     </div>
                     <button
                       onClick={() => attachmentService.download(id!, att.id, att.originalName)}
                       className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
-                      title="İndir"
+                      title={t('patients:detail.files.download')}
                     >
                       <Download size={16} />
                     </button>
                     {(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'] as const).includes(userCanonicalRole as any) && (
                       <button
                         onClick={async () => {
-                          if (!id || !confirm('Bu dosyayı silmek istediğinizden emin misiniz?')) return;
+                          if (!id || !confirm(t('patients:detail.files.deleteConfirm'))) return;
                           await attachmentService.delete(id, att.id);
                           setAttachments(prev => prev.filter(a => a.id !== att.id));
                         }}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                        title="Sil"
+                        title={t('common:delete')}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -992,7 +1003,7 @@ const PatientDetail: React.FC = () => {
         {activeTab === 'dental' && (
           <div className="card p-6">
             <h3 className="font-bold flex items-center gap-2 mb-6">
-              <span>🦷</span> Diş Haritası
+              <span>🦷</span> {t('patients:dentalChart.title')}
             </h3>
             <DentalChart patientId={id!} />
           </div>
@@ -1013,7 +1024,10 @@ const PatientDetail: React.FC = () => {
                   <div>
                     <p className="text-sm text-gray-900 font-medium">{item.payload.description}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      by {getActivityActorLabel(item.payload)} • {new Date(item.payload.createdAt).toLocaleString()}
+                      {t('patients:detail.activityByUser', {
+                        user: getActivityActorLabel(item.payload),
+                        date: new Date(item.payload.createdAt).toLocaleString(i18n.language),
+                      })}
                     </p>
                   </div>
                 </div>
@@ -1023,15 +1037,18 @@ const PatientDetail: React.FC = () => {
                     <MessageSquare size={14} />
                   </div>
                   <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-100">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">WhatsApp Görüşmesi</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('patients:detail.whatsappSessionTitle')}</p>
                     <p className="text-sm text-gray-700 mt-1">
-                      {item.payload.incomingCount} gelen · {item.payload.outgoingCount} giden
-                      <span className="text-gray-400"> ({item.payload.count} mesaj)</span>
+                      {t('patients:detail.whatsappSessionCounts', {
+                        incoming: item.payload.incomingCount,
+                        outgoing: item.payload.outgoingCount,
+                        count: item.payload.count,
+                      })}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {new Date(item.payload.startTime).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}
+                      {new Date(item.payload.startTime).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' })}
                       {item.payload.startTime !== item.payload.endTime
-                        ? ` — ${new Date(item.payload.endTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`
+                        ? ` — ${new Date(item.payload.endTime).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}`
                         : ''}
                     </p>
                   </div>

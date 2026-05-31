@@ -1,0 +1,66 @@
+{
+  "title": "No-show-Verfolgung",
+  "subtitle": "Patienten verfolgen, die Termine verpasst haben, und neue Buchungen anstossen.",
+  "ranges": {
+    "today": "Heute",
+    "this_week": "Diese Woche",
+    "this_month": "Dieser Monat",
+    "last_30_days": "Letzte 30 Tage"
+  },
+  "filters": {
+    "allStatuses": "Alle Status"
+  },
+  "recovery": {
+    "unresolved": "Ausstehend",
+    "contacted": "Kontaktiert",
+    "recovered": "Zurueckgewonnen"
+  },
+  "summary": {
+    "noShowCount": "No-show-Anzahl",
+    "noShowRate": "No-show-Rate",
+    "estimatedLostRevenue": "Geschaetzter Umsatzverlust",
+    "byServicePrices": "Basierend auf Leistungspreisen",
+    "contactedCount": "Kontaktiert",
+    "recoveredCount": "Zurueckgewonnene Termine",
+    "recoveryRate": "Rueckgewinnungsrate"
+  },
+  "sections": {
+    "byClinic": "Nach Filiale",
+    "byDoctor": "Nach Behandler",
+    "recentNoShows": "Letzte No-show-Termine"
+  },
+  "empty": {
+    "noNoShows": "Im ausgewaehlten Zeitraum wurden keine No-show-Termine gefunden.",
+    "noNoShowsDescription": "Alle Patienten haben in diesem Zeitraum ihre Termine wahrgenommen."
+  },
+  "table": {
+    "patient": "Patient",
+    "branch": "Filiale",
+    "doctor": "Behandler",
+    "dateTime": "Datum/Uhrzeit",
+    "service": "Leistung",
+    "estimatedValue": "Geschaetzter Wert",
+    "status": "Status",
+    "lastContact": "Letzter Kontakt"
+  },
+  "actions": {
+    "sendWhatsApp": "WhatsApp senden",
+    "createTask": "Aufgabe erstellen",
+    "markContacted": "Als kontaktiert markieren",
+    "markRecovered": "Als zurueckgewonnen markieren",
+    "reschedule": "Neuen Termin erstellen",
+    "rescheduleDisabled": "Patienten- oder Klinikdaten fehlen."
+  },
+  "success": {
+    "markedContacted": "Als kontaktiert markiert.",
+    "markedRecovered": "Termin als zurueckgewonnen markiert.",
+    "whatsappSent": "WhatsApp-Nachricht gesendet.",
+    "taskCreated": "Nachfassaufgabe erstellt."
+  },
+  "errors": {
+    "loadFailed": "Beim Laden der Daten ist ein Fehler aufgetreten.",
+    "actionFailed": "Aktion fehlgeschlagen.",
+    "messageFailed": "Nachricht konnte nicht gesendet werden.",
+    "taskFailed": "Aufgabe konnte nicht erstellt werden."
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "status": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "paid": "Paid",
+    "cancelled": "Cancelled"
+  },
+  "period": {
+    "monthOption": "Month {{month}}"
+  },
+  "filters": {
+    "allStatuses": "All Statuses",
+    "allDoctors": "All Doctors"
+  },
+  "summary": {
+    "totalEarnings": "Total Earnings",
+    "approved": "Approved",
+    "paid": "Paid",
+    "payableApproved": "Payable (Approved)"
+  },
+  "summaryTab": {
+    "empty": "No earning data found for this period."
+  },
+  "tabs": {
+    "summary": "Period Summary",
+    "earnings": "Earning List",
+    "payouts": "Payments",
+    "settings": "Commission Settings"
+  },
+  "columns": {
+    "doctor": "Doctor",
+    "patient": "Patient",
+    "service": "Service",
+    "serviceCase": "Service / Case",
+    "collection": "Collection",
+    "earning": "Earning",
+    "adjustedEarning": "Adj. Earning",
+    "calculatedEarning": "Calculated Earning",
+    "grossAmount": "Gross Amount",
+    "remaining": "Remaining",
+    "status": "Status",
+    "date": "Date"
+  },
+  "my": {
+    "title": "My Earnings",
+    "subtitle": "{{name}} - Personal earnings summary",
+    "details": "Earning Details",
+    "empty": "No earning records found for this period."
+  },
+  "management": {
+    "title": "Doctor Earnings Management",
+    "subtitle": "Doctor commission rules and earning tracking",
+    "empty": "No earning records found.",
+    "collectionRate": "{{rate}}% collected",
+    "adjustTitle": "Edit Earning",
+    "adjustedAmount": "Adjusted Amount",
+    "adjustmentReason": "Adjustment Reason",
+    "adjustmentPlaceholder": "Why are you making this adjustment?"
+  },
+  "actions": {
+    "approve": "Approve",
+    "markPaid": "Mark as paid",
+    "paid": "Paid"
+  },
+  "confirm": {
+    "cancelEarning": "Are you sure you want to cancel this earning?",
+    "deleteRule": "Are you sure you want to delete this rule?"
+  },
+  "payouts": {
+    "recordPayment": "Record Payment",
+    "empty": "No payment records yet.",
+    "period": "Period",
+    "periodMonth": "Period Month",
+    "periodYear": "Period Year",
+    "paymentDate": "Payment Date",
+    "amount": "Amount",
+    "method": "Method",
+    "note": "Note",
+    "recordedBy": "Recorded By",
+    "optional": "Optional",
+    "markApprovedAsPaid": "Mark approved earnings as paid (optional)"
+  },
+  "settings": {
+    "doctorCommissionRules": "Doctor Commission Rules",
+    "serviceCommissionRules": "Service-Based Commission Rules",
+    "addRule": "Add Rule",
+    "addServiceRule": "Add Service Rule",
+    "noRules": "No rule has been defined yet.",
+    "noServiceRules": "No service-based rule has been defined yet.",
+    "type": "Type",
+    "fixedMonthly": "Fixed (Monthly)",
+    "fixedMonthlyAmount": "Fixed Monthly Amount",
+    "fixedAmount": "Fixed Amount",
+    "percent": "Percent %",
+    "percentage": "Percentage (%)",
+    "calculationBase": "Calculation Base",
+    "commissionType": "Commission Type",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "editRuleTitle": "Edit Commission Rule",
+    "addRuleTitle": "Add Commission Rule",
+    "addServiceRuleTitle": "Add Service-Based Rule",
+    "compTypes": {
+      "fixed": "Fixed Monthly",
+      "percentage": "Percentage Based",
+      "fixed_plus_percentage": "Fixed + Percentage",
+      "per_service": "Service Based"
+    },
+    "calcBases": {
+      "collected": "Collection Based",
+      "billed": "Invoice Based"
+    }
+  },
+  "errors": {
+    "myEarningsLoadFailed": "Earning information could not be loaded.",
+    "earningsListLoadFailed": "Earning list could not be loaded.",
+    "actionFailed": "Action failed.",
+    "requiredFields": "Please fill in the required fields.",
+    "payoutSaveFailed": "Payment could not be saved.",
+    "ruleSaveFailed": "Rule could not be saved.",
+    "serviceRuleSaveFailed": "Service rule could not be saved."
+  }
+}

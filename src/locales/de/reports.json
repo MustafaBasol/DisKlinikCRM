@@ -1,0 +1,115 @@
+{
+  "title": "Berichte",
+  "subtitle": "Umsatzanalyse und Arztleistung",
+  "export": {
+    "csv": "CSV herunterladen",
+    "filePrefix": "umsatzbericht"
+  },
+  "tabs": {
+    "revenue": "Umsatzbericht",
+    "doctors": "Arztleistung",
+    "sources": "Patientenquellen",
+    "noshow": "No-Show-Analyse"
+  },
+  "filters": {
+    "startDate": "Startdatum",
+    "endDate": "Enddatum",
+    "grouping": "Gruppierung",
+    "day": "Täglich",
+    "week": "Wöchentlich",
+    "month": "Monatlich",
+    "paymentMethod": "Zahlungsmethode",
+    "all": "Alle",
+    "doctor": "Arzt",
+    "allDoctors": "Alle Ärzte",
+    "runReport": "Bericht anzeigen"
+  },
+  "errors": {
+    "revenueLoadFailed": "Der Bericht konnte nicht geladen werden.",
+    "doctorLoadFailed": "Der Arztbericht konnte nicht geladen werden.",
+    "sourcesLoadFailed": "Der Bericht zu Patientenquellen konnte nicht geladen werden.",
+    "noShowLoadFailed": "Der No-Show-Bericht konnte nicht geladen werden.",
+    "csvFailed": "CSV konnte nicht heruntergeladen werden."
+  },
+  "empty": {
+    "prompt": "Klicken Sie auf „{{button}}“, um den Bericht anzuzeigen."
+  },
+  "revenue": {
+    "totalRevenue": "Gesamtumsatz",
+    "paymentCount": "{{count}} Zahlungen",
+    "avgPayment": "Durchschnittliche Zahlung",
+    "pendingCollection": "Ausstehende Einnahmen",
+    "pendingCount": "{{count}} ausstehend",
+    "paymentCountTitle": "Anzahl Zahlungen",
+    "periodicRevenue": "Umsatz nach Zeitraum",
+    "revenue": "Umsatz",
+    "paymentMethodDistribution": "Verteilung nach Zahlungsmethode",
+    "revenueByDoctor": "Umsatz nach Arzt",
+    "doctorPaymentCount": "{{count}} Zahlungen",
+    "detailTable": "Detailtabelle",
+    "period": "Zeitraum",
+    "average": "Durchschnitt",
+    "total": "Gesamt",
+    "empty": "Für den ausgewählten Zeitraum wurden keine Zahlungseingänge gefunden."
+  },
+  "sources": {
+    "referral": "Empfehlung",
+    "social_media": "Soziale Medien",
+    "instagram": "Instagram",
+    "website": "Website",
+    "phone": "Telefon",
+    "walk_in": "Laufkundschaft",
+    "google": "Google",
+    "facebook": "Facebook",
+    "whatsapp": "WhatsApp",
+    "other": "Andere",
+    "totalPatientsInRange": "Registrierte Patienten gesamt (Zeitraum)",
+    "sourceCount": "{{count}} verschiedene Quellen",
+    "rankedSource": "#{{rank}} Quelle",
+    "patients": "Patienten",
+    "patientCountValue": "{{count}} Patienten",
+    "patientDistribution": "Patientenverteilung nach Quelle",
+    "revenueBySource": "Umsatz nach Quelle",
+    "detailTable": "Quellen-Detailtabelle",
+    "source": "Quelle",
+    "patientCount": "Patientenzahl",
+    "share": "Anteil %"
+  },
+  "noshow": {
+    "totalNoShow": "No-Shows gesamt",
+    "noShowRate": "No-Show-Rate",
+    "cancellationCount": "Anzahl Stornierungen",
+    "totalAppointments": "Termine gesamt",
+    "monthlyTrend": "Monatlicher No-Show-Trend",
+    "noShow": "No-Show",
+    "cancelled": "Storniert",
+    "rate": "Rate",
+    "ratePercent": "Rate %",
+    "byDay": "Verteilung nach Tag",
+    "byHour": "Verteilung nach Zeitfenster",
+    "doctorRate": "No-Show-Rate nach Arzt",
+    "doctor": "Arzt",
+    "total": "Gesamt"
+  },
+  "doctors": {
+    "empty": "Keine aktiven Ärzte gefunden.",
+    "commissionRate": "Provisionssatz: %{{rate}}",
+    "totalRevenue": "Gesamtumsatz",
+    "commission": "Provision",
+    "totalAppointments": "Termine gesamt",
+    "completed": "Abgeschlossen",
+    "noShow": "No-Show",
+    "completionRate": "Abschluss %",
+    "openedTreatment": "Geöffnete Behandlungen",
+    "avgPayment": "Durchschn. Zahlung"
+  },
+  "daysShort": {
+    "sun": "So",
+    "mon": "Mo",
+    "tue": "Di",
+    "wed": "Mi",
+    "thu": "Do",
+    "fri": "Fr",
+    "sat": "Sa"
+  }
+}

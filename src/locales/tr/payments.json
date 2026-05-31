@@ -8,6 +8,7 @@
     "totalPending": "Toplam Bekleyen",
     "totalRefunded": "Toplam İade",
     "remaining": "Kalan Bakiye",
+    "pendingBreakdown": "• {{installments}} taksit + {{payments}} ödeme bekleyen",
     "totalCollected": "Toplam Tahsilat",
     "pending": "Bekleyen",
     "transactions": "İşlemler",
@@ -34,6 +35,7 @@
     "card": "Kredi/Banka Kartı",
     "bank_transfer": "Banka Havalesi",
     "cheque": "Çek",
+    "insurance": "Sigorta",
     "other": "Diğer"
   },
   "list": {
@@ -56,5 +58,130 @@
   },
   "confirmCancel": "Bu ödeme iptal edilsin mi?",
   "empty": "Ödeme kaydı bulunmuyor.",
-  "noRelatedPayments": "İlgili ödeme bulunmuyor."
+  "noRelatedPayments": "İlgili ödeme bulunmuyor.",
+  "financeDashboard": {
+    "title": "Finans Paneli",
+    "subtitle": "Gelir & Ödeme Takibi",
+    "billingSubtitle": "Fatura Özeti",
+    "ranges": {
+      "today": "Bugün",
+      "this_week": "Bu Hafta",
+      "this_month": "Bu Ay",
+      "last_30_days": "Son 30 Gün"
+    },
+    "cards": {
+      "collectedToday": "Bugün Tahsilat",
+      "collectedInRange": "Dönem Tahsilat",
+      "outstandingBalance": "Bekleyen Bakiye",
+      "overdueAmount": "Gecikmiş Tutar",
+      "pendingInstallments": "Bekleyen Taksit",
+      "overdueInstallments": "Gecikmiş Taksit",
+      "practitionerPayoutsDue": "Hekim Hak Edişi (Ödenmemiş)",
+      "practitionerPayoutsPaid": "Hekim Ödemesi (Dönem)"
+    },
+    "sections": {
+      "byMethod": "Ödeme Yöntemine Göre",
+      "upcomingInstallments": "Yaklaşan / Gecikmiş Taksitler",
+      "branchPerformance": "Şube Bazlı Performans",
+      "recentPayments": "Son Ödemeler"
+    },
+    "columns": {
+      "collected": "Tahsilat",
+      "installment": "Taksit"
+    },
+    "actions": {
+      "viewAllPaymentPlans": "Tüm taksit planlarını gör",
+      "installments": "Taksitler"
+    },
+    "empty": {
+      "noInstallments": "Taksit yok",
+      "noPaymentsInRange": "Dönemde ödeme yok"
+    },
+    "transactionCount": "{{count}} işlem",
+    "errors": {
+      "loadFailed": "Finans verileri yüklenemedi."
+    }
+  },
+  "planForm": {
+    "newPlan": "Yeni Taksit Planı",
+    "paymentPlan": "Taksit Planı",
+    "paymentPlansTitle": "Taksit Planları & Ödeme Takvimi",
+    "selectPatient": "Hasta seçin...",
+    "relatedTreatment": "İlgili Tedavi (isteğe bağlı)",
+    "unlinkedPlan": "Bağlantısız ödeme planı",
+    "totalAmount": "Toplam Tutar",
+    "installmentCount": "Taksit Sayısı",
+    "installmentNo": "Taksit No",
+    "installmentLabel": "{{number}}. Taksit",
+    "installmentSummary": "{{count}} taksit - Toplam: {{amount}} {{currency}}",
+    "firstDueDate": "İlk Ödeme Tarihi",
+    "descriptionPlaceholder": "Örn: İmplant tedavisi taksit planı",
+    "preview": "Taksit Takvimi Önizleme",
+    "dueDate": "Vade",
+    "moreInstallments": "+{{count}} taksit daha",
+    "total": "Toplam",
+    "createPlan": "Planı Oluştur",
+    "paid": "Ödenen",
+    "installmentStatus": {
+      "overdue": "Gecikmiş"
+    },
+    "errors": {
+      "patientRequired": "Hasta seçiniz.",
+      "amountRequired": "Geçerli bir tutar giriniz.",
+      "firstDueDateRequired": "İlk ödeme tarihi seçiniz.",
+      "saveFailed": "Kayıt başarısız."
+    }
+  },
+  "plansPage": {
+    "title": "Taksit Planları",
+    "subtitle": "Ödeme planları ve taksit takibi",
+    "newPlan": "Yeni Taksit Planı",
+    "searchPlaceholder": "Hasta adı, tedavi veya açıklama ara...",
+    "empty": "Taksit planı bulunamadı.",
+    "createFirst": "İlk Planı Oluştur",
+    "confirmCancelPlan": "Bu taksit planını iptal etmek istediğinizden emin misiniz?",
+    "overdueCount": "{{count}} gecikmiş",
+    "installmentProgress": "{{paid}}/{{total}} taksit",
+    "remaining": "Kalan: {{amount}}",
+    "paidAmount": "{{amount}} ödendi",
+    "dueDate": "Vade",
+    "amount": "Tutar",
+    "status": "Durum",
+    "paidAt": "Ödendi: {{date}}",
+    "confirmPayment": "Onayla",
+    "markPaid": "Ödendi",
+    "cancelPlan": "Planı İptal Et",
+    "summary": {
+      "totalPlans": "Toplam Plan",
+      "overdueInstallments": "Gecikmiş Taksit"
+    },
+    "filters": {
+      "allStatuses": "Tüm Durumlar"
+    },
+    "planStatus": {
+      "active": "Aktif",
+      "completed": "Tamamlandı",
+      "cancelled": "İptal"
+    },
+    "installmentStatus": {
+      "pending": "Bekliyor",
+      "paid": "Ödendi",
+      "overdue": "Gecikmiş"
+    },
+    "errors": {
+      "paymentSaveFailed": "Ödeme kaydedilemedi.",
+      "cancelFailed": "Plan iptal edilemedi."
+    }
+  },
+  "receipt": {
+    "title": "Makbuz / Ödeme Belgesi",
+    "print": "Yazdır / PDF",
+    "loadFailed": "Makbuz bilgisi yüklenemedi.",
+    "paymentReceipt": "Ödeme Makbuzu",
+    "patientInfo": "Hasta Bilgisi",
+    "paymentDetails": "Ödeme Detayı",
+    "serviceTreatment": "Hizmet / Tedavi",
+    "generatedElectronically": "Bu belge elektronik ortamda oluşturulmuştur.",
+    "documentNo": "Belge No"
+  }
 }

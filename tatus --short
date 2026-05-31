@@ -1,0 +1,175 @@
+warning: in the working copy of 'src/components/ClinicSwitcher.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/DentalChart.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/GlobalSearch.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/MultiDoctorDayView.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/NotificationBell.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PatientForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PatientImportModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PaymentPlanForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ReceiptModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ServiceList.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/TreatmentCaseForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/UserClinicAssignmentModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/UserImportModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/UserList.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/context/AuthContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/i18n/namespaces.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/layouts/MainLayout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/layouts/PlatformAdminLayout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/insurance.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/messageTemplates.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/messages.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/services.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/settings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/tasks.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/treatmentCases.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/insurance.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/insurance.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/messageTemplates.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/messages.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/services.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/settings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/tasks.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/treatmentCases.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Appointments.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/BookingWidget.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Branches.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/ClinicSchedule.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Dashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/FinanceDashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/InstagramConnections.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/InstagramInbox.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Inventory.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Login.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Messages.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/MetaCallbackPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/MyEarnings.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/NoShows.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/OrganizationDashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PatientDetail.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Patients.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PaymentPlans.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PlatformAdmin.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PractitionerEarnings.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Register.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Reports.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Settings.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/TreatmentCaseDetail.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/WhatsAppConnections.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/WhatsAppInbox.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformClinics.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformDashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformLogin.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformOrganizations.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformPlans.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformSystem.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformUsers.tsx', LF will be replaced by CRLF the next time Git touches it
+ src/components/ClinicSwitcher.tsx            |  13 [32m+[m[31m-[m
+ src/components/DentalChart.tsx               |  88 [32m+++[m[31m----[m
+ src/components/GlobalSearch.tsx              |  22 [32m+[m[31m-[m
+ src/components/MultiDoctorDayView.tsx        |   6 [32m+[m[31m-[m
+ src/components/NotificationBell.tsx          |  12 [32m+[m[31m-[m
+ src/components/PatientForm.tsx               |   2 [32m+[m[31m-[m
+ src/components/PatientImportModal.tsx        |  62 [32m++[m[31m---[m
+ src/components/PaymentPlanForm.tsx           |  52 [32m++[m[31m--[m
+ src/components/ReceiptModal.tsx              |  64 [32m++[m[31m---[m
+ src/components/ServiceList.tsx               |   4 [32m+[m[31m-[m
+ src/components/TreatmentCaseForm.tsx         |   2 [32m+[m[31m-[m
+ src/components/UserClinicAssignmentModal.tsx |  32 [32m++[m[31m-[m
+ src/components/UserImportModal.tsx           |  66 [32m++[m[31m---[m
+ src/components/UserList.tsx                  |  16 [32m+[m[31m-[m
+ src/context/AuthContext.tsx                  |   4 [32m+[m[31m-[m
+ src/i18n/namespaces.ts                       |  11 [32m+[m
+ src/layouts/MainLayout.tsx                   |  73 [32m+++[m[31m---[m
+ src/layouts/PlatformAdminLayout.tsx          |  26 [32m+[m[31m-[m
+ src/locales/de/auth.json                     |  38 [32m++[m[31m-[m
+ src/locales/de/common.json                   |  78 [32m++++++[m
+ src/locales/de/dashboard.json                |  42 [32m+++[m[31m-[m
+ src/locales/de/patients.json                 | 160 [32m+++++++++++++[m
+ src/locales/de/payments.json                 | 130 [32m++++++++++[m
+ src/locales/en/auth.json                     |  38 [32m++[m[31m-[m
+ src/locales/en/common.json                   |  62 [32m+++++[m
+ src/locales/en/dashboard.json                |  21 [32m++[m
+ src/locales/en/insurance.json                |   3 [32m+[m
+ src/locales/en/messageTemplates.json         |   1 [32m+[m
+ src/locales/en/messages.json                 |  27 [32m++[m[31m-[m
+ src/locales/en/patients.json                 | 100 [32m++++++++[m
+ src/locales/en/payments.json                 | 130 [32m++++++++++[m
+ src/locales/en/services.json                 |   1 [32m+[m
+ src/locales/en/settings.json                 |  49 [32m++++[m
+ src/locales/en/tasks.json                    |   1 [32m+[m
+ src/locales/en/treatmentCases.json           |  79 [32m+++++[m[31m-[m
+ src/locales/fr/auth.json                     |  38 [32m++[m[31m-[m
+ src/locales/fr/common.json                   |  78 [32m++++++[m
+ src/locales/fr/dashboard.json                |  40 [32m+++[m[31m-[m
+ src/locales/fr/insurance.json                |   3 [32m+[m
+ src/locales/fr/patients.json                 | 160 [32m+++++++++++++[m
+ src/locales/fr/payments.json                 | 130 [32m++++++++++[m
+ src/locales/tr/auth.json                     |  38 [32m++[m[31m-[m
+ src/locales/tr/common.json                   |  62 [32m+++++[m
+ src/locales/tr/dashboard.json                |  21 [32m++[m
+ src/locales/tr/insurance.json                |   3 [32m+[m
+ src/locales/tr/messageTemplates.json         |   1 [32m+[m
+ src/locales/tr/messages.json                 |  27 [32m++[m[31m-[m
+ src/locales/tr/patients.json                 |  98 [32m++++++++[m
+ src/locales/tr/payments.json                 | 129 [32m+++++++++[m[31m-[m
+ src/locales/tr/services.json                 |   1 [32m+[m
+ src/locales/tr/settings.json                 |  49 [32m++++[m
+ src/locales/tr/tasks.json                    |   1 [32m+[m
+ src/locales/tr/treatmentCases.json           |  74 [32m++++++[m
+ src/main.tsx                                 |   4 [32m+[m[31m-[m
+ src/pages/Appointments.tsx                   |  12 [32m+[m[31m-[m
+ src/pages/BookingWidget.tsx                  | 109 [32m++++[m[31m-----[m
+ src/pages/Branches.tsx                       | 108 [32m+++++[m[31m----[m
+ src/pages/ClinicSchedule.tsx                 |  46 [32m++[m[31m--[m
+ src/pages/Dashboard.tsx                      |  95 [32m++++[m[31m----[m
+ src/pages/FinanceDashboard.tsx               | 173 [32m+++++++[m[31m-------[m
+ src/pages/InstagramConnections.tsx           | 152 [32m++++++[m[31m------[m
+ src/pages/InstagramInbox.tsx                 | 135 [32m++++++[m[31m-----[m
+ src/pages/Inventory.tsx                      | 214 [32m++++++++[m[31m---------[m
+ src/pages/Login.tsx                          |  18 [32m+[m[31m-[m
+ src/pages/Messages.tsx                       |  28 [32m+[m[31m--[m
+ src/pages/MetaCallbackPage.tsx               |  22 [32m+[m[31m-[m
+ src/pages/MyEarnings.tsx                     |  81 [32m++++[m[31m---[m
+ src/pages/NoShows.tsx                        | 121 [32m+++++[m[31m-----[m
+ src/pages/OrganizationDashboard.tsx          | 101 [32m++++[m[31m----[m
+ src/pages/PatientDetail.tsx                  | 137 [32m++++++[m[31m-----[m
+ src/pages/Patients.tsx                       |   4 [32m+[m[31m-[m
+ src/pages/PaymentPlans.tsx                   | 116 [32m++++[m[31m-----[m
+ src/pages/PlatformAdmin.tsx                  |  64 [32m++[m[31m---[m
+ src/pages/PractitionerEarnings.tsx           | 344 [32m++++++++++++++[m[31m-------------[m
+ src/pages/Register.tsx                       |  44 [32m++[m[31m--[m
+ src/pages/Reports.tsx                        | 257 [32m++++++++++[m[31m----------[m
+ src/pages/Settings.tsx                       | 126 [32m++++++++[m[31m--[m
+ src/pages/TreatmentCaseDetail.tsx            | 201 [32m++++++++[m[31m--------[m
+ src/pages/WhatsAppConnections.tsx            | 232 [32m+++++++++[m[31m---------[m
+ src/pages/WhatsAppInbox.tsx                  |  72 [32m+++[m[31m---[m
+ src/pages/platform/PlatformClinics.tsx       |  50 [32m++[m[31m--[m
+ src/pages/platform/PlatformDashboard.tsx     |  34 [32m+[m[31m--[m
+ src/pages/platform/PlatformLogin.tsx         |  16 [32m+[m[31m-[m
+ src/pages/platform/PlatformOrganizations.tsx |  80 [32m+++[m[31m----[m
+ src/pages/platform/PlatformPlans.tsx         |  60 [32m+++[m[31m--[m
+ src/pages/platform/PlatformSystem.tsx        |  22 [32m+[m[31m-[m
+ src/pages/platform/PlatformUsers.tsx         |  62 [32m+++[m[31m--[m
+ 87 files changed, 3924 insertions(+), 1884 deletions(-)

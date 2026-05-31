@@ -3,15 +3,45 @@
   "subtitle": "Hier ist, was heute passiert.",
   "todayAppointments": "Heutige Termine",
   "newPatients": "Neue Patienten",
-  "pendingTasks": "Anstehende Aufgaben",
-  "monthlyRevenue": "Monatlicher Umsatz",
-  "pendingCollections": "Ausstehende Inkassos",
-  "quickTasks": "Schnelle Aufgaben",
+  "monthlyRevenue": "Umsatz in diesem Monat",
+  "pendingCollections": "Ausstehende Zahlungen",
+  "todayAgenda": "Heutige Agenda",
   "activityFeed": "Aktivitäts-Feed",
+  "viewFullLogs": "Vollständige Aktivitätsprotokolle anzeigen",
+  "noAgendaToday": "Für heute sind keine Termine geplant.",
+  "noShowsMonth": "No-Shows in diesem Monat",
+  "openTreatments": "Offene Behandlungsakten",
+  "preparedMessages": "Vorbereitete Nachrichten (Woche)",
+  "doctor": {
+    "greeting": "Hallo, Dr. {{name}}",
+    "weekAppointments": "Diese Woche",
+    "pendingTasks": "Ausstehende Aufgaben",
+    "overdueTasksAlert": "Sie haben {{count}} überfällige Aufgaben. Jetzt prüfen.",
+    "pendingEarnings": "Aufgelaufene Verdienste (ausstehend + genehmigt)",
+    "todaySchedule": "Heutiger Plan",
+    "noActivity": "Keine Aktivität",
+    "upcomingSevenDays": "Nächste 7 Tage",
+    "appointmentCount": "{{count}} Termine",
+    "noUpcomingAppointments": "Keine Termine in den nächsten 7 Tagen",
+    "treatmentPipeline": "Behandlungspipeline",
+    "recentPatients": "Neue Patienten",
+    "noRecentPatients": "Noch keine Patientendatensätze"
+  },
+  "charts": {
+    "appointmentTrend": "Letzte 7 Tage - Termintrend",
+    "serviceDistribution": "Dieser Monat - Leistungsverteilung",
+    "revenueTrend": "Letzte 6 Monate - Umsatztrend",
+    "revenue": "Umsatz"
+  },
   "stats": {
-    "trendUp": "+{{count}} seit gestern",
-    "trendDown": "-{{count}} seit gestern",
+    "weekTotal": "{{count}} Termine diese Woche",
     "monthTrend": "{{count}}% in diesem Monat",
+    "revenueGoal": "Basierend auf angenommenen Angeboten",
     "actionRequired": "Handlung erforderlich"
+  },
+  "alerts": {
+    "overdueTasks": "Überfällige Nachfassaufgaben",
+    "noShowFollowUp": "No-Shows zur Kontaktaufnahme",
+    "pendingCollections": "Unbezahlte Salden"
   }
 }

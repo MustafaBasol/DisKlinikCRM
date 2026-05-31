@@ -1,0 +1,102 @@
+{
+  "title": "Stock Tracking",
+  "subtitle": "Manage implants, prosthetics and consumables",
+  "optional": "Optional",
+  "tabs": {
+    "list": "Stock List",
+    "alerts": "Low Stock",
+    "history": "Transaction History"
+  },
+  "actions": {
+    "newItem": "New Item",
+    "addTransaction": "Add stock transaction",
+    "addStockIn": "Add stock entry"
+  },
+  "filters": {
+    "searchPlaceholder": "Search item or supplier...",
+    "allCategories": "All Categories"
+  },
+  "empty": {
+    "noItems": "No stock record found.",
+    "addItemHint": "You can add one with the \"New Item\" button."
+  },
+  "categories": {
+    "implant": "Implant",
+    "prosthetic": "Prosthetic",
+    "consumable": "Consumable",
+    "medication": "Medication",
+    "equipment": "Equipment",
+    "other": "Other"
+  },
+  "units": {
+    "piece": "Piece",
+    "box": "Box",
+    "ml": "ml",
+    "gram": "g",
+    "vial": "Vial",
+    "set": "Set"
+  },
+  "itemForm": {
+    "createTitle": "New Item",
+    "editTitle": "Edit Item",
+    "fields": {
+      "name": "Item Name",
+      "category": "Category",
+      "unit": "Unit",
+      "openingStock": "Opening Stock",
+      "minimumStock": "Minimum Stock (Alert)",
+      "unitCost": "Unit Cost (₺)",
+      "supplier": "Supplier",
+      "barcode": "Barcode",
+      "notes": "Notes"
+    },
+    "placeholders": {
+      "name": "e.g. Bio-Oss 0.25g"
+    }
+  },
+  "list": {
+    "currentStock": "Current Stock",
+    "minimumStock": "Min. Stock"
+  },
+  "alerts": {
+    "emptyTitle": "No low stock alerts.",
+    "emptyDescription": "All items are above the minimum stock level.",
+    "countMessage": "{{count}} item is at or below minimum stock.",
+    "countMessage_plural": "{{count}} items are at or below minimum stock."
+  },
+  "history": {
+    "empty": "No stock transaction has been recorded yet.",
+    "performedBy": "Performed By"
+  },
+  "transaction": {
+    "title": "Stock Transaction - {{item}}",
+    "quantityLabel": "Quantity ({{unit}}) - Current: {{current}}",
+    "fields": {
+      "type": "Transaction Type",
+      "reason": "Reason",
+      "quantity": "Quantity"
+    },
+    "types": {
+      "in": "In",
+      "out": "Out",
+      "adjustment": "Adjustment"
+    },
+    "reasons": {
+      "purchase": "Purchase",
+      "usage": "Usage",
+      "treatment_use": "Used in Treatment",
+      "adjustment": "Stock Adjustment",
+      "wastage": "Wastage / Spoilage",
+      "return": "Return"
+    },
+    "errors": {
+      "quantityPositive": "Quantity must be greater than 0.",
+      "insufficientStock": "Insufficient stock. Current: {{current}} {{unit}}",
+      "actionFailed": "An error occurred during the transaction."
+    }
+  },
+  "errors": {
+    "nameRequired": "Item name is required.",
+    "saveFailed": "An error occurred while saving."
+  }
+}

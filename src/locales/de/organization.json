@@ -1,0 +1,63 @@
+{
+  "title": "Organisationsdashboard",
+  "subtitle": "Übersicht für alle Klinikstandorte",
+  "loading": "Wird geladen...",
+  "ranges": {
+    "today": "Heute",
+    "this_week": "Diese Woche",
+    "this_month": "Dieser Monat",
+    "last_30_days": "Letzte 30 Tage",
+    "custom": "Benutzerdefiniert"
+  },
+  "status": {
+    "active": "Aktiv",
+    "trial": "Testphase",
+    "suspended": "Gesperrt",
+    "cancelled": "Gekündigt"
+  },
+  "cards": {
+    "branches": "Standorte",
+    "activeSub": "{{value}} aktiv",
+    "todayAppointments": "Heutige Termine",
+    "completed": "Abgeschlossen",
+    "totalSub": "{{value}} gesamt",
+    "periodRevenue": "Umsatz im Zeitraum",
+    "outstandingBalance": "Offener Saldo",
+    "newPatients": "Neue Patienten",
+    "activeTreatments": "Aktive Behandlungen",
+    "completedSub": "{{value}} abgeschlossen",
+    "averageNoShow": "Durchschn. No-show",
+    "cancelledSub": "{{value}} storniert"
+  },
+  "insights": {
+    "topRevenue": "Höchster Umsatz",
+    "lowestRevenue": "Niedrigster Umsatz",
+    "highestAppointments": "Meiste Termine",
+    "highestBalance": "Höchster Saldo",
+    "highestNoShow": "Höchster No-show",
+    "topNewPatients": "Meiste neue Patienten"
+  },
+  "table": {
+    "title": "Standortvergleich",
+    "branch": "Standort",
+    "status": "Status",
+    "appointments": "Termine",
+    "completed": "Erledigt",
+    "cancelled": "Storniert",
+    "noShow": "No-show",
+    "newPatients": "Neue Patienten",
+    "revenue": "Umsatz",
+    "balance": "Saldo",
+    "treatments": "Behandlungen",
+    "staff": "Personal",
+    "actions": "Aktionen",
+    "empty": "Keine Daten gefunden",
+    "branchDashboard": "Standortdashboard",
+    "branchAppointments": "Termine",
+    "branchPatients": "Patienten",
+    "branchPayments": "Zahlungen"
+  },
+  "errors": {
+    "loadFailed": "Daten konnten nicht geladen werden"
+  }
+}

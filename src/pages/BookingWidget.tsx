@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { Calendar, Clock, User, Stethoscope, Phone, Mail, MessageSquare, CheckCircle, ChevronRight, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
+import { publicBookingService } from '../services/api';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Service {
@@ -35,18 +37,17 @@ interface BookingData {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
-const WEEKDAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-
-function getNext30Days(): { date: string; label: string; weekday: number }[] {
-  const days: { date: string; label: string; weekday: number }[] = [];
+function getNext30Days(locale: string): { date: string; label: string; weekday: number; weekdayName: string }[] {
+  const days: { date: string; label: string; weekday: number; weekdayName: string }[] = [];
   const today = new Date();
   for (let i = 1; i <= 30; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const weekday = d.getDay();
     const dateStr = d.toISOString().split('T')[0];
-    const label = `${d.toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })}`;
-    days.push({ date: dateStr, label, weekday });
+    const label = d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
+    const weekdayName = d.toLocaleDateString(locale, { weekday: 'long' });
+    days.push({ date: dateStr, label, weekday, weekdayName });
   }
   return days;
 }
@@ -78,8 +79,9 @@ const StepIndicator: React.FC<{ step: number; total: number }> = ({ step, total 
 
 // ── Main Widget ────────────────────────────────────────────────────────
 const BookingWidget: React.FC = () => {
-  // Get clinicId from URL param
-  const clinicId = window.location.pathname.split('/book/')[1]?.split('/')[0] || '';
+  const { t, i18n } = useTranslation(['booking', 'common']);
+  const { clinicId: clinicIdParam } = useParams<{ clinicId: string }>();
+  const clinicId = clinicIdParam || '';
 
   const [data, setData] = useState<BookingData | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -99,15 +101,15 @@ const BookingWidget: React.FC = () => {
   const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
-    if (!clinicId) { setLoadError('Geçersiz bağlantı.'); setLoading(false); return; }
-    axios
-      .get(`/api/public/booking/${clinicId}`)
+    if (!clinicId) { setLoadError(t('booking:errors.invalidLink')); setLoading(false); return; }
+    publicBookingService
+      .getClinicInfo(clinicId)
       .then((r) => setData(r.data))
-      .catch(() => setLoadError('Klinik bilgileri yüklenemedi.'))
+      .catch(() => setLoadError(t('booking:errors.loadClinic')))
       .finally(() => setLoading(false));
-  }, [clinicId]);
+  }, [clinicId, t]);
 
-  const allDays = getNext30Days();
+  const allDays = getNext30Days(i18n.language);
 
   // Filter available days for selected doctor
   const availableDays = allDays.filter((d) => {
@@ -118,13 +120,13 @@ const BookingWidget: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!patientName.trim() || !phone.trim()) {
-      setSubmitError('Ad Soyad ve telefon zorunludur.');
+      setSubmitError(t('booking:errors.namePhoneRequired'));
       return;
     }
     setSubmitting(true);
     setSubmitError('');
     try {
-      await axios.post(`/api/public/booking/${clinicId}`, {
+      await publicBookingService.submit(clinicId, {
         patientName: patientName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
@@ -136,7 +138,7 @@ const BookingWidget: React.FC = () => {
       });
       setStep(3);
     } catch {
-      setSubmitError('Randevu talebi gönderilemedi. Lütfen tekrar deneyin.');
+      setSubmitError(t('booking:errors.submitFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -154,7 +156,7 @@ const BookingWidget: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center p-8">
-          <p className="text-red-500 font-medium">{loadError || 'Yükleme hatası'}</p>
+          <p className="text-red-500 font-medium">{loadError || t('booking:errors.loading')}</p>
         </div>
       </div>
     );
@@ -172,7 +174,7 @@ const BookingWidget: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-gray-900">{clinic.name}</h1>
-            <p className="text-xs text-gray-500">Online Randevu</p>
+            <p className="text-xs text-gray-500">{t('booking:header.subtitle')}</p>
           </div>
         </div>
       </div>
@@ -183,8 +185,8 @@ const BookingWidget: React.FC = () => {
         {/* ── Step 0: Select service ── */}
         {step === 0 && (
           <div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-1">Hizmet seçin</h2>
-            <p className="text-sm text-gray-500 mb-4">Hangi tedavi için randevu almak istiyorsunuz?</p>
+            <h2 className="text-xl font-semibold text-gray-800 mb-1">{t('booking:service.title')}</h2>
+            <p className="text-sm text-gray-500 mb-4">{t('booking:service.subtitle')}</p>
             <div className="space-y-2">
               {services.map((s) => (
                 <button
@@ -195,21 +197,21 @@ const BookingWidget: React.FC = () => {
                   <div>
                     <p className="font-medium text-gray-800 group-hover:text-blue-700">{s.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {s.durationMinutes} dk
-                      {s.basePrice ? ` • ${s.basePrice.toLocaleString('tr-TR')} ${s.currency ?? 'TRY'}` : ''}
+                      {t('booking:service.duration', { minutes: s.durationMinutes })}
+                      {s.basePrice ? ` • ${s.basePrice.toLocaleString(i18n.language)} ${s.currency ?? 'TRY'}` : ''}
                     </p>
                   </div>
                   <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-500" />
                 </button>
               ))}
               {services.length === 0 && (
-                <p className="text-gray-500 text-center py-4">Henüz hizmet tanımlanmamış.</p>
+                <p className="text-gray-500 text-center py-4">{t('booking:service.empty')}</p>
               )}
               <button
                 onClick={() => { setSelectedService(''); setStep(1); }}
                 className="w-full py-3 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
               >
-                Hizmet seçmeden devam et
+                {t('booking:service.continueWithoutService')}
               </button>
             </div>
           </div>
@@ -219,23 +221,23 @@ const BookingWidget: React.FC = () => {
         {step === 1 && (
           <div className="space-y-5">
             <div>
-              <button onClick={() => setStep(0)} className="text-sm text-blue-600 hover:underline mb-2">← Geri</button>
-              <h2 className="text-xl font-semibold text-gray-800 mb-1">Hekim & Tarih Seçin</h2>
-              <p className="text-sm text-gray-500">İsteğe bağlı</p>
+              <button onClick={() => setStep(0)} className="text-sm text-blue-600 hover:underline mb-2">← {t('common:back')}</button>
+              <h2 className="text-xl font-semibold text-gray-800 mb-1">{t('booking:schedule.title')}</h2>
+              <p className="text-sm text-gray-500">{t('booking:schedule.optional')}</p>
             </div>
 
             {/* Doctor selection */}
             {doctors.length > 0 && (
               <div>
                 <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
-                  <User size={14} /> Hekim (opsiyonel)
+                  <User size={14} /> {t('booking:schedule.doctorOptional')}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setSelectedDoctor('')}
                     className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${!selectedDoctor ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}
                   >
-                    Farksız
+                    {t('booking:schedule.anyDoctor')}
                   </button>
                   {doctors.map((d) => (
                     <button
@@ -253,17 +255,17 @@ const BookingWidget: React.FC = () => {
             {/* Date selection */}
             <div>
               <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
-                <Calendar size={14} /> Tercih edilen tarih (opsiyonel)
+                <Calendar size={14} /> {t('booking:schedule.dateOptional')}
               </label>
               <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto pr-1">
-                {availableDays.map(({ date, label, weekday }) => (
+                {availableDays.map(({ date, label, weekdayName }) => (
                   <button
                     key={date}
                     onClick={() => setSelectedDate(selectedDate === date ? '' : date)}
                     className={`px-2 py-2 rounded-lg border text-xs transition-colors ${selectedDate === date ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-700 hover:border-blue-400 bg-white'}`}
                   >
-                    <span className="block font-medium">{WEEKDAY_NAMES[weekday]}</span>
-                    <span className="block text-[10px] opacity-75">{date.slice(5)}</span>
+                    <span className="block font-medium">{weekdayName}</span>
+                    <span className="block text-[10px] opacity-75">{label}</span>
                   </button>
                 ))}
               </div>
@@ -273,7 +275,7 @@ const BookingWidget: React.FC = () => {
             {selectedDate && (
               <div>
                 <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
-                  <Clock size={14} /> Tercih edilen saat (opsiyonel)
+                  <Clock size={14} /> {t('booking:schedule.timeOptional')}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {TIME_SLOTS.map((t) => (
@@ -293,7 +295,7 @@ const BookingWidget: React.FC = () => {
               onClick={() => setStep(2)}
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
             >
-              Devam Et →
+              {t('booking:actions.continue')} →
             </button>
           </div>
         )}
@@ -302,9 +304,9 @@ const BookingWidget: React.FC = () => {
         {step === 2 && (
           <div className="space-y-4">
             <div>
-              <button onClick={() => setStep(1)} className="text-sm text-blue-600 hover:underline mb-2">← Geri</button>
-              <h2 className="text-xl font-semibold text-gray-800 mb-1">İletişim Bilgileri</h2>
-              <p className="text-sm text-gray-500">Sizi arayabilmemiz için lütfen doldurun</p>
+              <button onClick={() => setStep(1)} className="text-sm text-blue-600 hover:underline mb-2">← {t('common:back')}</button>
+              <h2 className="text-xl font-semibold text-gray-800 mb-1">{t('booking:contact.title')}</h2>
+              <p className="text-sm text-gray-500">{t('booking:contact.subtitle')}</p>
             </div>
 
             {/* Summary */}
@@ -319,17 +321,17 @@ const BookingWidget: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ad Soyad *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('booking:contact.fullName')} *</label>
               <input
                 type="text"
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
-                placeholder="Adınız Soyadınız"
+                placeholder={t('booking:contact.fullNamePlaceholder')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
-              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Phone size={13} />Telefon *</label>
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Phone size={13} />{t('booking:contact.phone')} *</label>
               <input
                 type="tel"
                 value={phone}
@@ -339,7 +341,7 @@ const BookingWidget: React.FC = () => {
               />
             </div>
             <div>
-              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Mail size={13} />E-posta (opsiyonel)</label>
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Mail size={13} />{t('booking:contact.emailOptional')}</label>
               <input
                 type="email"
                 value={email}
@@ -349,11 +351,11 @@ const BookingWidget: React.FC = () => {
               />
             </div>
             <div>
-              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><MessageSquare size={13} />Not (opsiyonel)</label>
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><MessageSquare size={13} />{t('booking:contact.noteOptional')}</label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Şikayetiniz, özel isteğiniz..."
+                placeholder={t('booking:contact.notePlaceholder')}
                 rows={3}
                 maxLength={500}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
@@ -369,11 +371,11 @@ const BookingWidget: React.FC = () => {
               disabled={submitting}
               className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
             >
-              {submitting ? <><Loader2 size={18} className="animate-spin" /> Gönderiliyor...</> : 'Randevu Talebini Gönder'}
+              {submitting ? <><Loader2 size={18} className="animate-spin" /> {t('booking:actions.submitting')}</> : t('booking:actions.submit')}
             </button>
 
             <p className="text-xs text-gray-400 text-center">
-              Talebiniz alındıktan sonra klinik sizi arayarak randevunuzu onaylayacaktır.
+              {t('booking:contact.disclaimer')}
             </p>
           </div>
         )}
@@ -384,21 +386,20 @@ const BookingWidget: React.FC = () => {
             <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle size={40} className="text-emerald-500" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800">Talebiniz Alındı!</h2>
+            <h2 className="text-2xl font-bold text-gray-800">{t('booking:success.title')}</h2>
             <p className="text-gray-500 max-w-sm mx-auto">
-              <strong>{clinic.name}</strong> ekibi en kısa sürede{' '}
-              <strong>{phone}</strong> numaranızı arayarak randevunuzu onaylayacaktır.
+              {t('booking:success.body', { clinic: clinic.name, phone })}
             </p>
             {clinic.phone && (
               <p className="text-sm text-gray-400">
-                Sorularınız için: <a href={`tel:${clinic.phone}`} className="text-blue-600 hover:underline">{clinic.phone}</a>
+                {t('booking:success.questions')}: <a href={`tel:${clinic.phone}`} className="text-blue-600 hover:underline">{clinic.phone}</a>
               </p>
             )}
             <button
               onClick={() => { setStep(0); setSelectedService(''); setSelectedDoctor(''); setSelectedDate(''); setSelectedTime(''); setPatientName(''); setPhone(''); setEmail(''); setNotes(''); }}
               className="mt-4 px-6 py-2 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             >
-              Yeni Randevu Al
+              {t('booking:success.newAppointment')}
             </button>
           </div>
         )}
@@ -407,7 +408,7 @@ const BookingWidget: React.FC = () => {
       {/* Footer */}
       <div className="text-center py-6 text-xs text-gray-400">
         {clinic.address && <p>{clinic.address}</p>}
-        Powered by Klinik CRM
+        {t('booking:footer.poweredBy')}
       </div>
     </div>
   );

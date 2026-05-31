@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Inbox, AlertCircle, CheckCircle2, RefreshCw, User, Building2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { whatsappInboxService, patientService } from '../services/api';
 import {
@@ -46,6 +47,7 @@ interface ResolveModal {
 export default function WhatsAppInbox() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation(['whatsapp', 'common']);
   const [activeTab, setActiveTab] = useState<'unassigned' | 'all'>('unassigned');
   const [unassigned, setUnassigned] = useState<InboxEntry[]>([]);
   const [conversations, setConversations] = useState<InboxEntry[]>([]);
@@ -77,7 +79,7 @@ export default function WhatsAppInbox() {
       const res = await whatsappInboxService.getUnassigned();
       setUnassigned(res.data.entries || []);
     } catch {
-      setError('Atanmamış konuşmalar yüklenemedi.');
+      setError(t('whatsapp:inbox.errors.loadUnassigned'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,7 @@ export default function WhatsAppInbox() {
       const res = await whatsappInboxService.getConversations(params);
       setConversations(res.data.entries || []);
     } catch {
-      setError('Konuşmalar yüklenemedi.');
+      setError(t('whatsapp:inbox.errors.loadConversations'));
     } finally {
       setLoading(false);
     }
@@ -128,7 +130,7 @@ export default function WhatsAppInbox() {
       loadUnassigned();
       if (activeTab === 'all') loadConversations();
     } catch {
-      setError('Çözümleme başarısız oldu.');
+      setError(t('whatsapp:inbox.errors.resolveFailed'));
     } finally {
       setResolving(false);
     }
@@ -140,7 +142,7 @@ export default function WhatsAppInbox() {
       await whatsappInboxService.linkPatient(entryId, patientId);
       loadUnassigned();
     } catch {
-      setError('Hasta bağlama başarısız oldu.');
+      setError(t('whatsapp:inbox.errors.linkPatientFailed'));
     }
   }
 
@@ -150,7 +152,7 @@ export default function WhatsAppInbox() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Inbox className="text-green-600" size={28} />
-        <h1 className="text-2xl font-bold text-gray-800">WhatsApp Gelen Kutusu</h1>
+        <h1 className="text-2xl font-bold text-gray-800">{t('whatsapp:inbox.title')}</h1>
       </div>
 
       {error && (
@@ -170,7 +172,7 @@ export default function WhatsAppInbox() {
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          Atanmamış
+          {t('whatsapp:inbox.tabs.unassigned')}
           {unassigned.length > 0 && (
             <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
               {unassigned.length}
@@ -185,7 +187,7 @@ export default function WhatsAppInbox() {
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          Tüm Konuşmalar
+          {t('whatsapp:inbox.tabs.all')}
         </button>
       </div>
 
@@ -197,13 +199,13 @@ export default function WhatsAppInbox() {
             onChange={e => setFilterStatus(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
           >
-            <option value="">Tüm Durumlar</option>
-            <option value="unassigned">Atanmamış</option>
-            <option value="assigned">Atanmış</option>
+            <option value="">{t('whatsapp:inbox.filters.allStatuses')}</option>
+            <option value="unassigned">{t('whatsapp:inbox.status.unassigned')}</option>
+            <option value="assigned">{t('whatsapp:inbox.status.assigned')}</option>
           </select>
           <input
             type="text"
-            placeholder="Klinik ID filtrele..."
+            placeholder={t('whatsapp:inbox.filters.clinicIdPlaceholder')}
             value={filterClinic}
             onChange={e => setFilterClinic(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-56"
@@ -213,7 +215,7 @@ export default function WhatsAppInbox() {
             className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
           >
             <RefreshCw size={14} />
-            Yenile
+            {t('common:refresh')}
           </button>
         </div>
       )}
@@ -225,13 +227,13 @@ export default function WhatsAppInbox() {
             className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
           >
             <RefreshCw size={14} />
-            Yenile
+            {t('common:refresh')}
           </button>
         </div>
       )}
 
       {loading && (
-        <div className="text-center py-12 text-gray-500">Yükleniyor...</div>
+        <div className="text-center py-12 text-gray-500">{t('common:loading')}</div>
       )}
 
       {!loading && activeTab === 'unassigned' && (
@@ -239,7 +241,7 @@ export default function WhatsAppInbox() {
           {unassigned.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <CheckCircle2 size={40} className="mx-auto mb-2 text-green-400" />
-              <p>Atanmamış konuşma yok.</p>
+              <p>{t('whatsapp:inbox.empty.unassigned')}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -253,7 +255,7 @@ export default function WhatsAppInbox() {
                           <span className="text-sm text-gray-500">({entry.displayName})</span>
                         )}
                         <span className="text-xs bg-yellow-100 text-yellow-700 rounded-full px-2 py-0.5">
-                          {entry.messageCount} mesaj
+                          {t('whatsapp:inbox.messageCount', { count: entry.messageCount })}
                         </span>
                       </div>
                       {entry.lastMessageText && (
@@ -261,7 +263,7 @@ export default function WhatsAppInbox() {
                       )}
                       {entry.possiblePatients && entry.possiblePatients.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-1">
-                          <span className="text-xs text-gray-400">Olası hastalar:</span>
+                          <span className="text-xs text-gray-400">{t('whatsapp:inbox.possiblePatients')}:</span>
                           {entry.possiblePatients.map(p => (
                             <button
                               key={p.id}
@@ -278,7 +280,7 @@ export default function WhatsAppInbox() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-gray-400">
-                        {new Date(entry.createdAt).toLocaleDateString('tr-TR')}
+                        {new Date(entry.createdAt).toLocaleDateString(i18n.language)}
                       </span>
                       {canResolve && (
                         <button
@@ -286,7 +288,7 @@ export default function WhatsAppInbox() {
                           className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
                         >
                           <Building2 size={14} />
-                          Kliniğe Ata
+                          {t('whatsapp:inbox.actions.assignClinic')}
                         </button>
                       )}
                     </div>
@@ -301,7 +303,7 @@ export default function WhatsAppInbox() {
       {!loading && activeTab === 'all' && (
         <>
           {conversations.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">Konuşma bulunamadı.</div>
+            <div className="text-center py-12 text-gray-400">{t('whatsapp:inbox.empty.conversations')}</div>
           ) : (
             <div className="space-y-3">
               {conversations.map(entry => (
@@ -320,7 +322,11 @@ export default function WhatsAppInbox() {
                             ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-blue-100 text-blue-700'
                         }`}>
-                          {entry.status === 'resolved' ? 'Çözüldü' : entry.needsClinicResolution ? 'Atanmamış' : 'Açık'}
+                          {entry.status === 'resolved'
+                            ? t('whatsapp:inbox.status.resolved')
+                            : entry.needsClinicResolution
+                              ? t('whatsapp:inbox.status.unassigned')
+                              : t('whatsapp:inbox.status.open')}
                         </span>
                       </div>
                       {entry.clinic && (
@@ -337,7 +343,7 @@ export default function WhatsAppInbox() {
                       )}
                     </div>
                     <div className="text-xs text-gray-400 shrink-0">
-                      {new Date(entry.updatedAt).toLocaleDateString('tr-TR')}
+                      {new Date(entry.updatedAt).toLocaleDateString(i18n.language)}
                     </div>
                   </div>
                 </div>
@@ -351,27 +357,27 @@ export default function WhatsAppInbox() {
       {resolveModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold mb-4">Kliniğe Ata</h2>
+            <h2 className="text-lg font-semibold mb-4">{t('whatsapp:inbox.resolveModal.title')}</h2>
             <p className="text-sm text-gray-600 mb-4">
-              <span className="font-medium">{resolveModal.entry.phone}</span> numaralı konuşmayı bir kliniğe atayın.
+              {t('whatsapp:inbox.resolveModal.description', { phone: resolveModal.entry.phone })}
             </p>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Klinik ID *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('whatsapp:inbox.resolveModal.clinicId')} *</label>
               <input
                 type="text"
                 value={resolveModal.clinicId}
                 onChange={e => setResolveModal({ ...resolveModal, clinicId: e.target.value })}
-                placeholder="Klinik ID girin..."
+                placeholder={t('whatsapp:inbox.resolveModal.clinicIdPlaceholder')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hasta (opsiyonel)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('whatsapp:inbox.resolveModal.patientOptional')}</label>
               {resolveModal.patients.length > 0 && !resolveModal.patientId && (
                 <div className="mb-2 space-y-1">
-                  <p className="text-xs text-gray-500">Eşleşen hastalar:</p>
+                  <p className="text-xs text-gray-500">{t('whatsapp:inbox.resolveModal.matchingPatients')}:</p>
                   {resolveModal.patients.map(p => (
                     <button
                       key={p.id}
@@ -386,13 +392,13 @@ export default function WhatsAppInbox() {
               {resolveModal.patientId ? (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-green-700 bg-green-50 px-3 py-1.5 rounded-lg flex-1">
-                    Hasta seçildi (ID: {resolveModal.patientId})
+                    {t('whatsapp:inbox.resolveModal.patientSelected', { id: resolveModal.patientId })}
                   </span>
                   <button
                     onClick={() => setResolveModal({ ...resolveModal, patientId: '' })}
                     className="text-xs text-red-500 hover:text-red-700"
                   >
-                    Kaldır
+                    {t('common:remove')}
                   </button>
                 </div>
               ) : (
@@ -400,7 +406,7 @@ export default function WhatsAppInbox() {
                   type="text"
                   value={resolveModal.patientSearch}
                   onChange={e => searchPatients(e.target.value)}
-                  placeholder="Hasta ara..."
+                  placeholder={t('whatsapp:inbox.resolveModal.searchPatient')}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
               )}
@@ -411,14 +417,14 @@ export default function WhatsAppInbox() {
                 onClick={() => setResolveModal(null)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
               >
-                İptal
+                {t('common:cancel')}
               </button>
               <button
                 onClick={handleResolve}
                 disabled={!resolveModal.clinicId || resolving}
                 className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
-                {resolving ? 'Kaydediliyor...' : 'Kaydet'}
+                {resolving ? t('common:saving') : t('common:save')}
               </button>
             </div>
           </div>

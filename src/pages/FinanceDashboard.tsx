@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   TrendingUp,
   AlertTriangle,
@@ -76,27 +77,19 @@ interface DashboardData {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const RANGE_OPTIONS = [
-  { value: 'today', label: 'Bugün' },
-  { value: 'this_week', label: 'Bu Hafta' },
-  { value: 'this_month', label: 'Bu Ay' },
-  { value: 'last_30_days', label: 'Son 30 Gün' },
+  { value: 'today' },
+  { value: 'this_week' },
+  { value: 'this_month' },
+  { value: 'last_30_days' },
 ];
 
-const METHOD_LABELS: Record<string, string> = {
-  cash: 'Nakit',
-  card: 'Kart',
-  bank_transfer: 'Havale/EFT',
-  insurance: 'Sigorta',
-  other: 'Diğer',
-};
-
-function fmt(n: number): string {
-  return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+function fmt(n: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
-function fmtDate(d: string | null | undefined): string {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('tr-TR');
+function fmtDate(d: string | null | undefined, locale: string): string {
+  if (!d) return '-';
+  return new Date(d).toLocaleDateString(locale);
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -130,6 +123,7 @@ function SummaryCard({
 
 export default function FinanceDashboard() {
   const { user } = useAuth();
+  const { t, i18n } = useTranslation(['payments', 'common']);
   const navigate = useNavigate();
 
   const [range, setRange] = useState('this_month');
@@ -151,11 +145,11 @@ export default function FinanceDashboard() {
       const res = await financeDashboardService.get({ range });
       setData(res.data);
     } catch {
-      setError('Finans verileri yüklenemedi.');
+      setError(t('payments:financeDashboard.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, t]);
 
   useEffect(() => {
     if (canViewFinanceDashboard(user)) {
@@ -165,6 +159,9 @@ export default function FinanceDashboard() {
 
   const role = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
   const s = data?.summary;
+  const rangeLabel = (value: string) => t(`payments:financeDashboard.ranges.${value}`);
+  const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
+  const money = (value: number) => `₺${fmt(value, i18n.language)}`;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -173,9 +170,11 @@ export default function FinanceDashboard() {
         <div className="flex items-center gap-3">
           <DollarSign className="text-green-600" size={28} />
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Finans Paneli</h1>
+            <h1 className="text-2xl font-bold text-gray-800">{t('payments:financeDashboard.title')}</h1>
             <p className="text-sm text-gray-500">
-              {role === 'BILLING' ? 'Fatura Özeti' : 'Gelir &amp; Ödeme Takibi'}
+              {role === 'BILLING'
+                ? t('payments:financeDashboard.billingSubtitle')
+                : t('payments:financeDashboard.subtitle')}
             </p>
           </div>
         </div>
@@ -191,7 +190,7 @@ export default function FinanceDashboard() {
                     : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                {opt.label}
+                {rangeLabel(opt.value)}
               </button>
             ))}
           </div>
@@ -199,7 +198,7 @@ export default function FinanceDashboard() {
             onClick={load}
             disabled={loading}
             className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500"
-            title="Yenile"
+            title={t('common:refresh')}
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -214,7 +213,7 @@ export default function FinanceDashboard() {
       )}
 
       {loading && !data && (
-        <div className="text-center py-16 text-gray-400">Yükleniyor...</div>
+        <div className="text-center py-16 text-gray-400">{t('common:loading')}</div>
       )}
 
       {data && (
@@ -222,51 +221,51 @@ export default function FinanceDashboard() {
           {/* Summary cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
             <SummaryCard
-              title="Bugün Tahsilat"
-              value={`₺${fmt(s!.collectedToday)}`}
+              title={t('payments:financeDashboard.cards.collectedToday')}
+              value={money(s!.collectedToday)}
               icon={<TrendingUp size={18} className="text-green-600" />}
               color="bg-green-50"
             />
             <SummaryCard
-              title="Dönem Tahsilat"
-              value={`₺${fmt(s!.collectedInRange)}`}
+              title={t('payments:financeDashboard.cards.collectedInRange')}
+              value={money(s!.collectedInRange)}
               icon={<CreditCard size={18} className="text-blue-600" />}
               color="bg-blue-50"
-              sub={RANGE_OPTIONS.find(o => o.value === range)?.label}
+              sub={rangeLabel(range)}
             />
             <SummaryCard
-              title="Bekleyen Bakiye"
-              value={`₺${fmt(s!.outstandingBalance)}`}
+              title={t('payments:financeDashboard.cards.outstandingBalance')}
+              value={money(s!.outstandingBalance)}
               icon={<Clock size={18} className="text-yellow-600" />}
               color="bg-yellow-50"
             />
             <SummaryCard
-              title="Gecikmiş Tutar"
-              value={`₺${fmt(s!.overdueAmount)}`}
+              title={t('payments:financeDashboard.cards.overdueAmount')}
+              value={money(s!.overdueAmount)}
               icon={<AlertTriangle size={18} className="text-red-500" />}
               color="bg-red-50"
             />
             <SummaryCard
-              title="Bekleyen Taksit"
+              title={t('payments:financeDashboard.cards.pendingInstallments')}
               value={String(s!.pendingInstallments)}
               icon={<Calendar size={18} className="text-indigo-600" />}
               color="bg-indigo-50"
             />
             <SummaryCard
-              title="Gecikmiş Taksit"
+              title={t('payments:financeDashboard.cards.overdueInstallments')}
               value={String(s!.overdueInstallments)}
               icon={<AlertTriangle size={18} className="text-orange-500" />}
               color="bg-orange-50"
             />
             <SummaryCard
-              title="Hekim Hak Edişi (Ödenmemiş)"
-              value={`₺${fmt(s!.practitionerPayoutsDue)}`}
+              title={t('payments:financeDashboard.cards.practitionerPayoutsDue')}
+              value={money(s!.practitionerPayoutsDue)}
               icon={<DollarSign size={18} className="text-purple-600" />}
               color="bg-purple-50"
             />
             <SummaryCard
-              title="Hekim Ödemesi (Dönem)"
-              value={`₺${fmt(s!.practitionerPayoutsPaid)}`}
+              title={t('payments:financeDashboard.cards.practitionerPayoutsPaid')}
+              value={money(s!.practitionerPayoutsPaid)}
               icon={<TrendingUp size={18} className="text-teal-600" />}
               color="bg-teal-50"
             />
@@ -276,26 +275,26 @@ export default function FinanceDashboard() {
             {/* Collections by method */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
               <h2 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <CreditCard size={16} /> Ödeme Yöntemine Göre
+                <CreditCard size={16} /> {t('payments:financeDashboard.sections.byMethod')}
               </h2>
               {data.collectionsByMethod.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Veri yok</p>
+                <p className="text-sm text-gray-400 text-center py-4">{t('common:noData')}</p>
               ) : (
                 <div className="space-y-2">
                   {data.collectionsByMethod.map(m => (
                     <div key={m.method} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-600">
-                          {METHOD_LABELS[m.method] ?? m.method}
+                          {methodLabel(m.method)}
                         </span>
-                        <span className="text-xs text-gray-400">({m.count} işlem)</span>
+                        <span className="text-xs text-gray-400">({t('payments:financeDashboard.transactionCount', { count: m.count })})</span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-800">₺{fmt(m.amount)}</span>
+                      <span className="text-sm font-semibold text-gray-800">{money(m.amount)}</span>
                     </div>
                   ))}
                   <div className="border-t pt-2 flex justify-between text-sm font-bold">
-                    <span>Toplam</span>
-                    <span>₺{fmt(data.collectionsByMethod.reduce((a, m) => a + m.amount, 0))}</span>
+                    <span>{t('payments:planForm.total')}</span>
+                    <span>{money(data.collectionsByMethod.reduce((a, m) => a + m.amount, 0))}</span>
                   </div>
                 </div>
               )}
@@ -304,20 +303,20 @@ export default function FinanceDashboard() {
             {/* Upcoming/overdue installments */}
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
               <h2 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <Calendar size={16} /> Yaklaşan / Gecikmiş Taksitler
+                <Calendar size={16} /> {t('payments:financeDashboard.sections.upcomingInstallments')}
               </h2>
               {data.upcomingInstallments.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Taksit yok</p>
+                <p className="text-sm text-gray-400 text-center py-4">{t('payments:financeDashboard.empty.noInstallments')}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-gray-400 border-b">
-                        <th className="pb-2 pr-3">Hasta</th>
-                        <th className="pb-2 pr-3">Klinik</th>
-                        <th className="pb-2 pr-3">Tutar</th>
-                        <th className="pb-2 pr-3">Vade</th>
-                        <th className="pb-2">Durum</th>
+                        <th className="pb-2 pr-3">{t('payments:list.patient')}</th>
+                        <th className="pb-2 pr-3">{t('common:clinic')}</th>
+                        <th className="pb-2 pr-3">{t('payments:list.amount')}</th>
+                        <th className="pb-2 pr-3">{t('payments:planForm.dueDate')}</th>
+                        <th className="pb-2">{t('payments:list.status')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -325,15 +324,17 @@ export default function FinanceDashboard() {
                         <tr key={inst.id} className="hover:bg-gray-50">
                           <td className="py-1.5 pr-3 font-medium">{inst.patientName}</td>
                           <td className="py-1.5 pr-3 text-gray-500">{inst.clinicName}</td>
-                          <td className="py-1.5 pr-3">₺{fmt(inst.amount)}</td>
-                          <td className="py-1.5 pr-3">{fmtDate(inst.dueDate)}</td>
+                          <td className="py-1.5 pr-3">{money(inst.amount)}</td>
+                          <td className="py-1.5 pr-3">{fmtDate(inst.dueDate, i18n.language)}</td>
                           <td className="py-1.5">
                             <span className={`text-xs rounded-full px-2 py-0.5 ${
                               inst.status === 'overdue'
                                 ? 'bg-red-100 text-red-700'
                                 : 'bg-yellow-100 text-yellow-700'
                             }`}>
-                              {inst.status === 'overdue' ? 'Gecikmiş' : 'Bekliyor'}
+                              {inst.status === 'overdue'
+                                ? t('payments:planForm.installmentStatus.overdue')
+                                : t('payments:status.pending')}
                             </span>
                           </td>
                         </tr>
@@ -344,7 +345,7 @@ export default function FinanceDashboard() {
                     to="/payment-plans"
                     className="mt-3 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
                   >
-                    Tüm taksit planlarını gör <ChevronRight size={12} />
+                    {t('payments:financeDashboard.actions.viewAllPaymentPlans')} <ChevronRight size={12} />
                   </Link>
                 </div>
               )}
@@ -355,27 +356,27 @@ export default function FinanceDashboard() {
           {data.branchBreakdown.length > 1 && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-6">
               <h2 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <Building2 size={16} /> Şube Bazlı Performans
+                <Building2 size={16} /> {t('payments:financeDashboard.sections.branchPerformance')}
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-gray-400 border-b">
-                      <th className="pb-2 pr-4">Klinik</th>
-                      <th className="pb-2 pr-4 text-right">Tahsilat</th>
-                      <th className="pb-2 pr-4 text-right">Bekleyen</th>
-                      <th className="pb-2 pr-4 text-right">Gecikmiş</th>
-                      <th className="pb-2 pr-4 text-right">Taksit</th>
-                      <th className="pb-2 text-right">İşlemler</th>
+                      <th className="pb-2 pr-4">{t('common:clinic')}</th>
+                      <th className="pb-2 pr-4 text-right">{t('payments:financeDashboard.columns.collected')}</th>
+                      <th className="pb-2 pr-4 text-right">{t('payments:summary.pending')}</th>
+                      <th className="pb-2 pr-4 text-right">{t('payments:planForm.installmentStatus.overdue')}</th>
+                      <th className="pb-2 pr-4 text-right">{t('payments:financeDashboard.columns.installment')}</th>
+                      <th className="pb-2 text-right">{t('common:actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {data.branchBreakdown.map(b => (
                       <tr key={b.clinicId} className="hover:bg-gray-50">
                         <td className="py-2 pr-4 font-medium">{b.clinicName}</td>
-                        <td className="py-2 pr-4 text-right text-green-700">₺{fmt(b.collected)}</td>
-                        <td className="py-2 pr-4 text-right text-yellow-700">₺{fmt(b.outstanding)}</td>
-                        <td className="py-2 pr-4 text-right text-red-600">₺{fmt(b.overdue)}</td>
+                        <td className="py-2 pr-4 text-right text-green-700">{money(b.collected)}</td>
+                        <td className="py-2 pr-4 text-right text-yellow-700">{money(b.outstanding)}</td>
+                        <td className="py-2 pr-4 text-right text-red-600">{money(b.overdue)}</td>
                         <td className="py-2 pr-4 text-right">{b.pendingInstallments}</td>
                         <td className="py-2 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -383,13 +384,13 @@ export default function FinanceDashboard() {
                               to={`/payments?clinicId=${b.clinicId}`}
                               className="text-xs text-blue-600 hover:underline"
                             >
-                              Ödemeler
+                              {t('common:payments')}
                             </Link>
                             <Link
                               to={`/payment-plans?clinicId=${b.clinicId}`}
                               className="text-xs text-blue-600 hover:underline"
                             >
-                              Taksitler
+                              {t('payments:financeDashboard.actions.installments')}
                             </Link>
                           </div>
                         </td>
@@ -398,15 +399,15 @@ export default function FinanceDashboard() {
                   </tbody>
                   <tfoot className="border-t">
                     <tr className="font-bold text-sm">
-                      <td className="pt-2 pr-4">Toplam</td>
+                      <td className="pt-2 pr-4">{t('payments:planForm.total')}</td>
                       <td className="pt-2 pr-4 text-right text-green-700">
-                        ₺{fmt(data.branchBreakdown.reduce((a, b) => a + b.collected, 0))}
+                        {money(data.branchBreakdown.reduce((a, b) => a + b.collected, 0))}
                       </td>
                       <td className="pt-2 pr-4 text-right text-yellow-700">
-                        ₺{fmt(data.branchBreakdown.reduce((a, b) => a + b.outstanding, 0))}
+                        {money(data.branchBreakdown.reduce((a, b) => a + b.outstanding, 0))}
                       </td>
                       <td className="pt-2 pr-4 text-right text-red-600">
-                        ₺{fmt(data.branchBreakdown.reduce((a, b) => a + b.overdue, 0))}
+                        {money(data.branchBreakdown.reduce((a, b) => a + b.overdue, 0))}
                       </td>
                       <td className="pt-2 pr-4 text-right">
                         {data.branchBreakdown.reduce((a, b) => a + b.pendingInstallments, 0)}
@@ -423,28 +424,28 @@ export default function FinanceDashboard() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-700 flex items-center gap-2">
-                <TrendingUp size={16} /> Son Ödemeler
+                <TrendingUp size={16} /> {t('payments:financeDashboard.sections.recentPayments')}
               </h2>
               <Link
                 to="/payments"
                 className="text-xs text-blue-600 hover:underline flex items-center gap-1"
               >
-                Tümünü gör <ChevronRight size={12} />
+                {t('common:viewAll')} <ChevronRight size={12} />
               </Link>
             </div>
             {data.recentPayments.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">Dönemde ödeme yok</p>
+              <p className="text-sm text-gray-400 text-center py-4">{t('payments:financeDashboard.empty.noPaymentsInRange')}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-gray-400 border-b">
-                      <th className="pb-2 pr-3">Hasta</th>
-                      <th className="pb-2 pr-3">Klinik</th>
-                      <th className="pb-2 pr-3 text-right">Tutar</th>
-                      <th className="pb-2 pr-3">Yöntem</th>
-                      <th className="pb-2 pr-3">Tarih</th>
-                      <th className="pb-2">Durum</th>
+                      <th className="pb-2 pr-3">{t('payments:list.patient')}</th>
+                      <th className="pb-2 pr-3">{t('common:clinic')}</th>
+                      <th className="pb-2 pr-3 text-right">{t('payments:list.amount')}</th>
+                      <th className="pb-2 pr-3">{t('payments:list.method')}</th>
+                      <th className="pb-2 pr-3">{t('payments:list.date')}</th>
+                      <th className="pb-2">{t('payments:list.status')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -452,12 +453,12 @@ export default function FinanceDashboard() {
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="py-1.5 pr-3 font-medium">{p.patientName}</td>
                         <td className="py-1.5 pr-3 text-gray-500">{p.clinicName}</td>
-                        <td className="py-1.5 pr-3 text-right font-semibold">₺{fmt(p.amount)}</td>
-                        <td className="py-1.5 pr-3">{METHOD_LABELS[p.method] ?? p.method}</td>
-                        <td className="py-1.5 pr-3 text-gray-500">{fmtDate(p.paidAt)}</td>
+                        <td className="py-1.5 pr-3 text-right font-semibold">{money(p.amount)}</td>
+                        <td className="py-1.5 pr-3">{methodLabel(p.method)}</td>
+                        <td className="py-1.5 pr-3 text-gray-500">{fmtDate(p.paidAt, i18n.language)}</td>
                         <td className="py-1.5">
                           <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">
-                            Ödendi
+                            {t('payments:status.paid')}
                           </span>
                         </td>
                       </tr>

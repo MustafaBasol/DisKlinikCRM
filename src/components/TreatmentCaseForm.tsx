@@ -118,7 +118,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <Briefcase size={16} className="text-gray-400" />
-                  {t('treatmentCases:service')}
+                  {t('treatmentCases:form.service')}
                 </label>
                 <select
                   className="input-field"

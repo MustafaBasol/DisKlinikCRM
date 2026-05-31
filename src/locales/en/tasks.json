@@ -1,6 +1,7 @@
 {
   "title": "Tasks & Follow-Ups",
   "subtitle": "Manage clinic follow-up tasks and assignments.",
+  "noRelatedTasks": "No related tasks found.",
   "newTask": "New Task",
   "editTask": "Edit Task",
   "filters": {

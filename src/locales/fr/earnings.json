@@ -1,0 +1,123 @@
+{
+  "status": {
+    "pending": "En attente",
+    "approved": "Approuvé",
+    "paid": "Payé",
+    "cancelled": "Annulé"
+  },
+  "period": {
+    "monthOption": "Mois {{month}}"
+  },
+  "filters": {
+    "allStatuses": "Tous les statuts",
+    "allDoctors": "Tous les praticiens"
+  },
+  "summary": {
+    "totalEarnings": "Gains totaux",
+    "approved": "Approuvé",
+    "paid": "Payé",
+    "payableApproved": "À payer (approuvé)"
+  },
+  "summaryTab": {
+    "empty": "Aucune donnée de gains trouvée pour cette période."
+  },
+  "tabs": {
+    "summary": "Résumé de période",
+    "earnings": "Liste des gains",
+    "payouts": "Paiements",
+    "settings": "Paramètres de commission"
+  },
+  "columns": {
+    "doctor": "Praticien",
+    "patient": "Patient",
+    "service": "Service",
+    "serviceCase": "Service / Cas",
+    "collection": "Encaissement",
+    "earning": "Gain",
+    "adjustedEarning": "Gain ajusté",
+    "calculatedEarning": "Gain calculé",
+    "grossAmount": "Montant brut",
+    "remaining": "Restant",
+    "status": "Statut",
+    "date": "Date"
+  },
+  "my": {
+    "title": "Mes gains",
+    "subtitle": "{{name}} - Résumé personnel des gains",
+    "details": "Détails des gains",
+    "empty": "Aucun gain trouvé pour cette période."
+  },
+  "management": {
+    "title": "Gestion des gains des praticiens",
+    "subtitle": "Règles de commission et suivi des gains des praticiens",
+    "empty": "Aucun gain trouvé.",
+    "collectionRate": "{{rate}} % encaissé",
+    "adjustTitle": "Modifier le gain",
+    "adjustedAmount": "Montant ajusté",
+    "adjustmentReason": "Motif de l'ajustement",
+    "adjustmentPlaceholder": "Pourquoi effectuez-vous cet ajustement ?"
+  },
+  "actions": {
+    "approve": "Approuver",
+    "markPaid": "Marquer comme payé",
+    "paid": "Payé"
+  },
+  "confirm": {
+    "cancelEarning": "Voulez-vous vraiment annuler ce gain ?",
+    "deleteRule": "Voulez-vous vraiment supprimer cette règle ?"
+  },
+  "payouts": {
+    "recordPayment": "Enregistrer un paiement",
+    "empty": "Aucun paiement enregistré pour le moment.",
+    "period": "Période",
+    "periodMonth": "Mois de période",
+    "periodYear": "Année de période",
+    "paymentDate": "Date de paiement",
+    "amount": "Montant",
+    "method": "Méthode",
+    "note": "Note",
+    "recordedBy": "Enregistré par",
+    "optional": "Facultatif",
+    "markApprovedAsPaid": "Marquer les gains approuvés comme payés (facultatif)"
+  },
+  "settings": {
+    "doctorCommissionRules": "Règles de commission des praticiens",
+    "serviceCommissionRules": "Règles de commission par service",
+    "addRule": "Ajouter une règle",
+    "addServiceRule": "Ajouter une règle de service",
+    "noRules": "Aucune règle n'a encore été définie.",
+    "noServiceRules": "Aucune règle par service n'a encore été définie.",
+    "type": "Type",
+    "fixedMonthly": "Fixe (mensuel)",
+    "fixedMonthlyAmount": "Montant mensuel fixe",
+    "fixedAmount": "Montant fixe",
+    "percent": "Pourcentage %",
+    "percentage": "Pourcentage (%)",
+    "calculationBase": "Base de calcul",
+    "commissionType": "Type de commission",
+    "startDate": "Date de début",
+    "endDate": "Date de fin",
+    "editRuleTitle": "Modifier la règle de commission",
+    "addRuleTitle": "Ajouter une règle de commission",
+    "addServiceRuleTitle": "Ajouter une règle par service",
+    "compTypes": {
+      "fixed": "Fixe mensuel",
+      "percentage": "Basé sur un pourcentage",
+      "fixed_plus_percentage": "Fixe + pourcentage",
+      "per_service": "Basé sur le service"
+    },
+    "calcBases": {
+      "collected": "Basé sur l'encaissement",
+      "billed": "Basé sur la facturation"
+    }
+  },
+  "errors": {
+    "myEarningsLoadFailed": "Les informations de gains n'ont pas pu être chargées.",
+    "earningsListLoadFailed": "La liste des gains n'a pas pu être chargée.",
+    "actionFailed": "L'action a échoué.",
+    "requiredFields": "Veuillez remplir les champs obligatoires.",
+    "payoutSaveFailed": "Le paiement n'a pas pu être enregistré.",
+    "ruleSaveFailed": "La règle n'a pas pu être enregistrée.",
+    "serviceRuleSaveFailed": "La règle de service n'a pas pu être enregistrée."
+  }
+}

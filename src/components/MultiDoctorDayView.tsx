@@ -1,4 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface Doctor {
   id: string;
@@ -76,6 +77,7 @@ const MultiDoctorDayView: React.FC<MultiDoctorDayViewProps> = ({
   onSlotClick,
   onAppointmentClick,
 }) => {
+  const { t } = useTranslation(['appointments', 'common']);
   // Map: doctorId → list of appointments
   const apptsByDoctor = useMemo(() => {
     const map: Record<string, AppointmentItem[]> = {};
@@ -109,7 +111,7 @@ const MultiDoctorDayView: React.FC<MultiDoctorDayViewProps> = ({
   if (doctors.length === 0) {
     return (
       <div className="card p-8 text-center text-gray-400">
-        <p>Kayıtlı hekim bulunamadı.</p>
+        <p>{t('appointments:calendar.noDoctors')}</p>
       </div>
     );
   }
@@ -124,7 +126,7 @@ const MultiDoctorDayView: React.FC<MultiDoctorDayViewProps> = ({
         >
           {/* Header */}
           <div className="bg-gray-50 border-b border-r border-gray-200 p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide sticky left-0 z-10">
-            Saat
+            {t('common:time')}
           </div>
           {doctors.map((doc) => (
             <div

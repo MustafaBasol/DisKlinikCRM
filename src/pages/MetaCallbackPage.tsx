@@ -15,12 +15,14 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 type CallbackState = 'processing' | 'success' | 'error' | 'no_opener';
 
 const ALLOWED_ORIGINS = [window.location.origin];
 
 export default function MetaCallbackPage() {
+  const { t } = useTranslation('messages');
   const [state, setState] = useState<CallbackState>('processing');
   const [errorMsg, setErrorMsg] = useState<string>('');
 
@@ -44,7 +46,7 @@ export default function MetaCallbackPage() {
       setErrorMsg(errorDescription ?? error);
       setState('error');
     } else if (!code) {
-      setErrorMsg('Meta yanıtı eksik: authorization code alınamadı.');
+      setErrorMsg(t('metaCallback.missingCode'));
       setState('error');
     }
 
@@ -73,7 +75,7 @@ export default function MetaCallbackPage() {
       // In this case, we cannot postMessage. Show instruction to user.
       setState('no_opener');
     }
-  }, []);
+  }, [t]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
@@ -82,7 +84,7 @@ export default function MetaCallbackPage() {
           <>
             <Loader2 className="mx-auto mb-4 text-blue-500 animate-spin" size={40} />
             <p className="text-gray-700 dark:text-gray-300 font-medium">
-              Meta bağlantısı tamamlanıyor…
+              {t('metaCallback.processing')}
             </p>
           </>
         )}
@@ -90,37 +92,37 @@ export default function MetaCallbackPage() {
           <>
             <CheckCircle2 className="mx-auto mb-4 text-green-500" size={40} />
             <p className="text-gray-700 dark:text-gray-300 font-medium">
-              Meta hesabınız başarıyla bağlandı.
+              {t('metaCallback.success')}
             </p>
-            <p className="mt-2 text-sm text-gray-400">Bu sekme kapanacak…</p>
+            <p className="mt-2 text-sm text-gray-400">{t('metaCallback.closing')}</p>
           </>
         )}
         {state === 'error' && (
           <>
             <XCircle className="mx-auto mb-4 text-red-500" size={40} />
             <p className="text-gray-700 dark:text-gray-300 font-medium">
-              Meta bağlantısı başarısız oldu.
+              {t('metaCallback.failed')}
             </p>
             {errorMsg && (
               <p className="mt-2 text-sm text-red-500 dark:text-red-400 break-words">{errorMsg}</p>
             )}
-            <p className="mt-4 text-sm text-gray-400">Bu sekmeyi/pencereyi kapatabilirsiniz.</p>
+            <p className="mt-4 text-sm text-gray-400">{t('metaCallback.canClose')}</p>
           </>
         )}
         {state === 'no_opener' && (
           <>
             <CheckCircle2 className="mx-auto mb-4 text-blue-500" size={40} />
             <p className="text-gray-700 dark:text-gray-300 font-medium">
-              Meta yetkilendirmesi alındı.
+              {t('metaCallback.authorized')}
             </p>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              WhatsApp Bağlantıları sayfasına geri dönün ve tekrar deneyin.
+              {t('metaCallback.returnInstruction')}
             </p>
             <a
               href="/organization/whatsapp"
               className="mt-4 inline-block text-blue-600 dark:text-blue-400 text-sm underline"
             >
-              WhatsApp Bağlantıları
+              {t('metaCallback.connections')}
             </a>
           </>
         )}

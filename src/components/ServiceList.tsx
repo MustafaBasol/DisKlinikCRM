@@ -4,7 +4,7 @@ import { Plus, Edit2, CheckCircle2, XCircle, Tag, Loader2, AlertCircle } from 'l
 import { serviceService } from '../services/api';
 
 const ServiceList: React.FC = () => {
-  const { t } = useTranslation(['services', 'settings', 'common']);
+  const { t, i18n } = useTranslation(['services', 'settings', 'common']);
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +84,7 @@ const ServiceList: React.FC = () => {
                   <td className="p-4 text-sm text-gray-600">{service.category || '-'}</td>
                   <td className="p-4 text-sm text-gray-600">{service.durationMinutes} min</td>
                   <td className="p-4 text-sm font-medium text-primary-600">
-                    {service.basePrice != null ? service.basePrice.toLocaleString('tr-TR') : <span className="text-gray-400 italic text-xs">Fiyat girilmemiş</span>}
+                    {service.basePrice != null ? service.basePrice.toLocaleString(i18n.language) : <span className="text-gray-400 italic text-xs">{t('services:fields.noBasePrice')}</span>}
                   </td>
                   <td className="p-4 text-sm text-gray-600">{service.currency || <span className="text-gray-300">—</span>}</td>
                   <td className="p-4">

@@ -1,0 +1,42 @@
+{
+  "title": "Benutzer",
+  "importModal": {
+    "title": "Personal mit Excel hinzufügen",
+    "downloadTemplate": "Vorlage herunterladen (.xlsx)",
+    "selectFile": "Excel-Datei auswählen",
+    "dropzonePlaceholder": "Klicken Sie, um eine Datei auszuwählen, oder ziehen Sie sie hierher",
+    "fileRules": "Nur .xlsx, max. 5 MB, max. 500 Zeilen",
+    "previewButton": "Vorschau",
+    "importButton": "{{count}} Benutzer hinzufügen",
+    "rowLabel": "Zeile {{row}}",
+    "howItWorks": {
+      "title": "Wie funktioniert es?",
+      "downloadTemplate": "Laden Sie die Vorlage herunter und verwenden Sie die UUIDs von der Filialen-Seite als Referenz.",
+      "fillData": "Füllen Sie die Personaldaten aus (Pflicht: Vorname, Nachname, E-Mail, Rolle, Filial-ID).",
+      "temporaryPassword": "Wenn das Passwort leer ist, erzeugt das System ein temporäres Passwort und zeigt es nur einmal an.",
+      "skipExisting": "Bestehende E-Mails werden übersprungen und nicht überschrieben."
+    },
+    "preview": {
+      "totalRows": "Zeilen gesamt",
+      "validRows": "Gültig",
+      "invalidRows": "Fehlerhaft",
+      "invalidRowsTitle": "Fehlerhafte Zeilen:",
+      "noValidRows": "Es gibt keine gültigen Zeilen zum Importieren."
+    },
+    "result": {
+      "success": "{{count}} Benutzer erfolgreich hinzugefügt.",
+      "skipped": "{{count}} Zeilen übersprungen.",
+      "temporaryPasswordWarning": "Temporäre Passwörter werden nur einmal angezeigt. Bitte speichern Sie sie sicher.",
+      "copy": "Kopieren",
+      "copied": "Kopiert!",
+      "skippedRowsTitle": "Übersprungene Zeilen:"
+    },
+    "errors": {
+      "fileType": "Nur .xlsx-Dateien werden akzeptiert.",
+      "fileSize": "Die Datei überschreitet die Grenze von 5 MB.",
+      "templateDownload": "Vorlage konnte nicht heruntergeladen werden.",
+      "previewFailed": "Vorschau fehlgeschlagen.",
+      "importFailed": "Import fehlgeschlagen."
+    }
+  }
+}

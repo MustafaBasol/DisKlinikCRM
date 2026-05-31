@@ -1,0 +1,170 @@
+{
+  "inbox": {
+    "title": "WhatsApp Inbox",
+    "tabs": {
+      "unassigned": "Unassigned",
+      "all": "All Conversations"
+    },
+    "filters": {
+      "allStatuses": "All Statuses",
+      "clinicIdPlaceholder": "Filter by clinic ID..."
+    },
+    "status": {
+      "unassigned": "Unassigned",
+      "assigned": "Assigned",
+      "resolved": "Resolved",
+      "open": "Open"
+    },
+    "empty": {
+      "unassigned": "There are no unassigned conversations.",
+      "conversations": "No conversations found."
+    },
+    "errors": {
+      "loadUnassigned": "Unassigned conversations could not be loaded.",
+      "loadConversations": "Conversations could not be loaded.",
+      "resolveFailed": "Resolution failed.",
+      "linkPatientFailed": "Patient linking failed."
+    },
+    "messageCount": "{{count}} messages",
+    "possiblePatients": "Possible patients",
+    "actions": {
+      "assignClinic": "Assign to Clinic"
+    },
+    "resolveModal": {
+      "title": "Assign to Clinic",
+      "description": "Assign the conversation from {{phone}} to a clinic.",
+      "clinicId": "Clinic ID",
+      "clinicIdPlaceholder": "Enter clinic ID...",
+      "patientOptional": "Patient (optional)",
+      "matchingPatients": "Matching patients",
+      "patientSelected": "Patient selected (ID: {{id}})",
+      "searchPatient": "Search patient..."
+    }
+  },
+  "connections": {
+    "title": "WhatsApp Connections",
+    "subtitle": "Manage WhatsApp connections across the organization",
+    "providerInfo": "{{evolution}} and {{meta}} are supported. Evolution API can be configured manually; Meta can use Embedded Signup or manual token entry.",
+    "empty": "No WhatsApp connection has been added yet.",
+    "configuredSecret": "Configured (hidden)",
+    "assignedBranches": "Branches: {{branches}}",
+    "noBranchesAssigned": "No branch has been assigned yet",
+    "metaNoQr": "Meta Cloud API does not use QR; account verification is completed via \"Connect with Meta\".",
+    "inactiveWarning": "Connection is disabled; messages cannot be sent from this line.",
+    "createdAt": "Created",
+    "status": {
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "newConnection": "Add New Connection",
+      "connectMeta": "Connect with Meta",
+      "connectMetaAutomatic": "Connect with Meta Embedded Signup (Automatic)",
+      "importToPanel": "Import to Panel Management",
+      "test": "Test Connection",
+      "getQr": "Get QR Code / Connect",
+      "disconnect": "Disconnect (end WhatsApp session)",
+      "deactivate": "Disable",
+      "activate": "Activate"
+    },
+    "metaPanel": {
+      "title": "Meta (WhatsApp Business) Connection",
+      "ready": "Meta Embedded Signup is configured. Click the button to connect your account.",
+      "notConfiguredPrefix": "Meta Embedded Signup is not configured on this server.",
+      "notConfiguredSuffix": "environment variables must be set.",
+      "manualHint": " For manual setup, choose \"New Connection\" > \"Meta Cloud API\".",
+      "connectTitle": "Connect with Meta Embedded Signup",
+      "notConfiguredTitle": "Meta Embedded Signup is not configured"
+    },
+    "legacy": {
+      "title": "Existing Evolution API Connection Found in Environment Variables",
+      "description": "This connection currently runs from server environment variables. Import it into the panel to edit, test and assign it to branches.",
+      "note": "Note: A connection from environment variables cannot be deleted directly from the panel. To remove it completely, clear the server environment variables.",
+      "afterImport": "After import: Edit, Test, Assign Branch and Disable actions become available."
+    },
+    "token": {
+      "expired": "Meta access token has expired; renew the connection.",
+      "expiring": "Meta access token will expire soon; plan a token renewal.",
+      "unknown": "Token validity date is unknown; token information has not been entered.",
+      "validity": "Token validity",
+      "expiredShort": "Expired",
+      "expiringShort": "Expiring soon",
+      "unknownShort": "Unknown; token information has not been entered"
+    },
+    "qr": {
+      "metaNotUsed": "Meta Cloud API does not use QR codes. Connect the account with \"Connect with Meta\" or manual configuration.",
+      "connectWithQr": "Connect WhatsApp with the QR code:",
+      "empty": "QR code is not available; the connection may already be active.",
+      "alt": "QR code"
+    },
+    "deleteModal": {
+      "title": "Delete Connection",
+      "confirm": "\"{{name}}\" connection will be deleted. Are you sure?",
+      "branchWarning": "If this connection is deleted, linked branches cannot send WhatsApp messages.",
+      "historyWarning": "If message history exists, deletion is blocked; use \"Disable\" instead."
+    },
+    "modal": {
+      "createTitle": "New WhatsApp Connection",
+      "editTitle": "Edit Connection",
+      "name": "Connection Name",
+      "namePlaceholder": "e.g. Main Branch WhatsApp",
+      "provider": "Provider",
+      "metaManualAllowed": "Meta Embedded Signup is not configured on the server. You can still create a connection with manual token entry.",
+      "phoneNumber": "Phone Number",
+      "displayName": "Display Name",
+      "displayNamePlaceholder": "Clinic WhatsApp",
+      "evolutionSettings": "Evolution API Settings",
+      "apiUrl": "API URL",
+      "instanceName": "Instance Name",
+      "apiKey": "API Key",
+      "leaveBlankUnchanged": "leave blank to keep unchanged",
+      "configuredPlaceholder": "•••••••• (Configured)",
+      "configuredIfPlaceholder": "•••••••• (If configured)",
+      "evolutionApiKeyPlaceholder": "Evolution API key",
+      "apiKeyEncryptedHint": "The API key is stored encrypted server-side with AES-256-GCM. Entering a new value permanently replaces the old key.",
+      "webhookSecret": "Webhook Secret",
+      "optional": "optional",
+      "webhookSecretPlaceholder": "Webhook verification secret",
+      "metaManualSettings": "Meta Cloud API - Manual Configuration",
+      "metaManualHint": "Alternatively, enter Meta Business Manager > WhatsApp > API Setup details manually below.",
+      "metaBusinessId": "Business ID",
+      "metaWabaId": "WhatsApp Business Account ID (WABA ID)",
+      "metaPhoneNumberId": "Phone Number ID",
+      "metaAppId": "App ID",
+      "metaWebhookVerifyToken": "Webhook Verify Token",
+      "optionalSignature": "optional - X-Hub-Signature-256 verification",
+      "metaWebhookSecretPlaceholder": "Meta webhook secret",
+      "accessToken": "Access Token",
+      "accessTokenPlaceholder": "Meta Access Token",
+      "accessTokenEncryptedHint": "The access token is stored encrypted server-side with AES-256-GCM. Entering a new value permanently replaces the old token.",
+      "branchAssignment": "Branch Assignment",
+      "branchAssignmentHint": "Select which branches can use this connection. Multiple branches can be selected for a shared line.",
+      "noBranchSelected": "No branch selected. This connection will be saved but cannot be used for sending messages."
+    },
+    "confirm": {
+      "disconnect": "Are you sure you want to disconnect \"{{name}}\"?",
+      "importLegacy": "Existing Evolution API settings from environment variables will be imported into the database. Continue?"
+    },
+    "success": {
+      "disconnected": "\"{{name}}\" connection disconnected.",
+      "alreadyImported": "This connection had already been imported.",
+      "imported": "Evolution API connection successfully imported into the database.",
+      "activated": "\"{{name}}\" activated.",
+      "deactivated": "\"{{name}}\" disabled.",
+      "deleted": "\"{{name}}\" connection deleted."
+    },
+    "errors": {
+      "loadFailed": "WhatsApp connections could not be loaded.",
+      "nameRequired": "Connection name is required.",
+      "saveFailed": "Save failed.",
+      "testFailed": "Test request failed.",
+      "disconnectFailed": "Connection could not be disconnected.",
+      "importFailed": "Import failed.",
+      "statusUpdateFailed": "Status could not be updated.",
+      "deleteHasHistory": "\"{{name}}\" could not be deleted: message history exists. Use the \"Disable\" button instead.",
+      "deleteFailed": "Connection could not be deleted.",
+      "metaRejected": "Meta connection was rejected: {{error}}",
+      "metaMissingCode": "Meta authorization could not be completed: code was not received.",
+      "metaCreateFailed": "Meta connection could not be created."
+    }
+  }
+}

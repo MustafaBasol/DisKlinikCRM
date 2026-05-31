@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Instagram,
   Plus,
@@ -91,6 +92,7 @@ const GLOBAL_WEBHOOK_URL = `${WEBHOOK_BASE}/webhook`;
 // ── Helper: copy to clipboard ─────────────────────────────────────────────────
 
 function CopyButton({ value }: { value: string }) {
+  const { t } = useTranslation(['instagram']);
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     navigator.clipboard.writeText(value).then(() => {
@@ -102,7 +104,7 @@ function CopyButton({ value }: { value: string }) {
     <button
       onClick={handleCopy}
       className="ml-1 text-gray-400 hover:text-primary-600 transition-colors"
-      title="Kopyala"
+      title={t('instagram:actions.copy')}
       type="button"
     >
       {copied ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
@@ -114,6 +116,7 @@ function CopyButton({ value }: { value: string }) {
 
 export default function InstagramConnections() {
   const { user } = useAuth();
+  const { t, i18n } = useTranslation(['instagram', 'common']);
   const [connections, setConnections] = useState<InstagramConnection[]>([]);
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -145,11 +148,11 @@ export default function InstagramConnections() {
       setConnections(connRes.data.connections ?? []);
       setClinics(branchRes.data.clinics ?? branchRes.data.branches ?? []);
     } catch {
-      setError('Instagram bağlantıları yüklenemedi.');
+      setError(t('instagram:connections.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -180,7 +183,7 @@ export default function InstagramConnections() {
 
   async function handleSave() {
     if (!form.name.trim()) {
-      setFormError('Bağlantı adı gereklidir.');
+      setFormError(t('instagram:connections.errors.nameRequired'));
       return;
     }
     setSaving(true);
@@ -214,7 +217,7 @@ export default function InstagramConnections() {
       await load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setFormError(msg ?? 'Kayıt başarısız.');
+      setFormError(msg ?? t('instagram:connections.errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -227,20 +230,20 @@ export default function InstagramConnections() {
       setTestResult(prev => ({ ...prev, [id]: res.data }));
       await load();
     } catch {
-      setTestResult(prev => ({ ...prev, [id]: { success: false, message: 'Test başarısız.' } }));
+      setTestResult(prev => ({ ...prev, [id]: { success: false, message: t('instagram:connections.errors.testFailed') } }));
     } finally {
       setTesting(null);
     }
   }
 
   async function handleDisconnect(id: string) {
-    if (!window.confirm('Bu bağlantıyı devre dışı bırakmak istiyor musunuz?')) return;
+    if (!window.confirm(t('instagram:connections.confirm.disconnect'))) return;
     setDisconnecting(id);
     try {
       await instagramConnectionService.disconnect(id);
       await load();
     } catch {
-      setError('Bağlantı kesilemedi.');
+      setError(t('instagram:connections.errors.disconnectFailed'));
     } finally {
       setDisconnecting(null);
     }
@@ -251,18 +254,18 @@ export default function InstagramConnections() {
       await instagramConnectionService.setStatus(conn.id, { isActive: !conn.isActive });
       await load();
     } catch {
-      setError('Durum güncellenemedi.');
+      setError(t('instagram:connections.errors.statusUpdateFailed'));
     }
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm('Bu bağlantıyı kalıcı olarak silmek istiyor musunuz?')) return;
+    if (!window.confirm(t('instagram:connections.confirm.delete'))) return;
     setDeleting(id);
     try {
       await instagramConnectionService.deleteConnection(id);
       await load();
     } catch {
-      setError('Bağlantı silinemedi.');
+      setError(t('instagram:connections.errors.deleteFailed'));
     } finally {
       setDeleting(null);
     }
@@ -272,10 +275,10 @@ export default function InstagramConnections() {
 
   function StatusBadge({ status }: { status: string }) {
     const map: Record<string, { cls: string; label: string }> = {
-      connected: { cls: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', label: 'Bağlı' },
-      connecting: { cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300', label: 'Bağlanıyor' },
-      error: { cls: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300', label: 'Hata' },
-      disconnected: { cls: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', label: 'Bağlantı Yok' },
+      connected: { cls: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', label: t('instagram:connections.status.connected') },
+      connecting: { cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300', label: t('instagram:connections.status.connecting') },
+      error: { cls: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300', label: t('instagram:connections.status.error') },
+      disconnected: { cls: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', label: t('instagram:connections.status.disconnected') },
     };
     const { cls, label } = map[status] ?? map.disconnected;
     return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
@@ -292,8 +295,8 @@ export default function InstagramConnections() {
             <Instagram size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Instagram Bağlantıları</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Klinik için Instagram DM kanalı yönetimi</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('instagram:connections.title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('instagram:connections.subtitle')}</p>
           </div>
         </div>
         {canManage && (
@@ -302,7 +305,7 @@ export default function InstagramConnections() {
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
           >
             <Plus size={16} />
-            Yeni Bağlantı
+            {t('instagram:connections.actions.newConnection')}
           </button>
         )}
       </div>
@@ -312,24 +315,36 @@ export default function InstagramConnections() {
         <div className="flex items-start gap-3">
           <Info size={18} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
           <div className="text-sm text-blue-800 dark:text-blue-200">
-            <p className="font-semibold mb-1">Meta Geliştirici Paneli'nde yapılacak kurulum:</p>
+            <p className="font-semibold mb-1">{t('instagram:connections.setup.title')}</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
-              <li>Instagram hesabının <strong>Profesyonel</strong> hesap olması gerekir.</li>
-              <li>Instagram hesabı bir Facebook Sayfasına bağlı olmalıdır.</li>
-              <li>Meta App'in <strong>instagram_manage_messages</strong> izni olmalıdır.</li>
               <li>
-                Webhook Callback URL:
+                {t('instagram:connections.setup.professionalPrefix')}{' '}
+                <strong>{t('instagram:connections.setup.professionalAccount')}</strong>{' '}
+                {t('instagram:connections.setup.professionalSuffix')}
+              </li>
+              <li>{t('instagram:connections.setup.facebookPage')}</li>
+              <li>
+                {t('instagram:connections.setup.permissionPrefix')}{' '}
+                <strong>instagram_manage_messages</strong>{' '}
+                {t('instagram:connections.setup.permissionSuffix')}
+              </li>
+              <li>
+                {t('instagram:connections.setup.webhookCallbackUrl')}:
                 <span className="inline-flex items-center gap-1 ml-1">
                   <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{GLOBAL_WEBHOOK_URL}</code>
                   <CopyButton value={GLOBAL_WEBHOOK_URL} />
                 </span>
               </li>
-              <li>Webhook alanı: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">messages</code> abone edilmeli.</li>
-              <li>Verify Token: Bağlantı kartındaki token Meta paneline girilmeli.</li>
+              <li>
+                {t('instagram:connections.setup.webhookFieldPrefix')}{' '}
+                <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">messages</code>{' '}
+                {t('instagram:connections.setup.webhookFieldSuffix')}
+              </li>
+              <li>{t('instagram:connections.setup.verifyToken')}</li>
             </ul>
             <div className="mt-3 p-2.5 bg-blue-100/60 dark:bg-blue-800/40 rounded-lg text-xs text-blue-700 dark:text-blue-300">
-              <span className="font-semibold">ℹ️ Bu global webhook URL tüm klinikler için aynıdır.</span>{' '}
-              Sistem gelen mesajdaki Instagram Account ID üzerinden doğru bağlantı ve şubeyi bulur.
+              <span className="font-semibold">{t('instagram:connections.setup.globalWebhookNote')}</span>{' '}
+              {t('instagram:connections.setup.routingNote')}
             </div>
             <a
               href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api"
@@ -363,13 +378,13 @@ export default function InstagramConnections() {
       {!loading && connections.length === 0 && (
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <Instagram size={48} className="mx-auto mb-4 opacity-30" />
-          <p className="font-medium">Henüz Instagram bağlantısı yok.</p>
+          <p className="font-medium">{t('instagram:connections.empty')}</p>
           {canManage && (
             <button
               onClick={openCreate}
               className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium transition-colors"
             >
-              İlk Bağlantıyı Ekle
+              {t('instagram:connections.actions.addFirst')}
             </button>
           )}
         </div>
@@ -401,7 +416,7 @@ export default function InstagramConnections() {
                     <StatusBadge status={conn.status} />
                     {!conn.isActive && (
                       <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                        Devre Dışı
+                        {t('instagram:connections.status.inactive')}
                       </span>
                     )}
                   </div>
@@ -419,21 +434,21 @@ export default function InstagramConnections() {
                         onClick={() => handleTest(conn.id)}
                         disabled={testing === conn.id}
                         className="p-2 text-gray-400 hover:text-primary-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                        title="Bağlantıyı Test Et"
+                        title={t('instagram:connections.actions.test')}
                       >
                         {testing === conn.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                       </button>
                       <button
                         onClick={() => openEdit(conn)}
                         className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                        title="Düzenle"
+                        title={t('common:edit')}
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         onClick={() => handleToggleActive(conn)}
                         className="p-2 text-gray-400 hover:text-yellow-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                        title={conn.isActive ? 'Devre Dışı Bırak' : 'Etkinleştir'}
+                        title={conn.isActive ? t('instagram:connections.actions.deactivate') : t('instagram:connections.actions.activate')}
                       >
                         {conn.isActive ? <PowerOff size={16} /> : <Power size={16} />}
                       </button>
@@ -442,7 +457,7 @@ export default function InstagramConnections() {
                           onClick={() => handleDisconnect(conn.id)}
                           disabled={disconnecting === conn.id}
                           className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                          title="Bağlantıyı Kes"
+                          title={t('instagram:connections.actions.disconnect')}
                         >
                           {disconnecting === conn.id ? <Loader2 size={16} className="animate-spin" /> : <WifiOff size={16} />}
                         </button>
@@ -451,7 +466,7 @@ export default function InstagramConnections() {
                         onClick={() => handleDelete(conn.id)}
                         disabled={deleting === conn.id}
                         className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                        title="Sil"
+                        title={t('common:delete')}
                       >
                         {deleting === conn.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                       </button>
@@ -479,11 +494,14 @@ export default function InstagramConnections() {
                 <div className="px-5 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
                   {/* Webhook info */}
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Webhook Yapılandırması</p>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('instagram:connections.details.webhookConfig')}</p>
                     <div className="space-y-1.5">
                       {/* Global webhook URL (primary — use this in Meta Developer Console) */}
                       <div className="space-y-0.5">
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Global Callback URL <span className="text-green-600 dark:text-green-400 font-semibold">(önerilen)</span>:</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                          {t('instagram:connections.details.globalCallbackUrl')}{' '}
+                          <span className="text-green-600 dark:text-green-400 font-semibold">({t('instagram:connections.details.recommended')})</span>:
+                        </span>
                         <div className="flex items-center gap-1">
                           <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600 truncate max-w-md flex-1">
                             {GLOBAL_WEBHOOK_URL}
@@ -493,7 +511,7 @@ export default function InstagramConnections() {
                       </div>
                       {conn.webhookVerifyToken && (
                         <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
-                          <span className="font-medium">Verify Token:</span>
+                          <span className="font-medium">{t('instagram:connections.fields.webhookVerifyToken')}:</span>
                           <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600">
                             {conn.webhookVerifyToken}
                           </code>
@@ -503,7 +521,7 @@ export default function InstagramConnections() {
                       {/* Per-connection URL — advanced/optional */}
                       <details className="text-xs">
                         <summary className="cursor-pointer text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 select-none">
-                          Bağlantıya özel URL (gelişmiş, opsiyonel) ▾
+                          {t('instagram:connections.details.connectionSpecificUrl')} ▾
                         </summary>
                         <div className="mt-1 flex items-center gap-1">
                           <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-600 truncate max-w-md">
@@ -511,7 +529,7 @@ export default function InstagramConnections() {
                           </code>
                           <CopyButton value={`${WEBHOOK_BASE}/${conn.id}/webhook`} />
                         </div>
-                        <p className="mt-0.5 text-gray-400 dark:text-gray-500">Yalnızca bu bağlantıya özel yönlendirme gerekiyorsa kullanın.</p>
+                        <p className="mt-0.5 text-gray-400 dark:text-gray-500">{t('instagram:connections.details.connectionSpecificHint')}</p>
                       </details>
                     </div>
                   </div>
@@ -520,26 +538,26 @@ export default function InstagramConnections() {
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
                     {conn.instagramAccountId && (
                       <div>
-                        <span className="font-medium text-gray-500 dark:text-gray-400">Instagram Hesap ID:</span>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">{t('instagram:connections.fields.instagramAccountId')}:</span>
                         <span className="ml-1">{conn.instagramAccountId}</span>
                       </div>
                     )}
                     {conn.facebookPageId && (
                       <div>
-                        <span className="font-medium text-gray-500 dark:text-gray-400">Facebook Sayfa ID:</span>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">{t('instagram:connections.fields.facebookPageId')}:</span>
                         <span className="ml-1">{conn.facebookPageId}</span>
                       </div>
                     )}
                     {conn.metaAppId && (
                       <div>
-                        <span className="font-medium text-gray-500 dark:text-gray-400">Meta App ID:</span>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">{t('instagram:connections.fields.metaAppId')}:</span>
                         <span className="ml-1">{conn.metaAppId}</span>
                       </div>
                     )}
                     {conn.lastConnectedAt && (
                       <div>
-                        <span className="font-medium text-gray-500 dark:text-gray-400">Son Bağlantı:</span>
-                        <span className="ml-1">{new Date(conn.lastConnectedAt).toLocaleString('tr-TR')}</span>
+                        <span className="font-medium text-gray-500 dark:text-gray-400">{t('instagram:connections.details.lastConnection')}:</span>
+                        <span className="ml-1">{new Date(conn.lastConnectedAt).toLocaleString(i18n.language)}</span>
                       </div>
                     )}
                   </div>
@@ -554,7 +572,7 @@ export default function InstagramConnections() {
                   {/* Assigned clinics */}
                   {conn.clinics && conn.clinics.length > 0 && (
                     <div className="text-xs">
-                      <span className="font-medium text-gray-500 dark:text-gray-400">Bağlı Şubeler: </span>
+                      <span className="font-medium text-gray-500 dark:text-gray-400">{t('instagram:connections.details.linkedBranches')}: </span>
                       {conn.clinics.map(c => c.clinic.name).join(', ')}
                     </div>
                   )}
@@ -571,7 +589,7 @@ export default function InstagramConnections() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
               <h2 className="font-semibold text-gray-900 dark:text-white">
-                {editingConnection ? 'Bağlantıyı Düzenle' : 'Yeni Instagram Bağlantısı'}
+                {editingConnection ? t('instagram:connections.modal.editTitle') : t('instagram:connections.modal.createTitle')}
               </h2>
               <button
                 onClick={() => setModalOpen(false)}
@@ -591,63 +609,63 @@ export default function InstagramConnections() {
               {/* Connection Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Bağlantı Adı <span className="text-red-500">*</span>
+                  {t('instagram:connections.fields.connectionName')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Örn: Ana Klinik Instagram"
+                  placeholder={t('instagram:connections.placeholders.connectionName')}
                 />
               </div>
 
               {/* Instagram Account ID */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Instagram Hesap ID
+                  {t('instagram:connections.fields.instagramAccountId')}
                 </label>
                 <input
                   type="text"
                   value={form.instagramAccountId}
                   onChange={e => setForm(f => ({ ...f, instagramAccountId: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Sayısal Instagram hesap ID"
+                  placeholder={t('instagram:connections.placeholders.instagramAccountId')}
                 />
               </div>
 
               {/* Instagram Username */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Instagram Kullanıcı Adı
+                  {t('instagram:connections.fields.instagramUsername')}
                 </label>
                 <input
                   type="text"
                   value={form.instagramUsername}
                   onChange={e => setForm(f => ({ ...f, instagramUsername: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="@kullaniciadi (@ olmadan)"
+                  placeholder={t('instagram:connections.placeholders.instagramUsername')}
                 />
               </div>
 
               {/* Facebook Page ID */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Facebook Sayfa ID
+                  {t('instagram:connections.fields.facebookPageId')}
                 </label>
                 <input
                   type="text"
                   value={form.facebookPageId}
                   onChange={e => setForm(f => ({ ...f, facebookPageId: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Bağlı Facebook Sayfasının ID'si"
+                  placeholder={t('instagram:connections.placeholders.facebookPageId')}
                 />
               </div>
 
               {/* Access Token */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Erişim Tokeni
+                  {t('instagram:connections.fields.accessToken')}
                 </label>
                 <input
                   type="password"
@@ -655,34 +673,34 @@ export default function InstagramConnections() {
                   value={form.accessTokenEncrypted}
                   onChange={e => setForm(f => ({ ...f, accessTokenEncrypted: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder={editingConnection ? '(Boş bırak = mevcut token korunur)' : 'Meta erişim tokeni'}
+                  placeholder={editingConnection ? t('instagram:connections.placeholders.keepToken') : t('instagram:connections.placeholders.accessToken')}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Token kaydedilir ve şifrelenerek saklanır. Bir daha gösterilmez.
+                  {t('instagram:connections.hints.accessTokenEncrypted')}
                 </p>
               </div>
 
               {/* Webhook Verify Token */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Webhook Verify Token
+                  {t('instagram:connections.fields.webhookVerifyToken')}
                 </label>
                 <input
                   type="text"
                   value={form.webhookVerifyToken}
                   onChange={e => setForm(f => ({ ...f, webhookVerifyToken: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="(Otomatik oluşturulur)"
+                  placeholder={t('instagram:connections.placeholders.autoGenerated')}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Boş bırakılırsa otomatik oluşturulur. Meta Geliştirici Paneli'ne girilmelidir.
+                  {t('instagram:connections.hints.webhookVerifyToken')}
                 </p>
               </div>
 
               {/* Webhook Secret */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Webhook Gizli Anahtarı (App Secret)
+                  {t('instagram:connections.fields.webhookSecret')}
                 </label>
                 <input
                   type="password"
@@ -690,7 +708,7 @@ export default function InstagramConnections() {
                   value={form.webhookSecret}
                   onChange={e => setForm(f => ({ ...f, webhookSecret: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder={editingConnection ? '(Boş bırak = mevcut anahtar korunur)' : 'X-Hub-Signature doğrulaması için'}
+                  placeholder={editingConnection ? t('instagram:connections.placeholders.keepSecret') : t('instagram:connections.placeholders.webhookSecret')}
                 />
               </div>
 
@@ -704,7 +722,7 @@ export default function InstagramConnections() {
                   value={form.metaAppId}
                   onChange={e => setForm(f => ({ ...f, metaAppId: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Meta Uygulama ID'si (isteğe bağlı)"
+                  placeholder={t('instagram:connections.placeholders.metaAppId')}
                 />
               </div>
 
@@ -712,7 +730,7 @@ export default function InstagramConnections() {
               {clinics.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Bağlı Şubeler
+                    {t('instagram:connections.fields.linkedBranches')}
                   </label>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto">
                     {clinics.map(c => (
@@ -742,7 +760,7 @@ export default function InstagramConnections() {
                 onClick={() => setModalOpen(false)}
                 className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
               >
-                İptal
+                {t('common:cancel')}
               </button>
               <button
                 onClick={handleSave}
@@ -750,7 +768,7 @@ export default function InstagramConnections() {
                 className="flex items-center gap-2 px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                {editingConnection ? 'Güncelle' : 'Oluştur'}
+                {editingConnection ? t('common:save') : t('common:add')}
               </button>
             </div>
           </div>

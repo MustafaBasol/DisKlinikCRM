@@ -64,7 +64,7 @@ const UserList: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 font-medium rounded-lg border border-green-200 transition-colors text-sm"
             >
               <FileUp size={16} />
-              Excel ile Personel Ekle
+              {t('settings:users.importStaffWithExcel')}
             </button>
           )}
           <button onClick={() => openModal()} className="btn-primary">
@@ -112,7 +112,7 @@ const UserList: React.FC = () => {
                         <button
                           onClick={() => setAssignTarget({ id: user.id, name: `${user.firstName} ${user.lastName}`, email: user.email })}
                           className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                          title="Klinik Atamaları"
+                          title={t('settings:clinicAssignments.title')}
                         >
                           <Building2 size={16} />
                         </button>
@@ -183,11 +183,11 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
 
   const validatePassword = (pwd: string) => {
     const errors: string[] = [];
-    if (pwd.length < 8) errors.push('At least 8 characters');
-    if (!/[A-Z]/.test(pwd)) errors.push('One uppercase letter');
-    if (!/[a-z]/.test(pwd)) errors.push('One lowercase letter');
-    if (!/\d/.test(pwd)) errors.push('One number');
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) errors.push('One special character (!@#$%^&* etc)');
+    if (pwd.length < 8) errors.push(t('settings:users.passwordRules.minLength'));
+    if (!/[A-Z]/.test(pwd)) errors.push(t('settings:users.passwordRules.uppercase'));
+    if (!/[a-z]/.test(pwd)) errors.push(t('settings:users.passwordRules.lowercase'));
+    if (!/\d/.test(pwd)) errors.push(t('settings:users.passwordRules.number'));
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) errors.push(t('settings:users.passwordRules.special'));
     setPasswordErrors(errors);
   };
 
@@ -279,7 +279,7 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
 
           {(formData.password || !user) && passwordErrors.length > 0 && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-sm font-medium text-amber-900 mb-2">Password must include:</p>
+              <p className="text-sm font-medium text-amber-900 mb-2">{t('settings:users.passwordRequirementsTitle')}</p>
               <ul className="space-y-1">
                 {passwordErrors.map(error => (
                   <li key={error} className="text-xs text-amber-800 flex items-center gap-2">

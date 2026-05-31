@@ -3,6 +3,7 @@ import {
   Search, Loader2, AlertCircle, ChevronLeft, ChevronRight,
   CheckCircle2, Clock, Ban, RefreshCw,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
 
 interface Clinic {
@@ -34,6 +35,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 const PlatformClinics: React.FC = () => {
+  const { t, i18n } = useTranslation(['platform']);
   const api = usePlatformApi();
   const [data, setData] = useState<PagedResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +53,7 @@ const PlatformClinics: React.FC = () => {
         params: { page, limit: 25, search: search || undefined, status: statusFilter || undefined },
       })
       .then((res) => setData(res.data))
-      .catch(() => setError('Klinikler yüklenemedi'))
+      .catch(() => setError(t('platform:errors.clinicsLoadFailed')))
       .finally(() => setLoading(false));
   }, [api, page, search, statusFilter]);
 
@@ -63,7 +65,7 @@ const PlatformClinics: React.FC = () => {
       await api.patch(`/platform/clinics/${id}/status`, { status });
       fetchData();
     } catch {
-      alert('Durum güncellenemedi');
+      alert(t('platform:errors.statusUpdateFailed'));
     } finally {
       setActionId(null);
     }
@@ -72,13 +74,13 @@ const PlatformClinics: React.FC = () => {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Klinikler</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('platform:clinics.title')}</h1>
         <button
           onClick={fetchData}
           className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
         >
           <RefreshCw size={14} />
-          Yenile
+          {t('platform:actions.refresh')}
         </button>
       </div>
 
@@ -87,7 +89,7 @@ const PlatformClinics: React.FC = () => {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Ad, slug veya e-posta ara..."
+            placeholder={t('platform:clinics.searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
@@ -98,11 +100,11 @@ const PlatformClinics: React.FC = () => {
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">Tüm Durumlar</option>
-          <option value="trial">Deneme</option>
-          <option value="active">Aktif</option>
-          <option value="suspended">Askıya Alındı</option>
-          <option value="cancelled">İptal</option>
+          <option value="">{t('platform:filters.allStatuses')}</option>
+          <option value="trial">{t('platform:statuses.trial')}</option>
+          <option value="active">{t('platform:statuses.active')}</option>
+          <option value="suspended">{t('platform:statuses.suspended')}</option>
+          <option value="cancelled">{t('platform:statuses.cancelled')}</option>
         </select>
       </div>
 
@@ -122,14 +124,14 @@ const PlatformClinics: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
                   <tr>
-                    <th className="px-5 py-3 text-left">Klinik</th>
-                    <th className="px-4 py-3 text-left">Organizasyon</th>
-                    <th className="px-4 py-3 text-left">Plan</th>
-                    <th className="px-4 py-3 text-center">Durum</th>
-                    <th className="px-4 py-3 text-center">Kullanıcı</th>
-                    <th className="px-4 py-3 text-center">Hasta</th>
-                    <th className="px-4 py-3 text-left">Oluşturulma</th>
-                    <th className="px-5 py-3 text-right">İşlemler</th>
+                    <th className="px-5 py-3 text-left">{t('platform:clinics.columns.clinic')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:clinics.columns.organization')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:clinics.columns.plan')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:clinics.columns.status')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:clinics.columns.users')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:clinics.columns.patients')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:clinics.columns.created')}</th>
+                    <th className="px-5 py-3 text-right">{t('platform:clinics.columns.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -148,13 +150,13 @@ const PlatformClinics: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[clinic.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {clinic.status}
+                          {t(`platform:statuses.${clinic.status}`, { defaultValue: clinic.status })}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{clinic._count.users}</td>
                       <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{clinic._count.patients}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">
-                        {new Date(clinic.createdAt).toLocaleDateString('tr-TR')}
+                        {new Date(clinic.createdAt).toLocaleDateString(i18n.language || 'tr')}
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-1">
@@ -164,7 +166,7 @@ const PlatformClinics: React.FC = () => {
                               disabled={actionId === clinic.id}
                               className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-400 transition-colors disabled:opacity-50"
                             >
-                              Aktifleştir
+                              {t('platform:actions.activate')}
                             </button>
                           )}
                           {clinic.status !== 'suspended' && (
@@ -173,7 +175,7 @@ const PlatformClinics: React.FC = () => {
                               disabled={actionId === clinic.id}
                               className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors disabled:opacity-50"
                             >
-                              Askıya Al
+                              {t('platform:actions.suspend')}
                             </button>
                           )}
                         </div>
@@ -182,7 +184,7 @@ const PlatformClinics: React.FC = () => {
                   ))}
                   {data?.data.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center text-gray-400 py-12">Klinik bulunamadı</td>
+                      <td colSpan={8} className="text-center text-gray-400 py-12">{t('platform:clinics.empty')}</td>
                     </tr>
                   )}
                 </tbody>
@@ -191,7 +193,7 @@ const PlatformClinics: React.FC = () => {
 
             {data && data.pages > 1 && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800 text-sm text-gray-500">
-                <span>{data.total} klinik · Sayfa {data.page}/{data.pages}</span>
+                <span>{t('platform:pagination', { total: data.total, item: t('platform:items.clinic'), page: data.page, pages: data.pages })}</span>
                 <div className="flex gap-2">
                   <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors">
                     <ChevronLeft size={16} />

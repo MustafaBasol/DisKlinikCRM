@@ -7,6 +7,7 @@
     "duration": "Duration",
     "durationMinutes": "Duration (mins)",
     "basePrice": "Base Price",
+    "noBasePrice": "No price entered",
     "currency": "Currency",
     "status": "Status",
     "color": "Color Marker"

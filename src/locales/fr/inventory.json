@@ -1,0 +1,102 @@
+{
+  "title": "Suivi du stock",
+  "subtitle": "Gérez les implants, prothèses et consommables",
+  "optional": "Facultatif",
+  "tabs": {
+    "list": "Liste du stock",
+    "alerts": "Stock faible",
+    "history": "Historique des mouvements"
+  },
+  "actions": {
+    "newItem": "Nouvel article",
+    "addTransaction": "Ajouter un mouvement de stock",
+    "addStockIn": "Ajouter une entrée de stock"
+  },
+  "filters": {
+    "searchPlaceholder": "Rechercher un article ou un fournisseur...",
+    "allCategories": "Toutes les catégories"
+  },
+  "empty": {
+    "noItems": "Aucun enregistrement de stock trouvé.",
+    "addItemHint": "Vous pouvez en ajouter un avec le bouton \"Nouvel article\"."
+  },
+  "categories": {
+    "implant": "Implant",
+    "prosthetic": "Prothèse",
+    "consumable": "Consommable",
+    "medication": "Médicament",
+    "equipment": "Équipement",
+    "other": "Autre"
+  },
+  "units": {
+    "piece": "Pièce",
+    "box": "Boîte",
+    "ml": "ml",
+    "gram": "g",
+    "vial": "Flacon",
+    "set": "Set"
+  },
+  "itemForm": {
+    "createTitle": "Nouvel article",
+    "editTitle": "Modifier l'article",
+    "fields": {
+      "name": "Nom de l'article",
+      "category": "Catégorie",
+      "unit": "Unité",
+      "openingStock": "Stock initial",
+      "minimumStock": "Stock minimum (alerte)",
+      "unitCost": "Coût unitaire (₺)",
+      "supplier": "Fournisseur",
+      "barcode": "Code-barres",
+      "notes": "Notes"
+    },
+    "placeholders": {
+      "name": "ex. Bio-Oss 0.25g"
+    }
+  },
+  "list": {
+    "currentStock": "Stock actuel",
+    "minimumStock": "Stock min."
+  },
+  "alerts": {
+    "emptyTitle": "Aucune alerte de stock faible.",
+    "emptyDescription": "Tous les articles sont au-dessus du niveau minimum.",
+    "countMessage": "{{count}} article(s) sont au niveau minimum ou en dessous.",
+    "countMessage_plural": "{{count}} article(s) sont au niveau minimum ou en dessous."
+  },
+  "history": {
+    "empty": "Aucun mouvement de stock n'a encore été enregistré.",
+    "performedBy": "Effectué par"
+  },
+  "transaction": {
+    "title": "Mouvement de stock - {{item}}",
+    "quantityLabel": "Quantité ({{unit}}) - Actuel : {{current}}",
+    "fields": {
+      "type": "Type de mouvement",
+      "reason": "Raison",
+      "quantity": "Quantité"
+    },
+    "types": {
+      "in": "Entrée",
+      "out": "Sortie",
+      "adjustment": "Ajustement"
+    },
+    "reasons": {
+      "purchase": "Achat",
+      "usage": "Utilisation",
+      "treatment_use": "Utilisé en traitement",
+      "adjustment": "Ajustement du stock",
+      "wastage": "Perte / détérioration",
+      "return": "Retour"
+    },
+    "errors": {
+      "quantityPositive": "La quantité doit être supérieure à 0.",
+      "insufficientStock": "Stock insuffisant. Actuel : {{current}} {{unit}}",
+      "actionFailed": "Une erreur est survenue pendant le mouvement."
+    }
+  },
+  "errors": {
+    "nameRequired": "Le nom de l'article est obligatoire.",
+    "saveFailed": "Une erreur est survenue lors de l'enregistrement."
+  }
+}

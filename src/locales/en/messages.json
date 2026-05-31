@@ -21,11 +21,36 @@
   "actions": {
     "copy": "Copy Body",
     "whatsapp": "Open WhatsApp",
-    "preview": "Preview Message"
+    "preview": "Preview Message",
+    "sendNow": "Send Now",
+    "sendUnavailable": "WhatsApp connection is missing or not connected"
+  },
+  "filters": {
+    "channel": "Channel",
+    "status": "Status"
+  },
+  "copiedToClipboard": "Copied to clipboard!",
+  "whatsappStatus": {
+    "connected": "WhatsApp connected{{phone}}",
+    "metaInactive": "Meta Cloud API connection is not active yet — message sending is disabled",
+    "selectClinic": "Select a branch before sending messages",
+    "notConfigured": "WhatsApp connection is not configured — create a connection first"
+  },
+  "metaCallback": {
+    "missingCode": "Meta response is incomplete: authorization code was not received.",
+    "processing": "Completing Meta connection...",
+    "success": "Your Meta account was connected successfully.",
+    "closing": "This tab will close...",
+    "failed": "Meta connection failed.",
+    "canClose": "You can close this tab/window.",
+    "authorized": "Meta authorization was received.",
+    "returnInstruction": "Return to the WhatsApp Connections page and try again.",
+    "connections": "WhatsApp Connections"
   },
   "prepareModal": {
     "title": "Prepare Message",
     "selectTemplate": "Select Template",
+    "selectTemplatePrompt": "Please select a template to see preview",
     "customMessage": "Custom Message",
     "preview": "Preview",
     "send": "Save as Prepared"

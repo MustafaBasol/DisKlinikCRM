@@ -1,0 +1,66 @@
+{
+  "title": "No-show Takibi",
+  "subtitle": "Randevuya gelmeyen hastaları takip edin ve yeniden randevuya kazandırın.",
+  "ranges": {
+    "today": "Bugün",
+    "this_week": "Bu Hafta",
+    "this_month": "Bu Ay",
+    "last_30_days": "Son 30 Gün"
+  },
+  "filters": {
+    "allStatuses": "Tüm Durumlar"
+  },
+  "recovery": {
+    "unresolved": "Bekliyor",
+    "contacted": "İletişime Geçildi",
+    "recovered": "Geri Kazanıldı"
+  },
+  "summary": {
+    "noShowCount": "No-show Sayısı",
+    "noShowRate": "No-show Oranı",
+    "estimatedLostRevenue": "Tahmini Gelir Kaybı",
+    "byServicePrices": "Hizmet fiyatlarına göre",
+    "contactedCount": "İletişim Kuruldu",
+    "recoveredCount": "Kurtarılan Randevu",
+    "recoveryRate": "Kurtarma Oranı"
+  },
+  "sections": {
+    "byClinic": "Şubeye Göre",
+    "byDoctor": "Doktora Göre",
+    "recentNoShows": "Son No-show Randevular"
+  },
+  "empty": {
+    "noNoShows": "Seçili dönemde no-show randevu bulunmuyor.",
+    "noNoShowsDescription": "Bu dönemde tüm hastalar randevularına katılmış."
+  },
+  "table": {
+    "patient": "Hasta",
+    "branch": "Şube",
+    "doctor": "Doktor",
+    "dateTime": "Tarih/Saat",
+    "service": "Hizmet",
+    "estimatedValue": "Tahmini Değer",
+    "status": "Durum",
+    "lastContact": "Son Temas"
+  },
+  "actions": {
+    "sendWhatsApp": "WhatsApp Gönder",
+    "createTask": "Görev Oluştur",
+    "markContacted": "İletişim Kuruldu",
+    "markRecovered": "Kurtarıldı Olarak İşaretle",
+    "reschedule": "Yeniden Randevu Oluştur",
+    "rescheduleDisabled": "Hasta veya klinik bilgisi eksik."
+  },
+  "success": {
+    "markedContacted": "İletişim kuruldu olarak işaretlendi.",
+    "markedRecovered": "Randevu kurtarıldı olarak işaretlendi.",
+    "whatsappSent": "WhatsApp mesajı gönderildi.",
+    "taskCreated": "Takip görevi oluşturuldu."
+  },
+  "errors": {
+    "loadFailed": "Veri yüklenirken hata oluştu.",
+    "actionFailed": "İşlem başarısız.",
+    "messageFailed": "Mesaj gönderilemedi.",
+    "taskFailed": "Görev oluşturulamadı."
+  }
+}

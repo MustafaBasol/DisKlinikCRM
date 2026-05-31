@@ -3,37 +3,32 @@ import {
   CreditCard, Plus, Loader2, CheckCircle2, Clock, AlertCircle,
   ChevronDown, ChevronRight, XCircle, Search, Calendar,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { paymentPlanService } from '../services/api';
 import PaymentPlanForm from '../components/PaymentPlanForm';
 import { useAuth } from '../context/AuthContext';
 import { canManagePayments } from '../utils/permissions';
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Bekliyor', color: 'text-amber-600 bg-amber-50' },
-  paid: { label: 'Ödendi', color: 'text-green-600 bg-green-50' },
-  overdue: { label: 'Gecikmiş', color: 'text-red-600 bg-red-50' },
+const INSTALLMENT_STATUS_STYLES: Record<string, string> = {
+  pending: 'text-amber-600 bg-amber-50',
+  paid: 'text-green-600 bg-green-50',
+  overdue: 'text-red-600 bg-red-50',
 };
 
-const PLAN_STATUS: Record<string, { label: string; color: string }> = {
-  active: { label: 'Aktif', color: 'bg-blue-50 text-blue-700' },
-  completed: { label: 'Tamamlandı', color: 'bg-green-50 text-green-700' },
-  cancelled: { label: 'İptal', color: 'bg-gray-100 text-gray-500' },
+const PLAN_STATUS_STYLES: Record<string, string> = {
+  active: 'bg-blue-50 text-blue-700',
+  completed: 'bg-green-50 text-green-700',
+  cancelled: 'bg-gray-100 text-gray-500',
 };
 
-const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Nakit' },
-  { value: 'card', label: 'Kart' },
-  { value: 'bank_transfer', label: 'Havale/EFT' },
-  { value: 'cheque', label: 'Çek' },
-  { value: 'other', label: 'Diğer' },
-];
+const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'cheque', 'other'] as const;
 
-function formatCurrency(amount: number, currency = 'TRY') {
-  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount);
+function formatCurrency(amount: number, locale: string, currency = 'TRY') {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
 }
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+function formatDate(d: string, locale: string) {
+  return new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function isOverdue(dueDate: string, status: string) {
@@ -41,8 +36,15 @@ function isOverdue(dueDate: string, status: string) {
 }
 
 const PaymentPlans: React.FC = () => {
+  const { t, i18n } = useTranslation(['payments', 'common']);
   const { user } = useAuth();
   const isAdmin = canManagePayments(user);
+  const locale = i18n.language || 'tr';
+  const money = (amount: number, currency = 'TRY') => formatCurrency(amount, locale, currency);
+  const date = (value: string) => formatDate(value, locale);
+  const installmentStatusLabel = (status: string) => t(`payments:plansPage.installmentStatus.${status}`, { defaultValue: status });
+  const planStatusLabel = (status: string) => t(`payments:plansPage.planStatus.${status}`, { defaultValue: status });
+  const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,17 +82,17 @@ const PaymentPlans: React.FC = () => {
       setPayingInstallment(null);
       fetchPlans();
     } catch (err: any) {
-      alert(err?.response?.data?.error || 'Ödeme kaydedilemedi.');
+      alert(err?.response?.data?.error || t('payments:plansPage.errors.paymentSaveFailed'));
     }
   };
 
   const handleCancelPlan = async (planId: string) => {
-    if (!window.confirm('Bu taksit planını iptal etmek istediğinizden emin misiniz?')) return;
+    if (!window.confirm(t('payments:plansPage.confirmCancelPlan'))) return;
     try {
       await paymentPlanService.cancel(planId);
       fetchPlans();
     } catch {
-      alert('Plan iptal edilemedi.');
+      alert(t('payments:plansPage.errors.cancelFailed'));
     }
   };
 
@@ -111,21 +113,21 @@ const PaymentPlans: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Taksit Planları</h1>
-          <p className="text-gray-500 mt-1">Ödeme planları ve taksit takibi</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('payments:plansPage.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('payments:plansPage.subtitle')}</p>
         </div>
         <button onClick={() => setIsFormOpen(true)} className="btn-primary flex items-center gap-2 shrink-0">
-          <Plus size={20} /> Yeni Taksit Planı
+          <Plus size={20} /> {t('payments:plansPage.newPlan')}
         </button>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Toplam Plan', value: plans.length, color: 'text-blue-600', icon: CreditCard },
-          { label: 'Aktif', value: plans.filter(p => p.status === 'active').length, color: 'text-green-600', icon: Clock },
-          { label: 'Gecikmiş Taksit', value: plans.reduce((s, p) => s + overdueCount(p), 0), color: 'text-red-600', icon: AlertCircle },
-          { label: 'Tamamlanan', value: plans.filter(p => p.status === 'completed').length, color: 'text-purple-600', icon: CheckCircle2 },
+          { label: t('payments:plansPage.summary.totalPlans'), value: plans.length, color: 'text-blue-600', icon: CreditCard },
+          { label: t('payments:plansPage.planStatus.active'), value: plans.filter(p => p.status === 'active').length, color: 'text-green-600', icon: Clock },
+          { label: t('payments:plansPage.summary.overdueInstallments'), value: plans.reduce((s, p) => s + overdueCount(p), 0), color: 'text-red-600', icon: AlertCircle },
+          { label: t('payments:plansPage.planStatus.completed'), value: plans.filter(p => p.status === 'completed').length, color: 'text-purple-600', icon: CheckCircle2 },
         ].map(card => (
           <div key={card.label} className="card p-5">
             <div className="flex items-center justify-between mb-2">
@@ -141,14 +143,14 @@ const PaymentPlans: React.FC = () => {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" className="input-field pl-10" placeholder="Hasta adı, tedavi veya açıklama ara..."
+          <input type="text" className="input-field pl-10" placeholder={t('payments:plansPage.searchPlaceholder')}
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <select className="input-field w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">Tüm Durumlar</option>
-          <option value="active">Aktif</option>
-          <option value="completed">Tamamlandı</option>
-          <option value="cancelled">İptal</option>
+          <option value="">{t('payments:plansPage.filters.allStatuses')}</option>
+          <option value="active">{t('payments:plansPage.planStatus.active')}</option>
+          <option value="completed">{t('payments:plansPage.planStatus.completed')}</option>
+          <option value="cancelled">{t('payments:plansPage.planStatus.cancelled')}</option>
         </select>
       </div>
 
@@ -160,8 +162,8 @@ const PaymentPlans: React.FC = () => {
       ) : filteredPlans.length === 0 ? (
         <div className="card p-12 text-center text-gray-400">
           <CreditCard size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="font-medium">Taksit planı bulunamadı.</p>
-          <button onClick={() => setIsFormOpen(true)} className="btn-primary mt-4">İlk Planı Oluştur</button>
+          <p className="font-medium">{t('payments:plansPage.empty')}</p>
+          <button onClick={() => setIsFormOpen(true)} className="btn-primary mt-4">{t('payments:plansPage.createFirst')}</button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -172,7 +174,7 @@ const PaymentPlans: React.FC = () => {
             const remaining = plan.totalAmount - paidAmt;
             const progress = plan.installmentCount > 0 ? (paid / plan.installmentCount) * 100 : 0;
             const isExpanded = expandedPlan === plan.id;
-            const planStatusInfo = PLAN_STATUS[plan.status] || PLAN_STATUS.active;
+            const planStatusClass = PLAN_STATUS_STYLES[plan.status] || PLAN_STATUS_STYLES.active;
 
             return (
               <div key={plan.id} className="card overflow-hidden">
@@ -189,8 +191,8 @@ const PaymentPlans: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold text-gray-900 truncate">{plan.patient?.firstName} {plan.patient?.lastName}</h3>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${planStatusInfo.color}`}>{planStatusInfo.label}</span>
-                          {overdue > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-medium">{overdue} gecikmiş</span>}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${planStatusClass}`}>{planStatusLabel(plan.status)}</span>
+                          {overdue > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-medium">{t('payments:plansPage.overdueCount', { count: overdue })}</span>}
                         </div>
                         {plan.treatmentCase?.title && <p className="text-sm text-gray-500 truncate">{plan.treatmentCase.title}</p>}
                         {plan.description && <p className="text-xs text-gray-400 truncate">{plan.description}</p>}
@@ -198,10 +200,10 @@ const PaymentPlans: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
                       <div className="text-right">
-                        <p className="text-sm text-gray-500">{paid}/{plan.installmentCount} taksit</p>
-                        <p className="font-bold text-gray-900">{formatCurrency(plan.totalAmount, plan.currency)}</p>
+                        <p className="text-sm text-gray-500">{t('payments:plansPage.installmentProgress', { paid, total: plan.installmentCount })}</p>
+                        <p className="font-bold text-gray-900">{money(plan.totalAmount, plan.currency)}</p>
                         {remaining > 0 && plan.status === 'active' && (
-                          <p className="text-xs text-amber-600">Kalan: {formatCurrency(remaining, plan.currency)}</p>
+                          <p className="text-xs text-amber-600">{t('payments:plansPage.remaining', { amount: money(remaining, plan.currency) })}</p>
                         )}
                       </div>
                       {isExpanded ? <ChevronDown size={20} className="text-gray-400" /> : <ChevronRight size={20} className="text-gray-400" />}
@@ -212,7 +214,7 @@ const PaymentPlans: React.FC = () => {
                   {plan.installmentCount > 0 && (
                     <div className="mt-3">
                       <div className="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>{formatCurrency(paidAmt, plan.currency)} ödendi</span>
+                        <span>{t('payments:plansPage.paidAmount', { amount: money(paidAmt, plan.currency) })}</span>
                         <span>%{Math.round(progress)}</span>
                       </div>
                       <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
@@ -230,17 +232,17 @@ const PaymentPlans: React.FC = () => {
                         <thead className="bg-gray-50 dark:bg-gray-800">
                           <tr>
                             <th className="px-4 py-3 text-left font-medium text-gray-500 w-10">#</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">Vade</th>
-                            <th className="px-4 py-3 text-right font-medium text-gray-500">Tutar</th>
-                            <th className="px-4 py-3 text-center font-medium text-gray-500">Durum</th>
-                            <th className="px-4 py-3 text-right font-medium text-gray-500">İşlem</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:plansPage.dueDate')}</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-500">{t('payments:plansPage.amount')}</th>
+                            <th className="px-4 py-3 text-center font-medium text-gray-500">{t('payments:plansPage.status')}</th>
+                            <th className="px-4 py-3 text-right font-medium text-gray-500">{t('common:actions')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                           {(plan.installments || []).map((inst: any) => {
                             const overdue = isOverdue(inst.dueDate, inst.status);
                             const statusKey = overdue ? 'overdue' : inst.status;
-                            const statusInfo = STATUS_LABELS[statusKey] || STATUS_LABELS.pending;
+                            const statusClass = INSTALLMENT_STATUS_STYLES[statusKey] || INSTALLMENT_STATUS_STYLES.pending;
                             const isPaying = payingInstallment?.planId === plan.id && payingInstallment?.installmentId === inst.id;
 
                             return (
@@ -249,16 +251,16 @@ const PaymentPlans: React.FC = () => {
                                 <td className="px-4 py-3 text-gray-700">
                                   <div className="flex items-center gap-1">
                                     <Calendar size={14} className="text-gray-400" />
-                                    {formatDate(inst.dueDate)}
+                                    {date(inst.dueDate)}
                                   </div>
-                                  {inst.paidAt && <p className="text-xs text-green-600 mt-0.5">Ödendi: {formatDate(inst.paidAt)}</p>}
+                                  {inst.paidAt && <p className="text-xs text-green-600 mt-0.5">{t('payments:plansPage.paidAt', { date: date(inst.paidAt) })}</p>}
                                 </td>
                                 <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                                  {formatCurrency(inst.amount, plan.currency)}
+                                  {money(inst.amount, plan.currency)}
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusInfo.color}`}>
-                                    {overdue ? 'Gecikmiş' : statusInfo.label}
+                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusClass}`}>
+                                    {installmentStatusLabel(statusKey)}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
@@ -267,11 +269,11 @@ const PaymentPlans: React.FC = () => {
                                       {isPaying ? (
                                         <div className="flex items-center gap-2 justify-end">
                                           <select className="input-field py-1 text-xs w-32" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
-                                            {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                            {PAYMENT_METHODS.map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
                                           </select>
                                           <button onClick={() => handlePayInstallment(plan.id, inst.id)}
                                             className="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">
-                                            Onayla
+                                            {t('payments:plansPage.confirmPayment')}
                                           </button>
                                           <button onClick={() => setPayingInstallment(null)} className="text-xs text-gray-400 hover:text-gray-600">
                                             <XCircle size={16} />
@@ -282,7 +284,7 @@ const PaymentPlans: React.FC = () => {
                                           onClick={() => setPayingInstallment({ planId: plan.id, installmentId: inst.id })}
                                           className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors"
                                         >
-                                          Ödendi
+                                          {t('payments:plansPage.markPaid')}
                                         </button>
                                       )}
                                     </>
@@ -303,7 +305,7 @@ const PaymentPlans: React.FC = () => {
                       <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex justify-end">
                         <button onClick={() => handleCancelPlan(plan.id)}
                           className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
-                          <XCircle size={14} /> Planı İptal Et
+                          <XCircle size={14} /> {t('payments:plansPage.cancelPlan')}
                         </button>
                       </div>
                     )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { Building2, Mail, Lock, User, CheckCircle2, XCircle, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -16,6 +17,7 @@ interface FormData {
 }
 
 const Register: React.FC = () => {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [form, setForm] = useState<FormData>({
     clinicName: '',
@@ -77,11 +79,11 @@ const Register: React.FC = () => {
     setError('');
 
     if (form.adminPassword !== form.confirmPassword) {
-      setError('Şifreler eşleşmiyor.');
+      setError(t('register.errors.passwordMismatch'));
       return;
     }
     if (slugStatus === 'taken') {
-      setError('Bu URL zaten kullanımda, lütfen farklı bir tane seçin.');
+      setError(t('register.errors.slugTaken'));
       return;
     }
 
@@ -100,7 +102,7 @@ const Register: React.FC = () => {
       setSuccess(true);
       setTimeout(() => navigate('/login'), 4000);
     } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Kayıt başarısız, lütfen tekrar deneyin.');
+      setError(err.response?.data?.error ?? t('register.errors.registerFailed'));
     } finally {
       setLoading(false);
     }
@@ -111,8 +113,8 @@ const Register: React.FC = () => {
       <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center bg-white rounded-3xl shadow-xl p-10">
           <CheckCircle2 size={56} className="text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Klinik Kaydedildi!</h2>
-          <p className="text-gray-500">14 günlük deneme süreniz başladı. Giriş sayfasına yönlendiriliyorsunuz...</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('register.successTitle')}</h2>
+          <p className="text-gray-500">{t('register.successSubtitle')}</p>
         </div>
       </div>
     );
@@ -125,8 +127,8 @@ const Register: React.FC = () => {
           <div className="w-14 h-14 bg-primary-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold mx-auto shadow-lg mb-4">
             D
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Kliniğinizi Kaydedin</h1>
-          <p className="text-gray-500 mt-1">14 gün ücretsiz deneyin, kredi kartı gerekmez.</p>
+          <h1 className="text-3xl font-bold text-gray-900">{t('register.title')}</h1>
+          <p className="text-gray-500 mt-1">{t('register.subtitle')}</p>
         </div>
 
         <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
@@ -141,7 +143,7 @@ const Register: React.FC = () => {
             {/* Klinik Bilgileri */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Klinik Bilgileri
+                {t('register.clinicInfo')}
               </label>
               <div className="space-y-3">
                 <div className="relative">
@@ -150,7 +152,7 @@ const Register: React.FC = () => {
                     name="clinicName"
                     type="text"
                     required
-                    placeholder="Klinik adı"
+                    placeholder={t('register.clinicNamePlaceholder')}
                     value={form.clinicName}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -163,7 +165,7 @@ const Register: React.FC = () => {
                     name="slug"
                     type="text"
                     required
-                    placeholder="klinik-url-adiniz"
+                    placeholder={t('register.slugPlaceholder')}
                     value={form.slug}
                     onChange={handleSlugChange}
                     className="w-full pl-20 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -175,10 +177,10 @@ const Register: React.FC = () => {
                   </span>
                 </div>
                 {slugStatus === 'taken' && (
-                  <p className="text-xs text-red-500">Bu URL alınmış, lütfen farklı bir tane seçin.</p>
+                  <p className="text-xs text-red-500">{t('register.slugTaken')}</p>
                 )}
                 {slugStatus === 'available' && (
-                  <p className="text-xs text-green-600">Bu URL müsait!</p>
+                  <p className="text-xs text-green-600">{t('register.slugAvailable')}</p>
                 )}
               </div>
             </div>
@@ -186,7 +188,7 @@ const Register: React.FC = () => {
             {/* Admin Hesabı */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Yönetici Hesabı
+                {t('register.adminAccount')}
               </label>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -196,7 +198,7 @@ const Register: React.FC = () => {
                       name="adminFirstName"
                       type="text"
                       required
-                      placeholder="Ad"
+                      placeholder={t('register.firstName')}
                       value={form.adminFirstName}
                       onChange={handleChange}
                       className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -206,7 +208,7 @@ const Register: React.FC = () => {
                     name="adminLastName"
                     type="text"
                     required
-                    placeholder="Soyad"
+                    placeholder={t('register.lastName')}
                     value={form.adminLastName}
                     onChange={handleChange}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -219,7 +221,7 @@ const Register: React.FC = () => {
                     name="adminEmail"
                     type="email"
                     required
-                    placeholder="E-posta"
+                    placeholder={t('register.email')}
                     value={form.adminEmail}
                     onChange={handleChange}
                     className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -232,7 +234,7 @@ const Register: React.FC = () => {
                     name="adminPassword"
                     type="password"
                     required
-                    placeholder="Şifre (en az 8 karakter)"
+                    placeholder={t('register.passwordPlaceholder')}
                     value={form.adminPassword}
                     onChange={handleChange}
                     className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -245,7 +247,7 @@ const Register: React.FC = () => {
                     name="confirmPassword"
                     type="password"
                     required
-                    placeholder="Şifreyi tekrar girin"
+                    placeholder={t('register.confirmPasswordPlaceholder')}
                     value={form.confirmPassword}
                     onChange={handleChange}
                     className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -260,14 +262,14 @@ const Register: React.FC = () => {
               className="w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               {loading && <Loader2 size={18} className="animate-spin" />}
-              {loading ? 'Kaydediliyor...' : 'Kliniği Kaydet & Ücretsiz Başla'}
+              {loading ? t('register.saving') : t('register.submit')}
             </button>
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-5">
-            Zaten hesabınız var mı?{' '}
+            {t('register.alreadyHaveAccount')}{' '}
             <Link to="/login" className="text-primary-600 font-semibold hover:underline">
-              Giriş yapın
+              {t('register.loginLink')}
             </Link>
           </p>
         </div>

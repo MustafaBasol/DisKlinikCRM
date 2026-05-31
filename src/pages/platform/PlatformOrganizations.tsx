@@ -4,6 +4,7 @@ import {
   CheckCircle2, XCircle, Clock, Ban, RefreshCw, Package,
   CalendarClock,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
 
 interface Org {
@@ -25,13 +26,7 @@ interface PagedResponse {
   pages: number;
 }
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'Tüm Durumlar' },
-  { value: 'trial', label: 'Deneme' },
-  { value: 'active', label: 'Aktif' },
-  { value: 'suspended', label: 'Askıya Alındı' },
-  { value: 'cancelled', label: 'İptal' },
-];
+const STATUS_OPTIONS = ['', 'trial', 'active', 'suspended', 'cancelled'];
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
@@ -49,6 +44,7 @@ const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
 };
 
 const PlatformOrganizations: React.FC = () => {
+  const { t, i18n } = useTranslation(['platform']);
   const api = usePlatformApi();
   const [data, setData] = useState<PagedResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +70,7 @@ const PlatformOrganizations: React.FC = () => {
         params: { page, limit: 25, search: search || undefined, status: statusFilter || undefined },
       })
       .then((res) => setData(res.data))
-      .catch(() => setError('Organizasyonlar yüklenemedi'))
+      .catch(() => setError(t('platform:errors.organizationsLoadFailed')))
       .finally(() => setLoading(false));
   }, [api, page, search, statusFilter]);
 
@@ -93,7 +89,7 @@ const PlatformOrganizations: React.FC = () => {
       await api.patch(`/platform/organizations/${id}/status`, { status });
       fetchData();
     } catch {
-      alert('Durum güncellenemedi');
+      alert(t('platform:errors.statusUpdateFailed'));
     } finally {
       setActionOrgId(null);
     }
@@ -107,7 +103,7 @@ const PlatformOrganizations: React.FC = () => {
       setPlanModal(null);
       fetchData();
     } catch {
-      alert('Plan güncellenemedi');
+      alert(t('platform:errors.planUpdateFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -121,7 +117,7 @@ const PlatformOrganizations: React.FC = () => {
       setTrialModal(null);
       fetchData();
     } catch {
-      alert('Deneme süresi güncellenemedi');
+      alert(t('platform:errors.trialUpdateFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -130,13 +126,13 @@ const PlatformOrganizations: React.FC = () => {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Organizasyonlar</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('platform:organizations.title')}</h1>
         <button
           onClick={fetchData}
           className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
         >
           <RefreshCw size={14} />
-          Yenile
+          {t('platform:actions.refresh')}
         </button>
       </div>
 
@@ -146,7 +142,7 @@ const PlatformOrganizations: React.FC = () => {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Ad veya slug ara..."
+            placeholder={t('platform:organizations.searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
@@ -157,8 +153,10 @@ const PlatformOrganizations: React.FC = () => {
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          {STATUS_OPTIONS.map((value) => (
+            <option key={value || 'all'} value={value}>
+              {value ? t(`platform:statuses.${value}`) : t('platform:filters.allStatuses')}
+            </option>
           ))}
         </select>
       </div>
@@ -180,15 +178,15 @@ const PlatformOrganizations: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
                   <tr>
-                    <th className="px-5 py-3 text-left">Organizasyon</th>
-                    <th className="px-4 py-3 text-left">Plan</th>
-                    <th className="px-4 py-3 text-center">Durum</th>
-                    <th className="px-4 py-3 text-center">Klinik</th>
-                    <th className="px-4 py-3 text-center">Kullanıcı</th>
-                    <th className="px-4 py-3 text-center">Hasta</th>
-                    <th className="px-4 py-3 text-left">Deneme Bitiş</th>
-                    <th className="px-4 py-3 text-left">Oluşturulma</th>
-                    <th className="px-5 py-3 text-right">İşlemler</th>
+                    <th className="px-5 py-3 text-left">{t('platform:organizations.columns.organization')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:organizations.columns.plan')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:organizations.columns.status')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:organizations.columns.clinics')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:organizations.columns.users')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:organizations.columns.patients')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:organizations.columns.trialEnds')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:organizations.columns.created')}</th>
+                    <th className="px-5 py-3 text-right">{t('platform:organizations.columns.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -204,17 +202,17 @@ const PlatformOrganizations: React.FC = () => {
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[org.status] ?? 'bg-gray-100 text-gray-600'}`}>
                           <StatusIcon status={org.status} />
-                          {org.status}
+                          {t(`platform:statuses.${org.status}`, { defaultValue: org.status })}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{org._count.clinics}</td>
                       <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{org._count.users}</td>
                       <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{org._count.patients}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">
-                        {org.trialEndsAt ? new Date(org.trialEndsAt).toLocaleDateString('tr-TR') : '—'}
+                        {org.trialEndsAt ? new Date(org.trialEndsAt).toLocaleDateString(i18n.language || 'tr') : '—'}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">
-                        {new Date(org.createdAt).toLocaleDateString('tr-TR')}
+                        {new Date(org.createdAt).toLocaleDateString(i18n.language || 'tr')}
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-1 flex-wrap">
@@ -224,7 +222,7 @@ const PlatformOrganizations: React.FC = () => {
                               disabled={actionOrgId === org.id}
                               className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-400 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50"
                             >
-                              Aktifleştir
+                              {t('platform:actions.activate')}
                             </button>
                           )}
                           {org.status !== 'suspended' && (
@@ -233,7 +231,7 @@ const PlatformOrganizations: React.FC = () => {
                               disabled={actionOrgId === org.id}
                               className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-400 transition-colors disabled:opacity-50"
                             >
-                              Askıya Al
+                              {t('platform:actions.suspend')}
                             </button>
                           )}
                           <button
@@ -241,14 +239,14 @@ const PlatformOrganizations: React.FC = () => {
                             className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-400 transition-colors"
                           >
                             <Package size={12} className="inline mr-1" />
-                            Plan
+                            {t('platform:organizations.planAction')}
                           </button>
                           <button
                             onClick={() => { setTrialModal(org); setTrialDate(''); }}
                             className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-400 transition-colors"
                           >
                             <CalendarClock size={12} className="inline mr-1" />
-                            Deneme
+                            {t('platform:organizations.trialAction')}
                           </button>
                         </div>
                       </td>
@@ -257,7 +255,7 @@ const PlatformOrganizations: React.FC = () => {
                   {data?.data.length === 0 && (
                     <tr>
                       <td colSpan={9} className="text-center text-gray-400 py-12">
-                        Organizasyon bulunamadı
+                        {t('platform:organizations.empty')}
                       </td>
                     </tr>
                   )}
@@ -268,7 +266,7 @@ const PlatformOrganizations: React.FC = () => {
             {/* Pagination */}
             {data && data.pages > 1 && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800 text-sm text-gray-500">
-                <span>{data.total} organizasyon · Sayfa {data.page}/{data.pages}</span>
+                <span>{t('platform:pagination', { total: data.total, item: t('platform:items.organization'), page: data.page, pages: data.pages })}</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -295,22 +293,22 @@ const PlatformOrganizations: React.FC = () => {
       {planModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-96 space-y-4">
-            <h3 className="font-bold text-gray-900 dark:text-white">Plan Değiştir — {planModal.name}</h3>
+            <h3 className="font-bold text-gray-900 dark:text-white">{t('platform:organizations.changePlanTitle', { name: planModal.name })}</h3>
             <select
               value={selectedPlanId}
               onChange={(e) => setSelectedPlanId(e.target.value)}
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Plan seçin...</option>
+              <option value="">{t('platform:organizations.selectPlan')}</option>
               {plans.map((p) => (
                 <option key={p.id} value={p.id}>{p.displayName}</option>
               ))}
             </select>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setPlanModal(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">İptal</button>
+              <button onClick={() => setPlanModal(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('platform:actions.cancel')}</button>
               <button onClick={updatePlan} disabled={!selectedPlanId || actionLoading} className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 flex items-center gap-1">
                 {actionLoading && <Loader2 size={13} className="animate-spin" />}
-                Kaydet
+                {t('platform:actions.save')}
               </button>
             </div>
           </div>
@@ -321,7 +319,7 @@ const PlatformOrganizations: React.FC = () => {
       {trialModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-96 space-y-4">
-            <h3 className="font-bold text-gray-900 dark:text-white">Deneme Uzat — {trialModal.name}</h3>
+            <h3 className="font-bold text-gray-900 dark:text-white">{t('platform:organizations.extendTrialTitle', { name: trialModal.name })}</h3>
             <input
               type="date"
               value={trialDate}
@@ -329,10 +327,10 @@ const PlatformOrganizations: React.FC = () => {
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setTrialModal(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">İptal</button>
+              <button onClick={() => setTrialModal(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">{t('platform:actions.cancel')}</button>
               <button onClick={extendTrial} disabled={!trialDate || actionLoading} className="px-4 py-2 text-sm rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 flex items-center gap-1">
                 {actionLoading && <Loader2 size={13} className="animate-spin" />}
-                Kaydet
+                {t('platform:actions.save')}
               </button>
             </div>
           </div>

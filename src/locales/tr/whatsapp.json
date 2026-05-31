@@ -1,0 +1,170 @@
+{
+  "inbox": {
+    "title": "WhatsApp Gelen Kutusu",
+    "tabs": {
+      "unassigned": "Atanmamış",
+      "all": "Tüm Konuşmalar"
+    },
+    "filters": {
+      "allStatuses": "Tüm Durumlar",
+      "clinicIdPlaceholder": "Klinik ID filtrele..."
+    },
+    "status": {
+      "unassigned": "Atanmamış",
+      "assigned": "Atanmış",
+      "resolved": "Çözüldü",
+      "open": "Açık"
+    },
+    "empty": {
+      "unassigned": "Atanmamış konuşma yok.",
+      "conversations": "Konuşma bulunamadı."
+    },
+    "errors": {
+      "loadUnassigned": "Atanmamış konuşmalar yüklenemedi.",
+      "loadConversations": "Konuşmalar yüklenemedi.",
+      "resolveFailed": "Çözümleme başarısız oldu.",
+      "linkPatientFailed": "Hasta bağlama başarısız oldu."
+    },
+    "messageCount": "{{count}} mesaj",
+    "possiblePatients": "Olası hastalar",
+    "actions": {
+      "assignClinic": "Kliniğe Ata"
+    },
+    "resolveModal": {
+      "title": "Kliniğe Ata",
+      "description": "{{phone}} numaralı konuşmayı bir kliniğe atayın.",
+      "clinicId": "Klinik ID",
+      "clinicIdPlaceholder": "Klinik ID girin...",
+      "patientOptional": "Hasta (opsiyonel)",
+      "matchingPatients": "Eşleşen hastalar",
+      "patientSelected": "Hasta seçildi (ID: {{id}})",
+      "searchPatient": "Hasta ara..."
+    }
+  },
+  "connections": {
+    "title": "WhatsApp Bağlantıları",
+    "subtitle": "Organizasyon genelinde WhatsApp bağlantılarını yönetin",
+    "providerInfo": "{{evolution}} ve {{meta}} desteklenmektedir. Evolution API manuel yapılandırılabilir; Meta için Embedded Signup veya manuel token girişi kullanılabilir.",
+    "empty": "Henüz WhatsApp bağlantısı eklenmemiş.",
+    "configuredSecret": "Yapılandırılmış (gizli)",
+    "assignedBranches": "Şubeler: {{branches}}",
+    "noBranchesAssigned": "Henüz hiçbir şubeye atanmadı",
+    "metaNoQr": "Meta Cloud API QR kullanmaz; hesap doğrulama \"Meta ile Bağlan\" üzerinden yapılır.",
+    "inactiveWarning": "Bağlantı devre dışı; bu hattan mesaj gönderilemez.",
+    "createdAt": "Oluşturuldu",
+    "status": {
+      "inactive": "Devre Dışı"
+    },
+    "actions": {
+      "newConnection": "Yeni Bağlantı Ekle",
+      "connectMeta": "Meta ile Bağlan",
+      "connectMetaAutomatic": "Meta Embedded Signup ile Bağlan (Otomatik)",
+      "importToPanel": "Panel Yönetimine Aktar",
+      "test": "Bağlantıyı Test Et",
+      "getQr": "QR Kodu Al / Bağlan",
+      "disconnect": "Bağlantıyı Kes (WhatsApp oturumunu sonlandır)",
+      "deactivate": "Devre Dışı Bırak",
+      "activate": "Aktifleştir"
+    },
+    "metaPanel": {
+      "title": "Meta (WhatsApp Business) Bağlantısı",
+      "ready": "Meta Embedded Signup yapılandırıldı. Hesabınızı bağlamak için butona tıklayın.",
+      "notConfiguredPrefix": "Meta Embedded Signup bu sunucuda yapılandırılmamış.",
+      "notConfiguredSuffix": "ortam değişkenlerini ayarlayın.",
+      "manualHint": " Manuel yapılandırma için \"Yeni Bağlantı\" > \"Meta Cloud API\" seçin.",
+      "connectTitle": "Meta Embedded Signup ile bağlan",
+      "notConfiguredTitle": "Meta Embedded Signup yapılandırılmamış"
+    },
+    "legacy": {
+      "title": "Ortam Değişkenlerinde Mevcut Evolution API Bağlantısı Bulundu",
+      "description": "Bu bağlantı şu anda sunucu ortam değişkenlerinden çalışıyor. Panelden düzenlemek, test etmek ve şubelere atamak için panele aktarın.",
+      "note": "Not: Ortam değişkenlerinden gelen bağlantı panelden doğrudan silinemez. Tamamen kaldırmak için sunucu ortam değişkenlerini temizleyin.",
+      "afterImport": "Aktardıktan sonra: Düzenle, Test Et, Şube Ata ve Devre Dışı Bırak işlemleri kullanılabilir olur."
+    },
+    "token": {
+      "expired": "Meta access token süresi doldu; bağlantıyı yenileyin.",
+      "expiring": "Meta access token yakında dolacak; token yenilemeyi planlayın.",
+      "unknown": "Token geçerlilik tarihi bilinmiyor; token bilgisi girilmemiş.",
+      "validity": "Token geçerlilik",
+      "expiredShort": "Süresi doldu",
+      "expiringShort": "Yakında dolacak",
+      "unknownShort": "Bilinmiyor; token bilgisi girilmemiş"
+    },
+    "qr": {
+      "metaNotUsed": "Meta Cloud API QR kodu kullanmaz. Hesabı \"Meta ile Bağlan\" butonu veya manuel yapılandırma ile bağlayın.",
+      "connectWithQr": "WhatsApp'ı QR kod ile bağlayın:",
+      "empty": "QR kodu mevcut değil; bağlantı zaten aktif olabilir.",
+      "alt": "QR kod"
+    },
+    "deleteModal": {
+      "title": "Bağlantıyı Sil",
+      "confirm": "\"{{name}}\" bağlantısı silinecek. Emin misiniz?",
+      "branchWarning": "Bu bağlantı silinirse bağlı şubeler WhatsApp gönderimi yapamaz.",
+      "historyWarning": "Mesaj geçmişi varsa silme işlemi engellenir; bunun yerine \"Devre Dışı Bırak\" kullanın."
+    },
+    "modal": {
+      "createTitle": "Yeni WhatsApp Bağlantısı",
+      "editTitle": "Bağlantıyı Düzenle",
+      "name": "Bağlantı Adı",
+      "namePlaceholder": "örn: Ana Şube WhatsApp",
+      "provider": "Sağlayıcı",
+      "metaManualAllowed": "Sunucuda Meta Embedded Signup yapılandırılmamış. Manuel token girişi ile yine de bağlantı oluşturabilirsiniz.",
+      "phoneNumber": "Telefon Numarası",
+      "displayName": "Görünen Ad",
+      "displayNamePlaceholder": "Klinik WhatsApp",
+      "evolutionSettings": "Evolution API Ayarları",
+      "apiUrl": "API URL",
+      "instanceName": "Instance Adı",
+      "apiKey": "API Key",
+      "leaveBlankUnchanged": "boş bırakılırsa değişmez",
+      "configuredPlaceholder": "•••••••• (Yapılandırılmış)",
+      "configuredIfPlaceholder": "•••••••• (Yapılandırılmış ise)",
+      "evolutionApiKeyPlaceholder": "Evolution API anahtarı",
+      "apiKeyEncryptedHint": "API key sunucu tarafında AES-256-GCM ile şifreli saklanır. Yeni değer girilirse eski key kalıcı olarak değişir.",
+      "webhookSecret": "Webhook Secret",
+      "optional": "opsiyonel",
+      "webhookSecretPlaceholder": "Webhook doğrulama gizli anahtarı",
+      "metaManualSettings": "Meta Cloud API - Manuel Yapılandırma",
+      "metaManualHint": "Ya da aşağıya Meta Business Manager > WhatsApp > API Setup bilgilerini manuel girin.",
+      "metaBusinessId": "Business ID",
+      "metaWabaId": "WhatsApp Business Account ID (WABA ID)",
+      "metaPhoneNumberId": "Phone Number ID",
+      "metaAppId": "App ID",
+      "metaWebhookVerifyToken": "Webhook Verify Token",
+      "optionalSignature": "opsiyonel - X-Hub-Signature-256 doğrulama",
+      "metaWebhookSecretPlaceholder": "Meta webhook secret",
+      "accessToken": "Access Token",
+      "accessTokenPlaceholder": "Meta Access Token",
+      "accessTokenEncryptedHint": "Access token sunucu tarafında AES-256-GCM ile şifreli saklanır. Yeni değer girilirse eski token kalıcı olarak değişir.",
+      "branchAssignment": "Şube Ataması",
+      "branchAssignmentHint": "Bu bağlantının hangi şubelerde kullanılacağını seçin. Birden fazla şube seçilebilir (paylaşımlı hat).",
+      "noBranchSelected": "Hiçbir şube seçilmedi. Bu bağlantı kaydedilir ama mesaj gönderiminde kullanılmaz."
+    },
+    "confirm": {
+      "disconnect": "\"{{name}}\" bağlantısını kesmek istediğinizden emin misiniz?",
+      "importLegacy": "Mevcut ortam değişkenlerindeki Evolution API ayarları veritabanına aktarılacak. Devam edilsin mi?"
+    },
+    "success": {
+      "disconnected": "\"{{name}}\" bağlantısı kesildi.",
+      "alreadyImported": "Bu bağlantı daha önce zaten aktarılmıştı.",
+      "imported": "Evolution API bağlantısı başarıyla veritabanına aktarıldı.",
+      "activated": "\"{{name}}\" aktifleştirildi.",
+      "deactivated": "\"{{name}}\" devre dışı bırakıldı.",
+      "deleted": "\"{{name}}\" bağlantısı silindi."
+    },
+    "errors": {
+      "loadFailed": "WhatsApp bağlantıları yüklenemedi.",
+      "nameRequired": "Bağlantı adı zorunludur.",
+      "saveFailed": "Kayıt başarısız.",
+      "testFailed": "Test isteği başarısız.",
+      "disconnectFailed": "Bağlantı kesilemedi.",
+      "importFailed": "Aktarım başarısız.",
+      "statusUpdateFailed": "Durum güncellenemedi.",
+      "deleteHasHistory": "\"{{name}}\" silinemedi: mesaj geçmişi mevcut. Silmek yerine \"Devre Dışı Bırak\" butonunu kullanın.",
+      "deleteFailed": "Bağlantı silinemedi.",
+      "metaRejected": "Meta bağlantısı reddedildi: {{error}}",
+      "metaMissingCode": "Meta yetkilendirmesi tamamlanamadı: kod alınamadı.",
+      "metaCreateFailed": "Meta bağlantısı oluşturulamadı."
+    }
+  }
+}

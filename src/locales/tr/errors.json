@@ -1,0 +1,9 @@
+{
+  "unexpected": "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
+  "accessDenied": "Erişim reddedildi. Bu işlem için yetkiniz yok.",
+  "notFound": "Kayıt bulunamadı.",
+  "PATIENT_NOT_FOUND": "Hasta bulunamadı.",
+  "ACCESS_DENIED": "Erişim reddedildi.",
+  "VALIDATION_ERROR": "Doğrulama hatası.",
+  "APPOINTMENT_OVERLAP": "Randevu başka bir kayıtla çakışıyor."
+}

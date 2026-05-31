@@ -1,0 +1,49 @@
+{
+  "title": "Tâches et suivis",
+  "subtitle": "Gérez les tâches de suivi et les assignations de la clinique.",
+  "noRelatedTasks": "Aucune tâche liée trouvée.",
+  "newTask": "Nouvelle tâche",
+  "editTask": "Modifier la tâche",
+  "filters": {
+    "allStatus": "Tous les statuts",
+    "allPriorities": "Toutes les priorités",
+    "allUsers": "Tous les utilisateurs",
+    "dueToday": "À faire aujourd'hui",
+    "overdue": "En retard"
+  },
+  "status": {
+    "open": "Ouverte",
+    "in_progress": "En cours",
+    "completed": "Terminée",
+    "cancelled": "Annulée"
+  },
+  "priority": {
+    "low": "Faible",
+    "normal": "Normale",
+    "high": "Élevée",
+    "urgent": "Urgente"
+  },
+  "list": {
+    "task": "Tâche",
+    "patient": "Patient",
+    "assignedTo": "Assignée à",
+    "dueDate": "Date d'échéance",
+    "priority": "Priorité",
+    "status": "Statut"
+  },
+  "form": {
+    "title": "Titre de la tâche",
+    "description": "Description",
+    "assignedTo": "Assigner à",
+    "patient": "Patient lié",
+    "appointment": "Rendez-vous lié",
+    "dueDate": "Date d'échéance",
+    "priority": "Priorité",
+    "status": "Statut"
+  },
+  "actions": {
+    "complete": "Terminer",
+    "cancel": "Annuler",
+    "edit": "Modifier"
+  }
+}

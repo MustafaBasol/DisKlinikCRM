@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, Clock, Ban, AlertCircle, Loader2,
   ChevronRight, BarChart3, Package,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -26,14 +27,15 @@ interface Stats {
   clinicsByStatus: Record<string, number>;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  active:    { label: 'Aktif',       color: 'text-green-600 bg-green-50',  icon: <CheckCircle2 size={14} /> },
-  trial:     { label: 'Deneme',      color: 'text-blue-600 bg-blue-50',    icon: <Clock size={14} /> },
-  suspended: { label: 'Askıya Alındı', color: 'text-amber-600 bg-amber-50', icon: <AlertCircle size={14} /> },
-  cancelled: { label: 'İptal',       color: 'text-red-600 bg-red-50',      icon: <Ban size={14} /> },
+const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = {
+  active:    { color: 'text-green-600 bg-green-50',  icon: <CheckCircle2 size={14} /> },
+  trial:     { color: 'text-blue-600 bg-blue-50',    icon: <Clock size={14} /> },
+  suspended: { color: 'text-amber-600 bg-amber-50', icon: <AlertCircle size={14} /> },
+  cancelled: { color: 'text-red-600 bg-red-50',      icon: <Ban size={14} /> },
 };
 
 const PlatformAdmin: React.FC = () => {
+  const { t, i18n } = useTranslation(['platform']);
   const navigate = useNavigate();
   const [token] = useState(() => localStorage.getItem('platform_token'));
   const [loginEmail, setLoginEmail] = useState('');
@@ -84,7 +86,7 @@ const PlatformAdmin: React.FC = () => {
       localStorage.setItem('platform_token', res.data.token);
       window.location.reload();
     } catch (err: any) {
-      setLoginError(err.response?.data?.error ?? 'Giriş başarısız');
+      setLoginError(err.response?.data?.error ?? t('platform:errors.loginFailed'));
     } finally {
       setLoginLoading(false);
     }
@@ -95,7 +97,7 @@ const PlatformAdmin: React.FC = () => {
       await axios.patch(`${API_URL}/platform/clinics/${clinicId}/status`, { status }, { headers: authHeader });
       fetchData();
     } catch {
-      alert('Durum güncellenemedi');
+      alert(t('platform:errors.statusUpdateFailed'));
     }
   };
 
@@ -123,7 +125,7 @@ const PlatformAdmin: React.FC = () => {
                 className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
               />
               <input
-                type="password" required placeholder="Şifre" value={loginPassword}
+                type="password" required placeholder={t('platform:login.password')} value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
               />
@@ -131,7 +133,7 @@ const PlatformAdmin: React.FC = () => {
                 type="submit" disabled={loginLoading}
                 className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2"
               >
-                {loginLoading && <Loader2 size={16} className="animate-spin" />} Giriş Yap
+                {loginLoading && <Loader2 size={16} className="animate-spin" />} {t('platform:login.submit')}
               </button>
             </form>
           </div>
@@ -152,7 +154,7 @@ const PlatformAdmin: React.FC = () => {
           onClick={() => { localStorage.removeItem('platform_token'); window.location.reload(); }}
           className="text-sm text-gray-400 hover:text-white"
         >
-          Çıkış
+          {t('platform:admin.logout')}
         </button>
       </div>
 
@@ -161,14 +163,14 @@ const PlatformAdmin: React.FC = () => {
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Toplam Klinik', value: stats.totals.clinics, icon: <Building2 size={18} />, color: 'bg-violet-600' },
-              { label: 'Toplam Kullanıcı', value: stats.totals.users, icon: <Users size={18} />, color: 'bg-blue-600' },
-              { label: 'Toplam Hasta', value: stats.totals.patients, icon: <UserPlus size={18} />, color: 'bg-teal-600' },
-              { label: 'Toplam Randevu', value: stats.totals.appointments, icon: <BarChart3 size={18} />, color: 'bg-amber-600' },
+              { label: t('platform:dashboard.totalClinics'), value: stats.totals.clinics, icon: <Building2 size={18} />, color: 'bg-violet-600' },
+              { label: t('platform:dashboard.totalUsers'), value: stats.totals.users, icon: <Users size={18} />, color: 'bg-blue-600' },
+              { label: t('platform:dashboard.totalPatients'), value: stats.totals.patients, icon: <UserPlus size={18} />, color: 'bg-teal-600' },
+              { label: t('platform:admin.totalAppointments'), value: stats.totals.appointments, icon: <BarChart3 size={18} />, color: 'bg-amber-600' },
             ].map((s) => (
               <div key={s.label} className="bg-gray-800 rounded-2xl p-5 border border-gray-700">
                 <div className={`w-9 h-9 ${s.color} rounded-lg flex items-center justify-center mb-3`}>{s.icon}</div>
-                <div className="text-2xl font-bold">{s.value.toLocaleString('tr-TR')}</div>
+                <div className="text-2xl font-bold">{s.value.toLocaleString(i18n.language || 'tr')}</div>
                 <div className="text-xs text-gray-400 mt-1">{s.label}</div>
               </div>
             ))}
@@ -182,7 +184,7 @@ const PlatformAdmin: React.FC = () => {
               const cfg = STATUS_CONFIG[status];
               return (
                 <span key={status} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${cfg?.color ?? 'bg-gray-700 text-gray-300'}`}>
-                  {cfg?.icon} {cfg?.label ?? status}: {count}
+                  {cfg?.icon} {t(`platform:statuses.${status}`, { defaultValue: status })}: {count}
                 </span>
               );
             })}
@@ -192,17 +194,17 @@ const PlatformAdmin: React.FC = () => {
         {/* Klinik Listesi */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Klinikler</h2>
+            <h2 className="text-lg font-bold">{t('platform:admin.clinics')}</h2>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-300"
             >
-              <option value="">Tümü</option>
-              <option value="active">Aktif</option>
-              <option value="trial">Deneme</option>
-              <option value="suspended">Askıya Alındı</option>
-              <option value="cancelled">İptal</option>
+              <option value="">{t('platform:filters.all')}</option>
+              <option value="active">{t('platform:statuses.active')}</option>
+              <option value="trial">{t('platform:statuses.trial')}</option>
+              <option value="suspended">{t('platform:statuses.suspended')}</option>
+              <option value="cancelled">{t('platform:statuses.cancelled')}</option>
             </select>
           </div>
 
@@ -213,11 +215,11 @@ const PlatformAdmin: React.FC = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
-                    <th className="text-left px-5 py-3">Klinik</th>
-                    <th className="text-left px-5 py-3">Durum</th>
-                    <th className="text-left px-5 py-3 hidden md:table-cell">Plan</th>
-                    <th className="text-right px-5 py-3 hidden md:table-cell">Kullanıcı / Hasta</th>
-                    <th className="text-right px-5 py-3">İşlemler</th>
+                    <th className="text-left px-5 py-3">{t('platform:clinics.columns.clinic')}</th>
+                    <th className="text-left px-5 py-3">{t('platform:clinics.columns.status')}</th>
+                    <th className="text-left px-5 py-3 hidden md:table-cell">{t('platform:clinics.columns.plan')}</th>
+                    <th className="text-right px-5 py-3 hidden md:table-cell">{t('platform:admin.usersPatients')}</th>
+                    <th className="text-right px-5 py-3">{t('platform:clinics.columns.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -231,7 +233,7 @@ const PlatformAdmin: React.FC = () => {
                         </td>
                         <td className="px-5 py-4">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${cfg?.color ?? 'bg-gray-700 text-gray-300'}`}>
-                            {cfg?.icon} {cfg?.label ?? clinic.status}
+                            {cfg?.icon} {t(`platform:statuses.${clinic.status}`, { defaultValue: clinic.status })}
                           </span>
                         </td>
                         <td className="px-5 py-4 hidden md:table-cell text-gray-400">
@@ -247,7 +249,7 @@ const PlatformAdmin: React.FC = () => {
                                 onClick={() => updateStatus(clinic.id, 'suspended')}
                                 className="text-xs text-amber-400 hover:text-amber-300 border border-amber-700 rounded-lg px-2.5 py-1 hover:bg-amber-900/20"
                               >
-                                Askıya Al
+                                {t('platform:actions.suspend')}
                               </button>
                             )}
                             {(clinic.status === 'suspended' || clinic.status === 'trial') && (
@@ -255,7 +257,7 @@ const PlatformAdmin: React.FC = () => {
                                 onClick={() => updateStatus(clinic.id, 'active')}
                                 className="text-xs text-green-400 hover:text-green-300 border border-green-700 rounded-lg px-2.5 py-1 hover:bg-green-900/20"
                               >
-                                Aktifleştir
+                                {t('platform:actions.activate')}
                               </button>
                             )}
                           </div>
@@ -265,7 +267,7 @@ const PlatformAdmin: React.FC = () => {
                   })}
                   {clinics.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="text-center py-10 text-gray-500">Klinik bulunamadı</td>
+                      <td colSpan={5} className="text-center py-10 text-gray-500">{t('platform:clinics.empty')}</td>
                     </tr>
                   )}
                 </tbody>

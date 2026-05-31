@@ -1,0 +1,42 @@
+{
+  "title": "Utilisateurs",
+  "importModal": {
+    "title": "Ajouter du personnel avec Excel",
+    "downloadTemplate": "Télécharger le modèle (.xlsx)",
+    "selectFile": "Sélectionner un fichier Excel",
+    "dropzonePlaceholder": "Cliquez pour choisir un fichier ou glissez-le ici",
+    "fileRules": "Uniquement .xlsx, max. 5 Mo, max. 500 lignes",
+    "previewButton": "Aperçu",
+    "importButton": "Ajouter {{count}} utilisateurs",
+    "rowLabel": "Ligne {{row}}",
+    "howItWorks": {
+      "title": "Comment ça marche ?",
+      "downloadTemplate": "Téléchargez le modèle et utilisez les UUID de la page Branches comme référence.",
+      "fillData": "Renseignez les données du personnel (obligatoire : prénom, nom, e-mail, rôle, ID de branche).",
+      "temporaryPassword": "Si le mot de passe est vide, le système génère un mot de passe temporaire et l'affiche une seule fois.",
+      "skipExisting": "Les e-mails existants sont ignorés et ne sont pas écrasés."
+    },
+    "preview": {
+      "totalRows": "Total lignes",
+      "validRows": "Valides",
+      "invalidRows": "Invalides",
+      "invalidRowsTitle": "Lignes invalides :",
+      "noValidRows": "Aucune ligne valide à importer."
+    },
+    "result": {
+      "success": "{{count}} utilisateurs ajoutés avec succès.",
+      "skipped": "{{count}} lignes ignorées.",
+      "temporaryPasswordWarning": "Les mots de passe temporaires ne sont affichés qu'une seule fois. Veuillez les enregistrer en sécurité.",
+      "copy": "Copier",
+      "copied": "Copié !",
+      "skippedRowsTitle": "Lignes ignorées :"
+    },
+    "errors": {
+      "fileType": "Seuls les fichiers .xlsx sont acceptés.",
+      "fileSize": "Le fichier dépasse la limite de 5 Mo.",
+      "templateDownload": "Le modèle n'a pas pu être téléchargé.",
+      "previewFailed": "L'aperçu a échoué.",
+      "importFailed": "L'import a échoué."
+    }
+  }
+}

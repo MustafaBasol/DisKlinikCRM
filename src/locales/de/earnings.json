@@ -1,0 +1,123 @@
+{
+  "status": {
+    "pending": "Ausstehend",
+    "approved": "Genehmigt",
+    "paid": "Bezahlt",
+    "cancelled": "Storniert"
+  },
+  "period": {
+    "monthOption": "Monat {{month}}"
+  },
+  "filters": {
+    "allStatuses": "Alle Status",
+    "allDoctors": "Alle Ärzte"
+  },
+  "summary": {
+    "totalEarnings": "Gesamteinnahmen",
+    "approved": "Genehmigt",
+    "paid": "Bezahlt",
+    "payableApproved": "Auszuzahlen (genehmigt)"
+  },
+  "summaryTab": {
+    "empty": "Für diesen Zeitraum wurden keine Einnahmendaten gefunden."
+  },
+  "tabs": {
+    "summary": "Periodenübersicht",
+    "earnings": "Einnahmenliste",
+    "payouts": "Zahlungen",
+    "settings": "Provisionseinstellungen"
+  },
+  "columns": {
+    "doctor": "Arzt",
+    "patient": "Patient",
+    "service": "Leistung",
+    "serviceCase": "Leistung / Fall",
+    "collection": "Einnahme",
+    "earning": "Einnahme",
+    "adjustedEarning": "Korr. Einnahme",
+    "calculatedEarning": "Berechnete Einnahme",
+    "grossAmount": "Bruttobetrag",
+    "remaining": "Verbleibend",
+    "status": "Status",
+    "date": "Datum"
+  },
+  "my": {
+    "title": "Meine Einnahmen",
+    "subtitle": "{{name}} - Persönliche Einnahmenübersicht",
+    "details": "Einnahmendetails",
+    "empty": "Für diesen Zeitraum wurden keine Einnahmen gefunden."
+  },
+  "management": {
+    "title": "Arzteinnahmen verwalten",
+    "subtitle": "Provisionsregeln und Einnahmenverfolgung für Ärzte",
+    "empty": "Keine Einnahmen gefunden.",
+    "collectionRate": "{{rate}} % eingezogen",
+    "adjustTitle": "Einnahme bearbeiten",
+    "adjustedAmount": "Korrigierter Betrag",
+    "adjustmentReason": "Korrekturgrund",
+    "adjustmentPlaceholder": "Warum nehmen Sie diese Korrektur vor?"
+  },
+  "actions": {
+    "approve": "Genehmigen",
+    "markPaid": "Als bezahlt markieren",
+    "paid": "Bezahlt"
+  },
+  "confirm": {
+    "cancelEarning": "Möchten Sie diese Einnahme wirklich stornieren?",
+    "deleteRule": "Möchten Sie diese Regel wirklich löschen?"
+  },
+  "payouts": {
+    "recordPayment": "Zahlung erfassen",
+    "empty": "Noch keine Zahlungsdatensätze vorhanden.",
+    "period": "Zeitraum",
+    "periodMonth": "Zeitraum Monat",
+    "periodYear": "Zeitraum Jahr",
+    "paymentDate": "Zahlungsdatum",
+    "amount": "Betrag",
+    "method": "Methode",
+    "note": "Notiz",
+    "recordedBy": "Erfasst von",
+    "optional": "Optional",
+    "markApprovedAsPaid": "Genehmigte Einnahmen als bezahlt markieren (optional)"
+  },
+  "settings": {
+    "doctorCommissionRules": "Arzt-Provisionsregeln",
+    "serviceCommissionRules": "Leistungsbasierte Provisionsregeln",
+    "addRule": "Regel hinzufügen",
+    "addServiceRule": "Leistungsregel hinzufügen",
+    "noRules": "Es wurde noch keine Regel definiert.",
+    "noServiceRules": "Es wurde noch keine leistungsbasierte Regel definiert.",
+    "type": "Typ",
+    "fixedMonthly": "Fest (monatlich)",
+    "fixedMonthlyAmount": "Fester Monatsbetrag",
+    "fixedAmount": "Fester Betrag",
+    "percent": "Prozent %",
+    "percentage": "Prozent (%)",
+    "calculationBase": "Berechnungsbasis",
+    "commissionType": "Provisionstyp",
+    "startDate": "Startdatum",
+    "endDate": "Enddatum",
+    "editRuleTitle": "Provisionsregel bearbeiten",
+    "addRuleTitle": "Provisionsregel hinzufügen",
+    "addServiceRuleTitle": "Leistungsbasierte Regel hinzufügen",
+    "compTypes": {
+      "fixed": "Fest monatlich",
+      "percentage": "Prozentbasiert",
+      "fixed_plus_percentage": "Fest + Prozent",
+      "per_service": "Leistungsbasiert"
+    },
+    "calcBases": {
+      "collected": "Einnahmenbasiert",
+      "billed": "Rechnungsbasiert"
+    }
+  },
+  "errors": {
+    "myEarningsLoadFailed": "Einnahmeninformationen konnten nicht geladen werden.",
+    "earningsListLoadFailed": "Einnahmenliste konnte nicht geladen werden.",
+    "actionFailed": "Aktion fehlgeschlagen.",
+    "requiredFields": "Bitte füllen Sie die Pflichtfelder aus.",
+    "payoutSaveFailed": "Zahlung konnte nicht gespeichert werden.",
+    "ruleSaveFailed": "Regel konnte nicht gespeichert werden.",
+    "serviceRuleSaveFailed": "Leistungsregel konnte nicht gespeichert werden."
+  }
+}

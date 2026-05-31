@@ -1,0 +1,137 @@
+{
+  "title": "Traitements et services",
+  "subtitle": "Suivez les opportunités de service et le parcours de traitement des patients.",
+  "service": "Service",
+  "newCase": "Nouveau dossier de traitement",
+  "editCase": "Modifier le dossier de traitement",
+  "detailTitle": "Détails du dossier de traitement",
+  "filters": {
+    "allStages": "Toutes les étapes",
+    "openOnly": "Ouverts uniquement",
+    "closedOnly": "Fermés uniquement",
+    "allPractitioners": "Tous les praticiens"
+  },
+  "summary": {
+    "pipelineValue": "Valeur du pipeline",
+    "activeOpportunities": "{{count}} opportunités actives",
+    "active": "Actif",
+    "closed": "Fermé",
+    "casesInProgress": "Dossiers en cours",
+    "successfullyCompleted": "Terminés avec succès"
+  },
+  "stages": {
+    "new": "Nouvelle opportunité",
+    "consultation_scheduled": "Consultation planifiée",
+    "consultation_done": "Consultation effectuée",
+    "quote_sent": "Devis envoyé",
+    "waiting_patient_decision": "En attente de décision",
+    "accepted": "Accepté",
+    "in_progress": "En cours",
+    "completed": "Terminé",
+    "lost": "Perdu"
+  },
+  "list": {
+    "title": "Titre du traitement",
+    "patient": "Patient",
+    "practitioner": "Praticien",
+    "stage": "Étape",
+    "estimated": "Estimé",
+    "accepted": "Accepté",
+    "startDate": "Début prévu",
+    "updated": "Dernière mise à jour"
+  },
+  "form": {
+    "service": "Service",
+    "title": "Titre du dossier",
+    "description": "Description",
+    "patient": "Patient",
+    "practitioner": "Praticien",
+    "stage": "Étape",
+    "estimatedAmount": "Montant estimé",
+    "acceptedAmount": "Montant accepté",
+    "currency": "Devise",
+    "expectedStartDate": "Date de début prévue",
+    "lostReason": "Raison de la perte",
+    "lostReasonRequired": "La raison de la perte est requise.",
+    "noSpecificService": "Aucun service spécifique"
+  },
+  "actions": {
+    "changeStage": "Changer l'étape",
+    "markAccepted": "Marquer comme accepté",
+    "markCompleted": "Marquer comme terminé",
+    "markLost": "Marquer comme perdu",
+    "viewDetails": "Voir les détails"
+  },
+  "detail": {
+    "backToPipeline": "Retour au pipeline",
+    "closedOn": "Fermé le {{date}}",
+    "financialSummary": "Résumé financier",
+    "stakeholders": "Parties prenantes",
+    "noDescription": "Aucune description fournie.",
+    "errors": {
+      "loadFailed": "Impossible de récupérer les détails du dossier de traitement.",
+      "notFound": "Dossier de traitement introuvable."
+    }
+  },
+  "progress": {
+    "complete": "{{percent}} % terminé",
+    "clickToChange": "Cliquez sur une étape pour la modifier."
+  },
+  "appointments": {
+    "unlink": "Supprimer le lien",
+    "confirmUnlink": "Supprimer le lien de ce rendez-vous avec le dossier de traitement ?",
+    "linkFailed": "Impossible de lier le rendez-vous.",
+    "unlinkFailed": "Impossible de supprimer le lien du rendez-vous.",
+    "empty": "Aucun rendez-vous n'est lié à ce traitement.",
+    "createNew": "Créer un rendez-vous",
+    "linkExisting": "Lier un rendez-vous existant",
+    "linkModalDescription": "Sélectionnez l'un des rendez-vous de {{patient}} pour le lier à ce dossier de traitement.",
+    "noLinkable": "Aucun rendez-vous disponible à lier."
+  },
+  "procedures": {
+    "title": "Actes du plan de traitement",
+    "add": "Ajouter un acte",
+    "edit": "Modifier l'acte",
+    "empty": "Aucun acte ajouté pour le moment.",
+    "confirmDelete": "Supprimer cet acte ?",
+    "optional": "facultatif",
+    "selectService": "Sélectionner un service",
+    "fields": {
+      "name": "Nom de l'acte",
+      "service": "Service",
+      "toothFdi": "Dent FDI",
+      "estimatedCost": "Coût estimé",
+      "scheduledDate": "Date prévue",
+      "status": "Statut",
+      "notes": "Notes"
+    },
+    "placeholders": {
+      "name": "ex. préparation d'implant",
+      "toothFdi": "FDI",
+      "notes": "Ajouter des notes sur l'acte..."
+    },
+    "errors": {
+      "saveFailed": "Impossible d'enregistrer l'acte.",
+      "deleteFailed": "Impossible de supprimer l'acte."
+    }
+  },
+  "materials": {
+    "title": "Matériaux du traitement",
+    "item": "Article",
+    "stock": "Stock",
+    "quantity": "Quantité",
+    "noteOptional": "Note",
+    "notePlaceholder": "Note facultative",
+    "empty": "Aucun matériau ajouté pour le moment.",
+    "confirmDelete": "Supprimer ce matériau ?",
+    "errors": {
+      "addFailed": "Impossible d'ajouter le matériau.",
+      "deleteFailed": "Impossible de supprimer le matériau."
+    }
+  },
+  "activity": {
+    "title": "Historique d'activité",
+    "byUser": "par {{user}} • {{date}}",
+    "empty": "Aucune activité enregistrée."
+  }
+}

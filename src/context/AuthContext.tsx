@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/api';
 
 interface ClinicInfo {
@@ -64,6 +65,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_VERSION = 'aile-dis-v1';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation('common');
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
         <div className="flex flex-col items-center">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-slate-500 dark:text-slate-400">Aile Diş CRM yükleniyor...</p>
+          <p className="mt-4 text-slate-500 dark:text-slate-400">{t('loadingApp')}</p>
         </div>
       </div>
     );

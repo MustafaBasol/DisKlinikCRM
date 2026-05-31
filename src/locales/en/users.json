@@ -1,0 +1,42 @@
+{
+  "title": "Users",
+  "importModal": {
+    "title": "Add Staff with Excel",
+    "downloadTemplate": "Download Template (.xlsx)",
+    "selectFile": "Select Excel File",
+    "dropzonePlaceholder": "Click to choose a file or drag it here",
+    "fileRules": "Only .xlsx, max. 5 MB, max. 500 rows",
+    "previewButton": "Preview",
+    "importButton": "Add {{count}} Users",
+    "rowLabel": "Row {{row}}",
+    "howItWorks": {
+      "title": "How does it work?",
+      "downloadTemplate": "Download the template and use the UUIDs from the Branches page as reference.",
+      "fillData": "Fill in staff data (required: first name, last name, email, role, branch ID).",
+      "temporaryPassword": "If the password is empty, the system generates a temporary password and shows it only once.",
+      "skipExisting": "Existing emails are skipped and not overwritten."
+    },
+    "preview": {
+      "totalRows": "Total Rows",
+      "validRows": "Valid",
+      "invalidRows": "Invalid",
+      "invalidRowsTitle": "Invalid Rows:",
+      "noValidRows": "There are no valid rows to import."
+    },
+    "result": {
+      "success": "{{count}} users added successfully.",
+      "skipped": "{{count}} rows skipped.",
+      "temporaryPasswordWarning": "Temporary passwords are shown only once. Please store them securely.",
+      "copy": "Copy",
+      "copied": "Copied!",
+      "skippedRowsTitle": "Skipped Rows:"
+    },
+    "errors": {
+      "fileType": "Only .xlsx files are accepted.",
+      "fileSize": "File exceeds the 5 MB limit.",
+      "templateDownload": "Template could not be downloaded.",
+      "previewFailed": "Preview failed.",
+      "importFailed": "Import failed."
+    }
+  }
+}

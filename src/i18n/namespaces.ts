@@ -3,12 +3,23 @@ export const NS = {
   AUTH: 'auth',
   DASHBOARD: 'dashboard',
   PATIENTS: 'patients',
+  USERS: 'users',
   APPOINTMENTS: 'appointments',
   SETTINGS: 'settings',
   SERVICES: 'services',
   INSURANCE: 'insurance',
+  BOOKING: 'booking',
+  BRANCHES: 'branches',
+  INVENTORY: 'inventory',
+  NO_SHOWS: 'noShows',
+  REPORTS: 'reports',
+  EARNINGS: 'earnings',
+  PLATFORM: 'platform',
+  ORGANIZATION: 'organization',
   VALIDATION: 'validation',
   ERRORS: 'errors',
+  WHATSAPP: 'whatsapp',
+  INSTAGRAM: 'instagram',
 } as const;
 
 export type Namespace = typeof NS[keyof typeof NS];

@@ -1,0 +1,42 @@
+{
+  "title": "Kullanıcılar",
+  "importModal": {
+    "title": "Excel ile Personel Ekle",
+    "downloadTemplate": "Şablonu İndir (.xlsx)",
+    "selectFile": "Excel Dosyası Seç",
+    "dropzonePlaceholder": "Tıklayarak dosya seçin veya sürükleyin",
+    "fileRules": "Yalnızca .xlsx, maks. 5 MB, maks. 500 satır",
+    "previewButton": "Önizle",
+    "importButton": "{{count}} Kullanıcı Ekle",
+    "rowLabel": "Satır {{row}}",
+    "howItWorks": {
+      "title": "Nasıl çalışır?",
+      "downloadTemplate": "Şablonu indirin ve Şubeler sayfasındaki UUID'leri referans alın.",
+      "fillData": "Personel verilerini doldurun (zorunlu: Ad, Soyad, E-posta, Rol, Şube ID).",
+      "temporaryPassword": "Şifre boşsa sistem geçici şifre üretir ve yalnızca bir kez gösterir.",
+      "skipExisting": "Mevcut e-postalar atlanır, üzerine yazılmaz."
+    },
+    "preview": {
+      "totalRows": "Toplam Satır",
+      "validRows": "Geçerli",
+      "invalidRows": "Hatalı",
+      "invalidRowsTitle": "Hatalı Satırlar:",
+      "noValidRows": "İçe aktarılacak geçerli satır yok."
+    },
+    "result": {
+      "success": "{{count}} kullanıcı başarıyla eklendi.",
+      "skipped": "{{count}} satır atlandı.",
+      "temporaryPasswordWarning": "Geçici şifreler yalnızca bir kez gösterilir. Lütfen güvenli şekilde kaydedin.",
+      "copy": "Kopyala",
+      "copied": "Kopyalandı!",
+      "skippedRowsTitle": "Atlanan Satırlar:"
+    },
+    "errors": {
+      "fileType": "Yalnızca .xlsx dosyaları kabul edilir.",
+      "fileSize": "Dosya 5 MB sınırını aşıyor.",
+      "templateDownload": "Şablon indirilemedi.",
+      "previewFailed": "Önizleme başarısız.",
+      "importFailed": "İçe aktarma başarısız."
+    }
+  }
+}

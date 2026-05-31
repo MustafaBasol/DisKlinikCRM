@@ -54,6 +54,9 @@
   "summary": {
     "patientResponsibility": "Part patient"
   },
+  "notes": {
+    "patientResponsibilityFor": "Montant à charge du patient pour {{provider}}"
+  },
   "actions": {
     "cancel": "Annuler",
     "createPatientPayment": "Créer paiement patient"

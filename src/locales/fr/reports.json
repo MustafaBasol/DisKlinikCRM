@@ -1,0 +1,115 @@
+{
+  "title": "Rapports",
+  "subtitle": "Analyse des revenus et performance des praticiens",
+  "export": {
+    "csv": "Télécharger le CSV",
+    "filePrefix": "rapport-revenus"
+  },
+  "tabs": {
+    "revenue": "Rapport de revenus",
+    "doctors": "Performance des praticiens",
+    "sources": "Sources des patients",
+    "noshow": "Analyse des no-shows"
+  },
+  "filters": {
+    "startDate": "Date de début",
+    "endDate": "Date de fin",
+    "grouping": "Regroupement",
+    "day": "Quotidien",
+    "week": "Hebdomadaire",
+    "month": "Mensuel",
+    "paymentMethod": "Mode de paiement",
+    "all": "Tous",
+    "doctor": "Praticien",
+    "allDoctors": "Tous les praticiens",
+    "runReport": "Afficher le rapport"
+  },
+  "errors": {
+    "revenueLoadFailed": "Le rapport n'a pas pu être chargé.",
+    "doctorLoadFailed": "Le rapport des praticiens n'a pas pu être chargé.",
+    "sourcesLoadFailed": "Le rapport des sources patients n'a pas pu être chargé.",
+    "noShowLoadFailed": "Le rapport no-show n'a pas pu être chargé.",
+    "csvFailed": "Le CSV n'a pas pu être téléchargé."
+  },
+  "empty": {
+    "prompt": "Cliquez sur « {{button}} » pour afficher le rapport."
+  },
+  "revenue": {
+    "totalRevenue": "Revenu total",
+    "paymentCount": "{{count}} paiements",
+    "avgPayment": "Paiement moyen",
+    "pendingCollection": "Encaissement en attente",
+    "pendingCount": "{{count}} en attente",
+    "paymentCountTitle": "Nombre de paiements",
+    "periodicRevenue": "Revenus par période",
+    "revenue": "Revenu",
+    "paymentMethodDistribution": "Répartition par mode de paiement",
+    "revenueByDoctor": "Revenu par praticien",
+    "doctorPaymentCount": "{{count}} paiements",
+    "detailTable": "Tableau détaillé",
+    "period": "Période",
+    "average": "Moyenne",
+    "total": "Total",
+    "empty": "Aucun encaissement trouvé pour la période sélectionnée."
+  },
+  "sources": {
+    "referral": "Recommandation",
+    "social_media": "Réseaux sociaux",
+    "instagram": "Instagram",
+    "website": "Site web",
+    "phone": "Téléphone",
+    "walk_in": "Visite directe",
+    "google": "Google",
+    "facebook": "Facebook",
+    "whatsapp": "WhatsApp",
+    "other": "Autre",
+    "totalPatientsInRange": "Patients enregistrés (période)",
+    "sourceCount": "{{count}} sources différentes",
+    "rankedSource": "Source n°{{rank}}",
+    "patients": "patients",
+    "patientCountValue": "{{count}} patients",
+    "patientDistribution": "Répartition des patients par source",
+    "revenueBySource": "Revenu par source",
+    "detailTable": "Tableau détaillé des sources",
+    "source": "Source",
+    "patientCount": "Nombre de patients",
+    "share": "Part %"
+  },
+  "noshow": {
+    "totalNoShow": "Total no-show",
+    "noShowRate": "Taux de no-show",
+    "cancellationCount": "Nombre d'annulations",
+    "totalAppointments": "Total des rendez-vous",
+    "monthlyTrend": "Tendance mensuelle des no-shows",
+    "noShow": "No-show",
+    "cancelled": "Annulé",
+    "rate": "Taux",
+    "ratePercent": "Taux %",
+    "byDay": "Répartition par jour",
+    "byHour": "Répartition par créneau horaire",
+    "doctorRate": "Taux de no-show par praticien",
+    "doctor": "Praticien",
+    "total": "Total"
+  },
+  "doctors": {
+    "empty": "Aucun praticien actif trouvé.",
+    "commissionRate": "Taux de commission : %{{rate}}",
+    "totalRevenue": "Revenu total",
+    "commission": "Commission",
+    "totalAppointments": "Total des rendez-vous",
+    "completed": "Terminés",
+    "noShow": "No-show",
+    "completionRate": "Achèvement %",
+    "openedTreatment": "Traitements ouverts",
+    "avgPayment": "Paiement moy."
+  },
+  "daysShort": {
+    "sun": "Dim",
+    "mon": "Lun",
+    "tue": "Mar",
+    "wed": "Mer",
+    "thu": "Jeu",
+    "fri": "Ven",
+    "sat": "Sam"
+  }
+}

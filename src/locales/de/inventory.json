@@ -1,0 +1,102 @@
+{
+  "title": "Bestandsverwaltung",
+  "subtitle": "Implantate, Prothetik und Verbrauchsmaterial verwalten",
+  "optional": "Optional",
+  "tabs": {
+    "list": "Bestandsliste",
+    "alerts": "Niedriger Bestand",
+    "history": "Bewegungsverlauf"
+  },
+  "actions": {
+    "newItem": "Neuer Artikel",
+    "addTransaction": "Bestandsbewegung hinzufuegen",
+    "addStockIn": "Bestandseingang hinzufuegen"
+  },
+  "filters": {
+    "searchPlaceholder": "Artikel oder Lieferant suchen...",
+    "allCategories": "Alle Kategorien"
+  },
+  "empty": {
+    "noItems": "Kein Bestandseintrag gefunden.",
+    "addItemHint": "Sie koennen einen Eintrag mit der Schaltflaeche \"Neuer Artikel\" hinzufuegen."
+  },
+  "categories": {
+    "implant": "Implantat",
+    "prosthetic": "Prothetik",
+    "consumable": "Verbrauchsmaterial",
+    "medication": "Medikament",
+    "equipment": "Geraet",
+    "other": "Andere"
+  },
+  "units": {
+    "piece": "Stueck",
+    "box": "Box",
+    "ml": "ml",
+    "gram": "g",
+    "vial": "Flakon",
+    "set": "Set"
+  },
+  "itemForm": {
+    "createTitle": "Neuer Artikel",
+    "editTitle": "Artikel bearbeiten",
+    "fields": {
+      "name": "Artikelname",
+      "category": "Kategorie",
+      "unit": "Einheit",
+      "openingStock": "Anfangsbestand",
+      "minimumStock": "Mindestbestand (Warnung)",
+      "unitCost": "Stueckkosten (₺)",
+      "supplier": "Lieferant",
+      "barcode": "Barcode",
+      "notes": "Notizen"
+    },
+    "placeholders": {
+      "name": "z. B. Bio-Oss 0.25g"
+    }
+  },
+  "list": {
+    "currentStock": "Aktueller Bestand",
+    "minimumStock": "Mindestbestand"
+  },
+  "alerts": {
+    "emptyTitle": "Keine Warnung wegen niedrigem Bestand.",
+    "emptyDescription": "Alle Artikel liegen ueber dem Mindestbestand.",
+    "countMessage": "{{count}} Artikel liegt am oder unter dem Mindestbestand.",
+    "countMessage_plural": "{{count}} Artikel liegen am oder unter dem Mindestbestand."
+  },
+  "history": {
+    "empty": "Es wurde noch keine Bestandsbewegung erfasst.",
+    "performedBy": "Ausgefuehrt von"
+  },
+  "transaction": {
+    "title": "Bestandsbewegung - {{item}}",
+    "quantityLabel": "Menge ({{unit}}) - Aktuell: {{current}}",
+    "fields": {
+      "type": "Bewegungstyp",
+      "reason": "Grund",
+      "quantity": "Menge"
+    },
+    "types": {
+      "in": "Eingang",
+      "out": "Ausgang",
+      "adjustment": "Korrektur"
+    },
+    "reasons": {
+      "purchase": "Einkauf",
+      "usage": "Verwendung",
+      "treatment_use": "In Behandlung verwendet",
+      "adjustment": "Bestandskorrektur",
+      "wastage": "Verlust / Verderb",
+      "return": "Rueckgabe"
+    },
+    "errors": {
+      "quantityPositive": "Die Menge muss groesser als 0 sein.",
+      "insufficientStock": "Nicht genuegend Bestand. Aktuell: {{current}} {{unit}}",
+      "actionFailed": "Bei der Bewegung ist ein Fehler aufgetreten."
+    }
+  },
+  "errors": {
+    "nameRequired": "Artikelname ist erforderlich.",
+    "saveFailed": "Beim Speichern ist ein Fehler aufgetreten."
+  }
+}

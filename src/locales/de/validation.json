@@ -1,0 +1,6 @@
+{
+  "required": "Dieses Feld ist erforderlich",
+  "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
+  "emailOrPhoneRequired": "E-Mail oder Telefon muss angegeben werden",
+  "invalidDate": "Bitte geben Sie ein gültiges Datum ein"
+}

@@ -8,6 +8,7 @@
     "totalPending": "Total en Attente",
     "totalRefunded": "Total Remboursé",
     "remaining": "Solde Restant",
+    "pendingBreakdown": "• {{installments}} échéances + {{payments}} paiements en attente",
     "totalCollected": "Total Collecté",
     "pending": "En Attente",
     "transactions": "Transactions",
@@ -34,6 +35,7 @@
     "card": "Carte de Crédit/Débit",
     "bank_transfer": "Virement Bancaire",
     "cheque": "Chèque",
+    "insurance": "Assurance",
     "other": "Autre"
   },
   "list": {
@@ -53,5 +55,133 @@
     "status": "Statut",
     "paidAt": "Date de Paiement",
     "notes": "Notes"
+  },
+  "confirmCancel": "Annuler ce paiement ?",
+  "empty": "Aucun paiement trouvé.",
+  "noRelatedPayments": "Aucun paiement lié trouvé.",
+  "financeDashboard": {
+    "title": "Tableau de bord financier",
+    "subtitle": "Suivi des revenus et des paiements",
+    "billingSubtitle": "Résumé de facturation",
+    "ranges": {
+      "today": "Aujourd'hui",
+      "this_week": "Cette semaine",
+      "this_month": "Ce mois-ci",
+      "last_30_days": "30 derniers jours"
+    },
+    "cards": {
+      "collectedToday": "Collecté aujourd'hui",
+      "collectedInRange": "Collecté sur la période",
+      "outstandingBalance": "Solde en attente",
+      "overdueAmount": "Montant en retard",
+      "pendingInstallments": "Échéances en attente",
+      "overdueInstallments": "Échéances en retard",
+      "practitionerPayoutsDue": "Gains praticiens (non payés)",
+      "practitionerPayoutsPaid": "Paiements praticiens (période)"
+    },
+    "sections": {
+      "byMethod": "Par méthode de paiement",
+      "upcomingInstallments": "Échéances à venir / en retard",
+      "branchPerformance": "Performance par branche",
+      "recentPayments": "Paiements récents"
+    },
+    "columns": {
+      "collected": "Collecté",
+      "installment": "Échéance"
+    },
+    "actions": {
+      "viewAllPaymentPlans": "Voir tous les plans de paiement",
+      "installments": "Échéances"
+    },
+    "empty": {
+      "noInstallments": "Aucune échéance",
+      "noPaymentsInRange": "Aucun paiement sur cette période"
+    },
+    "transactionCount": "{{count}} transaction(s)",
+    "errors": {
+      "loadFailed": "Les données financières n'ont pas pu être chargées."
+    }
+  },
+  "planForm": {
+    "newPlan": "Nouveau plan de paiement",
+    "paymentPlan": "Plan de paiement",
+    "paymentPlansTitle": "Plans de paiement et échéancier",
+    "selectPatient": "Sélectionner un patient...",
+    "relatedTreatment": "Traitement lié (facultatif)",
+    "unlinkedPlan": "Plan de paiement non lié",
+    "totalAmount": "Montant total",
+    "installmentCount": "Nombre d'échéances",
+    "installmentNo": "N° d'échéance",
+    "installmentLabel": "Échéance {{number}}",
+    "installmentSummary": "{{count}} échéances - Total : {{amount}} {{currency}}",
+    "firstDueDate": "Date du premier paiement",
+    "descriptionPlaceholder": "Ex. Plan de paiement pour traitement implantaire",
+    "preview": "Aperçu du calendrier des échéances",
+    "dueDate": "Échéance",
+    "moreInstallments": "+{{count}} échéances supplémentaires",
+    "total": "Total",
+    "createPlan": "Créer le plan",
+    "paid": "Payé",
+    "installmentStatus": {
+      "overdue": "En retard"
+    },
+    "errors": {
+      "patientRequired": "Veuillez sélectionner un patient.",
+      "amountRequired": "Veuillez saisir un montant valide.",
+      "firstDueDateRequired": "Veuillez sélectionner la date du premier paiement.",
+      "saveFailed": "Enregistrement échoué."
+    }
+  },
+  "plansPage": {
+    "title": "Plans de paiement",
+    "subtitle": "Plans de paiement et suivi des échéances",
+    "newPlan": "Nouveau plan de paiement",
+    "searchPlaceholder": "Rechercher un patient, un traitement ou une description...",
+    "empty": "Aucun plan de paiement trouvé.",
+    "createFirst": "Créer le premier plan",
+    "confirmCancelPlan": "Voulez-vous vraiment annuler ce plan de paiement ?",
+    "overdueCount": "{{count}} en retard",
+    "installmentProgress": "{{paid}}/{{total}} échéances",
+    "remaining": "Restant : {{amount}}",
+    "paidAmount": "{{amount}} payé",
+    "dueDate": "Échéance",
+    "amount": "Montant",
+    "status": "Statut",
+    "paidAt": "Payé : {{date}}",
+    "confirmPayment": "Confirmer",
+    "markPaid": "Payé",
+    "cancelPlan": "Annuler le plan",
+    "summary": {
+      "totalPlans": "Total des plans",
+      "overdueInstallments": "Échéances en retard"
+    },
+    "filters": {
+      "allStatuses": "Tous les statuts"
+    },
+    "planStatus": {
+      "active": "Actif",
+      "completed": "Terminé",
+      "cancelled": "Annulé"
+    },
+    "installmentStatus": {
+      "pending": "En attente",
+      "paid": "Payé",
+      "overdue": "En retard"
+    },
+    "errors": {
+      "paymentSaveFailed": "Le paiement n'a pas pu être enregistré.",
+      "cancelFailed": "Le plan n'a pas pu être annulé."
+    }
+  },
+  "receipt": {
+    "title": "Reçu / document de paiement",
+    "print": "Imprimer / PDF",
+    "loadFailed": "Les informations du reçu n'ont pas pu être chargées.",
+    "paymentReceipt": "Reçu de paiement",
+    "patientInfo": "Informations patient",
+    "paymentDetails": "Détails du paiement",
+    "serviceTreatment": "Service / traitement",
+    "generatedElectronically": "Ce document a été généré électroniquement.",
+    "documentNo": "Document n°"
   }
 }

@@ -28,6 +28,7 @@
   },
   "seed": {
     "button": "Seed Default Templates",
+    "confirm": "Seed default templates?",
     "success": "Default templates created successfully"
   }
 }

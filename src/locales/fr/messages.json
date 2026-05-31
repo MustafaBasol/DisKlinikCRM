@@ -1,0 +1,58 @@
+{
+  "title": "Messages",
+  "subtitle": "Suivez les communications préparées et envoyées.",
+  "prepare": "Préparer un message",
+  "history": "Historique des communications",
+  "list": {
+    "patient": "Patient",
+    "channel": "Canal",
+    "body": "Message",
+    "status": "Statut",
+    "createdBy": "Préparé par",
+    "date": "Date"
+  },
+  "status": {
+    "prepared": "Préparé",
+    "sent": "Envoyé",
+    "failed": "Échec",
+    "delivered": "Livré",
+    "read": "Lu"
+  },
+  "actions": {
+    "copy": "Copier le contenu",
+    "whatsapp": "Ouvrir WhatsApp",
+    "preview": "Prévisualiser le message",
+    "sendNow": "Envoyer maintenant",
+    "sendUnavailable": "La connexion WhatsApp est absente ou non connectée"
+  },
+  "filters": {
+    "channel": "Canal",
+    "status": "Statut"
+  },
+  "copiedToClipboard": "Copié dans le presse-papiers !",
+  "whatsappStatus": {
+    "connected": "WhatsApp connecté{{phone}}",
+    "metaInactive": "La connexion Meta Cloud API n'est pas encore active — l'envoi de messages est désactivé",
+    "selectClinic": "Sélectionnez une branche avant d'envoyer des messages",
+    "notConfigured": "La connexion WhatsApp n'est pas configurée — créez d'abord une connexion"
+  },
+  "metaCallback": {
+    "missingCode": "Réponse Meta incomplète : le code d'autorisation n'a pas été reçu.",
+    "processing": "Finalisation de la connexion Meta...",
+    "success": "Votre compte Meta a été connecté avec succès.",
+    "closing": "Cet onglet va se fermer...",
+    "failed": "La connexion Meta a échoué.",
+    "canClose": "Vous pouvez fermer cet onglet/cette fenêtre.",
+    "authorized": "L'autorisation Meta a été reçue.",
+    "returnInstruction": "Retournez à la page Connexions WhatsApp et réessayez.",
+    "connections": "Connexions WhatsApp"
+  },
+  "prepareModal": {
+    "title": "Préparer un message",
+    "selectTemplate": "Sélectionner un modèle",
+    "selectTemplatePrompt": "Veuillez sélectionner un modèle pour voir l'aperçu",
+    "customMessage": "Message personnalisé",
+    "preview": "Aperçu",
+    "send": "Enregistrer comme préparé"
+  }
+}

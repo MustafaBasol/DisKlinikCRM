@@ -1,0 +1,63 @@
+{
+  "title": "Organization Dashboard",
+  "subtitle": "Summary view for all clinic branches",
+  "loading": "Loading...",
+  "ranges": {
+    "today": "Today",
+    "this_week": "This Week",
+    "this_month": "This Month",
+    "last_30_days": "Last 30 Days",
+    "custom": "Custom"
+  },
+  "status": {
+    "active": "Active",
+    "trial": "Trial",
+    "suspended": "Suspended",
+    "cancelled": "Cancelled"
+  },
+  "cards": {
+    "branches": "Branches",
+    "activeSub": "{{value}} active",
+    "todayAppointments": "Today's Appointments",
+    "completed": "Completed",
+    "totalSub": "{{value}} total",
+    "periodRevenue": "Period Revenue",
+    "outstandingBalance": "Outstanding Balance",
+    "newPatients": "New Patients",
+    "activeTreatments": "Active Treatments",
+    "completedSub": "{{value}} completed",
+    "averageNoShow": "Avg. No-show",
+    "cancelledSub": "{{value}} cancelled"
+  },
+  "insights": {
+    "topRevenue": "Highest Revenue",
+    "lowestRevenue": "Lowest Revenue",
+    "highestAppointments": "Most Appointments",
+    "highestBalance": "Highest Balance",
+    "highestNoShow": "Highest No-show",
+    "topNewPatients": "Most New Patients"
+  },
+  "table": {
+    "title": "Branch Comparison",
+    "branch": "Branch",
+    "status": "Status",
+    "appointments": "Appointments",
+    "completed": "Done",
+    "cancelled": "Cancelled",
+    "noShow": "No-show",
+    "newPatients": "New Patients",
+    "revenue": "Revenue",
+    "balance": "Balance",
+    "treatments": "Treatments",
+    "staff": "Staff",
+    "actions": "Actions",
+    "empty": "No data found",
+    "branchDashboard": "Branch Dashboard",
+    "branchAppointments": "Appointments",
+    "branchPatients": "Patients",
+    "branchPayments": "Payments"
+  },
+  "errors": {
+    "loadFailed": "Data could not be loaded"
+  }
+}

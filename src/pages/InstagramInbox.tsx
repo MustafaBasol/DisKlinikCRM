@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Instagram,
   AlertCircle,
@@ -85,6 +86,7 @@ interface AppointmentModal {
 
 export default function InstagramInbox() {
   const { user } = useAuth();
+  const { t, i18n } = useTranslation(['instagram', 'common', 'appointments']);
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'unassigned' | 'all'>('unassigned');
   const [unassigned, setUnassigned] = useState<InboxEntry[]>([]);
@@ -131,7 +133,7 @@ export default function InstagramInbox() {
       const res = await instagramInboxService.getUnassigned();
       setUnassigned(res.data.entries ?? []);
     } catch {
-      setError('Atanmamış DM\'ler yüklenemedi.');
+      setError(t('instagram:inbox.errors.loadUnassigned'));
     } finally {
       setLoading(false);
     }
@@ -147,7 +149,7 @@ export default function InstagramInbox() {
       const res = await instagramInboxService.getConversations(params);
       setConversations(res.data.entries ?? []);
     } catch {
-      setError('Konuşmalar yüklenemedi.');
+      setError(t('instagram:inbox.errors.loadConversations'));
     } finally {
       setLoading(false);
     }
@@ -188,7 +190,7 @@ export default function InstagramInbox() {
       reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? 'Çözümleme başarısız.');
+      setError(msg ?? t('instagram:inbox.errors.resolveFailed'));
     } finally {
       setResolving(false);
     }
@@ -199,7 +201,7 @@ export default function InstagramInbox() {
       await instagramInboxService.linkPatient(entryId, patientId);
       reload();
     } catch {
-      setError('Hasta bağlantısı kurulamadı.');
+      setError(t('instagram:inbox.errors.linkPatientFailed'));
     }
   }
 
@@ -211,12 +213,12 @@ export default function InstagramInbox() {
     setReplyResult(null);
     try {
       await instagramInboxService.reply(replyModal.entry.id, replyModal.message);
-      setReplyResult({ success: true, message: 'Mesaj gönderildi.' });
+      setReplyResult({ success: true, message: t('instagram:inbox.success.messageSent') });
       setReplyModal(prev => prev ? { ...prev, message: '' } : null);
       reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setReplyResult({ success: false, message: msg ?? 'Mesaj gönderilemedi.' });
+      setReplyResult({ success: false, message: msg ?? t('instagram:inbox.errors.messageSendFailed') });
     } finally {
       setReplying(false);
     }
@@ -226,18 +228,18 @@ export default function InstagramInbox() {
 
   async function handleConvertToRequest(entry: InboxEntry) {
     if (!entry.clinicId) {
-      setError('Önce şube atayın.');
+      setError(t('instagram:inbox.errors.assignBranchFirst'));
       return;
     }
-    if (!window.confirm('Bu Instagram DM\'i randevu talebine dönüştürmek istiyor musunuz?')) return;
+    if (!window.confirm(t('instagram:inbox.confirm.convertToRequest'))) return;
     setConvertingId(entry.id);
     try {
       await instagramInboxService.createAppointmentRequest(entry.id);
-      setToast({ success: true, message: 'Randevu talebi oluşturuldu.' });
+      setToast({ success: true, message: t('instagram:inbox.success.requestCreated') });
       reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? 'Randevu talebi oluşturulamadı.');
+      setError(msg ?? t('instagram:inbox.errors.requestCreateFailed'));
     } finally {
       setConvertingId(null);
       setTimeout(() => setToast(null), 3000);
@@ -248,7 +250,7 @@ export default function InstagramInbox() {
 
   async function openAppointmentModal(entry: InboxEntry) {
     if (!entry.clinicId || !entry.patientId) {
-      setError('Randevu oluşturmak için önce şube ve hasta atayın.');
+      setError(t('instagram:inbox.errors.assignBranchAndPatientFirst'));
       return;
     }
     const modal: AppointmentModal = {
@@ -259,7 +261,9 @@ export default function InstagramInbox() {
       appointmentTypeId: '',
       date: new Date().toISOString().split('T')[0],
       time: '09:00',
-      notes: `Instagram DM'den oluşturuldu. Gönderen: ${entry.senderUsername ? '@' + entry.senderUsername : entry.externalSenderId}`,
+      notes: t('instagram:inbox.appointment.defaultNotes', {
+        sender: entry.senderUsername ? `@${entry.senderUsername}` : entry.externalSenderId,
+      }),
       doctors: [],
       services: [],
       loadingData: true,
@@ -280,7 +284,7 @@ export default function InstagramInbox() {
     if (!apptModal) return;
     const { entry, patientId, clinicId, practitionerId, appointmentTypeId, date, time, notes } = apptModal;
     if (!practitionerId || !appointmentTypeId || !date || !time) {
-      setError('Hekim, hizmet, tarih ve saat zorunludur.');
+      setError(t('instagram:inbox.errors.appointmentRequiredFields'));
       return;
     }
     setSavingAppt(true);
@@ -289,11 +293,11 @@ export default function InstagramInbox() {
         patientId, clinicId, practitionerId, appointmentTypeId, date, time, notes,
       });
       setApptModal(null);
-      setToast({ success: true, message: 'Randevu oluşturuldu.' });
+      setToast({ success: true, message: t('instagram:inbox.success.appointmentCreated') });
       reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? 'Randevu oluşturulamadı.');
+      setError(msg ?? t('instagram:inbox.errors.appointmentCreateFailed'));
     } finally {
       setSavingAppt(false);
       setTimeout(() => setToast(null), 3000);
@@ -317,7 +321,7 @@ export default function InstagramInbox() {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
           <CalendarPlus size={10} />
-          Dönüştürüldü
+          {t('instagram:inbox.status.converted')}
         </span>
       );
     }
@@ -325,7 +329,7 @@ export default function InstagramInbox() {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
           <AlertCircle size={10} />
-          Şube Atanacak
+          {t('instagram:inbox.status.needsBranch')}
         </span>
       );
     }
@@ -333,14 +337,14 @@ export default function InstagramInbox() {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
           <CheckCircle2 size={10} />
-          Çözümlendi
+          {t('instagram:inbox.status.resolved')}
         </span>
       );
     }
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
         <MessageSquare size={10} />
-        Açık
+        {t('instagram:inbox.status.open')}
       </span>
     );
   }
@@ -358,14 +362,14 @@ export default function InstagramInbox() {
             <Instagram size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Instagram Gelen Kutusu</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Gelen DM'leri yönetin ve yanıtlayın</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('instagram:inbox.title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('instagram:inbox.subtitle')}</p>
           </div>
         </div>
         <button
           onClick={reload}
           className="p-2 text-gray-400 hover:text-primary-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-          title="Yenile"
+          title={t('common:refresh')}
         >
           <RefreshCw size={18} />
         </button>
@@ -374,8 +378,8 @@ export default function InstagramInbox() {
       {/* Tabs */}
       <div className="flex gap-1 mb-5 border-b border-gray-200 dark:border-gray-700">
         {[
-          { key: 'unassigned', label: 'Atanmamış', count: unassigned.length },
-          { key: 'all', label: 'Tüm Konuşmalar', count: null },
+          { key: 'unassigned', label: t('instagram:inbox.tabs.unassigned'), count: unassigned.length },
+          { key: 'all', label: t('instagram:inbox.tabs.all'), count: null },
         ].map(tab => (
           <button
             key={tab.key}
@@ -404,10 +408,10 @@ export default function InstagramInbox() {
             onChange={e => setFilterStatus(e.target.value)}
             className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           >
-            <option value="">Tüm Durumlar</option>
-            <option value="open">Açık</option>
-            <option value="resolved">Çözümlendi</option>
-            <option value="ignored">Yok Sayıldı</option>
+            <option value="">{t('instagram:inbox.filters.allStatuses')}</option>
+            <option value="open">{t('instagram:inbox.status.open')}</option>
+            <option value="resolved">{t('instagram:inbox.status.resolved')}</option>
+            <option value="ignored">{t('instagram:inbox.status.ignored')}</option>
           </select>
           {clinics.length > 0 && (
             <select
@@ -415,7 +419,7 @@ export default function InstagramInbox() {
               onChange={e => setFilterClinic(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             >
-              <option value="">Tüm Şubeler</option>
+              <option value="">{t('instagram:inbox.filters.allBranches')}</option>
               {clinics.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -444,7 +448,7 @@ export default function InstagramInbox() {
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <Instagram size={48} className="mx-auto mb-4 opacity-30" />
           <p className="font-medium">
-            {activeTab === 'unassigned' ? 'Atanmayı bekleyen DM yok.' : 'Konuşma bulunamadı.'}
+            {activeTab === 'unassigned' ? t('instagram:inbox.empty.unassigned') : t('instagram:inbox.empty.conversations')}
           </p>
         </div>
       )}
@@ -471,7 +475,7 @@ export default function InstagramInbox() {
                   <StatusBadge entry={entry} />
                   {entry.instagramConnection && (
                     <span className="text-xs text-gray-400 dark:text-gray-500">
-                      via {entry.instagramConnection.name}
+                      {t('instagram:inbox.viaConnection', { name: entry.instagramConnection.name })}
                     </span>
                   )}
                 </div>
@@ -485,8 +489,8 @@ export default function InstagramInbox() {
 
                 {/* Meta info */}
                 <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 flex-wrap">
-                  <span>{entry.messageCount} mesaj</span>
-                  <span>{new Date(entry.updatedAt).toLocaleString('tr-TR')}</span>
+                  <span>{t('instagram:inbox.messageCount', { count: entry.messageCount })}</span>
+                  <span>{new Date(entry.updatedAt).toLocaleString(i18n.language)}</span>
                   {entry.clinic && (
                     <span className="flex items-center gap-1">
                       <Building2 size={10} />
@@ -511,7 +515,7 @@ export default function InstagramInbox() {
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 rounded-lg text-xs font-medium hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
                   >
                     <Send size={12} />
-                    Yanıtla
+                    {t('instagram:inbox.actions.reply')}
                   </button>
                 )}
 
@@ -528,7 +532,7 @@ export default function InstagramInbox() {
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-lg text-xs font-medium hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition-colors"
                   >
                     <Building2 size={12} />
-                    Şube Ata
+                    {t('instagram:inbox.actions.assignBranch')}
                   </button>
                 )}
 
@@ -545,7 +549,7 @@ export default function InstagramInbox() {
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                   >
                     <User size={12} />
-                    Hasta Bağla
+                    {t('instagram:inbox.actions.linkPatient')}
                   </button>
                 )}
 
@@ -554,11 +558,11 @@ export default function InstagramInbox() {
                   <button
                     onClick={() => handleConvertToRequest(entry)}
                     disabled={convertingId === entry.id || !entry.clinicId}
-                    title={!entry.clinicId ? 'Önce şube atayın' : 'Randevu Talebine Dönüştür'}
+                    title={!entry.clinicId ? t('instagram:inbox.errors.assignBranchFirst') : t('instagram:inbox.actions.convertToRequest')}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {convertingId === entry.id ? <Loader2 size={12} className="animate-spin" /> : <CalendarPlus size={12} />}
-                    Talep Oluştur
+                    {t('instagram:inbox.actions.createRequest')}
                   </button>
                 )}
 
@@ -566,11 +570,11 @@ export default function InstagramInbox() {
                 {canViewInstagramInbox(user) && entry.status !== 'converted' && (
                   <button
                     onClick={() => entry.clinicId && entry.patientId ? openAppointmentModal(entry) : goToAppointmentForm(entry)}
-                    title={!entry.clinicId || !entry.patientId ? 'Şube ve hasta atandıktan sonra kullanılabilir' : 'Randevu Oluştur'}
+                    title={!entry.clinicId || !entry.patientId ? t('instagram:inbox.actions.appointmentDisabledHint') : t('instagram:inbox.actions.createAppointment')}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-lg text-xs font-medium hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
                   >
                     <Calendar size={12} />
-                    Randevu
+                    {t('instagram:inbox.actions.appointment')}
                   </button>
                 )}
               </div>
@@ -584,7 +588,7 @@ export default function InstagramInbox() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900 dark:text-white">Konuşmayı Çözümle</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-white">{t('instagram:inbox.resolveModal.title')}</h2>
               <button
                 onClick={() => setResolveModal(null)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -597,14 +601,14 @@ export default function InstagramInbox() {
               {/* Clinic */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Şube <span className="text-red-500">*</span>
+                  {t('instagram:inbox.resolveModal.branch')} <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={resolveModal.clinicId}
                   onChange={e => setResolveModal({ ...resolveModal, clinicId: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Şube seçin...</option>
+                  <option value="">{t('instagram:inbox.resolveModal.selectBranch')}</option>
                   {clinics.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -614,7 +618,7 @@ export default function InstagramInbox() {
               {/* Patient search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Hasta Ara (isteğe bağlı)
+                  {t('instagram:inbox.resolveModal.searchPatientOptional')}
                 </label>
                 <input
                   type="text"
@@ -623,7 +627,7 @@ export default function InstagramInbox() {
                     setResolveModal({ ...resolveModal, patientSearch: e.target.value });
                     searchPatients(e.target.value, resolveModal);
                   }}
-                  placeholder="Ad veya telefon..."
+                  placeholder={t('instagram:inbox.resolveModal.patientSearchPlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 {resolveModal.patients.length > 0 && (
@@ -647,7 +651,7 @@ export default function InstagramInbox() {
                 onClick={() => setResolveModal(null)}
                 className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
               >
-                İptal
+                {t('common:cancel')}
               </button>
               <button
                 onClick={handleResolve}
@@ -655,7 +659,7 @@ export default function InstagramInbox() {
                 className="flex items-center gap-2 px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
               >
                 {resolving && <Loader2 size={14} className="animate-spin" />}
-                Çözümle
+                {t('instagram:inbox.resolveModal.resolve')}
               </button>
             </div>
           </div>
@@ -667,7 +671,7 @@ export default function InstagramInbox() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900 dark:text-white">Instagram DM Yanıtla</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-white">{t('instagram:inbox.replyModal.title')}</h2>
               <button
                 onClick={() => { setReplyModal(null); setReplyResult(null); }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -678,7 +682,7 @@ export default function InstagramInbox() {
 
             <div className="px-6 py-4 space-y-3">
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                Alıcı: <strong>{replyModal.entry.senderUsername ? `@${replyModal.entry.senderUsername}` : replyModal.entry.externalSenderId}</strong>
+                {t('instagram:inbox.replyModal.recipient')}: <strong>{replyModal.entry.senderUsername ? `@${replyModal.entry.senderUsername}` : replyModal.entry.externalSenderId}</strong>
               </p>
 
               {replyResult && (
@@ -691,7 +695,7 @@ export default function InstagramInbox() {
               <textarea
                 value={replyModal.message}
                 onChange={e => setReplyModal({ ...replyModal, message: e.target.value })}
-                placeholder="Mesajınızı yazın..."
+                placeholder={t('instagram:inbox.replyModal.placeholder')}
                 rows={4}
                 maxLength={1000}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
@@ -706,7 +710,7 @@ export default function InstagramInbox() {
                 onClick={() => { setReplyModal(null); setReplyResult(null); }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
               >
-                Kapat
+                {t('common:close')}
               </button>
               <button
                 onClick={handleReply}
@@ -714,7 +718,7 @@ export default function InstagramInbox() {
                 className="flex items-center gap-2 px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
               >
                 {replying ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                Gönder
+                {t('instagram:inbox.replyModal.send')}
               </button>
             </div>
           </div>
@@ -728,7 +732,7 @@ export default function InstagramInbox() {
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
               <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <Calendar size={18} className="text-green-600" />
-                Randevu Oluştur
+                {t('instagram:inbox.appointment.title')}
               </h2>
               <button onClick={() => setApptModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <XCircle size={20} />
@@ -739,7 +743,12 @@ export default function InstagramInbox() {
               {/* Instagram DM source banner */}
               <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-xs text-purple-700 dark:text-purple-300 flex items-start gap-2">
                 <Instagram size={14} className="mt-0.5 shrink-0" />
-                <span>Bu randevu Instagram DM görüşmesinden oluşturuluyor.{apptModal.entry.senderUsername ? ` Gönderen: @${apptModal.entry.senderUsername}` : ''}</span>
+                <span>
+                  {t('instagram:inbox.appointment.sourceNotice')}
+                  {apptModal.entry.senderUsername
+                    ? ` ${t('instagram:inbox.appointment.sender', { sender: `@${apptModal.entry.senderUsername}` })}`
+                    : ''}
+                </span>
               </div>
 
               {apptModal.loadingData ? (
@@ -749,14 +758,14 @@ export default function InstagramInbox() {
                   {/* Practitioner */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Hekim <span className="text-red-500">*</span>
+                      {t('instagram:inbox.appointment.practitioner')} <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={apptModal.practitionerId}
                       onChange={e => setApptModal(prev => prev ? { ...prev, practitionerId: e.target.value } : null)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
-                      <option value="">Hekim seçin...</option>
+                      <option value="">{t('instagram:inbox.appointment.selectPractitioner')}</option>
                       {apptModal.doctors.map(d => (
                         <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
                       ))}
@@ -766,14 +775,14 @@ export default function InstagramInbox() {
                   {/* Service */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Hizmet <span className="text-red-500">*</span>
+                      {t('instagram:inbox.appointment.service')} <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={apptModal.appointmentTypeId}
                       onChange={e => setApptModal(prev => prev ? { ...prev, appointmentTypeId: e.target.value } : null)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
-                      <option value="">Hizmet seçin...</option>
+                      <option value="">{t('instagram:inbox.appointment.selectService')}</option>
                       {apptModal.services.map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
@@ -783,7 +792,7 @@ export default function InstagramInbox() {
                   {/* Date */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Tarih <span className="text-red-500">*</span>
+                      {t('common:date')} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="date"
@@ -796,7 +805,7 @@ export default function InstagramInbox() {
                   {/* Time */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Saat <span className="text-red-500">*</span>
+                      {t('common:time')} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="time"
@@ -808,7 +817,7 @@ export default function InstagramInbox() {
 
                   {/* Notes */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Not</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('instagram:inbox.appointment.notes')}</label>
                     <textarea
                       rows={2}
                       value={apptModal.notes}
@@ -822,7 +831,7 @@ export default function InstagramInbox() {
 
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 shrink-0">
               <button onClick={() => setApptModal(null)} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm">
-                İptal
+                {t('common:cancel')}
               </button>
               <button
                 onClick={handleCreateAppointment}
@@ -830,7 +839,7 @@ export default function InstagramInbox() {
                 className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
               >
                 {savingAppt ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
-                Randevu Oluştur
+                {t('instagram:inbox.actions.createAppointment')}
               </button>
             </div>
           </div>

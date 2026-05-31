@@ -1,0 +1,52 @@
+{
+  "header": {
+    "subtitle": "Online Appointment"
+  },
+  "errors": {
+    "invalidLink": "Invalid link.",
+    "loadClinic": "Clinic information could not be loaded.",
+    "loading": "Loading error",
+    "namePhoneRequired": "Full name and phone are required.",
+    "submitFailed": "Appointment request could not be sent. Please try again."
+  },
+  "service": {
+    "title": "Select a service",
+    "subtitle": "Which treatment would you like to book for?",
+    "duration": "{{minutes}} min",
+    "empty": "No services have been defined yet.",
+    "continueWithoutService": "Continue without selecting a service"
+  },
+  "schedule": {
+    "title": "Select Practitioner & Date",
+    "optional": "Optional",
+    "doctorOptional": "Practitioner (optional)",
+    "anyDoctor": "No preference",
+    "dateOptional": "Preferred date (optional)",
+    "timeOptional": "Preferred time (optional)"
+  },
+  "contact": {
+    "title": "Contact Information",
+    "subtitle": "Please fill this in so we can call you",
+    "fullName": "Full Name",
+    "fullNamePlaceholder": "Your full name",
+    "phone": "Phone",
+    "emailOptional": "Email (optional)",
+    "noteOptional": "Note (optional)",
+    "notePlaceholder": "Your concern, special request...",
+    "disclaimer": "After your request is received, the clinic will call you to confirm your appointment."
+  },
+  "actions": {
+    "continue": "Continue",
+    "submitting": "Sending...",
+    "submit": "Send Appointment Request"
+  },
+  "success": {
+    "title": "Your Request Has Been Received!",
+    "body": "{{clinic}} team will call {{phone}} as soon as possible to confirm your appointment.",
+    "questions": "For questions",
+    "newAppointment": "Book a New Appointment"
+  },
+  "footer": {
+    "poweredBy": "Powered by Klinik CRM"
+  }
+}

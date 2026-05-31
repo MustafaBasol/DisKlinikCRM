@@ -1,0 +1,170 @@
+{
+  "inbox": {
+    "title": "WhatsApp-Posteingang",
+    "tabs": {
+      "unassigned": "Nicht zugewiesen",
+      "all": "Alle Konversationen"
+    },
+    "filters": {
+      "allStatuses": "Alle Status",
+      "clinicIdPlaceholder": "Nach Klinik-ID filtern..."
+    },
+    "status": {
+      "unassigned": "Nicht zugewiesen",
+      "assigned": "Zugewiesen",
+      "resolved": "Gelöst",
+      "open": "Offen"
+    },
+    "empty": {
+      "unassigned": "Es gibt keine nicht zugewiesenen Konversationen.",
+      "conversations": "Keine Konversationen gefunden."
+    },
+    "errors": {
+      "loadUnassigned": "Nicht zugewiesene Konversationen konnten nicht geladen werden.",
+      "loadConversations": "Konversationen konnten nicht geladen werden.",
+      "resolveFailed": "Auflösung fehlgeschlagen.",
+      "linkPatientFailed": "Patientenverknüpfung fehlgeschlagen."
+    },
+    "messageCount": "{{count}} Nachrichten",
+    "possiblePatients": "Mögliche Patienten",
+    "actions": {
+      "assignClinic": "Klinik zuweisen"
+    },
+    "resolveModal": {
+      "title": "Klinik zuweisen",
+      "description": "Weisen Sie die Konversation von {{phone}} einer Klinik zu.",
+      "clinicId": "Klinik-ID",
+      "clinicIdPlaceholder": "Klinik-ID eingeben...",
+      "patientOptional": "Patient (optional)",
+      "matchingPatients": "Passende Patienten",
+      "patientSelected": "Patient ausgewählt (ID: {{id}})",
+      "searchPatient": "Patient suchen..."
+    }
+  },
+  "connections": {
+    "title": "WhatsApp-Verbindungen",
+    "subtitle": "WhatsApp-Verbindungen organisationsweit verwalten",
+    "providerInfo": "{{evolution}} und {{meta}} werden unterstuetzt. Evolution API kann manuell konfiguriert werden; Meta kann Embedded Signup oder manuelle Token-Eingabe verwenden.",
+    "empty": "Es wurde noch keine WhatsApp-Verbindung hinzugefuegt.",
+    "configuredSecret": "Konfiguriert (verborgen)",
+    "assignedBranches": "Filialen: {{branches}}",
+    "noBranchesAssigned": "Noch keiner Filiale zugewiesen",
+    "metaNoQr": "Meta Cloud API verwendet keinen QR-Code; die Kontoueberpruefung erfolgt ueber \"Mit Meta verbinden\".",
+    "inactiveWarning": "Verbindung ist deaktiviert; ueber diese Leitung koennen keine Nachrichten gesendet werden.",
+    "createdAt": "Erstellt",
+    "status": {
+      "inactive": "Deaktiviert"
+    },
+    "actions": {
+      "newConnection": "Neue Verbindung hinzufuegen",
+      "connectMeta": "Mit Meta verbinden",
+      "connectMetaAutomatic": "Mit Meta Embedded Signup verbinden (automatisch)",
+      "importToPanel": "In Panel-Verwaltung importieren",
+      "test": "Verbindung testen",
+      "getQr": "QR-Code abrufen / verbinden",
+      "disconnect": "Trennen (WhatsApp-Sitzung beenden)",
+      "deactivate": "Deaktivieren",
+      "activate": "Aktivieren"
+    },
+    "metaPanel": {
+      "title": "Meta-Verbindung (WhatsApp Business)",
+      "ready": "Meta Embedded Signup ist konfiguriert. Klicken Sie auf die Schaltflaeche, um Ihr Konto zu verbinden.",
+      "notConfiguredPrefix": "Meta Embedded Signup ist auf diesem Server nicht konfiguriert.",
+      "notConfiguredSuffix": "Umgebungsvariablen muessen gesetzt werden.",
+      "manualHint": " Fuer manuelle Einrichtung waehlen Sie \"Neue Verbindung\" > \"Meta Cloud API\".",
+      "connectTitle": "Mit Meta Embedded Signup verbinden",
+      "notConfiguredTitle": "Meta Embedded Signup ist nicht konfiguriert"
+    },
+    "legacy": {
+      "title": "Bestehende Evolution-API-Verbindung in Umgebungsvariablen gefunden",
+      "description": "Diese Verbindung laeuft derzeit ueber Server-Umgebungsvariablen. Importieren Sie sie ins Panel, um sie zu bearbeiten, zu testen und Filialen zuzuweisen.",
+      "note": "Hinweis: Eine Verbindung aus Umgebungsvariablen kann nicht direkt aus dem Panel geloescht werden. Entfernen Sie sie vollstaendig, indem Sie die Server-Umgebungsvariablen bereinigen.",
+      "afterImport": "Nach dem Import stehen Bearbeiten, Testen, Filiale zuweisen und Deaktivieren zur Verfuegung."
+    },
+    "token": {
+      "expired": "Meta Access Token ist abgelaufen; erneuern Sie die Verbindung.",
+      "expiring": "Meta Access Token laeuft bald ab; planen Sie eine Token-Erneuerung.",
+      "unknown": "Gueltigkeitsdatum des Tokens ist unbekannt; Token-Informationen wurden nicht eingegeben.",
+      "validity": "Token-Gueltigkeit",
+      "expiredShort": "Abgelaufen",
+      "expiringShort": "Laeuft bald ab",
+      "unknownShort": "Unbekannt; Token-Informationen wurden nicht eingegeben"
+    },
+    "qr": {
+      "metaNotUsed": "Meta Cloud API verwendet keine QR-Codes. Verbinden Sie das Konto ueber \"Mit Meta verbinden\" oder manuelle Konfiguration.",
+      "connectWithQr": "WhatsApp mit QR-Code verbinden:",
+      "empty": "QR-Code ist nicht verfuegbar; die Verbindung ist moeglicherweise bereits aktiv.",
+      "alt": "QR-Code"
+    },
+    "deleteModal": {
+      "title": "Verbindung loeschen",
+      "confirm": "Die Verbindung \"{{name}}\" wird geloescht. Sind Sie sicher?",
+      "branchWarning": "Wenn diese Verbindung geloescht wird, koennen verknuepfte Filialen keine WhatsApp-Nachrichten senden.",
+      "historyWarning": "Wenn ein Nachrichtenverlauf vorhanden ist, wird das Loeschen blockiert; verwenden Sie stattdessen \"Deaktivieren\"."
+    },
+    "modal": {
+      "createTitle": "Neue WhatsApp-Verbindung",
+      "editTitle": "Verbindung bearbeiten",
+      "name": "Verbindungsname",
+      "namePlaceholder": "z. B. WhatsApp Hauptfiliale",
+      "provider": "Anbieter",
+      "metaManualAllowed": "Meta Embedded Signup ist auf dem Server nicht konfiguriert. Sie koennen trotzdem eine Verbindung mit manueller Token-Eingabe erstellen.",
+      "phoneNumber": "Telefonnummer",
+      "displayName": "Anzeigename",
+      "displayNamePlaceholder": "Klinik WhatsApp",
+      "evolutionSettings": "Evolution API-Einstellungen",
+      "apiUrl": "API-URL",
+      "instanceName": "Instanzname",
+      "apiKey": "API-Schluessel",
+      "leaveBlankUnchanged": "leer lassen, um unveraendert zu lassen",
+      "configuredPlaceholder": "******** (Konfiguriert)",
+      "configuredIfPlaceholder": "******** (falls konfiguriert)",
+      "evolutionApiKeyPlaceholder": "Evolution API-Schluessel",
+      "apiKeyEncryptedHint": "Der API-Schluessel wird serverseitig mit AES-256-GCM verschluesselt gespeichert. Ein neuer Wert ersetzt den alten Schluessel dauerhaft.",
+      "webhookSecret": "Webhook-Geheimnis",
+      "optional": "optional",
+      "webhookSecretPlaceholder": "Webhook-Verifizierungsgeheimnis",
+      "metaManualSettings": "Meta Cloud API - manuelle Konfiguration",
+      "metaManualHint": "Alternativ koennen Sie unten die Details aus Meta Business Manager > WhatsApp > API Setup manuell eingeben.",
+      "metaBusinessId": "Business ID",
+      "metaWabaId": "WhatsApp Business Account ID (WABA ID)",
+      "metaPhoneNumberId": "Phone Number ID",
+      "metaAppId": "App ID",
+      "metaWebhookVerifyToken": "Webhook Verify Token",
+      "optionalSignature": "optional - X-Hub-Signature-256-Verifizierung",
+      "metaWebhookSecretPlaceholder": "Meta Webhook-Geheimnis",
+      "accessToken": "Access Token",
+      "accessTokenPlaceholder": "Meta Access Token",
+      "accessTokenEncryptedHint": "Das Access Token wird serverseitig mit AES-256-GCM verschluesselt gespeichert. Ein neuer Wert ersetzt das alte Token dauerhaft.",
+      "branchAssignment": "Filialzuweisung",
+      "branchAssignmentHint": "Waehlen Sie, welche Filialen diese Verbindung verwenden koennen. Mehrere Filialen koennen fuer eine gemeinsame Leitung ausgewaehlt werden.",
+      "noBranchSelected": "Keine Filiale ausgewaehlt. Diese Verbindung wird gespeichert, kann aber nicht zum Senden von Nachrichten verwendet werden."
+    },
+    "confirm": {
+      "disconnect": "Moechten Sie \"{{name}}\" wirklich trennen?",
+      "importLegacy": "Bestehende Evolution-API-Einstellungen aus den Umgebungsvariablen werden in die Datenbank importiert. Fortfahren?"
+    },
+    "success": {
+      "disconnected": "Verbindung \"{{name}}\" getrennt.",
+      "alreadyImported": "Diese Verbindung wurde bereits importiert.",
+      "imported": "Evolution-API-Verbindung erfolgreich in die Datenbank importiert.",
+      "activated": "\"{{name}}\" aktiviert.",
+      "deactivated": "\"{{name}}\" deaktiviert.",
+      "deleted": "Verbindung \"{{name}}\" geloescht."
+    },
+    "errors": {
+      "loadFailed": "WhatsApp-Verbindungen konnten nicht geladen werden.",
+      "nameRequired": "Verbindungsname ist erforderlich.",
+      "saveFailed": "Speichern fehlgeschlagen.",
+      "testFailed": "Testanfrage fehlgeschlagen.",
+      "disconnectFailed": "Verbindung konnte nicht getrennt werden.",
+      "importFailed": "Import fehlgeschlagen.",
+      "statusUpdateFailed": "Status konnte nicht aktualisiert werden.",
+      "deleteHasHistory": "\"{{name}}\" konnte nicht geloescht werden: Nachrichtenverlauf ist vorhanden. Verwenden Sie stattdessen die Schaltflaeche \"Deaktivieren\".",
+      "deleteFailed": "Verbindung konnte nicht geloescht werden.",
+      "metaRejected": "Meta-Verbindung wurde abgelehnt: {{error}}",
+      "metaMissingCode": "Meta-Autorisierung konnte nicht abgeschlossen werden: Code wurde nicht empfangen.",
+      "metaCreateFailed": "Meta-Verbindung konnte nicht erstellt werden."
+    }
+  }
+}

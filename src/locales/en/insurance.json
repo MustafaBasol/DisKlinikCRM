@@ -54,6 +54,9 @@
   "summary": {
     "patientResponsibility": "Patient Responsibility"
   },
+  "notes": {
+    "patientResponsibilityFor": "Patient responsibility amount for {{provider}}"
+  },
   "actions": {
     "cancel": "Cancel",
     "createPatientPayment": "Create Patient Payment"

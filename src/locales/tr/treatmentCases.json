@@ -1,6 +1,7 @@
 {
   "title": "Tedavi ve Hizmetler",
   "subtitle": "Hizmet fırsatlarını ve hasta tedavi süreçlerini takip edin.",
+  "service": "Hizmet",
   "newCase": "Yeni Tedavi Dosyası",
   "editCase": "Tedaviyi Düzenle",
   "detailTitle": "Tedavi Dosyası Detayları",
@@ -40,6 +41,7 @@
     "updated": "Son Güncelleme"
   },
   "form": {
+    "service": "Hizmet",
     "title": "Dosya Başlığı",
     "description": "Açıklama",
     "patient": "Hasta",
@@ -60,5 +62,77 @@
     "markCompleted": "Tamamlandı İşaretle",
     "markLost": "Kaybedildi İşaretle",
     "viewDetails": "Detayları Gör"
+  },
+  "detail": {
+    "backToPipeline": "Pipeline'a Dön",
+    "closedOn": "{{date}} tarihinde kapatıldı",
+    "financialSummary": "Finansal Özet",
+    "stakeholders": "İlgililer",
+    "noDescription": "Açıklama girilmemiş.",
+    "errors": {
+      "loadFailed": "Tedavi dosyası detayları alınamadı.",
+      "notFound": "Tedavi dosyası bulunamadı."
+    }
+  },
+  "progress": {
+    "complete": "%{{percent}} tamamlandı",
+    "clickToChange": "Değiştirmek için bir aşamaya tıklayın."
+  },
+  "appointments": {
+    "unlink": "Bağlantıyı kaldır",
+    "confirmUnlink": "Bu randevu bağlantısı tedavi dosyasından kaldırılsın mı?",
+    "linkFailed": "Randevu bağlanamadı.",
+    "unlinkFailed": "Randevu bağlantısı kaldırılamadı.",
+    "empty": "Bu tedaviyle ilişkili randevu yok.",
+    "createNew": "Randevu oluştur",
+    "linkExisting": "Mevcut randevu bağla",
+    "linkModalDescription": "{{patient}} hastasına ait randevulardan birini bu tedavi dosyasına bağlayın.",
+    "noLinkable": "Bağlanabilecek randevu bulunamadı."
+  },
+  "procedures": {
+    "title": "Tedavi Planı İşlemleri",
+    "add": "İşlem ekle",
+    "edit": "İşlemi düzenle",
+    "empty": "Henüz işlem eklenmemiş.",
+    "confirmDelete": "Bu işlem silinsin mi?",
+    "optional": "isteğe bağlı",
+    "selectService": "Hizmet seçin",
+    "fields": {
+      "name": "İşlem adı",
+      "service": "Hizmet",
+      "toothFdi": "FDI diş no",
+      "estimatedCost": "Tahmini tutar",
+      "scheduledDate": "Planlanan tarih",
+      "status": "Durum",
+      "notes": "Notlar"
+    },
+    "placeholders": {
+      "name": "Örn. implant hazırlığı",
+      "toothFdi": "FDI",
+      "notes": "İşlem notu ekleyin..."
+    },
+    "errors": {
+      "saveFailed": "İşlem kaydedilemedi.",
+      "deleteFailed": "İşlem silinemedi."
+    }
+  },
+  "materials": {
+    "title": "Tedavi Malzemeleri",
+    "item": "Malzeme",
+    "stock": "Stok",
+    "quantity": "Miktar",
+    "noteOptional": "Not",
+    "notePlaceholder": "İsteğe bağlı not",
+    "empty": "Henüz malzeme eklenmemiş.",
+    "confirmDelete": "Bu malzeme silinsin mi?",
+    "errors": {
+      "addFailed": "Malzeme eklenemedi.",
+      "deleteFailed": "Malzeme silinemedi."
+    }
+  },
+  "activity": {
+    "title": "Aktivite Geçmişi",
+    "byUser": "{{user}} tarafından • {{date}}",
+    "empty": "Aktivite kaydı yok."
   }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Clock,
   UserCheck,
@@ -32,7 +33,7 @@ interface Doctor {
   isActive: boolean;
 }
 
-const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
 const DEFAULT_HOURS: WorkingHoursEntry[] = Array.from({ length: 7 }, (_, i) => ({
   id: null,
@@ -47,6 +48,7 @@ const ClinicSchedule: React.FC = () => {
   const { clinicId } = useParams<{ clinicId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useTranslation(['branches', 'common']);
 
   const [tab, setTab] = useState<'hours' | 'doctors'>('hours');
   const [hours, setHours] = useState<WorkingHoursEntry[]>(DEFAULT_HOURS);
@@ -70,11 +72,11 @@ const ClinicSchedule: React.FC = () => {
       const res = await scheduleService.getWorkingHours(clinicId);
       setHours(res.data);
     } catch {
-      setError('Çalışma saatleri yüklenemedi');
+      setError(t('branches:schedule.errors.loadHoursFailed'));
     } finally {
       setLoading(false);
     }
-  }, [clinicId]);
+  }, [clinicId, t]);
 
   const fetchDoctors = useCallback(async () => {
     if (!clinicId) return;
@@ -84,11 +86,11 @@ const ClinicSchedule: React.FC = () => {
       const res = await scheduleService.getClinicDoctors(clinicId);
       setDoctors(res.data);
     } catch {
-      setError('Doktor listesi yüklenemedi');
+      setError(t('branches:schedule.errors.loadDoctorsFailed'));
     } finally {
       setLoading(false);
     }
-  }, [clinicId]);
+  }, [clinicId, t]);
 
   useEffect(() => {
     if (tab === 'hours') fetchHours();
@@ -118,7 +120,7 @@ const ClinicSchedule: React.FC = () => {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
-      setError('Çalışma saatleri kaydedilemedi');
+      setError(t('branches:schedule.errors.saveHoursFailed'));
     } finally {
       setSaving(false);
     }
@@ -150,8 +152,8 @@ const ClinicSchedule: React.FC = () => {
           <ChevronLeft size={20} />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Klinik Programı</h1>
-          <p className="text-sm text-gray-500">Çalışma saatleri ve doktor müsaitlikleri</p>
+          <h1 className="text-xl font-bold text-gray-900">{t('branches:schedule.title')}</h1>
+          <p className="text-sm text-gray-500">{t('branches:schedule.subtitle')}</p>
         </div>
       </div>
 
@@ -166,7 +168,7 @@ const ClinicSchedule: React.FC = () => {
           }`}
         >
           <Clock size={16} />
-          Çalışma Saatleri
+          {t('branches:schedule.tabs.hours')}
         </button>
         <button
           onClick={() => setTab('doctors')}
@@ -177,7 +179,7 @@ const ClinicSchedule: React.FC = () => {
           }`}
         >
           <UserCheck size={16} />
-          Doktorlar
+          {t('branches:schedule.tabs.doctors')}
         </button>
       </div>
 
@@ -193,7 +195,7 @@ const ClinicSchedule: React.FC = () => {
       {saveSuccess && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 text-sm">
           <CheckCircle size={16} />
-          Çalışma saatleri başarıyla kaydedildi
+          {t('branches:schedule.success.hoursSaved')}
         </div>
       )}
 
@@ -208,9 +210,9 @@ const ClinicSchedule: React.FC = () => {
       {!loading && tab === 'hours' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-800">Haftalık Çalışma Saatleri</h2>
+            <h2 className="font-semibold text-gray-800">{t('branches:schedule.weeklyHoursTitle')}</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Kapalı günlerde randevu oluşturulamaz
+              {t('branches:schedule.closedDayHelp')}
             </p>
           </div>
 
@@ -219,7 +221,7 @@ const ClinicSchedule: React.FC = () => {
               <div key={h.dayOfWeek} className="flex items-center gap-4 px-6 py-3">
                 <div className="w-28">
                   <span className={`text-sm font-medium ${h.isClosed ? 'text-gray-400' : 'text-gray-800'}`}>
-                    {DAY_NAMES[h.dayOfWeek]}
+                    {t(`branches:schedule.days.${DAY_KEYS[h.dayOfWeek]}`)}
                   </span>
                 </div>
 
@@ -230,11 +232,11 @@ const ClinicSchedule: React.FC = () => {
                     onChange={e => handleHourChange(h.dayOfWeek, 'isClosed', e.target.checked)}
                     className="rounded"
                   />
-                  <span className="text-sm text-gray-500">Kapalı</span>
+                  <span className="text-sm text-gray-500">{t('branches:schedule.closed')}</span>
                 </label>
 
                 {h.isClosed && (
-                  <span className="ml-4 text-sm text-gray-400 italic">Kapalı gün</span>
+                  <span className="ml-4 text-sm text-gray-400 italic">{t('branches:schedule.closedDay')}</span>
                 )}
               </div>
             ))}
@@ -247,7 +249,7 @@ const ClinicSchedule: React.FC = () => {
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              Kaydet
+              {t('common:save')}
             </button>
           </div>
         </div>
@@ -259,9 +261,9 @@ const ClinicSchedule: React.FC = () => {
           {doctors.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
               <UserCheck size={32} className="mx-auto mb-3 text-gray-300" />
-              <p className="text-gray-500 text-sm">Bu klinike atanmış doktor bulunmuyor</p>
+              <p className="text-gray-500 text-sm">{t('branches:schedule.doctorsEmpty')}</p>
               <p className="text-gray-400 text-xs mt-1">
-                Kullanıcı yönetiminden doktor ataması yapabilirsiniz
+                {t('branches:schedule.doctorsEmptyHelp')}
               </p>
             </div>
           ) : (
@@ -292,7 +294,7 @@ const ClinicSchedule: React.FC = () => {
                     ) : (
                       <Calendar size={12} />
                     )}
-                    Programını Görüntüle
+                    {t('branches:schedule.viewSchedule')}
                   </button>
                 </div>
 
@@ -300,7 +302,7 @@ const ClinicSchedule: React.FC = () => {
                   <div className="px-5 pb-4">
                     <div className="border-t border-gray-50 pt-3">
                       {doctorAvailabilities[doc.id].length === 0 ? (
-                        <p className="text-xs text-gray-400 italic">Program tanımlı değil</p>
+                        <p className="text-xs text-gray-400 italic">{t('branches:schedule.noSchedule')}</p>
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           {[0, 1, 2, 3, 4, 5, 6].map(day => {
@@ -311,7 +313,7 @@ const ClinicSchedule: React.FC = () => {
                             return (
                               <div key={day} className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                                 <p className="text-xs font-semibold text-blue-700 mb-1">
-                                  {DAY_NAMES[day]}
+                                  {t(`branches:schedule.days.${DAY_KEYS[day]}`)}
                                 </p>
                                 {slots.map((s: any) => (
                                   <p key={s.id} className="text-xs text-blue-600">

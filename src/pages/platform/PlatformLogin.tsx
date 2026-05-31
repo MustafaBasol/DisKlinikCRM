@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { usePlatformAuth } from '../../context/PlatformAuthContext';
 
 const PlatformLogin: React.FC = () => {
+  const { t } = useTranslation(['platform']);
   const navigate = useNavigate();
   const { login } = usePlatformAuth();
   const [email, setEmail] = useState('');
@@ -19,7 +21,7 @@ const PlatformLogin: React.FC = () => {
       await login(email, password);
       navigate('/platform');
     } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Giriş başarısız');
+      setError(err.response?.data?.error ?? t('platform:errors.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -32,14 +34,14 @@ const PlatformLogin: React.FC = () => {
           <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
             <Shield size={28} className="text-blue-600 dark:text-blue-400" />
           </div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Platform Yönetimi</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Süper admin girişi</p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('platform:login.title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('platform:login.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              E-posta
+              {t('platform:login.email')}
             </label>
             <input
               type="email"
@@ -54,7 +56,7 @@ const PlatformLogin: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Şifre
+              {t('platform:login.password')}
             </label>
             <input
               type="password"
@@ -78,12 +80,12 @@ const PlatformLogin: React.FC = () => {
             className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
-            Giriş Yap
+            {t('platform:login.submit')}
           </button>
         </form>
 
         <p className="text-center text-xs text-gray-400 dark:text-gray-600 mt-6">
-          Bu alan yalnızca platform yöneticilerine özeldir.
+          {t('platform:login.restricted')}
         </p>
       </div>
     </div>

@@ -1,0 +1,123 @@
+{
+  "status": {
+    "pending": "Bekliyor",
+    "approved": "Onaylandı",
+    "paid": "Ödendi",
+    "cancelled": "İptal"
+  },
+  "period": {
+    "monthOption": "{{month}}. Ay"
+  },
+  "filters": {
+    "allStatuses": "Tüm Durumlar",
+    "allDoctors": "Tüm Hekimler"
+  },
+  "summary": {
+    "totalEarnings": "Toplam Kazanç",
+    "approved": "Onaylanan",
+    "paid": "Ödenen",
+    "payableApproved": "Ödenmesi Gereken (Onaylı)"
+  },
+  "summaryTab": {
+    "empty": "Bu dönemde kazanç verisi bulunamadı."
+  },
+  "tabs": {
+    "summary": "Dönem Özeti",
+    "earnings": "Kazanç Listesi",
+    "payouts": "Ödemeler",
+    "settings": "Komisyon Ayarları"
+  },
+  "columns": {
+    "doctor": "Hekim",
+    "patient": "Hasta",
+    "service": "Hizmet",
+    "serviceCase": "Hizmet / Vaka",
+    "collection": "Tahsilat",
+    "earning": "Kazanç",
+    "adjustedEarning": "Düz. Kazanç",
+    "calculatedEarning": "Hesaplanan Kazanç",
+    "grossAmount": "Brüt Tutar",
+    "remaining": "Kalan",
+    "status": "Durum",
+    "date": "Tarih"
+  },
+  "my": {
+    "title": "Kazançlarım",
+    "subtitle": "{{name}} - Kişisel kazanç özeti",
+    "details": "Kazanç Detayları",
+    "empty": "Bu dönemde kazanç kaydı bulunamadı."
+  },
+  "management": {
+    "title": "Hekim Kazanç Yönetimi",
+    "subtitle": "Hekim komisyon kuralları ve kazanç takibi",
+    "empty": "Kazanç kaydı bulunamadı.",
+    "collectionRate": "%{{rate}} tahsil",
+    "adjustTitle": "Kazanç Düzenle",
+    "adjustedAmount": "Düzeltilmiş Tutar",
+    "adjustmentReason": "Düzeltme Gerekçesi",
+    "adjustmentPlaceholder": "Neden düzeltme yapıyorsunuz?"
+  },
+  "actions": {
+    "approve": "Onayla",
+    "markPaid": "Ödendi işaretle",
+    "paid": "Ödendi"
+  },
+  "confirm": {
+    "cancelEarning": "Bu kazancı iptal etmek istediğinize emin misiniz?",
+    "deleteRule": "Bu kuralı silmek istediğinize emin misiniz?"
+  },
+  "payouts": {
+    "recordPayment": "Ödeme Kaydet",
+    "empty": "Henüz ödeme kaydı yok.",
+    "period": "Dönem",
+    "periodMonth": "Dönem Ay",
+    "periodYear": "Dönem Yıl",
+    "paymentDate": "Ödeme Tarihi",
+    "amount": "Tutar",
+    "method": "Yöntem",
+    "note": "Not",
+    "recordedBy": "Kaydeden",
+    "optional": "İsteğe bağlı",
+    "markApprovedAsPaid": "Onaylı kazançları ödendi işaretle (isteğe bağlı)"
+  },
+  "settings": {
+    "doctorCommissionRules": "Hekim Komisyon Kuralları",
+    "serviceCommissionRules": "Hizmet Bazlı Komisyon Kuralları",
+    "addRule": "Kural Ekle",
+    "addServiceRule": "Hizmet Kuralı Ekle",
+    "noRules": "Henüz kural tanımlanmamış.",
+    "noServiceRules": "Henüz hizmet bazlı kural tanımlanmamış.",
+    "type": "Tür",
+    "fixedMonthly": "Sabit (Aylık)",
+    "fixedMonthlyAmount": "Sabit Aylık Tutar",
+    "fixedAmount": "Sabit Tutar",
+    "percent": "Yüzde %",
+    "percentage": "Yüzde (%)",
+    "calculationBase": "Hesap Bazı",
+    "commissionType": "Komisyon Türü",
+    "startDate": "Başlangıç Tarihi",
+    "endDate": "Bitiş Tarihi",
+    "editRuleTitle": "Komisyon Kuralı Düzenle",
+    "addRuleTitle": "Komisyon Kuralı Ekle",
+    "addServiceRuleTitle": "Hizmet Bazlı Kural Ekle",
+    "compTypes": {
+      "fixed": "Sabit Aylık",
+      "percentage": "Yüzde Bazlı",
+      "fixed_plus_percentage": "Sabit + Yüzde",
+      "per_service": "Hizmet Bazlı"
+    },
+    "calcBases": {
+      "collected": "Tahsilat Bazlı",
+      "billed": "Fatura Bazlı"
+    }
+  },
+  "errors": {
+    "myEarningsLoadFailed": "Kazanç bilgisi yüklenemedi.",
+    "earningsListLoadFailed": "Kazanç listesi yüklenemedi.",
+    "actionFailed": "İşlem başarısız.",
+    "requiredFields": "Lütfen zorunlu alanları doldurun.",
+    "payoutSaveFailed": "Ödeme kaydedilemedi.",
+    "ruleSaveFailed": "Kural kaydedilemedi.",
+    "serviceRuleSaveFailed": "Hizmet kuralı kaydedilemedi."
+  }
+}

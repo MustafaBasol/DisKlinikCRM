@@ -1,0 +1,123 @@
+{
+  "generalPreferences": "Allgemeine Einstellungen",
+  "preferences": "Einstellungen",
+  "language": "Sprache",
+  "languageHelp": "Ändert die Sprache der Oberfläche sofort.",
+  "accountInfo": "Kontoinformationen",
+  "accountFields": {
+    "name": "Name",
+    "email": "E-Mail",
+    "role": "Rolle",
+    "clinic": "Klinik"
+  },
+  "booking": {
+    "title": "Online-Buchungslink",
+    "description": "Teilen Sie diesen Link mit Patienten. Er erfordert keine Anmeldung und ermöglicht das Erstellen einer Terminanfrage.",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "open": "Öffnen"
+  },
+  "services": {
+    "title": "Klinikleistungen",
+    "subtitle": "Verwalten Sie die Leistungen und Behandlungen Ihrer Klinik.",
+    "newService": "Neue Leistung",
+    "empty": "Noch keine Leistungen konfiguriert."
+  },
+  "integrations": {
+    "title": "Integrationen",
+    "subtitle": "Verwalten Sie die Verbindungseinstellungen für die Kommunikationskanäle Ihrer Klinik.",
+    "whatsappTitle": "WhatsApp-Verbindungen",
+    "whatsappDescription": "Verwalten Sie WhatsApp-Kontoverbindungen, Status und Nachrichtenkonfiguration.",
+    "instagramTitle": "Instagram-Verbindungen",
+    "instagramDescription": "Verwalten Sie Instagram-Kontoverbindungen, Status und Inbox-Konfiguration.",
+    "open": "Öffnen"
+  },
+  "users": {
+    "title": "Benutzer und Behandler",
+    "subtitle": "Verwalten Sie Behandler und Mitarbeiterkonten der Klinik.",
+    "newUser": "Neuer Benutzer",
+    "editUser": "Benutzer bearbeiten",
+    "empty": "Noch keine Benutzer konfiguriert.",
+    "passwordHelp": "Leer lassen, um unverändert zu bleiben",
+    "importStaffWithExcel": "Personal mit Excel hinzufügen",
+    "passwordRequirementsTitle": "Das Passwort muss enthalten:",
+    "passwordRules": {
+      "minLength": "Mindestens 8 Zeichen",
+      "uppercase": "Einen Großbuchstaben",
+      "lowercase": "Einen Kleinbuchstaben",
+      "number": "Eine Zahl",
+      "special": "Ein Sonderzeichen (!@#$%^&* usw.)"
+    },
+    "fields": {
+      "name": "Name",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "role": "Rolle",
+      "password": "Passwort",
+      "status": "Status",
+      "isActive": "Aktiver Benutzer"
+    },
+    "status": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv"
+    },
+    "errors": {
+      "loadFailed": "Benutzer konnten nicht geladen werden",
+      "saveFailed": "Benutzer konnte nicht gespeichert werden"
+    }
+  },
+  "clinicAssignments": {
+    "title": "Klinikzuweisungen",
+    "loading": "Wird geladen...",
+    "empty": "In dieser Organisation wurde keine aktive Klinik gefunden.",
+    "defaultClinic": "Standardklinik",
+    "selectDefault": "— Auswählen —",
+    "roles": {
+      "CLINIC_MANAGER": "Klinikmanager",
+      "DENTIST": "Zahnarzt",
+      "RECEPTIONIST": "Empfang",
+      "BILLING": "Abrechnung",
+      "ASSISTANT": "Assistenz"
+    },
+    "errors": {
+      "loadFailed": "Klinikdaten konnten nicht geladen werden.",
+      "saveFailed": "Speichern fehlgeschlagen."
+    }
+  },
+  "availability": {
+    "title": "Behandler-Verfügbarkeit",
+    "subtitle": "Verwalten Sie wöchentliche Arbeitszeiten, in denen Termine gebucht werden können.",
+    "weeklySchedule": "Wöchentlicher Verfügbarkeitsplan",
+    "available": "Verfügbar",
+    "unavailable": "Nicht verfügbar",
+    "fields": {
+      "practitioner": "Behandler",
+      "isAvailable": "Verfügbar"
+    },
+    "errors": {
+      "loadFailed": "Verfügbarkeit konnte nicht geladen werden",
+      "saveFailed": "Verfügbarkeit konnte nicht gespeichert werden"
+    },
+    "offDays": {
+      "title": "Freie Tage und Feiertage",
+      "subtitle": "Tragen Sie bestimmte Daten ein, an denen der Behandler keine Termine annimmt.",
+      "addDate": "Hinzufügen",
+      "noOffDays": "Keine freien Tage erfasst.",
+      "reason": "Grund (optional)",
+      "reasonPlaceholder": "Urlaub, Krankheit, Kongress...",
+      "confirmDelete": "Möchten Sie dieses Datum wirklich entfernen?",
+      "modeSingle": "Einzeltag",
+      "modeRange": "Datumsbereich",
+      "startDate": "Start",
+      "endDate": "Ende",
+      "rangeAdded": "{{count}} Tage hinzugefügt",
+      "errors": {
+        "loadFailed": "Freie Tage konnten nicht geladen werden",
+        "saveFailed": "Freier Tag konnte nicht hinzugefügt werden",
+        "invalidRange": "Das Enddatum darf nicht vor dem Startdatum liegen"
+      }
+    }
+  }
+}

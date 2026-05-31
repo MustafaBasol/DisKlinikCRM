@@ -1,0 +1,115 @@
+{
+  "title": "Reports",
+  "subtitle": "Revenue analysis and doctor performance",
+  "export": {
+    "csv": "Download CSV",
+    "filePrefix": "revenue-report"
+  },
+  "tabs": {
+    "revenue": "Revenue Report",
+    "doctors": "Doctor Performance",
+    "sources": "Patient Sources",
+    "noshow": "No-Show Analysis"
+  },
+  "filters": {
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "grouping": "Grouping",
+    "day": "Daily",
+    "week": "Weekly",
+    "month": "Monthly",
+    "paymentMethod": "Payment Method",
+    "all": "All",
+    "doctor": "Doctor",
+    "allDoctors": "All Doctors",
+    "runReport": "Run Report"
+  },
+  "errors": {
+    "revenueLoadFailed": "Report could not be loaded.",
+    "doctorLoadFailed": "Doctor report could not be loaded.",
+    "sourcesLoadFailed": "Patient source report could not be loaded.",
+    "noShowLoadFailed": "No-show report could not be loaded.",
+    "csvFailed": "CSV could not be downloaded."
+  },
+  "empty": {
+    "prompt": "Click \"{{button}}\" to view the report."
+  },
+  "revenue": {
+    "totalRevenue": "Total Revenue",
+    "paymentCount": "{{count}} payments",
+    "avgPayment": "Average Payment",
+    "pendingCollection": "Pending Collection",
+    "pendingCount": "{{count}} pending",
+    "paymentCountTitle": "Payment Count",
+    "periodicRevenue": "Revenue by Period",
+    "revenue": "Revenue",
+    "paymentMethodDistribution": "Payment Method Distribution",
+    "revenueByDoctor": "Revenue by Doctor",
+    "doctorPaymentCount": "{{count}} payments",
+    "detailTable": "Detail Table",
+    "period": "Period",
+    "average": "Average",
+    "total": "Total",
+    "empty": "No collection records were found for the selected date range."
+  },
+  "sources": {
+    "referral": "Referral",
+    "social_media": "Social Media",
+    "instagram": "Instagram",
+    "website": "Website",
+    "phone": "Phone",
+    "walk_in": "Walk-in",
+    "google": "Google",
+    "facebook": "Facebook",
+    "whatsapp": "WhatsApp",
+    "other": "Other",
+    "totalPatientsInRange": "Total Registered Patients (Period)",
+    "sourceCount": "{{count}} different sources",
+    "rankedSource": "#{{rank}} Source",
+    "patients": "patients",
+    "patientCountValue": "{{count}} patients",
+    "patientDistribution": "Patient Distribution by Source",
+    "revenueBySource": "Revenue by Source",
+    "detailTable": "Source Detail Table",
+    "source": "Source",
+    "patientCount": "Patient Count",
+    "share": "Share %"
+  },
+  "noshow": {
+    "totalNoShow": "Total No-Shows",
+    "noShowRate": "No-Show Rate",
+    "cancellationCount": "Cancellation Count",
+    "totalAppointments": "Total Appointments",
+    "monthlyTrend": "Monthly No-Show Trend",
+    "noShow": "No-Show",
+    "cancelled": "Cancelled",
+    "rate": "Rate",
+    "ratePercent": "Rate %",
+    "byDay": "Distribution by Day",
+    "byHour": "Distribution by Time Slot",
+    "doctorRate": "No-Show Rate by Doctor",
+    "doctor": "Doctor",
+    "total": "Total"
+  },
+  "doctors": {
+    "empty": "No active doctors found.",
+    "commissionRate": "Commission rate: %{{rate}}",
+    "totalRevenue": "Total Revenue",
+    "commission": "Commission",
+    "totalAppointments": "Total Appointments",
+    "completed": "Completed",
+    "noShow": "No-Show",
+    "completionRate": "Completion %",
+    "openedTreatment": "Opened Treatment",
+    "avgPayment": "Avg. Payment"
+  },
+  "daysShort": {
+    "sun": "Sun",
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri",
+    "sat": "Sat"
+  }
+}

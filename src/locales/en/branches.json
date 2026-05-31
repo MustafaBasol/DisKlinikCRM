@@ -1,0 +1,95 @@
+{
+  "title": "Branches",
+  "subtitle": "All clinic branches under {{organization}}",
+  "organizationFallback": "Organization",
+  "newBranch": "New Branch",
+  "statuses": {
+    "active": "Active",
+    "trial": "Trial",
+    "inactive": "Inactive",
+    "suspended": "Suspended"
+  },
+  "empty": {
+    "title": "No branch has been added yet",
+    "description": "Use the button above to add a new branch."
+  },
+  "actions": {
+    "goToDashboard": "Go to Dashboard",
+    "viewAppointments": "View Appointments",
+    "manageSchedule": "Manage Schedule",
+    "whatsappSettings": "WhatsApp Settings",
+    "changeStatus": "Change Status",
+    "go": "Go"
+  },
+  "whatsapp": {
+    "connected": "WhatsApp Connected",
+    "none": "No WhatsApp",
+    "disconnected": "Not Connected"
+  },
+  "stats": {
+    "staffCount": "{{count}} staff",
+    "appointmentsToday": "{{count}} appointments today"
+  },
+  "form": {
+    "createTitle": "Add New Branch",
+    "editTitle": "Edit Branch",
+    "slugHelp": "(URL-friendly, lowercase letters, numbers and hyphens only)",
+    "update": "Update",
+    "create": "Create",
+    "fields": {
+      "name": "Branch Name",
+      "city": "City",
+      "status": "Status",
+      "address": "Address",
+      "phone": "Phone",
+      "email": "Email"
+    },
+    "placeholders": {
+      "name": "e.g. Main Branch",
+      "city": "Istanbul",
+      "address": "Street, neighborhood, district"
+    }
+  },
+  "statusModal": {
+    "title": "Change Branch Status",
+    "description": "branch status will be changed."
+  },
+  "errors": {
+    "actionFailed": "Action failed. Please try again.",
+    "statusUpdateFailed": "Status could not be updated.",
+    "loadFailed": "Branches could not be loaded."
+  },
+  "schedule": {
+    "title": "Clinic Schedule",
+    "subtitle": "Working hours and doctor availability",
+    "tabs": {
+      "hours": "Working Hours",
+      "doctors": "Doctors"
+    },
+    "weeklyHoursTitle": "Weekly Working Hours",
+    "closedDayHelp": "Appointments cannot be created on closed days",
+    "closed": "Closed",
+    "closedDay": "Closed day",
+    "doctorsEmpty": "No doctor has been assigned to this clinic",
+    "doctorsEmptyHelp": "You can assign doctors from user management.",
+    "viewSchedule": "View Schedule",
+    "noSchedule": "No schedule defined",
+    "success": {
+      "hoursSaved": "Working hours saved successfully"
+    },
+    "errors": {
+      "loadHoursFailed": "Working hours could not be loaded",
+      "loadDoctorsFailed": "Doctor list could not be loaded",
+      "saveHoursFailed": "Working hours could not be saved"
+    },
+    "days": {
+      "sunday": "Sunday",
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday"
+    }
+  }
+}
