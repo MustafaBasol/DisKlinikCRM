@@ -1,6 +1,7 @@
 {
   "title": "Randevular",
   "subtitle": "Klinik randevularını yönetin ve planlayın.",
+  "service": "Hizmet",
   "newAppointment": "Yeni Randevu",
   "editAppointment": "Randevuyu Düzenle",
   "appointmentDetails": "Randevu Detayları",
@@ -11,13 +12,22 @@
     "allPractitioners": "Tüm Hekimler",
     "date": "Tarih"
   },
+  "viewModes": {
+    "list": "Liste",
+    "listTitle": "Liste görünümü",
+    "calendar": "Takvim",
+    "calendarTitle": "Takvim görünümü",
+    "multiDoctor": "Çoklu Hekim",
+    "multiDoctorTitle": "Çoklu hekim görünümü"
+  },
   "calendar": {
     "monthView": "Aylık Takvim",
     "clickDayHint": "Günlük programa ulaşmak için takvimde bir güne tıklayın.",
     "previousMonth": "Önceki ay",
     "nextMonth": "Sonraki ay",
     "appointmentCount": "{{count}} randevu",
-    "noAppointments": "Randevu yok"
+    "noAppointments": "Randevu yok",
+    "noDoctors": "Kayıtlı hekim bulunamadı."
   },
   "availabilityWarning": {
     "title": "Hekim bu saatte müsait değil",
@@ -27,12 +37,14 @@
   "status": {
     "scheduled": "Planlandı",
     "confirmed": "Onaylandı",
+    "in_progress": "Devam Ediyor",
     "completed": "Tamamlandı",
     "cancelled": "İptal Edildi",
     "rescheduled": "Ertelendi",
     "no_show": "Gelmedi"
   },
   "actions": {
+    "backToList": "Randevulara Dön",
     "confirm": "Onayla",
     "complete": "Tamamla",
     "cancel": "İptal Et",
@@ -73,6 +85,17 @@
     "doctorAvailabilityMissing": "Bu hekime ait çalışma saati tanımlanmamış. Uygun randevu saati oluşturmak için önce hekim çalışma saatlerini tanımlayın.",
     "clinicClosed": "Klinik bu tarihte kapalı. Lütfen farklı bir tarih seçin.",
     "doctorOffDay": "Hekim bu tarihte izinli. Lütfen farklı bir tarih seçin.",
+    "noShowRecoveredNote": "Yeni randevu oluşturuldu.",
+    "noShowRescheduleTitle": "No-show randevudan yeniden oluşturuluyor",
+    "noShowRescheduleBody": "Bu randevu, no-show olarak işaretlenen önceki randevudan yeniden oluşturuluyor.",
+    "previousAppointmentDate": "Önceki tarih:",
+    "noShowRescheduleRecoveryHint": "Randevu oluşturulduğunda önceki no-show otomatik olarak geri kazanıldı durumuna alınacak.",
+    "instagramDefaultNote": "Instagram DM'den oluşturuldu.",
+    "instagramSourceTitle": "Instagram DM görüşmesinden oluşturuluyor",
+    "instagramSourceBody": "Bu randevu bir Instagram DM görüşmesinden oluşturuluyor. Randevu kaydedildiğinde ilgili DM dönüştürüldü olarak işaretlenecek.",
+    "treatmentCase": "Tedavi Dosyası",
+    "optional": "isteğe bağlı",
+    "selectTreatmentCaseOptional": "Tedavi dosyası seçin (isteğe bağlı)",
     "createSubmit": "Randevuyu Oluştur",
     "saveChanges": "Değişiklikleri Kaydet"
   }
