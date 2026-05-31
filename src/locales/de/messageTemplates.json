@@ -1,0 +1,34 @@
+{
+  "title": "Nachrichtenvorlagen",
+  "subtitle": "Verwalten Sie vordefinierte Nachrichten für schnelle Kommunikation.",
+  "addTemplate": "Vorlage hinzufügen",
+  "editTemplate": "Vorlage bearbeiten",
+  "fields": {
+    "name": "Vorlagenname",
+    "channel": "Kanal",
+    "language": "Sprache",
+    "subject": "Betreff (optional)",
+    "body": "Nachrichtentext",
+    "isActive": "Aktiv"
+  },
+  "variables": {
+    "title": "Verfügbare Variablen",
+    "patient_name": "Patientenname",
+    "clinic_name": "Klinikname",
+    "appointment_date": "Termindatum",
+    "appointment_time": "Terminzeit",
+    "practitioner_name": "Behandlername",
+    "treatment_title": "Behandlungstitel",
+    "remaining_balance": "Restbetrag"
+  },
+  "channels": {
+    "sms": "SMS",
+    "whatsapp": "WhatsApp",
+    "email": "E-Mail"
+  },
+  "seed": {
+    "button": "Standardvorlagen erstellen",
+    "confirm": "Standardvorlagen erstellen?",
+    "success": "Standardvorlagen wurden erfolgreich erstellt"
+  }
+}

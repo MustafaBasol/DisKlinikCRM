@@ -4,6 +4,7 @@ import {
   ChevronDown, ChevronUp, AlertCircle, Loader2, Settings,
   Pencil, Trash2, CreditCard,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import {
   compensationRuleService,
@@ -15,31 +16,20 @@ import {
 
 type Tab = 'summary' | 'earnings' | 'payouts' | 'settings';
 
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  pending:  { label: 'Bekliyor',   cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' },
-  approved: { label: 'Onaylandı',  cls: 'bg-blue-100   text-blue-800   dark:bg-blue-900/30   dark:text-blue-300'   },
-  paid:     { label: 'Ödendi',     cls: 'bg-green-100  text-green-800  dark:bg-green-900/30  dark:text-green-300'  },
-  cancelled:{ label: 'İptal',      cls: 'bg-gray-100   text-gray-600   dark:bg-gray-700      dark:text-gray-400'   },
+const STATUS_KEYS = ['pending', 'approved', 'paid', 'cancelled'] as const;
+const COMP_TYPE_KEYS = ['fixed', 'percentage', 'fixed_plus_percentage', 'per_service'] as const;
+const CALC_BASE_KEYS = ['collected', 'billed'] as const;
+const METHOD_KEYS = ['cash', 'bank_transfer', 'card', 'other'] as const;
+
+const STATUS_STYLES: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  approved: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
 };
 
-const COMP_TYPE_LABELS: Record<string, string> = {
-  fixed: 'Sabit Aylık',
-  percentage: 'Yüzde Bazlı',
-  fixed_plus_percentage: 'Sabit + Yüzde',
-  per_service: 'Hizmet Bazlı',
-};
-
-const CALC_BASE_LABELS: Record<string, string> = {
-  collected: 'Tahsilat Bazlı',
-  billed: 'Fatura Bazlı',
-};
-
-const METHOD_LABELS: Record<string, string> = {
-  cash: 'Nakit', bank_transfer: 'Havale/EFT', card: 'Kart', other: 'Diğer',
-};
-
-function fmt(n: number) {
-  return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+function fmt(n: number, locale: string) {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
 function currentPeriod() {
@@ -52,9 +42,12 @@ function currentPeriod() {
 const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practitioners: any[] }> = ({
   periodMonth, periodYear, practitioners,
 }) => {
+  const { t, i18n } = useTranslation(['earnings', 'common']);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterPractitioner, setFilterPractitioner] = useState('');
+  const locale = i18n.language || 'tr';
+  const formatAmount = (n: number) => fmt(n, locale);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,30 +73,30 @@ const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practition
           onChange={e => setFilterPractitioner(e.target.value)}
           className="input-field w-52"
         >
-          <option value="">Tüm Hekimler</option>
+          <option value="">{t('earnings:filters.allDoctors')}</option>
           {practitioners.map(p => (
             <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
           ))}
         </select>
-        <button onClick={load} className="btn-secondary text-sm">Yenile</button>
+        <button onClick={load} className="btn-secondary text-sm">{t('common:refresh')}</button>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-blue-500" size={32} /></div>
       ) : data.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Bu dönemde kazanç verisi bulunamadı.</div>
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">{t('earnings:summaryTab.empty')}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                <th className="text-left py-3 pl-4 pr-4">Hekim</th>
-                <th className="text-right py-3 pr-4">Brüt Tutar</th>
-                <th className="text-right py-3 pr-4">Tahsilat</th>
-                <th className="text-right py-3 pr-4">Hesaplanan Kazanç</th>
-                <th className="text-right py-3 pr-4">Onaylanan</th>
-                <th className="text-right py-3 pr-4">Ödenen</th>
-                <th className="text-right py-3 pr-4">Kalan</th>
+                <th className="text-left py-3 pl-4 pr-4">{t('earnings:columns.doctor')}</th>
+                <th className="text-right py-3 pr-4">{t('earnings:columns.grossAmount')}</th>
+                <th className="text-right py-3 pr-4">{t('earnings:columns.collection')}</th>
+                <th className="text-right py-3 pr-4">{t('earnings:columns.calculatedEarning')}</th>
+                <th className="text-right py-3 pr-4">{t('earnings:summary.approved')}</th>
+                <th className="text-right py-3 pr-4">{t('earnings:summary.paid')}</th>
+                <th className="text-right py-3 pr-4">{t('earnings:columns.remaining')}</th>
               </tr>
             </thead>
             <tbody>
@@ -112,12 +105,12 @@ const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practition
                 return (
                   <tr key={row.practitionerId} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="py-3 pl-4 pr-4 font-medium text-gray-900 dark:text-white">{row.practitionerName}</td>
-                    <td className="py-3 pr-4 text-right text-gray-700 dark:text-gray-300">{fmt(row.totalGross)}</td>
-                    <td className="py-3 pr-4 text-right text-gray-700 dark:text-gray-300">{fmt(row.totalCollected)}</td>
-                    <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">{fmt(row.totalEarning)}</td>
-                    <td className="py-3 pr-4 text-right text-blue-600 dark:text-blue-400">{fmt(row.approvedEarning)}</td>
-                    <td className="py-3 pr-4 text-right text-green-600 dark:text-green-400">{fmt(row.paidEarning)}</td>
-                    <td className="py-3 pr-4 text-right font-semibold text-orange-600 dark:text-orange-400">{fmt(remaining > 0 ? remaining : 0)}</td>
+                    <td className="py-3 pr-4 text-right text-gray-700 dark:text-gray-300">{formatAmount(row.totalGross)}</td>
+                    <td className="py-3 pr-4 text-right text-gray-700 dark:text-gray-300">{formatAmount(row.totalCollected)}</td>
+                    <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">{formatAmount(row.totalEarning)}</td>
+                    <td className="py-3 pr-4 text-right text-blue-600 dark:text-blue-400">{formatAmount(row.approvedEarning)}</td>
+                    <td className="py-3 pr-4 text-right text-green-600 dark:text-green-400">{formatAmount(row.paidEarning)}</td>
+                    <td className="py-3 pr-4 text-right font-semibold text-orange-600 dark:text-orange-400">{formatAmount(remaining > 0 ? remaining : 0)}</td>
                   </tr>
                 );
               })}
@@ -130,6 +123,7 @@ const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practition
 };
 
 const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
+  const { t, i18n } = useTranslation(['earnings', 'common']);
   const [earnings, setEarnings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -140,6 +134,9 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
   const [adjustTarget, setAdjustTarget] = useState<any>(null);
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
+  const locale = i18n.language || 'tr';
+  const formatAmount = (n: number) => fmt(n, locale);
+  const statusLabel = (status: string) => t(`earnings:status.${status}`, { defaultValue: status });
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -150,16 +147,16 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
       const res = await practitionerEarningService.getAll(params);
       setEarnings(res.data.earnings || res.data);
     } catch {
-      setError('Kazanç listesi yüklenemedi.');
+      setError(t('earnings:errors.earningsListLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [filterPractitioner, filterStatus, filterMonth, filterYear]);
+  }, [filterPractitioner, filterStatus, filterMonth, filterYear, t]);
 
   useEffect(() => { load(); }, [load]);
 
   const doAction = async (action: () => Promise<any>) => {
-    try { await action(); load(); } catch { setError('İşlem başarısız.'); }
+    try { await action(); load(); } catch { setError(t('earnings:errors.actionFailed')); }
   };
 
   const doAdjust = async () => {
@@ -181,20 +178,20 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
         <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="input-field w-32">
-          {months.map(m => <option key={m} value={m}>{m}. Ay</option>)}
+          {months.map(m => <option key={m} value={m}>{t('earnings:period.monthOption', { month: m })}</option>)}
         </select>
         <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="input-field w-24">
           {years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
         <select value={filterPractitioner} onChange={e => setFilterPractitioner(e.target.value)} className="input-field w-48">
-          <option value="">Tüm Hekimler</option>
+          <option value="">{t('earnings:filters.allDoctors')}</option>
           {practitioners.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="input-field w-36">
-          <option value="">Tüm Durumlar</option>
-          {Object.entries(STATUS_BADGE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          <option value="">{t('earnings:filters.allStatuses')}</option>
+          {STATUS_KEYS.map(k => <option key={k} value={k}>{statusLabel(k)}</option>)}
         </select>
-        <button onClick={load} className="btn-secondary text-sm">Yenile</button>
+        <button onClick={load} className="btn-secondary text-sm">{t('common:refresh')}</button>
       </div>
 
       {error && (
@@ -206,20 +203,20 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-blue-500" size={32} /></div>
       ) : earnings.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Kazanç kaydı bulunamadı.</div>
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">{t('earnings:management.empty')}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                <th className="text-left py-3 pl-4 pr-3">Hekim</th>
-                <th className="text-left py-3 pr-3">Hasta</th>
-                <th className="text-left py-3 pr-3">Hizmet</th>
-                <th className="text-right py-3 pr-3">Tahsilat</th>
-                <th className="text-right py-3 pr-3">Kazanç</th>
-                <th className="text-right py-3 pr-3">Düz. Kazanç</th>
-                <th className="text-center py-3 pr-3">Durum</th>
-                <th className="text-center py-3 pr-4">İşlem</th>
+                <th className="text-left py-3 pl-4 pr-3">{t('earnings:columns.doctor')}</th>
+                <th className="text-left py-3 pr-3">{t('earnings:columns.patient')}</th>
+                <th className="text-left py-3 pr-3">{t('earnings:columns.service')}</th>
+                <th className="text-right py-3 pr-3">{t('earnings:columns.collection')}</th>
+                <th className="text-right py-3 pr-3">{t('earnings:columns.earning')}</th>
+                <th className="text-right py-3 pr-3">{t('earnings:columns.adjustedEarning')}</th>
+                <th className="text-center py-3 pr-3">{t('earnings:columns.status')}</th>
+                <th className="text-center py-3 pr-4">{t('common:actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -236,25 +233,25 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
                   </td>
                   <td className="py-3 pr-3 text-right">
                     <div className="flex flex-col items-end">
-                      <span>{fmt(e.collectedAmount)}</span>
+                      <span>{formatAmount(e.collectedAmount)}</span>
                       {e.grossAmount > 0 && (
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5 ${
                           e.collectedAmount >= e.grossAmount ? 'bg-green-100 text-green-700' :
                           e.collectedAmount > 0 ? 'bg-amber-100 text-amber-700' :
                           'bg-red-100 text-red-600'
                         }`}>
-                          %{Math.round((e.collectedAmount / e.grossAmount) * 100)} tahsil
+                          {t('earnings:management.collectionRate', { rate: Math.round((e.collectedAmount / e.grossAmount) * 100) })}
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="py-3 pr-3 text-right">{fmt(e.earningAmount)}</td>
+                  <td className="py-3 pr-3 text-right">{formatAmount(e.earningAmount)}</td>
                   <td className="py-3 pr-3 text-right font-semibold text-gray-900 dark:text-white">
-                    {e.adminAdjustmentAmount != null ? fmt(e.adminAdjustmentAmount) : '—'}
+                    {e.adminAdjustmentAmount != null ? formatAmount(e.adminAdjustmentAmount) : '—'}
                   </td>
                   <td className="py-3 pr-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[e.status]?.cls}`}>
-                      {STATUS_BADGE[e.status]?.label}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[e.status] || STATUS_STYLES.pending}`}>
+                      {statusLabel(e.status)}
                     </span>
                   </td>
                   <td className="py-3 pr-4 text-center">
@@ -263,28 +260,28 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
                         <button
                           onClick={() => doAction(() => practitionerEarningService.approve(e.id))}
                           className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200"
-                          title="Onayla"
-                        >Onayla</button>
+                          title={t('earnings:actions.approve')}
+                        >{t('earnings:actions.approve')}</button>
                       )}
                       {(e.status === 'pending' || e.status === 'approved') && (
                         <button
                           onClick={() => { setAdjustTarget(e); setAdjustAmount(String(effectiveAmount(e))); setAdjustReason(''); }}
                           className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 hover:bg-yellow-200"
-                          title="Düzenle"
+                          title={t('common:edit')}
                         ><Pencil size={12} /></button>
                       )}
                       {e.status === 'approved' && (
                         <button
                           onClick={() => doAction(() => practitionerEarningService.markPaid(e.id))}
                           className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200"
-                          title="Ödendi işaretle"
-                        >Ödendi</button>
+                          title={t('earnings:actions.markPaid')}
+                        >{t('earnings:actions.paid')}</button>
                       )}
                       {e.status !== 'paid' && e.status !== 'cancelled' && (
                         <button
-                          onClick={() => { if (window.confirm('Bu kazancı iptal etmek istediğinize emin misiniz?')) doAction(() => practitionerEarningService.cancel(e.id)); }}
+                          onClick={() => { if (window.confirm(t('earnings:confirm.cancelEarning'))) doAction(() => practitionerEarningService.cancel(e.id)); }}
                           className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 hover:bg-red-200"
-                          title="İptal"
+                          title={t('common:cancel')}
                         ><XCircle size={12} /></button>
                       )}
                     </div>
@@ -300,10 +297,10 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
       {adjustTarget && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Kazanç Düzenle</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('earnings:management.adjustTitle')}</h3>
             <div className="space-y-4">
               <div>
-                <label className="label">Düzeltilmiş Tutar</label>
+                <label className="label">{t('earnings:management.adjustedAmount')}</label>
                 <input
                   type="number" min="0" step="0.01"
                   value={adjustAmount}
@@ -312,23 +309,23 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
                 />
               </div>
               <div>
-                <label className="label">Düzeltme Gerekçesi <span className="text-red-500">*</span></label>
+                <label className="label">{t('earnings:management.adjustmentReason')} <span className="text-red-500">*</span></label>
                 <textarea
                   value={adjustReason}
                   onChange={e => setAdjustReason(e.target.value)}
                   rows={3}
                   className="input-field"
-                  placeholder="Neden düzeltme yapıyorsunuz?"
+                  placeholder={t('earnings:management.adjustmentPlaceholder')}
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-6 justify-end">
-              <button onClick={() => setAdjustTarget(null)} className="btn-secondary">İptal</button>
+              <button onClick={() => setAdjustTarget(null)} className="btn-secondary">{t('common:cancel')}</button>
               <button
                 onClick={doAdjust}
                 disabled={!adjustAmount || !adjustReason}
                 className="btn-primary disabled:opacity-50"
-              >Kaydet</button>
+              >{t('common:save')}</button>
             </div>
           </div>
         </div>
@@ -338,6 +335,7 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
 };
 
 const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
+  const { t, i18n } = useTranslation(['earnings', 'common', 'payments']);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -349,6 +347,9 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
     method: 'bank_transfer', note: '',
   });
   const [formError, setFormError] = useState('');
+  const locale = i18n.language || 'tr';
+  const formatAmount = (n: number) => fmt(n, locale);
+  const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
 
   const load = async () => {
     setLoading(true);
@@ -385,7 +386,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
   const handleSubmit = async () => {
     setFormError('');
     if (!form.practitionerId || !form.amount || !form.paymentDate) {
-      setFormError('Lütfen zorunlu alanları doldurun.');
+      setFormError(t('earnings:errors.requiredFields'));
       return;
     }
     try {
@@ -404,7 +405,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
       setApprovedEarnings([]);
       load();
     } catch {
-      setFormError('Ödeme kaydedilemedi.');
+      setFormError(t('earnings:errors.payoutSaveFailed'));
     }
   };
 
@@ -416,26 +417,26 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
     <div className="space-y-4">
       <div className="flex justify-end">
         <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
-          <Plus size={16} />Ödeme Kaydet
+          <Plus size={16} />{t('earnings:payouts.recordPayment')}
         </button>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-blue-500" size={32} /></div>
       ) : payouts.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Henüz ödeme kaydı yok.</div>
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">{t('earnings:payouts.empty')}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                <th className="text-left py-3 pl-4 pr-4">Hekim</th>
-                <th className="text-left py-3 pr-4">Dönem</th>
-                <th className="text-left py-3 pr-4">Ödeme Tarihi</th>
-                <th className="text-right py-3 pr-4">Tutar</th>
-                <th className="text-left py-3 pr-4">Yöntem</th>
-                <th className="text-left py-3 pr-4">Not</th>
-                <th className="text-left py-3 pr-4">Kaydeden</th>
+                <th className="text-left py-3 pl-4 pr-4">{t('earnings:columns.doctor')}</th>
+                <th className="text-left py-3 pr-4">{t('earnings:payouts.period')}</th>
+                <th className="text-left py-3 pr-4">{t('earnings:payouts.paymentDate')}</th>
+                <th className="text-right py-3 pr-4">{t('earnings:payouts.amount')}</th>
+                <th className="text-left py-3 pr-4">{t('earnings:payouts.method')}</th>
+                <th className="text-left py-3 pr-4">{t('earnings:payouts.note')}</th>
+                <th className="text-left py-3 pr-4">{t('earnings:payouts.recordedBy')}</th>
               </tr>
             </thead>
             <tbody>
@@ -446,10 +447,10 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
                   </td>
                   <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{p.periodMonth}/{p.periodYear}</td>
                   <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">
-                    {new Date(p.paymentDate).toLocaleDateString('tr-TR')}
+                    {new Date(p.paymentDate).toLocaleDateString(locale)}
                   </td>
-                  <td className="py-3 pr-4 text-right font-semibold text-green-600 dark:text-green-400">{fmt(p.amount)}</td>
-                  <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{METHOD_LABELS[p.method] ?? p.method}</td>
+                  <td className="py-3 pr-4 text-right font-semibold text-green-600 dark:text-green-400">{formatAmount(p.amount)}</td>
+                  <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{methodLabel(p.method)}</td>
                   <td className="py-3 pr-4 text-gray-600 dark:text-gray-400 max-w-xs truncate">{p.note || '—'}</td>
                   <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">
                     {p.createdBy?.firstName} {p.createdBy?.lastName}
@@ -465,30 +466,30 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-lg my-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Ödeme Kaydet</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('earnings:payouts.recordPayment')}</h3>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Hekim <span className="text-red-500">*</span></label>
+                  <label className="label">{t('earnings:columns.doctor')} <span className="text-red-500">*</span></label>
                   <select value={form.practitionerId} onChange={e => handlePractitionerChange(e.target.value)} className="input-field">
-                    <option value="">Seçin</option>
+                    <option value="">{t('common:select')}</option>
                     {practitioners.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Tutar <span className="text-red-500">*</span></label>
+                  <label className="label">{t('earnings:payouts.amount')} <span className="text-red-500">*</span></label>
                   <input type="number" min="0" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="input-field" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Dönem Ay</label>
+                  <label className="label">{t('earnings:payouts.periodMonth')}</label>
                   <select value={form.periodMonth} onChange={e => { setForm(f => ({ ...f, periodMonth: e.target.value })); loadApprovedEarnings(form.practitionerId, Number(e.target.value), Number(form.periodYear)); }} className="input-field">
-                    {months.map(m => <option key={m} value={m}>{m}. Ay</option>)}
+                    {months.map(m => <option key={m} value={m}>{t('earnings:period.monthOption', { month: m })}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Dönem Yıl</label>
+                  <label className="label">{t('earnings:payouts.periodYear')}</label>
                   <select value={form.periodYear} onChange={e => { setForm(f => ({ ...f, periodYear: e.target.value })); loadApprovedEarnings(form.practitionerId, Number(form.periodMonth), Number(e.target.value)); }} className="input-field">
                     {years.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
@@ -496,25 +497,25 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Ödeme Tarihi <span className="text-red-500">*</span></label>
+                  <label className="label">{t('earnings:payouts.paymentDate')} <span className="text-red-500">*</span></label>
                   <input type="date" value={form.paymentDate} onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="label">Yöntem</label>
+                  <label className="label">{t('earnings:payouts.method')}</label>
                   <select value={form.method} onChange={e => setForm(f => ({ ...f, method: e.target.value }))} className="input-field">
-                    {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {METHOD_KEYS.map(k => <option key={k} value={k}>{methodLabel(k)}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="label">Not</label>
-                <input type="text" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="input-field" placeholder="İsteğe bağlı" />
+                <label className="label">{t('earnings:payouts.note')}</label>
+                <input type="text" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="input-field" placeholder={t('earnings:payouts.optional')} />
               </div>
 
               {/* Approved earnings to mark as paid */}
               {approvedEarnings.length > 0 && (
                 <div>
-                  <label className="label">Onaylı Kazançları Ödendi İşaretle (isteğe bağlı)</label>
+                  <label className="label">{t('earnings:payouts.markApprovedAsPaid')}</label>
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-48 overflow-y-auto">
                     {approvedEarnings.map(e => (
                       <label key={e.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
@@ -528,7 +529,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
                           {e.patient ? `${e.patient.firstName} ${e.patient.lastName}` : e.treatmentCase?.title || '—'}
                           {e.service ? ` — ${e.service.name}` : ''}
                         </span>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{fmt(effectiveAmount(e))}</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">{formatAmount(effectiveAmount(e))}</span>
                       </label>
                     ))}
                   </div>
@@ -538,8 +539,8 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
               {formError && <p className="text-sm text-red-500">{formError}</p>}
             </div>
             <div className="flex gap-3 mt-6 justify-end">
-              <button onClick={() => { setShowForm(false); setApprovedEarnings([]); setSelectedEarnings([]); }} className="btn-secondary">İptal</button>
-              <button onClick={handleSubmit} className="btn-primary">Kaydet</button>
+              <button onClick={() => { setShowForm(false); setApprovedEarnings([]); setSelectedEarnings([]); }} className="btn-secondary">{t('common:cancel')}</button>
+              <button onClick={handleSubmit} className="btn-primary">{t('common:save')}</button>
             </div>
           </div>
         </div>
@@ -549,6 +550,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
 };
 
 const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ practitioners, services }) => {
+  const { t, i18n } = useTranslation(['earnings', 'common']);
   const [rules, setRules] = useState<any[]>([]);
   const [serviceRules, setServiceRules] = useState<any[]>([]);
   const [filterPractitioner, setFilterPractitioner] = useState('');
@@ -564,6 +566,10 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
     practitionerId: '', serviceId: '', percentage: '', fixedAmount: '', isActive: true,
   });
   const [error, setError] = useState('');
+  const locale = i18n.language || 'tr';
+  const formatAmount = (n: number) => fmt(n, locale);
+  const compTypeLabel = (type: string) => t(`earnings:settings.compTypes.${type}`, { defaultValue: type });
+  const calcBaseLabel = (base: string) => t(`earnings:settings.calcBases.${base}`, { defaultValue: base });
 
   const load = async () => {
     try {
@@ -600,7 +606,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       setEditingRuleId(null);
       setRuleForm({ practitionerId: '', compensationType: 'percentage', fixedMonthlyAmount: '', defaultPercentage: '', calculationBase: 'collected', isActive: true, startDate: '', endDate: '' });
       load();
-    } catch { setError('Kural kaydedilemedi.'); }
+    } catch { setError(t('earnings:errors.ruleSaveFailed')); }
   };
 
   const handleSaveServiceRule = async () => {
@@ -617,7 +623,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       setShowServiceRuleForm(false);
       setServiceRuleForm({ practitionerId: '', serviceId: '', percentage: '', fixedAmount: '', isActive: true });
       load();
-    } catch { setError('Hizmet kuralı kaydedilemedi.'); }
+    } catch { setError(t('earnings:errors.serviceRuleSaveFailed')); }
   };
 
   return (
@@ -627,7 +633,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       {/* Filter */}
       <div className="flex items-center gap-3">
         <select value={filterPractitioner} onChange={e => setFilterPractitioner(e.target.value)} className="input-field w-52">
-          <option value="">Tüm Hekimler</option>
+          <option value="">{t('earnings:filters.allDoctors')}</option>
           {practitioners.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
         </select>
       </div>
@@ -635,25 +641,25 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       {/* Default Compensation Rules */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-900 dark:text-white">Hekim Komisyon Kuralları</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">{t('earnings:settings.doctorCommissionRules')}</h3>
           <button onClick={() => setShowRuleForm(true)} className="btn-primary text-sm flex items-center gap-1">
-            <Plus size={14} />Kural Ekle
+            <Plus size={14} />{t('earnings:settings.addRule')}
           </button>
         </div>
         {rules.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">Henüz kural tanımlanmamış.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('earnings:settings.noRules')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                  <th className="text-left py-2 pl-4 pr-4">Hekim</th>
-                  <th className="text-left py-2 pr-4">Tür</th>
-                  <th className="text-right py-2 pr-4">Sabit (Aylık)</th>
-                  <th className="text-right py-2 pr-4">Yüzde %</th>
-                  <th className="text-left py-2 pr-4">Hesap Bazı</th>
-                  <th className="text-left py-2 pr-4">Durum</th>
-                  <th className="text-center py-2 pr-4">İşlem</th>
+                  <th className="text-left py-2 pl-4 pr-4">{t('earnings:columns.doctor')}</th>
+                  <th className="text-left py-2 pr-4">{t('earnings:settings.type')}</th>
+                  <th className="text-right py-2 pr-4">{t('earnings:settings.fixedMonthly')}</th>
+                  <th className="text-right py-2 pr-4">{t('earnings:settings.percent')}</th>
+                  <th className="text-left py-2 pr-4">{t('earnings:settings.calculationBase')}</th>
+                  <th className="text-left py-2 pr-4">{t('earnings:columns.status')}</th>
+                  <th className="text-center py-2 pr-4">{t('common:actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -662,13 +668,13 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
                     <td className="py-2 pl-4 pr-4 font-medium text-gray-900 dark:text-white">
                       {r.practitioner?.firstName} {r.practitioner?.lastName}
                     </td>
-                    <td className="py-2 pr-4 text-gray-600 dark:text-gray-400">{COMP_TYPE_LABELS[r.compensationType] ?? r.compensationType}</td>
-                    <td className="py-2 pr-4 text-right">{r.fixedMonthlyAmount != null ? fmt(r.fixedMonthlyAmount) : '—'}</td>
+                    <td className="py-2 pr-4 text-gray-600 dark:text-gray-400">{compTypeLabel(r.compensationType)}</td>
+                    <td className="py-2 pr-4 text-right">{r.fixedMonthlyAmount != null ? formatAmount(r.fixedMonthlyAmount) : '—'}</td>
                     <td className="py-2 pr-4 text-right">{r.defaultPercentage != null ? `${r.defaultPercentage}%` : '—'}</td>
-                    <td className="py-2 pr-4 text-gray-600 dark:text-gray-400">{CALC_BASE_LABELS[r.calculationBase] ?? r.calculationBase}</td>
+                    <td className="py-2 pr-4 text-gray-600 dark:text-gray-400">{calcBaseLabel(r.calculationBase)}</td>
                     <td className="py-2 pr-4">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${r.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700'}`}>
-                        {r.isActive ? 'Aktif' : 'Pasif'}
+                        {r.isActive ? t('common:active') : t('common:inactive')}
                       </span>
                     </td>
                     <td className="py-2 pr-4 text-center">
@@ -689,12 +695,12 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
                             setShowRuleForm(true);
                           }}
                           className="text-blue-500 hover:text-blue-700"
-                          title="Düzenle"
+                          title={t('common:edit')}
                         ><Pencil size={14} /></button>
                         <button
-                          onClick={() => { if (window.confirm('Bu kuralı silmek istediğinize emin misiniz?')) compensationRuleService.remove(r.id).then(load); }}
+                          onClick={() => { if (window.confirm(t('earnings:confirm.deleteRule'))) compensationRuleService.remove(r.id).then(load); }}
                           className="text-red-500 hover:text-red-700"
-                          title="Sil"
+                          title={t('common:delete')}
                         ><Trash2 size={14} /></button>
                       </div>
                     </td>
@@ -709,24 +715,24 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       {/* Service-Specific Rules */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-900 dark:text-white">Hizmet Bazlı Komisyon Kuralları</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">{t('earnings:settings.serviceCommissionRules')}</h3>
           <button onClick={() => setShowServiceRuleForm(true)} className="btn-primary text-sm flex items-center gap-1">
-            <Plus size={14} />Hizmet Kuralı Ekle
+            <Plus size={14} />{t('earnings:settings.addServiceRule')}
           </button>
         </div>
         {serviceRules.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">Henüz hizmet bazlı kural tanımlanmamış.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('earnings:settings.noServiceRules')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                  <th className="text-left py-2 pl-4 pr-4">Hekim</th>
-                  <th className="text-left py-2 pr-4">Hizmet</th>
-                  <th className="text-right py-2 pr-4">Yüzde %</th>
-                  <th className="text-right py-2 pr-4">Sabit Tutar</th>
-                  <th className="text-left py-2 pr-4">Durum</th>
-                  <th className="text-center py-2 pr-4">İşlem</th>
+                  <th className="text-left py-2 pl-4 pr-4">{t('earnings:columns.doctor')}</th>
+                  <th className="text-left py-2 pr-4">{t('common:service')}</th>
+                  <th className="text-right py-2 pr-4">{t('earnings:settings.percent')}</th>
+                  <th className="text-right py-2 pr-4">{t('earnings:settings.fixedAmount')}</th>
+                  <th className="text-left py-2 pr-4">{t('earnings:columns.status')}</th>
+                  <th className="text-center py-2 pr-4">{t('common:actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -737,17 +743,17 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
                     </td>
                     <td className="py-2 pr-4 text-gray-600 dark:text-gray-400">{r.service?.name}</td>
                     <td className="py-2 pr-4 text-right">{r.percentage != null ? `${r.percentage}%` : '—'}</td>
-                    <td className="py-2 pr-4 text-right">{r.fixedAmount != null ? fmt(r.fixedAmount) : '—'}</td>
+                    <td className="py-2 pr-4 text-right">{r.fixedAmount != null ? formatAmount(r.fixedAmount) : '—'}</td>
                     <td className="py-2 pr-4">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${r.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700'}`}>
-                        {r.isActive ? 'Aktif' : 'Pasif'}
+                        {r.isActive ? t('common:active') : t('common:inactive')}
                       </span>
                     </td>
                     <td className="py-2 pr-4 text-center">
                       <button
-                        onClick={() => { if (window.confirm('Bu kuralı silmek istediğinize emin misiniz?')) compensationRuleService.removeServiceRule(r.id).then(load); }}
+                        onClick={() => { if (window.confirm(t('earnings:confirm.deleteRule'))) compensationRuleService.removeServiceRule(r.id).then(load); }}
                         className="text-red-500 hover:text-red-700"
-                        title="Sil"
+                        title={t('common:delete')}
                       ><Trash2 size={14} /></button>
                     </td>
                   </tr>
@@ -762,60 +768,59 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       {showRuleForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{editingRuleId ? 'Komisyon Kuralı Düzenle' : 'Komisyon Kuralı Ekle'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{editingRuleId ? t('earnings:settings.editRuleTitle') : t('earnings:settings.addRuleTitle')}</h3>
             <div className="space-y-3">
               <div>
-                <label className="label">Hekim <span className="text-red-500">*</span></label>
+                <label className="label">{t('earnings:columns.doctor')} <span className="text-red-500">*</span></label>
                 <select value={ruleForm.practitionerId} onChange={e => setRuleForm(f => ({ ...f, practitionerId: e.target.value }))} className="input-field">
-                  <option value="">Seçin</option>
+                  <option value="">{t('common:select')}</option>
                   {practitioners.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Komisyon Türü</label>
+                  <label className="label">{t('earnings:settings.commissionType')}</label>
                   <select value={ruleForm.compensationType} onChange={e => setRuleForm(f => ({ ...f, compensationType: e.target.value }))} className="input-field">
-                    {Object.entries(COMP_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {COMP_TYPE_KEYS.map(k => <option key={k} value={k}>{compTypeLabel(k)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Hesap Bazı</label>
+                  <label className="label">{t('earnings:settings.calculationBase')}</label>
                   <select value={ruleForm.calculationBase} onChange={e => setRuleForm(f => ({ ...f, calculationBase: e.target.value }))} className="input-field">
-                    <option value="collected">Tahsilat Bazlı</option>
-                    <option value="billed">Fatura Bazlı</option>
+                    {CALC_BASE_KEYS.map(k => <option key={k} value={k}>{calcBaseLabel(k)}</option>)}
                   </select>
                 </div>
               </div>
               {(ruleForm.compensationType === 'percentage' || ruleForm.compensationType === 'fixed_plus_percentage') && (
                 <div>
-                  <label className="label">Yüzde (%)</label>
+                  <label className="label">{t('earnings:settings.percentage')}</label>
                   <input type="number" min="0" max="100" step="0.01" value={ruleForm.defaultPercentage} onChange={e => setRuleForm(f => ({ ...f, defaultPercentage: e.target.value }))} className="input-field" />
                 </div>
               )}
               {(ruleForm.compensationType === 'fixed' || ruleForm.compensationType === 'fixed_plus_percentage') && (
                 <div>
-                  <label className="label">Sabit Aylık Tutar</label>
+                  <label className="label">{t('earnings:settings.fixedMonthlyAmount')}</label>
                   <input type="number" min="0" step="0.01" value={ruleForm.fixedMonthlyAmount} onChange={e => setRuleForm(f => ({ ...f, fixedMonthlyAmount: e.target.value }))} className="input-field" />
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Başlangıç Tarihi</label>
+                  <label className="label">{t('earnings:settings.startDate')}</label>
                   <input type="date" value={ruleForm.startDate} onChange={e => setRuleForm(f => ({ ...f, startDate: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="label">Bitiş Tarihi</label>
+                  <label className="label">{t('earnings:settings.endDate')}</label>
                   <input type="date" value={ruleForm.endDate} onChange={e => setRuleForm(f => ({ ...f, endDate: e.target.value }))} className="input-field" />
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="ruleActive" checked={ruleForm.isActive} onChange={e => setRuleForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded" />
-                <label htmlFor="ruleActive" className="text-sm text-gray-700 dark:text-gray-300">Aktif</label>
+                <label htmlFor="ruleActive" className="text-sm text-gray-700 dark:text-gray-300">{t('common:active')}</label>
               </div>
             </div>
             <div className="flex gap-3 mt-6 justify-end">
-              <button onClick={() => { setShowRuleForm(false); setEditingRuleId(null); setRuleForm({ practitionerId: '', compensationType: 'percentage', fixedMonthlyAmount: '', defaultPercentage: '', calculationBase: 'collected', isActive: true, startDate: '', endDate: '' }); }} className="btn-secondary">İptal</button>
-              <button onClick={handleSaveRule} disabled={!ruleForm.practitionerId} className="btn-primary disabled:opacity-50">Kaydet</button>
+              <button onClick={() => { setShowRuleForm(false); setEditingRuleId(null); setRuleForm({ practitionerId: '', compensationType: 'percentage', fixedMonthlyAmount: '', defaultPercentage: '', calculationBase: 'collected', isActive: true, startDate: '', endDate: '' }); }} className="btn-secondary">{t('common:cancel')}</button>
+              <button onClick={handleSaveRule} disabled={!ruleForm.practitionerId} className="btn-primary disabled:opacity-50">{t('common:save')}</button>
             </div>
           </div>
         </div>
@@ -825,40 +830,40 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
       {showServiceRuleForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Hizmet Bazlı Kural Ekle</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('earnings:settings.addServiceRuleTitle')}</h3>
             <div className="space-y-3">
               <div>
-                <label className="label">Hekim <span className="text-red-500">*</span></label>
+                <label className="label">{t('earnings:columns.doctor')} <span className="text-red-500">*</span></label>
                 <select value={serviceRuleForm.practitionerId} onChange={e => setServiceRuleForm(f => ({ ...f, practitionerId: e.target.value }))} className="input-field">
-                  <option value="">Seçin</option>
+                  <option value="">{t('common:select')}</option>
                   {practitioners.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
                 </select>
               </div>
               <div>
-                <label className="label">Hizmet <span className="text-red-500">*</span></label>
+                <label className="label">{t('common:service')} <span className="text-red-500">*</span></label>
                 <select value={serviceRuleForm.serviceId} onChange={e => setServiceRuleForm(f => ({ ...f, serviceId: e.target.value }))} className="input-field">
-                  <option value="">Seçin</option>
+                  <option value="">{t('common:select')}</option>
                   {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Yüzde (%)</label>
+                  <label className="label">{t('earnings:settings.percentage')}</label>
                   <input type="number" min="0" max="100" step="0.01" value={serviceRuleForm.percentage} onChange={e => setServiceRuleForm(f => ({ ...f, percentage: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="label">Sabit Tutar</label>
+                  <label className="label">{t('earnings:settings.fixedAmount')}</label>
                   <input type="number" min="0" step="0.01" value={serviceRuleForm.fixedAmount} onChange={e => setServiceRuleForm(f => ({ ...f, fixedAmount: e.target.value }))} className="input-field" />
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="srActive" checked={serviceRuleForm.isActive} onChange={e => setServiceRuleForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded" />
-                <label htmlFor="srActive" className="text-sm text-gray-700 dark:text-gray-300">Aktif</label>
+                <label htmlFor="srActive" className="text-sm text-gray-700 dark:text-gray-300">{t('common:active')}</label>
               </div>
             </div>
             <div className="flex gap-3 mt-6 justify-end">
-              <button onClick={() => setShowServiceRuleForm(false)} className="btn-secondary">İptal</button>
-              <button onClick={handleSaveServiceRule} disabled={!serviceRuleForm.practitionerId || !serviceRuleForm.serviceId} className="btn-primary disabled:opacity-50">Kaydet</button>
+              <button onClick={() => setShowServiceRuleForm(false)} className="btn-secondary">{t('common:cancel')}</button>
+              <button onClick={handleSaveServiceRule} disabled={!serviceRuleForm.practitionerId || !serviceRuleForm.serviceId} className="btn-primary disabled:opacity-50">{t('common:save')}</button>
             </div>
           </div>
         </div>
@@ -870,6 +875,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 const PractitionerEarnings: React.FC = () => {
+  const { t } = useTranslation(['earnings']);
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('summary');
   const [practitioners, setPractitioners] = useState<any[]>([]);
@@ -883,10 +889,10 @@ const PractitionerEarnings: React.FC = () => {
   }, []);
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'summary',  label: 'Dönem Özeti',     icon: <DollarSign size={16} /> },
-    { key: 'earnings', label: 'Kazanç Listesi',   icon: <Clock size={16} /> },
-    { key: 'payouts',  label: 'Ödemeler',         icon: <CreditCard size={16} /> },
-    { key: 'settings', label: 'Komisyon Ayarları',icon: <Settings size={16} /> },
+    { key: 'summary',  label: t('earnings:tabs.summary'), icon: <DollarSign size={16} /> },
+    { key: 'earnings', label: t('earnings:tabs.earnings'), icon: <Clock size={16} /> },
+    { key: 'payouts',  label: t('earnings:tabs.payouts'), icon: <CreditCard size={16} /> },
+    { key: 'settings', label: t('earnings:tabs.settings'), icon: <Settings size={16} /> },
   ];
 
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -897,13 +903,13 @@ const PractitionerEarnings: React.FC = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Hekim Kazanç Yönetimi</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Hekim komisyon kuralları ve kazanç takibi</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('earnings:management.title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('earnings:management.subtitle')}</p>
         </div>
         {tab === 'summary' && (
           <div className="flex items-center gap-2">
             <select value={periodMonth} onChange={e => setPeriodMonth(Number(e.target.value))} className="input-field w-28">
-              {months.map(m => <option key={m} value={m}>{m}. Ay</option>)}
+              {months.map(m => <option key={m} value={m}>{t('earnings:period.monthOption', { month: m })}</option>)}
             </select>
             <select value={periodYear} onChange={e => setPeriodYear(Number(e.target.value))} className="input-field w-20">
               {years.map(y => <option key={y} value={y}>{y}</option>)}

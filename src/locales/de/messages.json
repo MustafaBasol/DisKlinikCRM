@@ -1,0 +1,58 @@
+{
+  "title": "Nachrichten",
+  "subtitle": "Verfolgen Sie vorbereitete und gesendete Kommunikation.",
+  "prepare": "Nachricht vorbereiten",
+  "history": "Kommunikationsverlauf",
+  "list": {
+    "patient": "Patient",
+    "channel": "Kanal",
+    "body": "Nachricht",
+    "status": "Status",
+    "createdBy": "Vorbereitet von",
+    "date": "Datum"
+  },
+  "status": {
+    "prepared": "Vorbereitet",
+    "sent": "Gesendet",
+    "failed": "Fehlgeschlagen",
+    "delivered": "Zugestellt",
+    "read": "Gelesen"
+  },
+  "actions": {
+    "copy": "Text kopieren",
+    "whatsapp": "WhatsApp öffnen",
+    "preview": "Nachricht anzeigen",
+    "sendNow": "Jetzt senden",
+    "sendUnavailable": "WhatsApp-Verbindung fehlt oder ist nicht verbunden"
+  },
+  "filters": {
+    "channel": "Kanal",
+    "status": "Status"
+  },
+  "copiedToClipboard": "In die Zwischenablage kopiert!",
+  "whatsappStatus": {
+    "connected": "WhatsApp verbunden{{phone}}",
+    "metaInactive": "Die Meta Cloud API-Verbindung ist noch nicht aktiv — Nachrichtenversand ist deaktiviert",
+    "selectClinic": "Wählen Sie zuerst einen Standort aus, um Nachrichten zu senden",
+    "notConfigured": "WhatsApp-Verbindung ist nicht konfiguriert — erstellen Sie zuerst eine Verbindung"
+  },
+  "metaCallback": {
+    "missingCode": "Meta-Antwort ist unvollständig: Autorisierungscode wurde nicht empfangen.",
+    "processing": "Meta-Verbindung wird abgeschlossen...",
+    "success": "Ihr Meta-Konto wurde erfolgreich verbunden.",
+    "closing": "Dieser Tab wird geschlossen...",
+    "failed": "Meta-Verbindung fehlgeschlagen.",
+    "canClose": "Sie können diesen Tab/dieses Fenster schließen.",
+    "authorized": "Meta-Autorisierung wurde empfangen.",
+    "returnInstruction": "Kehren Sie zur Seite WhatsApp-Verbindungen zurück und versuchen Sie es erneut.",
+    "connections": "WhatsApp-Verbindungen"
+  },
+  "prepareModal": {
+    "title": "Nachricht vorbereiten",
+    "selectTemplate": "Vorlage auswählen",
+    "selectTemplatePrompt": "Bitte wählen Sie eine Vorlage aus, um die Vorschau zu sehen",
+    "customMessage": "Eigene Nachricht",
+    "preview": "Vorschau",
+    "send": "Als vorbereitet speichern"
+  }
+}

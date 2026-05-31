@@ -12,6 +12,27 @@
   "noShowsMonth": "No-Shows This Month",
   "openTreatments": "Open Treatment Cases",
   "preparedMessages": "Prepared Messages (Week)",
+  "doctor": {
+    "greeting": "Hello, Dr. {{name}}",
+    "weekAppointments": "This Week",
+    "pendingTasks": "Pending Tasks",
+    "overdueTasksAlert": "You have {{count}} overdue tasks. Review them now.",
+    "pendingEarnings": "Accrued Earnings (Pending + Approved)",
+    "todaySchedule": "Today's Schedule",
+    "noActivity": "No activity",
+    "upcomingSevenDays": "Next 7 Days",
+    "appointmentCount": "{{count}} appointments",
+    "noUpcomingAppointments": "No appointments in the next 7 days",
+    "treatmentPipeline": "Treatment Pipeline",
+    "recentPatients": "Recent Patients",
+    "noRecentPatients": "No patient records yet"
+  },
+  "charts": {
+    "appointmentTrend": "Last 7 Days - Appointment Trend",
+    "serviceDistribution": "This Month - Service Distribution",
+    "revenueTrend": "Last 6 Months - Revenue Trend",
+    "revenue": "Revenue"
+  },
   "stats": {
     "weekTotal": "{{count}} appointments this week",
     "monthTrend": "Trending up this month",

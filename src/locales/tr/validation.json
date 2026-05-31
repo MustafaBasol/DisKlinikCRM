@@ -1,0 +1,6 @@
+{
+  "required": "Bu alan zorunludur",
+  "invalidEmail": "Lütfen geçerli bir e-posta adresi girin",
+  "emailOrPhoneRequired": "E-posta veya telefon alanlarından biri girilmelidir",
+  "invalidDate": "Lütfen geçerli bir tarih girin"
+}

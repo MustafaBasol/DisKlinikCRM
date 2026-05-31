@@ -63,7 +63,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
       if (err.response?.status === 400) {
         setErrors(err.response.data.error);
       } else {
-        setErrors({ general: 'İşlem tamamlanamadı. Lütfen tekrar deneyin.' });
+        setErrors({ general: t('common:errorGeneric') });
       }
     } finally {
       setLoading(false);

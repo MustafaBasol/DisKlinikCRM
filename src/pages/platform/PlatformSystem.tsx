@@ -3,6 +3,7 @@ import {
   Loader2, AlertCircle, CheckCircle2, XCircle, RefreshCw,
   Database, Server, MessageCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
 
 interface SystemStatus {
@@ -36,6 +37,7 @@ const InfoRow: React.FC<{ label: string; value: React.ReactNode; sub?: string }>
 );
 
 const PlatformSystem: React.FC = () => {
+  const { t, i18n } = useTranslation(['platform']);
   const api = usePlatformApi();
   const [data, setData] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,7 @@ const PlatformSystem: React.FC = () => {
     api
       .get('/platform/system')
       .then((res) => setData(res.data))
-      .catch(() => setError('Sistem durumu alınamadı'))
+      .catch(() => setError(t('platform:errors.systemLoadFailed')))
       .finally(() => setLoading(false));
   };
 
@@ -56,13 +58,13 @@ const PlatformSystem: React.FC = () => {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Sistem Durumu</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('platform:system.title')}</h1>
         <button
           onClick={fetchData}
           className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
         >
           <RefreshCw size={14} />
-          Yenile
+          {t('platform:actions.refresh')}
         </button>
       </div>
 
@@ -87,10 +89,10 @@ const PlatformSystem: React.FC = () => {
           >
             <StatusDot ok={data.status === 'healthy'} />
             <span className="font-semibold">
-              {data.status === 'healthy' ? 'Sistem Sağlıklı' : 'Sistem Sorunlu'}
+              {data.status === 'healthy' ? t('platform:statuses.healthy') : t('platform:statuses.degraded')}
             </span>
             <span className="ml-auto text-xs opacity-70">
-              {new Date(data.timestamp).toLocaleString('tr-TR')}
+              {new Date(data.timestamp).toLocaleString(i18n.language || 'tr')}
             </span>
           </div>
 
@@ -99,10 +101,10 @@ const PlatformSystem: React.FC = () => {
             <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Database size={18} className="text-blue-500" />
-                <h2 className="font-semibold text-gray-900 dark:text-white">Veritabanı</h2>
+                <h2 className="font-semibold text-gray-900 dark:text-white">{t('platform:system.database')}</h2>
                 <StatusDot ok={data.database.status === 'ok'} />
               </div>
-              <InfoRow label="Durum" value={data.database.status === 'ok' ? 'OK' : 'HATA'} />
+              <InfoRow label={t('platform:system.status')} value={data.database.status === 'ok' ? t('platform:statuses.ok') : t('platform:statuses.error')} />
               {data.database.error && (
                 <p className="text-xs text-red-500 mt-2 bg-red-50 dark:bg-red-900/20 rounded p-2">
                   {data.database.error}
@@ -117,8 +119,8 @@ const PlatformSystem: React.FC = () => {
                 <h2 className="font-semibold text-gray-900 dark:text-white">API</h2>
                 <StatusDot ok={data.api.status === 'ok'} />
               </div>
-              <InfoRow label="Durum" value={data.api.status.toUpperCase()} />
-              <InfoRow label="Başarısız Mesaj" value={data.recentFailedMessages} sub="Toplam failed" />
+              <InfoRow label={t('platform:system.status')} value={data.api.status.toUpperCase()} />
+              <InfoRow label={t('platform:system.failedMessages')} value={data.recentFailedMessages} sub={t('platform:system.failedMessagesSub')} />
             </div>
 
             {/* WhatsApp */}
@@ -129,7 +131,7 @@ const PlatformSystem: React.FC = () => {
               </div>
               <InfoRow label="Evolution API" value={data.whatsapp.evolution} />
               <InfoRow label="Meta Cloud API" value={data.whatsapp.meta} />
-              <InfoRow label="Bağlı" value={data.whatsapp.connected} />
+              <InfoRow label={t('platform:system.connected')} value={data.whatsapp.connected} />
             </div>
           </div>
         </div>

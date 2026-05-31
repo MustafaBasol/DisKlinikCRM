@@ -1,0 +1,34 @@
+{
+  "title": "Services de la clinique",
+  "fields": {
+    "name": "Service",
+    "category": "Catégorie",
+    "description": "Description",
+    "duration": "Durée",
+    "durationMinutes": "Durée (min)",
+    "basePrice": "Prix de base",
+    "noBasePrice": "Aucun prix saisi",
+    "currency": "Devise",
+    "status": "Statut",
+    "color": "Marqueur de couleur"
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "actions": {
+    "edit": "Modifier le service",
+    "save": "Enregistrer le service",
+    "deactivate": "Désactiver",
+    "reactivate": "Réactiver"
+  },
+  "placeholders": {
+    "name": "Ex. Détartrage dentaire",
+    "category": "Ex. Hygiène, chirurgie",
+    "description": "Courte description interne"
+  },
+  "errors": {
+    "loadFailed": "Impossible de charger les services",
+    "validationFailed": "Validation échouée. Vérifiez les champs saisis."
+  }
+}

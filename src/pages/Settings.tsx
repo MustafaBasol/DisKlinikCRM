@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings as SettingsIcon, Globe, Shield, Activity, UserCog, Users, CalendarClock, Link, Copy, Check } from 'lucide-react';
+import { Link as RouterLink } from 'react-router-dom';
+import { Settings as SettingsIcon, Globe, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { canManageUsers, normalizeRole } from '../utils/permissions';
+import { useClinic } from '../context/ClinicContext';
+import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole } from '../utils/permissions';
 import ServiceList from '../components/ServiceList';
 import UserList from '../components/UserList';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
@@ -10,13 +12,22 @@ import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 const Settings: React.FC = () => {
   const { t, i18n } = useTranslation(['common', 'settings']);
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'availability' | 'services'>('general');
+  const { availableClinics, selectedClinicId } = useClinic();
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'availability' | 'services' | 'integrations'>('general');
   const [copied, setCopied] = useState(false);
 
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
+  const canSeeIntegrations = canViewWhatsAppStatus(user) || canViewInstagramStatus(user);
 
-  const bookingUrl = user?.clinic?.id
-    ? `${window.location.origin}/book/${user.clinic.id}`
+  const selectedClinic =
+    selectedClinicId !== 'all'
+      ? availableClinics.find((clinic) => clinic.id === selectedClinicId) ?? user?.clinic
+      : availableClinics.find((clinic) => clinic.id === user?.defaultClinicId) ??
+        availableClinics[0] ??
+        user?.clinic;
+
+  const bookingUrl = selectedClinic?.id
+    ? `${window.location.origin}/book/${encodeURIComponent(selectedClinic.id)}`
     : '';
 
   const handleCopy = () => {
@@ -72,6 +83,17 @@ const Settings: React.FC = () => {
                 {t('settings:users.title')}
               </button>
             )}
+            {canSeeIntegrations && (
+              <button
+                onClick={() => setActiveTab('integrations')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'integrations' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <LinkIcon size={18} />
+                {t('settings:integrations.title')}
+              </button>
+            )}
             {(canManageUsers(user) || userCanonicalRole === 'DENTIST') && (
               <button
                 onClick={() => setActiveTab('availability')}
@@ -121,19 +143,19 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-500">Name</p>
+                    <p className="text-gray-500">{t('settings:accountFields.name')}</p>
                     <p className="font-medium">{user?.firstName} {user?.lastName}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">Email</p>
+                    <p className="text-gray-500">{t('settings:accountFields.email')}</p>
                     <p className="font-medium">{user?.email}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">Role</p>
+                    <p className="text-gray-500">{t('settings:accountFields.role')}</p>
                     <p className="font-medium capitalize">{user?.role}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">Clinic</p>
+                    <p className="text-gray-500">{t('settings:accountFields.clinic')}</p>
                     <p className="font-medium">{user?.clinic?.name}</p>
                   </div>
                 </div>
@@ -142,11 +164,11 @@ const Settings: React.FC = () => {
               {/* Online Booking Link */}
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
-                  <Link size={20} className="text-gray-400" />
-                  <h2 className="text-lg font-bold">Online Randevu Linki</h2>
+                  <LinkIcon size={20} className="text-gray-400" />
+                  <h2 className="text-lg font-bold">{t('settings:booking.title')}</h2>
                 </div>
                 <p className="text-sm text-gray-500 mb-3">
-                  Bu linki hastalarınızla paylaşın. Giriş gerektirmez, randevu talebi oluşturabilirler.
+                  {t('settings:booking.description')}
                 </p>
                 <div className="flex items-center gap-2">
                   <input
@@ -160,16 +182,26 @@ const Settings: React.FC = () => {
                     className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
                   >
                     {copied ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
-                    {copied ? 'Kopyalandı' : 'Kopyala'}
+                    {copied ? t('settings:booking.copied') : t('settings:booking.copy')}
                   </button>
-                  <a
-                    href={bookingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors flex-shrink-0"
-                  >
-                    Aç
-                  </a>
+                  {bookingUrl ? (
+                    <a
+                      href={bookingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors flex-shrink-0"
+                    >
+                      {t('settings:booking.open')}
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-200 text-gray-500 text-sm font-medium cursor-not-allowed flex-shrink-0"
+                    >
+                      {t('settings:booking.open')}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -181,6 +213,58 @@ const Settings: React.FC = () => {
 
           {activeTab === 'users' && (
             <UserList />
+          )}
+
+          {activeTab === 'integrations' && (
+            <div className="card p-6">
+              <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
+                <LinkIcon size={20} className="text-gray-400" />
+                <h2 className="text-lg font-bold">{t('settings:integrations.title')}</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-5">{t('settings:integrations.subtitle')}</p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {canViewWhatsAppStatus(user) && (
+                  <div className="rounded-xl border border-gray-200 p-5 bg-white">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-green-50 text-green-600 flex items-center justify-center flex-shrink-0">
+                        <MessageCircle size={20} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-gray-900">{t('settings:integrations.whatsappTitle')}</h3>
+                        <p className="text-sm text-gray-500 mt-1">{t('settings:integrations.whatsappDescription')}</p>
+                      </div>
+                    </div>
+                    <RouterLink
+                      to="/organization/whatsapp"
+                      className="mt-4 inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
+                    >
+                      {t('settings:integrations.open')}
+                    </RouterLink>
+                  </div>
+                )}
+
+                {canViewInstagramStatus(user) && (
+                  <div className="rounded-xl border border-gray-200 p-5 bg-white">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-pink-50 text-pink-600 flex items-center justify-center flex-shrink-0">
+                        <Instagram size={20} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-gray-900">{t('settings:integrations.instagramTitle')}</h3>
+                        <p className="text-sm text-gray-500 mt-1">{t('settings:integrations.instagramDescription')}</p>
+                      </div>
+                    </div>
+                    <RouterLink
+                      to="/organization/instagram"
+                      className="mt-4 inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
+                    >
+                      {t('settings:integrations.open')}
+                    </RouterLink>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {activeTab === 'availability' && (

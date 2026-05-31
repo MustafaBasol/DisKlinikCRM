@@ -1,0 +1,9 @@
+{
+  "unexpected": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+  "accessDenied": "Zugriff verweigert. Sie haben keine Berechtigung für diese Aktion.",
+  "notFound": "Ressource nicht gefunden.",
+  "PATIENT_NOT_FOUND": "Patient nicht gefunden.",
+  "ACCESS_DENIED": "Zugriff verweigert.",
+  "VALIDATION_ERROR": "Validierungsfehler.",
+  "APPOINTMENT_OVERLAP": "Der Termin überschneidet sich mit einer anderen Buchung."
+}

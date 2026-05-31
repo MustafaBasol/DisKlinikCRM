@@ -1,0 +1,63 @@
+{
+  "title": "Organizasyon Panosu",
+  "subtitle": "Tüm klinik şubeleri özet görünümü",
+  "loading": "Yükleniyor...",
+  "ranges": {
+    "today": "Bugün",
+    "this_week": "Bu Hafta",
+    "this_month": "Bu Ay",
+    "last_30_days": "Son 30 Gün",
+    "custom": "Özel"
+  },
+  "status": {
+    "active": "Aktif",
+    "trial": "Deneme",
+    "suspended": "Askıya Alındı",
+    "cancelled": "İptal"
+  },
+  "cards": {
+    "branches": "Şube",
+    "activeSub": "{{value}} aktif",
+    "todayAppointments": "Bugünkü Randevu",
+    "completed": "Tamamlanan",
+    "totalSub": "{{value}} toplam",
+    "periodRevenue": "Dönem Geliri",
+    "outstandingBalance": "Bekleyen Bakiye",
+    "newPatients": "Yeni Hasta",
+    "activeTreatments": "Aktif Tedavi",
+    "completedSub": "{{value}} tamamlandı",
+    "averageNoShow": "Ort. No-show",
+    "cancelledSub": "{{value}} iptal"
+  },
+  "insights": {
+    "topRevenue": "En Yüksek Gelir",
+    "lowestRevenue": "En Düşük Gelir",
+    "highestAppointments": "En Çok Randevu",
+    "highestBalance": "En Yüksek Bakiye",
+    "highestNoShow": "En Yüksek No-show",
+    "topNewPatients": "En Çok Yeni Hasta"
+  },
+  "table": {
+    "title": "Şube Karşılaştırması",
+    "branch": "Şube",
+    "status": "Durum",
+    "appointments": "Randevu",
+    "completed": "Tamam",
+    "cancelled": "İptal",
+    "noShow": "No-show",
+    "newPatients": "Yeni Hasta",
+    "revenue": "Gelir",
+    "balance": "Bakiye",
+    "treatments": "Tedavi",
+    "staff": "Personel",
+    "actions": "İşlemler",
+    "empty": "Veri bulunamadı",
+    "branchDashboard": "Şube Panosu",
+    "branchAppointments": "Randevular",
+    "branchPatients": "Hastalar",
+    "branchPayments": "Ödemeler"
+  },
+  "errors": {
+    "loadFailed": "Veriler yüklenemedi"
+  }
+}

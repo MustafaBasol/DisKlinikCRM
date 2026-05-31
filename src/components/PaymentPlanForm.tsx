@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Loader2, Calendar, DollarSign } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { patientService, treatmentCaseService } from '../services/api';
 
 interface PaymentPlanFormProps {
@@ -20,6 +21,7 @@ function formatDate(d: Date): string {
 }
 
 const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatientId, treatmentCaseId: initTCId, onClose, onSave }) => {
+  const { t, i18n } = useTranslation(['payments', 'common']);
   const [saving, setSaving] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
@@ -65,9 +67,9 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!patientId) return setError('Hasta seçiniz.');
-    if (!totalAmount || parseFloat(totalAmount) <= 0) return setError('Geçerli bir tutar giriniz.');
-    if (!firstDueDate) return setError('İlk ödeme tarihi seçiniz.');
+    if (!patientId) return setError(t('payments:planForm.errors.patientRequired'));
+    if (!totalAmount || parseFloat(totalAmount) <= 0) return setError(t('payments:planForm.errors.amountRequired'));
+    if (!firstDueDate) return setError(t('payments:planForm.errors.firstDueDateRequired'));
 
     setSaving(true);
     try {
@@ -82,7 +84,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
       });
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Kayıt başarısız.');
+      setError(err?.response?.data?.error || t('payments:planForm.errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -92,7 +94,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h2 className="font-bold text-gray-900 dark:text-gray-100">Yeni Taksit Planı</h2>
+          <h2 className="font-bold text-gray-900 dark:text-gray-100">{t('payments:planForm.newPlan')}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
             <X size={20} />
           </button>
@@ -104,9 +106,9 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
           {/* Patient */}
           {!initPatientId && (
             <div>
-              <label className="label">Hasta *</label>
+              <label className="label">{t('payments:form.patient')} *</label>
               <select className="input-field" value={patientId} onChange={e => { setPatientId(e.target.value); setTreatmentCaseId(''); }} required>
-                <option value="">Hasta seçin...</option>
+                <option value="">{t('payments:planForm.selectPatient')}</option>
                 {patients.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} — {p.phone || ''}</option>)}
               </select>
             </div>
@@ -114,9 +116,9 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
 
           {/* Treatment Case */}
           <div>
-            <label className="label">İlgili Tedavi (isteğe bağlı)</label>
+            <label className="label">{t('payments:planForm.relatedTreatment')}</label>
             <select className="input-field" value={treatmentCaseId} onChange={e => setTreatmentCaseId(e.target.value)} disabled={!patientId || loadingTC}>
-              <option value="">Bağlantısız ödeme planı</option>
+              <option value="">{t('payments:planForm.unlinkedPlan')}</option>
               {treatmentCases.map(tc => <option key={tc.id} value={tc.id}>{tc.title}</option>)}
             </select>
           </div>
@@ -124,7 +126,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
           {/* Amount + Currency */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Toplam Tutar *</label>
+              <label className="label">{t('payments:planForm.totalAmount')} *</label>
               <div className="relative">
                 <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="number" min="0.01" step="0.01" className="input-field pl-9"
@@ -132,7 +134,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
               </div>
             </div>
             <div>
-              <label className="label">Para Birimi</label>
+              <label className="label">{t('payments:form.currency')}</label>
               <select className="input-field" value={currency} onChange={e => setCurrency(e.target.value)}>
                 <option value="TRY">TRY ₺</option>
                 <option value="EUR">EUR €</option>
@@ -144,12 +146,12 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
           {/* Installment Count + First Due Date */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Taksit Sayısı *</label>
+              <label className="label">{t('payments:planForm.installmentCount')} *</label>
               <input type="number" min={1} max={60} className="input-field"
                 value={installmentCount} onChange={e => setInstallmentCount(Math.max(1, parseInt(e.target.value) || 1))} required />
             </div>
             <div>
-              <label className="label">İlk Ödeme Tarihi *</label>
+              <label className="label">{t('payments:planForm.firstDueDate')} *</label>
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="date" className="input-field pl-9" value={firstDueDate} onChange={e => setFirstDueDate(e.target.value)} required />
@@ -159,47 +161,47 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
 
           {/* Description */}
           <div>
-            <label className="label">Açıklama</label>
-            <input type="text" className="input-field" placeholder="Örn: İmplant tedavisi taksit planı"
+            <label className="label">{t('payments:form.notes')}</label>
+            <input type="text" className="input-field" placeholder={t('payments:planForm.descriptionPlaceholder')}
               value={description} onChange={e => setDescription(e.target.value)} />
           </div>
 
           {/* Preview */}
           {preview.length > 0 && (
             <div>
-              <label className="label">Taksit Takvimi Önizleme</label>
+              <label className="label">{t('payments:planForm.preview')}</label>
               <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       <th className="px-4 py-2 text-left font-medium text-gray-500 w-12">#</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-500">Vade</th>
-                      <th className="px-4 py-2 text-right font-medium text-gray-500">Tutar</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-500">{t('payments:planForm.dueDate')}</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-500">{t('payments:list.amount')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                     {preview.slice(0, 12).map(row => (
                       <tr key={row.no}>
                         <td className="px-4 py-2 text-gray-400">{row.no}</td>
-                        <td className="px-4 py-2 text-gray-700">{new Date(row.date + 'T00:00:00').toLocaleDateString('tr-TR')}</td>
+                        <td className="px-4 py-2 text-gray-700">{new Date(row.date + 'T00:00:00').toLocaleDateString(i18n.language)}</td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-900">
-                          {new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(row.amount)}
+                          {new Intl.NumberFormat(i18n.language, { style: 'currency', currency }).format(row.amount)}
                         </td>
                       </tr>
                     ))}
                     {preview.length > 12 && (
                       <tr>
                         <td colSpan={3} className="px-4 py-2 text-center text-gray-400 text-xs">
-                          +{preview.length - 12} taksit daha
+                          {t('payments:planForm.moreInstallments', { count: preview.length - 12 })}
                         </td>
                       </tr>
                     )}
                   </tbody>
                   <tfoot className="bg-gray-50 dark:bg-gray-800">
                     <tr>
-                      <td colSpan={2} className="px-4 py-2 font-bold text-gray-700">Toplam</td>
+                      <td colSpan={2} className="px-4 py-2 font-bold text-gray-700">{t('payments:planForm.total')}</td>
                       <td className="px-4 py-2 text-right font-bold text-primary-700">
-                        {new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(parseFloat(totalAmount) || 0)}
+                        {new Intl.NumberFormat(i18n.language, { style: 'currency', currency }).format(parseFloat(totalAmount) || 0)}
                       </td>
                     </tr>
                   </tfoot>
@@ -209,10 +211,10 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary">İptal</button>
+            <button type="button" onClick={onClose} className="btn-secondary">{t('common:cancel')}</button>
             <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
               {saving && <Loader2 size={16} className="animate-spin" />}
-              Planı Oluştur
+              {t('payments:planForm.createPlan')}
             </button>
           </div>
         </form>

@@ -24,34 +24,13 @@ import { reportService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 
-const METHOD_LABELS: Record<string, string> = {
-  cash: 'Nakit',
-  card: 'Kart',
-  bank_transfer: 'Havale/EFT',
-  cheque: 'Çek',
-  other: 'Diğer',
-  insurance: 'Sigorta',
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  referral:     'Referans',
-  social_media: 'Sosyal Medya',
-  instagram:    'Instagram',
-  website:      'Web Sitesi',
-  phone:        'Telefon',
-  walk_in:      'Yürüyerek Gelen',
-  google:       'Google',
-  facebook:     'Facebook',
-  whatsapp:     'WhatsApp',
-  other:        'Diğer',
-};
-
-const DAY_LABELS = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+const METHOD_KEYS = ['cash', 'card', 'bank_transfer', 'cheque', 'insurance', 'other'] as const;
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6B7280', '#EC4899', '#14B8A6'];
 
-function formatCurrency(amount: number, currency = 'TRY') {
-  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount);
+function formatCurrency(amount: number, locale: string, currency = 'TRY') {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
 }
 
 function defaultDateRange() {
@@ -65,7 +44,7 @@ function defaultDateRange() {
 }
 
 const Reports: React.FC = () => {
-  const { t } = useTranslation(['common']);
+  const { t, i18n } = useTranslation(['reports', 'common', 'payments']);
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
   const [tab, setTab] = useState<'revenue' | 'doctors' | 'sources' | 'noshow'>('revenue');
@@ -97,7 +76,7 @@ const Reports: React.FC = () => {
       const res = await reportService.getRevenue(params);
       setRevenueData(res.data);
     } catch {
-      setError('Rapor yüklenemedi.');
+      setError(t('reports:errors.revenueLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -111,7 +90,7 @@ const Reports: React.FC = () => {
       const res = await reportService.getDoctorPerformance({ dateFrom, dateTo });
       setDoctorData(res.data);
     } catch {
-      setError('Hekim raporu yüklenemedi.');
+      setError(t('reports:errors.doctorLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -127,7 +106,7 @@ const Reports: React.FC = () => {
       const res = await reportService.getPatientSources(params);
       setSourcesData(res.data);
     } catch {
-      setError('Hasta kaynak raporu yüklenemedi.');
+      setError(t('reports:errors.sourcesLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -143,7 +122,7 @@ const Reports: React.FC = () => {
       const res = await reportService.getNoShowAnalysis(params);
       setNoShowData(res.data);
     } catch {
-      setError('No-show raporu yüklenemedi.');
+      setError(t('reports:errors.noShowLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -192,30 +171,38 @@ const Reports: React.FC = () => {
       .then(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `gelir-raporu-${dateFrom}-${dateTo}.csv`;
+        a.download = `${t('reports:export.filePrefix')}-${dateFrom}-${dateTo}.csv`;
         a.click();
         URL.revokeObjectURL(a.href);
       })
-      .catch(() => setError('CSV indirilemedi.'));
+      .catch(() => setError(t('reports:errors.csvFailed')));
   };
 
   const summary = revenueData?.summary;
   const byPeriod = revenueData?.byPeriod || [];
   const byMethod = revenueData?.byMethod || [];
   const byPractitioner = revenueData?.byPractitioner || [];
+  const locale = i18n.language || 'tr';
+  const money = (amount: number, currency = 'TRY') => formatCurrency(amount, locale, currency);
+  const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
+  const sourceLabel = (source: string) => t(`reports:sources.${source}`, { defaultValue: source });
+  const dayLabel = (day: number | string) => {
+    const key = DAY_KEYS[Number(day)];
+    return key ? t(`reports:daysShort.${key}`) : String(day);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Raporlar</h1>
-          <p className="text-gray-500 mt-1">Gelir analizi ve hekim performansı</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('reports:title')}</h1>
+          <p className="text-gray-500 mt-1">{t('reports:subtitle')}</p>
         </div>
         {tab === 'revenue' && revenueData && (
           <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-2 shrink-0">
             <Download size={16} />
-            CSV İndir
+            {t('reports:export.csv')}
           </button>
         )}
       </div>
@@ -223,10 +210,10 @@ const Reports: React.FC = () => {
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
         {[
-          { key: 'revenue',  icon: <TrendingUp size={16} />,  label: 'Gelir Raporu' },
-          { key: 'doctors',  icon: <Users size={16} />,       label: 'Hekim Performansı' },
-          { key: 'sources',  icon: <Megaphone size={16} />,   label: 'Hasta Kaynakları' },
-          { key: 'noshow',   icon: <UserMinus size={16} />,   label: 'No-Show Analizi' },
+          { key: 'revenue',  icon: <TrendingUp size={16} />,  label: t('reports:tabs.revenue') },
+          { key: 'doctors',  icon: <Users size={16} />,       label: t('reports:tabs.doctors') },
+          { key: 'sources',  icon: <Megaphone size={16} />,   label: t('reports:tabs.sources') },
+          { key: 'noshow',   icon: <UserMinus size={16} />,   label: t('reports:tabs.noshow') },
         ].map(({ key, icon, label }) => (
           <button
             key={key}
@@ -244,34 +231,34 @@ const Reports: React.FC = () => {
       <div className="card p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="label">Başlangıç Tarihi</label>
+            <label className="label">{t('reports:filters.startDate')}</label>
             <input type="date" className="input-field" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
           <div>
-            <label className="label">Bitiş Tarihi</label>
+            <label className="label">{t('reports:filters.endDate')}</label>
             <input type="date" className="input-field" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
           {tab === 'revenue' && (
             <>
               <div>
-                <label className="label">Gruplama</label>
+                <label className="label">{t('reports:filters.grouping')}</label>
                 <select className="input-field" value={groupBy} onChange={e => setGroupBy(e.target.value as any)}>
-                  <option value="day">Günlük</option>
-                  <option value="week">Haftalık</option>
-                  <option value="month">Aylık</option>
+                  <option value="day">{t('reports:filters.day')}</option>
+                  <option value="week">{t('reports:filters.week')}</option>
+                  <option value="month">{t('reports:filters.month')}</option>
                 </select>
               </div>
               <div>
-                <label className="label">Ödeme Yöntemi</label>
+                <label className="label">{t('reports:filters.paymentMethod')}</label>
                 <select className="input-field" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
-                  <option value="">Tümü</option>
-                  {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  <option value="">{t('reports:filters.all')}</option>
+                  {METHOD_KEYS.map(k => <option key={k} value={k}>{methodLabel(k)}</option>)}
                 </select>
               </div>
               <div>
-                <label className="label">Hekim</label>
+                <label className="label">{t('reports:filters.doctor')}</label>
                 <select className="input-field" value={practitionerId} onChange={e => setPractitionerId(e.target.value)}>
-                  <option value="">Tüm Hekimler</option>
+                  <option value="">{t('reports:filters.allDoctors')}</option>
                   {doctors.map(d => <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>)}
                 </select>
               </div>
@@ -280,7 +267,7 @@ const Reports: React.FC = () => {
           <div className="flex items-end">
             <button onClick={handleSearch} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <BarChart2 size={16} />}
-              Raporu Getir
+              {t('reports:filters.runReport')}
             </button>
           </div>
         </div>
@@ -305,30 +292,30 @@ const Reports: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="card p-5 bg-gradient-to-br from-green-500 to-green-600 text-white border-none">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-green-100 text-sm">Toplam Gelir</p>
+                <p className="text-green-100 text-sm">{t('reports:revenue.totalRevenue')}</p>
                 <DollarSign size={20} className="text-green-200" />
               </div>
-              <p className="text-2xl font-bold">{formatCurrency(summary.totalRevenue)}</p>
-              <p className="text-green-100 text-xs mt-1">{summary.totalCount} ödeme</p>
+              <p className="text-2xl font-bold">{money(summary.totalRevenue)}</p>
+              <p className="text-green-100 text-xs mt-1">{t('reports:revenue.paymentCount', { count: summary.totalCount })}</p>
             </div>
             <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-gray-500 text-sm">Ortalama Ödeme</p>
+                <p className="text-gray-500 text-sm">{t('reports:revenue.avgPayment')}</p>
                 <TrendingUp size={20} className="text-blue-500" />
               </div>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.avgPerPayment)}</p>
+              <p className="text-2xl font-bold text-gray-900">{money(summary.avgPerPayment)}</p>
             </div>
             <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-gray-500 text-sm">Bekleyen Tahsilat</p>
+                <p className="text-gray-500 text-sm">{t('reports:revenue.pendingCollection')}</p>
                 <Clock size={20} className="text-amber-500" />
               </div>
-              <p className="text-2xl font-bold text-amber-600">{formatCurrency(summary.pendingAmount)}</p>
-              <p className="text-gray-400 text-xs mt-1">{summary.pendingCount} bekleyen</p>
+              <p className="text-2xl font-bold text-amber-600">{money(summary.pendingAmount)}</p>
+              <p className="text-gray-400 text-xs mt-1">{t('reports:revenue.pendingCount', { count: summary.pendingCount })}</p>
             </div>
             <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-gray-500 text-sm">Ödeme Sayısı</p>
+                <p className="text-gray-500 text-sm">{t('reports:revenue.paymentCountTitle')}</p>
                 <Calendar size={20} className="text-purple-500" />
               </div>
               <p className="text-2xl font-bold text-gray-900">{summary.totalCount}</p>
@@ -340,7 +327,7 @@ const Reports: React.FC = () => {
             <div className="card p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <TrendingUp size={18} className="text-primary-500" />
-                Dönemsel Gelir
+                {t('reports:revenue.periodicRevenue')}
               </h3>
               <div className="overflow-x-auto">
                 <div style={{ minWidth: Math.max(400, byPeriod.length * 60) }}>
@@ -348,8 +335,8 @@ const Reports: React.FC = () => {
                     <BarChart data={byPeriod} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                       <XAxis dataKey="period" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
-                      <Tooltip formatter={(v: any) => formatCurrency(v as number)} />
-                      <Bar dataKey="revenue" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Gelir" />
+                      <Tooltip formatter={(v: any) => money(v as number)} />
+                      <Bar dataKey="revenue" fill="#3B82F6" radius={[4, 4, 0, 0]} name={t('reports:revenue.revenue')} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -361,18 +348,18 @@ const Reports: React.FC = () => {
             {/* By Method */}
             {byMethod.length > 0 && (
               <div className="card p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Ödeme Yöntemi Dağılımı</h3>
+                <h3 className="font-semibold text-gray-900 mb-4">{t('reports:revenue.paymentMethodDistribution')}</h3>
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie data={byMethod} dataKey="revenue" nameKey="method" cx="50%" cy="50%"
-                      outerRadius={80} label={({ method, percent }: any) => `${METHOD_LABELS[method] || method} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                      outerRadius={80} label={({ method, percent }: any) => `${methodLabel(method)} ${((percent ?? 0) * 100).toFixed(0)}%`}
                       labelLine={false}
                     >
                       {byMethod.map((_: any, index: number) => (
                         <Cell key={index} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: any, name: any) => [formatCurrency(v as number), METHOD_LABELS[name as string] || name]} />
+                    <Tooltip formatter={(v: any, name: any) => [money(v as number), methodLabel(name as string)]} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="mt-3 space-y-1">
@@ -380,9 +367,9 @@ const Reports: React.FC = () => {
                     <div key={m.method} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="text-gray-600">{METHOD_LABELS[m.method] || m.method}</span>
+                        <span className="text-gray-600">{methodLabel(m.method)}</span>
                       </div>
-                      <span className="font-semibold text-gray-900">{formatCurrency(m.revenue)}</span>
+                      <span className="font-semibold text-gray-900">{money(m.revenue)}</span>
                     </div>
                   ))}
                 </div>
@@ -392,7 +379,7 @@ const Reports: React.FC = () => {
             {/* By Practitioner */}
             {byPractitioner.length > 0 && (
               <div className="card p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Hekim Bazlı Gelir</h3>
+                <h3 className="font-semibold text-gray-900 mb-4">{t('reports:revenue.revenueByDoctor')}</h3>
                 <div className="space-y-3">
                   {byPractitioner.sort((a: any, b: any) => b.revenue - a.revenue).map((d: any, i: number) => (
                     <div key={d.practitionerId} className="flex items-center justify-between">
@@ -404,8 +391,8 @@ const Reports: React.FC = () => {
                         <span className="text-sm text-gray-700 truncate">Dr. {d.firstName} {d.lastName}</span>
                       </div>
                       <div className="text-right shrink-0 ml-2">
-                        <p className="font-semibold text-gray-900 text-sm">{formatCurrency(d.revenue)}</p>
-                        <p className="text-xs text-gray-400">{d.count} ödeme</p>
+                        <p className="font-semibold text-gray-900 text-sm">{money(d.revenue)}</p>
+                        <p className="text-xs text-gray-400">{t('reports:revenue.doctorPaymentCount', { count: d.count })}</p>
                       </div>
                     </div>
                   ))}
@@ -418,34 +405,34 @@ const Reports: React.FC = () => {
           {byPeriod.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-900">Detay Tablosu</h3>
+                <h3 className="font-semibold text-gray-900">{t('reports:revenue.detailTable')}</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 font-medium text-gray-500">Dönem</th>
-                      <th className="px-6 py-3 font-medium text-gray-500 text-right">Gelir</th>
-                      <th className="px-6 py-3 font-medium text-gray-500 text-right">Ödeme Sayısı</th>
-                      <th className="px-6 py-3 font-medium text-gray-500 text-right">Ortalama</th>
+                      <th className="px-6 py-3 font-medium text-gray-500">{t('reports:revenue.period')}</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:revenue.revenue')}</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:revenue.paymentCountTitle')}</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:revenue.average')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {byPeriod.map((row: any) => (
                       <tr key={row.period} className="hover:bg-gray-50">
                         <td className="px-6 py-3 font-medium text-gray-900">{row.period}</td>
-                        <td className="px-6 py-3 text-right text-green-600 font-semibold">{formatCurrency(Number(row.revenue))}</td>
+                        <td className="px-6 py-3 text-right text-green-600 font-semibold">{money(Number(row.revenue))}</td>
                         <td className="px-6 py-3 text-right text-gray-600">{row.count}</td>
                         <td className="px-6 py-3 text-right text-gray-600">
-                          {row.count > 0 ? formatCurrency(Number(row.revenue) / row.count) : '—'}
+                          {row.count > 0 ? money(Number(row.revenue) / row.count) : '—'}
                         </td>
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-semibold">
-                      <td className="px-6 py-3 text-gray-900">Toplam</td>
-                      <td className="px-6 py-3 text-right text-green-700">{formatCurrency(summary.totalRevenue)}</td>
+                      <td className="px-6 py-3 text-gray-900">{t('reports:revenue.total')}</td>
+                      <td className="px-6 py-3 text-right text-green-700">{money(summary.totalRevenue)}</td>
                       <td className="px-6 py-3 text-right text-gray-900">{summary.totalCount}</td>
-                      <td className="px-6 py-3 text-right text-gray-900">{formatCurrency(summary.avgPerPayment)}</td>
+                      <td className="px-6 py-3 text-right text-gray-900">{money(summary.avgPerPayment)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -456,7 +443,7 @@ const Reports: React.FC = () => {
           {byPeriod.length === 0 && !loading && (
             <div className="card p-12 text-center text-gray-400">
               <BarChart2 size={40} className="mx-auto mb-3 opacity-30" />
-              <p>Seçili tarih aralığında tahsilat kaydı bulunamadı.</p>
+              <p>{t('reports:revenue.empty')}</p>
             </div>
           )}
         </div>
@@ -468,16 +455,16 @@ const Reports: React.FC = () => {
           {/* Summary */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="card p-5 bg-gradient-to-br from-violet-500 to-violet-600 text-white border-none lg:col-span-2">
-              <p className="text-violet-100 text-sm mb-1">Toplam Kayıtlı Hasta (Dönem)</p>
+              <p className="text-violet-100 text-sm mb-1">{t('reports:sources.totalPatientsInRange')}</p>
               <p className="text-3xl font-bold">{sourcesData.total}</p>
-              <p className="text-violet-200 text-xs mt-1">{sourcesData.sources?.length} farklı kaynak</p>
+              <p className="text-violet-200 text-xs mt-1">{t('reports:sources.sourceCount', { count: sourcesData.sources?.length || 0 })}</p>
             </div>
             {sourcesData.sources?.slice(0, 2).map((s: any, i: number) => (
               <div key={s.source} className="card p-5">
-                <p className="text-xs text-gray-500 mb-1">#{i + 1} Kaynak</p>
-                <p className="text-xl font-bold text-gray-900">{SOURCE_LABELS[s.source] || s.source}</p>
+                <p className="text-xs text-gray-500 mb-1">{t('reports:sources.rankedSource', { rank: i + 1 })}</p>
+                <p className="text-xl font-bold text-gray-900">{sourceLabel(s.source)}</p>
                 <p className="text-2xl font-bold mt-1" style={{ color: COLORS[i % COLORS.length] }}>{s.count}</p>
-                <p className="text-xs text-gray-400">hasta</p>
+                <p className="text-xs text-gray-400">{t('reports:sources.patients')}</p>
               </div>
             ))}
           </div>
@@ -486,7 +473,7 @@ const Reports: React.FC = () => {
             {/* Pie chart: patient count distribution */}
             <div className="card p-6">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Users size={18} className="text-violet-500" />Kaynak Bazlı Hasta Dağılımı
+                <Users size={18} className="text-violet-500" />{t('reports:sources.patientDistribution')}
               </h3>
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -498,7 +485,7 @@ const Reports: React.FC = () => {
                     cy="50%"
                     outerRadius={85}
                     label={({ source, percent }: any) =>
-                      percent > 0.03 ? `${SOURCE_LABELS[source] || source} ${(percent * 100).toFixed(0)}%` : ''
+                      percent > 0.03 ? `${sourceLabel(source)} ${(percent * 100).toFixed(0)}%` : ''
                     }
                     labelLine={false}
                   >
@@ -506,7 +493,7 @@ const Reports: React.FC = () => {
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: any, name: any) => [(v as number) + ' hasta', SOURCE_LABELS[name as string] || name]} />
+                  <Tooltip formatter={(v: any, name: any) => [t('reports:sources.patientCountValue', { count: v as number }), sourceLabel(name as string)]} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -515,15 +502,15 @@ const Reports: React.FC = () => {
             {sourcesData.sources?.some((s: any) => s.revenue > 0) && (
               <div className="card p-6">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <DollarSign size={18} className="text-emerald-500" />Kaynak Bazlı Gelir
+                  <DollarSign size={18} className="text-emerald-500" />{t('reports:sources.revenueBySource')}
                 </h3>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={sourcesData.sources.filter((s: any) => s.revenue > 0)} layout="vertical"
                     margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                     <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
                     <YAxis type="category" dataKey="source" tick={{ fontSize: 11 }}
-                      tickFormatter={(v) => SOURCE_LABELS[v] || v} width={90} />
-                    <Tooltip formatter={(v: any) => [formatCurrency(v as number), 'Gelir']} />
+                      tickFormatter={(v) => sourceLabel(v)} width={90} />
+                    <Tooltip formatter={(v: any) => [money(v as number), t('reports:revenue.revenue')]} />
                     <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
                       {sourcesData.sources.map((_: any, i: number) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -538,17 +525,17 @@ const Reports: React.FC = () => {
           {/* Detail Table */}
           <div className="card overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Kaynak Detay Tablosu</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white">{t('reports:sources.detailTable')}</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-800/50">
                   <tr>
                     <th className="px-6 py-3 font-medium text-gray-500 pl-6">#</th>
-                    <th className="px-6 py-3 font-medium text-gray-500">Kaynak</th>
-                    <th className="px-6 py-3 font-medium text-gray-500 text-right">Hasta Sayısı</th>
-                    <th className="px-6 py-3 font-medium text-gray-500 text-right">Pay %</th>
-                    <th className="px-6 py-3 font-medium text-gray-500 text-right pr-6">Gelir</th>
+                    <th className="px-6 py-3 font-medium text-gray-500">{t('reports:sources.source')}</th>
+                    <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:sources.patientCount')}</th>
+                    <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:sources.share')}</th>
+                    <th className="px-6 py-3 font-medium text-gray-500 text-right pr-6">{t('reports:revenue.revenue')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -561,14 +548,14 @@ const Reports: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-3 font-semibold text-gray-900 dark:text-white">
-                        {SOURCE_LABELS[s.source] || s.source}
+                        {sourceLabel(s.source)}
                       </td>
                       <td className="px-6 py-3 text-right font-bold text-gray-900 dark:text-white">{s.count}</td>
                       <td className="px-6 py-3 text-right text-gray-500">
                         {sourcesData.total > 0 ? `%${Math.round(s.count / sourcesData.total * 100)}` : '—'}
                       </td>
                       <td className="px-6 py-3 text-right text-emerald-600 font-semibold pr-6">
-                        {s.revenue > 0 ? formatCurrency(s.revenue) : '—'}
+                        {s.revenue > 0 ? money(s.revenue) : '—'}
                       </td>
                     </tr>
                   ))}
@@ -581,7 +568,7 @@ const Reports: React.FC = () => {
       {!loading && tab === 'sources' && !sourcesData && (
         <div className="card p-12 text-center text-gray-400">
           <Megaphone size={40} className="mx-auto mb-3 opacity-30" />
-          <p>Raporu görüntülemek için "Raporu Getir" butonuna tıklayın.</p>
+          <p>{t('reports:empty.prompt', { button: t('reports:filters.runReport') })}</p>
         </div>
       )}
 
@@ -597,21 +584,21 @@ const Reports: React.FC = () => {
             return (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="card p-5 bg-gradient-to-br from-red-500 to-red-600 text-white border-none">
-                  <p className="text-red-100 text-sm mb-1">Toplam No-Show</p>
+                  <p className="text-red-100 text-sm mb-1">{t('reports:noshow.totalNoShow')}</p>
                   <p className="text-3xl font-bold">{totalNoShows}</p>
                 </div>
                 <div className="card p-5">
-                  <p className="text-gray-500 text-sm mb-1">No-Show Oranı</p>
+                  <p className="text-gray-500 text-sm mb-1">{t('reports:noshow.noShowRate')}</p>
                   <p className={`text-3xl font-bold ${overallRate > 20 ? 'text-red-600' : overallRate > 10 ? 'text-amber-500' : 'text-green-600'}`}>
                     %{overallRate}
                   </p>
                 </div>
                 <div className="card p-5">
-                  <p className="text-gray-500 text-sm mb-1">İptal Sayısı</p>
+                  <p className="text-gray-500 text-sm mb-1">{t('reports:noshow.cancellationCount')}</p>
                   <p className="text-3xl font-bold text-orange-500">{totalCancellations}</p>
                 </div>
                 <div className="card p-5">
-                  <p className="text-gray-500 text-sm mb-1">Toplam Randevu</p>
+                  <p className="text-gray-500 text-sm mb-1">{t('reports:noshow.totalAppointments')}</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-white">{totalAppts}</p>
                 </div>
               </div>
@@ -622,7 +609,7 @@ const Reports: React.FC = () => {
           {noShowData.monthlyTrend.length > 0 && (
             <div className="card p-6">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <TrendingUp size={18} className="text-red-500" />Aylık No-Show Trendi
+                <TrendingUp size={18} className="text-red-500" />{t('reports:noshow.monthlyTrend')}
               </h3>
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={noShowData.monthlyTrend.map((m: any) => ({
@@ -635,12 +622,12 @@ const Reports: React.FC = () => {
                   <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => `%${v}`} />
                   <Tooltip formatter={(v: any, name: any) => {
-                    if (name === 'rate') return [`%${v}`, 'No-Show Oranı'];
-                    if (name === 'no_shows') return [v, 'No-Show'];
-                    if (name === 'cancellations') return [v, 'İptal'];
+                    if (name === 'rate') return [`%${v}`, t('reports:noshow.noShowRate')];
+                    if (name === 'no_shows') return [v, t('reports:noshow.noShow')];
+                    if (name === 'cancellations') return [v, t('reports:noshow.cancelled')];
                     return [v, name];
                   }} />
-                  <Legend formatter={(v) => v === 'no_shows' ? 'No-Show' : v === 'cancellations' ? 'İptal' : 'Oran %'} />
+                  <Legend formatter={(v) => v === 'no_shows' ? t('reports:noshow.noShow') : v === 'cancellations' ? t('reports:noshow.cancelled') : t('reports:noshow.ratePercent')} />
                   <Bar yAxisId="left" dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
                   <Bar yAxisId="left" dataKey="cancellations" fill="#F97316" radius={[4, 4, 0, 0]} name="cancellations" />
                   <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#8B5CF6" strokeWidth={2} dot={false} name="rate" />
@@ -654,17 +641,17 @@ const Reports: React.FC = () => {
             {noShowData.byDayOfWeek.length > 0 && (
               <div className="card p-6">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Calendar size={18} className="text-indigo-500" />Gün Bazlı Dağılım
+                  <Calendar size={18} className="text-indigo-500" />{t('reports:noshow.byDay')}
                 </h3>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={noShowData.byDayOfWeek.map((d: any) => ({
-                    day: DAY_LABELS[d.day_of_week] || d.day_of_week,
+                    day: dayLabel(d.day_of_week),
                     no_shows: Number(d.no_shows),
                     rate: Number(d.total) > 0 ? Math.round(Number(d.no_shows) / Number(d.total) * 100) : 0,
                   }))} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
                     <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: any, name: any) => [name === 'rate' ? `%${v}` : v, name === 'rate' ? 'Oran' : 'No-Show']} />
+                    <Tooltip formatter={(v: any, name: any) => [name === 'rate' ? `%${v}` : v, name === 'rate' ? t('reports:noshow.rate') : t('reports:noshow.noShow')]} />
                     <Bar dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -675,7 +662,7 @@ const Reports: React.FC = () => {
             {noShowData.byHour.length > 0 && (
               <div className="card p-6">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Clock size={18} className="text-amber-500" />Saat Dilimi Dağılımı
+                  <Clock size={18} className="text-amber-500" />{t('reports:noshow.byHour')}
                 </h3>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={noShowData.byHour.map((h: any) => ({
@@ -685,7 +672,7 @@ const Reports: React.FC = () => {
                   }))} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
                     <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={1} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: any, name: any) => [v, name === 'no_shows' ? 'No-Show' : 'Toplam']} />
+                    <Tooltip formatter={(v: any, name: any) => [v, name === 'no_shows' ? t('reports:noshow.noShow') : t('reports:noshow.total')]} />
                     <Bar dataKey="total" fill="#E5E7EB" radius={[4, 4, 0, 0]} name="total" />
                     <Bar dataKey="no_shows" fill="#EF4444" radius={[4, 4, 0, 0]} name="no_shows" />
                   </BarChart>
@@ -699,18 +686,18 @@ const Reports: React.FC = () => {
             <div className="card overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                 <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Users size={18} className="text-blue-500" />Hekim Bazlı No-Show Oranı
+                  <Users size={18} className="text-blue-500" />{t('reports:noshow.doctorRate')}
                 </h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-800/50">
                     <tr>
-                      <th className="px-6 py-3 font-medium text-gray-500 pl-6">Hekim</th>
-                      <th className="px-6 py-3 font-medium text-gray-500 text-right">Toplam</th>
-                      <th className="px-6 py-3 font-medium text-gray-500 text-right">No-Show</th>
-                      <th className="px-6 py-3 font-medium text-gray-500 text-right">İptal</th>
-                      <th className="px-6 py-3 font-medium text-gray-500 text-right pr-6">No-Show Oranı</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 pl-6">{t('reports:noshow.doctor')}</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:noshow.total')}</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:noshow.noShow')}</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right">{t('reports:noshow.cancelled')}</th>
+                      <th className="px-6 py-3 font-medium text-gray-500 text-right pr-6">{t('reports:noshow.noShowRate')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -748,7 +735,7 @@ const Reports: React.FC = () => {
       {!loading && tab === 'noshow' && !noShowData && (
         <div className="card p-12 text-center text-gray-400">
           <UserMinus size={40} className="mx-auto mb-3 opacity-30" />
-          <p>Raporu görüntülemek için "Raporu Getir" butonuna tıklayın.</p>
+          <p>{t('reports:empty.prompt', { button: t('reports:filters.runReport') })}</p>
         </div>
       )}
 
@@ -758,7 +745,7 @@ const Reports: React.FC = () => {
           {doctorData.doctors.length === 0 ? (
             <div className="card p-12 text-center text-gray-400">
               <Users size={40} className="mx-auto mb-3 opacity-30" />
-              <p>Aktif hekim bulunamadı.</p>
+              <p>{t('reports:doctors.empty')}</p>
             </div>
           ) : (
             doctorData.doctors.map((doc: any) => (
@@ -770,28 +757,28 @@ const Reports: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-900">Dr. {doc.firstName} {doc.lastName}</h3>
-                      <p className="text-sm text-gray-500">Komisyon oranı: %{doc.commissionRate}</p>
+                      <p className="text-sm text-gray-500">{t('reports:doctors.commissionRate', { rate: doc.commissionRate })}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-xs text-gray-400">Toplam Gelir</p>
-                      <p className="font-bold text-green-600 text-lg">{formatCurrency(doc.metrics.revenue)}</p>
+                      <p className="text-xs text-gray-400">{t('reports:doctors.totalRevenue')}</p>
+                      <p className="font-bold text-green-600 text-lg">{money(doc.metrics.revenue)}</p>
                     </div>
                     {doc.commissionRate > 0 && (
                       <div className="text-right">
-                        <p className="text-xs text-gray-400">Komisyon</p>
-                        <p className="font-bold text-purple-600">{formatCurrency(doc.metrics.commissionAmount)}</p>
+                        <p className="text-xs text-gray-400">{t('reports:doctors.commission')}</p>
+                        <p className="font-bold text-purple-600">{money(doc.metrics.commissionAmount)}</p>
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: 'Toplam Randevu', value: doc.metrics.appointmentCount, icon: Calendar, color: 'text-blue-600' },
-                    { label: 'Tamamlanan', value: doc.metrics.completedAppointments, icon: ChevronRight, color: 'text-green-600' },
-                    { label: 'No-Show', value: doc.metrics.noShowCount, icon: AlertCircle, color: 'text-red-500' },
-                    { label: 'Tamamlanma %', value: `%${doc.metrics.completionRate}`, icon: Award, color: 'text-amber-600' },
+                    { label: t('reports:doctors.totalAppointments'), value: doc.metrics.appointmentCount, icon: Calendar, color: 'text-blue-600' },
+                    { label: t('reports:doctors.completed'), value: doc.metrics.completedAppointments, icon: ChevronRight, color: 'text-green-600' },
+                    { label: t('reports:doctors.noShow'), value: doc.metrics.noShowCount, icon: AlertCircle, color: 'text-red-500' },
+                    { label: t('reports:doctors.completionRate'), value: `%${doc.metrics.completionRate}`, icon: Award, color: 'text-amber-600' },
                   ].map(stat => (
                     <div key={stat.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                       <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
@@ -801,10 +788,10 @@ const Reports: React.FC = () => {
                 </div>
                 {(doc.metrics.treatmentCasesOpened > 0 || doc.metrics.treatmentCasesCompleted > 0) && (
                   <div className="mt-3 pt-3 border-t border-gray-100 flex gap-4 text-sm text-gray-500">
-                    <span>Açılan Tedavi: <strong className="text-gray-900">{doc.metrics.treatmentCasesOpened}</strong></span>
-                    <span>Tamamlanan: <strong className="text-gray-900">{doc.metrics.treatmentCasesCompleted}</strong></span>
+                    <span>{t('reports:doctors.openedTreatment')}: <strong className="text-gray-900">{doc.metrics.treatmentCasesOpened}</strong></span>
+                    <span>{t('reports:doctors.completed')}: <strong className="text-gray-900">{doc.metrics.treatmentCasesCompleted}</strong></span>
                     {doc.metrics.revenueCount > 0 && (
-                      <span>Ort. Ödeme: <strong className="text-gray-900">{formatCurrency(doc.metrics.avgRevenuePerAppointment)}</strong></span>
+                      <span>{t('reports:doctors.avgPayment')}: <strong className="text-gray-900">{money(doc.metrics.avgRevenuePerAppointment)}</strong></span>
                     )}
                   </div>
                 )}

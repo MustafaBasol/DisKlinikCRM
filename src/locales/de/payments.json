@@ -8,6 +8,7 @@
     "totalPending": "Gesamt Ausstehend",
     "totalRefunded": "Gesamt Rückerstattet",
     "remaining": "Restbetrag",
+    "pendingBreakdown": "• {{installments}} Raten + {{payments}} ausstehende Zahlungen",
     "totalCollected": "Gesamt Eingezogen",
     "pending": "Ausstehend",
     "transactions": "Transaktionen",
@@ -34,6 +35,7 @@
     "card": "Kredit-/Debitkarte",
     "bank_transfer": "Banküberweisung",
     "cheque": "Scheck",
+    "insurance": "Versicherung",
     "other": "Andere"
   },
   "list": {
@@ -53,5 +55,133 @@
     "status": "Status",
     "paidAt": "Zahlungsdatum",
     "notes": "Notizen"
+  },
+  "confirmCancel": "Diese Zahlung stornieren?",
+  "empty": "Keine Zahlungsdatensätze gefunden.",
+  "noRelatedPayments": "Keine zugehörigen Zahlungen gefunden.",
+  "financeDashboard": {
+    "title": "Finanz-Dashboard",
+    "subtitle": "Einnahmen- und Zahlungsverfolgung",
+    "billingSubtitle": "Abrechnungsübersicht",
+    "ranges": {
+      "today": "Heute",
+      "this_week": "Diese Woche",
+      "this_month": "Dieser Monat",
+      "last_30_days": "Letzte 30 Tage"
+    },
+    "cards": {
+      "collectedToday": "Heute eingezogen",
+      "collectedInRange": "Im Zeitraum eingezogen",
+      "outstandingBalance": "Ausstehender Saldo",
+      "overdueAmount": "Überfälliger Betrag",
+      "pendingInstallments": "Ausstehende Raten",
+      "overdueInstallments": "Überfällige Raten",
+      "practitionerPayoutsDue": "Behandler-Einnahmen (unbezahlt)",
+      "practitionerPayoutsPaid": "Behandler-Zahlungen (Zeitraum)"
+    },
+    "sections": {
+      "byMethod": "Nach Zahlungsmethode",
+      "upcomingInstallments": "Anstehende / überfällige Raten",
+      "branchPerformance": "Filialleistung",
+      "recentPayments": "Letzte Zahlungen"
+    },
+    "columns": {
+      "collected": "Eingezogen",
+      "installment": "Rate"
+    },
+    "actions": {
+      "viewAllPaymentPlans": "Alle Zahlungspläne anzeigen",
+      "installments": "Raten"
+    },
+    "empty": {
+      "noInstallments": "Keine Raten",
+      "noPaymentsInRange": "Keine Zahlungen in diesem Zeitraum"
+    },
+    "transactionCount": "{{count}} Transaktionen",
+    "errors": {
+      "loadFailed": "Finanzdaten konnten nicht geladen werden."
+    }
+  },
+  "planForm": {
+    "newPlan": "Neuer Zahlungsplan",
+    "paymentPlan": "Zahlungsplan",
+    "paymentPlansTitle": "Zahlungspläne und Zahlungsplan",
+    "selectPatient": "Patient auswählen...",
+    "relatedTreatment": "Zugehörige Behandlung (optional)",
+    "unlinkedPlan": "Nicht verknüpfter Zahlungsplan",
+    "totalAmount": "Gesamtbetrag",
+    "installmentCount": "Anzahl der Raten",
+    "installmentNo": "Raten-Nr.",
+    "installmentLabel": "Rate {{number}}",
+    "installmentSummary": "{{count}} Raten - Gesamt: {{amount}} {{currency}}",
+    "firstDueDate": "Erstes Zahlungsdatum",
+    "descriptionPlaceholder": "z. B. Zahlungsplan für Implantatbehandlung",
+    "preview": "Vorschau des Ratenplans",
+    "dueDate": "Fälligkeit",
+    "moreInstallments": "+{{count}} weitere Raten",
+    "total": "Gesamt",
+    "createPlan": "Plan erstellen",
+    "paid": "Bezahlt",
+    "installmentStatus": {
+      "overdue": "Überfällig"
+    },
+    "errors": {
+      "patientRequired": "Bitte wählen Sie einen Patienten aus.",
+      "amountRequired": "Bitte geben Sie einen gültigen Betrag ein.",
+      "firstDueDateRequired": "Bitte wählen Sie das erste Zahlungsdatum aus.",
+      "saveFailed": "Speichern fehlgeschlagen."
+    }
+  },
+  "plansPage": {
+    "title": "Zahlungspläne",
+    "subtitle": "Zahlungspläne und Ratenverfolgung",
+    "newPlan": "Neuer Zahlungsplan",
+    "searchPlaceholder": "Patientenname, Behandlung oder Beschreibung suchen...",
+    "empty": "Kein Zahlungsplan gefunden.",
+    "createFirst": "Ersten Plan erstellen",
+    "confirmCancelPlan": "Möchten Sie diesen Ratenplan wirklich stornieren?",
+    "overdueCount": "{{count}} überfällig",
+    "installmentProgress": "{{paid}}/{{total}} Raten",
+    "remaining": "Verbleibend: {{amount}}",
+    "paidAmount": "{{amount}} bezahlt",
+    "dueDate": "Fälligkeitsdatum",
+    "amount": "Betrag",
+    "status": "Status",
+    "paidAt": "Bezahlt: {{date}}",
+    "confirmPayment": "Bestätigen",
+    "markPaid": "Bezahlt",
+    "cancelPlan": "Plan stornieren",
+    "summary": {
+      "totalPlans": "Pläne gesamt",
+      "overdueInstallments": "Überfällige Raten"
+    },
+    "filters": {
+      "allStatuses": "Alle Status"
+    },
+    "planStatus": {
+      "active": "Aktiv",
+      "completed": "Abgeschlossen",
+      "cancelled": "Storniert"
+    },
+    "installmentStatus": {
+      "pending": "Ausstehend",
+      "paid": "Bezahlt",
+      "overdue": "Überfällig"
+    },
+    "errors": {
+      "paymentSaveFailed": "Zahlung konnte nicht gespeichert werden.",
+      "cancelFailed": "Plan konnte nicht storniert werden."
+    }
+  },
+  "receipt": {
+    "title": "Quittung / Zahlungsbeleg",
+    "print": "Drucken / PDF",
+    "loadFailed": "Quittungsinformationen konnten nicht geladen werden.",
+    "paymentReceipt": "Zahlungsquittung",
+    "patientInfo": "Patienteninformation",
+    "paymentDetails": "Zahlungsdetails",
+    "serviceTreatment": "Leistung / Behandlung",
+    "generatedElectronically": "Dieses Dokument wurde elektronisch erstellt.",
+    "documentNo": "Beleg-Nr."
   }
 }

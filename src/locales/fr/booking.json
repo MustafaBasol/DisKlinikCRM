@@ -1,0 +1,52 @@
+{
+  "header": {
+    "subtitle": "Rendez-vous en ligne"
+  },
+  "errors": {
+    "invalidLink": "Lien invalide.",
+    "loadClinic": "Les informations de la clinique n'ont pas pu être chargées.",
+    "loading": "Erreur de chargement",
+    "namePhoneRequired": "Le nom complet et le téléphone sont obligatoires.",
+    "submitFailed": "La demande de rendez-vous n'a pas pu être envoyée. Veuillez réessayer."
+  },
+  "service": {
+    "title": "Sélectionnez un service",
+    "subtitle": "Pour quel traitement souhaitez-vous prendre rendez-vous ?",
+    "duration": "{{minutes}} min",
+    "empty": "Aucun service n'a encore été défini.",
+    "continueWithoutService": "Continuer sans sélectionner de service"
+  },
+  "schedule": {
+    "title": "Sélectionner le praticien et la date",
+    "optional": "Facultatif",
+    "doctorOptional": "Praticien (facultatif)",
+    "anyDoctor": "Pas de préférence",
+    "dateOptional": "Date souhaitée (facultatif)",
+    "timeOptional": "Heure souhaitée (facultatif)"
+  },
+  "contact": {
+    "title": "Coordonnées",
+    "subtitle": "Veuillez remplir ces informations pour que nous puissions vous appeler",
+    "fullName": "Nom complet",
+    "fullNamePlaceholder": "Votre nom complet",
+    "phone": "Téléphone",
+    "emailOptional": "E-mail (facultatif)",
+    "noteOptional": "Note (facultatif)",
+    "notePlaceholder": "Votre motif, demande particulière...",
+    "disclaimer": "Après réception de votre demande, la clinique vous appellera pour confirmer votre rendez-vous."
+  },
+  "actions": {
+    "continue": "Continuer",
+    "submitting": "Envoi...",
+    "submit": "Envoyer la demande de rendez-vous"
+  },
+  "success": {
+    "title": "Votre demande a été reçue !",
+    "body": "L'équipe de {{clinic}} appellera {{phone}} dès que possible pour confirmer votre rendez-vous.",
+    "questions": "Pour vos questions",
+    "newAppointment": "Prendre un nouveau rendez-vous"
+  },
+  "footer": {
+    "poweredBy": "Powered by Klinik CRM"
+  }
+}

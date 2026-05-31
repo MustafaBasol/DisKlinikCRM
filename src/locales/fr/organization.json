@@ -1,0 +1,63 @@
+{
+  "title": "Tableau de bord de l'organisation",
+  "subtitle": "Vue synthétique de toutes les branches de clinique",
+  "loading": "Chargement...",
+  "ranges": {
+    "today": "Aujourd'hui",
+    "this_week": "Cette semaine",
+    "this_month": "Ce mois-ci",
+    "last_30_days": "30 derniers jours",
+    "custom": "Personnalisé"
+  },
+  "status": {
+    "active": "Actif",
+    "trial": "Essai",
+    "suspended": "Suspendu",
+    "cancelled": "Annulé"
+  },
+  "cards": {
+    "branches": "Branches",
+    "activeSub": "{{value}} actives",
+    "todayAppointments": "Rendez-vous du jour",
+    "completed": "Terminés",
+    "totalSub": "{{value}} au total",
+    "periodRevenue": "Revenu de la période",
+    "outstandingBalance": "Solde en attente",
+    "newPatients": "Nouveaux patients",
+    "activeTreatments": "Traitements actifs",
+    "completedSub": "{{value}} terminés",
+    "averageNoShow": "No-show moyen",
+    "cancelledSub": "{{value}} annulés"
+  },
+  "insights": {
+    "topRevenue": "Revenu le plus élevé",
+    "lowestRevenue": "Revenu le plus faible",
+    "highestAppointments": "Plus de rendez-vous",
+    "highestBalance": "Solde le plus élevé",
+    "highestNoShow": "No-show le plus élevé",
+    "topNewPatients": "Plus de nouveaux patients"
+  },
+  "table": {
+    "title": "Comparaison des branches",
+    "branch": "Branche",
+    "status": "Statut",
+    "appointments": "Rendez-vous",
+    "completed": "Terminés",
+    "cancelled": "Annulés",
+    "noShow": "No-show",
+    "newPatients": "Nouveaux patients",
+    "revenue": "Revenu",
+    "balance": "Solde",
+    "treatments": "Traitements",
+    "staff": "Personnel",
+    "actions": "Actions",
+    "empty": "Aucune donnée trouvée",
+    "branchDashboard": "Tableau de bord branche",
+    "branchAppointments": "Rendez-vous",
+    "branchPatients": "Patients",
+    "branchPayments": "Paiements"
+  },
+  "errors": {
+    "loadFailed": "Les données n'ont pas pu être chargées"
+  }
+}

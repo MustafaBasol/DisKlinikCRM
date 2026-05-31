@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   MessageCircle,
   Plus,
@@ -124,6 +125,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function WhatsAppConnections() {
   const { user } = useAuth();
+  const { t, i18n } = useTranslation(['whatsapp', 'common']);
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -164,11 +166,11 @@ export default function WhatsAppConnections() {
       const res = await whatsappConnectionService.list();
       setConnections(res.data);
     } catch {
-      setError('WhatsApp bağlantıları yüklenemedi.');
+      setError(t('whatsapp:connections.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchClinics = useCallback(async () => {
     try {
@@ -219,7 +221,7 @@ export default function WhatsAppConnections() {
 
   async function handleSave() {
     if (!form.name.trim()) {
-      setFormError('Bağlantı adı zorunludur.');
+      setFormError(t('whatsapp:connections.errors.nameRequired'));
       return;
     }
     setSaving(true);
@@ -256,7 +258,7 @@ export default function WhatsAppConnections() {
       setShowModal(false);
       fetchConnections();
     } catch (err: any) {
-      setFormError(err?.response?.data?.error ?? 'Kayıt başarısız.');
+      setFormError(err?.response?.data?.error ?? t('whatsapp:connections.errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -268,7 +270,7 @@ export default function WhatsAppConnections() {
       const res = await whatsappConnectionService.test(id);
       setTestResults((prev) => ({ ...prev, [id]: res.data }));
     } catch {
-      setTestResults((prev) => ({ ...prev, [id]: { success: false, message: 'Test isteği başarısız.' } }));
+      setTestResults((prev) => ({ ...prev, [id]: { success: false, message: t('whatsapp:connections.errors.testFailed') } }));
     } finally {
       setTestingId(null);
     }
@@ -285,34 +287,34 @@ export default function WhatsAppConnections() {
   }
 
   async function handleDisconnect(id: string, name: string) {
-    if (!confirm(`"${name}" bağlantısını kesmek istediğinizden emin misiniz?`)) return;
+    if (!confirm(t('whatsapp:connections.confirm.disconnect', { name }))) return;
     setDisconnectingId(id);
     try {
       await whatsappConnectionService.disconnect(id);
-      setSuccessMessage(`"${name}" bağlantısı kesildi.`);
+      setSuccessMessage(t('whatsapp:connections.success.disconnected', { name }));
       fetchConnections();
     } catch {
-      setImportError('Bağlantı kesilemedi.');
+      setImportError(t('whatsapp:connections.errors.disconnectFailed'));
     } finally {
       setDisconnectingId(null);
     }
   }
 
   async function handleImportLegacy() {
-    if (!confirm('Mevcut ortam değişkenlerindeki Evolution API ayarları veritabanına aktarılacak. Devam edilsin mi?')) return;
+    if (!confirm(t('whatsapp:connections.confirm.importLegacy'))) return;
     setImportingLegacy(true);
     setImportError(null);
     setSuccessMessage(null);
     try {
       const res = await whatsappConnectionService.importLegacy();
       if (res.data.alreadyImported) {
-        setSuccessMessage('Bu bağlantı daha önce zaten aktarılmıştı.');
+        setSuccessMessage(t('whatsapp:connections.success.alreadyImported'));
       } else {
-        setSuccessMessage('Evolution API bağlantısı başarıyla veritabanına aktarıldı!');
+        setSuccessMessage(t('whatsapp:connections.success.imported'));
       }
       fetchConnections();
     } catch (err: any) {
-      setImportError(err?.response?.data?.error ?? 'Aktarım başarısız.');
+      setImportError(err?.response?.data?.error ?? t('whatsapp:connections.errors.importFailed'));
     } finally {
       setImportingLegacy(false);
     }
@@ -329,11 +331,11 @@ export default function WhatsAppConnections() {
         status: newActive ? 'connected' : 'disconnected',
       });
       setSuccessMessage(
-        `"${conn.name}" ${newActive ? 'aktifleştirildi' : 'devre dışı bırakıldı'}.`,
+        t(newActive ? 'whatsapp:connections.success.activated' : 'whatsapp:connections.success.deactivated', { name: conn.name }),
       );
       fetchConnections();
     } catch {
-      setImportError(`Durum güncellenemedi.`);
+      setImportError(t('whatsapp:connections.errors.statusUpdateFailed'));
     } finally {
       setTogglingId(null);
     }
@@ -348,16 +350,16 @@ export default function WhatsAppConnections() {
     setSuccessMessage(null);
     try {
       await whatsappConnectionService.deleteConnection(conn.id);
-      setSuccessMessage(`"${conn.name}" bağlantısı silindi.`);
+      setSuccessMessage(t('whatsapp:connections.success.deleted', { name: conn.name }));
       fetchConnections();
     } catch (err: any) {
       const errCode = err?.response?.data?.code;
       if (errCode === 'HAS_MESSAGE_HISTORY') {
         setImportError(
-          `"${conn.name}" silinemedi: mesaj geçmişi mevcut. Silmek yerine "Devre Dışı Bırak" butonunu kullanın.`,
+          t('whatsapp:connections.errors.deleteHasHistory', { name: conn.name }),
         );
       } else {
-        setImportError(err?.response?.data?.error ?? 'Bağlantı silinemedi.');
+        setImportError(err?.response?.data?.error ?? t('whatsapp:connections.errors.deleteFailed'));
       }
     } finally {
       setDeletingId(null);
@@ -426,13 +428,13 @@ export default function WhatsAppConnections() {
         // Handle errors reported by the callback page
         if (data.error) {
           const humanError = data.errorDescription ?? data.error;
-          setFormError(`Meta bağlantısı reddedildi: ${humanError}`);
+          setFormError(t('whatsapp:connections.errors.metaRejected', { error: humanError }));
           setMetaConnecting(false);
           return;
         }
 
         if (!data.code) {
-          setFormError('Meta yetkilendirmesi tamamlanamadı: kod alınamadı.');
+          setFormError(t('whatsapp:connections.errors.metaMissingCode'));
           setMetaConnecting(false);
           return;
         }
@@ -450,7 +452,7 @@ export default function WhatsAppConnections() {
           fetchConnections();
         } catch (err: unknown) {
           const apiErr = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-          setFormError(apiErr ?? 'Meta bağlantısı oluşturulamadı.');
+          setFormError(apiErr ?? t('whatsapp:connections.errors.metaCreateFailed'));
         } finally {
           setMetaConnecting(false);
         }
@@ -490,9 +492,9 @@ export default function WhatsAppConnections() {
             <MessageCircle className="text-green-600 dark:text-green-400" size={20} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">WhatsApp Bağlantıları</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('whatsapp:connections.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Organizasyon genelinde WhatsApp bağlantılarını yönetin
+              {t('whatsapp:connections.subtitle')}
             </p>
           </div>
         </div>
@@ -502,15 +504,17 @@ export default function WhatsAppConnections() {
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Plus size={16} />
-            Yeni Bağlantı Ekle
+            {t('whatsapp:connections.actions.newConnection')}
           </button>
         )}
       </div>
 
       {/* Provider info banner */}
       <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-700 dark:text-blue-300">
-        <strong>Evolution API</strong> ve <strong>Meta Cloud API</strong> desteklenmektedir.
-        Evolution API için manuel yapılandırma, Meta için Embedded Signup veya manuel token girişi kullanılabilir.
+        {t('whatsapp:connections.providerInfo', {
+          evolution: 'Evolution API',
+          meta: 'Meta Cloud API',
+        })}
       </div>
 
       {/* Meta Embedded Signup quick-connect panel */}
@@ -519,25 +523,25 @@ export default function WhatsAppConnections() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="font-medium text-gray-900 dark:text-white text-sm">
-                Meta (WhatsApp Business) Bağlantısı
+                {t('whatsapp:connections.metaPanel.title')}
               </p>
               {META_ENV_READY ? (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Meta Embedded Signup yapılandırıldı. Hesabınızı bağlamak için butona tıklayın.
+                  {t('whatsapp:connections.metaPanel.ready')}
                 </p>
               ) : (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                  Meta Embedded Signup bu sunucuda yapılandırılmamış.{' '}
+                  {t('whatsapp:connections.metaPanel.notConfiguredPrefix')}{' '}
                   <span className="font-mono">VITE_META_APP_ID</span> ve{' '}
-                  <span className="font-mono">VITE_META_EMBEDDED_SIGNUP_CONFIG_ID</span> ortam değişkenlerini ayarlayın.
-                  Manuel yapılandırma için "Yeni Bağlantı" &gt; "Meta Cloud API" seçin.
+                  <span className="font-mono">VITE_META_EMBEDDED_SIGNUP_CONFIG_ID</span> {t('whatsapp:connections.metaPanel.notConfiguredSuffix')}
+                  {t('whatsapp:connections.metaPanel.manualHint')}
                 </p>
               )}
             </div>
             <button
               onClick={() => handleMetaEmbeddedSignup()}
               disabled={!META_ENV_READY || metaConnecting}
-              title={META_ENV_READY ? 'Meta Embedded Signup ile bağlan' : 'Meta Embedded Signup yapılandırılmamış'}
+              title={META_ENV_READY ? t('whatsapp:connections.metaPanel.connectTitle') : t('whatsapp:connections.metaPanel.notConfiguredTitle')}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed shrink-0"
             >
               {metaConnecting ? (
@@ -545,7 +549,7 @@ export default function WhatsAppConnections() {
               ) : (
                 <ExternalLink size={14} />
               )}
-              Meta ile Bağlan
+              {t('whatsapp:connections.actions.connectMeta')}
             </button>
           </div>
         </div>
@@ -578,14 +582,14 @@ export default function WhatsAppConnections() {
       ) : connections.length === 0 ? (
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <MessageCircle size={40} className="mx-auto mb-3 opacity-40" />
-          <p>Henüz WhatsApp bağlantısı eklenmemiş.</p>
+          <p>{t('whatsapp:connections.empty')}</p>
           {canManage && (
             <button
               onClick={openCreate}
               className="mt-4 flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors mx-auto"
             >
               <Plus size={16} />
-              Yeni Bağlantı Ekle
+              {t('whatsapp:connections.actions.newConnection')}
             </button>
           )}
         </div>
@@ -604,34 +608,32 @@ export default function WhatsAppConnections() {
                       <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-amber-900 dark:text-amber-100 text-sm">
-                          Ortam Değişkenlerinde Mevcut Evolution API Bağlantısı Bulundu
+                          {t('whatsapp:connections.legacy.title')}
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                          Bu bağlantı şu anda sunucu ortam değişkenlerinden çalışıyor. Panelden düzenlemek,
-                          test etmek ve şubelere atamak için panele aktarın.
+                          {t('whatsapp:connections.legacy.description')}
                         </p>
                         <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-amber-700 dark:text-amber-300">
                           {conn.evolutionApiUrl && (
                             <>
-                              <span className="font-medium">API URL</span>
+                              <span className="font-medium">{t('whatsapp:connections.modal.apiUrl')}</span>
                               <span className="truncate">{conn.evolutionApiUrl}</span>
                             </>
                           )}
                           {conn.evolutionInstanceName && (
                             <>
-                              <span className="font-medium">Instance</span>
+                              <span className="font-medium">{t('whatsapp:connections.modal.instanceName')}</span>
                               <span>{conn.evolutionInstanceName}</span>
                             </>
                           )}
-                          <span className="font-medium">API Key</span>
-                          <span>Yapılandırılmış (gizli)</span>
+                          <span className="font-medium">{t('whatsapp:connections.modal.apiKey')}</span>
+                          <span>{t('whatsapp:connections.configuredSecret')}</span>
                         </div>
                         <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 italic">
-                          Not: Ortam değişkenlerinden gelen bağlantı panelden doğrudan silinemez.
-                          Tamamen kaldırmak için sunucu ortam değişkenlerini temizleyin.
+                          {t('whatsapp:connections.legacy.note')}
                         </p>
                         <p className="mt-1 text-xs text-amber-600 dark:text-amber-400 italic">
-                          Aktardıktan sonra: Düzenle, Test Et, Şube Ata, Devre Dışı Bırak işlemleri kullanılabilir olur.
+                          {t('whatsapp:connections.legacy.afterImport')}
                         </p>
                       </div>
                       {canManage && (
@@ -645,7 +647,7 @@ export default function WhatsAppConnections() {
                           ) : (
                             <Download size={13} />
                           )}
-                          Panel Yönetimine Aktar
+                          {t('whatsapp:connections.actions.importToPanel')}
                         </button>
                       )}
                     </div>
@@ -678,7 +680,7 @@ export default function WhatsAppConnections() {
                       ) : (
                         <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
                           <PowerOff size={12} />
-                          Devre Dışı
+                          {t('whatsapp:connections.status.inactive')}
                         </span>
                       )}
                     </div>
@@ -689,40 +691,40 @@ export default function WhatsAppConnections() {
                     )}
                     {conn.clinics && conn.clinics.length > 0 && (
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        Şubeler: {conn.clinics.map((c) => c.clinic.name).join(', ')}
+                        {t('whatsapp:connections.assignedBranches', { branches: conn.clinics.map((c) => c.clinic.name).join(', ') })}
                       </p>
                     )}
                     {conn.clinics && conn.clinics.length === 0 && (
                       <p className="text-xs text-amber-500 dark:text-amber-400 mt-1">
-                        ⚠ Henüz hiçbir şubeye atanmadı
+                        {t('whatsapp:connections.noBranchesAssigned')}
                       </p>
                     )}
                     {/* Meta token expiry warning */}
                     {conn.provider === 'meta_cloud_api' && conn.metaTokenStatus === 'expired' && (
                       <p className="text-xs text-red-500 dark:text-red-400 mt-1">
-                        ⚠ Meta access token süresi doldu — bağlantıyı yenileyin
+                        {t('whatsapp:connections.token.expired')}
                       </p>
                     )}
                     {conn.provider === 'meta_cloud_api' && conn.metaTokenStatus === 'expiring' && (
                       <p className="text-xs text-amber-500 dark:text-amber-400 mt-1">
-                        ⚠ Meta access token yakında dolacak — token yenilemeyi planlayın
+                        {t('whatsapp:connections.token.expiring')}
                       </p>
                     )}
                     {conn.provider === 'meta_cloud_api' && !conn.metaTokenExpiresAt && (
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        Token geçerlilik tarihi bilinmiyor — token bilgisi girilmemiş
+                        {t('whatsapp:connections.token.unknown')}
                       </p>
                     )}
                     {/* Meta does not use QR */}
                     {conn.provider === 'meta_cloud_api' && (
                       <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
-                        ℹ Meta Cloud API QR kullanmaz — hesap doğrulama "Meta ile Bağlan" üzerinden yapılır.
+                        {t('whatsapp:connections.metaNoQr')}
                       </p>
                     )}
                     {/* Inactive warning */}
                     {!conn.isActive && (
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                        ⚠ Bağlantı devre dışı — bu hattan mesaj gönderilemez.
+                        {t('whatsapp:connections.inactiveWarning')}
                       </p>
                     )}
                   </div>
@@ -735,7 +737,7 @@ export default function WhatsAppConnections() {
                         <button
                           onClick={() => handleTest(conn.id)}
                           disabled={testingId === conn.id}
-                          title="Bağlantıyı Test Et"
+                          title={t('whatsapp:connections.actions.test')}
                           className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                         >
                           {testingId === conn.id ? (
@@ -748,7 +750,7 @@ export default function WhatsAppConnections() {
                         {conn.provider === 'evolution_api' && (
                           <button
                             onClick={() => handleGetQr(conn.id)}
-                            title="QR Kodu Al / Bağlan"
+                            title={t('whatsapp:connections.actions.getQr')}
                             className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                           >
                             <QrCode size={16} />
@@ -757,7 +759,7 @@ export default function WhatsAppConnections() {
                         {/* Edit */}
                         <button
                           onClick={() => openEdit(conn)}
-                          title="Düzenle"
+                          title={t('common:edit')}
                           className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                         >
                           <Pencil size={16} />
@@ -766,7 +768,7 @@ export default function WhatsAppConnections() {
                         <button
                           onClick={() => handleDisconnect(conn.id, conn.name)}
                           disabled={disconnectingId === conn.id}
-                          title="Bağlantıyı Kes (WhatsApp oturumunu sonlandır)"
+                          title={t('whatsapp:connections.actions.disconnect')}
                           className="p-2 text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                         >
                           {disconnectingId === conn.id ? (
@@ -779,7 +781,7 @@ export default function WhatsAppConnections() {
                         <button
                           onClick={() => handleToggleActive(conn)}
                           disabled={togglingId === conn.id}
-                          title={conn.isActive ? 'Devre Dışı Bırak' : 'Aktifleştir'}
+                          title={conn.isActive ? t('whatsapp:connections.actions.deactivate') : t('whatsapp:connections.actions.activate')}
                           className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 ${
                             conn.isActive
                               ? 'text-gray-400 hover:text-amber-600 dark:hover:text-amber-400'
@@ -798,7 +800,7 @@ export default function WhatsAppConnections() {
                         <button
                           onClick={() => setConfirmDeleteConn(conn)}
                           disabled={deletingId === conn.id}
-                          title="Sil"
+                          title={t('common:delete')}
                           className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                         >
                           {deletingId === conn.id ? (
@@ -841,30 +843,29 @@ export default function WhatsAppConnections() {
                   <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
                     {conn.provider === 'meta_cloud_api' ? (
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Meta Cloud API, QR kodu kullanmaz. Hesabınızı "Meta ile Bağlan" butonu veya
-                        manuel yapılandırma ile bağlayın.
+                        {t('whatsapp:connections.qr.metaNotUsed')}
                       </p>
                     ) : qrData[conn.id] ? (
                       <div className="flex flex-col items-start gap-2">
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          WhatsApp'ı QR kod ile bağlayın:
+                          {t('whatsapp:connections.qr.connectWithQr')}
                         </p>
                         <img
                           src={`data:image/png;base64,${qrData[conn.id]}`}
-                          alt="QR Code"
+                          alt={t('whatsapp:connections.qr.alt')}
                           className="w-48 h-48 border border-gray-200 dark:border-gray-600 rounded-lg"
                         />
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        QR kodu mevcut değil — bağlantı zaten aktif olabilir.
+                        {t('whatsapp:connections.qr.empty')}
                       </p>
                     )}
                     <button
                       onClick={() => setShowQrFor(null)}
                       className="mt-2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                     >
-                      Kapat
+                      {t('common:close')}
                     </button>
                   </div>
                 )}
@@ -877,13 +878,13 @@ export default function WhatsAppConnections() {
                         <>
                           {conn.evolutionApiUrl && (
                             <>
-                              <dt>API URL</dt>
+                              <dt>{t('whatsapp:connections.modal.apiUrl')}</dt>
                               <dd className="truncate text-gray-700 dark:text-gray-300">{conn.evolutionApiUrl}</dd>
                             </>
                           )}
                           {conn.evolutionInstanceName && (
                             <>
-                              <dt>Instance</dt>
+                              <dt>{t('whatsapp:connections.modal.instanceName')}</dt>
                               <dd className="text-gray-700 dark:text-gray-300">{conn.evolutionInstanceName}</dd>
                             </>
                           )}
@@ -917,28 +918,28 @@ export default function WhatsAppConnections() {
                           )}
                           {conn.metaTokenExpiresAt && (
                             <>
-                              <dt>Token geçerlilik</dt>
+                              <dt>{t('whatsapp:connections.token.validity')}</dt>
                               <dd className={
                                 conn.metaTokenStatus === 'expired' ? 'text-red-500' :
                                 conn.metaTokenStatus === 'expiring' ? 'text-amber-500' :
                                 'text-gray-700 dark:text-gray-300'
                               }>
-                                {new Date(conn.metaTokenExpiresAt).toLocaleDateString('tr-TR')}
-                                {conn.metaTokenStatus === 'expired' && ' — Süresi doldu'}
-                                {conn.metaTokenStatus === 'expiring' && ' — Yakında dolacak'}
+                                {new Date(conn.metaTokenExpiresAt).toLocaleDateString(i18n.language)}
+                                {conn.metaTokenStatus === 'expired' && ` — ${t('whatsapp:connections.token.expiredShort')}`}
+                                {conn.metaTokenStatus === 'expiring' && ` — ${t('whatsapp:connections.token.expiringShort')}`}
                               </dd>
                             </>
                           )}
                           {!conn.metaTokenExpiresAt && conn.provider === 'meta_cloud_api' && (
                             <>
-                              <dt>Token geçerlilik</dt>
-                              <dd className="text-amber-600 dark:text-amber-400">Bilinmiyor — token bilgisi girilmemiş</dd>
+                              <dt>{t('whatsapp:connections.token.validity')}</dt>
+                              <dd className="text-amber-600 dark:text-amber-400">{t('whatsapp:connections.token.unknownShort')}</dd>
                             </>
                           )}
                         </>
                       )}
-                      <dt>Oluşturuldu</dt>
-                      <dd>{new Date(conn.createdAt).toLocaleDateString('tr-TR')}</dd>
+                      <dt>{t('whatsapp:connections.createdAt')}</dt>
+                      <dd>{new Date(conn.createdAt).toLocaleDateString(i18n.language)}</dd>
                     </dl>
                   </div>
                 )}
@@ -955,17 +956,16 @@ export default function WhatsAppConnections() {
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Trash2 size={18} className="text-red-500" />
-                Bağlantıyı Sil
+                {t('whatsapp:connections.deleteModal.title')}
               </h2>
             </div>
             <div className="p-6 space-y-3">
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                <strong className="text-gray-900 dark:text-white">"{confirmDeleteConn.name}"</strong> bağlantısını
-                silmek istediğinizden emin misiniz?
+                {t('whatsapp:connections.deleteModal.confirm', { name: confirmDeleteConn.name })}
               </p>
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-800 dark:text-amber-300 space-y-1">
-                <p>⚠ Bu bağlantı silinirse bağlı şubeler WhatsApp gönderimi yapamaz.</p>
-                <p>ℹ Mesaj geçmişi varsa silme işlemi engellenir — bunun yerine "Devre Dışı Bırak" kullanın.</p>
+                <p>{t('whatsapp:connections.deleteModal.branchWarning')}</p>
+                <p>{t('whatsapp:connections.deleteModal.historyWarning')}</p>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
@@ -973,14 +973,14 @@ export default function WhatsAppConnections() {
                 onClick={() => setConfirmDeleteConn(null)}
                 className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
-                İptal
+                {t('common:cancel')}
               </button>
               <button
                 onClick={handleConfirmDelete}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <Trash2 size={14} />
-                Sil
+                {t('common:delete')}
               </button>
             </div>
           </div>
@@ -993,7 +993,7 @@ export default function WhatsAppConnections() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                {editingId ? 'Bağlantıyı Düzenle' : 'Yeni WhatsApp Bağlantısı'}
+                {editingId ? t('whatsapp:connections.modal.editTitle') : t('whatsapp:connections.modal.createTitle')}
               </h2>
             </div>
             <div className="p-6 space-y-4">
@@ -1005,19 +1005,19 @@ export default function WhatsAppConnections() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Bağlantı Adı <span className="text-red-500">*</span>
+                  {t('whatsapp:connections.modal.name')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="örn: Ana Şube WhatsApp"
+                  placeholder={t('whatsapp:connections.modal.namePlaceholder')}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Sağlayıcı
+                  {t('whatsapp:connections.modal.provider')}
                 </label>
                 <select
                   value={form.provider}
@@ -1029,7 +1029,7 @@ export default function WhatsAppConnections() {
                 </select>
                 {form.provider === 'meta_cloud_api' && !META_ENV_READY && (
                   <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                    Sunucuda Meta Embedded Signup yapılandırılmamış. Manuel token girişi ile yine de bağlantı oluşturabilirsiniz.
+                    {t('whatsapp:connections.modal.metaManualAllowed')}
                   </p>
                 )}
               </div>
@@ -1037,7 +1037,7 @@ export default function WhatsAppConnections() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Telefon Numarası
+                    {t('whatsapp:connections.modal.phoneNumber')}
                   </label>
                   <input
                     value={form.phoneNumber}
@@ -1048,12 +1048,12 @@ export default function WhatsAppConnections() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Görünen Ad
+                    {t('whatsapp:connections.modal.displayName')}
                   </label>
                   <input
                     value={form.displayName}
                     onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                    placeholder="Klinik WhatsApp"
+                    placeholder={t('whatsapp:connections.modal.displayNamePlaceholder')}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                   />
                 </div>
@@ -1063,11 +1063,11 @@ export default function WhatsAppConnections() {
               {form.provider === 'evolution_api' && (
                 <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Evolution API Ayarları
+                    {t('whatsapp:connections.modal.evolutionSettings')}
                   </p>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      API URL
+                      {t('whatsapp:connections.modal.apiUrl')}
                     </label>
                     <input
                       value={form.evolutionApiUrl}
@@ -1078,7 +1078,7 @@ export default function WhatsAppConnections() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Instance Adı
+                      {t('whatsapp:connections.modal.instanceName')}
                     </label>
                     <input
                       value={form.evolutionInstanceName}
@@ -1089,30 +1089,30 @@ export default function WhatsAppConnections() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      API Key {editingId && <span className="text-gray-400">(boş bırakılırsa değişmez)</span>}
+                      {t('whatsapp:connections.modal.apiKey')} {editingId && <span className="text-gray-400">({t('whatsapp:connections.modal.leaveBlankUnchanged')})</span>}
                     </label>
                     <input
                       type="password"
                       value={form.evolutionApiKeyEncrypted}
                       onChange={(e) => setForm((f) => ({ ...f, evolutionApiKeyEncrypted: e.target.value }))}
-                      placeholder={editingId ? '•••••••• (Yapılandırılmış)' : 'Evolution API anahtarı'}
+                      placeholder={editingId ? t('whatsapp:connections.modal.configuredPlaceholder') : t('whatsapp:connections.modal.evolutionApiKeyPlaceholder')}
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                     />
                     {editingId && (
                       <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                        API key sunucu tarafında AES-256-GCM ile şifreli saklanır. Yeni değer girilirse eski key kalıcı olarak değişir.
+                        {t('whatsapp:connections.modal.apiKeyEncryptedHint')}
                       </p>
                     )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Webhook Secret <span className="text-gray-400">(opsiyonel)</span>
+                      {t('whatsapp:connections.modal.webhookSecret')} <span className="text-gray-400">({t('whatsapp:connections.modal.optional')})</span>
                     </label>
                     <input
                       type="password"
                       value={form.webhookSecret}
                       onChange={(e) => setForm((f) => ({ ...f, webhookSecret: e.target.value }))}
-                      placeholder={editingId ? '•••••••• (Yapılandırılmış ise)' : 'Webhook doğrulama gizli anahtarı'}
+                      placeholder={editingId ? t('whatsapp:connections.modal.configuredIfPlaceholder') : t('whatsapp:connections.modal.webhookSecretPlaceholder')}
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                     />
                   </div>
@@ -1123,7 +1123,7 @@ export default function WhatsAppConnections() {
               {form.provider === 'meta_cloud_api' && (
                 <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Meta Cloud API — Manuel Yapılandırma
+                    {t('whatsapp:connections.modal.metaManualSettings')}
                   </p>
                   {META_ENV_READY && (
                     <button
@@ -1136,18 +1136,18 @@ export default function WhatsAppConnections() {
                       className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
                     >
                       {metaConnecting ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                      Meta Embedded Signup ile Bağlan (Otomatik)
+                      {t('whatsapp:connections.actions.connectMetaAutomatic')}
                     </button>
                   )}
                   <p className="text-xs text-gray-400 dark:text-gray-500">
-                    Ya da aşağıya Meta Business Manager &gt; WhatsApp &gt; API Setup bilgilerini manuel girin.
+                    {t('whatsapp:connections.modal.metaManualHint')}
                   </p>
                   {[
-                    { key: 'metaBusinessId', label: 'Business ID' },
-                    { key: 'metaWabaId', label: 'WhatsApp Business Account ID (WABA ID)' },
-                    { key: 'metaPhoneNumberId', label: 'Phone Number ID' },
-                    { key: 'metaAppId', label: 'App ID' },
-                    { key: 'metaWebhookVerifyToken', label: 'Webhook Verify Token' },
+                    { key: 'metaBusinessId', label: t('whatsapp:connections.modal.metaBusinessId') },
+                    { key: 'metaWabaId', label: t('whatsapp:connections.modal.metaWabaId') },
+                    { key: 'metaPhoneNumberId', label: t('whatsapp:connections.modal.metaPhoneNumberId') },
+                    { key: 'metaAppId', label: t('whatsapp:connections.modal.metaAppId') },
+                    { key: 'metaWebhookVerifyToken', label: t('whatsapp:connections.modal.metaWebhookVerifyToken') },
                   ].map(({ key, label }) => (
                     <div key={key}>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1162,30 +1162,30 @@ export default function WhatsAppConnections() {
                   ))}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Webhook Secret <span className="text-gray-400">(opsiyonel — X-Hub-Signature-256 doğrulama)</span>
+                      {t('whatsapp:connections.modal.webhookSecret')} <span className="text-gray-400">({t('whatsapp:connections.modal.optionalSignature')})</span>
                     </label>
                     <input
                       type="password"
                       value={form.metaWebhookSecret}
                       onChange={(e) => setForm((f) => ({ ...f, metaWebhookSecret: e.target.value }))}
-                      placeholder={editingId ? '•••••••• (Yapılandırılmış ise)' : 'Meta webhook secret'}
+                      placeholder={editingId ? t('whatsapp:connections.modal.configuredIfPlaceholder') : t('whatsapp:connections.modal.metaWebhookSecretPlaceholder')}
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Access Token {editingId && <span className="text-gray-400">(boş bırakılırsa değişmez)</span>}
+                      {t('whatsapp:connections.modal.accessToken')} {editingId && <span className="text-gray-400">({t('whatsapp:connections.modal.leaveBlankUnchanged')})</span>}
                     </label>
                     <input
                       type="password"
                       value={form.metaAccessTokenEncrypted}
                       onChange={(e) => setForm((f) => ({ ...f, metaAccessTokenEncrypted: e.target.value }))}
-                      placeholder={editingId ? '••••••••' : 'Meta Access Token'}
+                      placeholder={editingId ? t('whatsapp:connections.modal.configuredPlaceholder') : t('whatsapp:connections.modal.accessTokenPlaceholder')}
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                     {editingId && (
                       <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                        Access token sunucu tarafında AES-256-GCM ile şifreli saklanır. Yeni değer girilirse eski token kalıcı olarak değişir.
+                        {t('whatsapp:connections.modal.accessTokenEncryptedHint')}
                       </p>
                     )}
                   </div>
@@ -1196,10 +1196,10 @@ export default function WhatsAppConnections() {
               {clinicOptions.length > 0 && (
                 <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                    Şube Ataması
+                    {t('whatsapp:connections.modal.branchAssignment')}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
-                    Bu bağlantının hangi şubelerde kullanılacağını seçin. Birden fazla şube seçilebilir (paylaşımlı hat).
+                    {t('whatsapp:connections.modal.branchAssignmentHint')}
                   </p>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto">
                     {clinicOptions.map((clinic) => (
@@ -1219,7 +1219,7 @@ export default function WhatsAppConnections() {
                   </div>
                   {form.linkedClinicIds.length === 0 && (
                     <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                      ⚠ Hiçbir şube seçilmedi. Bu bağlantı kaydedilir ama mesaj gönderiminde kullanılmaz.
+                      {t('whatsapp:connections.modal.noBranchSelected')}
                     </p>
                   )}
                 </div>
@@ -1231,7 +1231,7 @@ export default function WhatsAppConnections() {
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
-                İptal
+                {t('common:cancel')}
               </button>
               <button
                 onClick={handleSave}
@@ -1239,7 +1239,7 @@ export default function WhatsAppConnections() {
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                {editingId ? 'Kaydet' : 'Oluştur'}
+                {editingId ? t('common:save') : t('common:add')}
               </button>
             </div>
           </div>

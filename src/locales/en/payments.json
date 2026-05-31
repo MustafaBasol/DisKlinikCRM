@@ -8,6 +8,7 @@
     "totalPending": "Total Pending",
     "totalRefunded": "Total Refunded",
     "remaining": "Remaining Balance",
+    "pendingBreakdown": "• {{installments}} installments + {{payments}} pending payments",
     "totalCollected": "Total Collected",
     "pending": "Pending",
     "transactions": "Transactions",
@@ -34,6 +35,7 @@
     "card": "Credit/Debit Card",
     "bank_transfer": "Bank Transfer",
     "cheque": "Cheque",
+    "insurance": "Insurance",
     "other": "Other"
   },
   "list": {
@@ -53,5 +55,133 @@
     "status": "Status",
     "paidAt": "Payment Date",
     "notes": "Notes"
+  },
+  "confirmCancel": "Cancel this payment?",
+  "empty": "No payment records found.",
+  "noRelatedPayments": "No related payments found.",
+  "financeDashboard": {
+    "title": "Finance Dashboard",
+    "subtitle": "Revenue & Payment Tracking",
+    "billingSubtitle": "Billing Summary",
+    "ranges": {
+      "today": "Today",
+      "this_week": "This Week",
+      "this_month": "This Month",
+      "last_30_days": "Last 30 Days"
+    },
+    "cards": {
+      "collectedToday": "Collected Today",
+      "collectedInRange": "Collected in Period",
+      "outstandingBalance": "Outstanding Balance",
+      "overdueAmount": "Overdue Amount",
+      "pendingInstallments": "Pending Installments",
+      "overdueInstallments": "Overdue Installments",
+      "practitionerPayoutsDue": "Practitioner Earnings (Unpaid)",
+      "practitionerPayoutsPaid": "Practitioner Payments (Period)"
+    },
+    "sections": {
+      "byMethod": "By Payment Method",
+      "upcomingInstallments": "Upcoming / Overdue Installments",
+      "branchPerformance": "Branch Performance",
+      "recentPayments": "Recent Payments"
+    },
+    "columns": {
+      "collected": "Collected",
+      "installment": "Installment"
+    },
+    "actions": {
+      "viewAllPaymentPlans": "View all payment plans",
+      "installments": "Installments"
+    },
+    "empty": {
+      "noInstallments": "No installments",
+      "noPaymentsInRange": "No payments in this period"
+    },
+    "transactionCount": "{{count}} transactions",
+    "errors": {
+      "loadFailed": "Finance data could not be loaded."
+    }
+  },
+  "planForm": {
+    "newPlan": "New Payment Plan",
+    "paymentPlan": "Payment Plan",
+    "paymentPlansTitle": "Payment Plans & Payment Schedule",
+    "selectPatient": "Select patient...",
+    "relatedTreatment": "Related Treatment (optional)",
+    "unlinkedPlan": "Unlinked payment plan",
+    "totalAmount": "Total Amount",
+    "installmentCount": "Installment Count",
+    "installmentNo": "Installment No",
+    "installmentLabel": "Installment {{number}}",
+    "installmentSummary": "{{count}} installments - Total: {{amount}} {{currency}}",
+    "firstDueDate": "First Payment Date",
+    "descriptionPlaceholder": "E.g. Implant treatment payment plan",
+    "preview": "Installment Schedule Preview",
+    "dueDate": "Due Date",
+    "moreInstallments": "+{{count}} more installments",
+    "total": "Total",
+    "createPlan": "Create Plan",
+    "paid": "Paid",
+    "installmentStatus": {
+      "overdue": "Overdue"
+    },
+    "errors": {
+      "patientRequired": "Please select a patient.",
+      "amountRequired": "Please enter a valid amount.",
+      "firstDueDateRequired": "Please select the first payment date.",
+      "saveFailed": "Save failed."
+    }
+  },
+  "plansPage": {
+    "title": "Payment Plans",
+    "subtitle": "Payment plans and installment tracking",
+    "newPlan": "New Payment Plan",
+    "searchPlaceholder": "Search patient name, treatment or description...",
+    "empty": "No payment plan found.",
+    "createFirst": "Create First Plan",
+    "confirmCancelPlan": "Are you sure you want to cancel this installment plan?",
+    "overdueCount": "{{count}} overdue",
+    "installmentProgress": "{{paid}}/{{total}} installments",
+    "remaining": "Remaining: {{amount}}",
+    "paidAmount": "{{amount}} paid",
+    "dueDate": "Due Date",
+    "amount": "Amount",
+    "status": "Status",
+    "paidAt": "Paid: {{date}}",
+    "confirmPayment": "Confirm",
+    "markPaid": "Paid",
+    "cancelPlan": "Cancel Plan",
+    "summary": {
+      "totalPlans": "Total Plans",
+      "overdueInstallments": "Overdue Installments"
+    },
+    "filters": {
+      "allStatuses": "All Statuses"
+    },
+    "planStatus": {
+      "active": "Active",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "installmentStatus": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "overdue": "Overdue"
+    },
+    "errors": {
+      "paymentSaveFailed": "Payment could not be saved.",
+      "cancelFailed": "Plan could not be cancelled."
+    }
+  },
+  "receipt": {
+    "title": "Receipt / Payment Document",
+    "print": "Print / PDF",
+    "loadFailed": "Receipt information could not be loaded.",
+    "paymentReceipt": "Payment Receipt",
+    "patientInfo": "Patient Information",
+    "paymentDetails": "Payment Details",
+    "serviceTreatment": "Service / Treatment",
+    "generatedElectronically": "This document was generated electronically.",
+    "documentNo": "Document No"
   }
 }

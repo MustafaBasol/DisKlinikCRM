@@ -1,0 +1,137 @@
+{
+  "title": "Behandlungen und Leistungen",
+  "subtitle": "Verfolgen Sie Leistungsanfragen und Behandlungsverläufe von Patienten.",
+  "service": "Leistung",
+  "newCase": "Neue Behandlungsakte",
+  "editCase": "Behandlungsakte bearbeiten",
+  "detailTitle": "Details der Behandlungsakte",
+  "filters": {
+    "allStages": "Alle Phasen",
+    "openOnly": "Nur offene",
+    "closedOnly": "Nur geschlossene",
+    "allPractitioners": "Alle Behandler"
+  },
+  "summary": {
+    "pipelineValue": "Pipeline-Wert",
+    "activeOpportunities": "{{count}} aktive Chancen",
+    "active": "Aktiv",
+    "closed": "Geschlossen",
+    "casesInProgress": "Laufende Akten",
+    "successfullyCompleted": "Erfolgreich abgeschlossen"
+  },
+  "stages": {
+    "new": "Neue Chance",
+    "consultation_scheduled": "Beratung geplant",
+    "consultation_done": "Beratung erfolgt",
+    "quote_sent": "Angebot gesendet",
+    "waiting_patient_decision": "Wartet auf Entscheidung",
+    "accepted": "Angenommen",
+    "in_progress": "In Bearbeitung",
+    "completed": "Abgeschlossen",
+    "lost": "Verloren"
+  },
+  "list": {
+    "title": "Behandlungstitel",
+    "patient": "Patient",
+    "practitioner": "Behandler",
+    "stage": "Phase",
+    "estimated": "Geschätzt",
+    "accepted": "Angenommen",
+    "startDate": "Erwarteter Start",
+    "updated": "Letzte Aktualisierung"
+  },
+  "form": {
+    "service": "Leistung",
+    "title": "Aktentitel",
+    "description": "Beschreibung",
+    "patient": "Patient",
+    "practitioner": "Behandler",
+    "stage": "Phase",
+    "estimatedAmount": "Geschätzter Betrag",
+    "acceptedAmount": "Angenommener Betrag",
+    "currency": "Währung",
+    "expectedStartDate": "Erwartetes Startdatum",
+    "lostReason": "Verlustgrund",
+    "lostReasonRequired": "Der Verlustgrund ist erforderlich.",
+    "noSpecificService": "Keine bestimmte Leistung"
+  },
+  "actions": {
+    "changeStage": "Phase ändern",
+    "markAccepted": "Als angenommen markieren",
+    "markCompleted": "Als abgeschlossen markieren",
+    "markLost": "Als verloren markieren",
+    "viewDetails": "Details anzeigen"
+  },
+  "detail": {
+    "backToPipeline": "Zurück zur Pipeline",
+    "closedOn": "Geschlossen am {{date}}",
+    "financialSummary": "Finanzübersicht",
+    "stakeholders": "Beteiligte",
+    "noDescription": "Keine Beschreibung angegeben.",
+    "errors": {
+      "loadFailed": "Details der Behandlungsakte konnten nicht geladen werden.",
+      "notFound": "Behandlungsakte nicht gefunden."
+    }
+  },
+  "progress": {
+    "complete": "{{percent}} % abgeschlossen",
+    "clickToChange": "Klicken Sie auf eine Phase, um sie zu ändern."
+  },
+  "appointments": {
+    "unlink": "Verknüpfung entfernen",
+    "confirmUnlink": "Diese Terminverknüpfung aus der Behandlungsakte entfernen?",
+    "linkFailed": "Termin konnte nicht verknüpft werden.",
+    "unlinkFailed": "Terminverknüpfung konnte nicht entfernt werden.",
+    "empty": "Mit dieser Behandlung sind keine Termine verknüpft.",
+    "createNew": "Termin erstellen",
+    "linkExisting": "Bestehenden Termin verknüpfen",
+    "linkModalDescription": "Wählen Sie einen Termin von {{patient}} aus, um ihn mit dieser Behandlungsakte zu verknüpfen.",
+    "noLinkable": "Keine Termine zum Verknüpfen verfügbar."
+  },
+  "procedures": {
+    "title": "Behandlungsplan-Prozeduren",
+    "add": "Prozedur hinzufügen",
+    "edit": "Prozedur bearbeiten",
+    "empty": "Noch keine Prozeduren hinzugefügt.",
+    "confirmDelete": "Diese Prozedur löschen?",
+    "optional": "optional",
+    "selectService": "Leistung auswählen",
+    "fields": {
+      "name": "Prozedurname",
+      "service": "Leistung",
+      "toothFdi": "FDI-Zahn",
+      "estimatedCost": "Geschätzte Kosten",
+      "scheduledDate": "Geplantes Datum",
+      "status": "Status",
+      "notes": "Notizen"
+    },
+    "placeholders": {
+      "name": "z. B. Implantatvorbereitung",
+      "toothFdi": "FDI",
+      "notes": "Notizen zur Prozedur hinzufügen..."
+    },
+    "errors": {
+      "saveFailed": "Prozedur konnte nicht gespeichert werden.",
+      "deleteFailed": "Prozedur konnte nicht gelöscht werden."
+    }
+  },
+  "materials": {
+    "title": "Behandlungsmaterialien",
+    "item": "Artikel",
+    "stock": "Bestand",
+    "quantity": "Menge",
+    "noteOptional": "Notiz",
+    "notePlaceholder": "Optionale Notiz",
+    "empty": "Noch keine Materialien hinzugefügt.",
+    "confirmDelete": "Dieses Material löschen?",
+    "errors": {
+      "addFailed": "Material konnte nicht hinzugefügt werden.",
+      "deleteFailed": "Material konnte nicht gelöscht werden."
+    }
+  },
+  "activity": {
+    "title": "Aktivitätsverlauf",
+    "byUser": "von {{user}} • {{date}}",
+    "empty": "Keine Aktivität aufgezeichnet."
+  }
+}

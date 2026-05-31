@@ -1,0 +1,95 @@
+{
+  "title": "Branches",
+  "subtitle": "Toutes les branches cliniques de {{organization}}",
+  "organizationFallback": "Organisation",
+  "newBranch": "Nouvelle branche",
+  "statuses": {
+    "active": "Actif",
+    "trial": "Essai",
+    "inactive": "Inactif",
+    "suspended": "Suspendu"
+  },
+  "empty": {
+    "title": "Aucune branche n'a encore été ajoutée",
+    "description": "Utilisez le bouton ci-dessus pour ajouter une nouvelle branche."
+  },
+  "actions": {
+    "goToDashboard": "Aller au tableau de bord",
+    "viewAppointments": "Voir les rendez-vous",
+    "manageSchedule": "Gérer le planning",
+    "whatsappSettings": "Paramètres WhatsApp",
+    "changeStatus": "Changer le statut",
+    "go": "Ouvrir"
+  },
+  "whatsapp": {
+    "connected": "WhatsApp connecté",
+    "none": "Pas de WhatsApp",
+    "disconnected": "Non connecté"
+  },
+  "stats": {
+    "staffCount": "{{count}} membre(s)",
+    "appointmentsToday": "{{count}} rendez-vous aujourd'hui"
+  },
+  "form": {
+    "createTitle": "Ajouter une nouvelle branche",
+    "editTitle": "Modifier la branche",
+    "slugHelp": "(Compatible URL, uniquement lettres minuscules, chiffres et tirets)",
+    "update": "Mettre à jour",
+    "create": "Créer",
+    "fields": {
+      "name": "Nom de la branche",
+      "city": "Ville",
+      "status": "Statut",
+      "address": "Adresse",
+      "phone": "Téléphone",
+      "email": "E-mail"
+    },
+    "placeholders": {
+      "name": "ex. Branche principale",
+      "city": "Istanbul",
+      "address": "Rue, quartier, district"
+    }
+  },
+  "statusModal": {
+    "title": "Changer le statut de la branche",
+    "description": "le statut de cette branche sera modifié."
+  },
+  "errors": {
+    "actionFailed": "L'action a échoué. Veuillez réessayer.",
+    "statusUpdateFailed": "Le statut n'a pas pu être mis à jour.",
+    "loadFailed": "Les branches n'ont pas pu être chargées."
+  },
+  "schedule": {
+    "title": "Planning de la clinique",
+    "subtitle": "Horaires de travail et disponibilités des praticiens",
+    "tabs": {
+      "hours": "Horaires de travail",
+      "doctors": "Praticiens"
+    },
+    "weeklyHoursTitle": "Horaires hebdomadaires",
+    "closedDayHelp": "Aucun rendez-vous ne peut être créé les jours fermés",
+    "closed": "Fermé",
+    "closedDay": "Jour fermé",
+    "doctorsEmpty": "Aucun praticien n'est assigné à cette clinique",
+    "doctorsEmptyHelp": "Vous pouvez assigner des praticiens depuis la gestion des utilisateurs.",
+    "viewSchedule": "Voir le planning",
+    "noSchedule": "Aucun planning défini",
+    "success": {
+      "hoursSaved": "Horaires enregistrés avec succès"
+    },
+    "errors": {
+      "loadHoursFailed": "Les horaires n'ont pas pu être chargés",
+      "loadDoctorsFailed": "La liste des praticiens n'a pas pu être chargée",
+      "saveHoursFailed": "Les horaires n'ont pas pu être enregistrés"
+    },
+    "days": {
+      "sunday": "Dimanche",
+      "monday": "Lundi",
+      "tuesday": "Mardi",
+      "wednesday": "Mercredi",
+      "thursday": "Jeudi",
+      "friday": "Vendredi",
+      "saturday": "Samedi"
+    }
+  }
+}

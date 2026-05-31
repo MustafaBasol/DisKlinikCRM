@@ -58,7 +58,7 @@ const Patients: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 font-medium rounded-lg border border-green-200 transition-colors text-sm"
             >
               <FileUp size={16} />
-              Excel ile İçe Aktar
+              {t('patients:importWithExcel')}
             </button>
           )}
           <button onClick={() => setIsFormOpen(true)} className="btn-primary">
@@ -116,7 +116,7 @@ const Patients: React.FC = () => {
                   <th className="px-4 sm:px-6 py-4">{t('patients:list.name')}</th>
                   <th className="px-4 sm:px-6 py-4 hidden sm:table-cell">{t('patients:list.contact')}</th>
                   {hasMultipleClinics && selectedClinicId === 'all' && (
-                    <th className="px-4 sm:px-6 py-4 hidden md:table-cell">Şube</th>
+                    <th className="px-4 sm:px-6 py-4 hidden md:table-cell">{t('patients:list.branch')}</th>
                   )}
                   <th className="px-4 sm:px-6 py-4">{t('patients:list.status')}</th>
                   <th className="px-4 sm:px-6 py-4 hidden md:table-cell">{t('patients:list.createdAt')}</th>

@@ -1,0 +1,9 @@
+{
+  "unexpected": "Une erreur inattendue est survenue. Veuillez réessayer.",
+  "accessDenied": "Accès refusé. Vous n'avez pas l'autorisation pour cette action.",
+  "notFound": "Ressource introuvable.",
+  "PATIENT_NOT_FOUND": "Patient introuvable.",
+  "ACCESS_DENIED": "Accès refusé.",
+  "VALIDATION_ERROR": "Erreur de validation.",
+  "APPOINTMENT_OVERLAP": "Le rendez-vous chevauche une autre réservation."
+}

@@ -36,7 +36,7 @@ import AppointmentForm from '../components/AppointmentForm';
 const TreatmentCaseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation(['treatmentCases', 'common', 'tasks', 'appointments', 'messages', 'insurance', 'payments']);
+  const { t, i18n } = useTranslation(['treatmentCases', 'common', 'tasks', 'appointments', 'messages', 'insurance', 'payments', 'patients']);
   
   const [tCase, setTCase] = useState<any>(null);
   const [payments, setPayments] = useState<any[]>([]);
@@ -106,7 +106,7 @@ const TreatmentCaseDetail: React.FC = () => {
       const invRes = await inventoryService.getAll({ isActive: 'true' });
       setInventoryItems(invRes.data);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to fetch details');
+      setError(err.response?.data?.error || t('treatmentCases:detail.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -132,7 +132,7 @@ const TreatmentCaseDetail: React.FC = () => {
       setPendingStage(null);
       fetchDetail();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Update failed');
+      alert(err.response?.data?.error || t('common:errorGeneric'));
     } finally {
       setStageSaving(false);
     }
@@ -179,19 +179,19 @@ const TreatmentCaseDetail: React.FC = () => {
       const procRes = await treatmentPlanProceduresService.getByCaseId(id);
       setProcedures(procRes.data);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to save procedure');
+      alert(err.response?.data?.error || t('treatmentCases:procedures.errors.saveFailed'));
     } finally {
       setProcSaving(false);
     }
   };
 
   const handleProcDelete = async (procId: string) => {
-    if (!id || !window.confirm('Prosedür silinsin mi?')) return;
+    if (!id || !window.confirm(t('treatmentCases:procedures.confirmDelete'))) return;
     try {
       await treatmentPlanProceduresService.remove(id, procId);
       setProcedures((prev) => prev.filter((p) => p.id !== procId));
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete');
+      alert(err.response?.data?.error || t('treatmentCases:procedures.errors.deleteFailed'));
     }
   };
   const openLinkApptModal = async () => {
@@ -216,24 +216,24 @@ const TreatmentCaseDetail: React.FC = () => {
       setIsLinkApptOpen(false);
       fetchDetail();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Bağlantı kurulamadı');
+      alert(err.response?.data?.error || t('treatmentCases:appointments.linkFailed'));
     }
   };
 
   const handleUnlinkAppt = async (apptId: string) => {
-    if (!window.confirm('Bu randevunun tedavi dosyası bağlantısı kaldırılsın mı?')) return;
+    if (!window.confirm(t('treatmentCases:appointments.confirmUnlink'))) return;
     try {
       await appointmentService.linkTreatmentCase(apptId, null);
       fetchDetail();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Bağlantı kaldırılamadı');
+      alert(err.response?.data?.error || t('treatmentCases:appointments.unlinkFailed'));
     }
   };
   const PROC_STATUS = {
-    planned:     { label: 'Planlandı',    dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100' },
-    in_progress: { label: 'Devam Ediyor', dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100' },
-    completed:   { label: 'Tamamlandı',   dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-    cancelled:   { label: 'İptal',        dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200' },
+    planned:     { dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100' },
+    in_progress: { dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100' },
+    completed:   { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+    cancelled:   { dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200' },
   } as const;
 
   if (loading) {
@@ -248,9 +248,9 @@ const TreatmentCaseDetail: React.FC = () => {
     return (
       <div className="card p-12 text-center text-red-600">
         <AlertCircle className="mx-auto mb-4" size={48} />
-        <p className="text-xl font-bold">{error || 'Treatment Case not found'}</p>
+        <p className="text-xl font-bold">{error || t('treatmentCases:detail.errors.notFound')}</p>
         <button onClick={() => navigate('/treatment-cases')} className="mt-4 btn-secondary">
-          Back to Pipeline
+          {t('treatmentCases:detail.backToPipeline')}
         </button>
       </div>
     );
@@ -351,18 +351,18 @@ const TreatmentCaseDetail: React.FC = () => {
                   className="px-3 py-1 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-1"
                 >
                   {stageSaving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
-                  Kaydet
+                  {t('common:save')}
                 </button>
                 <button
                   onClick={() => setPendingStage(null)}
                   className="px-2 py-1 text-xs font-bold text-gray-500 hover:text-gray-700 rounded-lg transition-colors"
                 >
-                  İptal
+                  {t('common:cancel')}
                 </button>
               </div>
             ) : (
               <span className="text-xs font-bold text-primary-600">
-                {Math.round(((currentStageIndex + 1) / stages.length) * 100)}% Complete
+                {t('treatmentCases:progress.complete', { percent: Math.round(((currentStageIndex + 1) / stages.length) * 100) })}
               </span>
             )}
           </div>
@@ -409,7 +409,7 @@ const TreatmentCaseDetail: React.FC = () => {
             ))}
           </div>
           {!pendingStage && tCase.stage !== 'completed' && (
-            <p className="text-center text-[10px] text-gray-400 mt-3 italic">Aşamaya tıklayarak değiştirebilirsiniz</p>
+            <p className="text-center text-[10px] text-gray-400 mt-3 italic">{t('treatmentCases:progress.clickToChange')}</p>
           )}
         </div>
       )}
@@ -423,7 +423,9 @@ const TreatmentCaseDetail: React.FC = () => {
             <h3 className="font-bold text-red-900">{t('treatmentCases:stages.lost')}</h3>
             <p className="text-red-700 mt-1">{t('treatmentCases:form.lostReason')}: {tCase.lostReason}</p>
             {tCase.closedAt && (
-              <p className="text-xs text-red-500 mt-2">Closed on {new Date(tCase.closedAt).toLocaleDateString()}</p>
+              <p className="text-xs text-red-500 mt-2">
+                {t('treatmentCases:detail.closedOn', { date: new Date(tCase.closedAt).toLocaleDateString(i18n.language) })}
+              </p>
             )}
           </div>
         </div>
@@ -435,44 +437,44 @@ const TreatmentCaseDetail: React.FC = () => {
           <div className="card p-6 space-y-6">
             <h3 className="font-bold text-gray-900 flex items-center gap-2">
               <DollarSign size={20} className="text-primary-500" />
-              Financial Summary
+              {t('treatmentCases:detail.financialSummary')}
             </h3>
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
                 <p className="text-xs font-bold text-gray-400 uppercase">{t('treatmentCases:form.estimatedAmount')}</p>
-                <p className="text-2xl font-bold text-gray-900">{tCase.estimatedAmount?.toLocaleString()} <span className="text-sm font-normal text-gray-500">{tCase.currency}</span></p>
+                <p className="text-2xl font-bold text-gray-900">{tCase.estimatedAmount?.toLocaleString(i18n.language)} <span className="text-sm font-normal text-gray-500">{tCase.currency}</span></p>
               </div>
               <div className="p-4 rounded-2xl bg-primary-50 border border-primary-100">
                 <p className="text-xs font-bold text-primary-400 uppercase">{t('treatmentCases:form.acceptedAmount')}</p>
-                <p className="text-2xl font-bold text-primary-700">{tCase.acceptedAmount?.toLocaleString()} <span className="text-sm font-normal text-primary-500">{tCase.currency}</span></p>
+                <p className="text-2xl font-bold text-primary-700">{tCase.acceptedAmount?.toLocaleString(i18n.language)} <span className="text-sm font-normal text-primary-500">{tCase.currency}</span></p>
               </div>
               <div className="p-4 rounded-2xl bg-green-50 border border-green-100">
                 <p className="text-xs font-bold text-green-400 uppercase">{t('payments:summary.totalPaid')}</p>
                 <p className="text-xl font-bold text-green-700">
-                  {payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} <span className="text-sm font-normal text-green-500">{tCase.currency}</span>
+                  {payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString(i18n.language)} <span className="text-sm font-normal text-green-500">{tCase.currency}</span>
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
                 <p className="text-xs font-bold text-amber-400 uppercase">{t('payments:summary.remaining')}</p>
                 <p className="text-xl font-bold text-amber-700">
-                  {( (tCase.acceptedAmount || tCase.estimatedAmount || 0) - payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0) ).toLocaleString()} <span className="text-sm font-normal text-amber-500">{tCase.currency}</span>
+                  {( (tCase.acceptedAmount || tCase.estimatedAmount || 0) - payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0) ).toLocaleString(i18n.language)} <span className="text-sm font-normal text-amber-500">{tCase.currency}</span>
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100">
                 <p className="text-xs font-bold text-blue-400 uppercase">{t('insurance:summary.patientResponsibility')}</p>
-                <p className="text-xl font-bold text-blue-700">{provisionTotals.patientResponsibility.toLocaleString()} <span className="text-sm font-normal text-blue-500">{tCase.currency || 'TRY'}</span></p>
+                <p className="text-xl font-bold text-blue-700">{provisionTotals.patientResponsibility.toLocaleString(i18n.language)} <span className="text-sm font-normal text-blue-500">{tCase.currency || 'TRY'}</span></p>
               </div>
             </div>
             <div className="pt-4 border-t border-gray-50 space-y-3">
               <div className="flex items-center gap-3 text-sm">
                 <Calendar size={16} className="text-gray-400" />
                 <span className="text-gray-600">{t('treatmentCases:form.expectedStartDate')}:</span>
-                <span className="font-bold">{tCase.expectedStartDate ? new Date(tCase.expectedStartDate).toLocaleDateString() : t('common:noData')}</span>
+                <span className="font-bold">{tCase.expectedStartDate ? new Date(tCase.expectedStartDate).toLocaleDateString(i18n.language) : t('common:noData')}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Clock size={16} className="text-gray-400" />
                 <span className="text-gray-600">{t('common:updated')}:</span>
-                <span className="font-bold">{new Date(tCase.updatedAt).toLocaleDateString()}</span>
+                <span className="font-bold">{new Date(tCase.updatedAt).toLocaleDateString(i18n.language)}</span>
               </div>
             </div>
           </div>
@@ -480,7 +482,7 @@ const TreatmentCaseDetail: React.FC = () => {
           <div className="card p-6">
             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
               <User size={20} className="text-primary-500" />
-              Stakeholders
+              {t('treatmentCases:detail.stakeholders')}
             </h3>
             <div className="space-y-6">
               <Link to={`/patients/${tCase.patientId}`} className="flex items-center gap-3 group">
@@ -515,7 +517,7 @@ const TreatmentCaseDetail: React.FC = () => {
               <FileText size={20} className="text-primary-500" />
               {t('treatmentCases:form.description')}
             </h3>
-            <p className="text-gray-600 whitespace-pre-wrap">{tCase.description || 'No description provided.'}</p>
+            <p className="text-gray-600 whitespace-pre-wrap">{tCase.description || t('treatmentCases:detail.noDescription')}</p>
           </div>
 
           {/* Related Items Grid */}
@@ -536,14 +538,14 @@ const TreatmentCaseDetail: React.FC = () => {
                   <button
                     onClick={openLinkApptModal}
                     className="p-1 hover:bg-white rounded transition-colors text-gray-500"
-                    title="Mevcut randevu bağla"
+                    title={t('treatmentCases:appointments.linkExisting')}
                   >
                     <LinkIcon size={15} />
                   </button>
                   <button
                     onClick={() => setIsAppointmentFormOpen(true)}
                     className="p-1 hover:bg-white rounded transition-colors text-primary-600"
-                    title="Yeni randevu oluştur"
+                    title={t('treatmentCases:appointments.createNew')}
                   >
                     <Plus size={16} />
                   </button>
@@ -555,7 +557,7 @@ const TreatmentCaseDetail: React.FC = () => {
                     <Link to={`/appointments/${a.id}`} className="flex-1 hover:text-primary-600">
                       <p className="font-bold">{a.appointmentType?.name}</p>
                       <p className="text-xs text-gray-500">
-                        {new Date(a.startTime).toLocaleDateString('tr-TR')} {new Date(a.startTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(a.startTime).toLocaleDateString(i18n.language)} {new Date(a.startTime).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
                         {a.practitioner && <> &bull; {a.practitioner.lastName}</>}
                       </p>
                     </Link>
@@ -564,11 +566,11 @@ const TreatmentCaseDetail: React.FC = () => {
                         a.status === 'completed' ? 'badge-green' :
                         a.status === 'cancelled' ? 'badge-red' :
                         a.status === 'confirmed' ? 'badge-blue' : 'bg-amber-50 text-amber-700 border border-amber-100'
-                      }`}>{a.status}</span>
+                      }`}>{t(`appointments:status.${a.status}`, { defaultValue: a.status })}</span>
                       <button
                         onClick={() => handleUnlinkAppt(a.id)}
                         className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded"
-                        title="Bağlantıyı kaldır"
+                        title={t('treatmentCases:appointments.unlink')}
                       >
                         <Unlink size={13} />
                       </button>
@@ -576,9 +578,9 @@ const TreatmentCaseDetail: React.FC = () => {
                   </div>
                 )) : (
                   <div className="p-6 text-center text-gray-400 text-xs">
-                    <p className="italic mb-2">Bu tedaviyle ilişkili randevu yok.</p>
+                    <p className="italic mb-2">{t('treatmentCases:appointments.empty')}</p>
                     <button onClick={() => setIsAppointmentFormOpen(true)} className="text-primary-600 font-semibold hover:underline">
-                      Randevu oluştur →
+                      {t('treatmentCases:appointments.createNew')} →
                     </button>
                   </div>
                 )}
@@ -601,12 +603,12 @@ const TreatmentCaseDetail: React.FC = () => {
                   <div key={tk.id} className="p-3 text-sm flex justify-between items-center">
                     <div>
                       <p className={`font-bold ${tk.status === 'completed' ? 'line-through text-gray-400' : ''}`}>{tk.title}</p>
-                      <p className="text-xs text-gray-500">{new Date(tk.dueDate).toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-500">{new Date(tk.dueDate).toLocaleDateString(i18n.language)}</p>
                     </div>
                     <div className={`w-2 h-2 rounded-full ${tk.status === 'completed' ? 'bg-green-400' : 'bg-blue-400'}`}></div>
                   </div>
                 )) : (
-                  <p className="p-6 text-center text-gray-400 text-xs italic">No related tasks.</p>
+                  <p className="p-6 text-center text-gray-400 text-xs italic">{t('tasks:noRelatedTasks')}</p>
                 )}
               </div>
             </div>
@@ -626,8 +628,10 @@ const TreatmentCaseDetail: React.FC = () => {
                 {payments.length > 0 ? payments.map((p: any) => (
                   <div key={p.id} className="p-3 text-sm flex justify-between items-center">
                     <div>
-                      <p className="font-bold">{p.amount.toLocaleString()} {p.currency}</p>
-                      <p className="text-[10px] text-gray-500 capitalize">{p.paymentMethod.replace('_', ' ')} • {new Date(p.paidAt).toLocaleDateString()}</p>
+                      <p className="font-bold">{p.amount.toLocaleString(i18n.language)} {p.currency}</p>
+                      <p className="text-[10px] text-gray-500 capitalize">
+                        {t(`payments:methods.${p.paymentMethod}`, { defaultValue: p.paymentMethod.replace('_', ' ') })} &bull; {new Date(p.paidAt).toLocaleDateString(i18n.language)}
+                      </p>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
                       p.paymentStatus === 'paid' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-amber-50 text-amber-700'
@@ -655,15 +659,15 @@ const TreatmentCaseDetail: React.FC = () => {
               <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3 border-b border-gray-50">
                 <div>
                   <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.requestedAmount')}</p>
-                  <p className="font-bold">{provisionTotals.requested.toLocaleString()} {tCase.currency || 'TRY'}</p>
+                  <p className="font-bold">{provisionTotals.requested.toLocaleString(i18n.language)} {tCase.currency || 'TRY'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.approvedAmount')}</p>
-                  <p className="font-bold">{provisionTotals.approved.toLocaleString()} {tCase.currency || 'TRY'}</p>
+                  <p className="font-bold">{provisionTotals.approved.toLocaleString(i18n.language)} {tCase.currency || 'TRY'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.patientResponsibility')}</p>
-                  <p className="font-bold">{provisionTotals.patientResponsibility.toLocaleString()} {tCase.currency || 'TRY'}</p>
+                  <p className="font-bold">{provisionTotals.patientResponsibility.toLocaleString(i18n.language)} {tCase.currency || 'TRY'}</p>
                 </div>
               </div>
               <div className="divide-y divide-gray-50">
@@ -671,7 +675,7 @@ const TreatmentCaseDetail: React.FC = () => {
                   <div key={provision.id} className="p-3 text-sm flex justify-between items-center">
                     <div>
                       <Link to={`/insurance-provisions/${provision.id}`} className="font-bold hover:text-primary-600">{provision.insuranceProviderName}</Link>
-                      <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`)} • {provision.requestedAmount?.toLocaleString()} {provision.currency}</p>
+                      <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`)} &bull; {provision.requestedAmount?.toLocaleString(i18n.language)} {provision.currency}</p>
                     </div>
                     <div className="text-right">
                       <span className="badge badge-blue text-[10px]">{t(`insurance:statuses.${provision.status}`)}</span>
@@ -683,7 +687,7 @@ const TreatmentCaseDetail: React.FC = () => {
                               treatmentCaseId: tCase.id,
                               amount: provision.patientResponsibilityAmount,
                               currency: provision.currency,
-                              notes: `${provision.insuranceProviderName} için hasta katılım tutarı`,
+                              notes: t('insurance:notes.patientResponsibilityFor', { provider: provision.insuranceProviderName }),
                             });
                             setIsPaymentFormOpen(true);
                           }}
@@ -705,7 +709,7 @@ const TreatmentCaseDetail: React.FC = () => {
               <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="font-bold text-sm flex items-center gap-2">
                   <ClipboardList size={16} className="text-gray-400" />
-                  Tedavi Planı Prosedürleri
+                  {t('treatmentCases:procedures.title')}
                   {procedures.filter((p) => p.status !== 'cancelled').length > 0 && (
                     <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">
                       {procedures.filter((p) => p.status !== 'cancelled').length}
@@ -715,16 +719,16 @@ const TreatmentCaseDetail: React.FC = () => {
                 <button
                   onClick={() => openProcForm()}
                   className="p-1 hover:bg-white rounded transition-colors text-primary-600"
-                  title="Prosedür Ekle"
+                  title={t('treatmentCases:procedures.add')}
                 >
                   <Plus size={16} />
                 </button>
               </div>
               {procedures.length === 0 ? (
                 <div className="p-6 text-center text-gray-400 text-xs italic">
-                  Henüz prosedür eklenmemiş.{' '}
+                  {t('treatmentCases:procedures.empty')}{' '}
                   <button onClick={() => openProcForm()} className="text-primary-600 font-semibold hover:underline">
-                    Ekle →
+                    {t('treatmentCases:procedures.add')} →
                   </button>
                 </div>
               ) : (
@@ -739,20 +743,20 @@ const TreatmentCaseDetail: React.FC = () => {
                             <span className="text-sm font-semibold text-gray-900">{proc.procedureName}</span>
                             {proc.toothFdi && (
                               <span className="text-xs bg-white border border-gray-200 px-1.5 py-0.5 rounded font-mono">
-                                Diş {proc.toothFdi}
+                                {t('patients:dentalChart.toothWithNumber', { number: proc.toothFdi })}
                               </span>
                             )}
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
-                              {cfg.label}
+                              {t(`patients:dentalChart.procedureStatus.${proc.status}`, { defaultValue: proc.status })}
                             </span>
                           </div>
                           {proc.notes && <p className="text-xs text-gray-500 mt-0.5">{proc.notes}</p>}
                           {proc.estimatedCost && (
-                            <p className="text-xs text-gray-400 mt-0.5">Tahmini: {Number(proc.estimatedCost).toLocaleString('tr-TR')} ₺</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{t('patients:dentalChart.estimated')}: {Number(proc.estimatedCost).toLocaleString(i18n.language)} ₺</p>
                           )}
                           {proc.scheduledDate && (
                             <p className="text-xs text-gray-400 mt-0.5">
-                              📅 {new Date(proc.scheduledDate).toLocaleDateString('tr-TR')}
+                              📅 {new Date(proc.scheduledDate).toLocaleDateString(i18n.language)}
                             </p>
                           )}
                         </div>
@@ -760,14 +764,14 @@ const TreatmentCaseDetail: React.FC = () => {
                           <button
                             onClick={() => openProcForm(proc)}
                             className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-700"
-                            title="Düzenle"
+                            title={t('common:edit')}
                           >
                             <Edit2 size={13} />
                           </button>
                           <button
                             onClick={() => handleProcDelete(proc.id)}
                             className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"
-                            title="Sil"
+                            title={t('common:delete')}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -785,7 +789,7 @@ const TreatmentCaseDetail: React.FC = () => {
             <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-sm flex items-center gap-2">
                 <Package size={16} className="text-gray-400" />
-                Kullanılan Malzemeler
+                {t('treatmentCases:materials.title')}
                 {materials.length > 0 && (
                   <span className="bg-indigo-600 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">{materials.length}</span>
                 )}
@@ -796,22 +800,22 @@ const TreatmentCaseDetail: React.FC = () => {
               {matError && <p className="text-xs text-red-600 mb-2">{matError}</p>}
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="flex-1 min-w-36">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Malzeme</label>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.item')}</label>
                   <select
                     className="input-field text-sm py-1.5"
                     value={matItemId}
                     onChange={e => setMatItemId(e.target.value)}
                   >
-                    <option value="">— Seçiniz —</option>
+                    <option value="">— {t('common:select')} —</option>
                     {inventoryItems.map((item: any) => (
                       <option key={item.id} value={item.id}>
-                        {item.name} (Stok: {item.currentStock} {item.unit})
+                        {item.name} ({t('treatmentCases:materials.stock')}: {item.currentStock} {item.unit})
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="w-24">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Adet</label>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.quantity')}</label>
                   <input
                     type="number"
                     min="0.01"
@@ -823,11 +827,11 @@ const TreatmentCaseDetail: React.FC = () => {
                   />
                 </div>
                 <div className="flex-1 min-w-24">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Not (opsiyonel)</label>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.noteOptional')}</label>
                   <input
                     type="text"
                     className="input-field text-sm py-1.5"
-                    placeholder="Not..."
+                    placeholder={t('treatmentCases:materials.notePlaceholder')}
                     value={matNotes}
                     onChange={e => setMatNotes(e.target.value)}
                   />
@@ -852,7 +856,7 @@ const TreatmentCaseDetail: React.FC = () => {
                       const invRes = await inventoryService.getAll({ isActive: 'true' });
                       setInventoryItems(invRes.data);
                     } catch (err: any) {
-                      setMatError(err.response?.data?.error || 'Eklenemedi');
+                      setMatError(err.response?.data?.error || t('treatmentCases:materials.errors.addFailed'));
                     } finally {
                       setMatSaving(false);
                     }
@@ -860,13 +864,13 @@ const TreatmentCaseDetail: React.FC = () => {
                   className="btn-primary py-1.5 text-sm flex-shrink-0"
                 >
                   {matSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                  Ekle
+                  {t('common:add')}
                 </button>
               </div>
             </div>
             {/* Materials list */}
             {materials.length === 0 ? (
-              <p className="p-4 text-xs text-gray-400 italic text-center">Henüz malzeme eklenmemiş.</p>
+              <p className="p-4 text-xs text-gray-400 italic text-center">{t('treatmentCases:materials.empty')}</p>
             ) : (
               <div className="divide-y divide-gray-50">
                 {materials.map((m: any) => (
@@ -878,11 +882,11 @@ const TreatmentCaseDetail: React.FC = () => {
                       {m.notes && <span className="text-xs text-gray-400 ml-2">— {m.notes}</span>}
                     </div>
                     <span className="text-xs text-gray-400 flex-shrink-0">
-                      {new Date(m.createdAt).toLocaleDateString('tr-TR')}
+                      {new Date(m.createdAt).toLocaleDateString(i18n.language)}
                     </span>
                     <button
                       onClick={async () => {
-                        if (!id || !window.confirm('Bu malzeme kullanımı silinsin mi? Stok geri eklenecek.')) return;
+                        if (!id || !window.confirm(t('treatmentCases:materials.confirmDelete'))) return;
                         try {
                           await treatmentCaseService.removeMaterial(id, m.id);
                           const matRes = await treatmentCaseService.getMaterials(id);
@@ -890,11 +894,11 @@ const TreatmentCaseDetail: React.FC = () => {
                           const invRes = await inventoryService.getAll({ isActive: 'true' });
                           setInventoryItems(invRes.data);
                         } catch {
-                          alert('Silinemedi');
+                          alert(t('treatmentCases:materials.errors.deleteFailed'));
                         }
                       }}
                       className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded text-gray-400 hover:text-red-600 transition-all"
-                      title="Sil"
+                      title={t('common:delete')}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -908,7 +912,7 @@ const TreatmentCaseDetail: React.FC = () => {
           <div className="card p-6">
             <h3 className="font-bold mb-6 flex items-center gap-2">
               <Clock size={20} className="text-primary-500" />
-              Activity History
+              {t('treatmentCases:activity.title')}
             </h3>
             <div className="space-y-8 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
               {tCase.activityLogs?.length > 0 ? tCase.activityLogs.map((log: any) => (
@@ -924,12 +928,15 @@ const TreatmentCaseDetail: React.FC = () => {
                   <div>
                     <p className="text-sm text-gray-900 font-medium">{log.description}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      by {log.user.firstName} {log.user.lastName} • {new Date(log.createdAt).toLocaleString()}
+                      {t('treatmentCases:activity.byUser', {
+                        user: `${log.user.firstName} ${log.user.lastName}`,
+                        date: new Date(log.createdAt).toLocaleString(i18n.language),
+                      })}
                     </p>
                   </div>
                 </div>
               )) : (
-                <div className="text-center text-gray-400 italic">No activity recorded.</div>
+                <div className="text-center text-gray-400 italic">{t('treatmentCases:activity.empty')}</div>
               )}
             </div>
           </div>
@@ -1008,7 +1015,7 @@ const TreatmentCaseDetail: React.FC = () => {
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <ClipboardList size={18} className="text-primary-500" />
-                {editingProc ? 'Prosedürü Düzenle' : 'Prosedür Ekle'}
+                {editingProc ? t('treatmentCases:procedures.edit') : t('treatmentCases:procedures.add')}
               </h3>
               <button onClick={() => setIsProcFormOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                 <XCircle size={18} className="text-gray-400" />
@@ -1017,12 +1024,12 @@ const TreatmentCaseDetail: React.FC = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="label">İşlem Adı *</label>
+                <label className="label">{t('treatmentCases:procedures.fields.name')} *</label>
                 <input
                   type="text"
                   value={procForm.procedureName}
                   onChange={(e) => setProcForm((f) => ({ ...f, procedureName: e.target.value }))}
-                  placeholder="ör. İmplant Yerleştirme, Kanal Tedavisi..."
+                  placeholder={t('treatmentCases:procedures.placeholders.name')}
                   className="input-field"
                   autoFocus
                 />
@@ -1030,7 +1037,7 @@ const TreatmentCaseDetail: React.FC = () => {
 
               {services.length > 0 && (
                 <div>
-                  <label className="label">Klinik Hizmeti <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                  <label className="label">{t('treatmentCases:procedures.fields.service')} <span className="text-gray-400 font-normal">- {t('treatmentCases:procedures.optional')}</span></label>
                   <select
                     className="input-field"
                     value={procForm.serviceId}
@@ -1046,10 +1053,10 @@ const TreatmentCaseDetail: React.FC = () => {
                       }));
                     }}
                   >
-                    <option value="">— Hizmet seçiniz —</option>
+                    <option value="">— {t('treatmentCases:procedures.selectService')} —</option>
                     {services.map((svc: any) => (
                       <option key={svc.id} value={svc.id}>
-                        {svc.name}{svc.basePrice != null ? ` — ${svc.basePrice.toLocaleString('tr-TR')} ${svc.currency || 'TRY'}` : ''}
+                        {svc.name}{svc.basePrice != null ? ` - ${svc.basePrice.toLocaleString(i18n.language)} ${svc.currency || 'TRY'}` : ''}
                       </option>
                     ))}
                   </select>
@@ -1058,19 +1065,19 @@ const TreatmentCaseDetail: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Diş No (FDI) <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                  <label className="label">{t('treatmentCases:procedures.fields.toothFdi')} <span className="text-gray-400 font-normal">- {t('treatmentCases:procedures.optional')}</span></label>
                   <input
                     type="number"
                     value={procForm.toothFdi}
                     onChange={(e) => setProcForm((f) => ({ ...f, toothFdi: e.target.value }))}
-                    placeholder="ör. 16, 36..."
+                    placeholder={t('treatmentCases:procedures.placeholders.toothFdi')}
                     min={11}
                     max={48}
                     className="input-field"
                   />
                 </div>
                 <div>
-                  <label className="label">Tahmini Tutar (₺) <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                  <label className="label">{t('treatmentCases:procedures.fields.estimatedCost')} <span className="text-gray-400 font-normal">- {t('treatmentCases:procedures.optional')}</span></label>
                   <input
                     type="number"
                     value={procForm.estimatedCost}
@@ -1083,7 +1090,7 @@ const TreatmentCaseDetail: React.FC = () => {
               </div>
 
               <div>
-                <label className="label">Planlanan Tarih <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                <label className="label">{t('treatmentCases:procedures.fields.scheduledDate')} <span className="text-gray-400 font-normal">- {t('treatmentCases:procedures.optional')}</span></label>
                 <input
                   type="date"
                   value={procForm.scheduledDate}
@@ -1093,7 +1100,7 @@ const TreatmentCaseDetail: React.FC = () => {
               </div>
 
               <div>
-                <label className="label">Durum</label>
+                <label className="label">{t('treatmentCases:procedures.fields.status')}</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(Object.entries(PROC_STATUS) as [string, typeof PROC_STATUS[keyof typeof PROC_STATUS]][]).map(([s, cfg]) => (
                     <button
@@ -1106,20 +1113,20 @@ const TreatmentCaseDetail: React.FC = () => {
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                      {cfg.label}
+                      {t(`patients:dentalChart.procedureStatus.${s}`, { defaultValue: s })}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="label">Not <span className="text-gray-400 font-normal">- İsteğe bağlı</span></label>
+                <label className="label">{t('treatmentCases:procedures.fields.notes')} <span className="text-gray-400 font-normal">- {t('treatmentCases:procedures.optional')}</span></label>
                 <textarea
                   value={procForm.notes}
                   onChange={(e) => setProcForm((f) => ({ ...f, notes: e.target.value }))}
                   rows={2}
                   maxLength={500}
-                  placeholder="Klinik not, özel bilgi..."
+                  placeholder={t('treatmentCases:procedures.placeholders.notes')}
                   className="input-field resize-none"
                 />
               </div>
@@ -1132,10 +1139,10 @@ const TreatmentCaseDetail: React.FC = () => {
                 className="btn-primary flex-1"
               >
                 {procSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                {editingProc ? 'Güncelle' : 'Ekle'}
+                {editingProc ? t('common:save') : t('common:add')}
               </button>
               <button onClick={() => setIsProcFormOpen(false)} className="btn-secondary">
-                İptal
+                {t('common:cancel')}
               </button>
             </div>
           </div>
@@ -1164,14 +1171,16 @@ const TreatmentCaseDetail: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <LinkIcon size={18} className="text-primary-500" />
-                Mevcut Randevu Bağla
+                {t('treatmentCases:appointments.linkExisting')}
               </h3>
               <button onClick={() => setIsLinkApptOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg">
                 <XCircle size={18} className="text-gray-400" />
               </button>
             </div>
             <p className="text-sm text-gray-500 mb-4">
-              <span className="font-semibold">{tCase.patient.firstName} {tCase.patient.lastName}</span> hastasına ait randevulardan birini bu tedavi dosyasına bağlayın.
+              {t('treatmentCases:appointments.linkModalDescription', {
+                patient: `${tCase.patient.firstName} ${tCase.patient.lastName}`,
+              })}
             </p>
             <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
               {linkLoading ? (
@@ -1180,9 +1189,9 @@ const TreatmentCaseDetail: React.FC = () => {
                 </div>
               ) : linkableAppts.length === 0 ? (
                 <p className="text-center text-gray-400 text-sm italic py-8">
-                  Bağlanabilecek randevu bulunamadı.<br />
+                  {t('treatmentCases:appointments.noLinkable')}<br />
                   <button onClick={() => { setIsLinkApptOpen(false); setIsAppointmentFormOpen(true); }} className="text-primary-600 font-semibold hover:underline mt-2">
-                    Yeni randevu oluştur →
+                    {t('treatmentCases:appointments.createNew')} →
                   </button>
                 </p>
               ) : (
@@ -1195,7 +1204,7 @@ const TreatmentCaseDetail: React.FC = () => {
                     <div>
                       <p className="font-semibold text-sm">{a.appointmentType?.name}</p>
                       <p className="text-xs text-gray-500">
-                        {new Date(a.startTime).toLocaleDateString('tr-TR')} {new Date(a.startTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(a.startTime).toLocaleDateString(i18n.language)} {new Date(a.startTime).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
                         {a.practitioner && <> &bull; {a.practitioner.lastName}</>}
                         {a.treatmentCase && <span className="text-amber-600"> &bull; {a.treatmentCase.title}</span>}
                       </p>
@@ -1204,14 +1213,14 @@ const TreatmentCaseDetail: React.FC = () => {
                       a.status === 'completed' ? 'badge-green' :
                       a.status === 'cancelled' ? 'badge-red' :
                       a.status === 'confirmed' ? 'badge-blue' : 'bg-amber-50 text-amber-700 border border-amber-100'
-                    }`}>{a.status}</span>
+                    }`}>{t(`appointments:status.${a.status}`, { defaultValue: a.status })}</span>
                   </button>
                 ))
               )}
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <button onClick={() => setIsLinkApptOpen(false)} className="btn-secondary w-full">
-                Kapat
+                {t('common:close')}
               </button>
             </div>
           </div>

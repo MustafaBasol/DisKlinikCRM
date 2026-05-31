@@ -28,6 +28,7 @@
   },
   "seed": {
     "button": "Varsayılan Şablonları Yükle",
+    "confirm": "Varsayılan şablonlar yüklensin mi?",
     "success": "Varsayılan şablonlar başarıyla oluşturuldu"
   }
 }

@@ -1,0 +1,95 @@
+{
+  "title": "Filialen",
+  "subtitle": "Alle Klinikfilialen unter {{organization}}",
+  "organizationFallback": "Organisation",
+  "newBranch": "Neue Filiale",
+  "statuses": {
+    "active": "Aktiv",
+    "trial": "Testphase",
+    "inactive": "Inaktiv",
+    "suspended": "Gesperrt"
+  },
+  "empty": {
+    "title": "Es wurde noch keine Filiale hinzugefuegt",
+    "description": "Verwenden Sie die Schaltflaeche oben, um eine neue Filiale hinzuzufuegen."
+  },
+  "actions": {
+    "goToDashboard": "Zum Dashboard",
+    "viewAppointments": "Termine anzeigen",
+    "manageSchedule": "Plan verwalten",
+    "whatsappSettings": "WhatsApp-Einstellungen",
+    "changeStatus": "Status aendern",
+    "go": "Oeffnen"
+  },
+  "whatsapp": {
+    "connected": "WhatsApp verbunden",
+    "none": "Kein WhatsApp",
+    "disconnected": "Nicht verbunden"
+  },
+  "stats": {
+    "staffCount": "{{count}} Mitarbeitende",
+    "appointmentsToday": "{{count}} Termine heute"
+  },
+  "form": {
+    "createTitle": "Neue Filiale hinzufuegen",
+    "editTitle": "Filiale bearbeiten",
+    "slugHelp": "(URL-freundlich, nur Kleinbuchstaben, Zahlen und Bindestriche)",
+    "update": "Aktualisieren",
+    "create": "Erstellen",
+    "fields": {
+      "name": "Filialname",
+      "city": "Stadt",
+      "status": "Status",
+      "address": "Adresse",
+      "phone": "Telefon",
+      "email": "E-Mail"
+    },
+    "placeholders": {
+      "name": "z. B. Hauptfiliale",
+      "city": "Istanbul",
+      "address": "Strasse, Viertel, Bezirk"
+    }
+  },
+  "statusModal": {
+    "title": "Filialstatus aendern",
+    "description": "der Status dieser Filiale wird geaendert."
+  },
+  "errors": {
+    "actionFailed": "Aktion fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "statusUpdateFailed": "Status konnte nicht aktualisiert werden.",
+    "loadFailed": "Filialen konnten nicht geladen werden."
+  },
+  "schedule": {
+    "title": "Klinikplan",
+    "subtitle": "Arbeitszeiten und Behandler-Verfuegbarkeit",
+    "tabs": {
+      "hours": "Arbeitszeiten",
+      "doctors": "Behandler"
+    },
+    "weeklyHoursTitle": "Woechentliche Arbeitszeiten",
+    "closedDayHelp": "An geschlossenen Tagen koennen keine Termine erstellt werden",
+    "closed": "Geschlossen",
+    "closedDay": "Geschlossener Tag",
+    "doctorsEmpty": "Dieser Klinik ist kein Behandler zugewiesen",
+    "doctorsEmptyHelp": "Sie koennen Behandler in der Benutzerverwaltung zuweisen.",
+    "viewSchedule": "Plan anzeigen",
+    "noSchedule": "Kein Plan definiert",
+    "success": {
+      "hoursSaved": "Arbeitszeiten erfolgreich gespeichert"
+    },
+    "errors": {
+      "loadHoursFailed": "Arbeitszeiten konnten nicht geladen werden",
+      "loadDoctorsFailed": "Behandlerliste konnte nicht geladen werden",
+      "saveHoursFailed": "Arbeitszeiten konnten nicht gespeichert werden"
+    },
+    "days": {
+      "sunday": "Sonntag",
+      "monday": "Montag",
+      "tuesday": "Dienstag",
+      "wednesday": "Mittwoch",
+      "thursday": "Donnerstag",
+      "friday": "Freitag",
+      "saturday": "Samstag"
+    }
+  }
+}

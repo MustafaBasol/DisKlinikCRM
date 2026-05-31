@@ -45,19 +45,20 @@ import { useTranslation } from 'react-i18next';
 import { formatTimeInTimeZone } from '../utils/dateTime';
 import AppointmentForm from '../components/AppointmentForm';
 
-const STAGE_LABELS: Record<string, { label: string; color: string }> = {
-  new:                       { label: 'Yeni',             color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
-  consultation_scheduled:    { label: 'Konsültasyon Plan.', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-  consultation_done:         { label: 'Konsültasyon Yapıldı', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' },
-  quote_sent:                { label: 'Teklif Gönderildi', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
-  waiting_patient_decision:  { label: 'Hasta Kararı Bekl.', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
-  accepted:                  { label: 'Kabul Edildi',     color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' },
-  in_progress:               { label: 'Devam Ediyor',     color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' },
+const STAGE_COLORS: Record<string, string> = {
+  new: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+  consultation_scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  consultation_done: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+  quote_sent: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+  waiting_patient_decision: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+  accepted: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  in_progress: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
 };
 
 // ─── Doctor Dashboard ─────────────────────────────────────────────────────────
 
 const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }> = ({ data, user, clinicTimeZone }) => {
+  const { t, i18n } = useTranslation(['dashboard', 'common', 'appointments', 'treatmentCases']);
   const navigate = useNavigate();
   const [isNewApptOpen, setIsNewApptOpen] = useState(false);
 
@@ -65,10 +66,10 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
   const extras = data.doctorExtras || {};
 
   const statCards = [
-    { label: 'Bugünkü Randevular',  value: stats.todayAppointments, icon: <Calendar size={22} />, color: 'bg-blue-500',   link: '/appointments' },
-    { label: 'Bu Hafta',            value: stats.weekAppointments,  icon: <Clock size={22} />,    color: 'bg-indigo-500', link: '/appointments' },
-    { label: 'Açık Tedaviler',      value: stats.openTreatments,    icon: <Briefcase size={22} />,color: 'bg-teal-500',   link: '/treatment-cases' },
-    { label: 'Bekleyen Görevler',   value: stats.pendingTasks,      icon: <CheckSquare size={22} />, color: 'bg-amber-500', link: '/tasks' },
+    { label: t('dashboard:todayAppointments'), value: stats.todayAppointments, icon: <Calendar size={22} />, color: 'bg-blue-500', link: '/appointments' },
+    { label: t('dashboard:doctor.weekAppointments'), value: stats.weekAppointments, icon: <Clock size={22} />, color: 'bg-indigo-500', link: '/appointments' },
+    { label: t('dashboard:openTreatments'), value: stats.openTreatments, icon: <Briefcase size={22} />, color: 'bg-teal-500', link: '/treatment-cases' },
+    { label: t('dashboard:doctor.pendingTasks'), value: stats.pendingTasks, icon: <CheckSquare size={22} />, color: 'bg-amber-500', link: '/tasks' },
   ];
 
   return (
@@ -76,17 +77,17 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Merhaba, Dr. {user?.firstName} 👋</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard:doctor.greeting', { name: user?.firstName })}</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString(i18n.language, { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setIsNewApptOpen(true)} className="btn-primary flex items-center gap-2">
-            <Plus size={16} />Randevu
+            <Plus size={16} />{t('common:appointments')}
           </button>
           <Link to="/my-earnings" className="btn-secondary flex items-center gap-2">
-            <Award size={16} />Kazançlarım
+            <Award size={16} />{t('common:myEarnings')}
           </Link>
         </div>
       </div>
@@ -95,7 +96,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
       {stats.overdueTasks > 0 && (
         <Link to="/tasks?overdue=true" className="flex items-center gap-3 p-4 rounded-xl bg-red-50 border border-red-100 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 hover:shadow-sm transition-all">
           <AlertCircle size={20} />
-          <span className="text-sm font-semibold">{stats.overdueTasks} gecikmiş göreviniz var — hemen inceleyin</span>
+          <span className="text-sm font-semibold">{t('dashboard:doctor.overdueTasksAlert', { count: stats.overdueTasks })}</span>
           <ChevronRight size={16} className="ml-auto" />
         </Link>
       )}
@@ -120,9 +121,9 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
             <Award size={22} />
           </div>
           <div className="flex-1">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Tahakkuk Eden Kazanç (Bekleyen + Onaylı)</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard:doctor.pendingEarnings')}</p>
             <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-              {new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(extras.pendingEarnings)}
+              {new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2 }).format(extras.pendingEarnings)}
             </p>
           </div>
           <ChevronRight size={20} className="text-gray-400" />
@@ -134,9 +135,9 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
         <div className="lg:col-span-2 card overflow-hidden">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Calendar size={18} className="text-blue-500" />Bugünkü Program
+              <Calendar size={18} className="text-blue-500" />{t('dashboard:doctor.todaySchedule')}
             </h2>
-            <Link to="/appointments" className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">Tümü</Link>
+            <Link to="/appointments" className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">{t('common:viewAll')}</Link>
           </div>
           {data.agenda?.length > 0 ? (
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -163,7 +164,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                     appt.status === 'no_show'    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
                     'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                   }`}>
-                    {appt.status === 'completed' ? 'Tamamlandı' : appt.status === 'confirmed' ? 'Onaylı' : appt.status === 'in_progress' ? 'Devam' : appt.status === 'no_show' ? 'Gelmedi' : 'Planlandı'}
+                    {t(`appointments:status.${appt.status}`, { defaultValue: appt.status })}
                   </span>
                 </div>
               ))}
@@ -171,7 +172,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
           ) : (
             <div className="py-12 text-center text-gray-400 dark:text-gray-600">
               <Calendar size={40} className="mx-auto mb-2 opacity-20" />
-              <p className="text-sm">Bugün randevu yok</p>
+              <p className="text-sm">{t('dashboard:noAgendaToday')}</p>
             </div>
           )}
         </div>
@@ -180,7 +181,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
         <div className="card flex flex-col overflow-hidden">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800">
             <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Activity size={18} className="text-purple-500" />Son Aktiviteler
+              <Activity size={18} className="text-purple-500" />{t('dashboard:activityFeed')}
             </h2>
           </div>
           <div className="flex-1 overflow-y-auto max-h-72 p-4 space-y-4">
@@ -190,12 +191,12 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                 <div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{log.description}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(log.createdAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}
+                    {new Date(log.createdAt).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' })}
                   </p>
                 </div>
               </div>
             )) : (
-              <p className="text-sm text-gray-400 text-center pt-8">Aktivite yok</p>
+              <p className="text-sm text-gray-400 text-center pt-8">{t('dashboard:doctor.noActivity')}</p>
             )}
           </div>
         </div>
@@ -206,9 +207,9 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
         <div className="card overflow-hidden">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <TrendingUp size={18} className="text-teal-500" />Önümüzdeki 7 Gün
+              <TrendingUp size={18} className="text-teal-500" />{t('dashboard:doctor.upcomingSevenDays')}
             </h2>
-            <span className="text-xs text-gray-400">{extras.upcomingWeek?.length || 0} randevu</span>
+            <span className="text-xs text-gray-400">{t('dashboard:doctor.appointmentCount', { count: extras.upcomingWeek?.length || 0 })}</span>
           </div>
           {extras.upcomingWeek?.length > 0 ? (
             <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-64 overflow-y-auto">
@@ -217,7 +218,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                   className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer text-sm">
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: appt.appointmentType?.color || '#6366f1' }} />
                   <span className="text-gray-500 dark:text-gray-400 w-24 shrink-0 text-xs">
-                    {new Date(appt.startTime).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {new Date(appt.startTime).toLocaleDateString(i18n.language, { weekday: 'short', day: 'numeric', month: 'short' })}
                   </span>
                   <span className="font-medium text-gray-900 dark:text-white truncate">
                     {appt.patient.firstName} {appt.patient.lastName}
@@ -228,7 +229,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
             </div>
           ) : (
             <div className="py-10 text-center text-gray-400 dark:text-gray-600 text-sm">
-              Önümüzdeki 7 günde randevu yok
+              {t('dashboard:doctor.noUpcomingAppointments')}
             </div>
           )}
         </div>
@@ -239,15 +240,15 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
           {extras.treatmentPipeline?.length > 0 && (
             <div className="card p-5">
               <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
-                <Briefcase size={18} className="text-indigo-500" />Tedavi Pipeline
+                <Briefcase size={18} className="text-indigo-500" />{t('dashboard:doctor.treatmentPipeline')}
               </h2>
               <div className="flex flex-wrap gap-2">
                 {extras.treatmentPipeline.map((p: any) => {
-                  const meta = STAGE_LABELS[p.stage] || { label: p.stage, color: 'bg-gray-100 text-gray-700' };
+                  const color = STAGE_COLORS[p.stage] || 'bg-gray-100 text-gray-700';
                   return (
                     <Link key={p.stage} to={`/treatment-cases?stage=${p.stage}`}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${meta.color} hover:opacity-80 transition-opacity`}>
-                      {meta.label}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${color} hover:opacity-80 transition-opacity`}>
+                      {t(`treatmentCases:stages.${p.stage}`, { defaultValue: p.stage })}
                       <span className="ml-1 bg-white/60 dark:bg-black/20 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[11px]">
                         {p.count}
                       </span>
@@ -262,9 +263,9 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
           <div className="card overflow-hidden">
             <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
               <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Star size={18} className="text-amber-500" />Son Hastalar
+                <Star size={18} className="text-amber-500" />{t('dashboard:doctor.recentPatients')}
               </h2>
-              <Link to="/patients" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">Tümü</Link>
+              <Link to="/patients" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t('common:viewAll')}</Link>
             </div>
             {extras.recentPatients?.length > 0 ? (
               <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -281,13 +282,13 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                       <p className="text-xs text-gray-400 truncate">{p.lastService}</p>
                     </div>
                     <p className="text-xs text-gray-400 shrink-0">
-                      {new Date(p.lastVisit).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                      {new Date(p.lastVisit).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short' })}
                     </p>
                   </Link>
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center text-gray-400 text-sm">Henüz hasta kaydı yok</div>
+              <div className="py-8 text-center text-gray-400 text-sm">{t('dashboard:doctor.noRecentPatients')}</div>
             )}
           </div>
         </div>
@@ -417,13 +418,13 @@ const Dashboard: React.FC = () => {
           {canViewWhatsAppInbox(user) && (
             <Link to="/whatsapp-inbox" className="btn-secondary">
               <MessageSquare size={18} />
-              WhatsApp Gelen Kutusu
+              {t('common:whatsappInbox')}
             </Link>
           )}
           {canViewFinanceDashboard(user) && (
             <Link to="/finance" className="btn-secondary">
               <BarChart2 size={18} />
-              Finans Paneli
+              {t('common:financeDashboard')}
             </Link>
           )}
         </div>
@@ -611,7 +612,7 @@ const Dashboard: React.FC = () => {
           <div className="card p-6 lg:col-span-2">
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
               <BarChart2 size={18} className="text-primary-600" />
-              Son 7 Gün — Randevu Trendi
+              {t('dashboard:charts.appointmentTrend')}
             </h2>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={data.charts.dailyTrend} barSize={28}>
@@ -621,7 +622,7 @@ const Dashboard: React.FC = () => {
                   contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
                   cursor={{ fill: '#f3f4f6' }}
                 />
-                <Bar dataKey="count" name="Randevu" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" name={t('common:appointments')} fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -630,7 +631,7 @@ const Dashboard: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
               <TrendingUp size={18} className="text-primary-600" />
-              Bu Ay — Hizmet Dağılımı
+              {t('dashboard:charts.serviceDistribution')}
             </h2>
             {data.charts.appointmentsByType.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
@@ -656,7 +657,7 @@ const Dashboard: React.FC = () => {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">Veri yok</div>
+              <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">{t('common:noData')}</div>
             )}
           </div>
 
@@ -664,7 +665,7 @@ const Dashboard: React.FC = () => {
           <div className="card p-6 lg:col-span-3">
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
               <DollarSign size={18} className="text-primary-600" />
-              Son 6 Ay — Gelir Trendi
+              {t('dashboard:charts.revenueTrend')}
             </h2>
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={data.charts.monthlyRevenueTrend}>
@@ -672,12 +673,12 @@ const Dashboard: React.FC = () => {
                 <YAxis tick={{ fontSize: 11 }} width={55} tickFormatter={(v) => v.toLocaleString()} />
                 <Tooltip
                   contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
-                  formatter={(v: any) => [v.toLocaleString(), 'Gelir']}
+                  formatter={(v: any) => [v.toLocaleString(), t('dashboard:charts.revenue')]}
                 />
                 <Line
                   type="monotone"
                   dataKey="revenue"
-                  name="Gelir"
+                  name={t('dashboard:charts.revenue')}
                   stroke="#10b981"
                   strokeWidth={2.5}
                   dot={{ fill: '#10b981', r: 4 }}

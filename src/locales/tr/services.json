@@ -7,6 +7,7 @@
     "duration": "Süre",
     "durationMinutes": "Süre (dk)",
     "basePrice": "Temel Fiyat",
+    "noBasePrice": "Fiyat girilmemiş",
     "currency": "Para Birimi",
     "status": "Durum",
     "color": "Renk"

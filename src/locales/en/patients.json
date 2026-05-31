@@ -2,6 +2,7 @@
   "title": "Patients",
   "subtitle": "Manage your clinic's patient records and history.",
   "addPatient": "Add Patient",
+  "importWithExcel": "Import with Excel",
   "editPatient": "Edit Patient",
   "searchPlaceholder": "Search patients by name, email or phone...",
   "includeArchived": "Include Archived",
@@ -9,6 +10,7 @@
   "list": {
     "name": "Patient Name",
     "contact": "Contact Info",
+    "branch": "Branch",
     "status": "Status",
     "createdAt": "Created At"
   },
@@ -19,6 +21,54 @@
     "nextAppointment": "Next Appointment",
     "history": "Appointment History",
     "activityTimeline": "Activity Timeline",
+    "filesTab": "Files",
+    "treatmentProcedureLinkHint": "Click for treatment plan procedures -> Case detail",
+    "createTreatmentCaseHint": "Create a new case before adding a treatment plan.",
+    "addProcedureInstructionTitle": "To add a treatment plan procedure:",
+    "addProcedureInstructionBody": "Click one of the cases above, then use the + button in the Treatment Plan Procedures section on the case detail page.",
+    "files": {
+      "addFile": "Add File",
+      "empty": "No files added yet",
+      "uploadFailed": "File could not be uploaded",
+      "download": "Download",
+      "deleteConfirm": "Are you sure you want to delete this file?"
+    },
+    "importModal": {
+      "title": "Import Patients with Excel",
+      "downloadTemplate": "Download Template (.xlsx)",
+      "selectFile": "Select Excel File",
+      "dropzonePlaceholder": "Click to choose a file or drag it here",
+      "fileRules": "Only .xlsx, max. 5 MB, max. 500 rows",
+      "previewButton": "Preview",
+      "importButton": "Import {{count}} Patients",
+      "rowLabel": "Row {{row}}",
+      "howItWorks": {
+        "title": "How does it work?",
+        "downloadTemplate": "Download the template below.",
+        "fillData": "Fill in patient data (required: first name, last name, phone).",
+        "previewFile": "Upload the file and preview it.",
+        "importValidRows": "Import valid rows."
+      },
+      "preview": {
+        "totalRows": "Total Rows",
+        "validRows": "Valid",
+        "invalidRows": "Invalid",
+        "invalidRowsTitle": "Invalid Rows:",
+        "noValidRows": "There are no valid rows to import."
+      },
+      "result": {
+        "success": "{{count}} patients imported successfully.",
+        "skipped": "{{count}} rows skipped.",
+        "skippedRowsTitle": "Skipped Rows:"
+      },
+      "errors": {
+        "fileType": "Only .xlsx files are accepted.",
+        "fileSize": "File exceeds the 5 MB limit.",
+        "templateDownload": "Template could not be downloaded.",
+        "previewFailed": "Preview failed.",
+        "importFailed": "Import failed."
+      }
+    },
     "whatsappTab": "WhatsApp",
     "whatsappIncoming": "WhatsApp Incoming",
     "whatsappOutgoing": "WhatsApp Outgoing",
@@ -28,6 +78,13 @@
     "whatsappFilterOutgoing": "Outgoing",
     "whatsappNoMessages": "No WhatsApp messages found for this filter.",
     "systemActor": "System",
+    "archiveFailed": "Failed to archive patient.",
+    "appointmentWith": "with {{practitioner}}",
+    "activityByUser": "by {{user}} • {{date}}",
+    "whatsappMessagesCount": "{{count}} message records",
+    "whatsappSessionTitle": "WhatsApp conversation",
+    "whatsappSessionSummary": "WhatsApp: {{count}} messages ({{incoming}} incoming • {{outgoing}} outgoing)",
+    "whatsappSessionCounts": "{{incoming}} incoming • {{outgoing}} outgoing ({{count}} messages)",
     "overview": {
       "clinicalAlerts": "Clinical Alerts",
       "clinicalAlertsSubtitle": "Important health information",
@@ -71,6 +128,47 @@
     "communicationConsent": "Patient consents to communication",
     "marketingConsent": "Patient consents to marketing messages"
   },
+  "dentalChart": {
+    "title": "Dental Chart",
+    "treatmentPlan": "Treatment Plan",
+    "clickHint": "Click a tooth to add a note",
+    "upperRight": "Upper Right",
+    "lowerRight": "Lower Right",
+    "recordedTeeth": "Recorded Teeth",
+    "toothWithNumber": "Tooth {{number}}",
+    "procedureCount": "{{count}} procedures",
+    "treatmentCaseFallback": "Treatment Case",
+    "noProcedures": "No treatment procedures have been added for this patient yet.",
+    "addProcedureHelp": "To add a procedure, go to the Treatment Cases tab, select a case, and use the + button in the Treatment Plan Procedures section.",
+    "goToTreatments": "Go to Treatment Cases Tab",
+    "addProcedureTitle": "Go to case detail to add a procedure",
+    "addProcedure": "Add Procedure",
+    "estimated": "Estimated",
+    "statusLabel": "Status",
+    "noteOptional": "Note (optional)",
+    "notePlaceholder": "Planned service, clinical note...",
+    "deleteRecord": "Delete record",
+    "status": {
+      "planned": "Planned",
+      "treated": "Treated",
+      "issue": "Issue",
+      "missing": "Missing",
+      "crown": "Crown",
+      "implant": "Implant"
+    },
+    "procedureStatus": {
+      "planned": "Planned",
+      "in_progress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "toothShape": {
+      "molar": "Molar",
+      "premolar": "Premolar",
+      "canine": "Canine",
+      "incisor": "Incisor"
+    }
+  },
   "status": {
     "all": "All Statuses",
     "new": "New",
@@ -82,7 +180,9 @@
     "google": "Google",
     "referral": "Referral",
     "social_media": "Social Media",
+    "instagram": "Instagram",
     "website": "Website",
+    "phone": "Phone",
     "walk_in": "Walk-in",
     "doctolib": "Doctolib",
     "other": "Other"

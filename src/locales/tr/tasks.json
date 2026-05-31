@@ -1,6 +1,7 @@
 {
   "title": "Görevler ve Takipler",
   "subtitle": "Klinik takip görevlerini ve atamalarını yönetin.",
+  "noRelatedTasks": "İlgili görev bulunmuyor.",
   "newTask": "Yeni Görev",
   "editTask": "Görevi Düzenle",
   "filters": {

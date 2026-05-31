@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Package, Plus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, Search, X, Pencil } from 'lucide-react';
 import { inventoryService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -6,38 +7,13 @@ import { useClinic } from '../context/ClinicContext';
 import { canManageInventory } from '../utils/permissions';
 
 // ── Label maps ────────────────────────────────────────────────────────────────
-const CATEGORY_LABELS: Record<string, string> = {
-  implant: 'İmplant',
-  prosthetic: 'Protez',
-  consumable: 'Sarf Malzeme',
-  medication: 'İlaç',
-  equipment: 'Ekipman',
-  other: 'Diğer',
-};
+const CATEGORY_KEYS = ['implant', 'prosthetic', 'consumable', 'medication', 'equipment', 'other'] as const;
 
-const UNIT_LABELS: Record<string, string> = {
-  piece: 'Adet',
-  box: 'Kutu',
-  ml: 'ml',
-  gram: 'gr',
-  vial: 'Flakon',
-  set: 'Set',
-};
+const UNIT_KEYS = ['piece', 'box', 'ml', 'gram', 'vial', 'set'] as const;
 
-const TRANSACTION_TYPE_LABELS: Record<string, string> = {
-  in: 'Giriş',
-  out: 'Çıkış',
-  adjustment: 'Düzeltme',
-};
+const TRANSACTION_TYPES = ['in', 'out', 'adjustment'] as const;
 
-const REASON_LABELS: Record<string, string> = {
-  purchase: 'Satın Alma',
-  usage: 'Kullanım',
-  treatment_use: 'Tedavide Kullanıldı',
-  adjustment: 'Stok Düzeltme',
-  wastage: 'Fire / Bozulma',
-  return: 'İade',
-};
+const REASON_KEYS = ['purchase', 'usage', 'treatment_use', 'adjustment', 'wastage', 'return'] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
   implant: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
@@ -106,6 +82,7 @@ function ItemFormModal({
   onSave: (data: any) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['inventory', 'common']);
   const [form, setForm] = useState<any>(
     initial
       ? {
@@ -126,7 +103,7 @@ function ItemFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) return setError('Malzeme adı zorunludur.');
+    if (!form.name.trim()) return setError(t('inventory:errors.nameRequired'));
     setSaving(true);
     setError('');
     try {
@@ -141,7 +118,7 @@ function ItemFormModal({
       });
       onClose();
     } catch {
-      setError('Kayıt sırasında hata oluştu.');
+      setError(t('inventory:errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -152,7 +129,7 @@ function ItemFormModal({
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {initial ? 'Malzeme Düzenle' : 'Yeni Malzeme'}
+            {initial ? t('inventory:itemForm.editTitle') : t('inventory:itemForm.createTitle')}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
         </div>
@@ -162,41 +139,41 @@ function ItemFormModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Malzeme Adı *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.name')} *</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="ör. Bio-Oss 0.25g"
+                placeholder={t('inventory:itemForm.placeholders.name')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kategori</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.category')}</label>
               <select
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                {Object.entries(CATEGORY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {CATEGORY_KEYS.map((v) => <option key={v} value={v}>{t(`inventory:categories.${v}`)}</option>)}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Birim</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.unit')}</label>
               <select
                 value={form.unit}
                 onChange={(e) => setForm({ ...form, unit: e.target.value })}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                {Object.entries(UNIT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {UNIT_KEYS.map((v) => <option key={v} value={v}>{t(`inventory:units.${v}`)}</option>)}
               </select>
             </div>
 
             {!initial && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Açılış Stoğu</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.openingStock')}</label>
                 <input
                   type="number"
                   min={0}
@@ -209,7 +186,7 @@ function ItemFormModal({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Minimum Stok (Uyarı)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.minimumStock')}</label>
               <input
                 type="number"
                 min={0}
@@ -221,7 +198,7 @@ function ItemFormModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Birim Maliyet (₺)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.unitCost')}</label>
               <input
                 type="number"
                 min={0}
@@ -229,12 +206,12 @@ function ItemFormModal({
                 value={form.unitCost}
                 onChange={(e) => setForm({ ...form, unitCost: e.target.value })}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="İsteğe bağlı"
+                placeholder={t('inventory:optional')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tedarikçi</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.supplier')}</label>
               <input
                 type="text"
                 value={form.supplier}
@@ -244,7 +221,7 @@ function ItemFormModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Barkod</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.barcode')}</label>
               <input
                 type="text"
                 value={form.barcode}
@@ -254,7 +231,7 @@ function ItemFormModal({
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notlar</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.notes')}</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -266,10 +243,10 @@ function ItemFormModal({
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">
-              İptal
+              {t('common:cancel')}
             </button>
             <button type="submit" disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-              {saving ? 'Kaydediliyor...' : 'Kaydet'}
+              {saving ? t('common:saving') : t('common:save')}
             </button>
           </div>
         </form>
@@ -288,6 +265,7 @@ function TransactionModal({
   onSave: (itemId: string, data: any) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['inventory', 'common']);
   const [form, setForm] = useState({ type: 'in', quantity: '', reason: 'purchase', notes: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -295,9 +273,10 @@ function TransactionModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = Number(form.quantity);
-    if (!qty || qty <= 0) return setError('Miktar 0\'dan büyük olmalıdır.');
+    const unitLabel = t(`inventory:units.${item.unit}`, { defaultValue: item.unit });
+    if (!qty || qty <= 0) return setError(t('inventory:transaction.errors.quantityPositive'));
     if (form.type === 'out' && qty > item.currentStock) {
-      return setError(`Yetersiz stok. Mevcut: ${item.currentStock} ${UNIT_LABELS[item.unit] || item.unit}`);
+      return setError(t('inventory:transaction.errors.insufficientStock', { current: item.currentStock, unit: unitLabel }));
     }
     setSaving(true);
     setError('');
@@ -310,7 +289,7 @@ function TransactionModal({
       });
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'İşlem sırasında hata oluştu.');
+      setError(err?.response?.data?.error || t('inventory:transaction.errors.actionFailed'));
     } finally {
       setSaving(false);
     }
@@ -327,7 +306,9 @@ function TransactionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Stok Hareketi — {item.name}</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            {t('inventory:transaction.title', { item: item.name })}
+          </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={18} /></button>
         </div>
 
@@ -335,20 +316,20 @@ function TransactionModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">İşlem Tipi</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:transaction.fields.type')}</label>
             <div className="flex gap-2">
-              {['in', 'out', 'adjustment'].map((t) => (
+              {TRANSACTION_TYPES.map((type) => (
                 <button
-                  key={t}
+                  key={type}
                   type="button"
-                  onClick={() => { setForm({ ...form, type: t, reason: t === 'in' ? 'purchase' : t === 'out' ? 'usage' : 'adjustment' }); }}
+                  onClick={() => { setForm({ ...form, type, reason: type === 'in' ? 'purchase' : type === 'out' ? 'usage' : 'adjustment' }); }}
                   className={`flex-1 py-2 text-sm rounded-lg border font-medium transition-colors ${
-                    form.type === t
+                    form.type === type
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
-                  {TRANSACTION_TYPE_LABELS[t]}
+                  {t(`inventory:transaction.types.${type}`)}
                 </button>
               ))}
             </div>
@@ -356,7 +337,10 @@ function TransactionModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Miktar ({UNIT_LABELS[item.unit] || item.unit}) — Mevcut: {item.currentStock}
+              {t('inventory:transaction.quantityLabel', {
+                unit: t(`inventory:units.${item.unit}`, { defaultValue: item.unit }),
+                current: item.currentStock,
+              })}
             </label>
             <input
               type="number"
@@ -369,33 +353,33 @@ function TransactionModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Neden</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:transaction.fields.reason')}</label>
             <select
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
               className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              {reasonOptions.map((r) => <option key={r} value={r}>{REASON_LABELS[r]}</option>)}
+              {reasonOptions.map((r) => <option key={r} value={r}>{t(`inventory:transaction.reasons.${r}`)}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notlar</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:itemForm.fields.notes')}</label>
             <input
               type="text"
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="İsteğe bağlı"
+              placeholder={t('inventory:optional')}
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
-              İptal
+              {t('common:cancel')}
             </button>
             <button type="submit" disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-              {saving ? 'Kaydediliyor...' : 'Kaydet'}
+              {saving ? t('common:saving') : t('common:save')}
             </button>
           </div>
         </form>
@@ -410,6 +394,7 @@ type Tab = 'list' | 'alerts' | 'history';
 export default function Inventory() {
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
+  const { t, i18n } = useTranslation(['inventory', 'common']);
   const isAdmin = canManageInventory(user);
 
   const [activeTab, setActiveTab] = useState<Tab>('list');
@@ -494,10 +479,19 @@ export default function Inventory() {
     if (activeTab === 'alerts') loadAlerts();
   };
 
+  const categoryLabel = (key: string) => t(`inventory:categories.${key}`, { defaultValue: key });
+  const unitLabel = (key: string) => t(`inventory:units.${key}`, { defaultValue: key });
+  const transactionTypeLabel = (key: string) => t(`inventory:transaction.types.${key}`, { defaultValue: key });
+  const reasonLabel = (key: string) => t(`inventory:transaction.reasons.${key}`, { defaultValue: key });
+
   const tabs = [
-    { id: 'list' as Tab, label: 'Stok Listesi', icon: <Package size={16} /> },
-    { id: 'alerts' as Tab, label: `Düşük Stok${alertItems.length > 0 ? ` (${alertItems.length})` : ''}`, icon: <AlertTriangle size={16} /> },
-    { id: 'history' as Tab, label: 'İşlem Geçmişi', icon: <SlidersHorizontal size={16} /> },
+    { id: 'list' as Tab, label: t('inventory:tabs.list'), icon: <Package size={16} /> },
+    {
+      id: 'alerts' as Tab,
+      label: `${t('inventory:tabs.alerts')}${alertItems.length > 0 ? ` (${alertItems.length})` : ''}`,
+      icon: <AlertTriangle size={16} />,
+    },
+    { id: 'history' as Tab, label: t('inventory:tabs.history'), icon: <SlidersHorizontal size={16} /> },
   ];
 
   // Pre-fetch alert count on mount
@@ -514,8 +508,8 @@ export default function Inventory() {
             <Package size={20} className="text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Stok Takibi</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">İmplant, protez ve sarf malzeme yönetimi</p>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('inventory:title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('inventory:subtitle')}</p>
           </div>
         </div>
         {isAdmin && (
@@ -523,7 +517,7 @@ export default function Inventory() {
             onClick={() => { setEditItem(null); setShowItemForm(true); }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <Plus size={16} /> Yeni Malzeme
+            <Plus size={16} /> {t('inventory:actions.newItem')}
           </button>
         )}
       </div>
@@ -556,7 +550,7 @@ export default function Inventory() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Malzeme veya tedarikçi ara..."
+                placeholder={t('inventory:filters.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -567,18 +561,18 @@ export default function Inventory() {
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="">Tüm Kategoriler</option>
-              {Object.entries(CATEGORY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              <option value="">{t('inventory:filters.allCategories')}</option>
+              {CATEGORY_KEYS.map((v) => <option key={v} value={v}>{categoryLabel(v)}</option>)}
             </select>
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">Yükleniyor...</div>
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">{t('common:loading')}</div>
           ) : items.length === 0 ? (
             <div className="card p-6 text-center text-gray-500 dark:text-gray-400">
               <Package size={40} className="mx-auto mb-3 opacity-40" />
-              <p>Stok kaydı bulunamadı.</p>
-              {isAdmin && <p className="text-sm mt-1">"Yeni Malzeme" butonuyla ekleyebilirsiniz.</p>}
+              <p>{t('inventory:empty.noItems')}</p>
+              {isAdmin && <p className="text-sm mt-1">{t('inventory:empty.addItemHint')}</p>}
             </div>
           ) : (
             <div className="card overflow-hidden">
@@ -586,13 +580,13 @@ export default function Inventory() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     <tr>
-                      <th className="px-4 py-3 text-left">Malzeme</th>
-                      <th className="px-4 py-3 text-left">Kategori</th>
-                      <th className="px-4 py-3 text-center">Mevcut Stok</th>
-                      <th className="px-4 py-3 text-center">Min. Stok</th>
-                      <th className="px-4 py-3 text-right hidden md:table-cell">Birim Maliyet</th>
-                      <th className="px-4 py-3 text-left hidden lg:table-cell">Tedarikçi</th>
-                      <th className="px-4 py-3 text-center">İşlem</th>
+                      <th className="px-4 py-3 text-left">{t('inventory:itemForm.fields.name')}</th>
+                      <th className="px-4 py-3 text-left">{t('inventory:itemForm.fields.category')}</th>
+                      <th className="px-4 py-3 text-center">{t('inventory:list.currentStock')}</th>
+                      <th className="px-4 py-3 text-center">{t('inventory:list.minimumStock')}</th>
+                      <th className="px-4 py-3 text-right hidden md:table-cell">{t('inventory:itemForm.fields.unitCost')}</th>
+                      <th className="px-4 py-3 text-left hidden lg:table-cell">{t('inventory:itemForm.fields.supplier')}</th>
+                      <th className="px-4 py-3 text-center">{t('common:actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -607,17 +601,17 @@ export default function Inventory() {
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other}`}>
-                            {CATEGORY_LABELS[item.category] || item.category}
+                            {categoryLabel(item.category)}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className={`font-semibold ${item.isLowStock ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white'}`}>
                             {item.currentStock}
                           </span>
-                          <span className="text-xs text-gray-400 ml-1">{UNIT_LABELS[item.unit] || item.unit}</span>
+                          <span className="text-xs text-gray-400 ml-1">{unitLabel(item.unit)}</span>
                         </td>
                         <td className="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
-                          {item.minimumStock} <span className="text-xs">{UNIT_LABELS[item.unit] || item.unit}</span>
+                          {item.minimumStock} <span className="text-xs">{unitLabel(item.unit)}</span>
                         </td>
                         <td className="px-4 py-3 text-right hidden md:table-cell text-gray-700 dark:text-gray-300">
                           {item.unitCost != null ? `₺${item.unitCost.toFixed(2)}` : '—'}
@@ -629,7 +623,7 @@ export default function Inventory() {
                           <div className="flex items-center justify-center gap-1">
                             <button
                               onClick={() => setTxItem(item)}
-                              title="Stok hareketi ekle"
+                              title={t('inventory:actions.addTransaction')}
                               className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
                             >
                               <ArrowUpCircle size={16} />
@@ -637,7 +631,7 @@ export default function Inventory() {
                             {isAdmin && (
                               <button
                                 onClick={() => { setEditItem(item); setShowItemForm(true); }}
-                                title="Düzenle"
+                                title={t('common:edit')}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
                               >
                                 <Pencil size={16} />
@@ -659,20 +653,20 @@ export default function Inventory() {
       {activeTab === 'alerts' && (
         <div className="space-y-4">
           {loading ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">Yükleniyor...</div>
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">{t('common:loading')}</div>
           ) : alertItems.length === 0 ? (
             <div className="card p-6 text-center">
               <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Package size={24} className="text-green-600 dark:text-green-400" />
               </div>
-              <p className="text-gray-700 dark:text-gray-300 font-medium">Düşük stok uyarısı yok!</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Tüm malzemeler minimum stok seviyesinin üzerinde.</p>
+              <p className="text-gray-700 dark:text-gray-300 font-medium">{t('inventory:alerts.emptyTitle')}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('inventory:alerts.emptyDescription')}</p>
             </div>
           ) : (
             <>
               <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400 font-medium">
                 <AlertTriangle size={16} />
-                <span>{alertItems.length} malzeme minimum stok seviyesinin altında veya eşit.</span>
+                <span>{t('inventory:alerts.countMessage', { count: alertItems.length })}</span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {alertItems.map((item) => (
@@ -681,13 +675,13 @@ export default function Inventory() {
                       <div>
                         <p className="font-semibold text-gray-900 dark:text-white text-sm">{item.name}</p>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other}`}>
-                          {CATEGORY_LABELS[item.category] || item.category}
+                          {categoryLabel(item.category)}
                         </span>
                       </div>
                       <button
                         onClick={() => setTxItem(item)}
                         className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100"
-                        title="Stok girişi ekle"
+                        title={t('inventory:actions.addStockIn')}
                       >
                         <ArrowUpCircle size={16} />
                       </button>
@@ -695,9 +689,9 @@ export default function Inventory() {
                     <div className="mt-3 flex items-center gap-2 text-sm">
                       <span className="text-orange-600 dark:text-orange-400 font-bold">{item.currentStock}</span>
                       <span className="text-gray-400">/ min {item.minimumStock}</span>
-                      <span className="text-xs text-gray-400">{UNIT_LABELS[item.unit] || item.unit}</span>
+                      <span className="text-xs text-gray-400">{unitLabel(item.unit)}</span>
                     </div>
-                    {item.supplier && <p className="text-xs text-gray-400 mt-1">Tedarikçi: {item.supplier}</p>}
+                    {item.supplier && <p className="text-xs text-gray-400 mt-1">{t('inventory:itemForm.fields.supplier')}: {item.supplier}</p>}
                   </div>
                 ))}
               </div>
@@ -710,11 +704,11 @@ export default function Inventory() {
       {activeTab === 'history' && (
         <div className="space-y-4">
           {loading ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">Yükleniyor...</div>
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">{t('common:loading')}</div>
           ) : transactions.length === 0 ? (
             <div className="card p-6 text-center text-gray-500 dark:text-gray-400">
               <SlidersHorizontal size={36} className="mx-auto mb-3 opacity-40" />
-              <p>Henüz stok hareketi kaydı yok.</p>
+              <p>{t('inventory:history.empty')}</p>
             </div>
           ) : (
             <div className="card overflow-hidden">
@@ -722,37 +716,37 @@ export default function Inventory() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     <tr>
-                      <th className="px-4 py-3 text-left">Tarih</th>
-                      <th className="px-4 py-3 text-left">İşlem</th>
-                      <th className="px-4 py-3 text-left">Neden</th>
-                      <th className="px-4 py-3 text-center">Miktar</th>
-                      <th className="px-4 py-3 text-left hidden md:table-cell">Yapan</th>
-                      <th className="px-4 py-3 text-left hidden lg:table-cell">Notlar</th>
+                      <th className="px-4 py-3 text-left">{t('common:date')}</th>
+                      <th className="px-4 py-3 text-left">{t('inventory:transaction.fields.type')}</th>
+                      <th className="px-4 py-3 text-left">{t('inventory:transaction.fields.reason')}</th>
+                      <th className="px-4 py-3 text-center">{t('inventory:transaction.fields.quantity')}</th>
+                      <th className="px-4 py-3 text-left hidden md:table-cell">{t('inventory:history.performedBy')}</th>
+                      <th className="px-4 py-3 text-left hidden lg:table-cell">{t('inventory:itemForm.fields.notes')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                     {transactions.map((tx) => (
                       <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                         <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                          {new Date(tx.createdAt).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {new Date(tx.createdAt).toLocaleDateString(i18n.language, { day: '2-digit', month: 'short', year: 'numeric' })}
                           <br />
-                          <span className="text-xs">{new Date(tx.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-xs">{new Date(tx.createdAt).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${TX_COLORS[tx.type] || ''}`}>
                             {tx.type === 'in' ? <ArrowUpCircle size={11} /> : tx.type === 'out' ? <ArrowDownCircle size={11} /> : <SlidersHorizontal size={11} />}
-                            {TRANSACTION_TYPE_LABELS[tx.type] || tx.type}
+                            {transactionTypeLabel(tx.type)}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                          {tx.reason ? REASON_LABELS[tx.reason] || tx.reason : '—'}
+                          {tx.reason ? reasonLabel(tx.reason) : '-'}
                           {tx.treatmentCase && <span className="text-xs text-gray-400 block">{tx.treatmentCase.title}</span>}
                         </td>
                         <td className="px-4 py-3 text-center font-semibold text-gray-900 dark:text-white">{tx.quantity}</td>
                         <td className="px-4 py-3 hidden md:table-cell text-gray-500 dark:text-gray-400 text-xs">
-                          {tx.performedBy ? `${tx.performedBy.firstName} ${tx.performedBy.lastName}` : '—'}
+                          {tx.performedBy ? `${tx.performedBy.firstName} ${tx.performedBy.lastName}` : '-'}
                         </td>
-                        <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">{tx.notes || '—'}</td>
+                        <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">{tx.notes || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

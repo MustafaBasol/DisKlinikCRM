@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, Trash2, Save, X, ClipboardList, CheckCircle2, Circle, AlertCircle, Plus, ExternalLink } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { dentalChartService, treatmentPlanProceduresService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -36,23 +37,23 @@ interface Props {
 
 // ── Procedure status config ────────────────────────────────────────────
 const PROC_STATUS_CONFIG = {
-  planned:     { label: 'Planlandı',    dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',  icon: Circle },
-  in_progress: { label: 'Devam Ediyor', dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',   icon: AlertCircle },
-  completed:   { label: 'Tamamlandı',   dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',icon: CheckCircle2 },
-  cancelled:   { label: 'İptal',        dot: 'bg-gray-400',    text: 'text-gray-500',   bg: 'bg-gray-50',   icon: X },
+  planned:     { dot: 'bg-amber-400',   text: 'text-amber-700',  bg: 'bg-amber-50',  icon: Circle },
+  in_progress: { dot: 'bg-blue-500',    text: 'text-blue-700',   bg: 'bg-blue-50',   icon: AlertCircle },
+  completed:   { dot: 'bg-emerald-500', text: 'text-emerald-700',bg: 'bg-emerald-50',icon: CheckCircle2 },
+  cancelled:   { dot: 'bg-gray-400',    text: 'text-gray-500',   bg: 'bg-gray-50',   icon: X },
 } as const;
 
 // ── Status config ──────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
   ToothStatus,
-  { label: string; bg: string; text: string; border: string; darkBg: string }
+  { bg: string; text: string; border: string; darkBg: string }
 > = {
-  planned:  { label: 'Planlandı',   bg: 'bg-amber-100',  text: 'text-amber-800',  border: 'border-amber-400',  darkBg: 'dark:bg-amber-900/40' },
-  treated:  { label: 'Tedavi Edildi', bg: 'bg-green-100', text: 'text-green-800',  border: 'border-green-400',  darkBg: 'dark:bg-green-900/40' },
-  issue:    { label: 'Sorun Var',   bg: 'bg-red-100',    text: 'text-red-800',    border: 'border-red-400',    darkBg: 'dark:bg-red-900/40'   },
-  missing:  { label: 'Eksik',       bg: 'bg-gray-200',   text: 'text-gray-600',   border: 'border-gray-400',   darkBg: 'dark:bg-gray-700'      },
-  crown:    { label: 'Kuron',       bg: 'bg-blue-100',   text: 'text-blue-800',   border: 'border-blue-400',   darkBg: 'dark:bg-blue-900/40'  },
-  implant:  { label: 'İmplant',     bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-400', darkBg: 'dark:bg-purple-900/40'},
+  planned:  { bg: 'bg-amber-100',  text: 'text-amber-800',  border: 'border-amber-400',  darkBg: 'dark:bg-amber-900/40' },
+  treated:  { bg: 'bg-green-100', text: 'text-green-800',  border: 'border-green-400',  darkBg: 'dark:bg-green-900/40' },
+  issue:    { bg: 'bg-red-100',    text: 'text-red-800',    border: 'border-red-400',    darkBg: 'dark:bg-red-900/40'   },
+  missing:  { bg: 'bg-gray-200',   text: 'text-gray-600',   border: 'border-gray-400',   darkBg: 'dark:bg-gray-700'      },
+  crown:    { bg: 'bg-blue-100',   text: 'text-blue-800',   border: 'border-blue-400',   darkBg: 'dark:bg-blue-900/40'  },
+  implant:  { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-400', darkBg: 'dark:bg-purple-900/40'},
 };
 
 // ── FDI layout (upper jaw left→right, lower jaw left→right) ───────────
@@ -88,6 +89,7 @@ interface ToothProps {
 }
 
 const Tooth: React.FC<ToothProps> = ({ fdi, record, procedures = [], onClick }) => {
+  const { t } = useTranslation(['patients']);
   const shape = toothShape(fdi);
   const sizeClass = SHAPE_SIZE[shape];
   const cfg = record ? STATUS_CONFIG[record.status] : null;
@@ -96,7 +98,7 @@ const Tooth: React.FC<ToothProps> = ({ fdi, record, procedures = [], onClick }) 
     <div className="flex flex-col items-center gap-0.5 relative">
       <button
         onClick={() => onClick(fdi)}
-        title={record ? `${fdi}: ${STATUS_CONFIG[record.status].label}${record.note ? ` — ${record.note}` : ''}` : `Diş ${fdi}`}
+        title={record ? `${fdi}: ${t(`patients:dentalChart.status.${record.status}`)}${record.note ? ` - ${record.note}` : ''}` : t('patients:dentalChart.toothWithNumber', { number: fdi })}
         className={[
           'rounded-lg border-2 flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 hover:shadow-md',
           sizeClass,
@@ -113,7 +115,7 @@ const Tooth: React.FC<ToothProps> = ({ fdi, record, procedures = [], onClick }) 
           {procedures.slice(0, 3).map((p) => (
             <span
               key={p.id}
-              title={`${p.procedureName} (${PROC_STATUS_CONFIG[p.status]?.label ?? p.status})`}
+              title={`${p.procedureName} (${t(`patients:dentalChart.procedureStatus.${p.status}`, { defaultValue: p.status })})`}
               className={`w-1.5 h-1.5 rounded-full ${PROC_STATUS_CONFIG[p.status]?.dot ?? 'bg-gray-400'}`}
             />
           ))}
@@ -154,6 +156,7 @@ const JawRow: React.FC<JawRowProps> = ({ left, right, records, procedureMap, onT
 
 // ── Main component ─────────────────────────────────────────────────────
 const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatmentPlan = true }) => {
+  const { t, i18n } = useTranslation(['patients', 'common']);
   const { user } = useAuth();
   const canEdit = !readOnly && ['admin', 'receptionist', 'doctor'].includes(user?.role || '');
 
@@ -275,7 +278,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
     (acc, p) => {
       const caseId = p.treatmentCase?.id ?? 'unknown';
       if (!acc[caseId]) {
-        acc[caseId] = { caseTitle: p.treatmentCase?.title ?? 'Tedavi Vakası', caseStage: p.treatmentCase?.stage ?? '', items: [] };
+        acc[caseId] = { caseTitle: p.treatmentCase?.title ?? t('patients:dentalChart.treatmentCaseFallback'), caseStage: p.treatmentCase?.stage ?? '', items: [] };
       }
       acc[caseId].items.push(p);
       return acc;
@@ -294,14 +297,14 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
             onClick={() => setActiveProcTab('chart')}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeProcTab === 'chart' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
           >
-            Diş Haritası
+            {t('patients:dentalChart.title')}
           </button>
           <button
             onClick={() => setActiveProcTab('plan')}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${activeProcTab === 'plan' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
           >
             <ClipboardList size={14} />
-            Tedavi Planı
+            {t('patients:dentalChart.treatmentPlan')}
             {activeProcedures.length > 0 && (
               <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">{activeProcedures.length}</span>
             )}
@@ -319,7 +322,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                   key={status}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${cfg.bg} ${cfg.text} ${cfg.border} ${cfg.darkBg}`}
                 >
-                  {cfg.label}
+                  {t(`patients:dentalChart.status.${status}`)}
                   {counts[status] > 0 && (
                     <span className="font-bold">({counts[status]})</span>
                   )}
@@ -331,14 +334,14 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                 {Object.entries(PROC_STATUS_CONFIG).map(([s, cfg]) => (
                   <span key={s} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-                    {cfg.label}
+                    {t(`patients:dentalChart.procedureStatus.${s}`, { defaultValue: s })}
                   </span>
                 ))}
               </div>
             )}
             {canEdit && (
               <span className="text-xs text-gray-400 dark:text-gray-500 self-center ml-2">
-                Dişe tıklayarak not ekle
+                {t('patients:dentalChart.clickHint')}
               </span>
             )}
           </div>
@@ -347,7 +350,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
           <div className="overflow-x-auto">
             <div className="inline-block min-w-max space-y-1 px-2">
               <JawRow
-                label="Üst Sağ"
+                label={t('patients:dentalChart.upperRight')}
                 left={UPPER_RIGHT}
                 right={UPPER_LEFT}
                 records={records}
@@ -360,7 +363,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                 <span className="w-12" />
               </div>
               <JawRow
-                label="Alt Sağ"
+                label={t('patients:dentalChart.lowerRight')}
                 left={LOWER_RIGHT}
                 right={LOWER_LEFT}
                 records={records}
@@ -373,7 +376,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
           {/* Summary table */}
           {records.size > 0 && (
             <div className="card p-4">
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Kayıtlı Dişler</h4>
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('patients:dentalChart.recordedTeeth')}</h4>
               <div className="divide-y dark:divide-gray-700">
                 {[...records.values()].map((r) => {
                   const cfg = STATUS_CONFIG[r.status];
@@ -389,11 +392,11 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Diş {r.toothFdi}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${cfg.bg} ${cfg.text} ${cfg.darkBg}`}>{cfg.label}</span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('patients:dentalChart.toothWithNumber', { number: r.toothFdi })}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${cfg.bg} ${cfg.text} ${cfg.darkBg}`}>{t(`patients:dentalChart.status.${r.status}`)}</span>
                           {toothProcs.length > 0 && (
                             <span className="text-xs text-blue-600 flex items-center gap-0.5">
-                              <ClipboardList size={11} /> {toothProcs.length} prosedür
+                              <ClipboardList size={11} /> {t('patients:dentalChart.procedureCount', { count: toothProcs.length })}
                             </span>
                           )}
                         </div>
@@ -419,10 +422,9 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
           {Object.keys(procByCase).length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <ClipboardList size={40} className="mx-auto mb-3 opacity-20" />
-              <p className="text-sm font-medium text-gray-500">Bu hasta için henüz tedavi prosedürü eklenmemiş.</p>
+              <p className="text-sm font-medium text-gray-500">{t('patients:dentalChart.noProcedures')}</p>
               <p className="text-xs mt-2 text-gray-400 max-w-xs mx-auto">
-                Prosedür eklemek için önce <strong>Tedavi Vakaları</strong> sekmesine gidin,
-                bir vaka seçin ve vaka detay sayfasından <strong>Tedavi Planı Prosedürleri</strong> bölümündeki <strong>+</strong> butonuna tıklayın.
+                {t('patients:dentalChart.addProcedureHelp')}
               </p>
               <Link
                 to="#"
@@ -430,7 +432,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                 className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-700 transition-colors"
               >
                 <ExternalLink size={13} />
-                Tedavi Vakaları Sekmesine Git
+                {t('patients:dentalChart.goToTreatments')}
               </Link>
             </div>
           ) : (
@@ -447,9 +449,9 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                   <Link
                     to={`/treatment-cases/${caseId}`}
                     className="ml-auto flex items-center gap-1 text-xs text-primary-600 font-semibold hover:underline flex-shrink-0"
-                    title="Prosedür eklemek için vaka detayına git"
+                    title={t('patients:dentalChart.addProcedureTitle')}
                   >
-                    <Plus size={12} /> Prosedür Ekle
+                    <Plus size={12} /> {t('patients:dentalChart.addProcedure')}
                   </Link>
                 </div>
                 <div className="space-y-2">
@@ -464,14 +466,14 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                             <span className="text-sm font-medium text-gray-800 dark:text-gray-100">{p.procedureName}</span>
                             {p.toothFdi && (
                               <span className="text-xs bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded font-mono">
-                                Diş {p.toothFdi}
+                                {t('patients:dentalChart.toothWithNumber', { number: p.toothFdi })}
                               </span>
                             )}
-                            <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
+                            <span className={`text-xs font-medium ${cfg.text}`}>{t(`patients:dentalChart.procedureStatus.${p.status}`, { defaultValue: p.status })}</span>
                           </div>
                           {p.notes && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.notes}</p>}
                           {p.estimatedCost && (
-                            <p className="text-xs text-gray-400 mt-0.5">Tahmini: {p.estimatedCost.toLocaleString('tr-TR')} ₺</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{t('patients:dentalChart.estimated')}: {p.estimatedCost.toLocaleString(i18n.language)} ₺</p>
                           )}
                         </div>
                       </div>
@@ -490,11 +492,9 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
           <div ref={popoverRef} className="card p-6 w-full max-w-sm shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg">
-                Diş {selected}
+                {t('patients:dentalChart.toothWithNumber', { number: selected })}
                 <span className="ml-2 text-sm font-normal text-gray-500">
-                  {toothShape(selected) === 'molar' ? 'Büyük Azı' :
-                   toothShape(selected) === 'premolar' ? 'Küçük Azı' :
-                   toothShape(selected) === 'canine' ? 'Köpek Dişi' : 'Kesici'}
+                  {t(`patients:dentalChart.toothShape.${toothShape(selected)}`)}
                 </span>
               </h3>
               <button onClick={() => setSelected(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
@@ -502,7 +502,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
               </button>
             </div>
             <div className="mb-4">
-              <label className="label">Durum</label>
+              <label className="label">{t('patients:dentalChart.statusLabel')}</label>
               <div className="grid grid-cols-3 gap-2">
                 {(Object.entries(STATUS_CONFIG) as [ToothStatus, typeof STATUS_CONFIG[ToothStatus]][]).map(([status, cfg]) => (
                   <button
@@ -515,29 +515,29 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                         : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-gray-300',
                     ].join(' ')}
                   >
-                    {cfg.label}
+                    {t(`patients:dentalChart.status.${status}`)}
                   </button>
                 ))}
               </div>
             </div>
             <div className="mb-5">
-              <label className="label">Not (isteğe bağlı)</label>
+              <label className="label">{t('patients:dentalChart.noteOptional')}</label>
               <textarea
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 rows={2}
                 maxLength={300}
-                placeholder="Planlanan hizmet, klinik not..."
+                placeholder={t('patients:dentalChart.notePlaceholder')}
                 className="input-field resize-none"
               />
             </div>
             <div className="flex items-center gap-2">
               <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                Kaydet
+                {t('common:save')}
               </button>
               {records.has(selected) && (
-                <button onClick={handleDelete} disabled={saving} className="btn-danger" title="Kaydı sil">
+                <button onClick={handleDelete} disabled={saving} className="btn-danger" title={t('patients:dentalChart.deleteRecord')}>
                   <Trash2 size={16} />
                 </button>
               )}

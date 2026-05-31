@@ -4,11 +4,33 @@
   "language": "Language",
   "languageHelp": "Changes the UI language instantly.",
   "accountInfo": "Account Info",
+  "accountFields": {
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "clinic": "Clinic"
+  },
+  "booking": {
+    "title": "Online Booking Link",
+    "description": "Share this link with patients. It does not require login and allows them to create an appointment request.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "open": "Open"
+  },
   "services": {
     "title": "Clinic Services",
     "subtitle": "Manage the services and treatments offered by your clinic.",
     "newService": "New Service",
     "empty": "No services configured yet."
+  },
+  "integrations": {
+    "title": "Integrations",
+    "subtitle": "Manage connection settings for your clinic communication channels.",
+    "whatsappTitle": "WhatsApp Connections",
+    "whatsappDescription": "Manage WhatsApp account connections, status, and messaging configuration.",
+    "instagramTitle": "Instagram Connections",
+    "instagramDescription": "Manage Instagram account connections, status, and inbox configuration.",
+    "open": "Open"
   },
   "users": {
     "title": "Users & Dentists",
@@ -17,6 +39,15 @@
     "editUser": "Edit User",
     "empty": "No users configured yet.",
     "passwordHelp": "Leave blank to keep unchanged",
+    "importStaffWithExcel": "Add Staff with Excel",
+    "passwordRequirementsTitle": "Password must include:",
+    "passwordRules": {
+      "minLength": "At least 8 characters",
+      "uppercase": "One uppercase letter",
+      "lowercase": "One lowercase letter",
+      "number": "One number",
+      "special": "One special character (!@#$%^&* etc)"
+    },
     "fields": {
       "name": "Name",
       "firstName": "First Name",
@@ -35,6 +66,24 @@
     "errors": {
       "loadFailed": "Failed to load users",
       "saveFailed": "Failed to save user"
+    }
+  },
+  "clinicAssignments": {
+    "title": "Clinic Assignments",
+    "loading": "Loading...",
+    "empty": "No active clinic found in this organization.",
+    "defaultClinic": "Default Clinic",
+    "selectDefault": "— Select —",
+    "roles": {
+      "CLINIC_MANAGER": "Clinic Manager",
+      "DENTIST": "Dentist",
+      "RECEPTIONIST": "Receptionist",
+      "BILLING": "Billing",
+      "ASSISTANT": "Assistant"
+    },
+    "errors": {
+      "loadFailed": "Clinic data could not be loaded.",
+      "saveFailed": "Could not save."
     }
   },
   "availability": {

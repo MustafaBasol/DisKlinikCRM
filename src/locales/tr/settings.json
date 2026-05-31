@@ -4,11 +4,33 @@
   "language": "Dil",
   "languageHelp": "Arayüz dilini anında değiştirir.",
   "accountInfo": "Hesap Bilgisi",
+  "accountFields": {
+    "name": "Ad Soyad",
+    "email": "E-posta",
+    "role": "Rol",
+    "clinic": "Klinik"
+  },
+  "booking": {
+    "title": "Online Randevu Linki",
+    "description": "Bu linki hastalarınızla paylaşın. Giriş gerektirmez, randevu talebi oluşturabilirler.",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı",
+    "open": "Aç"
+  },
   "services": {
     "title": "Klinik Hizmetleri",
     "subtitle": "Aile Diş tarafından sunulan hizmetleri ve tedavi randevularını yönetin.",
     "newService": "Yeni Hizmet",
     "empty": "Henüz hizmet tanımlanmadı."
+  },
+  "integrations": {
+    "title": "Entegrasyonlar",
+    "subtitle": "Klinik iletişim kanallarınızın bağlantı ayarlarını buradan yönetin.",
+    "whatsappTitle": "WhatsApp Bağlantıları",
+    "whatsappDescription": "WhatsApp hesap bağlantılarını, durumunu ve mesajlaşma yapılandırmasını yönetin.",
+    "instagramTitle": "Instagram Bağlantıları",
+    "instagramDescription": "Instagram hesap bağlantılarını, durumunu ve gelen kutusu yapılandırmasını yönetin.",
+    "open": "Aç"
   },
   "users": {
     "title": "Kullanıcılar ve Hekimler",
@@ -17,6 +39,15 @@
     "editUser": "Kullanıcıyı Düzenle",
     "empty": "Henüz kullanıcı tanımlanmadı.",
     "passwordHelp": "Değiştirmek istemiyorsanız boş bırakın",
+    "importStaffWithExcel": "Excel ile Personel Ekle",
+    "passwordRequirementsTitle": "Şifre şunları içermelidir:",
+    "passwordRules": {
+      "minLength": "En az 8 karakter",
+      "uppercase": "Bir büyük harf",
+      "lowercase": "Bir küçük harf",
+      "number": "Bir rakam",
+      "special": "Bir özel karakter (!@#$%^&* vb.)"
+    },
     "fields": {
       "name": "Ad Soyad",
       "firstName": "Ad",
@@ -35,6 +66,24 @@
     "errors": {
       "loadFailed": "Kullanıcılar yüklenemedi",
       "saveFailed": "Kullanıcı kaydedilemedi"
+    }
+  },
+  "clinicAssignments": {
+    "title": "Klinik Atamaları",
+    "loading": "Yükleniyor...",
+    "empty": "Organizasyonda aktif klinik bulunamadı.",
+    "defaultClinic": "Varsayılan Klinik",
+    "selectDefault": "— Seçin —",
+    "roles": {
+      "CLINIC_MANAGER": "Klinik Yöneticisi",
+      "DENTIST": "Diş Hekimi",
+      "RECEPTIONIST": "Resepsiyonist",
+      "BILLING": "Muhasebe",
+      "ASSISTANT": "Asistan"
+    },
+    "errors": {
+      "loadFailed": "Klinik verileri yüklenemedi.",
+      "saveFailed": "Kaydedilemedi."
     }
   },
   "availability": {

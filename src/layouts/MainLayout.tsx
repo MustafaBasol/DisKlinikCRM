@@ -26,7 +26,6 @@ import {
   Award,
   Package,
   Building2,
-  MessageCircle,
   Inbox,
   BarChart3,
   Activity,
@@ -51,12 +50,10 @@ import {
   canManageUsers,
   canViewUsers,
   normalizeRole,
-  canViewWhatsAppStatus,
   canViewWhatsAppInbox,
   canViewFinanceDashboard,
   canViewOperations,
   canViewNoShowDashboard,
-  canViewInstagramStatus,
   canViewInstagramInbox,
 } from '../utils/permissions';
 
@@ -131,34 +128,31 @@ const MainLayoutInner: React.FC = () => {
 
   // Genel
   {
-    const items: NavItem[] = [{ path: '/', icon: <LayoutDashboard size={18} />, label: 'Panel' }];
-    if (canViewOperations(user)) {
-      items.push({ path: '/operations', icon: <Activity size={18} />, label: 'Operasyon İzleme' });
-    }
-    navGroups.push({ id: 'genel', label: 'Genel', collapsible: false, items });
+    const items: NavItem[] = [{ path: '/dashboard', icon: <LayoutDashboard size={18} />, label: t('common:dashboard') }];
+    navGroups.push({ id: 'genel', label: t('common:navGroups.general'), collapsible: false, items });
   }
 
   // Hasta Yönetimi
   {
     const items: NavItem[] = [];
     if (canViewPatients(user)) {
-      items.push({ path: '/patients', icon: <Users size={18} />, label: 'Hastalar' });
+      items.push({ path: '/patients', icon: <Users size={18} />, label: t('common:patients') });
     }
     if (canViewAppointments(user)) {
-      items.push({ path: '/appointments', icon: <Calendar size={18} />, label: 'Randevular' });
+      items.push({ path: '/appointments', icon: <Calendar size={18} />, label: t('common:appointments') });
     }
     if (canViewPatients(user)) {
-      items.push({ path: '/treatment-cases', icon: <Briefcase size={18} />, label: 'Tedavi Dosyaları' });
-      items.push({ path: '/tasks', icon: <CheckSquare size={18} />, label: 'Görevler' });
+      items.push({ path: '/treatment-cases', icon: <Briefcase size={18} />, label: t('common:treatmentCases') });
+      items.push({ path: '/tasks', icon: <CheckSquare size={18} />, label: t('common:tasks') });
     }
     if (canViewPayments(user)) {
-      items.push({ path: '/insurance-provisions', icon: <ShieldCheck size={18} />, label: 'Sigorta' });
+      items.push({ path: '/insurance-provisions', icon: <ShieldCheck size={18} />, label: t('common:insurance') });
     }
     if (canViewNoShowDashboard(user)) {
-      items.push({ path: '/no-shows', icon: <UserX size={18} />, label: 'No-show Takibi' });
+      items.push({ path: '/no-shows', icon: <UserX size={18} />, label: t('common:noShowTracking') });
     }
     if (items.length > 0) {
-      navGroups.push({ id: 'hasta', label: 'Hasta Yönetimi', collapsible: true, items });
+      navGroups.push({ id: 'hasta', label: t('common:navGroups.patientManagement'), collapsible: true, items });
     }
   }
 
@@ -166,28 +160,22 @@ const MainLayoutInner: React.FC = () => {
   {
     const items: NavItem[] = [];
     if (canViewWhatsAppInbox(user)) {
-      items.push({ path: '/whatsapp-inbox', icon: <Inbox size={18} />, label: 'WhatsApp Gelen Kutusu' });
+      items.push({ path: '/whatsapp-inbox', icon: <Inbox size={18} />, label: t('common:whatsappInbox') });
     }
     if (canSeeAppointmentRequests) {
-      items.push({ path: '/appointment-requests', icon: <CalendarPlus size={18} />, label: 'WhatsApp Talepleri' });
+      items.push({ path: '/appointment-requests', icon: <CalendarPlus size={18} />, label: t('common:whatsappRequests') });
     }
     if (canViewPatients(user)) {
-      items.push({ path: '/messages', icon: <MessageSquare size={18} />, label: 'Mesajlar' });
+      items.push({ path: '/messages', icon: <MessageSquare size={18} />, label: t('common:messages') });
     }
     if (canSeeTemplates) {
-      items.push({ path: '/templates', icon: <Mail size={18} />, label: 'Mesaj Şablonları' });
-    }
-    if (canViewWhatsAppStatus(user)) {
-      items.push({ path: '/organization/whatsapp', icon: <MessageCircle size={18} />, label: 'WhatsApp Bağlantıları' });
+      items.push({ path: '/templates', icon: <Mail size={18} />, label: t('common:templates') });
     }
     if (canViewInstagramInbox(user)) {
-      items.push({ path: '/instagram-inbox', icon: <Instagram size={18} />, label: 'Instagram Gelen Kutusu' });
-    }
-    if (canViewInstagramStatus(user)) {
-      items.push({ path: '/organization/instagram', icon: <Instagram size={18} />, label: 'Instagram Bağlantıları' });
+      items.push({ path: '/instagram-inbox', icon: <Instagram size={18} />, label: t('common:instagramInbox') });
     }
     if (items.length > 0) {
-      navGroups.push({ id: 'iletisim', label: 'İletişim', collapsible: true, items });
+      navGroups.push({ id: 'iletisim', label: t('common:navGroups.communication'), collapsible: true, items });
     }
   }
 
@@ -195,21 +183,21 @@ const MainLayoutInner: React.FC = () => {
   {
     const items: NavItem[] = [];
     if (canViewFinanceDashboard(user)) {
-      items.push({ path: '/finance', icon: <BarChart3 size={18} />, label: 'Finans Paneli' });
+      items.push({ path: '/finance', icon: <BarChart3 size={18} />, label: t('common:financeDashboard') });
     }
     if (canViewPayments(user)) {
-      items.push({ path: '/payments', icon: <CreditCard size={18} />, label: 'Ödemeler' });
-      items.push({ path: '/payment-plans', icon: <CreditCard size={18} />, label: 'Taksit Planları' });
+      items.push({ path: '/payments', icon: <CreditCard size={18} />, label: t('common:payments') });
+      items.push({ path: '/payment-plans', icon: <CreditCard size={18} />, label: t('common:paymentPlans') });
     }
     if (canViewReports(user)) {
-      items.push({ path: '/reports', icon: <BarChart2 size={18} />, label: 'Raporlar' });
-      items.push({ path: '/practitioner-earnings', icon: <TrendingUp size={18} />, label: 'Hekim Kazançları' });
+      items.push({ path: '/reports', icon: <BarChart2 size={18} />, label: t('common:reports') });
+      items.push({ path: '/practitioner-earnings', icon: <TrendingUp size={18} />, label: t('common:practitionerEarnings') });
     }
     if (userRole === 'DENTIST') {
-      items.push({ path: '/my-earnings', icon: <Award size={18} />, label: 'Kazançlarım' });
+      items.push({ path: '/my-earnings', icon: <Award size={18} />, label: t('common:myEarnings') });
     }
     if (items.length > 0) {
-      navGroups.push({ id: 'finans', label: 'Finans', collapsible: true, items });
+      navGroups.push({ id: 'finans', label: t('common:navGroups.finance'), collapsible: true, items });
     }
   }
 
@@ -217,9 +205,9 @@ const MainLayoutInner: React.FC = () => {
   if (canManageInventory(user)) {
     navGroups.push({
       id: 'stok',
-      label: 'Stok',
+      label: t('common:navGroups.stock'),
       collapsible: false,
-      items: [{ path: '/inventory', icon: <Package size={18} />, label: 'Stok Takibi' }],
+      items: [{ path: '/inventory', icon: <Package size={18} />, label: t('common:stockTracking') }],
     });
   }
 
@@ -227,16 +215,19 @@ const MainLayoutInner: React.FC = () => {
   {
     const items: NavItem[] = [];
     if (canViewOrganizationDashboard(user)) {
-      items.push({ path: '/organization/dashboard', icon: <Building2 size={18} />, label: 'Organizasyon Paneli' });
+      items.push({ path: '/organization/dashboard', icon: <Building2 size={18} />, label: t('common:organizationDashboard') });
     }
     if (canViewBranches(user)) {
-      items.push({ path: '/branches', icon: <Building2 size={18} />, label: 'Şubeler' });
+      items.push({ path: '/branches', icon: <Building2 size={18} />, label: t('common:branches') });
     }
     if (canViewUsers(user)) {
-      items.push({ path: '/users', icon: <Users size={18} />, label: 'Kullanıcılar' });
+      items.push({ path: '/users', icon: <Users size={18} />, label: t('common:users') });
+    }
+    if (canViewOperations(user)) {
+      items.push({ path: '/operations', icon: <Activity size={18} />, label: t('common:operationsMonitoring') });
     }
     if (items.length > 0) {
-      navGroups.push({ id: 'yonetim', label: 'Yönetim', collapsible: true, items });
+      navGroups.push({ id: 'yonetim', label: t('common:navGroups.management'), collapsible: true, items });
     }
   }
 
@@ -408,7 +399,7 @@ const MainLayoutInner: React.FC = () => {
             <button
               onClick={toggleDark}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-500 dark:text-gray-400"
-              aria-label="Tema değiştir"
+              aria-label={t('common:toggleTheme')}
             >
               {isDark ? <Sun size={20} /> : <Moon size={20} />}
             </button>

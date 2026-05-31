@@ -1,0 +1,52 @@
+{
+  "header": {
+    "subtitle": "Online Randevu"
+  },
+  "errors": {
+    "invalidLink": "Geçersiz bağlantı.",
+    "loadClinic": "Klinik bilgileri yüklenemedi.",
+    "loading": "Yükleme hatası",
+    "namePhoneRequired": "Ad Soyad ve telefon zorunludur.",
+    "submitFailed": "Randevu talebi gönderilemedi. Lütfen tekrar deneyin."
+  },
+  "service": {
+    "title": "Hizmet seçin",
+    "subtitle": "Hangi tedavi için randevu almak istiyorsunuz?",
+    "duration": "{{minutes}} dk",
+    "empty": "Henüz hizmet tanımlanmamış.",
+    "continueWithoutService": "Hizmet seçmeden devam et"
+  },
+  "schedule": {
+    "title": "Hekim & Tarih Seçin",
+    "optional": "İsteğe bağlı",
+    "doctorOptional": "Hekim (opsiyonel)",
+    "anyDoctor": "Farksız",
+    "dateOptional": "Tercih edilen tarih (opsiyonel)",
+    "timeOptional": "Tercih edilen saat (opsiyonel)"
+  },
+  "contact": {
+    "title": "İletişim Bilgileri",
+    "subtitle": "Sizi arayabilmemiz için lütfen doldurun",
+    "fullName": "Ad Soyad",
+    "fullNamePlaceholder": "Adınız Soyadınız",
+    "phone": "Telefon",
+    "emailOptional": "E-posta (opsiyonel)",
+    "noteOptional": "Not (opsiyonel)",
+    "notePlaceholder": "Şikayetiniz, özel isteğiniz...",
+    "disclaimer": "Talebiniz alındıktan sonra klinik sizi arayarak randevunuzu onaylayacaktır."
+  },
+  "actions": {
+    "continue": "Devam Et",
+    "submitting": "Gönderiliyor...",
+    "submit": "Randevu Talebini Gönder"
+  },
+  "success": {
+    "title": "Talebiniz Alındı!",
+    "body": "{{clinic}} ekibi en kısa sürede {{phone}} numaranızı arayarak randevunuzu onaylayacaktır.",
+    "questions": "Sorularınız için",
+    "newAppointment": "Yeni Randevu Al"
+  },
+  "footer": {
+    "poweredBy": "Powered by Klinik CRM"
+  }
+}

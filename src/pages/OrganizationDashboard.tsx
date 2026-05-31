@@ -6,6 +6,7 @@ import {
   Clock, ChevronUp, ChevronDown, CheckCircle, XCircle,
   TrendingDown, Stethoscope,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { useClinic } from '../context/ClinicContext';
 
@@ -79,12 +80,6 @@ interface OrgDashboardData {
 // Helpers
 // ────────────────────────────────────────────────────────────
 
-const fmt = (n: number) => n.toLocaleString('tr-TR');
-
-const fmtCurrency = (n: number, currency = 'TRY') =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n);
-
-// noShowRate API'den 0–1 ondalık gelir (ör. 0.057 = %5.7)
 const fmtPct = (r: number) => `%${(r * 100).toFixed(1)}`;
 
 type SortKey = keyof Pick<ClinicMetric,
@@ -95,10 +90,6 @@ const STATUS_BADGE: Record<string, string> = {
   trial:     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   suspended: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  active: 'Aktif', trial: 'Deneme', suspended: 'Askıya Alındı', cancelled: 'İptal',
 };
 
 // ────────────────────────────────────────────────────────────
@@ -151,6 +142,7 @@ const InsightCard: React.FC<{
 // ────────────────────────────────────────────────────────────
 
 const OrganizationDashboard: React.FC = () => {
+  const { t, i18n } = useTranslation(['organization', 'common']);
   const navigate = useNavigate();
   const { setSelectedClinicId } = useClinic();
 
@@ -175,11 +167,11 @@ const OrganizationDashboard: React.FC = () => {
       const res = await api.get('/organization/dashboard', { params });
       setData(res.data);
     } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Veriler yüklenemedi');
+      setError(err.response?.data?.error ?? t('organization:errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [range, from, to]);
+  }, [range, from, to, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -214,6 +206,9 @@ const OrganizationDashboard: React.FC = () => {
 
   const s = data?.summary;
   const ins = data?.insights;
+  const fmt = (n: number) => n.toLocaleString(i18n.language);
+  const fmtCurrency = (n: number, currency = 'TRY') =>
+    new Intl.NumberFormat(i18n.language, { style: 'currency', currency, maximumFractionDigits: 0 }).format(n);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -222,9 +217,9 @@ const OrganizationDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <Building2 size={24} className="text-primary-500" /> Organizasyon Panosu
+            <Building2 size={24} className="text-primary-500" /> {t('organization:title')}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Tüm klinik şubeleri özet görünümü</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('organization:subtitle')}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -238,7 +233,7 @@ const OrganizationDashboard: React.FC = () => {
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50'
               }`}
             >
-              {{ today: 'Bugün', this_week: 'Bu Hafta', this_month: 'Bu Ay', last_30_days: 'Son 30 Gün', custom: 'Özel' }[r]}
+              {t(`organization:ranges.${r}`)}
             </button>
           ))}
           {range === 'custom' && (
@@ -260,7 +255,7 @@ const OrganizationDashboard: React.FC = () => {
 
       {loading && !data && (
         <div className="flex items-center justify-center py-20 text-gray-400">
-          <Activity size={24} className="animate-spin mr-3" /> Yükleniyor…
+          <Activity size={24} className="animate-spin mr-3" /> {t('organization:loading')}
         </div>
       )}
 
@@ -270,54 +265,54 @@ const OrganizationDashboard: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <SummaryCard
               icon={<Building2 size={20} className="text-white" />}
-              label="Şube"
+              label={t('organization:cards.branches')}
               value={fmt(s.totalClinics)}
-              sub={`${s.activeClinics} aktif`}
+              sub={t('organization:cards.activeSub', { value: fmt(s.activeClinics) })}
               color="bg-primary-500"
             />
             <SummaryCard
               icon={<Calendar size={20} className="text-white" />}
-              label="Bugünkü Randevu"
+              label={t('organization:cards.todayAppointments')}
               value={fmt(s.todayAppointments)}
               color="bg-blue-500"
             />
             <SummaryCard
               icon={<CheckCircle size={20} className="text-white" />}
-              label="Tamamlanan"
+              label={t('organization:cards.completed')}
               value={fmt(s.completedAppointments)}
-              sub={`${fmt(s.totalAppointments)} toplam`}
+              sub={t('organization:cards.totalSub', { value: fmt(s.totalAppointments) })}
               color="bg-indigo-500"
             />
             <SummaryCard
               icon={<CreditCard size={20} className="text-white" />}
-              label="Dönem Geliri"
+              label={t('organization:cards.periodRevenue')}
               value={fmtCurrency(s.monthlyRevenue)}
               color="bg-green-500"
             />
             <SummaryCard
               icon={<AlertCircle size={20} className="text-white" />}
-              label="Bekleyen Bakiye"
+              label={t('organization:cards.outstandingBalance')}
               value={fmtCurrency(s.outstandingBalance)}
               color="bg-orange-500"
             />
             <SummaryCard
               icon={<Users size={20} className="text-white" />}
-              label="Yeni Hasta"
+              label={t('organization:cards.newPatients')}
               value={fmt(s.newPatients)}
               color="bg-pink-500"
             />
             <SummaryCard
               icon={<TrendingUp size={20} className="text-white" />}
-              label="Aktif Tedavi"
+              label={t('organization:cards.activeTreatments')}
               value={fmt(s.activeTreatmentPlans)}
-              sub={`${fmt(s.completedTreatmentCases)} tamamlandı`}
+              sub={t('organization:cards.completedSub', { value: fmt(s.completedTreatmentCases) })}
               color="bg-purple-500"
             />
             <SummaryCard
               icon={<Clock size={20} className="text-white" />}
-              label="Ort. No-Show"
+              label={t('organization:cards.averageNoShow')}
               value={fmtPct(s.averageNoShowRate)}
-              sub={`${fmt(s.cancelledAppointments)} iptal`}
+              sub={t('organization:cards.cancelledSub', { value: fmt(s.cancelledAppointments) })}
               color="bg-red-500"
             />
           </div>
@@ -326,37 +321,37 @@ const OrganizationDashboard: React.FC = () => {
           {ins && (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <InsightCard
-                label="En Yüksek Gelir"
+                label={t('organization:insights.topRevenue')}
                 clinic={ins.topRevenueClinic}
                 value={ins.topRevenueClinic ? fmtCurrency(ins.topRevenueClinic.value) : '—'}
                 icon={<Award size={16} className="text-yellow-500" />}
               />
               <InsightCard
-                label="En Düşük Gelir"
+                label={t('organization:insights.lowestRevenue')}
                 clinic={ins.lowestRevenueClinic}
                 value={ins.lowestRevenueClinic ? fmtCurrency(ins.lowestRevenueClinic.value) : '—'}
                 icon={<TrendingDown size={16} className="text-gray-400" />}
               />
               <InsightCard
-                label="En Çok Randevu"
+                label={t('organization:insights.highestAppointments')}
                 clinic={ins.highestAppointmentClinic}
                 value={ins.highestAppointmentClinic ? fmt(ins.highestAppointmentClinic.value) : '—'}
                 icon={<BarChart2 size={16} className="text-blue-500" />}
               />
               <InsightCard
-                label="En Yüksek Bakiye"
+                label={t('organization:insights.highestBalance')}
                 clinic={ins.highestOutstandingBalanceClinic}
                 value={ins.highestOutstandingBalanceClinic ? fmtCurrency(ins.highestOutstandingBalanceClinic.value) : '—'}
                 icon={<AlertCircle size={16} className="text-orange-500" />}
               />
               <InsightCard
-                label="En Yüksek No-Show"
+                label={t('organization:insights.highestNoShow')}
                 clinic={ins.highestNoShowClinic}
                 value={ins.highestNoShowClinic ? fmtPct(ins.highestNoShowClinic.value) : '—'}
                 icon={<Clock size={16} className="text-red-500" />}
               />
               <InsightCard
-                label="En Çok Yeni Hasta"
+                label={t('organization:insights.topNewPatients')}
                 clinic={ins.topNewPatientClinic}
                 value={ins.topNewPatientClinic ? fmt(ins.topNewPatientClinic.value) : '—'}
                 icon={<Users size={16} className="text-pink-500" />}
@@ -368,32 +363,32 @@ const OrganizationDashboard: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
               <Building2 size={18} className="text-primary-500" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Şube Karşılaştırması</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('organization:table.title')}</h2>
               {loading && <Activity size={14} className="animate-spin text-gray-400 ml-auto" />}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
-                    <th className="px-4 py-3 text-left">Şube</th>
-                    <th className="px-4 py-3 text-left">Durum</th>
-                    <th className="px-4 py-3 text-right"><SortBtn k="appointments" label="Randevu" /></th>
-                    <th className="px-4 py-3 text-right"><SortBtn k="completedAppointments" label="Tamam" /></th>
-                    <th className="px-4 py-3 text-right text-gray-400">İptal</th>
-                    <th className="px-4 py-3 text-right"><SortBtn k="noShowRate" label="No-Show" /></th>
-                    <th className="px-4 py-3 text-right"><SortBtn k="newPatients" label="Yeni Hasta" /></th>
-                    <th className="px-4 py-3 text-right"><SortBtn k="revenue" label="Gelir" /></th>
-                    <th className="px-4 py-3 text-right"><SortBtn k="outstandingBalance" label="Bakiye" /></th>
-                    <th className="px-4 py-3 text-right text-gray-400">Tedavi</th>
-                    <th className="px-4 py-3 text-right text-gray-400">Personel</th>
-                    <th className="px-4 py-3 text-center">İşlemler</th>
+                    <th className="px-4 py-3 text-left">{t('organization:table.branch')}</th>
+                    <th className="px-4 py-3 text-left">{t('organization:table.status')}</th>
+                    <th className="px-4 py-3 text-right"><SortBtn k="appointments" label={t('organization:table.appointments')} /></th>
+                    <th className="px-4 py-3 text-right"><SortBtn k="completedAppointments" label={t('organization:table.completed')} /></th>
+                    <th className="px-4 py-3 text-right text-gray-400">{t('organization:table.cancelled')}</th>
+                    <th className="px-4 py-3 text-right"><SortBtn k="noShowRate" label={t('organization:table.noShow')} /></th>
+                    <th className="px-4 py-3 text-right"><SortBtn k="newPatients" label={t('organization:table.newPatients')} /></th>
+                    <th className="px-4 py-3 text-right"><SortBtn k="revenue" label={t('organization:table.revenue')} /></th>
+                    <th className="px-4 py-3 text-right"><SortBtn k="outstandingBalance" label={t('organization:table.balance')} /></th>
+                    <th className="px-4 py-3 text-right text-gray-400">{t('organization:table.treatments')}</th>
+                    <th className="px-4 py-3 text-right text-gray-400">{t('organization:table.staff')}</th>
+                    <th className="px-4 py-3 text-center">{t('organization:table.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedClinics.length === 0 && (
                     <tr>
                       <td colSpan={12} className="px-4 py-10 text-center text-gray-400 text-sm">
-                        Veri bulunamadı
+                        {t('organization:table.empty')}
                       </td>
                     </tr>
                   )}
@@ -417,7 +412,7 @@ const OrganizationDashboard: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGE[c.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {STATUS_LABEL[c.status] ?? c.status}
+                          {t(`organization:status.${c.status}`, { defaultValue: c.status })}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
@@ -465,7 +460,7 @@ const OrganizationDashboard: React.FC = () => {
                           {/* Şube Panosu */}
                           <button
                             onClick={() => goTo(c.clinicId, '/')}
-                            title="Şube Panosu"
+                            title={t('organization:table.branchDashboard')}
                             className="p-1.5 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 text-primary-600 transition-colors"
                           >
                             <ArrowUpRight size={14} />
@@ -473,7 +468,7 @@ const OrganizationDashboard: React.FC = () => {
                           {/* Randevular */}
                           <button
                             onClick={() => goTo(c.clinicId, '/appointments')}
-                            title="Randevular"
+                            title={t('organization:table.branchAppointments')}
                             className="p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-500 transition-colors"
                           >
                             <Calendar size={14} />
@@ -481,7 +476,7 @@ const OrganizationDashboard: React.FC = () => {
                           {/* Hastalar */}
                           <button
                             onClick={() => goTo(c.clinicId, '/patients')}
-                            title="Hastalar"
+                            title={t('organization:table.branchPatients')}
                             className="p-1.5 rounded-lg hover:bg-pink-100 dark:hover:bg-pink-900/30 text-pink-500 transition-colors"
                           >
                             <Users size={14} />
@@ -489,7 +484,7 @@ const OrganizationDashboard: React.FC = () => {
                           {/* Ödemeler */}
                           <button
                             onClick={() => goTo(c.clinicId, '/payments')}
-                            title="Ödemeler"
+                            title={t('organization:table.branchPayments')}
                             className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 text-green-600 transition-colors"
                           >
                             <CreditCard size={14} />

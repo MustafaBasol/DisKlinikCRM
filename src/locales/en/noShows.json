@@ -1,0 +1,66 @@
+{
+  "title": "No-show Tracking",
+  "subtitle": "Track patients who missed appointments and help recover them into new bookings.",
+  "ranges": {
+    "today": "Today",
+    "this_week": "This Week",
+    "this_month": "This Month",
+    "last_30_days": "Last 30 Days"
+  },
+  "filters": {
+    "allStatuses": "All Statuses"
+  },
+  "recovery": {
+    "unresolved": "Pending",
+    "contacted": "Contacted",
+    "recovered": "Recovered"
+  },
+  "summary": {
+    "noShowCount": "No-show Count",
+    "noShowRate": "No-show Rate",
+    "estimatedLostRevenue": "Estimated Lost Revenue",
+    "byServicePrices": "Based on service prices",
+    "contactedCount": "Contacted",
+    "recoveredCount": "Recovered Appointments",
+    "recoveryRate": "Recovery Rate"
+  },
+  "sections": {
+    "byClinic": "By Branch",
+    "byDoctor": "By Doctor",
+    "recentNoShows": "Recent No-show Appointments"
+  },
+  "empty": {
+    "noNoShows": "No no-show appointments found in the selected period.",
+    "noNoShowsDescription": "All patients attended their appointments in this period."
+  },
+  "table": {
+    "patient": "Patient",
+    "branch": "Branch",
+    "doctor": "Doctor",
+    "dateTime": "Date/Time",
+    "service": "Service",
+    "estimatedValue": "Estimated Value",
+    "status": "Status",
+    "lastContact": "Last Contact"
+  },
+  "actions": {
+    "sendWhatsApp": "Send WhatsApp",
+    "createTask": "Create Task",
+    "markContacted": "Mark Contacted",
+    "markRecovered": "Mark as Recovered",
+    "reschedule": "Create New Appointment",
+    "rescheduleDisabled": "Patient or clinic information is missing."
+  },
+  "success": {
+    "markedContacted": "Marked as contacted.",
+    "markedRecovered": "Appointment marked as recovered.",
+    "whatsappSent": "WhatsApp message sent.",
+    "taskCreated": "Follow-up task created."
+  },
+  "errors": {
+    "loadFailed": "An error occurred while loading data.",
+    "actionFailed": "Action failed.",
+    "messageFailed": "Message could not be sent.",
+    "taskFailed": "Task could not be created."
+  }
+}

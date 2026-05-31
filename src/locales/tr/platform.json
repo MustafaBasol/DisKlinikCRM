@@ -1,0 +1,184 @@
+{
+  "statuses": {
+    "active": "Aktif",
+    "trial": "Deneme",
+    "suspended": "Askıya Alındı",
+    "cancelled": "İptal",
+    "inactive": "Pasif",
+    "healthy": "Sistem Sağlıklı",
+    "degraded": "Sistem Sorunlu",
+    "ok": "OK",
+    "error": "HATA"
+  },
+  "actions": {
+    "activate": "Aktifleştir",
+    "suspend": "Askıya Al",
+    "deactivate": "Pasifleştir",
+    "viewAll": "Tümünü gör",
+    "save": "Kaydet",
+    "cancel": "İptal",
+    "refresh": "Yenile"
+  },
+  "filters": {
+    "all": "Tümü",
+    "allStatuses": "Tüm Durumlar",
+    "allRoles": "Tüm Roller"
+  },
+  "pagination": "{{total}} {{item}} - Sayfa {{page}}/{{pages}}",
+  "items": {
+    "clinic": "klinik",
+    "user": "kullanıcı",
+    "organization": "organizasyon"
+  },
+  "counts": {
+    "clinicsUsers": "{{clinics}} klinik - {{users}} kullanıcı",
+    "organizationsClinics": "{{organizations}} organizasyon - {{clinics}} klinik"
+  },
+  "errors": {
+    "dashboardLoadFailed": "Dashboard yüklenemedi",
+    "dataUnavailable": "Veri alınamadı",
+    "clinicsLoadFailed": "Klinikler yüklenemedi",
+    "organizationsLoadFailed": "Organizasyonlar yüklenemedi",
+    "usersLoadFailed": "Kullanıcılar yüklenemedi",
+    "plansLoadFailed": "Planlar yüklenemedi",
+    "systemLoadFailed": "Sistem durumu alınamadı",
+    "loginFailed": "Giriş başarısız",
+    "statusUpdateFailed": "Durum güncellenemedi",
+    "planUpdateFailed": "Plan güncellenemedi",
+    "trialUpdateFailed": "Deneme süresi güncellenemedi",
+    "saveFailed": "Kayıt başarısız"
+  },
+  "login": {
+    "title": "Platform Yönetimi",
+    "subtitle": "Süper admin girişi",
+    "email": "E-posta",
+    "password": "Şifre",
+    "submit": "Giriş Yap",
+    "restricted": "Bu alan yalnızca platform yöneticilerine özeldir."
+  },
+  "layout": {
+    "brandPrimary": "Platform",
+    "brandSecondary": "Yönetimi",
+    "topbarTitle": "Platform Admin",
+    "logout": "Çıkış Yap",
+    "nav": {
+      "dashboard": "Panel",
+      "organizations": "Organizasyonlar",
+      "clinics": "Klinikler",
+      "users": "Kullanıcılar",
+      "plans": "Planlar",
+      "system": "Sistem"
+    }
+  },
+  "dashboard": {
+    "title": "Platform Dashboard",
+    "totalOrganizations": "Toplam Organizasyon",
+    "activeOrganizations": "Aktif Organizasyon",
+    "suspendedOrganizations": "Askıya Alınan",
+    "trialEndingSoon": "Deneme Bitiyor (7g)",
+    "totalClinics": "Toplam Klinik",
+    "totalUsers": "Toplam Kullanıcı",
+    "totalPatients": "Toplam Hasta",
+    "whatsappConnections": "WhatsApp Bağlantı",
+    "recentOrganizations": "Son Organizasyonlar",
+    "emptyOrganizations": "Henüz organizasyon yok"
+  },
+  "clinics": {
+    "title": "Klinikler",
+    "searchPlaceholder": "Ad, slug veya e-posta ara...",
+    "empty": "Klinik bulunamadı",
+    "columns": {
+      "clinic": "Klinik",
+      "organization": "Organizasyon",
+      "plan": "Plan",
+      "status": "Durum",
+      "users": "Kullanıcı",
+      "patients": "Hasta",
+      "created": "Oluşturulma",
+      "actions": "İşlemler"
+    }
+  },
+  "organizations": {
+    "title": "Organizasyonlar",
+    "searchPlaceholder": "Ad veya slug ara...",
+    "empty": "Organizasyon bulunamadı",
+    "columns": {
+      "organization": "Organizasyon",
+      "plan": "Plan",
+      "status": "Durum",
+      "clinics": "Klinik",
+      "users": "Kullanıcı",
+      "patients": "Hasta",
+      "trialEnds": "Deneme Bitiş",
+      "created": "Oluşturulma",
+      "actions": "İşlemler"
+    },
+    "planAction": "Plan",
+    "trialAction": "Deneme",
+    "changePlanTitle": "Plan Değiştir - {{name}}",
+    "extendTrialTitle": "Deneme Uzat - {{name}}",
+    "selectPlan": "Plan seçin..."
+  },
+  "users": {
+    "title": "Kullanıcılar",
+    "searchPlaceholder": "Ad, e-posta ara...",
+    "empty": "Kullanıcı bulunamadı",
+    "pageInfo": "{{total}} kullanıcı - Sayfa {{page}}/{{pages}}",
+    "columns": {
+      "user": "Kullanıcı",
+      "role": "Rol",
+      "organization": "Organizasyon",
+      "defaultClinic": "Varsayılan Klinik",
+      "allClinics": "Tüm Klinikler",
+      "status": "Durum",
+      "lastLogin": "Son Giriş",
+      "actions": "İşlemler"
+    },
+    "roles": {
+      "OWNER": "Sahip",
+      "ORG_ADMIN": "Org. Yönetici",
+      "CLINIC_MANAGER": "Klinik Mgr.",
+      "DENTIST": "Diş Hekimi",
+      "RECEPTIONIST": "Resepsiyon",
+      "BILLING": "Muhasebe",
+      "ASSISTANT": "Asistan"
+    }
+  },
+  "plans": {
+    "title": "Planlar",
+    "newPlan": "Yeni Plan",
+    "editPlan": "Plan Düzenle",
+    "empty": "Henüz plan yok",
+    "code": "Kod (benzersiz)",
+    "displayName": "Görünen Ad",
+    "displayNamePlaceholder": "Başlangıç",
+    "maxUsers": "Maks Kullanıcı",
+    "maxPatients": "Maks Hasta",
+    "monthlyPrice": "Aylık Fiyat",
+    "price": "Fiyat",
+    "features": "Özellikler",
+    "featuresList": {
+      "whatsapp": "WhatsApp",
+      "reports": "Raporlar",
+      "compensation": "Prim Sistemi",
+      "inventory": "Stok"
+    }
+  },
+  "system": {
+    "title": "Sistem Durumu",
+    "database": "Veritabanı",
+    "api": "API",
+    "whatsapp": "WhatsApp",
+    "status": "Durum",
+    "failedMessages": "Başarısız Mesaj",
+    "failedMessagesSub": "Toplam failed",
+    "connected": "Bağlı"
+  },
+  "admin": {
+    "title": "Platform Admin",
+    "logout": "Çıkış",
+    "clinics": "Klinikler",
+    "totalAppointments": "Toplam Randevu",
+    "usersPatients": "Kullanıcı / Hasta"
+  }
+}

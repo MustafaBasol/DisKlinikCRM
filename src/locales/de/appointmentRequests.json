@@ -1,0 +1,53 @@
+{
+  "title": "WhatsApp-Terminanfragen",
+  "subtitle": "Prüfen Sie Termin-, Verschiebungs- und Stornierungsanfragen aus der WhatsApp-Leitung.",
+  "empty": "Für diesen Filter wurden keine WhatsApp-Anfragen gefunden.",
+  "summary": {
+    "visible": "Sichtbare Anfragen",
+    "pending": "Ausstehende Anfragen",
+    "source": "Quelle",
+    "converted": "Im Kalender geplant"
+  },
+  "labels": {
+    "status": "Status"
+  },
+  "filters": {
+    "allStatus": "Alle Status",
+    "sourceHint": "Diese Seite zeigt nur Anfragen aus WhatsApp."
+  },
+  "fields": {
+    "service": "Leistung",
+    "practitioner": "Behandler",
+    "preferredTime": "Gewünschte Zeit"
+  },
+  "status": {
+    "pending": "Ausstehend",
+    "approved": "Genehmigt",
+    "rejected": "Abgelehnt",
+    "converted": "Konvertiert",
+    "closed": "Geschlossen"
+  },
+  "badges": {
+    "scheduled": "Im Kalender geplant"
+  },
+  "requestType": {
+    "appointment": "Termin",
+    "reschedule": "Verschieben",
+    "cancel": "Stornieren",
+    "info": "Information"
+  },
+  "actions": {
+    "refresh": "Aktualisieren",
+    "convert": "Konvertieren",
+    "approve": "Genehmigen",
+    "reject": "Ablehnen",
+    "close": "Schließen",
+    "rejectionPrompt": "Geben Sie den Ablehnungsgrund ein"
+  },
+  "errors": {
+    "loadFailed": "WhatsApp-Anfragen konnten nicht geladen werden.",
+    "convertFailed": "Die Anfrage konnte nicht konvertiert werden.",
+    "outsideAvailability": "Die ausgewählte Zeit liegt außerhalb der Verfügbarkeit des Behandlers.",
+    "overlap": "Der Behandler hat zu dieser Zeit bereits einen anderen Termin."
+  }
+}

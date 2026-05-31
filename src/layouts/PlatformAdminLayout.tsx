@@ -13,19 +13,21 @@ import {
   ChevronRight,
   Shield,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-type NavItem = { path: string; icon: React.ReactNode; label: string };
+type NavItem = { path: string; icon: React.ReactNode; labelKey: string };
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/platform', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-  { path: '/platform/organizations', icon: <Building2 size={18} />, label: 'Organizasyonlar' },
-  { path: '/platform/clinics', icon: <Stethoscope size={18} />, label: 'Klinikler' },
-  { path: '/platform/users', icon: <Users size={18} />, label: 'Kullanıcılar' },
-  { path: '/platform/plans', icon: <Package size={18} />, label: 'Planlar' },
-  { path: '/platform/system', icon: <Activity size={18} />, label: 'Sistem' },
+  { path: '/platform', icon: <LayoutDashboard size={18} />, labelKey: 'dashboard' },
+  { path: '/platform/organizations', icon: <Building2 size={18} />, labelKey: 'organizations' },
+  { path: '/platform/clinics', icon: <Stethoscope size={18} />, labelKey: 'clinics' },
+  { path: '/platform/users', icon: <Users size={18} />, labelKey: 'users' },
+  { path: '/platform/plans', icon: <Package size={18} />, labelKey: 'plans' },
+  { path: '/platform/system', icon: <Activity size={18} />, labelKey: 'system' },
 ];
 
 const PlatformAdminLayout: React.FC = () => {
+  const { t } = useTranslation('platform');
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -58,8 +60,8 @@ const PlatformAdminLayout: React.FC = () => {
             <div className="flex items-center gap-2">
               <Shield size={20} className="text-blue-400" />
               <span className="font-semibold text-sm leading-tight">
-                Platform<br />
-                <span className="text-blue-400">Yönetimi</span>
+                {t('layout.brandPrimary')}<br />
+                <span className="text-blue-400">{t('layout.brandSecondary')}</span>
               </span>
             </div>
           )}
@@ -84,7 +86,7 @@ const PlatformAdminLayout: React.FC = () => {
               }`}
             >
               <span className="shrink-0">{item.icon}</span>
-              {sidebarOpen && <span>{item.label}</span>}
+              {sidebarOpen && <span>{t(`layout.nav.${item.labelKey}`)}</span>}
               {sidebarOpen && isActive(item.path) && (
                 <ChevronRight size={14} className="ml-auto" />
               )}
@@ -102,7 +104,7 @@ const PlatformAdminLayout: React.FC = () => {
             className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors w-full"
           >
             <LogOut size={16} />
-            {sidebarOpen && <span>Çıkış Yap</span>}
+            {sidebarOpen && <span>{t('layout.logout')}</span>}
           </button>
         </div>
       </aside>
@@ -114,7 +116,7 @@ const PlatformAdminLayout: React.FC = () => {
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-blue-500" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Platform Admin
+              {t('layout.topbarTitle')}
             </span>
           </div>
           {admin && (

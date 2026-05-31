@@ -2,6 +2,7 @@
   "title": "Hastalar",
   "subtitle": "Aile Diş hasta kayıtlarını, iletişim bilgilerini ve randevu geçmişini yönetin.",
   "addPatient": "Hasta Ekle",
+  "importWithExcel": "Excel ile İçe Aktar",
   "editPatient": "Hastayı Düzenle",
   "searchPlaceholder": "İsim, e-posta veya telefon ile ara...",
   "includeArchived": "Arşivlenmişleri Dahil Et",
@@ -9,6 +10,7 @@
   "list": {
     "name": "Hasta Adı",
     "contact": "İletişim Bilgisi",
+    "branch": "Şube",
     "status": "Durum",
     "createdAt": "Kayıt Tarihi"
   },
@@ -19,6 +21,54 @@
     "nextAppointment": "Sıradaki Randevu",
     "history": "Randevu Geçmişi",
     "activityTimeline": "İşlem Geçmişi",
+    "filesTab": "Dosyalar",
+    "treatmentProcedureLinkHint": "Tedavi planı prosedürleri için tıkla -> Vaka detayı",
+    "createTreatmentCaseHint": "Tedavi planı eklemek için önce yeni vaka oluşturun.",
+    "addProcedureInstructionTitle": "Tedavi planı prosedürü eklemek için:",
+    "addProcedureInstructionBody": "Yukarıdaki vakalardan birine tıklayın, ardından vaka detay sayfasındaki Tedavi Planı Prosedürleri bölümündeki + butonunu kullanın.",
+    "files": {
+      "addFile": "Dosya Ekle",
+      "empty": "Henüz dosya eklenmemiş",
+      "uploadFailed": "Dosya yüklenemedi",
+      "download": "İndir",
+      "deleteConfirm": "Bu dosyayı silmek istediğinizden emin misiniz?"
+    },
+    "importModal": {
+      "title": "Excel ile Hasta İçe Aktar",
+      "downloadTemplate": "Şablonu İndir (.xlsx)",
+      "selectFile": "Excel Dosyası Seç",
+      "dropzonePlaceholder": "Tıklayarak dosya seçin veya sürükleyin",
+      "fileRules": "Yalnızca .xlsx, maks. 5 MB, maks. 500 satır",
+      "previewButton": "Önizle",
+      "importButton": "{{count}} Hastayı İçe Aktar",
+      "rowLabel": "Satır {{row}}",
+      "howItWorks": {
+        "title": "Nasıl çalışır?",
+        "downloadTemplate": "Aşağıdaki şablonu indirin.",
+        "fillData": "Hasta verilerini doldurun (zorunlu: Ad, Soyad, Telefon).",
+        "previewFile": "Dosyayı yükleyip önizleyin.",
+        "importValidRows": "Geçerli satırları içe aktarın."
+      },
+      "preview": {
+        "totalRows": "Toplam Satır",
+        "validRows": "Geçerli",
+        "invalidRows": "Hatalı",
+        "invalidRowsTitle": "Hatalı Satırlar:",
+        "noValidRows": "İçe aktarılacak geçerli satır yok."
+      },
+      "result": {
+        "success": "{{count}} hasta başarıyla içe aktarıldı.",
+        "skipped": "{{count}} satır atlandı.",
+        "skippedRowsTitle": "Atlanan Satırlar:"
+      },
+      "errors": {
+        "fileType": "Yalnızca .xlsx dosyaları kabul edilir.",
+        "fileSize": "Dosya 5 MB sınırını aşıyor.",
+        "templateDownload": "Şablon indirilemedi.",
+        "previewFailed": "Önizleme başarısız.",
+        "importFailed": "İçe aktarma başarısız."
+      }
+    },
     "whatsappTab": "WhatsApp",
     "whatsappIncoming": "WhatsApp Gelen",
     "whatsappOutgoing": "WhatsApp Giden",
@@ -28,6 +78,13 @@
     "whatsappFilterOutgoing": "Giden",
     "whatsappNoMessages": "Bu filtre için WhatsApp mesajı bulunamadı.",
     "systemActor": "Sistem",
+    "archiveFailed": "Hasta arşivlenemedi.",
+    "appointmentWith": "{{practitioner}} ile",
+    "activityByUser": "{{user}} tarafından • {{date}}",
+    "whatsappMessagesCount": "{{count}} mesaj kaydı",
+    "whatsappSessionTitle": "WhatsApp görüşmesi",
+    "whatsappSessionSummary": "WhatsApp: {{count}} mesaj ({{incoming}} gelen • {{outgoing}} giden)",
+    "whatsappSessionCounts": "{{incoming}} gelen • {{outgoing}} giden ({{count}} mesaj)",
     "overview": {
       "clinicalAlerts": "Klinik Uyarılar",
       "clinicalAlertsSubtitle": "Önemli sağlık bilgileri",
@@ -70,6 +127,47 @@
     "source": "Kaynak",
     "communicationConsent": "Hasta iletişim izni veriyor",
     "marketingConsent": "Hasta pazarlama mesajları izni veriyor"
+  },
+  "dentalChart": {
+    "title": "Diş Haritası",
+    "treatmentPlan": "Tedavi Planı",
+    "clickHint": "Dişe tıklayarak not ekle",
+    "upperRight": "Üst Sağ",
+    "lowerRight": "Alt Sağ",
+    "recordedTeeth": "Kayıtlı Dişler",
+    "toothWithNumber": "Diş {{number}}",
+    "procedureCount": "{{count}} prosedür",
+    "treatmentCaseFallback": "Tedavi Vakası",
+    "noProcedures": "Bu hasta için henüz tedavi prosedürü eklenmemiş.",
+    "addProcedureHelp": "Prosedür eklemek için önce Tedavi Vakaları sekmesine gidin, bir vaka seçin ve vaka detay sayfasındaki Tedavi Planı Prosedürleri bölümündeki + butonuna tıklayın.",
+    "goToTreatments": "Tedavi Vakaları Sekmesine Git",
+    "addProcedureTitle": "Prosedür eklemek için vaka detayına git",
+    "addProcedure": "Prosedür Ekle",
+    "estimated": "Tahmini",
+    "statusLabel": "Durum",
+    "noteOptional": "Not (isteğe bağlı)",
+    "notePlaceholder": "Planlanan hizmet, klinik not...",
+    "deleteRecord": "Kaydı sil",
+    "status": {
+      "planned": "Planlandı",
+      "treated": "Tedavi Edildi",
+      "issue": "Sorun Var",
+      "missing": "Eksik",
+      "crown": "Kuron",
+      "implant": "İmplant"
+    },
+    "procedureStatus": {
+      "planned": "Planlandı",
+      "in_progress": "Devam Ediyor",
+      "completed": "Tamamlandı",
+      "cancelled": "İptal"
+    },
+    "toothShape": {
+      "molar": "Büyük Azı",
+      "premolar": "Küçük Azı",
+      "canine": "Köpek Dişi",
+      "incisor": "Kesici"
+    }
   },
   "status": {
     "all": "Tüm Durumlar",

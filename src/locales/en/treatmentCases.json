@@ -1,7 +1,7 @@
 {
   "title": "Treatment & Services",
   "subtitle": "Track service opportunities and patient treatment pipeline.",
-  "service": "Clinic Service",
+  "service": "Service",
   "newCase": "New Treatment Case",
   "editCase": "Edit Treatment Case",
   "detailTitle": "Treatment Case Details",
@@ -41,6 +41,7 @@
     "updated": "Last Updated"
   },
   "form": {
+    "service": "Service",
     "title": "Case Title",
     "description": "Description",
     "patient": "Patient",
@@ -50,8 +51,8 @@
     "acceptedAmount": "Accepted Amount",
     "currency": "Currency",
     "expectedStartDate": "Expected Start Date",
-    "lostReason": "Reason for Loss"
-    ,
+    "lostReason": "Reason for Loss",
+    "lostReasonRequired": "Reason for loss is required.",
     "noSpecificService": "No specific service"
   },
   "actions": {
@@ -60,5 +61,77 @@
     "markCompleted": "Mark as Completed",
     "markLost": "Mark as Lost",
     "viewDetails": "View Details"
+  },
+  "detail": {
+    "backToPipeline": "Back to Pipeline",
+    "closedOn": "Closed on {{date}}",
+    "financialSummary": "Financial Summary",
+    "stakeholders": "Stakeholders",
+    "noDescription": "No description provided.",
+    "errors": {
+      "loadFailed": "Failed to fetch treatment case details.",
+      "notFound": "Treatment case not found."
+    }
+  },
+  "progress": {
+    "complete": "{{percent}}% complete",
+    "clickToChange": "Click a stage to change it."
+  },
+  "appointments": {
+    "unlink": "Remove link",
+    "confirmUnlink": "Remove this appointment link from the treatment case?",
+    "linkFailed": "Failed to link appointment.",
+    "unlinkFailed": "Failed to remove appointment link.",
+    "empty": "No appointments are linked to this treatment.",
+    "createNew": "Create appointment",
+    "linkExisting": "Link existing appointment",
+    "linkModalDescription": "Select one of {{patient}}'s appointments to link it to this treatment case.",
+    "noLinkable": "No appointments available to link."
+  },
+  "procedures": {
+    "title": "Treatment Plan Procedures",
+    "add": "Add procedure",
+    "edit": "Edit procedure",
+    "empty": "No procedures added yet.",
+    "confirmDelete": "Delete this procedure?",
+    "optional": "optional",
+    "selectService": "Select service",
+    "fields": {
+      "name": "Procedure name",
+      "service": "Service",
+      "toothFdi": "Tooth FDI",
+      "estimatedCost": "Estimated cost",
+      "scheduledDate": "Scheduled date",
+      "status": "Status",
+      "notes": "Notes"
+    },
+    "placeholders": {
+      "name": "e.g. Implant preparation",
+      "toothFdi": "FDI",
+      "notes": "Add procedure notes..."
+    },
+    "errors": {
+      "saveFailed": "Failed to save procedure.",
+      "deleteFailed": "Failed to delete procedure."
+    }
+  },
+  "materials": {
+    "title": "Treatment Materials",
+    "item": "Item",
+    "stock": "Stock",
+    "quantity": "Quantity",
+    "noteOptional": "Note",
+    "notePlaceholder": "Optional note",
+    "empty": "No materials added yet.",
+    "confirmDelete": "Delete this material?",
+    "errors": {
+      "addFailed": "Failed to add material.",
+      "deleteFailed": "Failed to delete material."
+    }
+  },
+  "activity": {
+    "title": "Activity History",
+    "byUser": "by {{user}} • {{date}}",
+    "empty": "No activity recorded."
   }
 }

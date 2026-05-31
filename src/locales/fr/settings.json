@@ -1,0 +1,123 @@
+{
+  "generalPreferences": "Préférences générales",
+  "preferences": "Préférences",
+  "language": "Langue",
+  "languageHelp": "Change instantanément la langue de l'interface.",
+  "accountInfo": "Informations du compte",
+  "accountFields": {
+    "name": "Nom",
+    "email": "E-mail",
+    "role": "Rôle",
+    "clinic": "Clinique"
+  },
+  "booking": {
+    "title": "Lien de réservation en ligne",
+    "description": "Partagez ce lien avec les patients. Il ne nécessite pas de connexion et leur permet de créer une demande de rendez-vous.",
+    "copy": "Copier",
+    "copied": "Copié",
+    "open": "Ouvrir"
+  },
+  "services": {
+    "title": "Services de la clinique",
+    "subtitle": "Gérez les services et traitements proposés par votre clinique.",
+    "newService": "Nouveau service",
+    "empty": "Aucun service configuré pour le moment."
+  },
+  "integrations": {
+    "title": "Intégrations",
+    "subtitle": "Gérez les paramètres de connexion des canaux de communication de la clinique.",
+    "whatsappTitle": "Connexions WhatsApp",
+    "whatsappDescription": "Gérez les connexions de compte WhatsApp, leur état et la configuration de messagerie.",
+    "instagramTitle": "Connexions Instagram",
+    "instagramDescription": "Gérez les connexions de compte Instagram, leur état et la configuration de la boîte de réception.",
+    "open": "Ouvrir"
+  },
+  "users": {
+    "title": "Utilisateurs et praticiens",
+    "subtitle": "Gérez les comptes des praticiens et de l'équipe de la clinique.",
+    "newUser": "Nouvel utilisateur",
+    "editUser": "Modifier l'utilisateur",
+    "empty": "Aucun utilisateur configuré pour le moment.",
+    "passwordHelp": "Laissez vide pour conserver le mot de passe actuel",
+    "importStaffWithExcel": "Ajouter du personnel avec Excel",
+    "passwordRequirementsTitle": "Le mot de passe doit inclure :",
+    "passwordRules": {
+      "minLength": "Au moins 8 caractères",
+      "uppercase": "Une lettre majuscule",
+      "lowercase": "Une lettre minuscule",
+      "number": "Un chiffre",
+      "special": "Un caractère spécial (!@#$%^&* etc.)"
+    },
+    "fields": {
+      "name": "Nom",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "role": "Rôle",
+      "password": "Mot de passe",
+      "status": "Statut",
+      "isActive": "Utilisateur actif"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif"
+    },
+    "errors": {
+      "loadFailed": "Impossible de charger les utilisateurs",
+      "saveFailed": "Impossible d'enregistrer l'utilisateur"
+    }
+  },
+  "clinicAssignments": {
+    "title": "Affectations de clinique",
+    "loading": "Chargement...",
+    "empty": "Aucune clinique active trouvée dans cette organisation.",
+    "defaultClinic": "Clinique par défaut",
+    "selectDefault": "— Sélectionner —",
+    "roles": {
+      "CLINIC_MANAGER": "Responsable de clinique",
+      "DENTIST": "Dentiste",
+      "RECEPTIONIST": "Réceptionniste",
+      "BILLING": "Facturation",
+      "ASSISTANT": "Assistant"
+    },
+    "errors": {
+      "loadFailed": "Les données de clinique n'ont pas pu être chargées.",
+      "saveFailed": "Enregistrement impossible."
+    }
+  },
+  "availability": {
+    "title": "Disponibilité du praticien",
+    "subtitle": "Gérez les horaires hebdomadaires où les rendez-vous peuvent être pris.",
+    "weeklySchedule": "Planning hebdomadaire de disponibilité",
+    "available": "Disponible",
+    "unavailable": "Indisponible",
+    "fields": {
+      "practitioner": "Praticien",
+      "isAvailable": "Disponible"
+    },
+    "errors": {
+      "loadFailed": "Impossible de charger les disponibilités",
+      "saveFailed": "Impossible d'enregistrer la disponibilité"
+    },
+    "offDays": {
+      "title": "Jours d'absence et jours fériés",
+      "subtitle": "Indiquez les dates où le praticien n'accepte pas de rendez-vous.",
+      "addDate": "Ajouter",
+      "noOffDays": "Aucun jour d'absence enregistré.",
+      "reason": "Motif (facultatif)",
+      "reasonPlaceholder": "Congé, maladie, congrès...",
+      "confirmDelete": "Voulez-vous vraiment supprimer cette date ?",
+      "modeSingle": "Un jour",
+      "modeRange": "Plage de dates",
+      "startDate": "Début",
+      "endDate": "Fin",
+      "rangeAdded": "{{count}} jours ajoutés",
+      "errors": {
+        "loadFailed": "Impossible de charger les jours d'absence",
+        "saveFailed": "Impossible d'ajouter le jour d'absence",
+        "invalidRange": "La date de fin ne peut pas être antérieure à la date de début"
+      }
+    }
+  }
+}

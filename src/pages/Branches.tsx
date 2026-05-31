@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Building2,
   Plus,
@@ -62,24 +63,24 @@ const EMPTY_FORM: BranchFormData = {
   status: 'active',
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: JSX.Element }> = {
+const STATUS_CONFIG: Record<string, { labelKey: string; color: string; icon: JSX.Element }> = {
   active: {
-    label: 'Aktif',
+    labelKey: 'branches:statuses.active',
     color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     icon: <CheckCircle size={14} />,
   },
   trial: {
-    label: 'Deneme',
+    labelKey: 'branches:statuses.trial',
     color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
     icon: <CheckCircle size={14} />,
   },
   inactive: {
-    label: 'Pasif',
+    labelKey: 'branches:statuses.inactive',
     color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
     icon: <XCircle size={14} />,
   },
   suspended: {
-    label: 'Askıya Alındı',
+    labelKey: 'branches:statuses.suspended',
     color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     icon: <PauseCircle size={14} />,
   },
@@ -110,6 +111,7 @@ interface BranchModalProps {
 }
 
 function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
+  const { t } = useTranslation(['branches', 'common']);
   const isEdit = Boolean(branch);
   const [form, setForm] = useState<BranchFormData>(
     branch
@@ -167,7 +169,7 @@ function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
       onClose();
     } catch (err: any) {
       const msg =
-        err?.response?.data?.error ?? 'İşlem başarısız. Lütfen tekrar deneyin.';
+        err?.response?.data?.error ?? t('branches:errors.actionFailed');
       setError(msg);
     } finally {
       setLoading(false);
@@ -179,7 +181,7 @@ function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {isEdit ? 'Şube Düzenle' : 'Yeni Şube Ekle'}
+            {isEdit ? t('branches:form.editTitle') : t('branches:form.createTitle')}
           </h2>
           <button
             onClick={onClose}
@@ -199,14 +201,14 @@ function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Şube Adı <span className="text-red-500">*</span>
+                {t('branches:form.fields.name')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={form.name}
                 onChange={e => handleChange('name', e.target.value)}
                 required
-                placeholder="Örn: Merkez Şube"
+                placeholder={t('branches:form.placeholders.name')}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
@@ -215,7 +217,7 @@ function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Slug <span className="text-red-500">*</span>
                 <span className="ml-2 text-xs font-normal text-gray-500">
-                  (URL-friendly, yalnızca küçük harf, rakam ve tire)
+                  {t('branches:form.slugHelp')}
                 </span>
               </label>
               <input
@@ -231,50 +233,50 @@ function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Şehir <span className="text-red-500">*</span>
+                {t('branches:form.fields.city')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={form.city}
                 onChange={e => handleChange('city', e.target.value)}
                 required
-                placeholder="İstanbul"
+                placeholder={t('branches:form.placeholders.city')}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Durum
+                {t('branches:form.fields.status')}
               </label>
               <select
                 value={form.status}
                 onChange={e => handleChange('status', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
-                <option value="active">Aktif</option>
-                <option value="trial">Deneme</option>
-                <option value="inactive">Pasif</option>
-                <option value="suspended">Askıya Alındı</option>
+                <option value="active">{t('branches:statuses.active')}</option>
+                <option value="trial">{t('branches:statuses.trial')}</option>
+                <option value="inactive">{t('branches:statuses.inactive')}</option>
+                <option value="suspended">{t('branches:statuses.suspended')}</option>
               </select>
             </div>
 
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Adres
+                {t('branches:form.fields.address')}
               </label>
               <input
                 type="text"
                 value={form.address}
                 onChange={e => handleChange('address', e.target.value)}
-                placeholder="Cadde, mahalle, ilçe"
+                placeholder={t('branches:form.placeholders.address')}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Telefon
+                {t('branches:form.fields.phone')}
               </label>
               <input
                 type="tel"
@@ -287,7 +289,7 @@ function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                E-posta
+                {t('branches:form.fields.email')}
               </label>
               <input
                 type="email"
@@ -305,14 +307,14 @@ function BranchModal({ branch, onClose, onSaved }: BranchModalProps) {
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              İptal
+              {t('common:cancel')}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Kaydediliyor…' : isEdit ? 'Güncelle' : 'Oluştur'}
+              {loading ? t('common:saving') : isEdit ? t('branches:form.update') : t('branches:form.create')}
             </button>
           </div>
         </form>
@@ -330,6 +332,7 @@ interface StatusModalProps {
 }
 
 function StatusModal({ branch, onClose, onSaved }: StatusModalProps) {
+  const { t } = useTranslation(['branches', 'common']);
   const [status, setStatus] = useState<'active' | 'inactive' | 'suspended'>(
     branch.status === 'trial' ? 'active' : (branch.status as 'active' | 'inactive' | 'suspended')
   );
@@ -345,7 +348,7 @@ function StatusModal({ branch, onClose, onSaved }: StatusModalProps) {
       onSaved();
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Durum güncellenemedi.');
+      setError(err?.response?.data?.error ?? t('branches:errors.statusUpdateFailed'));
     } finally {
       setLoading(false);
     }
@@ -356,7 +359,7 @@ function StatusModal({ branch, onClose, onSaved }: StatusModalProps) {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-            Şube Durumunu Değiştir
+            {t('branches:statusModal.title')}
           </h2>
           <button
             onClick={onClose}
@@ -373,16 +376,16 @@ function StatusModal({ branch, onClose, onSaved }: StatusModalProps) {
           )}
           <p className="text-sm text-gray-600 dark:text-gray-400">
             <span className="font-medium text-gray-900 dark:text-white">{branch.name}</span>{' '}
-            şubesinin durumunu değiştirin.
+            {t('branches:statusModal.description')}
           </p>
           <select
             value={status}
             onChange={e => setStatus(e.target.value as 'active' | 'inactive' | 'suspended')}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
           >
-            <option value="active">Aktif</option>
-            <option value="inactive">Pasif</option>
-            <option value="suspended">Askıya Al</option>
+            <option value="active">{t('branches:statuses.active')}</option>
+            <option value="inactive">{t('branches:statuses.inactive')}</option>
+            <option value="suspended">{t('branches:statuses.suspended')}</option>
           </select>
           <div className="flex justify-end gap-3">
             <button
@@ -390,14 +393,14 @@ function StatusModal({ branch, onClose, onSaved }: StatusModalProps) {
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              İptal
+              {t('common:cancel')}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Kaydediliyor…' : 'Kaydet'}
+              {loading ? t('common:saving') : t('common:save')}
             </button>
           </div>
         </form>
@@ -411,6 +414,7 @@ function StatusModal({ branch, onClose, onSaved }: StatusModalProps) {
 export default function Branches() {
   const { user } = useAuth();
   const { setSelectedClinicId } = useClinic();
+  const { t } = useTranslation(['branches', 'common']);
   const navigate = useNavigate();
 
   const [branches, setBranches] = useState<ClinicBranch[]>([]);
@@ -457,11 +461,11 @@ export default function Branches() {
       );
       setWhatsappStatuses(statusMap);
     } catch {
-      setError('Şubeler yüklenemedi.');
+      setError(t('branches:errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchBranches();
@@ -495,10 +499,10 @@ export default function Branches() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Building2 size={26} className="text-primary-600" />
-            Şubeler
+            {t('branches:title')}
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {user?.organization?.name ?? 'Organizasyon'} bünyesindeki tüm klinik şubeleri
+            {t('branches:subtitle', { organization: user?.organization?.name ?? t('branches:organizationFallback') })}
           </p>
         </div>
         {canManage && (
@@ -507,7 +511,7 @@ export default function Branches() {
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
           >
             <Plus size={16} />
-            Yeni Şube
+            {t('branches:newBranch')}
           </button>
         )}
       </div>
@@ -527,10 +531,10 @@ export default function Branches() {
       ) : branches.length === 0 ? (
         <div className="text-center py-16 text-gray-500 dark:text-gray-400">
           <Building2 size={40} className="mx-auto mb-3 opacity-40" />
-          <p className="font-medium">Henüz şube eklenmemiş</p>
+          <p className="font-medium">{t('branches:empty.title')}</p>
           {canManage && (
             <p className="text-sm mt-1">
-              Yeni bir şube eklemek için yukarıdaki butonu kullanın.
+              {t('branches:empty.description')}
             </p>
           )}
         </div>
@@ -555,7 +559,7 @@ export default function Branches() {
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${sc.color}`}
                       >
                         {sc.icon}
-                        {sc.label}
+                        {t(sc.labelKey)}
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 font-mono">
@@ -584,7 +588,7 @@ export default function Branches() {
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
                         >
                           <LayoutDashboard size={14} />
-                          Dashboard'a Git
+                          {t('branches:actions.goToDashboard')}
                         </button>
                         <button
                           onClick={() => {
@@ -594,7 +598,7 @@ export default function Branches() {
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
                         >
                           <Calendar size={14} />
-                          Randevuları Gör
+                          {t('branches:actions.viewAppointments')}
                         </button>
                         {canManageClinicSchedule(user) && (
                           <button
@@ -605,7 +609,7 @@ export default function Branches() {
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
                           >
                             <Clock size={14} />
-                            Program Yönet
+                            {t('branches:actions.manageSchedule')}
                           </button>
                         )}
                         {canAssignWhatsAppToClinic(user) && (
@@ -617,7 +621,7 @@ export default function Branches() {
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
                           >
                             <MessageCircle size={14} />
-                            WhatsApp Ayarları
+                            {t('branches:actions.whatsappSettings')}
                           </button>
                         )}
                         {canManage && (
@@ -631,7 +635,7 @@ export default function Branches() {
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
                             >
                               <Pencil size={14} />
-                              Düzenle
+                              {t('common:edit')}
                             </button>
                             <button
                               onClick={() => {
@@ -641,7 +645,7 @@ export default function Branches() {
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
                             >
                               <PauseCircle size={14} />
-                              Durum Değiştir
+                              {t('branches:actions.changeStatus')}
                             </button>
                           </>
                         )}
@@ -686,7 +690,11 @@ export default function Branches() {
                             ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
                             : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300';
                         const label =
-                          st === 'connected' ? 'WhatsApp Bağlı' : st === 'none' ? 'WhatsApp Yok' : 'Bağlı Değil';
+                          st === 'connected'
+                            ? t('branches:whatsapp.connected')
+                            : st === 'none'
+                            ? t('branches:whatsapp.none')
+                            : t('branches:whatsapp.disconnected');
                         return (
                           <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${cls}`}>
                             <MessageCircle size={11} />
@@ -699,7 +707,7 @@ export default function Branches() {
                           onClick={() => navigate('/organization/whatsapp')}
                           className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1 ml-2"
                         >
-                          <MessageCircle size={11} /> Ayarlar
+                          <MessageCircle size={11} /> {t('common:settings')}
                         </button>
                       )}
                     </div>
@@ -711,18 +719,18 @@ export default function Branches() {
                   <div className="flex items-center gap-4 px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 rounded-b-xl">
                     <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                       <Users size={13} />
-                      <span>{branch._count.userClinics} personel</span>
+                      <span>{t('branches:stats.staffCount', { count: branch._count.userClinics })}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                       <Calendar size={13} />
-                      <span>{branch._count.appointments} bugünkü randevu</span>
+                      <span>{t('branches:stats.appointmentsToday', { count: branch._count.appointments })}</span>
                     </div>
                     <div className="ml-auto">
                       <button
                         onClick={() => handleOpenDashboard(branch.id)}
                         className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                       >
-                        Git <ChevronRight size={13} />
+                        {t('branches:actions.go')} <ChevronRight size={13} />
                       </button>
                     </div>
                   </div>

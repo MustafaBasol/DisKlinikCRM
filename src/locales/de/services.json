@@ -1,0 +1,34 @@
+{
+  "title": "Klinikleistungen",
+  "fields": {
+    "name": "Leistung",
+    "category": "Kategorie",
+    "description": "Beschreibung",
+    "duration": "Dauer",
+    "durationMinutes": "Dauer (Min.)",
+    "basePrice": "Grundpreis",
+    "noBasePrice": "Kein Preis eingetragen",
+    "currency": "Währung",
+    "status": "Status",
+    "color": "Farbmarkierung"
+  },
+  "status": {
+    "active": "Aktiv",
+    "inactive": "Inaktiv"
+  },
+  "actions": {
+    "edit": "Leistung bearbeiten",
+    "save": "Leistung speichern",
+    "deactivate": "Deaktivieren",
+    "reactivate": "Reaktivieren"
+  },
+  "placeholders": {
+    "name": "z. B. Zahnreinigung",
+    "category": "z. B. Hygiene, Chirurgie",
+    "description": "Kurze interne Beschreibung"
+  },
+  "errors": {
+    "loadFailed": "Leistungen konnten nicht geladen werden",
+    "validationFailed": "Validierung fehlgeschlagen. Bitte prüfen Sie die Eingaben."
+  }
+}

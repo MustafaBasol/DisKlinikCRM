@@ -3,6 +3,7 @@ import {
   Search, Loader2, AlertCircle, ChevronLeft, ChevronRight,
   RefreshCw, CheckCircle2, XCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
 
 interface User {
@@ -29,17 +30,10 @@ interface PagedResponse {
   pages: number;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  OWNER: 'Sahip',
-  ORG_ADMIN: 'Org. Yönetici',
-  CLINIC_MANAGER: 'Klinik Mgr.',
-  DENTIST: 'Diş Hekimi',
-  RECEPTIONIST: 'Resepsiyon',
-  BILLING: 'Muhasebe',
-  ASSISTANT: 'Asistan',
-};
+const ROLE_KEYS = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING', 'ASSISTANT'];
 
 const PlatformUsers: React.FC = () => {
+  const { t, i18n } = useTranslation(['platform']);
   const api = usePlatformApi();
   const [data, setData] = useState<PagedResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +58,7 @@ const PlatformUsers: React.FC = () => {
         },
       })
       .then((res) => setData(res.data))
-      .catch(() => setError('Kullanıcılar yüklenemedi'))
+      .catch(() => setError(t('platform:errors.usersLoadFailed')))
       .finally(() => setLoading(false));
   }, [api, page, search, statusFilter, roleFilter]);
 
@@ -76,7 +70,7 @@ const PlatformUsers: React.FC = () => {
       await api.patch(`/platform/users/${user.id}/status`, { isActive: !user.isActive });
       fetchData();
     } catch {
-      alert('Durum güncellenemedi');
+      alert(t('platform:errors.statusUpdateFailed'));
     } finally {
       setActionId(null);
     }
@@ -85,13 +79,13 @@ const PlatformUsers: React.FC = () => {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Kullanıcılar</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('platform:users.title')}</h1>
         <button
           onClick={fetchData}
           className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
         >
           <RefreshCw size={14} />
-          Yenile
+          {t('platform:actions.refresh')}
         </button>
       </div>
 
@@ -100,7 +94,7 @@ const PlatformUsers: React.FC = () => {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Ad, e-posta ara..."
+            placeholder={t('platform:users.searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
@@ -111,18 +105,18 @@ const PlatformUsers: React.FC = () => {
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none"
         >
-          <option value="">Tüm Durumlar</option>
-          <option value="active">Aktif</option>
-          <option value="inactive">Pasif</option>
+          <option value="">{t('platform:filters.allStatuses')}</option>
+          <option value="active">{t('platform:statuses.active')}</option>
+          <option value="inactive">{t('platform:statuses.inactive')}</option>
         </select>
         <select
           value={roleFilter}
           onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
           className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none"
         >
-          <option value="">Tüm Roller</option>
-          {Object.entries(ROLE_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>{label}</option>
+          <option value="">{t('platform:filters.allRoles')}</option>
+          {ROLE_KEYS.map((val) => (
+            <option key={val} value={val}>{t(`platform:users.roles.${val}`, { defaultValue: val })}</option>
           ))}
         </select>
       </div>
@@ -143,14 +137,14 @@ const PlatformUsers: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
                   <tr>
-                    <th className="px-5 py-3 text-left">Kullanıcı</th>
-                    <th className="px-4 py-3 text-left">Rol</th>
-                    <th className="px-4 py-3 text-left">Organizasyon</th>
-                    <th className="px-4 py-3 text-left">Varsayılan Klinik</th>
-                    <th className="px-4 py-3 text-center">Tüm Klinikler</th>
-                    <th className="px-4 py-3 text-center">Durum</th>
-                    <th className="px-4 py-3 text-left">Son Giriş</th>
-                    <th className="px-5 py-3 text-right">İşlemler</th>
+                    <th className="px-5 py-3 text-left">{t('platform:users.columns.user')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:users.columns.role')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:users.columns.organization')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:users.columns.defaultClinic')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:users.columns.allClinics')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:users.columns.status')}</th>
+                    <th className="px-4 py-3 text-left">{t('platform:users.columns.lastLogin')}</th>
+                    <th className="px-5 py-3 text-right">{t('platform:users.columns.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -164,7 +158,7 @@ const PlatformUsers: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-                          {ROLE_LABELS[user.role] ?? user.role}
+                          {t(`platform:users.roles.${user.role}`, { defaultValue: user.role })}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-400">
@@ -182,11 +176,11 @@ const PlatformUsers: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${user.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
-                          {user.isActive ? 'Aktif' : 'Pasif'}
+                          {user.isActive ? t('platform:statuses.active') : t('platform:statuses.inactive')}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">
-                        {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('tr-TR') : '—'}
+                        {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString(i18n.language || 'tr') : '—'}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <button
@@ -200,14 +194,14 @@ const PlatformUsers: React.FC = () => {
                         >
                           {actionId === user.id ? (
                             <Loader2 size={12} className="animate-spin inline" />
-                          ) : user.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                          ) : user.isActive ? t('platform:actions.deactivate') : t('platform:actions.activate')}
                         </button>
                       </td>
                     </tr>
                   ))}
                   {data?.data.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center text-gray-400 py-12">Kullanıcı bulunamadı</td>
+                      <td colSpan={8} className="text-center text-gray-400 py-12">{t('platform:users.empty')}</td>
                     </tr>
                   )}
                 </tbody>
@@ -216,7 +210,7 @@ const PlatformUsers: React.FC = () => {
 
             {data && data.pages > 1 && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800 text-sm text-gray-500">
-                <span>{data.total} kullanıcı · Sayfa {data.page}/{data.pages}</span>
+                <span>{t('platform:users.pageInfo', { total: data.total, page: data.page, pages: data.pages })}</span>
                 <div className="flex gap-2">
                   <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors">
                     <ChevronLeft size={16} />

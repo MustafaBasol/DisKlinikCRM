@@ -21,11 +21,36 @@
   "actions": {
     "copy": "Metni Kopyala",
     "whatsapp": "WhatsApp'ta Aç",
-    "preview": "Mesajı Önizle"
+    "preview": "Mesajı Önizle",
+    "sendNow": "Şimdi Gönder",
+    "sendUnavailable": "WhatsApp bağlantısı yok veya bağlı değil"
+  },
+  "filters": {
+    "channel": "Kanal",
+    "status": "Durum"
+  },
+  "copiedToClipboard": "Panoya kopyalandı!",
+  "whatsappStatus": {
+    "connected": "WhatsApp bağlı{{phone}}",
+    "metaInactive": "Meta Cloud API bağlantısı henüz aktif değil — mesaj gönderimi devre dışı",
+    "selectClinic": "Mesaj göndermek için önce bir şube seçin",
+    "notConfigured": "WhatsApp bağlantısı yapılandırılmamış — önce bağlantı oluşturun"
+  },
+  "metaCallback": {
+    "missingCode": "Meta yanıtı eksik: authorization code alınamadı.",
+    "processing": "Meta bağlantısı tamamlanıyor...",
+    "success": "Meta hesabınız başarıyla bağlandı.",
+    "closing": "Bu sekme kapanacak...",
+    "failed": "Meta bağlantısı başarısız oldu.",
+    "canClose": "Bu sekmeyi/pencereyi kapatabilirsiniz.",
+    "authorized": "Meta yetkilendirmesi alındı.",
+    "returnInstruction": "WhatsApp Bağlantıları sayfasına geri dönün ve tekrar deneyin.",
+    "connections": "WhatsApp Bağlantıları"
   },
   "prepareModal": {
     "title": "Mesaj Hazırla",
     "selectTemplate": "Şablon Seç",
+    "selectTemplatePrompt": "Önizleme için lütfen bir şablon seçin",
     "customMessage": "Özel Mesaj",
     "preview": "Önizleme",
     "send": "Hazır Olarak Kaydet"

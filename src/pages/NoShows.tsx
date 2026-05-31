@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   UserX,
   RefreshCw,
@@ -79,39 +80,40 @@ interface DashboardData {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function RecoveryBadge({ status }: { status: string }) {
+  const { t } = useTranslation(['noShows']);
   if (status === 'recovered') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-        <CheckCircle2 className="w-3 h-3" /> Geri Kazanıldı
+        <CheckCircle2 className="w-3 h-3" /> {t('noShows:recovery.recovered')}
       </span>
     );
   }
   if (status === 'contacted') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-        <Phone className="w-3 h-3" /> İletişime Geçildi
+        <Phone className="w-3 h-3" /> {t('noShows:recovery.contacted')}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-      <AlertTriangle className="w-3 h-3" /> Bekliyor
+      <AlertTriangle className="w-3 h-3" /> {t('noShows:recovery.unresolved')}
     </span>
   );
 }
 
-function fmtDate(dateStr: string, timeStr?: string) {
+function fmtDate(dateStr: string, locale: string, timeStr?: string) {
   try {
     const d = new Date(dateStr + (timeStr ? `T${timeStr}` : ''));
-    return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return dateStr;
   }
 }
 
-function fmtCurrency(value: number, currency?: string | null) {
-  if (!value) return '—';
-  return new Intl.NumberFormat('tr-TR', {
+function fmtCurrency(value: number, locale: string, currency?: string | null) {
+  if (!value) return '-';
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: currency ?? 'TRY',
     minimumFractionDigits: 0,
@@ -151,6 +153,7 @@ export default function NoShows() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { selectedClinicId } = useClinic();
+  const { t, i18n } = useTranslation(['noShows', 'common']);
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,11 +183,11 @@ export default function NoShows() {
       const { data: resp } = await noShowService.getDashboard(params);
       setData(resp);
     } catch {
-      showToast('Veri yüklenirken hata oluştu.', 'error');
+      showToast(t('noShows:errors.loadFailed'), 'error');
     } finally {
       setLoading(false);
     }
-  }, [range, selectedClinicId, doctorFilter, recoveryFilter]);
+  }, [range, selectedClinicId, doctorFilter, recoveryFilter, t]);
 
   useEffect(() => {
     if (!canViewNoShowDashboard(user)) {
@@ -205,10 +208,10 @@ export default function NoShows() {
     setActionLoading(prev => ({ ...prev, [`contact_${appointmentId}`]: true }));
     try {
       await noShowService.updateRecoveryStatus(appointmentId, { status: 'contacted' });
-      showToast('İletişim kuruldu olarak işaretlendi.');
+      showToast(t('noShows:success.markedContacted'));
       fetchData();
     } catch {
-      showToast('İşlem başarısız.', 'error');
+      showToast(t('noShows:errors.actionFailed'), 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [`contact_${appointmentId}`]: false }));
     }
@@ -218,10 +221,10 @@ export default function NoShows() {
     setActionLoading(prev => ({ ...prev, [`recover_${appointmentId}`]: true }));
     try {
       await noShowService.updateRecoveryStatus(appointmentId, { status: 'recovered' });
-      showToast('Randevu kurtarıldı olarak işaretlendi.');
+      showToast(t('noShows:success.markedRecovered'));
       fetchData();
     } catch {
-      showToast('İşlem başarısız.', 'error');
+      showToast(t('noShows:errors.actionFailed'), 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [`recover_${appointmentId}`]: false }));
     }
@@ -231,10 +234,10 @@ export default function NoShows() {
     setActionLoading(prev => ({ ...prev, [`whatsapp_${appointmentId}`]: true }));
     try {
       await noShowService.sendRecoveryMessage(appointmentId);
-      showToast('WhatsApp mesajı gönderildi.');
+      showToast(t('noShows:success.whatsappSent'));
       fetchData();
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Mesaj gönderilemedi.';
+      const msg = err?.response?.data?.error ?? t('noShows:errors.messageFailed');
       showToast(msg, 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [`whatsapp_${appointmentId}`]: false }));
@@ -245,9 +248,9 @@ export default function NoShows() {
     setActionLoading(prev => ({ ...prev, [`task_${appointmentId}`]: true }));
     try {
       await noShowService.createFollowUpTask(appointmentId);
-      showToast('Takip görevi oluşturuldu.');
+      showToast(t('noShows:success.taskCreated'));
     } catch {
-      showToast('Görev oluşturulamadı.', 'error');
+      showToast(t('noShows:errors.taskFailed'), 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [`task_${appointmentId}`]: false }));
     }
@@ -278,10 +281,10 @@ export default function NoShows() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <UserX className="w-6 h-6 text-red-500" />
-            No-show Takibi
+            {t('noShows:title')}
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Randevuya gelmeyen hastaları takip edin ve yeniden randevuya kazandırın.
+            {t('noShows:subtitle')}
           </p>
         </div>
         <button
@@ -290,7 +293,7 @@ export default function NoShows() {
           className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Yenile
+          {t('common:refresh')}
         </button>
       </div>
 
@@ -301,10 +304,10 @@ export default function NoShows() {
           onChange={e => setRange(e.target.value)}
           className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
         >
-          <option value="today">Bugün</option>
-          <option value="this_week">Bu Hafta</option>
-          <option value="this_month">Bu Ay</option>
-          <option value="last_30_days">Son 30 Gün</option>
+          <option value="today">{t('noShows:ranges.today')}</option>
+          <option value="this_week">{t('noShows:ranges.this_week')}</option>
+          <option value="this_month">{t('noShows:ranges.this_month')}</option>
+          <option value="last_30_days">{t('noShows:ranges.last_30_days')}</option>
         </select>
 
         <select
@@ -312,10 +315,10 @@ export default function NoShows() {
           onChange={e => setRecoveryFilter(e.target.value)}
           className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
         >
-          <option value="">Tüm Durumlar</option>
-          <option value="unresolved">Çözümlenmedi</option>
-          <option value="contacted">İletişim Kuruldu</option>
-          <option value="recovered">Kurtarıldı</option>
+          <option value="">{t('noShows:filters.allStatuses')}</option>
+          <option value="unresolved">{t('noShows:recovery.unresolved')}</option>
+          <option value="contacted">{t('noShows:recovery.contacted')}</option>
+          <option value="recovered">{t('noShows:recovery.recovered')}</option>
         </select>
       </div>
 
@@ -329,38 +332,38 @@ export default function NoShows() {
       ) : summary ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <SummaryCard
-            title="No-show Sayısı"
+            title={t('noShows:summary.noShowCount')}
             value={summary.noShowCount}
             icon={<UserX className="w-5 h-5 text-red-600" />}
             color="bg-red-50 dark:bg-red-900/20"
           />
           <SummaryCard
-            title="No-show Oranı"
+            title={t('noShows:summary.noShowRate')}
             value={`${summary.noShowRate}%`}
             icon={<TrendingDown className="w-5 h-5 text-orange-600" />}
             color="bg-orange-50 dark:bg-orange-900/20"
           />
           <SummaryCard
-            title="Tahmini Gelir Kaybı"
-            value={fmtCurrency(summary.estimatedLostRevenue)}
-            subtitle="Hizmet fiyatlarına göre"
+            title={t('noShows:summary.estimatedLostRevenue')}
+            value={fmtCurrency(summary.estimatedLostRevenue, i18n.language)}
+            subtitle={t('noShows:summary.byServicePrices')}
             icon={<TrendingDown className="w-5 h-5 text-yellow-600" />}
             color="bg-yellow-50 dark:bg-yellow-900/20"
           />
           <SummaryCard
-            title="İletişim Kuruldu"
+            title={t('noShows:summary.contactedCount')}
             value={summary.contactedCount}
             icon={<Phone className="w-5 h-5 text-blue-600" />}
             color="bg-blue-50 dark:bg-blue-900/20"
           />
           <SummaryCard
-            title="Kurtarılan Randevu"
+            title={t('noShows:summary.recoveredCount')}
             value={summary.recoveredCount}
             icon={<CheckCircle2 className="w-5 h-5 text-green-600" />}
             color="bg-green-50 dark:bg-green-900/20"
           />
           <SummaryCard
-            title="Kurtarma Oranı"
+            title={t('noShows:summary.recoveryRate')}
             value={`${summary.recoveryRate}%`}
             icon={<TrendingDown className="w-5 h-5 text-teal-600" />}
             color="bg-teal-50 dark:bg-teal-900/20"
@@ -375,7 +378,7 @@ export default function NoShows() {
           {data.byClinic.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
               <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-gray-500" /> Şubeye Göre
+                <Building2 className="w-4 h-4 text-gray-500" /> {t('noShows:sections.byClinic')}
               </h2>
               <div className="space-y-3">
                 {data.byClinic.map(row => (
@@ -398,7 +401,7 @@ export default function NoShows() {
           {data.byDoctor.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
               <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Stethoscope className="w-4 h-4 text-gray-500" /> Doktora Göre
+                <Stethoscope className="w-4 h-4 text-gray-500" /> {t('noShows:sections.byDoctor')}
               </h2>
               <div className="space-y-3">
                 {data.byDoctor.map(row => (
@@ -423,29 +426,39 @@ export default function NoShows() {
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-500" /> Son No-show Randevular
+            <Calendar className="w-4 h-4 text-gray-500" /> {t('noShows:sections.recentNoShows')}
           </h2>
         </div>
 
         {loading ? (
           <div className="p-8 text-center text-gray-400">
             <RefreshCw className="w-6 h-6 mx-auto animate-spin mb-2" />
-            Yükleniyor...
+            {t('common:loading')}
           </div>
         ) : !data || data.recentNoShows.length === 0 ? (
           <div className="p-12 text-center">
             <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400 font-medium">
-              Seçili dönemde no-show randevu bulunmuyor.
+              {t('noShows:empty.noNoShows')}
             </p>
-            <p className="text-sm text-gray-400 mt-1">Bu dönemde tüm hastalar randevularına katılmış. 🎉</p>
+            <p className="text-sm text-gray-400 mt-1">{t('noShows:empty.noNoShowsDescription')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-700">
-                  {['Hasta', 'Şube', 'Doktor', 'Tarih/Saat', 'Hizmet', 'Tahmini Değer', 'Durum', 'Son Temas', 'İşlemler'].map(h => (
+                  {[
+                    t('noShows:table.patient'),
+                    t('noShows:table.branch'),
+                    t('noShows:table.doctor'),
+                    t('noShows:table.dateTime'),
+                    t('noShows:table.service'),
+                    t('noShows:table.estimatedValue'),
+                    t('noShows:table.status'),
+                    t('noShows:table.lastContact'),
+                    t('common:actions'),
+                  ].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
@@ -466,26 +479,26 @@ export default function NoShows() {
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{row.clinicName}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{row.doctorName}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                      {fmtDate(row.date)} {row.time}
+                      {fmtDate(row.date, i18n.language)} {row.time}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{row.serviceName ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{row.serviceName ?? '-'}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                      {fmtCurrency(row.estimatedValue, row.currency)}
+                      {fmtCurrency(row.estimatedValue, i18n.language, row.currency)}
                     </td>
                     <td className="px-4 py-3">
                       <RecoveryBadge status={row.recoveryStatus} />
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                       {row.lastContactAt
-                        ? new Date(row.lastContactAt).toLocaleDateString('tr-TR')
-                        : '—'}
+                        ? new Date(row.lastContactAt).toLocaleDateString(i18n.language)
+                        : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 flex-wrap">
                         {/* WhatsApp */}
                         {canSendMsg && row.recoveryStatus !== 'recovered' && (
                           <button
-                            title="WhatsApp Gönder"
+                            title={t('noShows:actions.sendWhatsApp')}
                             disabled={!!actionLoading[`whatsapp_${row.appointmentId}`]}
                             onClick={() => handleSendWhatsApp(row.appointmentId)}
                             className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
@@ -499,7 +512,7 @@ export default function NoShows() {
                         {/* Create Task */}
                         {canCreateTask && (
                           <button
-                            title="Görev Oluştur"
+                            title={t('noShows:actions.createTask')}
                             disabled={!!actionLoading[`task_${row.appointmentId}`]}
                             onClick={() => handleCreateTask(row.appointmentId)}
                             className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
@@ -513,7 +526,7 @@ export default function NoShows() {
                         {/* Mark Contacted */}
                         {canManage && row.recoveryStatus === 'unresolved' && (
                           <button
-                            title="İletişim Kuruldu"
+                            title={t('noShows:actions.markContacted')}
                             disabled={!!actionLoading[`contact_${row.appointmentId}`]}
                             onClick={() => handleMarkContacted(row.appointmentId)}
                             className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
@@ -527,7 +540,7 @@ export default function NoShows() {
                         {/* Mark Recovered */}
                         {canManage && row.recoveryStatus !== 'recovered' && (
                           <button
-                            title="Kurtarıldı Olarak İşaretle"
+                            title={t('noShows:actions.markRecovered')}
                             disabled={!!actionLoading[`recover_${row.appointmentId}`]}
                             onClick={() => handleMarkRecovered(row.appointmentId)}
                             className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
@@ -554,7 +567,7 @@ export default function NoShows() {
                           };
                           return (
                             <button
-                              title={canReschedule ? 'Yeniden Randevu Oluştur' : 'Hasta veya klinik bilgisi eksik.'}
+                              title={canReschedule ? t('noShows:actions.reschedule') : t('noShows:actions.rescheduleDisabled')}
                               disabled={!canReschedule}
                               onClick={() => canReschedule && navigate(buildRescheduleUrl())}
                               className={`p-1.5 rounded-lg transition-colors ${

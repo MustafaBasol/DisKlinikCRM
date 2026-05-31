@@ -3,15 +3,45 @@
   "subtitle": "Voici ce qui se passe aujourd'hui.",
   "todayAppointments": "Rendez-vous du jour",
   "newPatients": "Nouveaux patients",
-  "pendingTasks": "Tâches en attente",
-  "monthlyRevenue": "Revenu mensuel",
+  "monthlyRevenue": "Revenu du mois",
   "pendingCollections": "Collectes en attente",
-  "quickTasks": "Tâches rapides",
+  "todayAgenda": "Agenda du jour",
   "activityFeed": "Flux d'activité",
+  "viewFullLogs": "Voir tout le journal d'activité",
+  "noAgendaToday": "Aucun rendez-vous prévu aujourd'hui.",
+  "noShowsMonth": "Absences ce mois-ci",
+  "openTreatments": "Dossiers de traitement ouverts",
+  "preparedMessages": "Messages préparés (semaine)",
+  "doctor": {
+    "greeting": "Bonjour, Dr {{name}}",
+    "weekAppointments": "Cette semaine",
+    "pendingTasks": "Tâches en attente",
+    "overdueTasksAlert": "Vous avez {{count}} tâches en retard. Consultez-les maintenant.",
+    "pendingEarnings": "Revenus acquis (en attente + approuvés)",
+    "todaySchedule": "Planning du jour",
+    "noActivity": "Aucune activité",
+    "upcomingSevenDays": "7 prochains jours",
+    "appointmentCount": "{{count}} rendez-vous",
+    "noUpcomingAppointments": "Aucun rendez-vous dans les 7 prochains jours",
+    "treatmentPipeline": "Pipeline de traitement",
+    "recentPatients": "Patients récents",
+    "noRecentPatients": "Aucun patient enregistré pour le moment"
+  },
+  "charts": {
+    "appointmentTrend": "7 derniers jours - tendance des rendez-vous",
+    "serviceDistribution": "Ce mois-ci - répartition des services",
+    "revenueTrend": "6 derniers mois - tendance du revenu",
+    "revenue": "Revenu"
+  },
   "stats": {
-    "trendUp": "+{{count}} depuis hier",
-    "trendDown": "-{{count}} depuis hier",
+    "weekTotal": "{{count}} rendez-vous cette semaine",
     "monthTrend": "{{count}}% ce mois-ci",
+    "revenueGoal": "Basé sur les devis acceptés",
     "actionRequired": "Action requise"
+  },
+  "alerts": {
+    "overdueTasks": "Suivis en retard",
+    "noShowFollowUp": "Absences à contacter",
+    "pendingCollections": "Soldes impayés"
   }
 }

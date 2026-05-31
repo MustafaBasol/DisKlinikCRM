@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Calendar, CheckSquare, CalendarPlus, AlertTriangle, X, CheckCheck, Circle, CheckCircle2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 interface NotificationItem {
@@ -21,6 +22,7 @@ const TYPE_CONFIG = {
 };
 
 const NotificationBell: React.FC = () => {
+  const { t } = useTranslation('common');
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -88,7 +90,7 @@ const NotificationBell: React.FC = () => {
       <button
         onClick={() => setOpen((o) => !o)}
         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 dark:text-gray-400 relative"
-        aria-label="Bildirimler"
+        aria-label={t('notifications.title')}
       >
         <Bell size={20} />
         {unreadCount > 0 && (
@@ -103,7 +105,7 @@ const NotificationBell: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              Bildirimler
+              {t('notifications.title')}
               {unreadCount > 0 && (
                 <span className="ml-2 text-[10px] font-bold text-white bg-red-500 rounded-full px-1.5 py-0.5">{unreadCount}</span>
               )}
@@ -113,7 +115,7 @@ const NotificationBell: React.FC = () => {
                 <button
                   onClick={handleMarkAllRead}
                   disabled={markingAll}
-                  title="Tümünü okundu işaretle"
+                  title={t('notifications.markAllRead')}
                   className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-green-600 transition-colors"
                 >
                   <CheckCheck size={15} />
@@ -130,7 +132,7 @@ const NotificationBell: React.FC = () => {
             {items.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-gray-400 dark:text-gray-500">
                 <Bell size={28} className="mb-2 opacity-30" />
-                <p className="text-sm">Bildirim yok</p>
+                <p className="text-sm">{t('notifications.empty')}</p>
               </div>
             ) : (
               items.map((item) => {
@@ -154,7 +156,7 @@ const NotificationBell: React.FC = () => {
                     </div>
                     <button
                       onClick={(e) => handleToggleRead(e, item)}
-                      title={item.isRead ? 'Okunmadı olarak işaretle' : 'Okundu olarak işaretle'}
+                      title={item.isRead ? t('notifications.markUnread') : t('notifications.markRead')}
                       className="flex-shrink-0 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 dark:hover:bg-gray-600"
                     >
                       {item.isRead

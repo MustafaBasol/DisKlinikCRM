@@ -230,10 +230,10 @@ const Appointments: React.FC = () => {
                   ? 'bg-white shadow-sm text-primary-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
-              title="Liste görünümü"
+              title={t('appointments:viewModes.listTitle')}
             >
               <LayoutList size={16} />
-              <span className="hidden sm:inline">Liste</span>
+              <span className="hidden sm:inline">{t('appointments:viewModes.list')}</span>
             </button>
             <button
               onClick={() => setViewMode('timeline')}
@@ -242,10 +242,10 @@ const Appointments: React.FC = () => {
                   ? 'bg-white shadow-sm text-primary-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
-              title="Takvim görünümü"
+              title={t('appointments:viewModes.calendarTitle')}
             >
               <CalendarDays size={16} />
-              <span className="hidden sm:inline">Takvim</span>
+              <span className="hidden sm:inline">{t('appointments:viewModes.calendar')}</span>
             </button>
             <button
               onClick={() => setViewMode('multidoctor')}
@@ -254,10 +254,10 @@ const Appointments: React.FC = () => {
                   ? 'bg-white shadow-sm text-primary-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
-              title="Çoklu hekim görünümü"
+              title={t('appointments:viewModes.multiDoctorTitle')}
             >
               <Users size={16} />
-              <span className="hidden sm:inline">Çoklu Hekim</span>
+              <span className="hidden sm:inline">{t('appointments:viewModes.multiDoctor')}</span>
             </button>
           </div>
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, User, Calendar, Stethoscope, X, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { patientService, appointmentService, treatmentCaseService } from '../services/api';
 
 interface SearchResult {
@@ -23,6 +24,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation('common');
 
   useEffect(() => {
     if (isOpen) {
@@ -72,7 +74,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
             id: a.id,
             type: 'appointment',
             title: `${a.patient?.firstName ?? ''} ${a.patient?.lastName ?? ''}`.trim(),
-            subtitle: `${a.appointmentType?.name ?? ''} — ${new Date(a.startTime).toLocaleDateString()}`,
+            subtitle: `${a.appointmentType?.name ?? ''} — ${new Date(a.startTime).toLocaleDateString(i18n.language)}`,
             path: `/appointments/${a.id}`,
           });
         });
@@ -133,9 +135,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
   };
 
   const typeLabel = (type: SearchResult['type']) => {
-    if (type === 'patient') return 'Hasta';
-    if (type === 'appointment') return 'Randevu';
-    return 'Tedavi';
+    if (type === 'patient') return t('globalSearch.types.patient');
+    if (type === 'appointment') return t('globalSearch.types.appointment');
+    return t('globalSearch.types.treatment');
   };
 
   if (!isOpen) return null;
@@ -145,7 +147,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Küresel arama"
+      aria-label={t('globalSearch.ariaLabel')}
     >
       {/* Backdrop */}
       <div
@@ -167,7 +169,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
             ref={inputRef}
             type="text"
             className="flex-1 outline-none text-sm text-gray-900 placeholder:text-gray-400 bg-transparent"
-            placeholder="Hasta, randevu veya tedavi ara… (min. 2 karakter)"
+            placeholder={t('globalSearch.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -205,15 +207,15 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
 
         {query.length >= 2 && !loading && results.length === 0 && (
           <div className="px-4 py-8 text-center text-sm text-gray-400">
-            "{query}" için sonuç bulunamadı
+            {t('globalSearch.noResults', { query })}
           </div>
         )}
 
         {/* Footer hint */}
         <div className="flex items-center gap-4 px-4 py-2 border-t border-gray-100 bg-gray-50 text-[11px] text-gray-400">
-          <span><kbd className="font-mono bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px]">↑↓</kbd> Gezin</span>
-          <span><kbd className="font-mono bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px]">Enter</kbd> Seç</span>
-          <span><kbd className="font-mono bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px]">Esc</kbd> Kapat</span>
+          <span><kbd className="font-mono bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px]">↑↓</kbd> {t('globalSearch.navigate')}</span>
+          <span><kbd className="font-mono bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px]">Enter</kbd> {t('globalSearch.select')}</span>
+          <span><kbd className="font-mono bg-white border border-gray-200 px-1.5 py-0.5 rounded text-[10px]">Esc</kbd> {t('close')}</span>
         </div>
       </div>
     </div>

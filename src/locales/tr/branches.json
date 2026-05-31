@@ -1,0 +1,95 @@
+{
+  "title": "Şubeler",
+  "subtitle": "{{organization}} bünyesindeki tüm klinik şubeleri",
+  "organizationFallback": "Organizasyon",
+  "newBranch": "Yeni Şube",
+  "statuses": {
+    "active": "Aktif",
+    "trial": "Deneme",
+    "inactive": "Pasif",
+    "suspended": "Askıya Alındı"
+  },
+  "empty": {
+    "title": "Henüz şube eklenmemiş",
+    "description": "Yeni bir şube eklemek için yukarıdaki butonu kullanın."
+  },
+  "actions": {
+    "goToDashboard": "Dashboard'a Git",
+    "viewAppointments": "Randevuları Gör",
+    "manageSchedule": "Program Yönet",
+    "whatsappSettings": "WhatsApp Ayarları",
+    "changeStatus": "Durum Değiştir",
+    "go": "Git"
+  },
+  "whatsapp": {
+    "connected": "WhatsApp Bağlı",
+    "none": "WhatsApp Yok",
+    "disconnected": "Bağlı Değil"
+  },
+  "stats": {
+    "staffCount": "{{count}} personel",
+    "appointmentsToday": "{{count}} bugünkü randevu"
+  },
+  "form": {
+    "createTitle": "Yeni Şube Ekle",
+    "editTitle": "Şube Düzenle",
+    "slugHelp": "(URL-friendly, yalnızca küçük harf, rakam ve tire)",
+    "update": "Güncelle",
+    "create": "Oluştur",
+    "fields": {
+      "name": "Şube Adı",
+      "city": "Şehir",
+      "status": "Durum",
+      "address": "Adres",
+      "phone": "Telefon",
+      "email": "E-posta"
+    },
+    "placeholders": {
+      "name": "Örn: Merkez Şube",
+      "city": "İstanbul",
+      "address": "Cadde, mahalle, ilçe"
+    }
+  },
+  "statusModal": {
+    "title": "Şube Durumunu Değiştir",
+    "description": "şubesinin durumunu değiştirin."
+  },
+  "errors": {
+    "actionFailed": "İşlem başarısız. Lütfen tekrar deneyin.",
+    "statusUpdateFailed": "Durum güncellenemedi.",
+    "loadFailed": "Şubeler yüklenemedi."
+  },
+  "schedule": {
+    "title": "Klinik Programı",
+    "subtitle": "Çalışma saatleri ve doktor müsaitlikleri",
+    "tabs": {
+      "hours": "Çalışma Saatleri",
+      "doctors": "Doktorlar"
+    },
+    "weeklyHoursTitle": "Haftalık Çalışma Saatleri",
+    "closedDayHelp": "Kapalı günlerde randevu oluşturulamaz",
+    "closed": "Kapalı",
+    "closedDay": "Kapalı gün",
+    "doctorsEmpty": "Bu kliniğe atanmış doktor bulunmuyor",
+    "doctorsEmptyHelp": "Kullanıcı yönetiminden doktor ataması yapabilirsiniz.",
+    "viewSchedule": "Programını Görüntüle",
+    "noSchedule": "Program tanımlı değil",
+    "success": {
+      "hoursSaved": "Çalışma saatleri başarıyla kaydedildi"
+    },
+    "errors": {
+      "loadHoursFailed": "Çalışma saatleri yüklenemedi",
+      "loadDoctorsFailed": "Doktor listesi yüklenemedi",
+      "saveHoursFailed": "Çalışma saatleri kaydedilemedi"
+    },
+    "days": {
+      "sunday": "Pazar",
+      "monday": "Pazartesi",
+      "tuesday": "Salı",
+      "wednesday": "Çarşamba",
+      "thursday": "Perşembe",
+      "friday": "Cuma",
+      "saturday": "Cumartesi"
+    }
+  }
+}

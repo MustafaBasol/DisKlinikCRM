@@ -1,0 +1,170 @@
+{
+  "inbox": {
+    "title": "Boîte WhatsApp",
+    "tabs": {
+      "unassigned": "Non assignées",
+      "all": "Toutes les conversations"
+    },
+    "filters": {
+      "allStatuses": "Tous les statuts",
+      "clinicIdPlaceholder": "Filtrer par ID clinique..."
+    },
+    "status": {
+      "unassigned": "Non assignée",
+      "assigned": "Assignée",
+      "resolved": "Résolue",
+      "open": "Ouverte"
+    },
+    "empty": {
+      "unassigned": "Aucune conversation non assignée.",
+      "conversations": "Aucune conversation trouvée."
+    },
+    "errors": {
+      "loadUnassigned": "Les conversations non assignées n'ont pas pu être chargées.",
+      "loadConversations": "Les conversations n'ont pas pu être chargées.",
+      "resolveFailed": "La résolution a échoué.",
+      "linkPatientFailed": "La liaison du patient a échoué."
+    },
+    "messageCount": "{{count}} messages",
+    "possiblePatients": "Patients possibles",
+    "actions": {
+      "assignClinic": "Assigner à la clinique"
+    },
+    "resolveModal": {
+      "title": "Assigner à la clinique",
+      "description": "Assignez la conversation du {{phone}} à une clinique.",
+      "clinicId": "ID clinique",
+      "clinicIdPlaceholder": "Saisir l'ID clinique...",
+      "patientOptional": "Patient (facultatif)",
+      "matchingPatients": "Patients correspondants",
+      "patientSelected": "Patient sélectionné (ID : {{id}})",
+      "searchPatient": "Rechercher un patient..."
+    }
+  },
+  "connections": {
+    "title": "Connexions WhatsApp",
+    "subtitle": "Gérez les connexions WhatsApp de l'organisation",
+    "providerInfo": "{{evolution}} et {{meta}} sont pris en charge. Evolution API peut être configuré manuellement ; Meta peut utiliser Embedded Signup ou une saisie manuelle du token.",
+    "empty": "Aucune connexion WhatsApp n'a encore été ajoutée.",
+    "configuredSecret": "Configuré (masqué)",
+    "assignedBranches": "Branches : {{branches}}",
+    "noBranchesAssigned": "Aucune branche assignée pour le moment",
+    "metaNoQr": "Meta Cloud API n'utilise pas de QR ; la vérification du compte se fait via \"Connecter avec Meta\".",
+    "inactiveWarning": "La connexion est désactivée ; aucun message ne peut être envoyé depuis cette ligne.",
+    "createdAt": "Créé le",
+    "status": {
+      "inactive": "Désactivé"
+    },
+    "actions": {
+      "newConnection": "Ajouter une connexion",
+      "connectMeta": "Connecter avec Meta",
+      "connectMetaAutomatic": "Connecter avec Meta Embedded Signup (automatique)",
+      "importToPanel": "Importer dans le panneau",
+      "test": "Tester la connexion",
+      "getQr": "Obtenir le QR / Connecter",
+      "disconnect": "Déconnecter (terminer la session WhatsApp)",
+      "deactivate": "Désactiver",
+      "activate": "Activer"
+    },
+    "metaPanel": {
+      "title": "Connexion Meta (WhatsApp Business)",
+      "ready": "Meta Embedded Signup est configuré. Cliquez sur le bouton pour connecter votre compte.",
+      "notConfiguredPrefix": "Meta Embedded Signup n'est pas configuré sur ce serveur.",
+      "notConfiguredSuffix": "les variables d'environnement doivent être définies.",
+      "manualHint": " Pour une configuration manuelle, choisissez \"Nouvelle connexion\" > \"Meta Cloud API\".",
+      "connectTitle": "Connecter avec Meta Embedded Signup",
+      "notConfiguredTitle": "Meta Embedded Signup n'est pas configuré"
+    },
+    "legacy": {
+      "title": "Connexion Evolution API existante trouvée dans les variables d'environnement",
+      "description": "Cette connexion fonctionne actuellement depuis les variables d'environnement du serveur. Importez-la dans le panneau pour la modifier, la tester et l'assigner aux branches.",
+      "note": "Remarque : une connexion issue des variables d'environnement ne peut pas être supprimée directement depuis le panneau. Pour la retirer complètement, nettoyez les variables d'environnement du serveur.",
+      "afterImport": "Après import : les actions Modifier, Tester, Assigner une branche et Désactiver seront disponibles."
+    },
+    "token": {
+      "expired": "Le token d'accès Meta a expiré ; renouvelez la connexion.",
+      "expiring": "Le token d'accès Meta expirera bientôt ; planifiez son renouvellement.",
+      "unknown": "La date de validité du token est inconnue ; les informations du token n'ont pas été saisies.",
+      "validity": "Validité du token",
+      "expiredShort": "Expiré",
+      "expiringShort": "Expire bientôt",
+      "unknownShort": "Inconnue ; informations du token non saisies"
+    },
+    "qr": {
+      "metaNotUsed": "Meta Cloud API n'utilise pas de QR. Connectez le compte avec \"Connecter avec Meta\" ou une configuration manuelle.",
+      "connectWithQr": "Connectez WhatsApp avec le QR :",
+      "empty": "Le QR n'est pas disponible ; la connexion est peut-être déjà active.",
+      "alt": "QR code"
+    },
+    "deleteModal": {
+      "title": "Supprimer la connexion",
+      "confirm": "La connexion \"{{name}}\" sera supprimée. Êtes-vous sûr ?",
+      "branchWarning": "Si cette connexion est supprimée, les branches liées ne pourront plus envoyer de messages WhatsApp.",
+      "historyWarning": "Si un historique de messages existe, la suppression est bloquée ; utilisez plutôt \"Désactiver\"."
+    },
+    "modal": {
+      "createTitle": "Nouvelle connexion WhatsApp",
+      "editTitle": "Modifier la connexion",
+      "name": "Nom de la connexion",
+      "namePlaceholder": "ex. WhatsApp branche principale",
+      "provider": "Fournisseur",
+      "metaManualAllowed": "Meta Embedded Signup n'est pas configuré sur le serveur. Vous pouvez tout de même créer une connexion avec une saisie manuelle du token.",
+      "phoneNumber": "Numéro de téléphone",
+      "displayName": "Nom affiché",
+      "displayNamePlaceholder": "WhatsApp de la clinique",
+      "evolutionSettings": "Paramètres Evolution API",
+      "apiUrl": "URL API",
+      "instanceName": "Nom de l'instance",
+      "apiKey": "Clé API",
+      "leaveBlankUnchanged": "laisser vide pour conserver",
+      "configuredPlaceholder": "•••••••• (Configuré)",
+      "configuredIfPlaceholder": "•••••••• (Si configuré)",
+      "evolutionApiKeyPlaceholder": "Clé Evolution API",
+      "apiKeyEncryptedHint": "La clé API est stockée chiffrée côté serveur avec AES-256-GCM. Une nouvelle valeur remplace définitivement l'ancienne clé.",
+      "webhookSecret": "Secret webhook",
+      "optional": "facultatif",
+      "webhookSecretPlaceholder": "Secret de vérification webhook",
+      "metaManualSettings": "Meta Cloud API - configuration manuelle",
+      "metaManualHint": "Sinon, renseignez manuellement ci-dessous les informations Meta Business Manager > WhatsApp > API Setup.",
+      "metaBusinessId": "Business ID",
+      "metaWabaId": "WhatsApp Business Account ID (WABA ID)",
+      "metaPhoneNumberId": "Phone Number ID",
+      "metaAppId": "App ID",
+      "metaWebhookVerifyToken": "Webhook Verify Token",
+      "optionalSignature": "facultatif - vérification X-Hub-Signature-256",
+      "metaWebhookSecretPlaceholder": "Secret webhook Meta",
+      "accessToken": "Access Token",
+      "accessTokenPlaceholder": "Meta Access Token",
+      "accessTokenEncryptedHint": "Le token d'accès est stocké chiffré côté serveur avec AES-256-GCM. Une nouvelle valeur remplace définitivement l'ancien token.",
+      "branchAssignment": "Assignation des branches",
+      "branchAssignmentHint": "Sélectionnez les branches qui peuvent utiliser cette connexion. Plusieurs branches peuvent partager la même ligne.",
+      "noBranchSelected": "Aucune branche sélectionnée. Cette connexion sera enregistrée mais ne pourra pas envoyer de messages."
+    },
+    "confirm": {
+      "disconnect": "Voulez-vous vraiment déconnecter \"{{name}}\" ?",
+      "importLegacy": "Les paramètres Evolution API existants des variables d'environnement seront importés dans la base de données. Continuer ?"
+    },
+    "success": {
+      "disconnected": "Connexion \"{{name}}\" déconnectée.",
+      "alreadyImported": "Cette connexion avait déjà été importée.",
+      "imported": "Connexion Evolution API importée avec succès dans la base de données.",
+      "activated": "\"{{name}}\" activée.",
+      "deactivated": "\"{{name}}\" désactivée.",
+      "deleted": "Connexion \"{{name}}\" supprimée."
+    },
+    "errors": {
+      "loadFailed": "Les connexions WhatsApp n'ont pas pu être chargées.",
+      "nameRequired": "Le nom de la connexion est obligatoire.",
+      "saveFailed": "Enregistrement échoué.",
+      "testFailed": "La requête de test a échoué.",
+      "disconnectFailed": "La connexion n'a pas pu être déconnectée.",
+      "importFailed": "Import échoué.",
+      "statusUpdateFailed": "Le statut n'a pas pu être mis à jour.",
+      "deleteHasHistory": "\"{{name}}\" n'a pas pu être supprimée : un historique de messages existe. Utilisez plutôt le bouton \"Désactiver\".",
+      "deleteFailed": "La connexion n'a pas pu être supprimée.",
+      "metaRejected": "Connexion Meta refusée : {{error}}",
+      "metaMissingCode": "L'autorisation Meta n'a pas pu être terminée : code non reçu.",
+      "metaCreateFailed": "La connexion Meta n'a pas pu être créée."
+    }
+  }
+}

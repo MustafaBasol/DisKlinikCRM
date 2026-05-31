@@ -1,0 +1,66 @@
+{
+  "title": "Suivi des no-shows",
+  "subtitle": "Suivez les patients absents aux rendez-vous et aidez à les reprogrammer.",
+  "ranges": {
+    "today": "Aujourd'hui",
+    "this_week": "Cette semaine",
+    "this_month": "Ce mois-ci",
+    "last_30_days": "30 derniers jours"
+  },
+  "filters": {
+    "allStatuses": "Tous les statuts"
+  },
+  "recovery": {
+    "unresolved": "En attente",
+    "contacted": "Contacté",
+    "recovered": "Récupéré"
+  },
+  "summary": {
+    "noShowCount": "Nombre de no-shows",
+    "noShowRate": "Taux de no-show",
+    "estimatedLostRevenue": "Revenu perdu estimé",
+    "byServicePrices": "Basé sur les prix des services",
+    "contactedCount": "Contactés",
+    "recoveredCount": "Rendez-vous récupérés",
+    "recoveryRate": "Taux de récupération"
+  },
+  "sections": {
+    "byClinic": "Par branche",
+    "byDoctor": "Par praticien",
+    "recentNoShows": "Rendez-vous no-show récents"
+  },
+  "empty": {
+    "noNoShows": "Aucun rendez-vous no-show trouvé sur la période sélectionnée.",
+    "noNoShowsDescription": "Tous les patients ont assisté à leur rendez-vous pendant cette période."
+  },
+  "table": {
+    "patient": "Patient",
+    "branch": "Branche",
+    "doctor": "Praticien",
+    "dateTime": "Date/heure",
+    "service": "Service",
+    "estimatedValue": "Valeur estimée",
+    "status": "Statut",
+    "lastContact": "Dernier contact"
+  },
+  "actions": {
+    "sendWhatsApp": "Envoyer WhatsApp",
+    "createTask": "Créer une tâche",
+    "markContacted": "Marquer comme contacté",
+    "markRecovered": "Marquer comme récupéré",
+    "reschedule": "Créer un nouveau rendez-vous",
+    "rescheduleDisabled": "Informations patient ou clinique manquantes."
+  },
+  "success": {
+    "markedContacted": "Marqué comme contacté.",
+    "markedRecovered": "Rendez-vous marqué comme récupéré.",
+    "whatsappSent": "Message WhatsApp envoyé.",
+    "taskCreated": "Tâche de suivi créée."
+  },
+  "errors": {
+    "loadFailed": "Une erreur est survenue lors du chargement des données.",
+    "actionFailed": "L'action a échoué.",
+    "messageFailed": "Le message n'a pas pu être envoyé.",
+    "taskFailed": "La tâche n'a pas pu être créée."
+  }
+}

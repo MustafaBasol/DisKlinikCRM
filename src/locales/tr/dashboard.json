@@ -12,6 +12,27 @@
   "noShowsMonth": "Bu Ayki Gelmeyenler",
   "openTreatments": "Açık Tedavi Dosyaları",
   "preparedMessages": "Hazırlanan Mesajlar (Hafta)",
+  "doctor": {
+    "greeting": "Merhaba, Dr. {{name}}",
+    "weekAppointments": "Bu Hafta",
+    "pendingTasks": "Bekleyen Görevler",
+    "overdueTasksAlert": "{{count}} gecikmiş göreviniz var. Hemen inceleyin.",
+    "pendingEarnings": "Tahakkuk Eden Kazanç (Bekleyen + Onaylı)",
+    "todaySchedule": "Bugünkü Program",
+    "noActivity": "Aktivite yok",
+    "upcomingSevenDays": "Önümüzdeki 7 Gün",
+    "appointmentCount": "{{count}} randevu",
+    "noUpcomingAppointments": "Önümüzdeki 7 günde randevu yok",
+    "treatmentPipeline": "Tedavi Pipeline",
+    "recentPatients": "Son Hastalar",
+    "noRecentPatients": "Henüz hasta kaydı yok"
+  },
+  "charts": {
+    "appointmentTrend": "Son 7 Gün - Randevu Trendi",
+    "serviceDistribution": "Bu Ay - Hizmet Dağılımı",
+    "revenueTrend": "Son 6 Ay - Gelir Trendi",
+    "revenue": "Gelir"
+  },
   "stats": {
     "weekTotal": "Bu hafta {{count}} randevu",
     "monthTrend": "Bu ay yükselişte",

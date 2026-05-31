@@ -4,6 +4,7 @@ import {
   Building2, Users, Stethoscope, Activity, Clock, ShieldOff,
   MessageCircle, TrendingUp, Loader2, AlertCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
 
 interface DashboardData {
@@ -59,6 +60,7 @@ const StatCard: React.FC<{
 };
 
 const PlatformDashboard: React.FC = () => {
+  const { t } = useTranslation(['platform']);
   const api = usePlatformApi();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,7 +70,7 @@ const PlatformDashboard: React.FC = () => {
     api
       .get('/platform/dashboard')
       .then((res) => setData(res.data))
-      .catch(() => setError('Dashboard yüklenemedi'))
+      .catch(() => setError(t('platform:errors.dashboardLoadFailed')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -84,7 +86,7 @@ const PlatformDashboard: React.FC = () => {
     return (
       <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl p-4">
         <AlertCircle size={18} />
-        <span>{error || 'Veri alınamadı'}</span>
+        <span>{error || t('platform:errors.dataUnavailable')}</span>
       </div>
     );
   }
@@ -93,57 +95,57 @@ const PlatformDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Platform Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('platform:dashboard.title')}</h1>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          label="Toplam Organizasyon"
+          label={t('platform:dashboard.totalOrganizations')}
           value={totals.organizations}
           icon={<Building2 size={22} className="text-blue-600" />}
           color="bg-blue-50 dark:bg-blue-900/30"
           to="/platform/organizations"
         />
         <StatCard
-          label="Aktif Organizasyon"
+          label={t('platform:dashboard.activeOrganizations')}
           value={totals.activeOrganizations}
           icon={<TrendingUp size={22} className="text-green-600" />}
           color="bg-green-50 dark:bg-green-900/30"
         />
         <StatCard
-          label="Askıya Alınan"
+          label={t('platform:dashboard.suspendedOrganizations')}
           value={totals.suspendedOrganizations}
           icon={<ShieldOff size={22} className="text-amber-600" />}
           color="bg-amber-50 dark:bg-amber-900/30"
         />
         <StatCard
-          label="Deneme Bitiyor (7g)"
+          label={t('platform:dashboard.trialEndingSoon')}
           value={totals.trialEndingSoon}
           icon={<Clock size={22} className="text-orange-600" />}
           color="bg-orange-50 dark:bg-orange-900/30"
         />
         <StatCard
-          label="Toplam Klinik"
+          label={t('platform:dashboard.totalClinics')}
           value={totals.clinics}
           icon={<Stethoscope size={22} className="text-purple-600" />}
           color="bg-purple-50 dark:bg-purple-900/30"
           to="/platform/clinics"
         />
         <StatCard
-          label="Toplam Kullanıcı"
+          label={t('platform:dashboard.totalUsers')}
           value={totals.users}
           icon={<Users size={22} className="text-indigo-600" />}
           color="bg-indigo-50 dark:bg-indigo-900/30"
           to="/platform/users"
         />
         <StatCard
-          label="Toplam Hasta"
+          label={t('platform:dashboard.totalPatients')}
           value={totals.patients}
           icon={<Activity size={22} className="text-teal-600" />}
           color="bg-teal-50 dark:bg-teal-900/30"
         />
         <StatCard
-          label="WhatsApp Bağlantı"
+          label={t('platform:dashboard.whatsappConnections')}
           value={totals.whatsappConnections}
           icon={<MessageCircle size={22} className="text-green-600" />}
           color="bg-green-50 dark:bg-green-900/30"
@@ -153,12 +155,12 @@ const PlatformDashboard: React.FC = () => {
       {/* Recent organizations */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="font-semibold text-gray-900 dark:text-white">Son Organizasyonlar</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-white">{t('platform:dashboard.recentOrganizations')}</h2>
           <Link
             to="/platform/organizations"
             className="text-sm text-blue-600 hover:underline"
           >
-            Tümünü gör
+            {t('platform:actions.viewAll')}
           </Link>
         </div>
         <div className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -172,19 +174,19 @@ const PlatformDashboard: React.FC = () => {
                   {org.name}
                 </Link>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {org._count.clinics} klinik · {org._count.users} kullanıcı
+                  {t('platform:counts.clinicsUsers', { clinics: org._count.clinics, users: org._count.users })}
                   {org.plan && ` · ${org.plan.displayName}`}
                 </p>
               </div>
               <span
                 className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[org.status] ?? 'bg-gray-100 text-gray-600'}`}
               >
-                {org.status}
+                {t(`platform:statuses.${org.status}`, { defaultValue: org.status })}
               </span>
             </div>
           ))}
           {recentOrganizations.length === 0 && (
-            <p className="text-center text-sm text-gray-400 py-8">Henüz organizasyon yok</p>
+            <p className="text-center text-sm text-gray-400 py-8">{t('platform:dashboard.emptyOrganizations')}</p>
           )}
         </div>
       </div>

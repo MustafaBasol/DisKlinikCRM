@@ -1,0 +1,68 @@
+{
+  "title": "Versicherung / Genehmigungen",
+  "subtitle": "Manuelle Nachverfolgung von SGK-, TSS-, OSS- und privaten Versicherungsfreigaben.",
+  "newProvision": "Neue Genehmigungsanfrage",
+  "editProvision": "Genehmigung bearbeiten",
+  "backToList": "Zurück zu Genehmigungen",
+  "noTreatmentCase": "Keine verknüpfte Behandlungsakte",
+  "confirmCancel": "Diese Genehmigungsanfrage stornieren?",
+  "activity": "Genehmigungsaktivität",
+  "fields": {
+    "patient": "Patient",
+    "treatmentCase": "Behandlungsakte",
+    "provider": "Anbieter",
+    "type": "Versicherungstyp",
+    "policyNumber": "Policennummer",
+    "provisionNumber": "Genehmigungsnummer",
+    "status": "Status",
+    "requestedAmount": "Angefragter Betrag",
+    "approvedAmount": "Genehmigter Betrag",
+    "patientResponsibility": "Patientenanteil",
+    "currency": "Währung",
+    "submittedAt": "Eingereicht am",
+    "respondedAt": "Antwort am",
+    "rejectionReason": "Ablehnungsgrund",
+    "notes": "Notizen",
+    "assignedTo": "Zugewiesen an",
+    "createdBy": "Erstellt von"
+  },
+  "types": {
+    "sgk": "SGK",
+    "tss": "TSS",
+    "oss": "OSS",
+    "private": "Private Versicherung",
+    "corporate": "Unternehmen",
+    "other": "Sonstige"
+  },
+  "statuses": {
+    "draft": "Entwurf",
+    "pending_documents": "Dokumente ausstehend",
+    "submitted": "Eingereicht",
+    "waiting_response": "Wartet auf Antwort",
+    "approved": "Genehmigt",
+    "partially_approved": "Teilweise genehmigt",
+    "rejected": "Abgelehnt",
+    "cancelled": "Storniert"
+  },
+  "filters": {
+    "title": "Filter",
+    "allStatuses": "Alle Status",
+    "allTypes": "Alle Typen",
+    "allPatients": "Alle Patienten",
+    "provider": "Anbietername..."
+  },
+  "summary": {
+    "patientResponsibility": "Patientenanteil"
+  },
+  "notes": {
+    "patientResponsibilityFor": "Patientenanteil für {{provider}}"
+  },
+  "actions": {
+    "cancel": "Stornieren",
+    "createPatientPayment": "Patientenzahlung erstellen"
+  },
+  "errors": {
+    "loadFailed": "Versicherungsdaten konnten nicht geladen werden",
+    "saveFailed": "Genehmigung konnte nicht gespeichert werden"
+  }
+}

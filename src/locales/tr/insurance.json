@@ -54,6 +54,9 @@
   "summary": {
     "patientResponsibility": "Hasta Katılım Tutarı"
   },
+  "notes": {
+    "patientResponsibilityFor": "{{provider}} için hasta katılım tutarı"
+  },
   "actions": {
     "cancel": "İptal Et",
     "createPatientPayment": "Hasta Ödemesi Oluştur"

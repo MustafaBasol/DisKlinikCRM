@@ -22,7 +22,7 @@ const Login: React.FC = () => {
     try {
       const response = await authService.login({ email, password });
       login(response.data.token, response.data.user);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || t('auth:loginFailed'));
     } finally {
@@ -98,38 +98,38 @@ const Login: React.FC = () => {
           </form>
 
           <div className="mt-8 pt-8 border-t border-gray-100">
-            <p className="text-xs text-gray-500 mb-3 font-medium">Password Requirements:</p>
+            <p className="text-xs text-gray-500 mb-3 font-medium">{t('auth:passwordRequirements.title')}</p>
             <ul className="space-y-2 text-xs text-gray-600">
               <li className="flex items-start gap-2">
                 <span className="text-primary-600 mt-0.5">•</span>
-                <span>Minimum 8 characters</span>
+                <span>{t('auth:passwordRequirements.minLength')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary-600 mt-0.5">•</span>
-                <span>One uppercase letter (A-Z)</span>
+                <span>{t('auth:passwordRequirements.uppercase')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary-600 mt-0.5">•</span>
-                <span>One lowercase letter (a-z)</span>
+                <span>{t('auth:passwordRequirements.lowercase')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary-600 mt-0.5">•</span>
-                <span>One number (0-9)</span>
+                <span>{t('auth:passwordRequirements.number')}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary-600 mt-0.5">•</span>
-                <span>One special character (!@#$%^&* etc)</span>
+                <span>{t('auth:passwordRequirements.special')}</span>
               </li>
             </ul>
           </div>
         </div>
 
         <p className="text-center text-gray-500 mt-8 text-sm">
-          &copy; 2026 Aile Diş CRM. Güvenli MVP altyapısı.
+          {t('auth:footer')}
         </p>
         <p className="text-center mt-3">
           <Link to="/platform/login" className="text-xs text-gray-400 hover:text-gray-500 transition-colors">
-            Platform Yöneticisi Girişi
+            {t('auth:platformLogin')}
           </Link>
         </p>
       </div>

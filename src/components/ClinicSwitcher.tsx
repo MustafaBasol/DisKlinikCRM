@@ -1,11 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Building2, Check, Globe } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
 
 const ClinicSwitcher: React.FC = () => {
+  const { t } = useTranslation('common');
   const { availableClinics, selectedClinicId, setSelectedClinicId, canAccessAllClinics, hasMultipleClinics, selectedClinicName } = useClinic();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const displayedClinicName = selectedClinicId === 'all'
+    ? t('allClinics')
+    : selectedClinicName === t('clinic')
+      ? t('clinic')
+      : selectedClinicName;
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -21,7 +28,7 @@ const ClinicSwitcher: React.FC = () => {
       <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-xs font-bold border border-primary-100 dark:border-primary-800">
         <span className="w-2 h-2 bg-primary-500 rounded-full animate-pulse" />
         <Building2 size={12} />
-        {selectedClinicName}
+        {displayedClinicName}
       </div>
     );
   }
@@ -34,7 +41,7 @@ const ClinicSwitcher: React.FC = () => {
         className="flex items-center gap-2 px-3 py-1.5 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-xs font-bold border border-primary-100 dark:border-primary-800 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
       >
         {selectedClinicId === 'all' ? <Globe size={12} /> : <Building2 size={12} />}
-        <span className="max-w-[160px] truncate">{selectedClinicName}</span>
+        <span className="max-w-[160px] truncate">{displayedClinicName}</span>
         <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -47,7 +54,7 @@ const ClinicSwitcher: React.FC = () => {
               className="w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors"
             >
               <Globe size={14} className="text-primary-500 shrink-0" />
-              <span className="flex-1 text-left font-medium text-gray-700 dark:text-gray-200">Tüm Klinikler</span>
+              <span className="flex-1 text-left font-medium text-gray-700 dark:text-gray-200">{t('allClinics')}</span>
               {selectedClinicId === 'all' && <Check size={14} className="text-primary-500" />}
             </button>
           )}

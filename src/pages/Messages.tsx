@@ -21,7 +21,7 @@ import { useClinic } from '../context/ClinicContext';
 import { canCreateAppointment } from '../utils/permissions';
 
 const Messages: React.FC = () => {
-  const { t } = useTranslation(['messages', 'common']);
+  const { t, i18n } = useTranslation(['messages', 'common']);
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
   const canSend = canCreateAppointment(user); // OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST
@@ -84,7 +84,7 @@ const Messages: React.FC = () => {
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard!');
+    alert(t('messages:copiedToClipboard'));
   };
 
   const handleSend = async (id: string) => {
@@ -145,17 +145,17 @@ const Messages: React.FC = () => {
           />
         </div>
         <select className="input-field w-full md:w-48" value={channel} onChange={(e) => setChannel(e.target.value)}>
-          <option value="">{t('messageTemplates:fields.channel')}</option>
+          <option value="">{t('messages:filters.channel')}</option>
           <option value="sms">SMS</option>
           <option value="whatsapp">WhatsApp</option>
           <option value="email">Email</option>
         </select>
         <select className="input-field w-full md:w-48" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">{t('messages:list.status')}</option>
-          <option value="prepared">Prepared</option>
-          <option value="sent">Sent</option>
-          <option value="delivered">Delivered</option>
-          <option value="failed">Failed</option>
+          <option value="">{t('messages:filters.status')}</option>
+          <option value="prepared">{t('messages:status.prepared')}</option>
+          <option value="sent">{t('messages:status.sent')}</option>
+          <option value="delivered">{t('messages:status.delivered')}</option>
+          <option value="failed">{t('messages:status.failed')}</option>
         </select>
       </div>
 
@@ -171,12 +171,12 @@ const Messages: React.FC = () => {
           }`}>
             <MessageSquare size={13} className="flex-shrink-0" />
             {waConnection?.status === 'connected' && waConnection.provider !== 'meta_cloud_api'
-              ? `WhatsApp bağlı${waConnection.phoneNumber ? ` — ${waConnection.phoneNumber}` : ''}`
+              ? t('messages:whatsappStatus.connected', { phone: waConnection.phoneNumber ? ` — ${waConnection.phoneNumber}` : '' })
               : waConnection?.provider === 'meta_cloud_api'
-              ? 'Meta Cloud API bağlantısı henüz aktif değil — mesaj gönderimi devre dışı'
+              ? t('messages:whatsappStatus.metaInactive')
               : selectedClinicId === 'all'
-              ? 'Mesaj göndermek için önce bir şube seçin'
-              : 'WhatsApp bağlantısı yapılandırılmamış — önce bağlantı oluşturun'}
+              ? t('messages:whatsappStatus.selectClinic')
+              : t('messages:whatsappStatus.notConfigured')}
           </div>
         )}
 
@@ -241,7 +241,7 @@ const Messages: React.FC = () => {
                       {getStatusBadge(message.status)}
                     </td>
                     <td className="p-4">
-                      <p className="text-xs text-gray-600">{new Date(message.createdAt).toLocaleString()}</p>
+                      <p className="text-xs text-gray-600">{new Date(message.createdAt).toLocaleString(i18n.language)}</p>
                       <p className="text-[10px] text-gray-400 flex items-center gap-1">
                         <User size={10} />
                         {message.createdBy.firstName}
@@ -254,7 +254,7 @@ const Messages: React.FC = () => {
                             onClick={() => handleSend(message.id)}
                             disabled={sending === message.id || !canSendNow}
                             className="p-2 text-gray-400 hover:bg-white hover:text-green-600 rounded-lg transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                            title={canSendNow ? 'Şimdi Gönder' : 'WhatsApp bağlantısı yok veya bağlı değil'}
+                            title={canSendNow ? t('messages:actions.sendNow') : t('messages:actions.sendUnavailable')}
                           >
                             {sending === message.id
                               ? <Loader2 size={18} className="animate-spin" />
