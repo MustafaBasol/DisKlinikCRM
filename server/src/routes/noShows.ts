@@ -17,6 +17,9 @@ import { getParam } from '../utils/helpers.js';
 import { getAccessibleClinicIds } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
+import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -25,6 +28,31 @@ const router = express.Router();
 const NO_SHOW_MARK_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const;
 const NO_SHOW_RECOVERY_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'] as const;
 const NO_SHOW_DASHBOARD_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const;
+
+function formatDateForClinic(value: Date, preferences: ClinicOperatingPreferences): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: preferences.timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const year = parts.find(part => part.type === 'year')?.value ?? '0000';
+  const month = parts.find(part => part.type === 'month')?.value ?? '00';
+  const day = parts.find(part => part.type === 'day')?.value ?? '00';
+  if (preferences.dateFormat === 'MM/dd/yyyy') return `${month}/${day}/${year}`;
+  if (preferences.dateFormat === 'dd/MM/yyyy') return `${day}/${month}/${year}`;
+  if (preferences.dateFormat === 'yyyy-MM-dd') return `${year}-${month}-${day}`;
+  return `${day}.${month}.${year}`;
+}
+
+function formatTimeForClinic(value: Date, preferences: ClinicOperatingPreferences): string {
+  return new Intl.DateTimeFormat(preferences.locale, {
+    timeZone: preferences.timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: preferences.timeFormat === '12h',
+  }).format(value);
+}
 
 // ─── Helper: load appointment in org+clinic scope ─────────────────────────────
 
@@ -416,8 +444,9 @@ router.post(
       }
 
       const patientName = `${patient.firstName} ${patient.lastName}`;
-      const appointmentDate = appointment.startTime.toLocaleDateString('tr-TR');
-      const appointmentTime = appointment.startTime.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      const operatingPreferences = await getClinicOperatingPreferences(appointment.clinicId);
+      const appointmentDate = formatDateForClinic(appointment.startTime, operatingPreferences);
+      const appointmentTime = formatTimeForClinic(appointment.startTime, operatingPreferences);
 
       const body = customMessage
         ?? `Merhaba ${patientName}, ${appointmentDate} ${appointmentTime} tarihindeki randevunuza katılamadığınızı gördük. Yeni bir randevu oluşturmak isterseniz size yardımcı olabiliriz.`;
@@ -497,6 +526,7 @@ router.post(
       }
 
       const patientName = `${appointment.patient.firstName} ${appointment.patient.lastName}`;
+      const operatingPreferences = await getClinicOperatingPreferences(appointment.clinicId);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(9, 0, 0, 0);
@@ -509,7 +539,7 @@ router.post(
           createdById: userId,
           assignedToId: assignedToId ?? userId,
           title: `No-show takip: ${patientName}`,
-          description: `${appointment.startTime.toLocaleDateString('tr-TR')} tarihli randevuya gelinmedi. Hastayı arayarak yeniden randevu alın.`,
+          description: `${formatDateForClinic(appointment.startTime, operatingPreferences)} tarihli randevuya gelinmedi. Hastayı arayarak yeniden randevu alın.`,
           dueDate: dueDate ? new Date(dueDate) : tomorrow,
           status: 'open',
           priority: 'normal',
@@ -529,6 +559,8 @@ router.post(
         description: `No-show takip görevi oluşturuldu: ${patientName}`,
         metadata: { appointmentId: id },
       });
+
+      await sendTaskAssignmentNotification(appointment.clinicId, task);
 
       return res.json(task);
     } catch {

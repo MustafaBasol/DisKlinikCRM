@@ -3,6 +3,12 @@ import { Calendar, Clock, User, Stethoscope, Phone, Mail, MessageSquare, CheckCi
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { publicBookingService } from '../services/api';
+import {
+  DEFAULT_CLINIC_OPERATING_PREFERENCES,
+  formatCurrencyWithPreference,
+  formatDateWithPreference,
+} from '../utils/clinicPreferences';
+import type { ClinicOperatingPreferences } from '../utils/clinicPreferences';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Service {
@@ -34,10 +40,117 @@ interface BookingData {
   clinic: ClinicInfo;
   services: Service[];
   doctors: Doctor[];
+  operatingPreferences: ClinicOperatingPreferences;
+}
+
+type RawObject = Record<string, unknown>;
+
+function isRawObject(value: unknown): value is RawObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function readWeekdays(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((weekday) => readNumber(weekday))
+        .filter((weekday): weekday is number => weekday !== undefined && weekday >= 0 && weekday <= 6),
+    ),
+  );
+}
+
+function normalizeClinic(raw: unknown): ClinicInfo | null {
+  if (!isRawObject(raw)) return null;
+  const id = readString(raw.id);
+  const name = readString(raw.name);
+  if (!id || !name) return null;
+
+  return {
+    id,
+    name,
+    phone: readString(raw.phone),
+    email: readString(raw.email),
+    address: readString(raw.address),
+  };
+}
+
+function normalizeService(raw: unknown): Service | null {
+  if (!isRawObject(raw)) return null;
+  const id = readString(raw.id);
+  const name = readString(raw.name);
+  if (!id || !name) return null;
+
+  return {
+    id,
+    name,
+    durationMinutes: readNumber(raw.durationMinutes) ?? 30,
+    basePrice: readNumber(raw.basePrice),
+    currency: readString(raw.currency),
+    category: readString(raw.category),
+    description: readString(raw.description),
+  };
+}
+
+function normalizeDoctor(raw: unknown): Doctor | null {
+  if (!isRawObject(raw)) return null;
+  const id = readString(raw.id);
+  if (!id) return null;
+
+  return {
+    id,
+    firstName: readString(raw.firstName) ?? '',
+    lastName: readString(raw.lastName) ?? '',
+    availableWeekdays: readWeekdays(raw.availableWeekdays),
+  };
+}
+
+function normalizeBookingData(payload: unknown): BookingData | null {
+  const response = isRawObject(payload) && isRawObject(payload.data) ? payload.data : payload;
+  if (!isRawObject(response)) return null;
+
+  const clinic = normalizeClinic(isRawObject(response.clinic) ? response.clinic : response);
+  if (!clinic) return null;
+
+  const services = Array.isArray(response.services)
+    ? response.services
+        .map(normalizeService)
+        .filter((service): service is Service => Boolean(service))
+    : [];
+
+  const doctors = Array.isArray(response.doctors)
+    ? response.doctors
+        .map(normalizeDoctor)
+        .filter((doctor): doctor is Doctor => Boolean(doctor))
+    : [];
+
+  return {
+    clinic,
+    services,
+    doctors,
+    operatingPreferences: isRawObject(response.operatingPreferences)
+      ? { ...DEFAULT_CLINIC_OPERATING_PREFERENCES, ...response.operatingPreferences }
+      : DEFAULT_CLINIC_OPERATING_PREFERENCES,
+  };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
-function getNext30Days(locale: string): { date: string; label: string; weekday: number; weekdayName: string }[] {
+function getNext30Days(preferences: ClinicOperatingPreferences): { date: string; label: string; weekday: number; weekdayName: string }[] {
   const days: { date: string; label: string; weekday: number; weekdayName: string }[] = [];
   const today = new Date();
   for (let i = 1; i <= 30; i++) {
@@ -45,8 +158,8 @@ function getNext30Days(locale: string): { date: string; label: string; weekday: 
     d.setDate(today.getDate() + i);
     const weekday = d.getDay();
     const dateStr = d.toISOString().split('T')[0];
-    const label = d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
-    const weekdayName = d.toLocaleDateString(locale, { weekday: 'long' });
+    const label = formatDateWithPreference(d, preferences);
+    const weekdayName = new Intl.DateTimeFormat(preferences.locale, { weekday: 'long', timeZone: preferences.timezone }).format(d);
     days.push({ date: dateStr, label, weekday, weekdayName });
   }
   return days;
@@ -79,7 +192,7 @@ const StepIndicator: React.FC<{ step: number; total: number }> = ({ step, total 
 
 // ── Main Widget ────────────────────────────────────────────────────────
 const BookingWidget: React.FC = () => {
-  const { t, i18n } = useTranslation(['booking', 'common']);
+  const { t } = useTranslation(['booking', 'common']);
   const { clinicId: clinicIdParam } = useParams<{ clinicId: string }>();
   const clinicId = clinicIdParam || '';
 
@@ -104,18 +217,24 @@ const BookingWidget: React.FC = () => {
     if (!clinicId) { setLoadError(t('booking:errors.invalidLink')); setLoading(false); return; }
     publicBookingService
       .getClinicInfo(clinicId)
-      .then((r) => setData(r.data))
+      .then((r) => {
+        const normalizedData = normalizeBookingData(r.data);
+        if (!normalizedData) throw new Error('Invalid public booking response');
+        setData(normalizedData);
+      })
       .catch(() => setLoadError(t('booking:errors.loadClinic')))
       .finally(() => setLoading(false));
   }, [clinicId, t]);
 
-  const allDays = getNext30Days(i18n.language);
+  const preferences = data?.operatingPreferences ?? DEFAULT_CLINIC_OPERATING_PREFERENCES;
+  const allDays = getNext30Days(preferences);
 
   // Filter available days for selected doctor
   const availableDays = allDays.filter((d) => {
     if (!selectedDoctor) return true;
     const doc = data?.doctors.find((x) => x.id === selectedDoctor);
-    return doc ? doc.availableWeekdays.includes(d.weekday) : true;
+    if (!doc || doc.availableWeekdays.length === 0) return true;
+    return doc.availableWeekdays.includes(d.weekday);
   });
 
   const handleSubmit = async () => {
@@ -198,7 +317,7 @@ const BookingWidget: React.FC = () => {
                     <p className="font-medium text-gray-800 group-hover:text-blue-700">{s.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {t('booking:service.duration', { minutes: s.durationMinutes })}
-                      {s.basePrice ? ` • ${s.basePrice.toLocaleString(i18n.language)} ${s.currency ?? 'TRY'}` : ''}
+                      {s.basePrice ? ` • ${formatCurrencyWithPreference(s.basePrice, preferences, s.currency ?? preferences.currency)}` : ''}
                     </p>
                   </div>
                   <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-500" />

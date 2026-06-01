@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Loader2, Calendar, DollarSign } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { patientService, treatmentCaseService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface PaymentPlanFormProps {
   patientId?: string;
@@ -16,12 +17,13 @@ function addMonths(date: Date, months: number): Date {
   return d;
 }
 
-function formatDate(d: Date): string {
+function toDateInputValue(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
 const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatientId, treatmentCaseId: initTCId, onClose, onSave }) => {
-  const { t, i18n } = useTranslation(['payments', 'common']);
+  const { t } = useTranslation(['payments', 'common']);
+  const { defaultCurrency, formatCurrency, formatDate: formatDisplayDate } = useClinicPreferences();
   const [saving, setSaving] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
@@ -30,9 +32,9 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
   const [patientId, setPatientId] = useState(initPatientId || '');
   const [treatmentCaseId, setTreatmentCaseId] = useState(initTCId || '');
   const [totalAmount, setTotalAmount] = useState('');
-  const [currency, setCurrency] = useState('TRY');
+  const [currency, setCurrency] = useState(defaultCurrency);
   const [installmentCount, setInstallmentCount] = useState(3);
-  const [firstDueDate, setFirstDueDate] = useState(formatDate(new Date()));
+  const [firstDueDate, setFirstDueDate] = useState(toDateInputValue(new Date()));
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
 
@@ -59,7 +61,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
     const first = new Date(firstDueDate + 'T00:00:00');
     return Array.from({ length: count }, (_, i) => ({
       no: i + 1,
-      date: formatDate(addMonths(first, i)),
+      date: toDateInputValue(addMonths(first, i)),
       amount: i === count - 1 ? Math.round((base + rem) * 100) / 100 : base,
     }));
   }, [totalAmount, installmentCount, firstDueDate]);
@@ -139,6 +141,9 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
                 <option value="TRY">TRY ₺</option>
                 <option value="EUR">EUR €</option>
                 <option value="USD">USD $</option>
+                <option value="GBP">GBP</option>
+                <option value="CAD">CAD</option>
+                <option value="CHF">CHF</option>
               </select>
             </div>
           </div>
@@ -183,9 +188,9 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
                     {preview.slice(0, 12).map(row => (
                       <tr key={row.no}>
                         <td className="px-4 py-2 text-gray-400">{row.no}</td>
-                        <td className="px-4 py-2 text-gray-700">{new Date(row.date + 'T00:00:00').toLocaleDateString(i18n.language)}</td>
+                        <td className="px-4 py-2 text-gray-700">{formatDisplayDate(row.date + 'T00:00:00')}</td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-900">
-                          {new Intl.NumberFormat(i18n.language, { style: 'currency', currency }).format(row.amount)}
+                          {formatCurrency(row.amount, currency)}
                         </td>
                       </tr>
                     ))}
@@ -201,7 +206,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
                     <tr>
                       <td colSpan={2} className="px-4 py-2 font-bold text-gray-700">{t('payments:planForm.total')}</td>
                       <td className="px-4 py-2 text-right font-bold text-primary-700">
-                        {new Intl.NumberFormat(i18n.language, { style: 'currency', currency }).format(parseFloat(totalAmount) || 0)}
+                        {formatCurrency(parseFloat(totalAmount) || 0, currency)}
                       </td>
                     </tr>
                   </tfoot>

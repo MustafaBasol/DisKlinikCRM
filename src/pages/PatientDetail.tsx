@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { patientService, taskService, treatmentCaseService, paymentService, paymentPlanService, insuranceProvisionService, attachmentService } from '../services/api';
 import DentalChart from '../components/DentalChart';
 import PatientForm from '../components/PatientForm';
@@ -38,16 +39,15 @@ import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PaymentForm from '../components/PaymentForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
-import { formatDateInTimeZone, formatTimeInTimeZone } from '../utils/dateTime';
 import { normalizeRole } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases', 'appointments']);
+  const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases', 'appointments']);
   const { user } = useAuth();
+  const { defaultCurrency, locale, timezone, formatCurrency, formatNumber, formatDate, formatTime, formatDateTime } = useClinicPreferences();
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
-  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   const [patient, setPatient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -68,7 +68,7 @@ const PatientDetail: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [paymentPlans, setPaymentPlans] = useState<any[]>([]);
   const [insuranceProvisions, setInsuranceProvisions] = useState<any[]>([]);
-  const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || 'TRY';
+  const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || defaultCurrency;
 
   const fetchPatient = async () => {
     if (!id) return;
@@ -169,8 +169,8 @@ const PatientDetail: React.FC = () => {
 
   const filteredWhatsappMessages = (patient.whatsappConversationMessages || []).filter((message: any) => {
     const matchesDirection = whatsappDirection === 'all' || message.direction === whatsappDirection;
-    const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase(i18n.language);
-    const matchesSearch = !normalizedSearch || message.text.toLocaleLowerCase(i18n.language).includes(normalizedSearch);
+    const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase(locale);
+    const matchesSearch = !normalizedSearch || message.text.toLocaleLowerCase(locale).includes(normalizedSearch);
     return matchesDirection && matchesSearch;
   });
 
@@ -257,7 +257,7 @@ const PatientDetail: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Calendar size={18} className="text-gray-400" />
-                <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString(i18n.language) : t('common:noData')}</span>
+                <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? formatDate(patient.dateOfBirth) : t('common:noData')}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <MapPin size={18} className="text-gray-400" />
@@ -324,7 +324,7 @@ const PatientDetail: React.FC = () => {
                 const remaining = Math.max(0, totalTreatment - totalPaid);
                 const lastPmt = payments.find((p: any) => p.paymentStatus === 'paid');
                 const currency = paymentCurrency;
-                const fmt = (n: number) => n.toLocaleString(i18n.language, { minimumFractionDigits: 0 }) + ' ' + currency;
+                const fmt = (n: number) => formatCurrency(n, currency, { maximumFractionDigits: 0 });
                 if (totalTreatment === 0 && payments.length === 0) {
                   return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
                 }
@@ -343,7 +343,7 @@ const PatientDetail: React.FC = () => {
                       <span className={`font-bold ${remaining > 0 ? 'text-amber-600' : 'text-green-600'}`}>{fmt(remaining)}</span>
                     </div>
                     {lastPmt && (
-                      <p className="text-xs text-gray-400 pt-1">{t('patients:detail.overview.lastPayment')}: {new Date(lastPmt.paidAt || lastPmt.createdAt).toLocaleDateString(i18n.language)}</p>
+                      <p className="text-xs text-gray-400 pt-1">{t('patients:detail.overview.lastPayment')}: {formatDate(lastPmt.paidAt || lastPmt.createdAt)}</p>
                     )}
                   </div>
                 );
@@ -386,16 +386,16 @@ const PatientDetail: React.FC = () => {
                         >
                           <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-center ${idx === 0 ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
                             <span className="text-[10px] leading-none font-bold uppercase">
-                              {formatDateInTimeZone(appt.startTime, i18n.language, clinicTimeZone, { month: 'short' })}
+                              {new Intl.DateTimeFormat(locale, { month: 'short', timeZone: timezone }).format(new Date(appt.startTime))}
                             </span>
                             <span className="text-lg leading-none font-extrabold">
-                              {formatDateInTimeZone(appt.startTime, i18n.language, clinicTimeZone, { day: 'numeric' })}
+                              {new Intl.DateTimeFormat(locale, { day: 'numeric', timeZone: timezone }).format(new Date(appt.startTime))}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-gray-900 truncate">{appt.appointmentType?.name}</p>
                             <p className="text-xs text-gray-500">
-                              {formatTimeInTimeZone(appt.startTime, i18n.language, clinicTimeZone)} &middot; {appt.practitioner ? `${appt.practitioner.firstName} ${appt.practitioner.lastName}` : t('patients:detail.overview.unassigned')}
+                              {formatTime(appt.startTime)} &middot; {appt.practitioner ? `${appt.practitioner.firstName} ${appt.practitioner.lastName}` : t('patients:detail.overview.unassigned')}
                             </p>
                           </div>
                           <span className={`badge text-xs flex-shrink-0 ${appt.status === 'completed' ? 'badge-green' : appt.status === 'confirmed' ? 'badge-blue' : 'badge-yellow'}`}>
@@ -532,7 +532,7 @@ const PatientDetail: React.FC = () => {
                               : item.payload?.description}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            {new Date(item.createdAt).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' })}
+                            {formatDateTime(item.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -561,7 +561,7 @@ const PatientDetail: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-700">{formatDateInTimeZone(appt.startTime, i18n.language, clinicTimeZone)}</p>
+                      <p className="text-sm text-gray-700">{formatDateTime(appt.startTime)}</p>
                       <span className={`badge ${
                         appt.status === 'completed' ? 'badge-green' : 'badge-blue'
                       }`}>
@@ -597,7 +597,7 @@ const PatientDetail: React.FC = () => {
                      }`}></div>
                      <div className="flex-1">
                        <p className={`font-semibold ${task.status === 'completed' ? 'line-through' : ''}`}>{task.title}</p>
-                       <p className="text-xs text-gray-500">{t('tasks:form.dueDate')}: {new Date(task.dueDate).toLocaleDateString(i18n.language)}</p>
+                       <p className="text-xs text-gray-500">{t('tasks:form.dueDate')}: {formatDate(task.dueDate)}</p>
                      </div>
                      <span className={`badge ${task.status === 'completed' ? 'badge-green' : 'badge-yellow'}`}>
                        {t(`tasks:status.${task.status}`)}
@@ -688,23 +688,23 @@ const PatientDetail: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="card p-4 bg-green-50 border-green-100">
                       <p className="text-[10px] font-bold text-green-600 uppercase mb-1">{t('payments:summary.totalPaid')}</p>
-                      <p className="text-xl font-bold text-green-700">{paidTotal.toLocaleString(i18n.language)} {paymentCurrency}</p>
+                      <p className="text-xl font-bold text-green-700">{formatCurrency(paidTotal, paymentCurrency)}</p>
                     </div>
                     <div className="card p-4 bg-amber-50 border-amber-100">
                       <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">{t('payments:summary.totalPending')}</p>
-                      <p className="text-xl font-bold text-amber-700">{totalPending.toLocaleString(i18n.language)} {paymentCurrency}</p>
+                      <p className="text-xl font-bold text-amber-700">{formatCurrency(totalPending, paymentCurrency)}</p>
                       {unpaidInstallments > 0 && (
                         <p className="text-[10px] text-amber-500 mt-1">
                           {t('payments:summary.pendingBreakdown', {
-                            installments: unpaidInstallments.toLocaleString(i18n.language),
-                            payments: pendingPayments.toLocaleString(i18n.language),
+                            installments: formatCurrency(unpaidInstallments, paymentCurrency),
+                            payments: formatCurrency(pendingPayments, paymentCurrency),
                           })}
                         </p>
                       )}
                     </div>
                     <div className="card p-4 bg-red-50 border-red-100">
                       <p className="text-[10px] font-bold text-red-600 uppercase mb-1">{t('payments:summary.totalRefunded')}</p>
-                      <p className="text-xl font-bold text-red-700">{refundedTotal.toLocaleString(i18n.language)} {paymentCurrency}</p>
+                      <p className="text-xl font-bold text-red-700">{formatCurrency(refundedTotal, paymentCurrency)}</p>
                     </div>
                   </div>
                 );
@@ -735,7 +735,7 @@ const PatientDetail: React.FC = () => {
                     <tbody className="divide-y divide-gray-50">
                       {payments.length > 0 ? payments.map(p => (
                         <tr key={p.id}>
-                          <td className="p-3 font-bold">{p.amount.toLocaleString(i18n.language)} {p.currency}</td>
+                          <td className="p-3 font-bold">{formatCurrency(p.amount, p.currency || paymentCurrency)}</td>
                           <td className="p-3 text-gray-600 capitalize">{t(`payments:methods.${p.paymentMethod}`, { defaultValue: p.paymentMethod.replace('_', ' ') })}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
@@ -745,7 +745,7 @@ const PatientDetail: React.FC = () => {
                               {t(`payments:status.${p.paymentStatus}`)}
                             </span>
                           </td>
-                          <td className="p-3 text-gray-500">{new Date(p.paidAt).toLocaleDateString(i18n.language)}</td>
+                          <td className="p-3 text-gray-500">{formatDate(p.paidAt)}</td>
                         </tr>
                       )) : (
                         <tr>
@@ -770,11 +770,11 @@ const PatientDetail: React.FC = () => {
                         <div className="flex items-center justify-between mb-2">
                           <div>
                             <p className="font-semibold text-gray-900 dark:text-white">{plan.description || t('payments:planForm.paymentPlan')}</p>
-                            <p className="text-xs text-gray-500">{t('payments:planForm.installmentSummary', { count: plan.installments?.length || 0, amount: plan.totalAmount?.toLocaleString(i18n.language), currency: plan.currency || paymentCurrency })}</p>
+                            <p className="text-xs text-gray-500">{t('payments:planForm.installmentSummary', { count: plan.installments?.length || 0, amount: formatNumber(plan.totalAmount), currency: plan.currency || paymentCurrency })}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-green-600 font-bold">{t('payments:planForm.paid')}: {paidAmount.toLocaleString(i18n.language)}</p>
-                            <p className="text-xs text-amber-600 font-bold">{t('payments:summary.remaining')}: {(plan.totalAmount - paidAmount).toLocaleString(i18n.language)}</p>
+                            <p className="text-xs text-green-600 font-bold">{t('payments:planForm.paid')}: {formatCurrency(paidAmount, plan.currency || paymentCurrency)}</p>
+                            <p className="text-xs text-amber-600 font-bold">{t('payments:summary.remaining')}: {formatCurrency(plan.totalAmount - paidAmount, plan.currency || paymentCurrency)}</p>
                           </div>
                         </div>
                         {/* Progress bar */}
@@ -797,8 +797,8 @@ const PatientDetail: React.FC = () => {
                                 return (
                                   <tr key={inst.id} className="border-t border-gray-50">
                                     <td className="py-1.5 pr-3 text-gray-500 text-xs">{t('payments:planForm.installmentLabel', { number: inst.installmentNo })}</td>
-                                    <td className="py-1.5 pr-3 text-gray-700">{new Date(inst.dueDate).toLocaleDateString(i18n.language)}</td>
-                                    <td className="py-1.5 pr-3 text-right font-medium">{inst.amount.toLocaleString(i18n.language)} {plan.currency || paymentCurrency}</td>
+                                    <td className="py-1.5 pr-3 text-gray-700">{formatDate(inst.dueDate)}</td>
+                                    <td className="py-1.5 pr-3 text-right font-medium">{formatCurrency(inst.amount, plan.currency || paymentCurrency)}</td>
                                     <td className="py-1.5 text-right">
                                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                                         inst.status === 'paid' ? 'bg-green-50 text-green-700' :
@@ -847,7 +847,7 @@ const PatientDetail: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <span className="badge badge-blue">{t(`insurance:statuses.${provision.status}`, { defaultValue: provision.status })}</span>
-                      <p className="text-xs text-gray-500 mt-2">{provision.requestedAmount?.toLocaleString(i18n.language)} {provision.currency}</p>
+                      <p className="text-xs text-gray-500 mt-2">{formatCurrency(provision.requestedAmount, provision.currency || paymentCurrency)}</p>
                     </div>
                   </Link>
                 )) : (
@@ -903,7 +903,7 @@ const PatientDetail: React.FC = () => {
                         </p>
                         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-900">{message.text}</p>
                       </div>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(message.createdAt).toLocaleString(i18n.language)}</span>
+                      <span className="text-xs text-gray-500 whitespace-nowrap">{formatDateTime(message.createdAt)}</span>
                     </div>
                   </div>
                 )) : (
@@ -970,7 +970,7 @@ const PatientDetail: React.FC = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{att.originalName}</p>
                       <p className="text-xs text-gray-400">
-                        {(att.fileSize / 1024).toFixed(1)} KB &bull; {new Date(att.createdAt).toLocaleDateString(i18n.language)} &bull; {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
+                        {(att.fileSize / 1024).toFixed(1)} KB &bull; {formatDate(att.createdAt)} &bull; {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
                       </p>
                     </div>
                     <button
@@ -1026,7 +1026,7 @@ const PatientDetail: React.FC = () => {
                     <p className="text-xs text-gray-500 mt-1">
                       {t('patients:detail.activityByUser', {
                         user: getActivityActorLabel(item.payload),
-                        date: new Date(item.payload.createdAt).toLocaleString(i18n.language),
+                        date: formatDateTime(item.payload.createdAt),
                       })}
                     </p>
                   </div>
@@ -1046,9 +1046,9 @@ const PatientDetail: React.FC = () => {
                       })}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {new Date(item.payload.startTime).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' })}
+                      {formatDateTime(item.payload.startTime)}
                       {item.payload.startTime !== item.payload.endTime
-                        ? ` — ${new Date(item.payload.endTime).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}`
+                        ? ` — ${formatTime(item.payload.endTime)}`
                         : ''}
                     </p>
                   </div>

@@ -18,10 +18,12 @@ import { useTranslation } from 'react-i18next';
 import { messageService, clinicWhatsAppService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { canCreateAppointment } from '../utils/permissions';
 
 const Messages: React.FC = () => {
-  const { t, i18n } = useTranslation(['messages', 'common']);
+  const { t } = useTranslation(['messages', 'common']);
+  const { formatDateTime } = useClinicPreferences();
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
   const canSend = canCreateAppointment(user); // OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST
@@ -241,7 +243,7 @@ const Messages: React.FC = () => {
                       {getStatusBadge(message.status)}
                     </td>
                     <td className="p-4">
-                      <p className="text-xs text-gray-600">{new Date(message.createdAt).toLocaleString(i18n.language)}</p>
+                      <p className="text-xs text-gray-600">{formatDateTime(message.createdAt)}</p>
                       <p className="text-[10px] text-gray-400 flex items-center gap-1">
                         <User size={10} />
                         {message.createdBy.firstName}

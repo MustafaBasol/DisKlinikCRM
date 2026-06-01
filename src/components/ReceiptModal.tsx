@@ -2,19 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { X, Loader2, Printer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { paymentService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface ReceiptModalProps {
   paymentId: string;
   onClose: () => void;
-}
-
-function formatDate(d: string | null, locale: string) {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' });
-}
-
-function formatCurrency(amount: number, currency = 'TRY') {
-  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount);
 }
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ paymentId, onClose }) => {
@@ -98,7 +90,8 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ paymentId, onClose }) => {
 };
 
 const ReceiptContent: React.FC<{ data: any }> = ({ data }) => {
-  const { t, i18n } = useTranslation(['payments', 'common']);
+  const { t } = useTranslation(['payments', 'common']);
+  const { formatCurrency, formatDate } = useClinicPreferences();
   const receiptNo = data.id.replace(/-/g, '').slice(0, 10).toUpperCase();
   return (
     <div className="receipt-area space-y-6 font-sans text-gray-900">
@@ -121,7 +114,7 @@ const ReceiptContent: React.FC<{ data: any }> = ({ data }) => {
         </div>
         <div className="text-right">
           <p className="text-sm text-gray-400">{t('common:date')}</p>
-          <p className="font-semibold text-gray-700">{formatDate(data.paidAt || data.createdAt, i18n.language)}</p>
+          <p className="font-semibold text-gray-700">{formatDate(data.paidAt || data.createdAt)}</p>
         </div>
       </div>
 
@@ -164,7 +157,7 @@ const ReceiptContent: React.FC<{ data: any }> = ({ data }) => {
         <div className="mt-4 bg-primary-50 border border-primary-100 rounded-xl p-4 flex items-center justify-between">
           <span className="text-lg font-bold text-gray-700">{t('payments:planForm.totalAmount')}</span>
           <span className="text-2xl font-bold text-primary-700">
-            {new Intl.NumberFormat(i18n.language, { style: 'currency', currency: data.currency || 'TRY' }).format(data.amount)}
+            {formatCurrency(data.amount, data.currency)}
           </span>
         </div>
       </div>
@@ -172,7 +165,7 @@ const ReceiptContent: React.FC<{ data: any }> = ({ data }) => {
       {/* Footer */}
       <div className="text-center text-xs text-gray-400 border-t border-gray-100 pt-4">
         <p>{t('payments:receipt.generatedElectronically')}</p>
-        <p className="mt-1">{t('payments:receipt.documentNo')}: {receiptNo} - {formatDate(new Date().toISOString(), i18n.language)}</p>
+        <p className="mt-1">{t('payments:receipt.documentNo')}: {receiptNo} - {formatDate(new Date().toISOString())}</p>
       </div>
     </div>
   );

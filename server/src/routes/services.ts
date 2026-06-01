@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { appointmentTypeSchema } from '../schemas/index.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -31,12 +32,12 @@ const createServiceHandler = async (req: AuthRequest, res: Response) => {
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
+    const operatingPreferences = await getClinicOperatingPreferences(clinicId);
     const type = await prisma.appointmentType.create({
       data: {
         ...validation.data,
         clinicId,
-        currency: validation.data.currency || clinic?.currency || 'USD',
+        currency: validation.data.currency || operatingPreferences.currency,
         isService: validation.data.isService ?? true,
       },
     });

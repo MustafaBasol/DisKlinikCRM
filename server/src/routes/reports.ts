@@ -2,6 +2,7 @@ import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -191,9 +192,19 @@ router.get('/reports/revenue/export.csv', authorize(['OWNER', 'ORG_ADMIN', 'CLIN
       orderBy: { paidAt: 'asc' },
     });
 
+    const operatingPreferences = await getClinicOperatingPreferences(
+      typeof selectedClinicId === 'string' && selectedClinicId !== 'all' ? selectedClinicId : req.user!.clinicId,
+    );
+    const csvDateFormatter = new Intl.DateTimeFormat(operatingPreferences.locale, {
+      timeZone: operatingPreferences.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+
     const headers = ['Tarih', 'Hasta', 'Telefon', 'Tedavi', 'Hekim', 'Tutar', 'Para Birimi', 'Yöntem', 'Durum'];
     const rows = payments.map(p => [
-      p.paidAt ? new Date(p.paidAt).toLocaleDateString('tr-TR') : '',
+      p.paidAt ? csvDateFormatter.format(new Date(p.paidAt)) : '',
       `${p.patient.firstName} ${p.patient.lastName}`,
       p.patient.phone || '',
       p.treatmentCase?.title || '',

@@ -45,7 +45,7 @@
       "unit": "Einheit",
       "openingStock": "Anfangsbestand",
       "minimumStock": "Mindestbestand (Warnung)",
-      "unitCost": "Stueckkosten (₺)",
+      "unitCost": "Stueckkosten",
       "supplier": "Lieferant",
       "barcode": "Barcode",
       "notes": "Notizen"

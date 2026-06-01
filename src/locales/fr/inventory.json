@@ -45,7 +45,7 @@
       "unit": "Unité",
       "openingStock": "Stock initial",
       "minimumStock": "Stock minimum (alerte)",
-      "unitCost": "Coût unitaire (₺)",
+      "unitCost": "Coût unitaire",
       "supplier": "Fournisseur",
       "barcode": "Code-barres",
       "notes": "Notes"

@@ -9,6 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 // ────────────────────────────────────────────────────────────
 // Types
@@ -142,7 +143,8 @@ const InsightCard: React.FC<{
 // ────────────────────────────────────────────────────────────
 
 const OrganizationDashboard: React.FC = () => {
-  const { t, i18n } = useTranslation(['organization', 'common']);
+  const { t } = useTranslation(['organization', 'common']);
+  const { defaultCurrency, formatCurrency, formatNumber } = useClinicPreferences();
   const navigate = useNavigate();
   const { setSelectedClinicId } = useClinic();
 
@@ -206,9 +208,9 @@ const OrganizationDashboard: React.FC = () => {
 
   const s = data?.summary;
   const ins = data?.insights;
-  const fmt = (n: number) => n.toLocaleString(i18n.language);
-  const fmtCurrency = (n: number, currency = 'TRY') =>
-    new Intl.NumberFormat(i18n.language, { style: 'currency', currency, maximumFractionDigits: 0 }).format(n);
+  const fmt = (n: number) => formatNumber(n);
+  const fmtCurrency = (n: number, currency = defaultCurrency) =>
+    formatCurrency(n, currency, { maximumFractionDigits: 0 });
 
   return (
     <div className="p-4 sm:p-6 space-y-6">

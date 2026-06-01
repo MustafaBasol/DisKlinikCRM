@@ -19,18 +19,16 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { appointmentService, taskService, treatmentCaseService } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
-import { formatDateInTimeZone, formatTimeInTimeZone } from '../utils/dateTime';
 
 const AppointmentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation(['appointments', 'common']);
-  const { user } = useAuth();
-  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
+  const { formatCurrency, formatDate, formatTime, formatDateTime } = useClinicPreferences();
   
   const [appointment, setAppointment] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -162,7 +160,7 @@ const AppointmentDetail: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase">{t('common:date')}</p>
-                    <p className="font-medium">{formatDateInTimeZone(appointment.startTime, undefined, clinicTimeZone, { dateStyle: 'long' })}</p>
+                    <p className="font-medium">{formatDate(appointment.startTime)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-gray-600">
@@ -172,8 +170,7 @@ const AppointmentDetail: React.FC = () => {
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase">{t('appointments:form.startTime')}</p>
                     <p className="font-medium">
-                      {formatTimeInTimeZone(appointment.startTime, undefined, clinicTimeZone)} - 
-                      {formatTimeInTimeZone(appointment.endTime, undefined, clinicTimeZone)}
+                      {formatTime(appointment.startTime)} - {formatTime(appointment.endTime)}
                     </p>
                   </div>
                 </div>
@@ -270,7 +267,7 @@ const AppointmentDetail: React.FC = () => {
                     <p className="text-sm font-bold text-gray-900">{tc.title}</p>
                     <p className="text-xs text-gray-500">{t(`treatmentCases:stages.${tc.stage}`)}</p>
                   </div>
-                  <p className="text-sm font-bold text-primary-600">{tc.acceptedAmount || tc.estimatedAmount} {tc.currency}</p>
+                  <p className="text-sm font-bold text-primary-600">{formatCurrency(tc.acceptedAmount || tc.estimatedAmount, tc.currency)}</p>
                 </Link>
               )) : (
                 <div className="p-8 text-center text-gray-400 italic">
@@ -298,7 +295,7 @@ const AppointmentDetail: React.FC = () => {
                         <span className="font-bold">{log.user.firstName}</span> {log.description}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {new Date(log.createdAt).toLocaleString()}
+                        {formatDateTime(log.createdAt)}
                       </p>
                     </div>
                   </div>

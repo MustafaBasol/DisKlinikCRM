@@ -24,8 +24,9 @@ import { canCreateAppointment } from '../utils/permissions';
 import AppointmentForm, { AppointmentFormPrefill } from '../components/AppointmentForm';
 import CalendarTimelineView from '../components/CalendarTimelineView';
 import MultiDoctorDayView from '../components/MultiDoctorDayView';
-import { formatTimeInTimeZone, getDateKeyInTimeZone } from '../utils/dateTime';
+import { getDateKeyInTimeZone } from '../utils/dateTime';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const STATUS_BORDER_COLORS: Record<string, string> = {
   scheduled:   '#f59e0b',
@@ -36,12 +37,22 @@ const STATUS_BORDER_COLORS: Record<string, string> = {
   no_show:     '#f97316',
 };
 
+const APPOINTMENT_STATUS_KEYS = ['scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 'rescheduled', 'no_show'] as const;
+
+function humanizeEnum(value: string) {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 const Appointments: React.FC = () => {
-  const { t, i18n } = useTranslation(['appointments', 'common']);
+  const { t } = useTranslation(['appointments', 'common']);
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
+  const { locale, timezone, preferences, formatDate, formatTime } = useClinicPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
-  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
   
   const [appointments, setAppointments] = useState<any[]>([]);
   const [monthAppointments, setMonthAppointments] = useState<any[]>([]);
@@ -61,6 +72,7 @@ const Appointments: React.FC = () => {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [status, setStatus] = useState('');
   const [practitionerId, setPractitionerId] = useState('');
+  const appointmentStatusLabel = (value: string) => t(`appointments:status.${value}`, { defaultValue: humanizeEnum(value) });
 
   // Auto-open form with prefill when URL search params are present (e.g., from no-show reschedule)
   useEffect(() => {
@@ -194,24 +206,19 @@ const Appointments: React.FC = () => {
 
   const canEdit = canCreateAppointment(user); // OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST
   const isDoctor = user?.role === 'doctor';
-  const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth]);
+  const calendarDays = useMemo(() => buildCalendarDays(calendarMonth, preferences.firstDayOfWeek), [calendarMonth, preferences.firstDayOfWeek]);
   const appointmentCounts = useMemo(() => {
     return monthAppointments
       .filter((a) => !['cancelled', 'no_show'].includes(a.status))
       .reduce<Record<string, number>>((acc, appointment) => {
-        const key = getDateKeyInTimeZone(appointment.startTime, clinicTimeZone);
+        const key = getDateKeyInTimeZone(appointment.startTime, timezone);
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
-  }, [monthAppointments, clinicTimeZone]);
-  const selectedDateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(i18n.language, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  const monthLabel = calendarMonth.toLocaleDateString(i18n.language, { month: 'long', year: 'numeric' });
-  const weekdayLabels = getWeekdayLabels(i18n.language);
+  }, [monthAppointments, timezone]);
+  const selectedDateLabel = formatDate(`${selectedDate}T00:00:00`);
+  const monthLabel = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(calendarMonth);
+  const weekdayLabels = getWeekdayLabels(locale, preferences.firstDayOfWeek);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -401,8 +408,8 @@ const Appointments: React.FC = () => {
           onChange={(e) => setStatus(e.target.value)}
         >
           <option value="">{t('appointments:filters.allStatus')}</option>
-          {['scheduled', 'confirmed', 'completed', 'cancelled', 'rescheduled', 'no_show'].map(s => (
-            <option key={s} value={s}>{t(`appointments:status.${s}`)}</option>
+          {APPOINTMENT_STATUS_KEYS.map(s => (
+            <option key={s} value={s}>{appointmentStatusLabel(s)}</option>
           ))}
         </select>
 
@@ -432,7 +439,7 @@ const Appointments: React.FC = () => {
               <div className="flex items-center gap-4 md:w-32 flex-shrink-0">
                 <div className="bg-gray-50 p-2 rounded-lg text-gray-600 font-bold flex flex-col items-center">
                   <Clock size={16} className="mb-1 text-primary-500" />
-                  <span className="text-sm">{formatTimeInTimeZone(appt.startTime, i18n.language, clinicTimeZone)}</span>
+                  <span className="text-sm">{formatTime(appt.startTime)}</span>
                 </div>
               </div>
 
@@ -461,7 +468,7 @@ const Appointments: React.FC = () => {
                       appt.status === 'cancelled' ? 'badge-red' : 
                       appt.status === 'no_show' ? 'badge-gray' : 'badge-yellow'
                     }`}>
-                      {t(`appointments:status.${appt.status}`)}
+                      {appointmentStatusLabel(appt.status)}
                     </span>
                   </div>
                 </Link>
@@ -528,7 +535,7 @@ const Appointments: React.FC = () => {
         <CalendarTimelineView
           appointments={status ? appointments : appointments.filter((a) => !['cancelled', 'no_show'].includes(a.status))}
           selectedDate={selectedDate}
-          locale={i18n.language}
+          locale={locale}
           canEdit={canEdit}
           onDateChange={(date) => {
             setSelectedDate(date);
@@ -604,15 +611,16 @@ function getDayRange(dateString: string) {
   };
 }
 
-function buildCalendarDays(monthDate: Date) {
+function buildCalendarDays(monthDate: Date, firstDayOfWeek: 'monday' | 'sunday') {
   const firstDay = startOfMonth(monthDate);
   const lastDay = endOfMonth(monthDate);
+  const weekStart = firstDayOfWeek === 'sunday' ? 0 : 1;
   const start = new Date(firstDay);
-  const startOffset = (firstDay.getDay() + 6) % 7;
+  const startOffset = (firstDay.getDay() - weekStart + 7) % 7;
   start.setDate(firstDay.getDate() - startOffset);
 
   const end = new Date(lastDay);
-  const endOffset = (7 - ((lastDay.getDay() + 6) % 7) - 1) % 7;
+  const endOffset = (7 - ((lastDay.getDay() - weekStart + 7) % 7) - 1) % 7;
   end.setDate(lastDay.getDate() + endOffset);
 
   const days: Date[] = [];
@@ -624,11 +632,11 @@ function buildCalendarDays(monthDate: Date) {
   return days;
 }
 
-function getWeekdayLabels(locale: string) {
-  const baseMonday = new Date(2026, 0, 5);
+function getWeekdayLabels(locale: string, firstDayOfWeek: 'monday' | 'sunday') {
+  const firstDate = firstDayOfWeek === 'sunday' ? new Date(2026, 0, 4) : new Date(2026, 0, 5);
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(baseMonday);
-    date.setDate(baseMonday.getDate() + index);
+    const date = new Date(firstDate);
+    date.setDate(firstDate.getDate() + index);
     return date.toLocaleDateString(locale, { weekday: 'short' });
   });
 }

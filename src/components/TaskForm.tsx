@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, User, ClipboardList, AlertCircle, Loader2, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { patientService, userService, appointmentService, taskService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface TaskFormProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ interface TaskFormProps {
 
 const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, patientId, appointmentId }) => {
   const { t } = useTranslation(['tasks', 'common']);
+  const { formatDate } = useClinicPreferences();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -213,7 +215,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
                   <option value="">{t('common:selectPlaceholder')}</option>
                   {appointments.map(a => (
                     <option key={a.id} value={a.id}>
-                      {new Date(a.startTime).toLocaleDateString()} - {a.appointmentType.name}
+                      {formatDate(a.startTime)} - {a.appointmentType.name}
                     </option>
                   ))}
                 </select>

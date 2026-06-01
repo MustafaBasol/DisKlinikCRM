@@ -3,6 +3,7 @@ import { AlertCircle, CalendarClock, CalendarOff, Loader2, Plus, Save, Trash2 } 
 import { useTranslation } from 'react-i18next';
 import { doctorAvailabilityService, doctorOffDayService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { canManageUsers } from '../utils/permissions';
 
 const weekdays = [1, 2, 3, 4, 5, 6, 0];
@@ -15,8 +16,9 @@ const defaultRows = () => weekdays.map(weekday => ({
 }));
 
 const DoctorAvailabilityManager: React.FC = () => {
-  const { t, i18n } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation(['settings', 'common']);
   const { user } = useAuth();
+  const { locale, formatDate } = useClinicPreferences();
   const [doctors, setDoctors] = useState<any[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [rows, setRows] = useState(defaultRows());
@@ -230,7 +232,7 @@ const DoctorAvailabilityManager: React.FC = () => {
           {rows.map(row => (
             <div key={row.weekday} className="p-4 grid grid-cols-1 md:grid-cols-[1fr_120px_120px_120px] gap-3 md:items-center">
               <div>
-                <p className="font-semibold text-gray-900">{weekdayLabel(row.weekday, i18n.language)}</p>
+                <p className="font-semibold text-gray-900">{weekdayLabel(row.weekday, locale)}</p>
                 <p className="text-xs text-gray-500">{row.isActive ? t('settings:availability.available') : t('settings:availability.unavailable')}</p>
               </div>
               <input
@@ -361,9 +363,7 @@ const DoctorAvailabilityManager: React.FC = () => {
                 <div key={od.id} className="flex items-center justify-between py-2">
                   <div>
                     <span className="font-medium text-sm text-gray-800">
-                      {new Date(od.date + 'T00:00:00').toLocaleDateString(i18n.language, {
-                        weekday: 'short', year: 'numeric', month: 'long', day: 'numeric',
-                      })}
+                      {formatDate(od.date + 'T00:00:00')}
                     </span>
                     {od.reason && (
                       <span className="ml-2 text-xs text-gray-500">— {od.reason}</span>

@@ -3,6 +3,151 @@
   "preferences": "Tercihler",
   "language": "Dil",
   "languageHelp": "Arayüz dilini anında değiştirir.",
+  "notificationPreferences": {
+    "title": "Bildirim Tercihleri",
+    "subtitle": "WhatsApp otomasyonlarını ve uygulama içi zil bildirimlerini klinik bazında yönetin.",
+    "clinicScope": "Bu ayarlar {{clinic}} kliniği için geçerlidir.",
+    "save": "Kaydet",
+    "loading": "Bildirim tercihleri yükleniyor...",
+    "saveSuccess": "Bildirim tercihleri kaydedildi.",
+    "saveError": "Bildirim tercihleri kaydedilemedi.",
+    "loadError": "Bildirim tercihleri yüklenemedi.",
+    "readOnly": "Bu tercihleri yalnızca yönetici yetkisine sahip kullanıcılar değiştirebilir.",
+    "whatsappSection": "WhatsApp Otomatik Bildirimleri",
+    "inAppSection": "Zil Bildirimleri",
+    "fields": {
+      "day": "Gönderim günü",
+      "time": "Saat",
+      "leadHours": "Randevu öncesi süre"
+    },
+    "days": {
+      "0": "Aynı gün",
+      "1": "1 gün önce",
+      "2": "2 gün önce",
+      "3": "3 gün önce",
+      "7": "1 hafta önce"
+    },
+    "hoursBefore": "{{count}} saat önce",
+    "patientReminder": {
+      "title": "Hasta randevu hatırlatması",
+      "description": "Randevusu yaklaşan hastalara WhatsApp üzerinden hatırlatma gönderir.",
+      "timingHelp": "Randevu tarihi ve saati dışında hassas sağlık detayı gönderilmez."
+    },
+    "practitionerSchedule": {
+      "title": "Hekim günlük programı",
+      "description": "Hekimlere seçilen günün randevu programını WhatsApp üzerinden gönderir.",
+      "timingHelp": "Program mesajında hasta adı kısaltılır ve tedavi detayı paylaşılmaz."
+    },
+    "taskAssignment": {
+      "title": "Görev atama bildirimi",
+      "description": "Bir kullanıcıya görev atandığında WhatsApp üzerinden kısa bildirim gönderir."
+    },
+    "paymentReminder": {
+      "title": "Ödeme hatırlatması",
+      "description": "Vadesi yaklaşan ödeme planı taksitleri için WhatsApp hatırlatması gönderir.",
+      "timingHelp": "Mesajda sadece ödeme tutarı ve vade bilgisi yer alır."
+    },
+    "inApp": {
+      "upcomingAppointments": {
+        "title": "Yaklaşan randevular",
+        "description": "Zil menüsünde yaklaşan randevuları gösterir."
+      },
+      "overdueTasks": {
+        "title": "Geciken görevler",
+        "description": "Zil menüsünde vadesi geçmiş açık görevleri gösterir."
+      },
+      "appointmentRequests": {
+        "title": "Yeni randevu talepleri",
+        "description": "Zil menüsünde bekleyen online/WhatsApp randevu taleplerini gösterir."
+      },
+      "lowStock": {
+        "title": "Stok uyarıları",
+        "description": "Zil menüsünde minimum seviyenin altına düşen stok uyarılarını gösterir."
+      }
+    }
+  },
+  "operatingPreferences": {
+    "title": "Klinik Çalışma Tercihleri",
+    "subtitle": "Para birimi, tarih-saat biçimi ve ülke formatlarını klinik bazında yönetin.",
+    "clinicScope": "Bu çalışma tercihleri {{clinic}} kliniği için geçerlidir.",
+    "save": "Kaydet",
+    "loading": "Klinik çalışma tercihleri yükleniyor...",
+    "saveSuccess": "Klinik çalışma tercihleri kaydedildi.",
+    "saveError": "Klinik çalışma tercihleri kaydedilemedi.",
+    "loadError": "Klinik çalışma tercihleri yüklenemedi.",
+    "readOnly": "Bu tercihleri yalnızca yönetici yetkisine sahip kullanıcılar değiştirebilir.",
+    "fields": {
+      "regionPreset": "Bölge / ülke formatı",
+      "currency": "Varsayılan para birimi",
+      "locale": "Sayı ve metin formatı",
+      "timezone": "Saat dilimi",
+      "dateFormat": "Tarih formatı",
+      "timeFormat": "Saat formatı",
+      "firstDayOfWeek": "Hafta başlangıcı"
+    },
+    "help": {
+      "regionPreset": "Seçilen ülkeye göre önerilen değerleri otomatik doldurur.",
+      "currency": "Yeni fiyat, ödeme ve finans kayıtlarında varsayılan para birimi olarak kullanılır.",
+      "locale": "Sayı, para ve tarih gösterimlerinde yerel biçimi belirler.",
+      "timezone": "Randevu ve otomatik bildirim saatlerinde kullanılır."
+    },
+    "regions": {
+      "TR": "Türkiye",
+      "US": "Amerika Birleşik Devletleri",
+      "GB": "İngiltere",
+      "CA": "Kanada",
+      "DE": "Almanya",
+      "FR": "Fransa",
+      "EU": "Avrupa Birliği geneli"
+    },
+    "currencies": {
+      "TRY": "TRY - Türk Lirası",
+      "USD": "USD - ABD Doları",
+      "EUR": "EUR - Euro",
+      "GBP": "GBP - İngiliz Sterlini",
+      "CAD": "CAD - Kanada Doları",
+      "CHF": "CHF - İsviçre Frangı"
+    },
+    "locales": {
+      "tr-TR": "Türkçe (Türkiye)",
+      "en-US": "English (United States)",
+      "en-GB": "English (United Kingdom)",
+      "en-CA": "English (Canada)",
+      "de-DE": "Deutsch (Deutschland)",
+      "fr-FR": "Français (France)",
+      "es-ES": "Español (España)",
+      "it-IT": "Italiano (Italia)",
+      "nl-NL": "Nederlands (Nederland)"
+    },
+    "timeFormats": {
+      "24h": "24 saat",
+      "12h": "12 saat (AM/PM)"
+    },
+    "weekStarts": {
+      "monday": "Pazartesi",
+      "sunday": "Pazar"
+    },
+    "timezones": {
+      "Europe/Istanbul": "İstanbul",
+      "America/New_York": "New York",
+      "America/Toronto": "Toronto",
+      "America/Vancouver": "Vancouver",
+      "Europe/London": "Londra",
+      "Europe/Berlin": "Berlin",
+      "Europe/Paris": "Paris",
+      "Europe/Madrid": "Madrid",
+      "Europe/Rome": "Roma",
+      "Europe/Amsterdam": "Amsterdam",
+      "Europe/Brussels": "Brüksel",
+      "UTC": "UTC"
+    },
+    "preview": {
+      "title": "Örnek görünüm",
+      "date": "Tarih",
+      "time": "Saat",
+      "money": "Para"
+    }
+  },
   "accountInfo": "Hesap Bilgisi",
   "accountFields": {
     "name": "Ad Soyad",

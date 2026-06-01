@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertCircle, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { insuranceProvisionService, patientService, treatmentCaseService, userService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface InsuranceProvisionFormProps {
   onClose: () => void;
@@ -26,6 +27,7 @@ const InsuranceProvisionForm: React.FC<InsuranceProvisionFormProps> = ({
   currency,
 }) => {
   const { t } = useTranslation(['insurance', 'common']);
+  const { defaultCurrency } = useClinicPreferences();
   const [patients, setPatients] = useState<any[]>([]);
   const [cases, setCases] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -42,7 +44,7 @@ const InsuranceProvisionForm: React.FC<InsuranceProvisionFormProps> = ({
     requestedAmount: initialData?.requestedAmount ?? requestedAmount ?? 0,
     approvedAmount: initialData?.approvedAmount ?? '',
     patientResponsibilityAmount: initialData?.patientResponsibilityAmount ?? '',
-    currency: initialData?.currency || currency || 'TRY',
+    currency: initialData?.currency || currency || defaultCurrency,
     submittedAt: initialData?.submittedAt ? new Date(initialData.submittedAt).toISOString().slice(0, 10) : '',
     respondedAt: initialData?.respondedAt ? new Date(initialData.respondedAt).toISOString().slice(0, 10) : '',
     rejectionReason: initialData?.rejectionReason || '',
@@ -173,7 +175,7 @@ const InsuranceProvisionForm: React.FC<InsuranceProvisionFormProps> = ({
             <div>
               <label className="text-sm font-semibold text-gray-700">{t('insurance:fields.currency')}</label>
               <select className="input-field mt-1" value={formData.currency} onChange={e => setFormData({ ...formData, currency: e.target.value })}>
-                {['TRY', 'EUR', 'USD', 'GBP', 'CHF'].map(c => <option key={c} value={c}>{c}</option>)}
+                {['TRY', 'EUR', 'USD', 'GBP', 'CAD', 'CHF'].map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>

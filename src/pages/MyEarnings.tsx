@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { DollarSign, Clock, CheckCircle, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { practitionerEarningService } from '../services/api';
 
 const STATUS_KEYS = ['pending', 'approved', 'paid', 'cancelled'] as const;
@@ -13,18 +14,15 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
 };
 
-function fmt(n: number, locale: string) {
-  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
 function currentPeriod() {
   const d = new Date();
   return { month: d.getMonth() + 1, year: d.getFullYear() };
 }
 
 const MyEarnings: React.FC = () => {
-  const { t, i18n } = useTranslation(['earnings', 'common']);
+  const { t } = useTranslation(['earnings', 'common']);
   const { user } = useAuth();
+  const { formatCurrency, formatDate } = useClinicPreferences();
   const [earnings, setEarnings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -63,8 +61,7 @@ const MyEarnings: React.FC = () => {
 
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
   const years = [2024, 2025, 2026, 2027];
-  const locale = i18n.language || 'tr';
-  const formatAmount = (n: number) => fmt(n, locale);
+  const formatAmount = (n: number) => formatCurrency(n);
   const statusLabel = (status: string) => t(`earnings:status.${status}`, { defaultValue: status });
 
   return (
@@ -170,7 +167,7 @@ const MyEarnings: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 text-xs">
-                      {new Date(e.createdAt).toLocaleDateString(locale)}
+                      {formatDate(e.createdAt)}
                     </td>
                   </tr>
                 ))}

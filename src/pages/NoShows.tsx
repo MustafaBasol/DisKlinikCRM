@@ -23,6 +23,7 @@ import {
   canCreateNoShowFollowUpTask,
 } from '../utils/permissions';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,24 +103,6 @@ function RecoveryBadge({ status }: { status: string }) {
   );
 }
 
-function fmtDate(dateStr: string, locale: string, timeStr?: string) {
-  try {
-    const d = new Date(dateStr + (timeStr ? `T${timeStr}` : ''));
-    return d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-}
-
-function fmtCurrency(value: number, locale: string, currency?: string | null) {
-  if (!value) return '-';
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: currency ?? 'TRY',
-    minimumFractionDigits: 0,
-  }).format(value);
-}
-
 // ─── Summary Card ─────────────────────────────────────────────────────────────
 
 function SummaryCard({
@@ -153,7 +136,8 @@ export default function NoShows() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { selectedClinicId } = useClinic();
-  const { t, i18n } = useTranslation(['noShows', 'common']);
+  const { t } = useTranslation(['noShows', 'common']);
+  const { formatCurrency, formatDate } = useClinicPreferences();
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -345,7 +329,7 @@ export default function NoShows() {
           />
           <SummaryCard
             title={t('noShows:summary.estimatedLostRevenue')}
-            value={fmtCurrency(summary.estimatedLostRevenue, i18n.language)}
+            value={formatCurrency(summary.estimatedLostRevenue)}
             subtitle={t('noShows:summary.byServicePrices')}
             icon={<TrendingDown className="w-5 h-5 text-yellow-600" />}
             color="bg-yellow-50 dark:bg-yellow-900/20"
@@ -479,18 +463,18 @@ export default function NoShows() {
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{row.clinicName}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{row.doctorName}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                      {fmtDate(row.date, i18n.language)} {row.time}
+                      {formatDate(row.date)} {row.time}
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{row.serviceName ?? '-'}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                      {fmtCurrency(row.estimatedValue, i18n.language, row.currency)}
+                      {formatCurrency(row.estimatedValue, row.currency)}
                     </td>
                     <td className="px-4 py-3">
                       <RecoveryBadge status={row.recoveryStatus} />
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                       {row.lastContactAt
-                        ? new Date(row.lastContactAt).toLocaleDateString(i18n.language)
+                        ? formatDate(row.lastContactAt)
                         : '-'}
                     </td>
                     <td className="px-4 py-3">

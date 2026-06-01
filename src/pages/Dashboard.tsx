@@ -41,8 +41,8 @@ import {
 import { dashboardService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { useTranslation } from 'react-i18next';
-import { formatTimeInTimeZone } from '../utils/dateTime';
 import AppointmentForm from '../components/AppointmentForm';
 
 const STAGE_COLORS: Record<string, string> = {
@@ -57,8 +57,9 @@ const STAGE_COLORS: Record<string, string> = {
 
 // ─── Doctor Dashboard ─────────────────────────────────────────────────────────
 
-const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }> = ({ data, user, clinicTimeZone }) => {
-  const { t, i18n } = useTranslation(['dashboard', 'common', 'appointments', 'treatmentCases']);
+const DoctorDashboard: React.FC<{ data: any; user: any }> = ({ data, user }) => {
+  const { t } = useTranslation(['dashboard', 'common', 'appointments', 'treatmentCases']);
+  const { formatCurrency, formatDate, formatDateTime, formatTime } = useClinicPreferences();
   const navigate = useNavigate();
   const [isNewApptOpen, setIsNewApptOpen] = useState(false);
 
@@ -79,7 +80,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard:doctor.greeting', { name: user?.firstName })}</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {new Date().toLocaleDateString(i18n.language, { weekday: 'long', day: 'numeric', month: 'long' })}
+            {formatDate(new Date())}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -123,7 +124,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
           <div className="flex-1">
             <p className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard:doctor.pendingEarnings')}</p>
             <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-              {new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2 }).format(extras.pendingEarnings)}
+              {formatCurrency(extras.pendingEarnings)}
             </p>
           </div>
           <ChevronRight size={20} className="text-gray-400" />
@@ -149,7 +150,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                 >
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: appt.appointmentType?.color || '#6366f1' }} />
                   <div className="w-14 text-xs font-bold text-gray-500 dark:text-gray-400 shrink-0">
-                    {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)}
+                    {formatTime(appt.startTime)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
@@ -191,7 +192,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                 <div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{log.description}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(log.createdAt).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' })}
+                    {formatDateTime(log.createdAt)}
                   </p>
                 </div>
               </div>
@@ -218,7 +219,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                   className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer text-sm">
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: appt.appointmentType?.color || '#6366f1' }} />
                   <span className="text-gray-500 dark:text-gray-400 w-24 shrink-0 text-xs">
-                    {new Date(appt.startTime).toLocaleDateString(i18n.language, { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {formatDate(appt.startTime)}
                   </span>
                   <span className="font-medium text-gray-900 dark:text-white truncate">
                     {appt.patient.firstName} {appt.patient.lastName}
@@ -282,7 +283,7 @@ const DoctorDashboard: React.FC<{ data: any; user: any; clinicTimeZone: string }
                       <p className="text-xs text-gray-400 truncate">{p.lastService}</p>
                     </div>
                     <p className="text-xs text-gray-400 shrink-0">
-                      {new Date(p.lastVisit).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short' })}
+                      {formatDate(p.lastVisit)}
                     </p>
                   </Link>
                 ))}
@@ -310,7 +311,7 @@ const Dashboard: React.FC = () => {
   const { t } = useTranslation(['dashboard', 'common', 'appointments', 'patients', 'tasks', 'messages']);
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
-  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
+  const { formatCurrency, formatDateTime, formatTime, formatNumber } = useClinicPreferences();
   const navigate = useNavigate();
   
   const [data, setData] = useState<any>(null);
@@ -347,7 +348,7 @@ const Dashboard: React.FC = () => {
 
   // ── Hekim kendi özel dashboard'unu görür ──────────────────────────────────
   if (user?.role === 'doctor' || (user && normalizeRole(user.role, user.canAccessAllClinics) === 'DENTIST')) {
-    return <DoctorDashboard data={data} user={user} clinicTimeZone={clinicTimeZone} />;
+    return <DoctorDashboard data={data} user={user} />;
   }
 
   const statCards = [
@@ -369,7 +370,7 @@ const Dashboard: React.FC = () => {
     },
     { 
       label: t('dashboard:monthlyRevenue'), 
-      value: `${data?.stats?.monthlyRevenue?.toLocaleString()} ${user?.clinic?.currency || '$'}`, 
+      value: formatCurrency(data?.stats?.monthlyRevenue || 0), 
       icon: <TrendingUp size={24} />, 
       color: "bg-purple-500", 
       trend: t('dashboard:stats.revenueGoal'),
@@ -377,7 +378,7 @@ const Dashboard: React.FC = () => {
     },
     { 
       label: t('dashboard:pendingCollections'), 
-      value: `${data?.stats?.pendingAmount?.toLocaleString()} ${user?.clinic?.currency || '$'}`, 
+      value: formatCurrency(data?.stats?.pendingAmount || 0), 
       icon: <DollarSign size={24} />, 
       color: "bg-amber-500", 
       trend: t('dashboard:stats.actionRequired'), 
@@ -453,7 +454,7 @@ const Dashboard: React.FC = () => {
               <div className="flex-1">
                 <p className="text-xs font-bold uppercase tracking-wider opacity-70">{t(`dashboard:alerts.${alert.title}`)}</p>
                 <p className="text-lg font-bold">
-                  {alert.count !== undefined ? alert.count : `${alert.value?.toLocaleString()} ${user?.clinic?.currency || '$'}`}
+                  {alert.count !== undefined ? alert.count : formatCurrency(alert.value || 0)}
                 </p>
               </div>
               <ChevronRight size={20} className="opacity-50" />
@@ -532,7 +533,7 @@ const Dashboard: React.FC = () => {
                         {appt.practitioner.firstName} {appt.practitioner.lastName}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                        {formatTimeInTimeZone(appt.startTime, undefined, clinicTimeZone)}
+                        {formatTime(appt.startTime)}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -583,7 +584,7 @@ const Dashboard: React.FC = () => {
                         <span className="font-bold text-gray-900">{log.user.firstName}</span> {log.description}
                       </p>
                       <p className="text-[10px] text-gray-400 mt-1 font-medium">
-                        {new Date(log.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                        {formatDateTime(log.createdAt)}
                       </p>
                     </div>
                   </div>
@@ -670,10 +671,10 @@ const Dashboard: React.FC = () => {
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={data.charts.monthlyRevenueTrend}>
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} width={55} tickFormatter={(v) => v.toLocaleString()} />
+                <YAxis tick={{ fontSize: 11 }} width={55} tickFormatter={(v) => formatNumber(Number(v))} />
                 <Tooltip
                   contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
-                  formatter={(v: any) => [v.toLocaleString(), t('dashboard:charts.revenue')]}
+                  formatter={(v: any) => [formatCurrency(Number(v)), t('dashboard:charts.revenue')]}
                 />
                 <Line
                   type="monotone"

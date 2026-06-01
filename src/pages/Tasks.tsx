@@ -18,11 +18,13 @@ import { taskService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import TaskForm from '../components/TaskForm';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const Tasks: React.FC = () => {
   const { t } = useTranslation(['tasks', 'common']);
   const { user: currentUser } = useAuth();
   const { selectedClinicId } = useClinic();
+  const { formatDate } = useClinicPreferences();
   
   const [tasks, setTasks] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -228,7 +230,7 @@ const Tasks: React.FC = () => {
                   <span className="flex items-center gap-1">
                     <Clock size={12} className="text-gray-400" />
                     <span className={isOverdue(task.dueDate, task.status) ? 'text-red-600 font-bold' : ''}>
-                      {new Date(task.dueDate).toLocaleDateString()}
+                      {formatDate(task.dueDate)}
                     </span>
                   </span>
                   <span className="flex items-center gap-1">

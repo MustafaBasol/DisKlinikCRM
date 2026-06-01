@@ -21,16 +21,23 @@ import {
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { reportService, userService } from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const METHOD_KEYS = ['cash', 'card', 'bank_transfer', 'cheque', 'insurance', 'other'] as const;
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6B7280', '#EC4899', '#14B8A6'];
 
-function formatCurrency(amount: number, locale: string, currency = 'TRY') {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+function formatEnumFallback(value: string) {
+  const normalized = value?.trim();
+  if (!normalized) return '-';
+
+  return normalized
+    .split('_')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function defaultDateRange() {
@@ -44,9 +51,9 @@ function defaultDateRange() {
 }
 
 const Reports: React.FC = () => {
-  const { t, i18n } = useTranslation(['reports', 'common', 'payments']);
-  const { user } = useAuth();
+  const { t } = useTranslation(['reports', 'common', 'payments']);
   const { selectedClinicId } = useClinic();
+  const { defaultCurrency, formatCurrency } = useClinicPreferences();
   const [tab, setTab] = useState<'revenue' | 'doctors' | 'sources' | 'noshow'>('revenue');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -182,10 +189,9 @@ const Reports: React.FC = () => {
   const byPeriod = revenueData?.byPeriod || [];
   const byMethod = revenueData?.byMethod || [];
   const byPractitioner = revenueData?.byPractitioner || [];
-  const locale = i18n.language || 'tr';
-  const money = (amount: number, currency = 'TRY') => formatCurrency(amount, locale, currency);
-  const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
-  const sourceLabel = (source: string) => t(`reports:sources.${source}`, { defaultValue: source });
+  const money = (amount: number, currency = defaultCurrency) => formatCurrency(amount, currency);
+  const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: formatEnumFallback(method) });
+  const sourceLabel = (source: string) => t(`reports:sources.${source}`, { defaultValue: formatEnumFallback(source) });
   const dayLabel = (day: number | string) => {
     const key = DAY_KEYS[Number(day)];
     return key ? t(`reports:daysShort.${key}`) : String(day);

@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { insuranceProvisionSchema, insuranceProvisionUpdateSchema, insuranceStatusSchema } from '../schemas/index.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -102,15 +103,25 @@ router.get('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
 // POST /api/insurance-provisions
 router.post('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
-  const validation = insuranceProvisionSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const operatingPreferences = await getClinicOperatingPreferences(clinicId);
+    const validation = insuranceProvisionSchema.safeParse({
+      ...req.body,
+      currency: req.body.currency || operatingPreferences.currency,
+    });
+    if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+
     const relationValidation = await validateInsuranceRelations(validation.data, clinicId);
     if (relationValidation.error) return res.status(400).json({ error: relationValidation.error });
 
     const provision = await prisma.insuranceProvision.create({
-      data: { ...validation.data, clinicId, createdById: req.user!.id },
+      data: {
+        ...validation.data,
+        currency: validation.data.currency || operatingPreferences.currency,
+        clinicId,
+        createdById: req.user!.id,
+      },
       include: insuranceInclude,
     });
 

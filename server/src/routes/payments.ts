@@ -7,6 +7,7 @@ import { paymentSchema } from '../schemas/index.js';
 import { generateEarningFromPayment } from '../services/earningService.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -61,10 +62,15 @@ router.get('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILL
 router.post('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
-  const validation = paymentSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const operatingPreferences = await getClinicOperatingPreferences(clinicId);
+    const validation = paymentSchema.safeParse({
+      ...req.body,
+      currency: req.body.currency || operatingPreferences.currency,
+    });
+    if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+
     const patient = await prisma.patient.findFirst({ where: { id: validation.data.patientId, organizationId: req.user!.organizationId } });
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
 
@@ -76,7 +82,12 @@ router.post('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BIL
     }
 
     const payment = await prisma.payment.create({
-      data: { ...validation.data, clinicId, createdById: req.user!.id },
+      data: {
+        ...validation.data,
+        currency: validation.data.currency || operatingPreferences.currency,
+        clinicId,
+        createdById: req.user!.id,
+      },
     });
 
     await logActivity({

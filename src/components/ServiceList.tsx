@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Edit2, CheckCircle2, XCircle, Tag, Loader2, AlertCircle } from 'lucide-react';
 import { serviceService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const ServiceList: React.FC = () => {
-  const { t, i18n } = useTranslation(['services', 'settings', 'common']);
+  const { t } = useTranslation(['services', 'settings', 'common']);
+  const { formatNumber } = useClinicPreferences();
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +86,7 @@ const ServiceList: React.FC = () => {
                   <td className="p-4 text-sm text-gray-600">{service.category || '-'}</td>
                   <td className="p-4 text-sm text-gray-600">{service.durationMinutes} min</td>
                   <td className="p-4 text-sm font-medium text-primary-600">
-                    {service.basePrice != null ? service.basePrice.toLocaleString(i18n.language) : <span className="text-gray-400 italic text-xs">{t('services:fields.noBasePrice')}</span>}
+                    {service.basePrice != null ? formatNumber(service.basePrice) : <span className="text-gray-400 italic text-xs">{t('services:fields.noBasePrice')}</span>}
                   </td>
                   <td className="p-4 text-sm text-gray-600">{service.currency || <span className="text-gray-300">—</span>}</td>
                   <td className="p-4">
@@ -134,13 +136,14 @@ const ServiceList: React.FC = () => {
 
 const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () => void }> = ({ service, onClose, onSuccess }) => {
   const { t } = useTranslation(['services', 'settings', 'common']);
+  const { defaultCurrency } = useClinicPreferences();
   const [formData, setFormData] = useState({
     name: service?.name || '',
     category: service?.category || '',
     description: service?.description || '',
     durationMinutes: service?.durationMinutes || 30,
     basePrice: service?.basePrice ?? '',
-    currency: service?.currency || 'TRY',
+    currency: service?.currency || defaultCurrency,
     color: service?.color || '#3B82F6',
   });
   const [loading, setLoading] = useState(false);
@@ -227,6 +230,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
                 <option value="EUR">EUR</option>
                 <option value="USD">USD</option>
                 <option value="GBP">GBP</option>
+                <option value="CAD">CAD</option>
                 <option value="CHF">CHF</option>
               </select>
             </div>

@@ -20,11 +20,13 @@ import { useNavigate } from 'react-router-dom';
 import { treatmentCaseService, userService } from '../services/api';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const TreatmentCases: React.FC = () => {
   const { t } = useTranslation(['treatmentCases', 'common']);
   const navigate = useNavigate();
   const { selectedClinicId } = useClinic();
+  const { defaultCurrency, formatCurrency } = useClinicPreferences();
   
   const [cases, setCases] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
@@ -88,7 +90,7 @@ const TreatmentCases: React.FC = () => {
   };
 
   const totalValue = cases.reduce((acc, curr) => acc + (curr.acceptedAmount || curr.estimatedAmount || 0), 0);
-  const summaryCurrency = cases[0]?.currency || 'TRY';
+  const summaryCurrency = cases[0]?.currency || defaultCurrency;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -116,7 +118,7 @@ const TreatmentCases: React.FC = () => {
             <TrendingUp size={24} className="opacity-80" />
             <span className="text-xs font-bold uppercase tracking-wider opacity-80">{t('treatmentCases:summary.pipelineValue')}</span>
           </div>
-          <p className="text-3xl font-bold">{totalValue.toLocaleString()} <span className="text-lg font-normal opacity-80">{summaryCurrency}</span></p>
+          <p className="text-3xl font-bold">{formatCurrency(totalValue, summaryCurrency)}</p>
           <p className="text-sm mt-2 opacity-80">{t('treatmentCases:summary.activeOpportunities', { count: cases.length })}</p>
         </div>
         <div className="card p-6 bg-white flex flex-col justify-between">
@@ -229,7 +231,7 @@ const TreatmentCases: React.FC = () => {
                     </td>
                     <td className="p-4 text-right">
                       <p className="text-sm font-bold text-gray-900">
-                        {c.acceptedAmount?.toLocaleString() || c.estimatedAmount?.toLocaleString() || 0} {c.currency}
+                        {formatCurrency(c.acceptedAmount ?? c.estimatedAmount ?? 0, c.currency || summaryCurrency)}
                       </p>
                       <p className="text-[10px] text-gray-400 mt-0.5">
                         {c.acceptedAmount ? t('treatmentCases:list.accepted') : t('treatmentCases:list.estimated')}
