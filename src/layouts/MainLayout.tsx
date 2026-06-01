@@ -34,7 +34,6 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { ClinicProvider } from '../context/ClinicContext';
 import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
 import NotificationBell from '../components/NotificationBell';
@@ -469,10 +468,6 @@ const MainLayoutInner: React.FC = () => {
   );
 };
 
-const MainLayout: React.FC = () => (
-  <ClinicProvider>
-    <MainLayoutInner />
-  </ClinicProvider>
-);
+const MainLayout: React.FC = () => <MainLayoutInner />;
 
 export default MainLayout;

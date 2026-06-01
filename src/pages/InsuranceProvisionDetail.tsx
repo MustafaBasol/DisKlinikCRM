@@ -4,6 +4,7 @@ import { ArrowLeft, Edit2, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { insuranceProvisionService } from '../services/api';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const statusClass = (status: string) => {
   if (status === 'approved') return 'badge-green';
@@ -17,6 +18,7 @@ const InsuranceProvisionDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation(['insurance', 'common']);
+  const { formatCurrency, formatDate, formatDateTime } = useClinicPreferences();
   const [provision, setProvision] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -85,23 +87,23 @@ const InsuranceProvisionDetail: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card p-5">
           <p className="text-xs font-bold text-gray-400 uppercase">{t('insurance:fields.requestedAmount')}</p>
-          <p className="text-2xl font-bold">{provision.requestedAmount?.toLocaleString()} {provision.currency}</p>
+          <p className="text-2xl font-bold">{formatCurrency(provision.requestedAmount, provision.currency)}</p>
         </div>
         <div className="card p-5">
           <p className="text-xs font-bold text-gray-400 uppercase">{t('insurance:fields.approvedAmount')}</p>
-          <p className="text-2xl font-bold">{provision.approvedAmount != null ? provision.approvedAmount.toLocaleString() : '-'} <span className="text-sm text-gray-500">{provision.currency}</span></p>
+          <p className="text-2xl font-bold">{provision.approvedAmount != null ? formatCurrency(provision.approvedAmount, provision.currency) : '-'}</p>
         </div>
         <div className="card p-5">
           <p className="text-xs font-bold text-gray-400 uppercase">{t('insurance:fields.patientResponsibility')}</p>
-          <p className="text-2xl font-bold">{provision.patientResponsibilityAmount != null ? provision.patientResponsibilityAmount.toLocaleString() : '-'} <span className="text-sm text-gray-500">{provision.currency}</span></p>
+          <p className="text-2xl font-bold">{provision.patientResponsibilityAmount != null ? formatCurrency(provision.patientResponsibilityAmount, provision.currency) : '-'}</p>
         </div>
       </div>
 
       <div className="card p-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
         <div><span className="text-gray-500">{t('insurance:fields.policyNumber')}:</span> <span className="font-medium">{provision.policyNumber || '-'}</span></div>
         <div><span className="text-gray-500">{t('insurance:fields.provisionNumber')}:</span> <span className="font-medium">{provision.provisionNumber || '-'}</span></div>
-        <div><span className="text-gray-500">{t('insurance:fields.submittedAt')}:</span> <span className="font-medium">{provision.submittedAt ? new Date(provision.submittedAt).toLocaleDateString() : '-'}</span></div>
-        <div><span className="text-gray-500">{t('insurance:fields.respondedAt')}:</span> <span className="font-medium">{provision.respondedAt ? new Date(provision.respondedAt).toLocaleDateString() : '-'}</span></div>
+        <div><span className="text-gray-500">{t('insurance:fields.submittedAt')}:</span> <span className="font-medium">{formatDate(provision.submittedAt)}</span></div>
+        <div><span className="text-gray-500">{t('insurance:fields.respondedAt')}:</span> <span className="font-medium">{formatDate(provision.respondedAt)}</span></div>
         <div><span className="text-gray-500">{t('insurance:fields.assignedTo')}:</span> <span className="font-medium">{provision.assignedTo ? `${provision.assignedTo.firstName} ${provision.assignedTo.lastName}` : '-'}</span></div>
         <div><span className="text-gray-500">{t('insurance:fields.createdBy')}:</span> <span className="font-medium">{provision.createdBy.firstName} {provision.createdBy.lastName}</span></div>
         {provision.rejectionReason && <div className="md:col-span-2 text-red-600"><span className="font-bold">{t('insurance:fields.rejectionReason')}:</span> {provision.rejectionReason}</div>}
@@ -114,7 +116,7 @@ const InsuranceProvisionDetail: React.FC = () => {
           {provision.activityLogs?.length > 0 ? provision.activityLogs.map((log: any) => (
             <div key={log.id} className="border-l-2 border-primary-100 pl-4">
               <p className="text-sm font-medium">{log.description}</p>
-              <p className="text-xs text-gray-500">{log.user.firstName} {log.user.lastName} • {new Date(log.createdAt).toLocaleString()}</p>
+              <p className="text-xs text-gray-500">{log.user.firstName} {log.user.lastName} • {formatDateTime(log.createdAt)}</p>
             </div>
           )) : <p className="text-sm text-gray-400 italic">{t('common:noData')}</p>}
         </div>

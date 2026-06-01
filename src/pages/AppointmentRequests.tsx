@@ -11,18 +11,21 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { appointmentRequestService } from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import { formatDateTimeInTimeZone, formatTimeInTimeZone } from '../utils/dateTime';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const AppointmentRequests: React.FC = () => {
-  const { t, i18n } = useTranslation(['appointmentRequests', 'common']);
-  const { user } = useAuth();
+  const { t } = useTranslation(['appointmentRequests', 'common']);
+  const { formatDateTime, formatTime } = useClinicPreferences();
   const [allRequests, setAllRequests] = useState<any[]>([]);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState('');
   const [error, setError] = useState('');
-  const clinicTimeZone = user?.clinic?.timezone || 'Europe/Paris';
+  const formatPreferredRange = (start?: string, end?: string) => {
+    if (!start) return '-';
+    if (!end) return formatDateTime(start);
+    return `${formatDateTime(start)} - ${formatTime(end)}`;
+  };
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -179,7 +182,7 @@ const AppointmentRequests: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-sm">
                     <InfoBlock label={t('appointmentRequests:fields.service')} value={request.appointmentType?.name || t('common:unassigned')} />
                     <InfoBlock label={t('appointmentRequests:fields.practitioner')} value={request.practitioner ? `${request.practitioner.firstName} ${request.practitioner.lastName}` : t('common:unassigned')} />
-                    <InfoBlock label={t('appointmentRequests:fields.preferredTime')} value={formatDateRange(request.preferredStartTime, request.preferredEndTime, i18n.language, clinicTimeZone)} />
+                    <InfoBlock label={t('appointmentRequests:fields.preferredTime')} value={formatPreferredRange(request.preferredStartTime, request.preferredEndTime)} />
                   </div>
 
                   {request.rawMessage && (
@@ -232,14 +235,6 @@ const InfoBlock = ({ label, value }: { label: string; value: string }) => (
     <p className="font-medium text-gray-900 mt-1">{value}</p>
   </div>
 );
-
-const formatDateRange = (start?: string, end?: string, locale = 'tr', timeZone = 'Europe/Paris') => {
-  if (!start) return '-';
-  const startLabel = formatDateTimeInTimeZone(start, locale, timeZone);
-  if (!end) return startLabel;
-  const endLabel = formatTimeInTimeZone(end, locale, timeZone);
-  return `${startLabel} - ${endLabel}`;
-};
 
 const statusCardClass = (status: string) => {
   switch (status) {

@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlatformAuthProvider, usePlatformAuth } from './context/PlatformAuthContext';
+import { ClinicProvider } from './context/ClinicContext';
+import { ClinicPreferencesProvider } from './context/ClinicPreferencesContext';
 import MainLayout from './layouts/MainLayout';
 import PlatformAdminLayout from './layouts/PlatformAdminLayout';
 import GlobalSearch from './components/GlobalSearch';
@@ -107,7 +109,8 @@ const ProductApplication: React.FC = () => {
   return (
     <AuthProvider>
       <PlatformAuthProvider>
-        <>
+        <ClinicProvider>
+          <ClinicPreferencesProvider>
           <ToastContainer />
           <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
           <Routes>
@@ -133,6 +136,7 @@ const ProductApplication: React.FC = () => {
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<MainLayout />}>
               <Route index element={<Dashboard />} />
+              <Route path="dashboard" element={<Dashboard />} />
               <Route path="patients" element={<Patients />} />
               <Route path="patients/:id" element={<PatientDetail />} />
               <Route path="appointments" element={<Appointments />} />
@@ -163,11 +167,12 @@ const ProductApplication: React.FC = () => {
               <Route path="operations" element={<Operations />} />
               <Route path="users" element={<Users />} />
               <Route path="no-shows" element={<NoShows />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>
             </Route>
           </Routes>
-        </>
+          </ClinicPreferencesProvider>
+        </ClinicProvider>
       </PlatformAuthProvider>
     </AuthProvider>
   );
@@ -176,6 +181,7 @@ const ProductApplication: React.FC = () => {
 const App: React.FC = () => (
   <Router>
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/legal" element={<LegalCenterPage />} />
       <Route path="/legal/privacy" element={<PrivacyNoticePage />} />

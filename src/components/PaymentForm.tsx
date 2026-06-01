@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Briefcase, DollarSign, Calendar, CreditCard, AlertCircle, Loader2, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { patientService, treatmentCaseService, paymentService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface PaymentFormProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ interface PaymentFormProps {
 
 const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialData, patientId, treatmentCaseId }) => {
   const { t } = useTranslation(['payments', 'common']);
+  const { defaultCurrency } = useClinicPreferences();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -23,7 +25,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
     patientId: patientId || initialData?.patientId || '',
     treatmentCaseId: treatmentCaseId || initialData?.treatmentCaseId || '',
     amount: initialData?.amount || 0,
-    currency: initialData?.currency || 'TRY',
+    currency: initialData?.currency || defaultCurrency,
     paymentMethod: initialData?.paymentMethod || 'cash',
     paymentStatus: initialData?.paymentStatus || 'paid',
     paidAt: initialData?.paidAt ? new Date(initialData.paidAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -157,6 +159,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
                   <option value="GBP">GBP</option>
+                  <option value="CAD">CAD</option>
                   <option value="CHF">CHF</option>
                 </select>
               </div>

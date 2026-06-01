@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import prisma from '../db.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
 
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
-    const [services, doctors, availabilities, offDays] = await Promise.all([
+    const [services, doctors, availabilities, offDays, operatingPreferences] = await Promise.all([
       prisma.appointmentType.findMany({
         where: { clinicId, isActive: true, isService: true },
         select: {
@@ -42,6 +43,7 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
         where: { clinicId },
         select: { practitionerId: true, date: true },
       }),
+      getClinicOperatingPreferences(clinicId),
     ]);
 
     // Build doctor → available weekdays map
@@ -60,6 +62,7 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
 
     return res.json({
       clinic,
+      operatingPreferences,
       services,
       doctors: doctors.map((d) => ({
         ...d,

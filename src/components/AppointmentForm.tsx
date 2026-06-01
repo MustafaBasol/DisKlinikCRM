@@ -3,6 +3,7 @@ import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle, Briefcase,
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import {
   appointmentService,
   instagramInboxService,
@@ -55,15 +56,9 @@ const toTimeInputValue = (value?: string | Date, timeZone?: string) => {
   return formatTimeInTimeZone(parsed, 'en-GB', timeZone);
 };
 
-const formatDateLabel = (date: string, locale: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString(locale, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-
 const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, initialData, prefill }) => {
-  const { t, i18n } = useTranslation(['appointments', 'common']);
+  const { t } = useTranslation(['appointments', 'common']);
+  const { formatDate, formatDateTime, formatTime } = useClinicPreferences();
   const { user } = useAuth();
   const { availableClinics, selectedClinicId } = useClinic();
   const effectiveClinicId =
@@ -111,7 +106,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     notes: initialData?.notes || (isNoShowReschedule && prefill?.previousAppointmentId
       ? `Rescheduled from no-show appointment: ${prefill.previousAppointmentId}`
       : isInstagramSource
-        ? `Instagram DM'den oluşturuldu.`
+        ? t('appointments:form.instagramDefaultNote')
         : ''),
     treatmentCaseId: initialData?.treatmentCaseId || '',
   });
@@ -271,7 +266,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
           try {
             await noShowService.updateRecoveryStatus(prefill.previousAppointmentId, {
               status: 'recovered',
-              note: 'Yeni randevu oluşturuldu.',
+              note: t('appointments:form.noShowRecoveredNote'),
             });
             window.dispatchEvent(new CustomEvent('noShowRecovered'));
           } catch {
@@ -339,16 +334,16 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-700/50 dark:text-amber-200">
               <Info size={16} className="mt-0.5 flex-shrink-0" />
               <div>
-                <div className="font-semibold mb-0.5">No-show randevudan yeniden oluşturuluyor</div>
+                <div className="font-semibold mb-0.5">{t('appointments:form.noShowRescheduleTitle')}</div>
                 <div className="text-xs text-amber-700 dark:text-amber-300">
-                  Bu randevu, no-show olarak işaretlenen önceki randevudan yeniden oluşturuluyor.
+                  {t('appointments:form.noShowRescheduleBody')}
                   {prevAppointment && (
                     <span>
-                      {' '}Önceki tarih:{' '}
-                      {new Date(prevAppointment.startTime).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.
+                      {' '}{t('appointments:form.previousAppointmentDate')}{' '}
+                      {formatDateTime(prevAppointment.startTime)}.
                     </span>
                   )}
-                  {' '}Randevu oluşturulduğunda önceki no-show otomatik olarak "Geri Kazanıldı" durumuna alınacak.
+                  {' '}{t('appointments:form.noShowRescheduleRecoveryHint')}
                 </div>
               </div>
             </div>
@@ -358,9 +353,9 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
             <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-start gap-2.5 text-sm text-purple-800 dark:bg-purple-900/20 dark:border-purple-700/50 dark:text-purple-200">
               <Info size={16} className="mt-0.5 flex-shrink-0" />
               <div>
-                <div className="font-semibold mb-0.5">Instagram DM görüşmesinden oluşturuluyor</div>
+                <div className="font-semibold mb-0.5">{t('appointments:form.instagramSourceTitle')}</div>
                 <div className="text-xs text-purple-700 dark:text-purple-300">
-                  Bu randevu bir Instagram DM görüşmesinden oluşturuluyor. Randevu kaydedildiğinde ilgili DM "Dönüştürüldü" olarak işaretlenecek.
+                  {t('appointments:form.instagramSourceBody')}
                 </div>
               </div>
             </div>
@@ -398,14 +393,14 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                   <Briefcase size={16} className="text-gray-400" />
-                  Tedavi Dosyası <span className="text-gray-400 font-normal">(isteğe bağlı)</span>
+                  {t('appointments:form.treatmentCase')} <span className="text-gray-400 font-normal">({t('appointments:form.optional')})</span>
                 </label>
                 <select
                   className="input-field"
                   value={formData.treatmentCaseId}
                   onChange={(e) => setFormData({ ...formData, treatmentCaseId: e.target.value })}
                 >
-                  <option value="">Tedavi dosyası seçin (isteğe bağlı)</option>
+                  <option value="">{t('appointments:form.selectTreatmentCaseOptional')}</option>
                   {treatmentCases.map(tc => (
                     <option key={tc.id} value={tc.id}>{tc.title}</option>
                   ))}
@@ -555,7 +550,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
                   </div>
                   <div>
                     <span className="font-semibold">{t('appointments:form.summaryDateTime')}:</span>{' '}
-                    {formatDateLabel(formData.date, i18n.language)} · {selectedSlot.start} - {selectedSlot.end}
+                    {formatDate(`${formData.date}T00:00:00`)} · {selectedSlot.startTime ? formatTime(selectedSlot.startTime) : selectedSlot.start} - {selectedSlot.endTime ? formatTime(selectedSlot.endTime) : selectedSlot.end}
                   </div>
                 </div>
               </section>

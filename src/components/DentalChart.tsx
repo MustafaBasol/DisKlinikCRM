@@ -4,6 +4,7 @@ import { Loader2, Trash2, Save, X, ClipboardList, CheckCircle2, Circle, AlertCir
 import { useTranslation } from 'react-i18next';
 import { dentalChartService, treatmentPlanProceduresService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 // ── Types ──────────────────────────────────────────────────────────────
 export type ToothStatus = 'planned' | 'treated' | 'issue' | 'missing' | 'crown' | 'implant';
@@ -156,8 +157,9 @@ const JawRow: React.FC<JawRowProps> = ({ left, right, records, procedureMap, onT
 
 // ── Main component ─────────────────────────────────────────────────────
 const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatmentPlan = true }) => {
-  const { t, i18n } = useTranslation(['patients', 'common']);
+  const { t } = useTranslation(['patients', 'common']);
   const { user } = useAuth();
+  const { formatCurrency } = useClinicPreferences();
   const canEdit = !readOnly && ['admin', 'receptionist', 'doctor'].includes(user?.role || '');
 
   const [records, setRecords] = useState<Map<number, ToothRecord>>(new Map());
@@ -473,7 +475,7 @@ const DentalChart: React.FC<Props> = ({ patientId, readOnly = false, showTreatme
                           </div>
                           {p.notes && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.notes}</p>}
                           {p.estimatedCost && (
-                            <p className="text-xs text-gray-400 mt-0.5">{t('patients:dentalChart.estimated')}: {p.estimatedCost.toLocaleString(i18n.language)} ₺</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{t('patients:dentalChart.estimated')}: {formatCurrency(p.estimatedCost)}</p>
                           )}
                         </div>
                       </div>

@@ -5,6 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { taskSchema } from '../schemas/index.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';
 
 const router = express.Router();
 
@@ -61,6 +62,8 @@ router.get('/tasks/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DEN
     });
 
     if (!task) return res.status(404).json({ error: 'Task not found' });
+    await sendTaskAssignmentNotification(clinicId, task);
+
     res.json(task);
   } catch {
     res.status(500).json({ error: 'Failed to fetch task' });
@@ -121,6 +124,10 @@ router.put('/tasks/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DEN
       clinicId, userId: req.user!.id, entityType: 'task', entityId: id,
       action: 'updated', description: `"${updated.title}" görevi güncellendi`,
     });
+
+    if (validation.data.assignedToId && validation.data.assignedToId !== existing.assignedToId) {
+      await sendTaskAssignmentNotification(clinicId, updated);
+    }
 
     res.json(updated);
   } catch {

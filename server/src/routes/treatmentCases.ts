@@ -6,6 +6,7 @@ import { getParam } from '../utils/helpers.js';
 import { treatmentCaseSchema } from '../schemas/index.js';
 import { generateEarningFromTreatmentCase } from '../services/earningService.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -87,10 +88,15 @@ router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
 router.post('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
-  const validation = treatmentCaseSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const operatingPreferences = await getClinicOperatingPreferences(clinicId);
+    const validation = treatmentCaseSchema.safeParse({
+      ...req.body,
+      currency: req.body.currency || operatingPreferences.currency,
+    });
+    if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+
     const practitionerId = validation.data.practitionerId ?? undefined;
     const [patient, practitioner] = await Promise.all([
       prisma.patient.findFirst({ where: { id: validation.data.patientId, organizationId: req.user!.organizationId, deletedAt: null } }),
@@ -101,7 +107,11 @@ router.post('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
     if (practitionerId && !practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
 
     const tc = await prisma.treatmentCase.create({
-      data: { ...validation.data, clinicId },
+      data: {
+        ...validation.data,
+        currency: validation.data.currency || operatingPreferences.currency,
+        clinicId,
+      },
       include: treatmentCaseInclude,
     });
 

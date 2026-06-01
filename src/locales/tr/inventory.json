@@ -45,7 +45,7 @@
       "unit": "Birim",
       "openingStock": "Açılış Stoğu",
       "minimumStock": "Minimum Stok (Uyarı)",
-      "unitCost": "Birim Maliyet (₺)",
+      "unitCost": "Birim Maliyet",
       "supplier": "Tedarikçi",
       "barcode": "Barkod",
       "notes": "Notlar"

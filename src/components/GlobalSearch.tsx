@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, User, Calendar, Stethoscope, X, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { patientService, appointmentService, treatmentCaseService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface SearchResult {
   id: string;
@@ -24,7 +25,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation('common');
+  const { t } = useTranslation('common');
+  const { formatDate } = useClinicPreferences();
 
   useEffect(() => {
     if (isOpen) {
@@ -74,7 +76,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
             id: a.id,
             type: 'appointment',
             title: `${a.patient?.firstName ?? ''} ${a.patient?.lastName ?? ''}`.trim(),
-            subtitle: `${a.appointmentType?.name ?? ''} — ${new Date(a.startTime).toLocaleDateString(i18n.language)}`,
+            subtitle: `${a.appointmentType?.name ?? ''} — ${formatDate(a.startTime)}`,
             path: `/appointments/${a.id}`,
           });
         });
@@ -102,7 +104,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [formatDate]);
 
   useEffect(() => {
     const timer = setTimeout(() => search(query), 300);

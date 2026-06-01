@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { timeToMinutes } from '../utils/helpers.js';
 
-export const validCurrencies = ['USD', 'EUR', 'TRY', 'GBP', 'CHF'] as const;
+export const validCurrencies = ['USD', 'EUR', 'TRY', 'GBP', 'CAD', 'CHF'] as const;
 export const insuranceTypes = ['sgk', 'tss', 'oss', 'private', 'corporate', 'other'] as const;
 export const insuranceStatuses = [
   'draft',
@@ -195,7 +195,7 @@ export const treatmentCaseSchema = z.object({
   ]).default('new'),
   estimatedAmount: z.number().nonnegative().optional().nullable(),
   acceptedAmount: z.number().nonnegative().optional().nullable(),
-  currency: z.enum(validCurrencies).default('USD'),
+  currency: z.enum(validCurrencies).optional(),
   expectedStartDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   lostReason: z.string().optional().nullable(),
 });
@@ -213,7 +213,7 @@ const insuranceProvisionBaseSchema = z.object({
   requestedAmount: z.number().nonnegative('Requested amount must be non-negative'),
   approvedAmount: z.number().nonnegative('Approved amount must be non-negative').optional().nullable(),
   patientResponsibilityAmount: z.number().nonnegative('Patient responsibility amount must be non-negative').optional().nullable(),
-  currency: z.enum(validCurrencies).default('TRY'),
+  currency: z.enum(validCurrencies).optional(),
   submittedAt: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   respondedAt: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   rejectionReason: z.string().optional().nullable(),
@@ -250,7 +250,7 @@ export const paymentSchema = z.object({
   patientId: z.string().uuid('Invalid patient ID'),
   treatmentCaseId: z.string().uuid().optional().nullable(),
   amount: z.number().positive('Amount must be positive'),
-  currency: z.string().min(1, 'Currency is required').default('USD'),
+  currency: z.enum(validCurrencies).optional(),
   paymentMethod: z.enum(['cash', 'card', 'bank_transfer', 'cheque', 'other']),
   paymentStatus: z.enum(['pending', 'partial', 'paid', 'refunded', 'cancelled']).default('paid'),
   paidAt: z.string().optional().nullable().transform(val => val ? new Date(val) : new Date()),

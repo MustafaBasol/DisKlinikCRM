@@ -13,6 +13,7 @@ import {
 import { appointmentSchema, appointmentUpdateSchema } from '../schemas/index.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 const SLOT_STEP_MINUTES = 30;
@@ -25,6 +26,27 @@ const addDaysToDateString = (date: string, days: number) => {
   const nextDay = String(result.getUTCDate()).padStart(2, '0');
 
   return `${nextYear}-${nextMonth}-${nextDay}`;
+};
+
+const formatAppointmentCaseDescription = (appointment: {
+  startTime: Date;
+  endTime: Date;
+  notes?: string | null;
+  appointmentType: { name: string; durationMinutes: number };
+}) => {
+  const lines = [
+    'Tamamlanan randevudan otomatik oluşturuldu.',
+    `Hizmet: ${appointment.appointmentType.name}`,
+    `Süre: ${appointment.appointmentType.durationMinutes} dk`,
+    `Başlangıç: ${appointment.startTime.toISOString()}`,
+    `Bitiş: ${appointment.endTime.toISOString()}`,
+  ];
+
+  if (appointment.notes?.trim()) {
+    lines.push(`Randevu notu: ${appointment.notes.trim()}`);
+  }
+
+  return lines.join('\n');
 };
 
 // GET /api/appointments
@@ -413,10 +435,64 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
       if (overlap) return res.status(409).json({ error: 'Overlap detected with another appointment' });
     }
 
-    const updated = await prisma.appointment.update({
-      where: { id },
-      data: validation.data,
-      include: { patient: true, practitioner: true },
+    const shouldCreateTreatmentCase =
+      validation.data.status === 'completed' &&
+      existing.status !== 'completed';
+
+    let autoCreatedTreatmentCase: { id: string; title: string } | null = null;
+    const operatingPreferences = shouldCreateTreatmentCase
+      ? await getClinicOperatingPreferences(clinicId)
+      : null;
+
+    const updated = await prisma.$transaction(async tx => {
+      const appointment = await tx.appointment.update({
+        where: { id },
+        data: validation.data,
+        include: {
+          patient: true,
+          practitioner: true,
+          appointmentType: true,
+          clinic: { select: { currency: true } },
+          treatmentCase: true,
+        },
+      });
+
+      if (!shouldCreateTreatmentCase || appointment.treatmentCaseId) {
+        return appointment;
+      }
+
+      const basePrice = appointment.appointmentType.basePrice;
+      const title = appointment.appointmentType.name || appointment.title || 'Tamamlanan randevu';
+      const treatmentCase = await tx.treatmentCase.create({
+        data: {
+          clinicId,
+          patientId: appointment.patientId,
+          practitionerId: appointment.practitionerId,
+          appointmentTypeId: appointment.appointmentTypeId,
+          title,
+          description: formatAppointmentCaseDescription(appointment),
+          stage: 'completed',
+          estimatedAmount: basePrice,
+          acceptedAmount: basePrice,
+          currency: appointment.appointmentType.currency || operatingPreferences?.currency || appointment.clinic.currency || 'TRY',
+          expectedStartDate: appointment.startTime,
+          closedAt: new Date(),
+          createdById: req.user!.id,
+        },
+      });
+
+      autoCreatedTreatmentCase = { id: treatmentCase.id, title: treatmentCase.title };
+
+      return tx.appointment.update({
+        where: { id },
+        data: { treatmentCaseId: treatmentCase.id },
+        include: {
+          patient: true,
+          practitioner: true,
+          appointmentType: true,
+          treatmentCase: true,
+        },
+      });
     });
 
     if (validation.data.status && validation.data.status !== existing.status) {
@@ -437,6 +513,18 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         metadata: { previousStatus: existing.status, newStatus: validation.data.status },
         ...extractRequestMeta(req),
       });
+
+      if (autoCreatedTreatmentCase) {
+        await logActivity({
+          clinicId,
+          userId,
+          entityType: 'treatment_case',
+          entityId: autoCreatedTreatmentCase.id,
+          action: 'created',
+          description: `Tamamlanan randevudan "${autoCreatedTreatmentCase.title}" tedavi dosyası otomatik oluşturuldu`,
+          metadata: { appointmentId: id },
+        });
+      }
     } else {
       await logActivity({
         clinicId, userId, entityType: 'appointment', entityId: id,

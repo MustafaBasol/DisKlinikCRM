@@ -7,17 +7,52 @@ import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { recordOperationalEvent } from '../services/operationalEventService.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
+function formatDateForTemplate(value: Date, preferences: ClinicOperatingPreferences): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: preferences.timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const year = parts.find(part => part.type === 'year')?.value ?? '0000';
+  const month = parts.find(part => part.type === 'month')?.value ?? '00';
+  const day = parts.find(part => part.type === 'day')?.value ?? '00';
+  if (preferences.dateFormat === 'MM/dd/yyyy') return `${month}/${day}/${year}`;
+  if (preferences.dateFormat === 'dd/MM/yyyy') return `${day}/${month}/${year}`;
+  if (preferences.dateFormat === 'yyyy-MM-dd') return `${year}-${month}-${day}`;
+  return `${day}.${month}.${year}`;
+}
+
+function formatTimeForTemplate(value: Date, preferences: ClinicOperatingPreferences): string {
+  return new Intl.DateTimeFormat(preferences.locale, {
+    timeZone: preferences.timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: preferences.timeFormat === '12h',
+  }).format(value);
+}
+
+function formatCurrencyForTemplate(value: number, currency: string, preferences: ClinicOperatingPreferences): string {
+  return new Intl.NumberFormat(preferences.locale, { style: 'currency', currency }).format(value);
+}
+
 async function renderTemplate(text: string, context: any): Promise<string> {
   let rendered = text;
+  const preferences = context.clinic?.id
+    ? await getClinicOperatingPreferences(context.clinic.id)
+    : undefined;
+  const appointmentStart = context.appointment ? new Date(context.appointment.startTime) : null;
   const vars: Record<string, string> = {
     patient_name: context.patient ? `${context.patient.firstName} ${context.patient.lastName}` : '',
     clinic_name: context.clinic?.name || '',
-    appointment_date: context.appointment ? new Date(context.appointment.startTime).toLocaleDateString() : '',
+    appointment_date: appointmentStart && preferences ? formatDateForTemplate(appointmentStart, preferences) : '',
     appointment_time: context.appointment
-      ? new Date(context.appointment.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? preferences ? formatTimeForTemplate(appointmentStart!, preferences) : new Date(context.appointment.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '',
     practitioner_name: context.appointment?.practitioner
       ? `Dr. ${context.appointment.practitioner.firstName} ${context.appointment.practitioner.lastName}`
@@ -25,7 +60,9 @@ async function renderTemplate(text: string, context: any): Promise<string> {
     treatment_title: context.treatmentCase?.title || '',
     remaining_balance:
       context.remainingBalance !== undefined
-        ? `${context.remainingBalance} ${context.clinic?.currency || 'USD'}`
+        ? preferences
+          ? formatCurrencyForTemplate(context.remainingBalance, context.clinic?.currency || preferences.currency, preferences)
+          : `${context.remainingBalance} ${context.clinic?.currency || 'USD'}`
         : '',
   };
 

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService, serviceService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
@@ -36,7 +37,8 @@ import AppointmentForm from '../components/AppointmentForm';
 const TreatmentCaseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation(['treatmentCases', 'common', 'tasks', 'appointments', 'messages', 'insurance', 'payments', 'patients']);
+  const { t } = useTranslation(['treatmentCases', 'common', 'tasks', 'appointments', 'messages', 'insurance', 'payments', 'patients']);
+  const { defaultCurrency, formatCurrency, formatDate, formatTime, formatDateTime } = useClinicPreferences();
   
   const [tCase, setTCase] = useState<any>(null);
   const [payments, setPayments] = useState<any[]>([]);
@@ -268,6 +270,8 @@ const TreatmentCaseDetail: React.FC = () => {
     approved: totals.approved + (provision.approvedAmount || 0),
     patientResponsibility: totals.patientResponsibility + (provision.patientResponsibilityAmount || 0),
   }), { requested: 0, approved: 0, patientResponsibility: 0 });
+  const caseCurrency = tCase.currency || defaultCurrency;
+  const paidTotal = payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -424,7 +428,7 @@ const TreatmentCaseDetail: React.FC = () => {
             <p className="text-red-700 mt-1">{t('treatmentCases:form.lostReason')}: {tCase.lostReason}</p>
             {tCase.closedAt && (
               <p className="text-xs text-red-500 mt-2">
-                {t('treatmentCases:detail.closedOn', { date: new Date(tCase.closedAt).toLocaleDateString(i18n.language) })}
+                {t('treatmentCases:detail.closedOn', { date: formatDate(tCase.closedAt) })}
               </p>
             )}
           </div>
@@ -442,39 +446,39 @@ const TreatmentCaseDetail: React.FC = () => {
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
                 <p className="text-xs font-bold text-gray-400 uppercase">{t('treatmentCases:form.estimatedAmount')}</p>
-                <p className="text-2xl font-bold text-gray-900">{tCase.estimatedAmount?.toLocaleString(i18n.language)} <span className="text-sm font-normal text-gray-500">{tCase.currency}</span></p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(tCase.estimatedAmount, caseCurrency)}</p>
               </div>
               <div className="p-4 rounded-2xl bg-primary-50 border border-primary-100">
                 <p className="text-xs font-bold text-primary-400 uppercase">{t('treatmentCases:form.acceptedAmount')}</p>
-                <p className="text-2xl font-bold text-primary-700">{tCase.acceptedAmount?.toLocaleString(i18n.language)} <span className="text-sm font-normal text-primary-500">{tCase.currency}</span></p>
+                <p className="text-2xl font-bold text-primary-700">{formatCurrency(tCase.acceptedAmount, caseCurrency)}</p>
               </div>
               <div className="p-4 rounded-2xl bg-green-50 border border-green-100">
                 <p className="text-xs font-bold text-green-400 uppercase">{t('payments:summary.totalPaid')}</p>
                 <p className="text-xl font-bold text-green-700">
-                  {payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString(i18n.language)} <span className="text-sm font-normal text-green-500">{tCase.currency}</span>
+                  {formatCurrency(paidTotal, caseCurrency)}
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
                 <p className="text-xs font-bold text-amber-400 uppercase">{t('payments:summary.remaining')}</p>
                 <p className="text-xl font-bold text-amber-700">
-                  {( (tCase.acceptedAmount || tCase.estimatedAmount || 0) - payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0) ).toLocaleString(i18n.language)} <span className="text-sm font-normal text-amber-500">{tCase.currency}</span>
+                  {formatCurrency((tCase.acceptedAmount || tCase.estimatedAmount || 0) - paidTotal, caseCurrency)}
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100">
                 <p className="text-xs font-bold text-blue-400 uppercase">{t('insurance:summary.patientResponsibility')}</p>
-                <p className="text-xl font-bold text-blue-700">{provisionTotals.patientResponsibility.toLocaleString(i18n.language)} <span className="text-sm font-normal text-blue-500">{tCase.currency || 'TRY'}</span></p>
+                <p className="text-xl font-bold text-blue-700">{formatCurrency(provisionTotals.patientResponsibility, caseCurrency)}</p>
               </div>
             </div>
             <div className="pt-4 border-t border-gray-50 space-y-3">
               <div className="flex items-center gap-3 text-sm">
                 <Calendar size={16} className="text-gray-400" />
                 <span className="text-gray-600">{t('treatmentCases:form.expectedStartDate')}:</span>
-                <span className="font-bold">{tCase.expectedStartDate ? new Date(tCase.expectedStartDate).toLocaleDateString(i18n.language) : t('common:noData')}</span>
+                <span className="font-bold">{tCase.expectedStartDate ? formatDate(tCase.expectedStartDate) : t('common:noData')}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Clock size={16} className="text-gray-400" />
                 <span className="text-gray-600">{t('common:updated')}:</span>
-                <span className="font-bold">{new Date(tCase.updatedAt).toLocaleDateString(i18n.language)}</span>
+                <span className="font-bold">{formatDate(tCase.updatedAt)}</span>
               </div>
             </div>
           </div>
@@ -557,7 +561,7 @@ const TreatmentCaseDetail: React.FC = () => {
                     <Link to={`/appointments/${a.id}`} className="flex-1 hover:text-primary-600">
                       <p className="font-bold">{a.appointmentType?.name}</p>
                       <p className="text-xs text-gray-500">
-                        {new Date(a.startTime).toLocaleDateString(i18n.language)} {new Date(a.startTime).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
+                        {formatDateTime(a.startTime)}
                         {a.practitioner && <> &bull; {a.practitioner.lastName}</>}
                       </p>
                     </Link>
@@ -603,7 +607,7 @@ const TreatmentCaseDetail: React.FC = () => {
                   <div key={tk.id} className="p-3 text-sm flex justify-between items-center">
                     <div>
                       <p className={`font-bold ${tk.status === 'completed' ? 'line-through text-gray-400' : ''}`}>{tk.title}</p>
-                      <p className="text-xs text-gray-500">{new Date(tk.dueDate).toLocaleDateString(i18n.language)}</p>
+                      <p className="text-xs text-gray-500">{formatDate(tk.dueDate)}</p>
                     </div>
                     <div className={`w-2 h-2 rounded-full ${tk.status === 'completed' ? 'bg-green-400' : 'bg-blue-400'}`}></div>
                   </div>
@@ -628,9 +632,9 @@ const TreatmentCaseDetail: React.FC = () => {
                 {payments.length > 0 ? payments.map((p: any) => (
                   <div key={p.id} className="p-3 text-sm flex justify-between items-center">
                     <div>
-                      <p className="font-bold">{p.amount.toLocaleString(i18n.language)} {p.currency}</p>
+                      <p className="font-bold">{formatCurrency(p.amount, p.currency || caseCurrency)}</p>
                       <p className="text-[10px] text-gray-500 capitalize">
-                        {t(`payments:methods.${p.paymentMethod}`, { defaultValue: p.paymentMethod.replace('_', ' ') })} &bull; {new Date(p.paidAt).toLocaleDateString(i18n.language)}
+                        {t(`payments:methods.${p.paymentMethod}`, { defaultValue: p.paymentMethod.replace('_', ' ') })} &bull; {formatDate(p.paidAt)}
                       </p>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
@@ -659,15 +663,15 @@ const TreatmentCaseDetail: React.FC = () => {
               <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3 border-b border-gray-50">
                 <div>
                   <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.requestedAmount')}</p>
-                  <p className="font-bold">{provisionTotals.requested.toLocaleString(i18n.language)} {tCase.currency || 'TRY'}</p>
+                  <p className="font-bold">{formatCurrency(provisionTotals.requested, caseCurrency)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.approvedAmount')}</p>
-                  <p className="font-bold">{provisionTotals.approved.toLocaleString(i18n.language)} {tCase.currency || 'TRY'}</p>
+                  <p className="font-bold">{formatCurrency(provisionTotals.approved, caseCurrency)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-gray-400">{t('insurance:fields.patientResponsibility')}</p>
-                  <p className="font-bold">{provisionTotals.patientResponsibility.toLocaleString(i18n.language)} {tCase.currency || 'TRY'}</p>
+                  <p className="font-bold">{formatCurrency(provisionTotals.patientResponsibility, caseCurrency)}</p>
                 </div>
               </div>
               <div className="divide-y divide-gray-50">
@@ -675,7 +679,7 @@ const TreatmentCaseDetail: React.FC = () => {
                   <div key={provision.id} className="p-3 text-sm flex justify-between items-center">
                     <div>
                       <Link to={`/insurance-provisions/${provision.id}`} className="font-bold hover:text-primary-600">{provision.insuranceProviderName}</Link>
-                      <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`)} &bull; {provision.requestedAmount?.toLocaleString(i18n.language)} {provision.currency}</p>
+                      <p className="text-xs text-gray-500">{t(`insurance:types.${provision.insuranceType}`)} &bull; {formatCurrency(provision.requestedAmount, provision.currency || caseCurrency)}</p>
                     </div>
                     <div className="text-right">
                       <span className="badge badge-blue text-[10px]">{t(`insurance:statuses.${provision.status}`)}</span>
@@ -752,11 +756,11 @@ const TreatmentCaseDetail: React.FC = () => {
                           </div>
                           {proc.notes && <p className="text-xs text-gray-500 mt-0.5">{proc.notes}</p>}
                           {proc.estimatedCost && (
-                            <p className="text-xs text-gray-400 mt-0.5">{t('patients:dentalChart.estimated')}: {Number(proc.estimatedCost).toLocaleString(i18n.language)} ₺</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{t('patients:dentalChart.estimated')}: {formatCurrency(Number(proc.estimatedCost), caseCurrency)}</p>
                           )}
                           {proc.scheduledDate && (
                             <p className="text-xs text-gray-400 mt-0.5">
-                              📅 {new Date(proc.scheduledDate).toLocaleDateString(i18n.language)}
+                              📅 {formatDate(proc.scheduledDate)}
                             </p>
                           )}
                         </div>
@@ -882,7 +886,7 @@ const TreatmentCaseDetail: React.FC = () => {
                       {m.notes && <span className="text-xs text-gray-400 ml-2">— {m.notes}</span>}
                     </div>
                     <span className="text-xs text-gray-400 flex-shrink-0">
-                      {new Date(m.createdAt).toLocaleDateString(i18n.language)}
+                      {formatDate(m.createdAt)}
                     </span>
                     <button
                       onClick={async () => {
@@ -930,7 +934,7 @@ const TreatmentCaseDetail: React.FC = () => {
                     <p className="text-xs text-gray-500 mt-1">
                       {t('treatmentCases:activity.byUser', {
                         user: `${log.user.firstName} ${log.user.lastName}`,
-                        date: new Date(log.createdAt).toLocaleString(i18n.language),
+                        date: formatDateTime(log.createdAt),
                       })}
                     </p>
                   </div>
@@ -987,7 +991,7 @@ const TreatmentCaseDetail: React.FC = () => {
           patientId={tCase.patientId}
           treatmentCaseId={tCase.id}
           requestedAmount={tCase.estimatedAmount || tCase.acceptedAmount || 0}
-          currency={tCase.currency || 'TRY'}
+          currency={caseCurrency}
           onClose={() => setIsInsuranceFormOpen(false)}
           onSuccess={() => {
             setIsInsuranceFormOpen(false);
@@ -1056,7 +1060,7 @@ const TreatmentCaseDetail: React.FC = () => {
                     <option value="">— {t('treatmentCases:procedures.selectService')} —</option>
                     {services.map((svc: any) => (
                       <option key={svc.id} value={svc.id}>
-                        {svc.name}{svc.basePrice != null ? ` - ${svc.basePrice.toLocaleString(i18n.language)} ${svc.currency || 'TRY'}` : ''}
+                        {svc.name}{svc.basePrice != null ? ` - ${formatCurrency(svc.basePrice, svc.currency || caseCurrency)}` : ''}
                       </option>
                     ))}
                   </select>
@@ -1204,7 +1208,7 @@ const TreatmentCaseDetail: React.FC = () => {
                     <div>
                       <p className="font-semibold text-sm">{a.appointmentType?.name}</p>
                       <p className="text-xs text-gray-500">
-                        {new Date(a.startTime).toLocaleDateString(i18n.language)} {new Date(a.startTime).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}
+                        {formatDateTime(a.startTime)}
                         {a.practitioner && <> &bull; {a.practitioner.lastName}</>}
                         {a.treatmentCase && <span className="text-amber-600"> &bull; {a.treatmentCase.title}</span>}
                       </p>

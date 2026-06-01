@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Stethoscope, Briefcase, DollarSign, Calendar, AlertCircle, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { patientService, userService, treatmentCaseService, serviceService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface TreatmentCaseFormProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ interface TreatmentCaseFormProps {
 
 const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSuccess, initialData, patientId, practitionerId }) => {
   const { t } = useTranslation(['treatmentCases', 'common']);
+  const { defaultCurrency } = useClinicPreferences();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -29,7 +31,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
     stage: initialData?.stage || 'new',
     estimatedAmount: initialData?.estimatedAmount != null ? String(initialData.estimatedAmount) : '',
     acceptedAmount: initialData?.acceptedAmount != null ? String(initialData.acceptedAmount) : '',
-    currency: initialData?.currency || 'TRY',
+    currency: initialData?.currency || defaultCurrency,
     expectedStartDate: initialData?.expectedStartDate ? new Date(initialData.expectedStartDate).toISOString().split('T')[0] : '',
     lostReason: initialData?.lostReason || '',
   });
@@ -260,6 +262,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
                   <option value="GBP">GBP</option>
+                  <option value="CAD">CAD</option>
                   <option value="CHF">CHF</option>
                 </select>
               </div>

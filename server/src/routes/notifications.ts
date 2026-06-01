@@ -1,6 +1,12 @@
 import express, { Response } from 'express';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import prisma from '../db.js';
+import {
+  getEnabledInAppNotificationTypes,
+  getNotificationPreferences,
+} from '../services/notificationPreferences.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -42,19 +48,29 @@ router.get(
   '/notifications',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId;
+    const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
     const role = req.user!.normalizedRole;
     const userId = req.user!.id;
     const now = new Date();
+    const [preferences, operatingPreferences] = await Promise.all([
+      getNotificationPreferences(clinicId),
+      getClinicOperatingPreferences(clinicId),
+    ]);
+    const enabledTypes = getEnabledInAppNotificationTypes(preferences);
 
     // ── 1. Upsert computed notifications ─────────────────────────────────────
 
-    // Upcoming appointments (next 2h)
-    if (['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'].includes(role)) {
-      const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    // Upcoming appointments
+    if (
+      preferences.inApp.upcomingAppointments.enabled &&
+      ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'].includes(role)
+    ) {
+      const leadMs = preferences.inApp.upcomingAppointments.leadHours * 60 * 60 * 1000;
+      const inLeadWindow = new Date(now.getTime() + leadMs);
       const apptWhere: any = {
         clinicId,
-        startTime: { gte: now, lte: inTwoHours },
+        startTime: { gte: now, lte: inLeadWindow },
         status: { in: ['scheduled', 'confirmed'] },
       };
       if (role === 'DENTIST') apptWhere.practitionerId = userId;
@@ -70,7 +86,12 @@ router.get(
           take: 5,
         });
         for (const a of upcomingAppts) {
-          const timeStr = new Date(a.startTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          const timeStr = new Intl.DateTimeFormat(operatingPreferences.locale, {
+            timeZone: operatingPreferences.timezone,
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: operatingPreferences.timeFormat === '12h',
+          }).format(new Date(a.startTime));
           await upsertNotification(clinicId, {
             externalId: `appt-${a.id}`,
             type: 'upcoming_appointment',
@@ -84,7 +105,10 @@ router.get(
     }
 
     // Overdue tasks
-    if (['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'].includes(role)) {
+    if (
+      preferences.inApp.overdueTasks.enabled &&
+      ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'].includes(role)
+    ) {
       const taskWhere: any = {
         clinicId,
         dueDate: { lt: now },
@@ -108,7 +132,10 @@ router.get(
     }
 
     // Pending appointment requests
-    if (['admin', 'receptionist'].includes(role)) {
+    if (
+      preferences.inApp.appointmentRequests.enabled &&
+      ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'].includes(role)
+    ) {
       try {
         const pendingRequests = await prisma.appointmentRequest.findMany({
           where: { clinicId, status: 'pending' },
@@ -130,8 +157,12 @@ router.get(
 
     // ── 2. Fetch all DB notifications for this clinic ─────────────────────────
     try {
+      if (enabledTypes.length === 0) {
+        return res.json({ total: 0, items: [] });
+      }
+
       const dbItems = await (prisma as any).notification.findMany({
-        where: { clinicId },
+        where: { clinicId, type: { in: enabledTypes } },
         orderBy: { createdAt: 'desc' },
         take: 20,
       });
@@ -149,7 +180,8 @@ router.post(
   '/notifications/mark-all-read',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId;
+    const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
     try {
       await (prisma as any).notification.updateMany({
         where: { clinicId, isRead: false },
@@ -167,7 +199,8 @@ router.patch(
   '/notifications/:id/toggle-read',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId;
+    const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
     const { id } = req.params;
     try {
       const existing = await (prisma as any).notification.findFirst({ where: { id, clinicId } });

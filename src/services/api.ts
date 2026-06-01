@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+export const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 const api = axios.create({
   baseURL: API_URL,
@@ -221,6 +221,32 @@ export const dashboardService = {
   getStats: () => api.get('/dashboard/stats'),
 };
 
+export const notificationPreferencesService = {
+  get: (clinicId?: string) =>
+    api.get('/settings/notification-preferences', {
+      params: clinicId ? { clinicId } : undefined,
+    }),
+  update: (preferences: any, clinicId?: string) =>
+    api.put(
+      '/settings/notification-preferences',
+      { preferences },
+      { params: clinicId ? { clinicId } : undefined },
+    ),
+};
+
+export const clinicOperatingPreferencesService = {
+  get: (clinicId?: string) =>
+    api.get('/settings/clinic-operating-preferences', {
+      params: clinicId ? { clinicId } : undefined,
+    }),
+  update: (preferences: any, clinicId?: string) =>
+    api.put(
+      '/settings/clinic-operating-preferences',
+      { preferences },
+      { params: clinicId ? { clinicId } : undefined },
+    ),
+};
+
 export const reportService = {
   getRevenue: (params?: any) => api.get('/reports/revenue', { params }),
   getDoctorPerformance: (params?: any) => api.get('/reports/doctor-performance', { params }),
@@ -277,8 +303,8 @@ export const treatmentPlanProceduresService = {
 };
 
 export const publicBookingService = {
-  getClinicInfo: (clinicId: string) => axios.get(`/api/public/booking/${clinicId}`),
-  submit: (clinicId: string, data: any) => axios.post(`/api/public/booking/${clinicId}`, data),
+  getClinicInfo: (clinicId: string) => axios.get(`${API_URL}/public/booking/${encodeURIComponent(clinicId)}`),
+  submit: (clinicId: string, data: any) => axios.post(`${API_URL}/public/booking/${encodeURIComponent(clinicId)}`, data),
 };
 
 export const practitionerPayoutService = {
@@ -341,7 +367,8 @@ export const clinicWhatsAppService = {
     api.delete(`/clinics/${clinicId}/whatsapp/${connectionId}`),
 };
 
-export const whatsappInboxService = {  getUnassigned: () => api.get('/whatsapp/inbox/unassigned'),
+export const whatsappInboxService = {
+  getUnassigned: () => api.get('/whatsapp/inbox/unassigned'),
   getConversations: (params?: { status?: string; clinicId?: string }) =>
     api.get('/whatsapp/inbox/conversations', { params }),
   resolve: (id: string, data: { clinicId: string; patientId?: string }) =>

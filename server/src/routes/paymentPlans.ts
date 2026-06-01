@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -93,6 +94,8 @@ router.post('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER',
   }
 
   try {
+    const operatingPreferences = await getClinicOperatingPreferences(clinicId);
+    const planCurrency = currency || operatingPreferences.currency;
     const patient = await prisma.patient.findFirst({ where: { id: patientId, clinicId } });
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
 
@@ -112,7 +115,7 @@ router.post('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER',
         patientId,
         treatmentCaseId: treatmentCaseId || null,
         totalAmount: Number(totalAmount),
-        currency: currency || 'TRY',
+        currency: planCurrency,
         installmentCount: Number(installmentCount),
         description: description || null,
         status: 'active',
@@ -128,7 +131,7 @@ router.post('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER',
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'payment_plan', entityId: plan.id,
       action: 'created',
-      description: `${patient.firstName} ${patient.lastName} için ${totalAmount} ${currency || 'TRY'} tutarında ${installmentCount} taksitli plan oluşturuldu`,
+      description: `${patient.firstName} ${patient.lastName} için ${totalAmount} ${planCurrency} tutarında ${installmentCount} taksitli plan oluşturuldu`,
       patientId,
     });
 

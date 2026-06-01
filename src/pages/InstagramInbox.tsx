@@ -17,6 +17,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { instagramInboxService, patientService, organizationBranchService, userService, serviceService } from '../services/api';
 import {
   canViewInstagramInbox,
@@ -86,7 +87,8 @@ interface AppointmentModal {
 
 export default function InstagramInbox() {
   const { user } = useAuth();
-  const { t, i18n } = useTranslation(['instagram', 'common', 'appointments']);
+  const { t } = useTranslation(['instagram', 'common', 'appointments']);
+  const { formatDateTime } = useClinicPreferences();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'unassigned' | 'all'>('unassigned');
   const [unassigned, setUnassigned] = useState<InboxEntry[]>([]);
@@ -490,7 +492,7 @@ export default function InstagramInbox() {
                 {/* Meta info */}
                 <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 flex-wrap">
                   <span>{t('instagram:inbox.messageCount', { count: entry.messageCount })}</span>
-                  <span>{new Date(entry.updatedAt).toLocaleString(i18n.language)}</span>
+                  <span>{formatDateTime(entry.updatedAt)}</span>
                   {entry.clinic && (
                     <span className="flex items-center gap-1">
                       <Building2 size={10} />

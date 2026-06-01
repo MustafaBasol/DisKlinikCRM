@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 
 interface ClinicOption {
@@ -7,6 +8,7 @@ interface ClinicOption {
   slug?: string;
   status: string;
   memberRole?: string;
+  currency?: string;
   timezone?: string;
 }
 
@@ -24,13 +26,19 @@ const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
 const STORAGE_KEY = 'hcrm_clinic_id';
 
 export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { t } = useTranslation('common');
   const { user } = useAuth();
 
   const [selectedClinicId, setSelectedClinicIdState] = useState<string>(
     () => localStorage.getItem(STORAGE_KEY) ?? 'all'
   );
 
-  const availableClinics: ClinicOption[] = user?.clinics ?? (user?.clinic ? [{ ...user.clinic, status: 'active' }] : []);
+  const availableClinics: ClinicOption[] =
+    user?.clinics?.length
+      ? user.clinics
+      : user?.clinic
+        ? [{ ...user.clinic, status: 'active' }]
+        : [];
   const canAccessAllClinics = user?.canAccessAllClinics ?? false;
   const hasMultipleClinics = availableClinics.length > 1;
 
@@ -66,8 +74,8 @@ export const ClinicProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const selectedClinicName =
     selectedClinicId === 'all'
-      ? 'Tüm Klinikler'
-      : (availableClinics.find(c => c.id === selectedClinicId)?.name ?? 'Klinik');
+      ? t('allClinics')
+      : (availableClinics.find(c => c.id === selectedClinicId)?.name ?? t('clinic'));
 
   return (
     <ClinicContext.Provider

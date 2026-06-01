@@ -3,6 +3,151 @@
   "preferences": "Preferences",
   "language": "Language",
   "languageHelp": "Changes the UI language instantly.",
+  "notificationPreferences": {
+    "title": "Notification Preferences",
+    "subtitle": "Manage WhatsApp automations and in-app bell notifications per clinic.",
+    "clinicScope": "These settings apply to {{clinic}}.",
+    "save": "Save",
+    "loading": "Loading notification preferences...",
+    "saveSuccess": "Notification preferences saved.",
+    "saveError": "Could not save notification preferences.",
+    "loadError": "Could not load notification preferences.",
+    "readOnly": "Only users with manager permissions can change these preferences.",
+    "whatsappSection": "WhatsApp Automations",
+    "inAppSection": "Bell Notifications",
+    "fields": {
+      "day": "Send day",
+      "time": "Time",
+      "leadHours": "Before appointment"
+    },
+    "days": {
+      "0": "Same day",
+      "1": "1 day before",
+      "2": "2 days before",
+      "3": "3 days before",
+      "7": "1 week before"
+    },
+    "hoursBefore": "{{count}} hours before",
+    "patientReminder": {
+      "title": "Patient appointment reminder",
+      "description": "Sends WhatsApp reminders to patients with upcoming appointments.",
+      "timingHelp": "No sensitive health details are included beyond appointment date and time."
+    },
+    "practitionerSchedule": {
+      "title": "Practitioner daily schedule",
+      "description": "Sends the selected day's appointment schedule to practitioners over WhatsApp.",
+      "timingHelp": "Patient names are shortened and treatment details are not shared."
+    },
+    "taskAssignment": {
+      "title": "Task assignment notification",
+      "description": "Sends a short WhatsApp notification when a task is assigned to a user."
+    },
+    "paymentReminder": {
+      "title": "Payment reminder",
+      "description": "Sends WhatsApp reminders for payment plan installments approaching due date.",
+      "timingHelp": "The message only includes amount and due date details."
+    },
+    "inApp": {
+      "upcomingAppointments": {
+        "title": "Upcoming appointments",
+        "description": "Shows upcoming appointment alerts in the bell menu."
+      },
+      "overdueTasks": {
+        "title": "Overdue tasks",
+        "description": "Shows overdue open tasks in the bell menu."
+      },
+      "appointmentRequests": {
+        "title": "New appointment requests",
+        "description": "Shows pending online/WhatsApp appointment requests in the bell menu."
+      },
+      "lowStock": {
+        "title": "Stock alerts",
+        "description": "Shows stock alerts for items below minimum levels in the bell menu."
+      }
+    }
+  },
+  "operatingPreferences": {
+    "title": "Clinic Operating Preferences",
+    "subtitle": "Manage currency, date-time formats, and country presets per clinic.",
+    "clinicScope": "These operating preferences apply to {{clinic}}.",
+    "save": "Save",
+    "loading": "Loading clinic operating preferences...",
+    "saveSuccess": "Clinic operating preferences saved.",
+    "saveError": "Could not save clinic operating preferences.",
+    "loadError": "Could not load clinic operating preferences.",
+    "readOnly": "Only users with manager permissions can change these preferences.",
+    "fields": {
+      "regionPreset": "Region / country format",
+      "currency": "Default currency",
+      "locale": "Number and text format",
+      "timezone": "Time zone",
+      "dateFormat": "Date format",
+      "timeFormat": "Time format",
+      "firstDayOfWeek": "Week starts on"
+    },
+    "help": {
+      "regionPreset": "Fills recommended values based on the selected country.",
+      "currency": "Used as the default for new prices, payments, and finance records.",
+      "locale": "Controls local number, currency, and date display conventions.",
+      "timezone": "Used for appointments and automated notification timing."
+    },
+    "regions": {
+      "TR": "Turkey",
+      "US": "United States",
+      "GB": "United Kingdom",
+      "CA": "Canada",
+      "DE": "Germany",
+      "FR": "France",
+      "EU": "European Union general"
+    },
+    "currencies": {
+      "TRY": "TRY - Turkish Lira",
+      "USD": "USD - US Dollar",
+      "EUR": "EUR - Euro",
+      "GBP": "GBP - British Pound",
+      "CAD": "CAD - Canadian Dollar",
+      "CHF": "CHF - Swiss Franc"
+    },
+    "locales": {
+      "tr-TR": "Turkish (Turkey)",
+      "en-US": "English (United States)",
+      "en-GB": "English (United Kingdom)",
+      "en-CA": "English (Canada)",
+      "de-DE": "German (Germany)",
+      "fr-FR": "French (France)",
+      "es-ES": "Spanish (Spain)",
+      "it-IT": "Italian (Italy)",
+      "nl-NL": "Dutch (Netherlands)"
+    },
+    "timeFormats": {
+      "24h": "24-hour",
+      "12h": "12-hour (AM/PM)"
+    },
+    "weekStarts": {
+      "monday": "Monday",
+      "sunday": "Sunday"
+    },
+    "timezones": {
+      "Europe/Istanbul": "Istanbul",
+      "America/New_York": "New York",
+      "America/Toronto": "Toronto",
+      "America/Vancouver": "Vancouver",
+      "Europe/London": "London",
+      "Europe/Berlin": "Berlin",
+      "Europe/Paris": "Paris",
+      "Europe/Madrid": "Madrid",
+      "Europe/Rome": "Rome",
+      "Europe/Amsterdam": "Amsterdam",
+      "Europe/Brussels": "Brussels",
+      "UTC": "UTC"
+    },
+    "preview": {
+      "title": "Preview",
+      "date": "Date",
+      "time": "Time",
+      "money": "Money"
+    }
+  },
   "accountInfo": "Account Info",
   "accountFields": {
     "name": "Name",

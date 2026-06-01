@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { instagramConnectionService, organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import {
   canManageInstagramConnections,
   canViewInstagramStatus,
@@ -116,7 +117,8 @@ function CopyButton({ value }: { value: string }) {
 
 export default function InstagramConnections() {
   const { user } = useAuth();
-  const { t, i18n } = useTranslation(['instagram', 'common']);
+  const { t } = useTranslation(['instagram', 'common']);
+  const { formatDateTime } = useClinicPreferences();
   const [connections, setConnections] = useState<InstagramConnection[]>([]);
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -557,7 +559,7 @@ export default function InstagramConnections() {
                     {conn.lastConnectedAt && (
                       <div>
                         <span className="font-medium text-gray-500 dark:text-gray-400">{t('instagram:connections.details.lastConnection')}:</span>
-                        <span className="ml-1">{new Date(conn.lastConnectedAt).toLocaleString(i18n.language)}</span>
+                        <span className="ml-1">{formatDateTime(conn.lastConnectedAt)}</span>
                       </div>
                     )}
                   </div>

@@ -8,6 +8,7 @@ import { paymentPlanService } from '../services/api';
 import PaymentPlanForm from '../components/PaymentPlanForm';
 import { useAuth } from '../context/AuthContext';
 import { canManagePayments } from '../utils/permissions';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const INSTALLMENT_STATUS_STYLES: Record<string, string> = {
   pending: 'text-amber-600 bg-amber-50',
@@ -23,25 +24,17 @@ const PLAN_STATUS_STYLES: Record<string, string> = {
 
 const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'cheque', 'other'] as const;
 
-function formatCurrency(amount: number, locale: string, currency = 'TRY') {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
-}
-
-function formatDate(d: string, locale: string) {
-  return new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
 function isOverdue(dueDate: string, status: string) {
   return status === 'pending' && new Date(dueDate) < new Date();
 }
 
 const PaymentPlans: React.FC = () => {
-  const { t, i18n } = useTranslation(['payments', 'common']);
+  const { t } = useTranslation(['payments', 'common']);
   const { user } = useAuth();
+  const { defaultCurrency, formatCurrency, formatDate } = useClinicPreferences();
   const isAdmin = canManagePayments(user);
-  const locale = i18n.language || 'tr';
-  const money = (amount: number, currency = 'TRY') => formatCurrency(amount, locale, currency);
-  const date = (value: string) => formatDate(value, locale);
+  const money = (amount: number, currency = defaultCurrency) => formatCurrency(amount, currency);
+  const date = (value: string) => formatDate(value);
   const installmentStatusLabel = (status: string) => t(`payments:plansPage.installmentStatus.${status}`, { defaultValue: status });
   const planStatusLabel = (status: string) => t(`payments:plansPage.planStatus.${status}`, { defaultValue: status });
   const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });

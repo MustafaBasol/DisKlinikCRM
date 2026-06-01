@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import {
   compensationRuleService,
   practitionerEarningService,
@@ -28,10 +29,6 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
 };
 
-function fmt(n: number, locale: string) {
-  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
 function currentPeriod() {
   const d = new Date();
   return { month: d.getMonth() + 1, year: d.getFullYear() };
@@ -42,12 +39,12 @@ function currentPeriod() {
 const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practitioners: any[] }> = ({
   periodMonth, periodYear, practitioners,
 }) => {
-  const { t, i18n } = useTranslation(['earnings', 'common']);
+  const { t } = useTranslation(['earnings', 'common']);
+  const { formatCurrency } = useClinicPreferences();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterPractitioner, setFilterPractitioner] = useState('');
-  const locale = i18n.language || 'tr';
-  const formatAmount = (n: number) => fmt(n, locale);
+  const formatAmount = (n: number) => formatCurrency(n);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,7 +120,8 @@ const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practition
 };
 
 const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
-  const { t, i18n } = useTranslation(['earnings', 'common']);
+  const { t } = useTranslation(['earnings', 'common']);
+  const { formatCurrency } = useClinicPreferences();
   const [earnings, setEarnings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -134,8 +132,7 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
   const [adjustTarget, setAdjustTarget] = useState<any>(null);
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
-  const locale = i18n.language || 'tr';
-  const formatAmount = (n: number) => fmt(n, locale);
+  const formatAmount = (n: number) => formatCurrency(n);
   const statusLabel = (status: string) => t(`earnings:status.${status}`, { defaultValue: status });
 
   const load = useCallback(async () => {
@@ -335,7 +332,8 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
 };
 
 const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
-  const { t, i18n } = useTranslation(['earnings', 'common', 'payments']);
+  const { t } = useTranslation(['earnings', 'common', 'payments']);
+  const { formatCurrency, formatDate } = useClinicPreferences();
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -347,8 +345,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
     method: 'bank_transfer', note: '',
   });
   const [formError, setFormError] = useState('');
-  const locale = i18n.language || 'tr';
-  const formatAmount = (n: number) => fmt(n, locale);
+  const formatAmount = (n: number) => formatCurrency(n);
   const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
 
   const load = async () => {
@@ -447,7 +444,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
                   </td>
                   <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{p.periodMonth}/{p.periodYear}</td>
                   <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">
-                    {new Date(p.paymentDate).toLocaleDateString(locale)}
+                    {formatDate(p.paymentDate)}
                   </td>
                   <td className="py-3 pr-4 text-right font-semibold text-green-600 dark:text-green-400">{formatAmount(p.amount)}</td>
                   <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{methodLabel(p.method)}</td>
@@ -550,7 +547,8 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
 };
 
 const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ practitioners, services }) => {
-  const { t, i18n } = useTranslation(['earnings', 'common']);
+  const { t } = useTranslation(['earnings', 'common']);
+  const { formatCurrency } = useClinicPreferences();
   const [rules, setRules] = useState<any[]>([]);
   const [serviceRules, setServiceRules] = useState<any[]>([]);
   const [filterPractitioner, setFilterPractitioner] = useState('');
@@ -566,8 +564,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
     practitionerId: '', serviceId: '', percentage: '', fixedAmount: '', isActive: true,
   });
   const [error, setError] = useState('');
-  const locale = i18n.language || 'tr';
-  const formatAmount = (n: number) => fmt(n, locale);
+  const formatAmount = (n: number) => formatCurrency(n);
   const compTypeLabel = (type: string) => t(`earnings:settings.compTypes.${type}`, { defaultValue: type });
   const calcBaseLabel = (base: string) => t(`earnings:settings.calcBases.${base}`, { defaultValue: base });
 

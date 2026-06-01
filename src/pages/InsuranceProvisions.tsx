@@ -4,6 +4,7 @@ import { Filter, Loader2, Plus, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { insuranceProvisionService, patientService } from '../services/api';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const statuses = ['draft', 'pending_documents', 'submitted', 'waiting_response', 'approved', 'partially_approved', 'rejected', 'cancelled'];
 const types = ['sgk', 'tss', 'oss', 'private', 'corporate', 'other'];
@@ -18,6 +19,7 @@ const statusClass = (status: string) => {
 
 const InsuranceProvisions: React.FC = () => {
   const { t } = useTranslation(['insurance', 'common']);
+  const { formatCurrency } = useClinicPreferences();
   const [provisions, setProvisions] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,8 +107,8 @@ const InsuranceProvisions: React.FC = () => {
                   <td className="p-4 text-sm">{p.patient?.firstName} {p.patient?.lastName}</td>
                   <td className="p-4 text-sm">{t(`insurance:types.${p.insuranceType}`)}</td>
                   <td className="p-4"><span className={`badge ${statusClass(p.status)}`}>{t(`insurance:statuses.${p.status}`)}</span></td>
-                  <td className="p-4 text-sm text-right font-semibold">{p.requestedAmount?.toLocaleString()} {p.currency}</td>
-                  <td className="p-4 text-sm text-right font-semibold">{p.approvedAmount != null ? `${p.approvedAmount.toLocaleString()} ${p.currency}` : '-'}</td>
+                  <td className="p-4 text-sm text-right font-semibold">{formatCurrency(p.requestedAmount, p.currency)}</td>
+                  <td className="p-4 text-sm text-right font-semibold">{p.approvedAmount != null ? formatCurrency(p.approvedAmount, p.currency) : '-'}</td>
                 </tr>
               )) : (
                 <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic">{t('common:noData')}</td></tr>

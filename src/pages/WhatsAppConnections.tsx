@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { whatsappConnectionService, organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { canManageWhatsAppConnections, canViewWhatsAppStatus } from '../utils/permissions';
 
 // ── Meta Embedded Signup env config (frontend-safe vars only) ─────────────────
@@ -125,7 +126,8 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function WhatsAppConnections() {
   const { user } = useAuth();
-  const { t, i18n } = useTranslation(['whatsapp', 'common']);
+  const { t } = useTranslation(['whatsapp', 'common']);
+  const { formatDate } = useClinicPreferences();
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -924,7 +926,7 @@ export default function WhatsAppConnections() {
                                 conn.metaTokenStatus === 'expiring' ? 'text-amber-500' :
                                 'text-gray-700 dark:text-gray-300'
                               }>
-                                {new Date(conn.metaTokenExpiresAt).toLocaleDateString(i18n.language)}
+                                {formatDate(conn.metaTokenExpiresAt)}
                                 {conn.metaTokenStatus === 'expired' && ` — ${t('whatsapp:connections.token.expiredShort')}`}
                                 {conn.metaTokenStatus === 'expiring' && ` — ${t('whatsapp:connections.token.expiringShort')}`}
                               </dd>
@@ -939,7 +941,7 @@ export default function WhatsAppConnections() {
                         </>
                       )}
                       <dt>{t('whatsapp:connections.createdAt')}</dt>
-                      <dd>{new Date(conn.createdAt).toLocaleDateString(i18n.language)}</dd>
+                      <dd>{formatDate(conn.createdAt)}</dd>
                     </dl>
                   </div>
                 )}

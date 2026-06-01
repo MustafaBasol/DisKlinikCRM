@@ -107,7 +107,7 @@ router.get(
         }),
       );
 
-      res.json({ unassigned: enriched, total: enriched.length });
+      res.json({ unassigned: enriched, entries: enriched, total: enriched.length });
     } catch (error) {
       console.error('[whatsapp-inbox] list-unassigned error', error);
       res.status(500).json({ error: 'Failed to fetch unassigned inbox' });
@@ -128,16 +128,17 @@ router.get(
     const { status, clinicId } = req.query;
 
     try {
-      // Build where clause
-      const where: Record<string, unknown> = {
+      // Build inbox-entry where clause.
+      const inboxWhere: Prisma.WhatsAppInboxEntryWhereInput = {
         organizationId: user.organizationId,
       };
 
       if (status === 'unassigned') {
-        where.needsClinicResolution = true;
+        inboxWhere.needsClinicResolution = true;
+        inboxWhere.status = 'open';
       } else if (status === 'assigned') {
-        where.needsClinicResolution = false;
-        where.clinicId = { not: null };
+        inboxWhere.needsClinicResolution = false;
+        inboxWhere.clinicId = { not: null };
       }
 
       // Clinic filter from query
@@ -146,15 +147,15 @@ router.get(
         if (allowedClinicIds !== null && !allowedClinicIds.includes(clinicId)) {
           return res.status(403).json({ error: 'Forbidden: No access to this clinic' });
         }
-        where.clinicId = clinicId;
+        inboxWhere.clinicId = clinicId;
       } else if (allowedClinicIds !== null) {
         // Scope to allowed clinics for non-admin roles (unassigned entries have clinicId=null,
         // which non-admins should not see)
-        where.clinicId = { in: allowedClinicIds };
+        inboxWhere.clinicId = { in: allowedClinicIds };
       }
 
-      const entries = await prisma.whatsAppInboxEntry.findMany({
-        where: where as Prisma.WhatsAppInboxEntryWhereInput,
+      const inboxEntries = await prisma.whatsAppInboxEntry.findMany({
+        where: inboxWhere,
         include: {
           whatsappConnection: {
             select: { id: true, name: true, provider: true, phoneNumber: true },
@@ -168,7 +169,98 @@ router.get(
         take: 100,
       });
 
-      res.json({ conversations: entries, total: entries.length });
+      // Patient pages read WhatsAppConversationMessage directly. Include those
+      // routed patient conversations here so "All conversations" matches the
+      // patient WhatsApp tab instead of only showing manual-resolution entries.
+      const messageWhere: Prisma.WhatsAppConversationMessageWhereInput = {
+        clinic: { organizationId: user.organizationId },
+      };
+
+      if (clinicId && typeof clinicId === 'string') {
+        messageWhere.clinicId = clinicId;
+      } else if (allowedClinicIds !== null) {
+        messageWhere.clinicId = { in: allowedClinicIds };
+      }
+
+      const messageGroups =
+        status === 'unassigned'
+          ? []
+          : await prisma.whatsAppConversationMessage.groupBy({
+              by: ['clinicId', 'patientId', 'phone'],
+              where: messageWhere,
+              _count: { _all: true },
+              _min: { createdAt: true },
+              _max: { createdAt: true },
+              orderBy: { _max: { createdAt: 'desc' } },
+              take: 100,
+            });
+
+      const lastMessageFilters = messageGroups
+        .filter((group) => group._max.createdAt)
+        .map((group) => ({
+          clinicId: group.clinicId,
+          patientId: group.patientId,
+          phone: group.phone,
+          createdAt: group._max.createdAt!,
+        }));
+
+      const lastMessages = lastMessageFilters.length
+        ? await prisma.whatsAppConversationMessage.findMany({
+            where: { OR: lastMessageFilters },
+            include: {
+              clinic: { select: { id: true, name: true } },
+              patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
+            },
+          })
+        : [];
+
+      const lastMessageByGroup = new Map(
+        lastMessages.map((message) => [
+          `${message.clinicId}:${message.patientId}:${message.phone}:${message.createdAt.toISOString()}`,
+          message,
+        ]),
+      );
+
+      const messageConversations = messageGroups.map((group) => {
+        const updatedAt = group._max.createdAt ?? new Date(0);
+        const lastMessage = lastMessageByGroup.get(
+          `${group.clinicId}:${group.patientId}:${group.phone}:${updatedAt.toISOString()}`,
+        );
+        const patient = lastMessage?.patient;
+
+        return {
+          id: `conversation:${group.clinicId}:${group.patientId}:${group.phone}`,
+          phone: group.phone,
+          displayName: patient ? `${patient.firstName} ${patient.lastName}` : undefined,
+          lastMessageText: lastMessage?.text ?? null,
+          messageCount: group._count._all,
+          needsClinicResolution: false,
+          status: 'open',
+          createdAt: group._min.createdAt ?? updatedAt,
+          updatedAt,
+          clinicId: group.clinicId,
+          patientId: group.patientId,
+          clinic: lastMessage?.clinic ?? null,
+          patient: patient
+            ? { id: patient.id, firstName: patient.firstName, lastName: patient.lastName }
+            : null,
+        };
+      });
+
+      const messageConversationKeys = new Set(
+        messageConversations.map((entry) => `${entry.clinicId}:${entry.patientId}:${entry.phone}`),
+      );
+
+      const dedupedInboxEntries = inboxEntries.filter((entry) => {
+        if (!entry.clinicId || !entry.patientId) return true;
+        return !messageConversationKeys.has(`${entry.clinicId}:${entry.patientId}:${entry.phone}`);
+      });
+
+      const conversations = [...messageConversations, ...dedupedInboxEntries]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 100);
+
+      res.json({ conversations, entries: conversations, total: conversations.length });
     } catch (error) {
       console.error('[whatsapp-inbox] list-conversations error', error);
       res.status(500).json({ error: 'Failed to fetch conversations' });

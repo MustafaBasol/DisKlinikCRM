@@ -2,6 +2,7 @@ import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { validateAndGetScope, toClinicOnlyScope } from '../utils/clinicScope.js';
+import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
 
@@ -212,6 +213,11 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       };
     }
 
+    const chartPreferenceClinicId =
+      selectedClinicId && selectedClinicId !== 'all'
+        ? selectedClinicId
+        : req.user!.clinicId;
+
     res.json({
       stats: {
         todayAppointments: stats.todayAppointments ?? 0,
@@ -231,7 +237,7 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       alerts,
       activities,
       doctorExtras,
-      charts: normalizedRole !== 'DENTIST' ? await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth) : null,
+      charts: normalizedRole !== 'DENTIST' ? await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth, chartPreferenceClinicId) : null,
     });
   } catch (error) {
     console.error(error);
@@ -275,7 +281,8 @@ export function buildSafeStats(raw: {
   };
 }
 
-async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, today: Date, tomorrow: Date, firstDayOfMonth: Date) {
+async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, today: Date, tomorrow: Date, firstDayOfMonth: Date, clinicId: string) {
+  const operatingPreferences = await getClinicOperatingPreferences(clinicId);
   // ── 1) Son 7 günlük günlük randevu sayısı ────────────────────────────────────────────
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
@@ -296,7 +303,11 @@ async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, t
     if (dailyMap[key] !== undefined) dailyMap[key]++;
   });
   const dailyTrend = Object.entries(dailyMap).map(([date, count]) => ({
-    date: new Date(date).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric' }),
+    date: new Intl.DateTimeFormat(operatingPreferences.locale, {
+      timeZone: operatingPreferences.timezone,
+      weekday: 'short',
+      day: 'numeric',
+    }).format(new Date(date)),
     count,
   }));
 
@@ -339,7 +350,11 @@ async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, t
     if (revenueMap[key] !== undefined) revenueMap[key] += p.amount;
   });
   const monthlyRevenueTrend = Object.entries(revenueMap).map(([month, revenue]) => ({
-    month: new Date(month + '-01').toLocaleDateString('tr-TR', { month: 'short', year: '2-digit' }),
+    month: new Intl.DateTimeFormat(operatingPreferences.locale, {
+      timeZone: operatingPreferences.timezone,
+      month: 'short',
+      year: '2-digit',
+    }).format(new Date(month + '-01')),
     revenue,
   }));
 

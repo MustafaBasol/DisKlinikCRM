@@ -3,6 +3,151 @@
   "preferences": "Préférences",
   "language": "Langue",
   "languageHelp": "Change instantanément la langue de l'interface.",
+  "notificationPreferences": {
+    "title": "Préférences de notification",
+    "subtitle": "Gérez les automatisations WhatsApp et les notifications de la cloche par clinique.",
+    "clinicScope": "Ces paramètres s'appliquent à {{clinic}}.",
+    "save": "Enregistrer",
+    "loading": "Chargement des préférences de notification...",
+    "saveSuccess": "Préférences de notification enregistrées.",
+    "saveError": "Impossible d'enregistrer les préférences de notification.",
+    "loadError": "Impossible de charger les préférences de notification.",
+    "readOnly": "Seuls les utilisateurs avec des droits de gestion peuvent modifier ces préférences.",
+    "whatsappSection": "Automatisations WhatsApp",
+    "inAppSection": "Notifications de la cloche",
+    "fields": {
+      "day": "Jour d'envoi",
+      "time": "Heure",
+      "leadHours": "Avant le rendez-vous"
+    },
+    "days": {
+      "0": "Le même jour",
+      "1": "1 jour avant",
+      "2": "2 jours avant",
+      "3": "3 jours avant",
+      "7": "1 semaine avant"
+    },
+    "hoursBefore": "{{count}} heures avant",
+    "patientReminder": {
+      "title": "Rappel de rendez-vous patient",
+      "description": "Envoie des rappels WhatsApp aux patients ayant un rendez-vous à venir.",
+      "timingHelp": "Aucun détail de santé sensible n'est inclus au-delà de la date et de l'heure du rendez-vous."
+    },
+    "practitionerSchedule": {
+      "title": "Planning quotidien du praticien",
+      "description": "Envoie le planning du jour sélectionné aux praticiens via WhatsApp.",
+      "timingHelp": "Les noms des patients sont abrégés et les détails de traitement ne sont pas partagés."
+    },
+    "taskAssignment": {
+      "title": "Notification d'affectation de tâche",
+      "description": "Envoie une courte notification WhatsApp lorsqu'une tâche est affectée à un utilisateur."
+    },
+    "paymentReminder": {
+      "title": "Rappel de paiement",
+      "description": "Envoie des rappels WhatsApp pour les échéances de plan de paiement à venir.",
+      "timingHelp": "Le message contient uniquement le montant et l'échéance."
+    },
+    "inApp": {
+      "upcomingAppointments": {
+        "title": "Rendez-vous à venir",
+        "description": "Affiche les alertes de rendez-vous à venir dans la cloche."
+      },
+      "overdueTasks": {
+        "title": "Tâches en retard",
+        "description": "Affiche les tâches ouvertes en retard dans la cloche."
+      },
+      "appointmentRequests": {
+        "title": "Nouvelles demandes de rendez-vous",
+        "description": "Affiche les demandes de rendez-vous en attente dans la cloche."
+      },
+      "lowStock": {
+        "title": "Alertes de stock",
+        "description": "Affiche les alertes de stock sous le minimum dans la cloche."
+      }
+    }
+  },
+  "operatingPreferences": {
+    "title": "Préférences de fonctionnement de la clinique",
+    "subtitle": "Gérez la devise, les formats date-heure et les formats pays par clinique.",
+    "clinicScope": "Ces préférences s'appliquent à {{clinic}}.",
+    "save": "Enregistrer",
+    "loading": "Chargement des préférences de fonctionnement...",
+    "saveSuccess": "Préférences de fonctionnement enregistrées.",
+    "saveError": "Impossible d'enregistrer les préférences de fonctionnement.",
+    "loadError": "Impossible de charger les préférences de fonctionnement.",
+    "readOnly": "Seuls les utilisateurs avec des droits de gestion peuvent modifier ces préférences.",
+    "fields": {
+      "regionPreset": "Format région / pays",
+      "currency": "Devise par défaut",
+      "locale": "Format des nombres et du texte",
+      "timezone": "Fuseau horaire",
+      "dateFormat": "Format de date",
+      "timeFormat": "Format horaire",
+      "firstDayOfWeek": "Début de semaine"
+    },
+    "help": {
+      "regionPreset": "Remplit les valeurs recommandées selon le pays sélectionné.",
+      "currency": "Utilisée par défaut pour les nouveaux prix, paiements et enregistrements financiers.",
+      "locale": "Définit les conventions locales pour les nombres, devises et dates.",
+      "timezone": "Utilisé pour les rendez-vous et les notifications automatiques."
+    },
+    "regions": {
+      "TR": "Turquie",
+      "US": "États-Unis",
+      "GB": "Royaume-Uni",
+      "CA": "Canada",
+      "DE": "Allemagne",
+      "FR": "France",
+      "EU": "Union européenne générale"
+    },
+    "currencies": {
+      "TRY": "TRY - Livre turque",
+      "USD": "USD - Dollar américain",
+      "EUR": "EUR - Euro",
+      "GBP": "GBP - Livre sterling",
+      "CAD": "CAD - Dollar canadien",
+      "CHF": "CHF - Franc suisse"
+    },
+    "locales": {
+      "tr-TR": "Turc (Turquie)",
+      "en-US": "Anglais (États-Unis)",
+      "en-GB": "Anglais (Royaume-Uni)",
+      "en-CA": "Anglais (Canada)",
+      "de-DE": "Allemand (Allemagne)",
+      "fr-FR": "Français (France)",
+      "es-ES": "Espagnol (Espagne)",
+      "it-IT": "Italien (Italie)",
+      "nl-NL": "Néerlandais (Pays-Bas)"
+    },
+    "timeFormats": {
+      "24h": "24 heures",
+      "12h": "12 heures (AM/PM)"
+    },
+    "weekStarts": {
+      "monday": "Lundi",
+      "sunday": "Dimanche"
+    },
+    "timezones": {
+      "Europe/Istanbul": "Istanbul",
+      "America/New_York": "New York",
+      "America/Toronto": "Toronto",
+      "America/Vancouver": "Vancouver",
+      "Europe/London": "Londres",
+      "Europe/Berlin": "Berlin",
+      "Europe/Paris": "Paris",
+      "Europe/Madrid": "Madrid",
+      "Europe/Rome": "Rome",
+      "Europe/Amsterdam": "Amsterdam",
+      "Europe/Brussels": "Bruxelles",
+      "UTC": "UTC"
+    },
+    "preview": {
+      "title": "Aperçu",
+      "date": "Date",
+      "time": "Heure",
+      "money": "Montant"
+    }
+  },
   "accountInfo": "Informations du compte",
   "accountFields": {
     "name": "Nom",

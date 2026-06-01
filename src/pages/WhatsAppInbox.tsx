@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Inbox, AlertCircle, CheckCircle2, RefreshCw, User, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { whatsappInboxService, patientService } from '../services/api';
 import {
   canViewWhatsAppInbox,
   canResolveWhatsAppConversation,
   canLinkWhatsAppPatient,
+  normalizeRole,
 } from '../utils/permissions';
 
 interface PossiblePatient {
@@ -47,7 +49,8 @@ interface ResolveModal {
 export default function WhatsAppInbox() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation(['whatsapp', 'common']);
+  const { t } = useTranslation(['whatsapp', 'common']);
+  const { formatDate } = useClinicPreferences();
   const [activeTab, setActiveTab] = useState<'unassigned' | 'all'>('unassigned');
   const [unassigned, setUnassigned] = useState<InboxEntry[]>([]);
   const [conversations, setConversations] = useState<InboxEntry[]>([]);
@@ -57,6 +60,8 @@ export default function WhatsAppInbox() {
   const [filterClinic, setFilterClinic] = useState('');
   const [resolveModal, setResolveModal] = useState<ResolveModal | null>(null);
   const [resolving, setResolving] = useState(false);
+  const role = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
+  const canSeeUnassigned = role === 'OWNER' || role === 'ORG_ADMIN';
 
   useEffect(() => {
     if (!canViewWhatsAppInbox(user)) {
@@ -65,19 +70,25 @@ export default function WhatsAppInbox() {
   }, [user, navigate]);
 
   useEffect(() => {
+    if (user && !canSeeUnassigned && activeTab === 'unassigned') {
+      setActiveTab('all');
+    }
+  }, [activeTab, canSeeUnassigned, user]);
+
+  useEffect(() => {
     if (activeTab === 'unassigned') {
-      loadUnassigned();
+      if (canSeeUnassigned) loadUnassigned();
     } else {
       loadConversations();
     }
-  }, [activeTab, filterStatus, filterClinic]);
+  }, [activeTab, filterStatus, filterClinic, canSeeUnassigned]);
 
   async function loadUnassigned() {
     setLoading(true);
     setError('');
     try {
       const res = await whatsappInboxService.getUnassigned();
-      setUnassigned(res.data.entries || []);
+      setUnassigned(res.data.unassigned || res.data.entries || []);
     } catch {
       setError(t('whatsapp:inbox.errors.loadUnassigned'));
     } finally {
@@ -93,7 +104,7 @@ export default function WhatsAppInbox() {
       if (filterStatus) params.status = filterStatus;
       if (filterClinic) params.clinicId = filterClinic;
       const res = await whatsappInboxService.getConversations(params);
-      setConversations(res.data.entries || []);
+      setConversations(res.data.conversations || res.data.entries || []);
     } catch {
       setError(t('whatsapp:inbox.errors.loadConversations'));
     } finally {
@@ -140,7 +151,11 @@ export default function WhatsAppInbox() {
     if (!canLinkWhatsAppPatient(user)) return;
     try {
       await whatsappInboxService.linkPatient(entryId, patientId);
-      loadUnassigned();
+      if (activeTab === 'unassigned') {
+        loadUnassigned();
+      } else {
+        loadConversations();
+      }
     } catch {
       setError(t('whatsapp:inbox.errors.linkPatientFailed'));
     }
@@ -164,21 +179,23 @@ export default function WhatsAppInbox() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('unassigned')}
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-            activeTab === 'unassigned'
-              ? 'bg-white border border-b-white border-gray-200 text-green-600'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          {t('whatsapp:inbox.tabs.unassigned')}
-          {unassigned.length > 0 && (
-            <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
-              {unassigned.length}
-            </span>
-          )}
-        </button>
+        {canSeeUnassigned && (
+          <button
+            onClick={() => setActiveTab('unassigned')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === 'unassigned'
+                ? 'bg-white border border-b-white border-gray-200 text-green-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t('whatsapp:inbox.tabs.unassigned')}
+            {unassigned.length > 0 && (
+              <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
+                {unassigned.length}
+              </span>
+            )}
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('all')}
           className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
@@ -280,7 +297,7 @@ export default function WhatsAppInbox() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-gray-400">
-                        {new Date(entry.createdAt).toLocaleDateString(i18n.language)}
+                        {formatDate(entry.createdAt)}
                       </span>
                       {canResolve && (
                         <button
@@ -328,7 +345,13 @@ export default function WhatsAppInbox() {
                               ? t('whatsapp:inbox.status.unassigned')
                               : t('whatsapp:inbox.status.open')}
                         </span>
+                        <span className="text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">
+                          {t('whatsapp:inbox.messageCount', { count: entry.messageCount })}
+                        </span>
                       </div>
+                      {entry.lastMessageText && (
+                        <p className="text-sm text-gray-600 truncate mb-2">{entry.lastMessageText}</p>
+                      )}
                       {entry.clinic && (
                         <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
                           <Building2 size={12} />
@@ -343,7 +366,7 @@ export default function WhatsAppInbox() {
                       )}
                     </div>
                     <div className="text-xs text-gray-400 shrink-0">
-                      {new Date(entry.updatedAt).toLocaleDateString(i18n.language)}
+                      {formatDate(entry.updatedAt)}
                     </div>
                   </div>
                 </div>

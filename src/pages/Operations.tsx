@@ -14,6 +14,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { operationalMonitoringService } from '../services/api';
 import { canViewOperations, canResolveOperationalEvents } from '../utils/permissions';
 
@@ -74,11 +75,6 @@ interface EventsResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString();
-}
-
 function SeverityBadge({ severity }: { severity: string }) {
   const map: Record<string, string> = {
     info:     'bg-blue-100 text-blue-800',
@@ -104,6 +100,8 @@ function StatusBadge({ status }: { status: 'ok' | 'warning' | 'error' | string }
 export default function OperationsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { formatDateTime } = useClinicPreferences();
+  const fmtDate = (iso: string | null | undefined) => iso ? formatDateTime(iso) : '—';
 
   // Access guard
   useEffect(() => {

@@ -4,6 +4,7 @@ import { Package, Plus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, SlidersHo
 import { inventoryService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { canManageInventory } from '../utils/permissions';
 
 // ── Label maps ────────────────────────────────────────────────────────────────
@@ -394,7 +395,8 @@ type Tab = 'list' | 'alerts' | 'history';
 export default function Inventory() {
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
-  const { t, i18n } = useTranslation(['inventory', 'common']);
+  const { t } = useTranslation(['inventory', 'common']);
+  const { formatCurrency, formatDate, formatTime } = useClinicPreferences();
   const isAdmin = canManageInventory(user);
 
   const [activeTab, setActiveTab] = useState<Tab>('list');
@@ -614,7 +616,7 @@ export default function Inventory() {
                           {item.minimumStock} <span className="text-xs">{unitLabel(item.unit)}</span>
                         </td>
                         <td className="px-4 py-3 text-right hidden md:table-cell text-gray-700 dark:text-gray-300">
-                          {item.unitCost != null ? `₺${item.unitCost.toFixed(2)}` : '—'}
+                          {item.unitCost != null ? formatCurrency(item.unitCost) : '—'}
                         </td>
                         <td className="px-4 py-3 hidden lg:table-cell text-gray-500 dark:text-gray-400 text-xs">
                           {item.supplier || '—'}
@@ -728,9 +730,9 @@ export default function Inventory() {
                     {transactions.map((tx) => (
                       <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                         <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                          {new Date(tx.createdAt).toLocaleDateString(i18n.language, { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {formatDate(tx.createdAt)}
                           <br />
-                          <span className="text-xs">{new Date(tx.createdAt).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-xs">{formatTime(tx.createdAt)}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${TX_COLORS[tx.type] || ''}`}>

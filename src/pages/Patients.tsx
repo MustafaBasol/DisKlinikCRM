@@ -8,11 +8,13 @@ import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
 import { useAuth } from '../context/AuthContext';
 import { canImportPatients } from '../utils/permissions';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const Patients: React.FC = () => {
   const { t } = useTranslation(['patients', 'common']);
   const { selectedClinicId, availableClinics, hasMultipleClinics } = useClinic();
   const { user: currentUser } = useAuth();
+  const { formatDate } = useClinicPreferences();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -167,7 +169,7 @@ const Patients: React.FC = () => {
                         {t(`patients:status.${patient.patientStatus}`)}
                       </span>
                     </td>
-                    <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 hidden md:table-cell">{new Date(patient.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 hidden md:table-cell">{formatDate(patient.createdAt)}</td>
                     <td className="px-4 sm:px-6 py-4 text-right">
                       <Link to={`/patients/${patient.id}`} className="text-gray-400 hover:text-primary-600 p-2 inline-block">
                         <User size={18} />

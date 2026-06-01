@@ -22,10 +22,12 @@ import { paymentService, patientService } from '../services/api';
 import PaymentForm from '../components/PaymentForm';
 import ReceiptModal from '../components/ReceiptModal';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const Payments: React.FC = () => {
   const { t } = useTranslation(['payments', 'common']);
   const { selectedClinicId } = useClinic();
+  const { defaultCurrency, formatCurrency, formatDate, formatNumber } = useClinicPreferences();
   
   const [payments, setPayments] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
@@ -88,7 +90,7 @@ const Payments: React.FC = () => {
 
   const totalPaid = payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
   const totalPending = payments.filter(p => p.paymentStatus === 'pending').reduce((acc, curr) => acc + curr.amount, 0);
-  const summaryCurrency = payments[0]?.currency || 'TRY';
+  const summaryCurrency = payments[0]?.currency || defaultCurrency;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -116,7 +118,7 @@ const Payments: React.FC = () => {
             <CheckCircle2 size={24} className="opacity-80" />
             <span className="text-xs font-bold uppercase tracking-wider opacity-80">{t('payments:summary.totalCollected')}</span>
           </div>
-          <p className="text-3xl font-bold">{totalPaid.toLocaleString()} <span className="text-lg font-normal opacity-80">{summaryCurrency}</span></p>
+          <p className="text-3xl font-bold">{formatCurrency(totalPaid, summaryCurrency)}</p>
           <p className="text-sm mt-2 opacity-80">{t('payments:summary.fromPaidRecords')}</p>
         </div>
         <div className="card p-6 bg-white border-amber-100">
@@ -124,7 +126,7 @@ const Payments: React.FC = () => {
             <Clock size={24} className="opacity-80" />
             <span className="text-xs font-bold uppercase tracking-wider opacity-80">{t('payments:summary.pending')}</span>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{totalPending.toLocaleString()} <span className="text-lg font-normal text-gray-400">{summaryCurrency}</span></p>
+          <p className="text-3xl font-bold text-gray-900">{formatCurrency(totalPending, summaryCurrency)}</p>
           <p className="text-sm mt-2 text-gray-500">{t('payments:summary.awaitingPayment')}</p>
         </div>
         <div className="card p-6 bg-white">
@@ -141,7 +143,7 @@ const Payments: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider opacity-80">{t('payments:summary.average')}</span>
           </div>
           <p className="text-3xl font-bold text-gray-900">
-            {payments.length > 0 ? (totalPaid / payments.length).toFixed(0) : 0}
+            {formatNumber(payments.length > 0 ? totalPaid / payments.length : 0, { maximumFractionDigits: 0 })}
           </p>
           <p className="text-sm mt-2 text-gray-500">{t('payments:summary.perTransaction')}</p>
         </div>
@@ -237,7 +239,7 @@ const Payments: React.FC = () => {
                       )}
                     </td>
                     <td className="p-4">
-                      <p className="text-sm font-bold text-gray-900">{p.amount.toLocaleString()} {p.currency}</p>
+                      <p className="text-sm font-bold text-gray-900">{formatCurrency(p.amount, p.currency)}</p>
                     </td>
                     <td className="p-4 hidden sm:table-cell">
                       <span className="text-xs font-medium text-gray-600 flex items-center gap-2">
@@ -251,7 +253,7 @@ const Payments: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4 hidden md:table-cell">
-                      <p className="text-xs text-gray-600">{new Date(p.paidAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-600">{formatDate(p.paidAt)}</p>
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

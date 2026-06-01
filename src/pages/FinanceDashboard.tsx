@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { financeDashboardService } from '../services/api';
 import { canViewFinanceDashboard } from '../utils/permissions';
 import { normalizeRole } from '../utils/permissions';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,15 +84,6 @@ const RANGE_OPTIONS = [
   { value: 'last_30_days' },
 ];
 
-function fmt(n: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function fmtDate(d: string | null | undefined, locale: string): string {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString(locale);
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SummaryCard({
@@ -123,8 +115,9 @@ function SummaryCard({
 
 export default function FinanceDashboard() {
   const { user } = useAuth();
-  const { t, i18n } = useTranslation(['payments', 'common']);
+  const { t } = useTranslation(['payments', 'common']);
   const navigate = useNavigate();
+  const { defaultCurrency, formatCurrency, formatDate } = useClinicPreferences();
 
   const [range, setRange] = useState('this_month');
   const [data, setData] = useState<DashboardData | null>(null);
@@ -161,7 +154,7 @@ export default function FinanceDashboard() {
   const s = data?.summary;
   const rangeLabel = (value: string) => t(`payments:financeDashboard.ranges.${value}`);
   const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
-  const money = (value: number) => `₺${fmt(value, i18n.language)}`;
+  const money = (value: number) => formatCurrency(value, defaultCurrency);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -325,7 +318,7 @@ export default function FinanceDashboard() {
                           <td className="py-1.5 pr-3 font-medium">{inst.patientName}</td>
                           <td className="py-1.5 pr-3 text-gray-500">{inst.clinicName}</td>
                           <td className="py-1.5 pr-3">{money(inst.amount)}</td>
-                          <td className="py-1.5 pr-3">{fmtDate(inst.dueDate, i18n.language)}</td>
+                          <td className="py-1.5 pr-3">{formatDate(inst.dueDate)}</td>
                           <td className="py-1.5">
                             <span className={`text-xs rounded-full px-2 py-0.5 ${
                               inst.status === 'overdue'
@@ -455,7 +448,7 @@ export default function FinanceDashboard() {
                         <td className="py-1.5 pr-3 text-gray-500">{p.clinicName}</td>
                         <td className="py-1.5 pr-3 text-right font-semibold">{money(p.amount)}</td>
                         <td className="py-1.5 pr-3">{methodLabel(p.method)}</td>
-                        <td className="py-1.5 pr-3 text-gray-500">{fmtDate(p.paidAt, i18n.language)}</td>
+                        <td className="py-1.5 pr-3 text-gray-500">{formatDate(p.paidAt)}</td>
                         <td className="py-1.5">
                           <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">
                             {t('payments:status.paid')}
