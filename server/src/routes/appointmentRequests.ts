@@ -3,7 +3,7 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam, checkPractitionerAvailability } from '../utils/helpers.js';
-import { appointmentRequestStatusSchema, appointmentRequestConvertSchema } from '../schemas/index.js';
+import { appointmentRequestStatusSchema, appointmentRequestConvertSchema, appointmentRequestUpdateSchema } from '../schemas/index.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { findUserAssignedToClinic } from '../utils/relationGuards.js';
 
@@ -151,7 +151,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
     const endTime = validation.data.endTime || request.preferredEndTime;
 
     if (!appointmentTypeId || !practitionerId || !startTime || !endTime) {
-      return res.status(400).json({ error: 'Service, practitioner, start time, and end time are required for conversion' });
+      return res.status(400).json({ error: 'Service, practitioner, start time, and end time are required for conversion', code: 'MISSING_REQUIRED_FIELDS' });
     }
 
     const [service, practitioner] = await Promise.all([
@@ -245,6 +245,51 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
     res.status(201).json({ appointment, request: updatedRequest });
   } catch {
     res.status(500).json({ error: 'Failed to convert appointment request' });
+  }
+});
+
+// PUT /api/appointment-requests/:id
+router.put('/appointment-requests/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+  const clinicId = req.user!.clinicId;
+  const id = getParam(req, 'id');
+  const validation = appointmentRequestUpdateSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+
+  try {
+    const existing = await prisma.appointmentRequest.findFirst({ where: { id, clinicId } });
+    if (!existing) return res.status(404).json({ error: 'Appointment request not found', code: 'NOT_FOUND' });
+    if (existing.status === 'converted') {
+      return res.status(400).json({ error: 'Converted requests cannot be edited', code: 'ALREADY_CONVERTED' });
+    }
+
+    const d = validation.data;
+    const patchData: Record<string, unknown> = {};
+    if (d.appointmentTypeId !== undefined) patchData.appointmentTypeId = d.appointmentTypeId;
+    if (d.practitionerId !== undefined) patchData.practitionerId = d.practitionerId;
+    if (d.preferredStartTime !== undefined) patchData.preferredStartTime = d.preferredStartTime ? new Date(d.preferredStartTime) : null;
+    if (d.preferredEndTime !== undefined) patchData.preferredEndTime = d.preferredEndTime ? new Date(d.preferredEndTime) : null;
+    if (d.notes !== undefined) patchData.notes = d.notes;
+
+    const updated = await prisma.appointmentRequest.update({
+      where: { id },
+      data: patchData,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        appointmentType: true,
+        practitioner: { select: { id: true, firstName: true, lastName: true } },
+        convertedAppointment: { select: { id: true, startTime: true, status: true } },
+      },
+    });
+
+    await logActivity({
+      clinicId, userId: req.user!.id, entityType: 'appointment_request', entityId: id,
+      action: 'updated',
+      description: 'WhatsApp appointment request details updated by staff',
+    });
+
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Failed to update appointment request' });
   }
 });
 

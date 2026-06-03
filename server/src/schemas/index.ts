@@ -305,6 +305,14 @@ export const appointmentRequestConvertSchema = z.object({
   path: ['endTime'],
 });
 
+export const appointmentRequestUpdateSchema = z.object({
+  appointmentTypeId: z.string().uuid('Invalid appointment type ID').nullable().optional(),
+  practitionerId: z.string().uuid('Invalid practitioner ID').nullable().optional(),
+  preferredStartTime: z.string().nullable().optional(),
+  preferredEndTime: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+
 // --- Practitioner Compensation Rule ---
 
 export const compensationTypeEnum = z.enum(['fixed', 'percentage', 'fixed_plus_percentage', 'per_service']);

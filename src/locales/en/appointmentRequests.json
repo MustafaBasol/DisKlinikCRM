@@ -38,16 +38,34 @@
   },
   "actions": {
     "refresh": "Refresh",
-    "convert": "Convert",
+    "convert": "Convert to Appointment",
     "approve": "Approve",
     "reject": "Reject",
     "close": "Close",
+    "edit": "Edit",
     "rejectionPrompt": "Enter the rejection reason"
+  },
+  "edit": {
+    "title": "Edit Request",
+    "titleConvert": "Complete Appointment Details",
+    "convertHint": "Please fill in the service, practitioner, and time to convert this request into an appointment.",
+    "service": "Service",
+    "practitioner": "Practitioner",
+    "date": "Date",
+    "availableSlots": "Available Slots",
+    "loadingSlots": "Loading slots...",
+    "noSlots": "No available slots on this date.",
+    "clinicClosed": "The clinic is closed on this day.",
+    "offDay": "The practitioner is off on this day.",
+    "save": "Save",
+    "selectService": "Select a service",
+    "selectPractitioner": "Select a practitioner"
   },
   "errors": {
     "loadFailed": "Failed to load WhatsApp requests.",
     "convertFailed": "Request could not be converted.",
     "outsideAvailability": "The selected time is outside practitioner availability.",
-    "overlap": "The practitioner already has another appointment at this time."
+    "overlap": "The practitioner already has another appointment at this time.",
+    "missingRequiredFields": "Service, practitioner, start time and end time are required to convert this request."
   }
 }

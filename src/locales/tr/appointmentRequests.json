@@ -42,12 +42,30 @@
     "approve": "Onayla",
     "reject": "Reddet",
     "close": "Kapat",
+    "edit": "Düzenle",
     "rejectionPrompt": "Reddetme nedenini yazın"
+  },
+  "edit": {
+    "title": "Talebi Düzenle",
+    "titleConvert": "Randevu Bilgilerini Tamamla",
+    "convertHint": "Randevuya çevirmek için lütfen hizmet, hekim ve saat bilgilerini doldurun.",
+    "service": "Hizmet",
+    "practitioner": "Hekim",
+    "date": "Tarih",
+    "availableSlots": "Müsait Saatler",
+    "loadingSlots": "Saatler yükleniyor...",
+    "noSlots": "Seçilen tarihte müsait saat bulunamadı.",
+    "clinicClosed": "Klinik bu gün kapalı.",
+    "offDay": "Hekim bu gün izinli.",
+    "save": "Kaydet",
+    "selectService": "Hizmet seçin",
+    "selectPractitioner": "Hekim seçin"
   },
   "errors": {
     "loadFailed": "WhatsApp talepleri yüklenemedi.",
     "convertFailed": "Talep randevuya çevrilemedi.",
     "outsideAvailability": "Seçilen saat hekimin müsaitlik saatleri dışında.",
-    "overlap": "Seçilen saatte hekimin başka bir randevusu var."
+    "overlap": "Seçilen saatte hekimin başka bir randevusu var.",
+    "missingRequiredFields": "Randevuya çevirmek için hizmet, hekim, başlangıç ve bitiş saati zorunludur."
   }
 }

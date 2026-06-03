@@ -67,7 +67,8 @@ type AssistantStep =
   | 'awaiting_cancel_selection'
   | 'awaiting_handoff_note'
   | 'awaiting_general_date'
-  | 'awaiting_general_time';
+  | 'awaiting_general_time'
+  | 'awaiting_general_practitioner';
 
 type AssistantExtraction = {
   intent: AssistantIntent;
@@ -134,6 +135,7 @@ type ConversationStateJson = {
     startTime?: string | null;
     endTime?: string | null;
   };
+  practitionerOptions?: { id: string; name: string }[];
 };
 
 // ---- Helper Middlewares ----
@@ -1072,23 +1074,42 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
   const timeZone = clinic?.timezone || 'Europe/Istanbul';
   const now = new Date();
+  const normalizedPhone = normalizePhone(phone);
   const patient = await findExistingPatientByPhone(clinicId, phone);
-  if (!patient) return [];
 
-  const appointments = await prisma.appointment.findMany({
-    where: {
-      clinicId, deletedAt: null, status: { notIn: ['cancelled'] },
-      startTime: { gte: now }, patientId: patient.id,
-    },
-    select: {
-      id: true, startTime: true, endTime: true, status: true,
-      appointmentType: { select: { name: true } },
-      practitioner: { select: { firstName: true, lastName: true } },
-    },
-    orderBy: { startTime: 'asc' },
-    take: 10,
-  });
-  return appointments.map(a => {
+  const [appointments, pendingRequests] = await Promise.all([
+    patient ? prisma.appointment.findMany({
+      where: {
+        clinicId, deletedAt: null, status: { notIn: ['cancelled'] },
+        startTime: { gte: now }, patientId: patient.id,
+      },
+      select: {
+        id: true, startTime: true, endTime: true, status: true,
+        appointmentType: { select: { name: true } },
+        practitioner: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { startTime: 'asc' },
+      take: 10,
+    }) : Promise.resolve([]),
+    // Onay bekleyen veya onaylanmış appointment request'leri de dahil et
+    prisma.appointmentRequest.findMany({
+      where: {
+        clinicId,
+        phone: normalizedPhone,
+        status: { in: ['pending', 'approved'] },
+      },
+      select: {
+        id: true, preferredStartTime: true, preferredEndTime: true, status: true,
+        appointmentType: { select: { name: true } },
+        practitioner: { select: { firstName: true, lastName: true } },
+        notes: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
+  ]);
+
+  const appointmentSummaries: SavedAppointmentSummary[] = appointments.map(a => {
     const start = formatClinicDateTime(a.startTime, timeZone);
     const end = formatClinicDateTime(a.endTime, timeZone);
     return {
@@ -1096,8 +1117,25 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
       serviceName: a.appointmentType?.name ?? null,
       practitionerName: a.practitioner ? `${a.practitioner.firstName} ${a.practitioner.lastName}` : null,
       status: a.status,
-    } satisfies SavedAppointmentSummary;
+    };
   });
+
+  const requestSummaries: SavedAppointmentSummary[] = pendingRequests.map(r => {
+    const start = r.preferredStartTime ? formatClinicDateTime(r.preferredStartTime, timeZone) : null;
+    const end = r.preferredEndTime ? formatClinicDateTime(r.preferredEndTime, timeZone) : null;
+    const isGeneralAssessment = !r.appointmentType || r.notes?.includes('genel muayene');
+    return {
+      id: r.id,
+      date: start?.date ?? 'Tarih belirsiz',
+      startTime: start?.time ?? 'Saat belirsiz',
+      endTime: end?.time ?? '',
+      serviceName: r.appointmentType?.name ?? (isGeneralAssessment ? 'Genel muayene / acil değerlendirme' : null),
+      practitionerName: r.practitioner ? `${r.practitioner.firstName} ${r.practitioner.lastName}` : null,
+      status: r.status === 'approved' ? 'Onaylandı' : 'Onay bekliyor',
+    };
+  });
+
+  return [...appointmentSummaries, ...requestSummaries];
 };
 
 const createAppointmentRequestFromAssistant = async (
@@ -1276,6 +1314,7 @@ const createWhatsAppStaffRequest = async (args: {
   rawMessage: string;
   notes: string;
   appointmentTypeId?: string | null;
+  practitionerId?: string | null;
   preferredStartTime?: Date | null;
   preferredEndTime?: Date | null;
 }) => prisma.appointmentRequest.create({
@@ -1285,6 +1324,7 @@ const createWhatsAppStaffRequest = async (args: {
     patientName: args.patientName,
     phone: normalizePhone(args.phone),
     appointmentTypeId: args.appointmentTypeId ?? null,
+    practitionerId: args.practitionerId ?? null,
     preferredStartTime: args.preferredStartTime ?? null,
     preferredEndTime: args.preferredEndTime ?? null,
     requestType: args.requestType,
@@ -1381,6 +1421,30 @@ const getActiveDoctorCountForClinic = async (clinicId: string) => {
     select: { id: true },
   });
   return new Set([...assignedIds, ...legacyDoctors.map(user => user.id)]).size;
+};
+
+const getClinicPractitioners = async (clinicId: string): Promise<{ id: string; firstName: string; lastName: string }[]> => {
+  const assignments = await prisma.userClinic.findMany({
+    where: {
+      clinicId,
+      isActive: true,
+      user: { isActive: true },
+      OR: [{ role: 'DENTIST' }, { role: 'dentist' }, { role: 'doctor' }],
+    },
+    select: { userId: true, user: { select: { id: true, firstName: true, lastName: true } } },
+  });
+  const assignedIds = new Set(assignments.map(a => a.userId));
+  const assignedDoctors = assignments.map(a => ({ id: a.user.id, firstName: a.user.firstName, lastName: a.user.lastName }));
+  const legacyDoctors = await prisma.user.findMany({
+    where: {
+      clinicId,
+      isActive: true,
+      role: { in: ['doctor', 'DENTIST', 'dentist'] },
+      id: { notIn: [...assignedIds] },
+    },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  return [...assignedDoctors, ...legacyDoctors];
 };
 
 const loadWhatsAppAgentClinicFacts = async (
@@ -1536,6 +1600,7 @@ const createGeneralAppointmentRequest = async (args: {
   selectedDate: string;
   preferredTimeRange?: ConversationStateJson['preferredTimeRange'];
   reason?: string | null;
+  selectedPractitionerId?: string | null;
 }) => {
   const existingPatient = await findExistingPatientByPhone(args.clinic.id, args.input.phone);
   const patientName = getRequestPatientName(args.customerName, args.input);
@@ -1557,6 +1622,8 @@ const createGeneralAppointmentRequest = async (args: {
     rawMessage: args.input.text,
     preferredStartTime: startTime,
     preferredEndTime: endTime,
+    appointmentTypeId: null,
+    practitionerId: args.selectedPractitionerId ?? null,
     notes: [
       'WhatsApp asistanı genel muayene / acil değerlendirme yönlendirmesi olarak aldı.',
       'Tıbbi teşhis veya tedavi önerisi verilmedi.',
@@ -1697,6 +1764,91 @@ const handleGeneralTimeStep = async (args: {
     return 'Saat aralığını anlayamadım. Örneğin 12 ile 14 arası, 15:00 veya 16:00 sonrası yazabilirsiniz.';
   }
 
+  // Saat tercihi alındı — hekim tercihi sor
+  const practitioners = await getClinicPractitioners(args.clinic.id);
+  if (practitioners.length === 0) {
+    // Hekim kaydı yoksa direkt talebi oluştur
+    return createGeneralAppointmentRequest({
+      clinic: args.clinic,
+      input: args.input,
+      customerName: args.customerName,
+      selectedDate: args.selectedDate,
+      preferredTimeRange,
+      reason: args.stateJson.generalRequestReason ?? args.input.text,
+    });
+  }
+
+  const practitionerOptions = practitioners.map(p => ({ id: p.id, name: `Dt. ${p.firstName} ${p.lastName}` }));
+  await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+    customerName: args.customerName ?? null,
+    currentIntent: 'book_appointment',
+    step: 'awaiting_general_practitioner',
+    selectedAppointmentTypeName: 'Genel muayene / acil değerlendirme',
+    selectedDate: args.selectedDate,
+    lastMessage: args.input.text,
+    stateJson: {
+      generalRequestReason: args.stateJson.generalRequestReason ?? args.input.text,
+      preferredTimeRange,
+      practitionerOptions,
+    },
+  });
+
+  return [
+    'Belirli bir hekimimizle görüşmek ister misiniz?',
+    ...practitionerOptions.map((p, i) => `${i + 1}. ${p.name}`),
+    `${practitionerOptions.length + 1}. Fark etmez, klinik ekibi atasın`,
+  ].join('\n');
+};
+
+const handleGeneralPractitionerStep = async (args: {
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>;
+  input: NormalizedWhatsAppMessage;
+  customerName?: string | null;
+  selectedDate?: string | null;
+  stateJson: ConversationStateJson;
+}) => {
+  if (!args.selectedDate) {
+    return handleGeneralDateStep({
+      clinic: args.clinic,
+      input: args.input,
+      customerName: args.customerName,
+      stateJson: args.stateJson,
+    });
+  }
+
+  const options = args.stateJson.practitionerOptions ?? [];
+  const preferredTimeRange = args.stateJson.preferredTimeRange;
+  const normalized = normalizeIntentText(args.input.text);
+  const normalizedSearch = normalizeTurkishSearchText(args.input.text);
+
+  let selectedPractitionerId: string | null = null;
+
+  if (/^\d+$/.test(normalized)) {
+    const idx = Number(normalized) - 1;
+    if (idx >= 0 && idx < options.length) {
+      selectedPractitionerId = options[idx].id;
+    }
+    // idx === options.length → "Fark etmez" seçeneği, null kalır
+  } else if (/fark etmez|herhangi|siz ata|siz secin|atayin|atasin|farketmez/.test(normalizedSearch)) {
+    selectedPractitionerId = null;
+  } else {
+    // İsim bazlı eşleştirme
+    const matched = options.find(p =>
+      normalizeTurkishSearchText(p.name).includes(normalizedSearch)
+      || normalizedSearch.includes(normalizeTurkishSearchText(p.name).replace(/^dt\.\s*/, ''))
+    );
+    if (matched) {
+      selectedPractitionerId = matched.id;
+    } else {
+      // Seçim anlaşılamadıysa tekrar sor
+      return [
+        'Hekim seçiminizi anlayamadım. Lütfen bir numara seçin:',
+        ...options.map((p, i) => `${i + 1}. ${p.name}`),
+        `${options.length + 1}. Fark etmez, klinik ekibi atasın`,
+      ].join('\n');
+    }
+  }
+
   return createGeneralAppointmentRequest({
     clinic: args.clinic,
     input: args.input,
@@ -1704,6 +1856,7 @@ const handleGeneralTimeStep = async (args: {
     selectedDate: args.selectedDate,
     preferredTimeRange,
     reason: args.stateJson.generalRequestReason ?? args.input.text,
+    selectedPractitionerId,
   });
 };
 
@@ -1925,7 +2078,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   const selectedAppointmentTypeName = state?.selectedAppointmentTypeName ?? null;
   const selectedPractitionerId = state?.selectedPractitionerId ?? null;
   const selectedDate = state?.selectedDate ?? null;
-  const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation', 'awaiting_general_date', 'awaiting_general_time'].includes(currentStep ?? '');
+  const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation', 'awaiting_general_date', 'awaiting_general_time', 'awaiting_general_practitioner'].includes(currentStep ?? '');
 
   // ── REMINDER CONFIRMATION: Patient replies EVET/HAYIR to an automated reminder ──
   const isReminderConfirm = /^(evet|e|yes)\s*[!.]*$/i.test(input.text.trim());
@@ -2275,6 +2428,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
 
   if (currentStep === 'awaiting_general_time') {
     return handleGeneralTimeStep({ clinic, input, customerName, selectedDate, stateJson });
+  }
+
+  if (currentStep === 'awaiting_general_practitioner') {
+    return handleGeneralPractitionerStep({ clinic, input, customerName, selectedDate, stateJson });
   }
 
   if (

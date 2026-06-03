@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   AlertCircle,
   CalendarPlus,
@@ -6,12 +6,35 @@ import {
   Clock,
   Loader2,
   MessageCircle,
+  Pencil,
   RefreshCw,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { appointmentRequestService } from '../services/api';
+import { appointmentRequestService, appointmentService, appointmentTypeService, userService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+
+type EditForm = {
+  appointmentTypeId: string;
+  practitionerId: string;
+  date: string;           // "YYYY-MM-DD"
+  selectedSlot: { startTime: string; endTime: string; start: string; end: string } | null;
+};
+
+const today = () => {
+  const d = new Date();
+  return (
+    d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0')
+  );
+};
+
+const isoToDateStr = (iso?: string | null): string => {
+  if (!iso) return '';
+  return iso.slice(0, 10); // "YYYY-MM-DD"
+};
 
 const AppointmentRequests: React.FC = () => {
   const { t } = useTranslation(['appointmentRequests', 'common']);
@@ -21,6 +44,21 @@ const AppointmentRequests: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState('');
   const [error, setError] = useState('');
+
+  // Edit modal state
+  const [editModal, setEditModal] = useState<{ open: boolean; request: any | null; mode: 'edit' | 'convert' }>({
+    open: false, request: null, mode: 'edit',
+  });
+  const [editForm, setEditForm] = useState<EditForm>({ appointmentTypeId: '', practitionerId: '', date: '', selectedSlot: null });
+  const [modalServices, setModalServices] = useState<any[]>([]);
+  const [modalDoctors, setModalDoctors] = useState<any[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState<Array<{ start: string; end: string; startTime: string; endTime: string }>>([]);
+  const [slotsReason, setSlotsReason] = useState<string | null>(null);
+  const [modalSaving, setModalSaving] = useState(false);
+  const [modalError, setModalError] = useState('');
+
   const formatPreferredRange = (start?: string, end?: string) => {
     if (!start) return '-';
     if (!end) return formatDateTime(start);
@@ -31,9 +69,7 @@ const AppointmentRequests: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await appointmentRequestService.getAll({
-        source: 'whatsapp',
-      });
+      const res = await appointmentRequestService.getAll({ source: 'whatsapp' });
       setAllRequests(res.data);
     } catch {
       setError(t('appointmentRequests:errors.loadFailed'));
@@ -42,24 +78,18 @@ const AppointmentRequests: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchRequests();
-  }, []);
+  useEffect(() => { fetchRequests(); }, []);
 
   const updateStatus = async (request: any, nextStatus: string) => {
     const rejectionReason = nextStatus === 'rejected'
       ? window.prompt(t('appointmentRequests:actions.rejectionPrompt'))
       : undefined;
-
     if (nextStatus === 'rejected' && !rejectionReason) return;
 
     setWorkingId(request.id);
     setError('');
     try {
-      await appointmentRequestService.updateStatus(request.id, {
-        status: nextStatus,
-        rejectionReason,
-      });
+      await appointmentRequestService.updateStatus(request.id, { status: nextStatus, rejectionReason });
       fetchRequests();
     } catch (err: any) {
       setError(err.response?.data?.error || t('common:errorGeneric'));
@@ -68,7 +98,61 @@ const AppointmentRequests: React.FC = () => {
     }
   };
 
+  const openEditModal = useCallback(async (request: any, mode: 'edit' | 'convert') => {
+    setEditForm({
+      appointmentTypeId: request.appointmentTypeId || '',
+      practitionerId: request.practitionerId || '',
+      date: isoToDateStr(request.preferredStartTime) || today(),
+      selectedSlot: null,
+    });
+    setAvailableSlots([]);
+    setSlotsReason(null);
+    setEditModal({ open: true, request, mode });
+    setModalError('');
+    setModalLoading(true);
+    try {
+      const [svcsRes, docsRes] = await Promise.all([
+        appointmentTypeService.getAll(true),
+        userService.getDoctors(),
+      ]);
+      setModalServices(svcsRes.data);
+      setModalDoctors(docsRes.data);
+    } finally {
+      setModalLoading(false);
+    }
+  }, []);
+
+  // Fetch available slots when practitioner + service + date are all filled
+  useEffect(() => {
+    const { appointmentTypeId, practitionerId, date } = editForm;
+    if (!editModal.open || !appointmentTypeId || !practitionerId || !date) {
+      setAvailableSlots([]);
+      setSlotsReason(null);
+      return;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    setAvailableSlots([]);
+    setSlotsReason(null);
+    setEditForm(prev => ({ ...prev, selectedSlot: null }));
+    appointmentService.getAvailableSlots({ doctorId: practitionerId, serviceId: appointmentTypeId, date })
+      .then(res => {
+        if (cancelled) return;
+        setAvailableSlots(res.data.slots || []);
+        setSlotsReason(res.data.reason || null);
+      })
+      .catch(() => { if (!cancelled) setSlotsReason('error'); })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editForm.appointmentTypeId, editForm.practitionerId, editForm.date, editModal.open]);
+
   const convertRequest = async (request: any) => {
+    // If any required field is missing, open the edit modal instead of calling convert
+    if (!request.appointmentTypeId || !request.practitionerId || !request.preferredStartTime || !request.preferredEndTime) {
+      await openEditModal(request, 'convert');
+      return;
+    }
     setWorkingId(request.id);
     setError('');
     try {
@@ -80,11 +164,64 @@ const AppointmentRequests: React.FC = () => {
         setError(t('appointmentRequests:errors.outsideAvailability'));
       } else if (code === 'APPOINTMENT_OVERLAP') {
         setError(t('appointmentRequests:errors.overlap'));
+      } else if (code === 'MISSING_REQUIRED_FIELDS') {
+        await openEditModal(request, 'convert');
       } else {
         setError(err.response?.data?.error || t('appointmentRequests:errors.convertFailed'));
       }
     } finally {
       setWorkingId('');
+    }
+  };
+
+  const handleModalSave = async () => {
+    const req = editModal.request;
+    if (!req) return;
+    setModalSaving(true);
+    setModalError('');
+    try {
+      await appointmentRequestService.update(req.id, {
+        appointmentTypeId: editForm.appointmentTypeId || null,
+        practitionerId: editForm.practitionerId || null,
+        preferredStartTime: editForm.selectedSlot?.startTime ?? null,
+        preferredEndTime: editForm.selectedSlot?.endTime ?? null,
+      });
+      setEditModal({ open: false, request: null, mode: 'edit' });
+      fetchRequests();
+    } catch (err: any) {
+      setModalError(err.response?.data?.error || t('common:errorGeneric'));
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
+  const handleModalConvert = async () => {
+    const req = editModal.request;
+    if (!req) return;
+    setModalSaving(true);
+    setModalError('');
+    try {
+      await appointmentRequestService.convert(req.id, {
+        appointmentTypeId: editForm.appointmentTypeId || undefined,
+        practitionerId: editForm.practitionerId || undefined,
+        startTime: editForm.selectedSlot?.startTime,
+        endTime: editForm.selectedSlot?.endTime,
+      });
+      setEditModal({ open: false, request: null, mode: 'edit' });
+      fetchRequests();
+    } catch (err: any) {
+      const code = err.response?.data?.code;
+      if (code === 'APPOINTMENT_OUTSIDE_AVAILABILITY') {
+        setModalError(t('appointmentRequests:errors.outsideAvailability'));
+      } else if (code === 'APPOINTMENT_OVERLAP') {
+        setModalError(t('appointmentRequests:errors.overlap'));
+      } else if (code === 'MISSING_REQUIRED_FIELDS') {
+        setModalError(t('appointmentRequests:errors.missingRequiredFields'));
+      } else {
+        setModalError(err.response?.data?.error || t('appointmentRequests:errors.convertFailed'));
+      }
+    } finally {
+      setModalSaving(false);
     }
   };
 
@@ -191,6 +328,17 @@ const AppointmentRequests: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap lg:justify-end gap-2">
+                  {request.status !== 'converted' && !String(request.id).startsWith('legacy-') && (
+                    <button
+                      onClick={() => openEditModal(request, 'edit')}
+                      disabled={workingId === request.id}
+                      className="btn-secondary"
+                      title={t('appointmentRequests:actions.edit')}
+                    >
+                      <Pencil size={16} />
+                      {t('appointmentRequests:actions.edit')}
+                    </button>
+                  )}
                   {request.status !== 'converted' && request.requestType !== 'cancel' && (
                     <button
                       onClick={() => convertRequest(request)}
@@ -225,6 +373,180 @@ const AppointmentRequests: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* Edit / Convert Modal */}
+      {editModal.open && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  {editModal.mode === 'convert'
+                    ? t('appointmentRequests:edit.titleConvert')
+                    : t('appointmentRequests:edit.title')}
+                </h2>
+                {editModal.request?.patientName && (
+                  <p className="text-sm text-gray-500 mt-0.5">{editModal.request.patientName}</p>
+                )}
+              </div>
+              <button
+                onClick={() => setEditModal({ open: false, request: null, mode: 'edit' })}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100"
+                disabled={modalSaving}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {editModal.mode === 'convert' && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 text-amber-700 rounded-lg text-sm">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  {t('appointmentRequests:edit.convertHint')}
+                </div>
+              )}
+
+              {modalLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="animate-spin text-primary-600" size={28} />
+                </div>
+              ) : (
+                <>
+                  {/* Step 1: Service */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('appointmentRequests:edit.service')}
+                    </label>
+                    <select
+                      className="input-field w-full"
+                      value={editForm.appointmentTypeId}
+                      onChange={e => setEditForm(prev => ({ ...prev, appointmentTypeId: e.target.value, selectedSlot: null }))}
+                    >
+                      <option value="">{t('appointmentRequests:edit.selectService')}</option>
+                      {modalServices.map((svc: any) => (
+                        <option key={svc.id} value={svc.id}>{svc.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Step 2: Practitioner (shown after service selected) */}
+                  {editForm.appointmentTypeId && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('appointmentRequests:edit.practitioner')}
+                      </label>
+                      <select
+                        className="input-field w-full"
+                        value={editForm.practitionerId}
+                        onChange={e => setEditForm(prev => ({ ...prev, practitionerId: e.target.value, selectedSlot: null }))}
+                      >
+                        <option value="">{t('appointmentRequests:edit.selectPractitioner')}</option>
+                        {modalDoctors.map((doc: any) => (
+                          <option key={doc.id} value={doc.id}>{doc.firstName} {doc.lastName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Step 3: Date (shown after practitioner selected) */}
+                  {editForm.appointmentTypeId && editForm.practitionerId && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('appointmentRequests:edit.date')}
+                      </label>
+                      <input
+                        type="date"
+                        className="input-field w-full"
+                        min={today()}
+                        value={editForm.date}
+                        onChange={e => setEditForm(prev => ({ ...prev, date: e.target.value, selectedSlot: null }))}
+                      />
+                    </div>
+                  )}
+
+                  {/* Step 4: Available slots (shown after date selected) */}
+                  {editForm.appointmentTypeId && editForm.practitionerId && editForm.date && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('appointmentRequests:edit.availableSlots')}
+                      </label>
+                      {slotsLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                          <Loader2 size={16} className="animate-spin" />
+                          {t('appointmentRequests:edit.loadingSlots')}
+                        </div>
+                      ) : availableSlots.length === 0 ? (
+                        <p className="text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
+                          {slotsReason === 'clinic_closed'
+                            ? t('appointmentRequests:edit.clinicClosed')
+                            : slotsReason === 'off_day'
+                            ? t('appointmentRequests:edit.offDay')
+                            : t('appointmentRequests:edit.noSlots')}
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {availableSlots.map(slot => {
+                            const isSelected = editForm.selectedSlot?.startTime === slot.startTime;
+                            return (
+                              <button
+                                key={slot.startTime}
+                                type="button"
+                                onClick={() => setEditForm(prev => ({ ...prev, selectedSlot: slot }))}
+                                className={`text-sm py-2 px-3 rounded-lg border font-medium transition-colors ${
+                                  isSelected
+                                    ? 'bg-primary-600 text-white border-primary-600'
+                                    : 'bg-white text-gray-700 border-gray-200 hover:border-primary-400 hover:bg-primary-50'
+                                }`}
+                              >
+                                {slot.start}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {modalError && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+                  <AlertCircle size={16} />
+                  {modalError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 p-5 border-t border-gray-100">
+              <button
+                onClick={() => setEditModal({ open: false, request: null, mode: 'edit' })}
+                disabled={modalSaving}
+                className="btn-secondary"
+              >
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={handleModalSave}
+                disabled={modalSaving || modalLoading}
+                className="btn-secondary"
+              >
+                {modalSaving ? <Loader2 size={16} className="animate-spin" /> : null}
+                {t('appointmentRequests:edit.save')}
+              </button>
+              {editModal.request?.requestType !== 'cancel' && (
+                <button
+                  onClick={handleModalConvert}
+                  disabled={modalSaving || modalLoading || !editForm.selectedSlot}
+                  className="btn-primary"
+                >
+                  {modalSaving ? <Loader2 size={16} className="animate-spin" /> : <CalendarPlus size={16} />}
+                  {t('appointmentRequests:actions.convert')}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -259,3 +581,4 @@ const statusClass = (status: string) => {
 };
 
 export default AppointmentRequests;
+
