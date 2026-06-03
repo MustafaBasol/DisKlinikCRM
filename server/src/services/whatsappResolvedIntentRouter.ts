@@ -67,9 +67,13 @@ export const routeResolvedWhatsAppIntent = async ({
   formatMainMenu,
   handleCancelIntent,
 }: ResolvedIntentRouterDependencies) => {
-  const effectiveIntent = extraction.intent !== 'unknown'
-    ? extraction.intent
-    : state?.currentIntent ?? 'unknown';
+  const effectiveIntent = extraction.intent === 'check_appointment'
+    ? 'appointment_query'
+    : extraction.intent !== 'unknown'
+      ? extraction.intent
+      : state?.currentIntent === 'check_appointment'
+        ? 'appointment_query'
+        : state?.currentIntent ?? 'unknown';
 
   if (extraction.needsClarification || (extraction.intent === 'unknown' && extraction.confidence < 0.6)) {
     const clarification = buildClarificationMessage(extraction, state, customerName);
@@ -88,7 +92,7 @@ export const routeResolvedWhatsAppIntent = async ({
     return formatServiceList(services);
   }
 
-  if (effectiveIntent === 'check_appointment') {
+  if (effectiveIntent === 'check_appointment' || effectiveIntent === 'appointment_query') {
     const appointments = await getAppointments();
     await resetState(customerName);
     return formatAppointmentLookup(appointments);
@@ -116,10 +120,11 @@ export const routeResolvedWhatsAppIntent = async ({
   await upsertState({
     customerName,
     currentIntent: null,
-    step: 'main_menu',
+    step: null,
     lastMessage: inputText,
     stateJson: null,
   });
 
-  return formatMainMenu(customerName, true, clinicName);
+  const firstName = customerName?.trim().split(/\s+/)[0] ?? null;
+  return `${firstName ? `${firstName}, ` : ''}mesajınızı tam anlayamadım. Randevu almak, mevcut randevunuzu sormak, klinik bilgisi almak veya yetkili ekibe ulaşmak istediğinizi yazabilirsiniz.`;
 };

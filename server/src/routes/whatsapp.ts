@@ -7,6 +7,8 @@ import {
   upsertInboxEntry,
 } from '../services/whatsapp/clinicResolver.js';
 import { extractAssistantInputWithGoogleAi } from '../services/googleAiStudio.js';
+import { resolveWhatsAppConversationAgentDecision, type WhatsAppConversationAgentSource } from '../services/whatsappConversationAgent.js';
+import type { WhatsAppAgentDecision } from '../services/whatsappAgentSchema.js';
 import {
   buildAvailableSlots,
   loadAvailabilityForDate,
@@ -18,6 +20,7 @@ import {
   extractExplicitRequestedTime as interpretExplicitRequestedTime,
   extractExplicitTimeThreshold as interpretExplicitTimeThreshold,
   getTimePreference as interpretTimePreference,
+  interpretTimeRequest,
   isDifferentDateRequest as interpretDifferentDateRequest,
   isMoreOptionsRequest as interpretMoreOptionsRequest,
   type TimePreference,
@@ -36,13 +39,24 @@ import {
 } from '../services/whatsappPublicApi';
 import { logActivity } from '../utils/activity.js';
 import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE } from '../utils/whatsappDate.js';
-import { getZonedDateParts, minutesToTime, timeToMinutes, formatClinicDateTime } from '../utils/helpers.js';
+import { getZonedDateParts, minutesToTime, timeToMinutes, formatClinicDateTime, localDateTimeToClinicDate } from '../utils/helpers.js';
 
 const router = express.Router();
 
 // ---- Type Definitions ----
 
-type AssistantIntent = 'book_appointment' | 'check_appointment' | 'cancel_appointment' | 'service_info' | 'unknown';
+type AssistantIntent =
+  | 'greeting'
+  | 'book_appointment'
+  | 'appointment_query'
+  | 'check_appointment'
+  | 'cancel_appointment'
+  | 'human_handoff'
+  | 'clinic_info'
+  | 'service_info'
+  | 'symptom_or_complaint'
+  | 'off_topic_or_smalltalk'
+  | 'unknown';
 type AssistantStep =
   | 'main_menu'
   | 'awaiting_name'
@@ -50,7 +64,10 @@ type AssistantStep =
   | 'awaiting_date'
   | 'awaiting_time'
   | 'awaiting_confirmation'
-  | 'awaiting_cancel_selection';
+  | 'awaiting_cancel_selection'
+  | 'awaiting_handoff_note'
+  | 'awaiting_general_date'
+  | 'awaiting_general_time';
 
 type AssistantExtraction = {
   intent: AssistantIntent;
@@ -111,6 +128,12 @@ type ConversationStateJson = {
   cancellableAppointments?: SavedAppointmentSummary[];
   matchedServices?: SavedServiceOption[];
   pendingConfirmationSlot?: SavedAvailableSlot | null;
+  pendingHandoffRequestId?: string;
+  generalRequestReason?: string;
+  preferredTimeRange?: {
+    startTime?: string | null;
+    endTime?: string | null;
+  };
 };
 
 // ---- Helper Middlewares ----
@@ -246,6 +269,9 @@ const extractNumericSelection = (text: string) => {
 const readConversationStateJson = (value: unknown): ConversationStateJson => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const stateValue = value as Record<string, unknown>;
+  const preferredTimeRange = stateValue.preferredTimeRange && typeof stateValue.preferredTimeRange === 'object' && !Array.isArray(stateValue.preferredTimeRange)
+    ? stateValue.preferredTimeRange as ConversationStateJson['preferredTimeRange']
+    : undefined;
   return {
     availableSlots: Array.isArray(stateValue.availableSlots) ? stateValue.availableSlots as SavedAvailableSlot[] : undefined,
     lastShownSlots: Array.isArray(stateValue.lastShownSlots) ? stateValue.lastShownSlots as SavedAvailableSlot[] : undefined,
@@ -254,6 +280,9 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
     pendingConfirmationSlot: stateValue.pendingConfirmationSlot && typeof stateValue.pendingConfirmationSlot === 'object' && !Array.isArray(stateValue.pendingConfirmationSlot)
       ? stateValue.pendingConfirmationSlot as SavedAvailableSlot
       : undefined,
+    pendingHandoffRequestId: typeof stateValue.pendingHandoffRequestId === 'string' ? stateValue.pendingHandoffRequestId : undefined,
+    generalRequestReason: typeof stateValue.generalRequestReason === 'string' ? stateValue.generalRequestReason : undefined,
+    preferredTimeRange,
   };
 };
 
@@ -399,6 +428,126 @@ const isClinicHoursQuestion = (text: string) => {
     || /acik.*\b\d{1,2}\s*(mayis|haziran|temmuz|agustos|eylul|ekim|kasim|aralik|ocak|subat|mart|nisan)\b/i.test(normalized);
 };
 
+const isHumanHandoffIntent = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'yetkili ile gorusmek',
+    'yetkiliyle gorusmek',
+    'yetkili istiyorum',
+    'insanla gorusmek',
+    'canli destek',
+    'temsilci',
+    'operator',
+    'personelle gorusmek',
+    'resepsiyonla gorusmek',
+    'doktorla gorusmek',
+    'beni arasin',
+    'aramalarini istiyorum',
+    'ekibe ilet',
+    'klinik ekibiyle gorus',
+  ].some(pattern => normalized.includes(pattern));
+};
+
+const isSymptomOrComplaintMessage = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'disim agriyor',
+    'disim cok agriyor',
+    'dis agrisi',
+    'agzim agriyor',
+    'cenem agriyor',
+    'sizlama',
+    'sizlik',
+    'hassasiyet',
+    'sislik',
+    'yuzum sisti',
+    'apse',
+    'kanama',
+    'dis etim kaniyor',
+    'disim kirildi',
+    'disim catladi',
+    'dolgu dustu',
+    'kuron dustu',
+    'kaplama dustu',
+    'acil',
+    'sikayetim var',
+  ].some(pattern => normalized.includes(pattern))
+    || /\b(agri|agriyor|aciyor|sanci|sancisi)\b/.test(normalized);
+};
+
+const isClinicInfoQuestion = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return isClinicHoursQuestion(text)
+    || [
+      'kac doktor',
+      'doktor sayisi',
+      'hekim sayisi',
+      'kac hekim',
+      'klinigin adresi',
+      'adresiniz',
+      'neredesiniz',
+      'konum',
+      'telefon numaraniz',
+      'telefonunuz',
+      'mail adresiniz',
+      'email adresiniz',
+      'web siteniz',
+      'ogle arasi',
+      'oglen acik',
+      'ogle molasi',
+      'calisan doktor',
+    ].some(pattern => normalized.includes(pattern));
+};
+
+const isOffTopicOrSmallTalkMessage = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'saat kac',
+    'saat kactir',
+    'su an saat',
+    'nasilsin',
+    'naber',
+    'hava nasil',
+    'fikra anlat',
+    'saka yap',
+  ].some(pattern => normalized.includes(pattern));
+};
+
+const hasBookingLanguage = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'randevu',
+    'muayene',
+    'gelmek istiyorum',
+    'kontrol ettirmek',
+    'uygunluk',
+    'musaitlik',
+    'musaitim',
+  ].some(pattern => normalized.includes(pattern));
+};
+
+const normalizeAssistantIntentValue = (intent: string | null | undefined): AssistantIntent => {
+  if (intent === 'check_appointment') return 'appointment_query';
+  if ([
+    'greeting',
+    'book_appointment',
+    'appointment_query',
+    'cancel_appointment',
+    'human_handoff',
+    'clinic_info',
+    'service_info',
+    'symptom_or_complaint',
+    'off_topic_or_smalltalk',
+    'unknown',
+  ].includes(intent ?? '')) {
+    return intent as AssistantIntent;
+  }
+  return 'unknown';
+};
+
+const isAppointmentQueryIntentValue = (intent: string | null | undefined) =>
+  normalizeAssistantIntentValue(intent) === 'appointment_query';
+
 const isBookingFlowCancelCommand = (text: string, state: AssistantStateRecord | null | undefined) => {
   const normalized = normalizeTurkishSearchText(text);
   const isBookingStep = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation'].includes(state?.step ?? '');
@@ -483,18 +632,42 @@ const findServiceSelection = (text: string, services: AssistantService[]) => {
 
 const extractAssistantInputRuleBased = (text: string, services: AssistantService[]): AssistantExtraction => {
   const normalized = normalizeIntentText(text);
+  const timeRequest = interpretTimeRequest(text);
   const matchedService = findServiceSelection(text, services);
   const timeMatch = normalized.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
   let intent: AssistantIntent = 'unknown';
 
-  if (normalized === '1' || /(randevu al|randevu almak|randevu oluştur|randevu olustur|randevu istiyorum)/.test(normalized)) {
+  if (isHumanHandoffIntent(text)) {
+    intent = 'human_handoff';
+  } else if (isSymptomOrComplaintMessage(text)) {
+    intent = 'symptom_or_complaint';
+  } else if (
+    normalized === '1'
+    || /(randevu al|randevu almak|randevu oluştur|randevu olustur|randevu istiyorum|randevu almak istiyorum)/.test(normalized)
+    || (
+      hasBookingLanguage(text)
+      && (
+        Boolean(normalizeDateFromTurkishInput(text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE))
+        || timeRequest.rangeStartMinutes !== null
+        || timeRequest.exactTime !== null
+        || timeRequest.afterTimeMinutes !== null
+        || timeRequest.preference !== null
+      )
+    )
+  ) {
     intent = 'book_appointment';
   } else if (normalized === '2' || /(randevumu sorgu|randevu sorgu|randevum ne zaman|randevu durum|randevum var mı|randevum var mi)/.test(normalized)) {
-    intent = 'check_appointment';
-  } else if (normalized === '3' || /(iptal|randevumu iptal|randevu iptal)/.test(normalized)) {
+    intent = 'appointment_query';
+  } else if (normalized === '3' || /(randevumu iptal|randevu iptal|var olan randevumu iptal)/.test(normalized)) {
     intent = 'cancel_appointment';
+  } else if (isClinicInfoQuestion(text)) {
+    intent = 'clinic_info';
   } else if (normalized === '4' || /(hizmet|tedavi|bilgi almak|fiyat|servis)/.test(normalized)) {
     intent = 'service_info';
+  } else if (isGreetingMessage(text)) {
+    intent = 'greeting';
+  } else if (isOffTopicOrSmallTalkMessage(text)) {
+    intent = 'off_topic_or_smalltalk';
   }
 
   return {
@@ -517,15 +690,37 @@ const extractAssistantInputRuleBased = (text: string, services: AssistantService
   };
 };
 
-const mergeAssistantExtractions = (ruleBased: AssistantExtraction, aiBased: AssistantExtraction | null, services: AssistantService[]): AssistantExtraction => {
+const mergeAssistantExtractions = (ruleBased: AssistantExtraction, aiBased: AssistantExtraction | null, services: AssistantService[], text: string): AssistantExtraction => {
   const aiService = aiBased?.appointmentTypeId
     ? services.find(s => s.id === aiBased.appointmentTypeId) ?? null
     : aiBased?.appointmentTypeName
       ? findServiceSelection(aiBased.appointmentTypeName, services)
       : null;
+  const isDeterministicMenuSelection = /^[1-4]$/.test(normalizeIntentText(text));
+  const normalizedAiIntent = normalizeAssistantIntentValue(aiBased?.intent);
+  const normalizedRuleIntent = normalizeAssistantIntentValue(ruleBased.intent);
+  const timeRequest = interpretTimeRequest(text);
+  const hasActionableBookingTime = timeRequest.rangeStartMinutes !== null
+    || timeRequest.exactTime !== null
+    || timeRequest.afterTimeMinutes !== null
+    || timeRequest.preference !== null
+    || Boolean(normalizeDateFromTurkishInput(text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE));
+  const shouldKeepRuleIntent = normalizedRuleIntent === 'human_handoff'
+    || normalizedRuleIntent === 'symptom_or_complaint'
+    || (normalizedRuleIntent === 'book_appointment' && hasBookingLanguage(text) && hasActionableBookingTime)
+    || isDeterministicMenuSelection;
+  const shouldPreferAiIntent = Boolean(aiBased)
+    && normalizedAiIntent !== 'unknown'
+    && (aiBased?.confidence ?? 0) >= 0.65
+    && !shouldKeepRuleIntent;
+  const resolvedIntent = shouldPreferAiIntent
+    ? normalizedAiIntent
+    : normalizedRuleIntent !== 'unknown'
+      ? normalizedRuleIntent
+      : normalizedAiIntent;
 
   return {
-    intent: ruleBased.intent !== 'unknown' ? ruleBased.intent : (aiBased?.intent ?? 'unknown'),
+    intent: resolvedIntent,
     name: ruleBased.name ?? aiBased?.name ?? null,
     phone: ruleBased.phone ?? aiBased?.phone ?? null,
     appointmentTypeName: ruleBased.appointmentTypeName ?? aiService?.name ?? aiBased?.appointmentTypeName ?? null,
@@ -535,7 +730,7 @@ const mergeAssistantExtractions = (ruleBased: AssistantExtraction, aiBased: Assi
     exactTime: ruleBased.exactTime ?? aiBased?.exactTime ?? null,
     afterTime: ruleBased.afterTime ?? aiBased?.afterTime ?? null,
     timePreference: ruleBased.timePreference ?? aiBased?.timePreference ?? null,
-    confidence: ruleBased.confidence > 0.2 ? ruleBased.confidence : (aiBased?.confidence ?? ruleBased.confidence),
+    confidence: shouldPreferAiIntent ? (aiBased?.confidence ?? ruleBased.confidence) : (ruleBased.confidence > 0.2 ? ruleBased.confidence : (aiBased?.confidence ?? ruleBased.confidence)),
     needsClarification: aiBased?.needsClarification ?? false,
     clarificationReason: aiBased?.clarificationReason ?? null,
   };
@@ -553,7 +748,7 @@ const resolveAssistantExtraction = async (text: string, services: AssistantServi
       selectedAppointmentTypeName: state.selectedAppointmentTypeName,
       selectedDate: state.selectedDate,
     });
-    const merged = mergeAssistantExtractions(ruleBased, aiBased, services);
+    const merged = mergeAssistantExtractions(ruleBased, aiBased, services, text);
     console.info('[whatsapp-assistant] extraction-source', {
       usedAi: Boolean(aiBased),
       intent: merged.intent,
@@ -568,6 +763,50 @@ const resolveAssistantExtraction = async (text: string, services: AssistantServi
     console.error('[whatsapp-assistant] ai-extraction-error', error);
     return ruleBased;
   }
+};
+
+const buildAssistantExtractionFromAgentDecision = (
+  decision: WhatsAppAgentDecision,
+  services: AssistantService[],
+): AssistantExtraction => {
+  const serviceFromSlot = decision.slots.appointmentTypeId
+    ? services.find(service => service.id === decision.slots.appointmentTypeId) ?? null
+    : decision.slots.appointmentTypeName
+      ? findServiceSelection(decision.slots.appointmentTypeName, services)
+      : decision.slots.serviceName
+        ? findServiceSelection(decision.slots.serviceName, services)
+        : null;
+
+  return {
+    intent: normalizeAssistantIntentValue(decision.intent),
+    name: decision.slots.name,
+    phone: decision.slots.phone,
+    appointmentTypeName: serviceFromSlot?.name ?? decision.slots.appointmentTypeName ?? decision.slots.serviceName,
+    appointmentTypeId: serviceFromSlot?.id ?? decision.slots.appointmentTypeId,
+    dateText: decision.slots.dateText,
+    time: decision.slots.time,
+    exactTime: decision.slots.exactTime ?? decision.slots.time,
+    afterTime: decision.slots.afterTime,
+    timePreference: decision.slots.timePreference as TimePreference | null,
+    confidence: decision.confidence,
+    needsClarification: decision.action === 'ask_clarification' || decision.confidence < 0.6,
+    clarificationReason: decision.action === 'ask_clarification' ? decision.reply : null,
+  };
+};
+
+const resolveAssistantExtractionWithAgentDecision = async (
+  text: string,
+  services: AssistantService[],
+  state: AssistantStateRecord,
+  agentDecision: WhatsAppAgentDecision | null,
+) => {
+  if (agentDecision) {
+    const ruleBased = extractAssistantInputRuleBased(text, services);
+    const agentBased = buildAssistantExtractionFromAgentDecision(agentDecision, services);
+    return mergeAssistantExtractions(ruleBased, agentBased, services, text);
+  }
+
+  return resolveAssistantExtraction(text, services, state);
 };
 
 // ---- State Management ----
@@ -773,6 +1012,20 @@ const saveWhatsAppConversationMessage = async (args: {
   }
 };
 
+const loadRecentWhatsAppAgentMessages = async (clinicId: string, patientId?: string | null) => {
+  if (!patientId) return [];
+  const messages = await prisma.whatsAppConversationMessage.findMany({
+    where: { clinicId, patientId },
+    select: { direction: true, text: true },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+  return messages.reverse().map(message => ({
+    direction: message.direction === 'outgoing' ? 'outgoing' as const : 'incoming' as const,
+    text: message.text,
+  }));
+};
+
 const hasProcessedWhatsAppProviderMessage = async (clinicId: string, phone: string, providerMessageId?: string | null) => {
   if (!providerMessageId?.trim()) return false;
   const [message, state] = await Promise.all([
@@ -947,6 +1200,660 @@ const handleCancelIntent = async (clinicId: string, phone: string) => {
   ].join('\n');
 };
 
+const getPreferredTimeRangeFromText = (text: string): ConversationStateJson['preferredTimeRange'] => {
+  const interpreted = interpretTimeRequest(text);
+  if (interpreted.rangeStartMinutes !== null && interpreted.rangeEndMinutes !== null) {
+    return {
+      startTime: minutesToTime(interpreted.rangeStartMinutes),
+      endTime: minutesToTime(interpreted.rangeEndMinutes),
+    };
+  }
+  if (interpreted.exactTime) {
+    return { startTime: interpreted.exactTime, endTime: null };
+  }
+  if (interpreted.afterTimeMinutes !== null) {
+    return { startTime: minutesToTime(interpreted.afterTimeMinutes), endTime: null };
+  }
+  return undefined;
+};
+
+const mergePreferredTimeRange = (
+  previous: ConversationStateJson['preferredTimeRange'],
+  next: ConversationStateJson['preferredTimeRange'],
+) => next?.startTime || next?.endTime ? next : previous;
+
+const formatPreferredTimeRange = (range: ConversationStateJson['preferredTimeRange']) => {
+  if (!range?.startTime) return null;
+  if (range.endTime) return `${range.startTime}-${range.endTime} arası`;
+  return `${range.startTime} sonrası`;
+};
+
+const prefersGeneralAssessment = (text: string) => {
+  const normalized = normalizeTurkishSearchText(text);
+  return [
+    'hizmet adini bilmiyorum',
+    'hangi hizmet oldugunu bilmiyorum',
+    'tam bilmiyorum',
+    'bilmiyorum sadece',
+    'genel muayene',
+    'acil degerlendirme',
+    'muayene olsun',
+  ].some(pattern => normalized.includes(pattern));
+};
+
+const buildGeneralAssessmentPrompt = (args: {
+  text: string;
+  customerName?: string | null;
+  symptom: boolean;
+  preferredTimeRange?: ConversationStateJson['preferredTimeRange'];
+}) => {
+  const rangeText = formatPreferredTimeRange(args.preferredTimeRange);
+  const firstName = getFirstNameFromCustomerName(args.customerName);
+  const prefix = args.symptom
+    ? 'Geçmiş olsun. Hizmet adını bilmeniz gerekmiyor. Diş ağrısı veya benzer şikayetler için sizi genel muayene ya da acil değerlendirme randevusuna yönlendirebilirim.'
+    : 'Anladım. Hizmet adını bilmeniz gerekmiyor; genel muayene veya acil değerlendirme randevusu olarak ilerleyebiliriz.';
+  const rangeSentence = rangeText ? ` ${rangeText} müsait olduğunuzu not aldım.` : '';
+  const question = ' Hangi gün gelmek istersiniz?';
+  return `${firstName ? `${firstName}, ` : ''}${prefix}${rangeSentence}${question}`;
+};
+
+const getRequestPatientName = (customerName: string | null | undefined, input: NormalizedWhatsAppMessage) =>
+  customerName?.trim() || input.name?.trim() || 'WhatsApp kullanıcısı';
+
+const createWhatsAppStaffRequest = async (args: {
+  clinicId: string;
+  phone: string;
+  patientName: string;
+  patientId?: string | null;
+  requestType: 'appointment' | 'info' | 'cancel' | 'reschedule';
+  rawMessage: string;
+  notes: string;
+  appointmentTypeId?: string | null;
+  preferredStartTime?: Date | null;
+  preferredEndTime?: Date | null;
+}) => prisma.appointmentRequest.create({
+  data: {
+    clinicId: args.clinicId,
+    patientId: args.patientId ?? null,
+    patientName: args.patientName,
+    phone: normalizePhone(args.phone),
+    appointmentTypeId: args.appointmentTypeId ?? null,
+    preferredStartTime: args.preferredStartTime ?? null,
+    preferredEndTime: args.preferredEndTime ?? null,
+    requestType: args.requestType,
+    source: 'whatsapp',
+    status: 'pending',
+    rawMessage: args.rawMessage,
+    notes: args.notes,
+  },
+});
+
+const handleHumanHandoffIntent = async (
+  clinicId: string,
+  input: NormalizedWhatsAppMessage,
+  customerName: string | null | undefined,
+) => {
+  const existingPatient = await findExistingPatientByPhone(clinicId, input.phone);
+  const patientName = getRequestPatientName(customerName, input);
+  const request = await createWhatsAppStaffRequest({
+    clinicId,
+    phone: input.phone,
+    patientId: existingPatient?.id ?? null,
+    patientName,
+    requestType: 'info',
+    rawMessage: input.text,
+    notes: `WhatsApp üzerinden insan yetkili talebi alındı.\nİlk mesaj: ${input.text}`,
+  });
+
+  await upsertWhatsAppConversationState(clinicId, input.phone, {
+    customerName: customerName ?? input.name ?? null,
+    currentIntent: 'human_handoff',
+    step: 'awaiting_handoff_note',
+    lastMessage: input.text,
+    stateJson: { pendingHandoffRequestId: request.id },
+    selectedAppointmentTypeId: null,
+    selectedAppointmentTypeName: null,
+    selectedPractitionerId: null,
+    selectedDate: null,
+    selectedTime: null,
+  });
+
+  const firstName = getFirstNameFromCustomerName(customerName ?? input.name ?? null);
+  return `${firstName ? `Elbette ${firstName}.` : 'Elbette.'} Talebinizi yetkili ekibe iletiyorum. Klinik ekibinden biri size en kısa sürede dönüş yapacak. Konu hakkında kısa bir not bırakmak ister misiniz?`;
+};
+
+const handleHandoffNote = async (
+  clinicId: string,
+  input: NormalizedWhatsAppMessage,
+  customerName: string | null | undefined,
+  stateJson: ConversationStateJson,
+) => {
+  const note = input.text.trim();
+  if (stateJson.pendingHandoffRequestId) {
+    await prisma.appointmentRequest.updateMany({
+      where: { id: stateJson.pendingHandoffRequestId, clinicId },
+      data: {
+        notes: `WhatsApp üzerinden insan yetkili talebi alındı.\nKullanıcı notu: ${note}`,
+      },
+    });
+  } else {
+    const existingPatient = await findExistingPatientByPhone(clinicId, input.phone);
+    await createWhatsAppStaffRequest({
+      clinicId,
+      phone: input.phone,
+      patientId: existingPatient?.id ?? null,
+      patientName: getRequestPatientName(customerName, input),
+      requestType: 'info',
+      rawMessage: input.text,
+      notes: `WhatsApp yetkili görüşme notu: ${note}`,
+    });
+  }
+
+  await resetWhatsAppConversationState(clinicId, input.phone, customerName);
+  return 'Notunuzu ekledim. Yetkili ekip en kısa sürede size dönüş yapacak.';
+};
+
+const getActiveDoctorCountForClinic = async (clinicId: string) => {
+  const assignments = await prisma.userClinic.findMany({
+    where: {
+      clinicId,
+      isActive: true,
+      user: { isActive: true },
+      OR: [{ role: 'DENTIST' }, { role: 'dentist' }, { role: 'doctor' }],
+    },
+    select: { userId: true },
+  });
+  const assignedIds = assignments.map(item => item.userId);
+  const legacyDoctors = await prisma.user.findMany({
+    where: {
+      clinicId,
+      isActive: true,
+      role: { in: ['doctor', 'DENTIST', 'dentist'] },
+      id: { notIn: assignedIds },
+    },
+    select: { id: true },
+  });
+  return new Set([...assignedIds, ...legacyDoctors.map(user => user.id)]).size;
+};
+
+const loadWhatsAppAgentClinicFacts = async (
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>,
+) => {
+  const [doctorCount, workingHoursCount] = await Promise.all([
+    getActiveDoctorCountForClinic(clinic.id),
+    prisma.clinicWorkingHours.count({ where: { clinicId: clinic.id } }),
+  ]);
+
+  return {
+    clinicName: clinic.name,
+    timezone: clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE,
+    hasAddress: Boolean(clinic.address?.trim()),
+    hasPhone: Boolean(clinic.phone?.trim()),
+    hasEmail: Boolean(clinic.email?.trim()),
+    hasWebsite: Boolean(clinic.website?.trim()),
+    doctorCountKnown: doctorCount > 0,
+    doctorCount: doctorCount > 0 ? doctorCount : null,
+    workingHoursKnown: workingHoursCount > 0,
+    workingHoursDetail: workingHoursCount > 0 ? 'closed_days_only' as const : 'none' as const,
+  };
+};
+
+const TURKISH_WEEKDAY_LABELS: Record<number, string> = {
+  0: 'Pazar',
+  1: 'Pazartesi',
+  2: 'Salı',
+  3: 'Çarşamba',
+  4: 'Perşembe',
+  5: 'Cuma',
+  6: 'Cumartesi',
+};
+
+const answerClinicWorkingHoursInfo = async (
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>,
+  text: string,
+) => {
+  const rows = await prisma.clinicWorkingHours.findMany({
+    where: { clinicId: clinic.id },
+    select: { dayOfWeek: true, isClosed: true },
+    orderBy: { dayOfWeek: 'asc' },
+  });
+  if (rows.length === 0) return null;
+
+  const normalized = normalizeTurkishSearchText(text);
+  const timeZone = clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE;
+  const currentWeekday = getZonedDateParts(new Date(), timeZone).weekday;
+  const targetWeekday = normalized.includes('yarin')
+    ? (currentWeekday + 1) % 7
+    : normalized.includes('bugun')
+      ? currentWeekday
+      : null;
+
+  if (targetWeekday !== null) {
+    const row = rows.find(item => item.dayOfWeek === targetWeekday);
+    if (row) {
+      return row.isClosed
+        ? `${TURKISH_WEEKDAY_LABELS[targetWeekday]} günü sistemde kapalı gün olarak görünüyor. Net çalışma saati aralığını sistemde göremiyorum.`
+        : `${TURKISH_WEEKDAY_LABELS[targetWeekday]} günü sistemde açık gün olarak görünüyor. Net çalışma saati aralığını sistemde göremiyorum.`;
+    }
+  }
+
+  const closedDays = rows.filter(row => row.isClosed).map(row => TURKISH_WEEKDAY_LABELS[row.dayOfWeek]).filter(Boolean);
+  if (closedDays.length > 0) {
+    return `Sistemde kapalı gün kaydı olarak ${closedDays.join(', ')} görünüyor. Net çalışma saatleri veya öğle arası saat aralığını sistemde göremiyorum.`;
+  }
+
+  return 'Sistemde çalışma günü kayıtları var, ancak net çalışma saatleri veya öğle arası saat aralığını göremiyorum.';
+};
+
+const formatBookingContinuation = (currentStep: AssistantStep | 'main_menu' | null, selectedDate?: string | null) => {
+  if (currentStep === 'awaiting_service') {
+    return ' Randevu için hizmet adını bilmiyorsanız genel muayene veya acil değerlendirme olarak ilerleyebiliriz. Hangi gün gelmek istersiniz?';
+  }
+  if (currentStep === 'awaiting_date' || currentStep === 'awaiting_general_date') {
+    return ' Randevu akışına devam edebiliriz. Hangi gün için bakmamı istersiniz?';
+  }
+  if (currentStep === 'awaiting_time') {
+    return selectedDate
+      ? ' Randevu akışına devam edebiliriz. Size uygun saati veya saat aralığını yazabilirsiniz.'
+      : ' Randevu akışına devam edebiliriz. Hangi gün için bakmamı istersiniz?';
+  }
+  if (currentStep === 'awaiting_confirmation') {
+    return ' Randevu talebini oluşturmamı onaylamak isterseniz “evet” yazabilirsiniz.';
+  }
+  return '';
+};
+
+const answerClinicInfo = async (
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>,
+  text: string,
+  currentStep: AssistantStep | 'main_menu' | null,
+  selectedDate?: string | null,
+) => {
+  const normalized = normalizeTurkishSearchText(text);
+  let answer: string | null = null;
+
+  if (normalized.includes('kac doktor') || normalized.includes('doktor sayisi') || normalized.includes('hekim sayisi') || normalized.includes('kac hekim') || normalized.includes('calisan doktor')) {
+    const doctorCount = await getActiveDoctorCountForClinic(clinic.id);
+    answer = doctorCount > 0
+      ? `Sistemde bu klinik için ${doctorCount} aktif hekim kayıtlı görünüyor.`
+      : 'Bu bilgiyi sistemde net olarak göremiyorum. İsterseniz talebinizi yetkili ekibe iletebilirim.';
+  } else if (normalized.includes('adres') || normalized.includes('neredesiniz') || normalized.includes('konum')) {
+    answer = clinic.address?.trim()
+      ? `Klinik adresi: ${clinic.address.trim()}`
+      : 'Bu bilgiyi sistemde net olarak göremiyorum. İsterseniz talebinizi yetkili ekibe iletebilirim.';
+  } else if (normalized.includes('telefon')) {
+    answer = clinic.phone?.trim()
+      ? `Klinik telefon numarası: ${clinic.phone.trim()}`
+      : 'Bu bilgiyi sistemde net olarak göremiyorum. İsterseniz talebinizi yetkili ekibe iletebilirim.';
+  } else if (normalized.includes('mail') || normalized.includes('email')) {
+    answer = clinic.email?.trim()
+      ? `Klinik e-posta adresi: ${clinic.email.trim()}`
+      : 'Bu bilgiyi sistemde net olarak göremiyorum. İsterseniz talebinizi yetkili ekibe iletebilirim.';
+  } else if (normalized.includes('web')) {
+    answer = clinic.website?.trim()
+      ? `Klinik web sitesi: ${clinic.website.trim()}`
+      : 'Bu bilgiyi sistemde net olarak göremiyorum. İsterseniz talebinizi yetkili ekibe iletebilirim.';
+  } else if (isClinicHoursQuestion(text) || normalized.includes('ogle arasi') || normalized.includes('ogle molasi')) {
+    const workingHoursAnswer = await answerClinicWorkingHoursInfo(clinic, text);
+    answer = workingHoursAnswer
+      ? `${workingHoursAnswer} İsterseniz randevu uygunluğunu gün ve saat tercihinize göre kontrol edebilirim.`
+      : 'Çalışma saatleri veya öğle arası bilgisini sistemde net saat aralığı olarak göremiyorum. İsterseniz randevu uygunluğunu gün ve saat tercihinize göre kontrol edebilirim.';
+  }
+
+  return `${answer ?? 'Bu bilgiyi sistemde net olarak göremiyorum. İsterseniz talebinizi yetkili ekibe iletebilirim.'}${formatBookingContinuation(currentStep, selectedDate)}`;
+};
+
+const answerSmallTalk = (
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>,
+  text: string,
+  currentStep: AssistantStep | 'main_menu' | null,
+  selectedDate?: string | null,
+) => {
+  const normalized = normalizeTurkishSearchText(text);
+  if (normalized.includes('saat kac') || normalized.includes('saat kactir') || normalized.includes('su an saat')) {
+    const timeZone = clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE;
+    const time = new Intl.DateTimeFormat('tr-TR', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date());
+    return `Klinik saatine göre şu an saat ${time}.${formatBookingContinuation(currentStep, selectedDate)}`;
+  }
+  return `Ben randevu, klinik bilgisi ve yetkili ekibe yönlendirme konularında yardımcı olabilirim.${formatBookingContinuation(currentStep, selectedDate)}`;
+};
+
+const createGeneralAppointmentRequest = async (args: {
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>;
+  input: NormalizedWhatsAppMessage;
+  customerName?: string | null;
+  selectedDate: string;
+  preferredTimeRange?: ConversationStateJson['preferredTimeRange'];
+  reason?: string | null;
+}) => {
+  const existingPatient = await findExistingPatientByPhone(args.clinic.id, args.input.phone);
+  const patientName = getRequestPatientName(args.customerName, args.input);
+  const timeZone = args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE;
+  const startTime = args.preferredTimeRange?.startTime
+    ? localDateTimeToClinicDate(args.selectedDate, args.preferredTimeRange.startTime, timeZone)
+    : null;
+  const endTime = args.preferredTimeRange?.endTime
+    ? localDateTimeToClinicDate(args.selectedDate, args.preferredTimeRange.endTime, timeZone)
+    : null;
+  const rangeText = formatPreferredTimeRange(args.preferredTimeRange);
+
+  const request = await createWhatsAppStaffRequest({
+    clinicId: args.clinic.id,
+    phone: args.input.phone,
+    patientId: existingPatient?.id ?? null,
+    patientName,
+    requestType: 'appointment',
+    rawMessage: args.input.text,
+    preferredStartTime: startTime,
+    preferredEndTime: endTime,
+    notes: [
+      'WhatsApp asistanı genel muayene / acil değerlendirme yönlendirmesi olarak aldı.',
+      'Tıbbi teşhis veya tedavi önerisi verilmedi.',
+      args.reason ? `Kullanıcı ifadesi: ${args.reason}` : null,
+      rangeText ? `Saat tercihi: ${rangeText}` : null,
+    ].filter(Boolean).join('\n'),
+  });
+
+  const systemUserId = await getClinicSystemUserId(args.clinic.id);
+  if (systemUserId) {
+    await logActivity({
+      clinicId: args.clinic.id,
+      userId: systemUserId,
+      entityType: 'appointment_request',
+      entityId: request.id,
+      action: 'created',
+      description: 'WhatsApp general assessment request created for staff approval',
+      patientId: existingPatient?.id,
+      metadata: { systemGenerated: true, source: 'whatsapp', phone: normalizePhone(args.input.phone) },
+    });
+  }
+
+  await resetWhatsAppConversationState(args.clinic.id, args.input.phone, args.customerName ?? patientName);
+  const dateText = formatTurkishDateLong(args.selectedDate, timeZone);
+  return `Talebinizi klinik onay ekranına aldım. Genel muayene / acil değerlendirme için ${dateText}${rangeText ? `, ${rangeText}` : ''} tercihiniz personel tarafından kontrol edilecek. Klinik ekibi size uygunluk bilgisini iletecek.`;
+};
+
+const handleGeneralAssessmentStart = async (args: {
+  clinicId: string;
+  input: NormalizedWhatsAppMessage;
+  customerName?: string | null;
+  symptom: boolean;
+}) => {
+  const preferredTimeRange = getPreferredTimeRangeFromText(args.input.text);
+  await upsertWhatsAppConversationState(args.clinicId, args.input.phone, {
+    customerName: args.customerName ?? null,
+    currentIntent: args.symptom ? 'symptom_or_complaint' : 'book_appointment',
+    step: 'awaiting_general_date',
+    selectedAppointmentTypeId: null,
+    selectedAppointmentTypeName: 'Genel muayene / acil değerlendirme',
+    selectedDate: null,
+    selectedTime: null,
+    lastMessage: args.input.text,
+    stateJson: {
+      generalRequestReason: args.input.text,
+      preferredTimeRange,
+    },
+  });
+  return buildGeneralAssessmentPrompt({
+    text: args.input.text,
+    customerName: args.customerName,
+    symptom: args.symptom,
+    preferredTimeRange,
+  });
+};
+
+const handleGeneralDateStep = async (args: {
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>;
+  input: NormalizedWhatsAppMessage;
+  customerName?: string | null;
+  stateJson: ConversationStateJson;
+}) => {
+  const normalizedDate = normalizeDateFromTurkishInput(args.input.text, new Date(), args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE);
+  const nextRange = getPreferredTimeRangeFromText(args.input.text);
+  const preferredTimeRange = mergePreferredTimeRange(args.stateJson.preferredTimeRange, nextRange);
+  if (!normalizedDate) {
+    await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+      customerName: args.customerName ?? null,
+      currentIntent: 'book_appointment',
+      step: 'awaiting_general_date',
+      selectedAppointmentTypeName: 'Genel muayene / acil değerlendirme',
+      lastMessage: args.input.text,
+      stateJson: {
+        generalRequestReason: args.stateJson.generalRequestReason ?? args.input.text,
+        preferredTimeRange,
+      },
+    });
+    return 'Hangi gün gelmek istediğinizi anlayamadım. Örneğin bugün, yarın veya 16 Mayıs yazabilirsiniz.';
+  }
+
+  await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+    customerName: args.customerName ?? null,
+    currentIntent: 'book_appointment',
+    step: 'awaiting_general_time',
+    selectedAppointmentTypeName: 'Genel muayene / acil değerlendirme',
+    selectedDate: normalizedDate,
+    lastMessage: args.input.text,
+    stateJson: {
+      generalRequestReason: args.stateJson.generalRequestReason ?? args.input.text,
+      preferredTimeRange,
+    },
+  });
+
+  if (!preferredTimeRange?.startTime) {
+    return `${formatTurkishDateLong(normalizedDate, args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE)} için not aldım. Hangi saat aralığında müsaitsiniz?`;
+  }
+
+  return createGeneralAppointmentRequest({
+    clinic: args.clinic,
+    input: args.input,
+    customerName: args.customerName,
+    selectedDate: normalizedDate,
+    preferredTimeRange,
+    reason: args.stateJson.generalRequestReason ?? args.input.text,
+  });
+};
+
+const handleGeneralTimeStep = async (args: {
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>;
+  input: NormalizedWhatsAppMessage;
+  customerName?: string | null;
+  selectedDate?: string | null;
+  stateJson: ConversationStateJson;
+}) => {
+  if (!args.selectedDate) {
+    return handleGeneralDateStep({
+      clinic: args.clinic,
+      input: args.input,
+      customerName: args.customerName,
+      stateJson: args.stateJson,
+    });
+  }
+  const preferredTimeRange = mergePreferredTimeRange(args.stateJson.preferredTimeRange, getPreferredTimeRangeFromText(args.input.text));
+  if (!preferredTimeRange?.startTime) {
+    await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+      customerName: args.customerName ?? null,
+      currentIntent: 'book_appointment',
+      step: 'awaiting_general_time',
+      selectedAppointmentTypeName: 'Genel muayene / acil değerlendirme',
+      selectedDate: args.selectedDate,
+      lastMessage: args.input.text,
+      stateJson: {
+        generalRequestReason: args.stateJson.generalRequestReason ?? args.input.text,
+        preferredTimeRange,
+      },
+    });
+    return 'Saat aralığını anlayamadım. Örneğin 12 ile 14 arası, 15:00 veya 16:00 sonrası yazabilirsiniz.';
+  }
+
+  return createGeneralAppointmentRequest({
+    clinic: args.clinic,
+    input: args.input,
+    customerName: args.customerName,
+    selectedDate: args.selectedDate,
+    preferredTimeRange,
+    reason: args.stateJson.generalRequestReason ?? args.input.text,
+  });
+};
+
+const applyAgentStatePatch = async (args: {
+  clinicId: string;
+  phone: string;
+  customerName?: string | null;
+  inputText: string;
+  patch: WhatsAppAgentDecision['statePatch'];
+}) => {
+  const data: {
+    customerName?: string | null;
+    currentIntent?: string | null;
+    step?: string | null;
+    selectedAppointmentTypeId?: string | null;
+    selectedAppointmentTypeName?: string | null;
+    selectedDate?: string | null;
+    selectedTime?: string | null;
+    lastMessage?: string | null;
+  } = {
+    customerName: args.customerName ?? null,
+    lastMessage: args.inputText,
+  };
+
+  if ('currentIntent' in args.patch) data.currentIntent = args.patch.currentIntent ?? null;
+  if ('step' in args.patch) data.step = args.patch.step ?? null;
+  if ('selectedAppointmentTypeId' in args.patch) data.selectedAppointmentTypeId = args.patch.selectedAppointmentTypeId ?? null;
+  if ('selectedAppointmentTypeName' in args.patch) data.selectedAppointmentTypeName = args.patch.selectedAppointmentTypeName ?? null;
+  if ('selectedDate' in args.patch) data.selectedDate = args.patch.selectedDate ?? null;
+  if ('selectedTime' in args.patch) data.selectedTime = args.patch.selectedTime ?? null;
+
+  await upsertWhatsAppConversationState(args.clinicId, args.phone, data);
+};
+
+const executeAgentDecision = async (args: {
+  decision: WhatsAppAgentDecision | null;
+  source: WhatsAppConversationAgentSource;
+  clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>;
+  input: NormalizedWhatsAppMessage;
+  customerName?: string | null;
+  currentStep: AssistantStep | 'main_menu' | null;
+  selectedDate?: string | null;
+  stateJson: ConversationStateJson;
+}) => {
+  const decision = args.decision;
+  if (!decision) return null;
+
+  const minimumConfidence = args.source === 'ai' ? 0.6 : 0.85;
+  if (decision.confidence < minimumConfidence && decision.action !== 'ask_clarification' && decision.action !== 'unknown_safe_reply') {
+    return null;
+  }
+
+  const intent = normalizeAssistantIntentValue(decision.intent);
+  console.info('[whatsapp-agent] decision', {
+    source: args.source,
+    intent,
+    action: decision.action,
+    confidence: decision.confidence,
+    step: args.currentStep,
+    needsHuman: decision.needsHuman,
+    safetyFlags: decision.safetyFlags,
+  });
+
+  if (decision.action === 'store_handoff_note' && args.currentStep === 'awaiting_handoff_note') {
+    return handleHandoffNote(args.clinic.id, args.input, args.customerName, args.stateJson);
+  }
+
+  if (decision.action === 'human_handoff' || intent === 'human_handoff' || decision.needsHuman) {
+    logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'human_handoff');
+    return handleHumanHandoffIntent(args.clinic.id, args.input, args.customerName);
+  }
+
+  if (decision.action === 'answer_clinic_info' || intent === 'clinic_info') {
+    logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'clinic_info');
+    return answerClinicInfo(args.clinic, args.input.text, args.currentStep, args.selectedDate);
+  }
+
+  if (decision.action === 'reply_only' && intent === 'off_topic_or_smalltalk') {
+    logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'off_topic_or_smalltalk');
+    return answerSmallTalk(args.clinic, args.input.text, args.currentStep, args.selectedDate);
+  }
+
+  if (decision.action === 'start_general_assessment' || intent === 'symptom_or_complaint') {
+    logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'symptom_or_complaint');
+    return handleGeneralAssessmentStart({
+      clinicId: args.clinic.id,
+      input: args.input,
+      customerName: args.customerName,
+      symptom: intent === 'symptom_or_complaint',
+    });
+  }
+
+  if (decision.action === 'appointment_lookup' || isAppointmentQueryIntentValue(intent)) {
+    logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'appointment_query');
+    await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+      customerName: args.customerName,
+      step: null,
+      currentIntent: 'appointment_query',
+      lastMessage: args.input.text,
+      ...clearBookingState(),
+    });
+    const appointments = await getAppointmentsForPhone(args.clinic.id, args.input.phone);
+    return formatAppointmentLookupForMessage(appointments);
+  }
+
+  if (decision.action === 'cancel_appointment' || intent === 'cancel_appointment') {
+    logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'cancel_appointment');
+    await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+      customerName: args.customerName,
+      step: null,
+      currentIntent: 'cancel_appointment',
+      lastMessage: args.input.text,
+      ...clearBookingState(),
+    });
+    return handleCancelIntent(args.clinic.id, args.input.phone);
+  }
+
+  if (decision.action === 'answer_service_info' || intent === 'service_info') {
+    await resetWhatsAppConversationState(args.clinic.id, args.input.phone, args.customerName);
+    return ['Hizmetlerimiz şu şekilde:', ...((await getAssistantServices(args.clinic.id)).map((service, index) => `${index + 1}. ${service.name}`))].join('\n');
+  }
+
+  if (decision.action === 'ask_clarification') {
+    await applyAgentStatePatch({
+      clinicId: args.clinic.id,
+      phone: args.input.phone,
+      customerName: args.customerName,
+      inputText: args.input.text,
+      patch: decision.statePatch,
+    });
+    return decision.reply ?? 'Mesajınızı tam anlayamadım. Randevu, klinik bilgisi veya yetkili ekibe ulaşma konusunda nasıl yardımcı olabilirim?';
+  }
+
+  if (decision.action === 'unknown_safe_reply') {
+    await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+      customerName: args.customerName,
+      currentIntent: null,
+      step: null,
+      lastMessage: args.input.text,
+      stateJson: null,
+    });
+    return decision.reply ?? 'Mesajınızı tam anlayamadım. Randevu almak, mevcut randevunuzu sormak, klinik bilgisi almak veya yetkili ekibe ulaşmak istediğinizi yazabilirsiniz.';
+  }
+
+  if (decision.action === 'show_main_menu' && isMainMenuCommand(args.input.text)) {
+    await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+      customerName: args.customerName,
+      currentIntent: null,
+      step: 'main_menu',
+      lastMessage: args.input.text,
+      ...clearBookingState(),
+    });
+    return formatMainMenuOptions();
+  }
+
+  return null;
+};
+
 // ---- Main Conversation Handler ----
 
 const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>) => {
@@ -976,7 +1883,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   const selectedAppointmentTypeName = state?.selectedAppointmentTypeName ?? null;
   const selectedPractitionerId = state?.selectedPractitionerId ?? null;
   const selectedDate = state?.selectedDate ?? null;
-  const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation'].includes(currentStep ?? '');
+  const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation', 'awaiting_general_date', 'awaiting_general_time'].includes(currentStep ?? '');
 
   // ── REMINDER CONFIRMATION: Patient replies EVET/HAYIR to an automated reminder ──
   const isReminderConfirm = /^(evet|e|yes)\s*[!.]*$/i.test(input.text.trim());
@@ -1112,9 +2019,9 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     return `Ben ${clinic.name} kliniğinin dijital randevu asistanıyım. Randevu almak, mevcut randevunuzu sorgulamak veya iptal etmek için yardımcı olabilirim. Herhangi bir sorunuz varsa kliniği doğrudan arayabilirsiniz.`;
   }
 
-  if (isClinicHoursQuestion(input.text)) {
+  if (isClinicHoursQuestion(input.text) && !hasBookingLanguage(input.text)) {
     logGlobalIntent(input.phone, input.text, currentStep, 'clinic_hours');
-    return `Kliniğimizin müsait randevu saatlerini görmek için bir hizmet seçmeniz yeterli. Hangi hizmet için randevu düşünüyorsunuz? Seçtiğiniz hizmet ve tarihe göre boş saatleri hemen kontrol edebilirim.\n\n${services.map((s, i) => `${i + 1}. ${s.name}`).join('\n')}`;
+    return answerClinicInfo(clinic, input.text, currentStep, selectedDate);
   }
 
   if (isCheckAppointmentIntent(input.text)) {
@@ -1228,6 +2135,121 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     });
   }
 
+  const [recentMessages, clinicFacts] = await Promise.all([
+    loadRecentWhatsAppAgentMessages(clinic.id, existingPatient?.id),
+    loadWhatsAppAgentClinicFacts(clinic),
+  ]);
+  const agentResolution = await resolveWhatsAppConversationAgentDecision({
+    latestMessage: input.text,
+    customerName,
+    currentIntent: state?.currentIntent,
+    currentStep: state?.step,
+    selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+    selectedDate: state?.selectedDate,
+    services,
+    recentMessages,
+    clinicFacts,
+  });
+
+  const agentHandledResponse = await executeAgentDecision({
+    decision: agentResolution.decision,
+    source: agentResolution.source,
+    clinic,
+    input,
+    customerName,
+    currentStep,
+    selectedDate,
+    stateJson,
+  });
+  if (agentHandledResponse) return agentHandledResponse;
+
+  const extracted = await resolveAssistantExtractionWithAgentDecision(input.text, services, {
+    currentIntent: state?.currentIntent, step: state?.step, customerName: state?.customerName,
+    selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate,
+  }, agentResolution.decision);
+  const preflightIntent = normalizeAssistantIntentValue(extracted.intent);
+
+  console.info('[whatsapp-assistant] detected', {
+    agentSource: agentResolution.source,
+    agentAction: agentResolution.decision?.action ?? null,
+    intent: preflightIntent, rawIntent: extracted.intent, step: state?.step ?? null, confidence: extracted.confidence,
+    needsClarification: extracted.needsClarification, exactTime: extracted.exactTime,
+    afterTime: extracted.afterTime, timePreference: extracted.timePreference,
+  });
+
+  if (preflightIntent === 'human_handoff') {
+    logGlobalIntent(input.phone, input.text, currentStep, 'human_handoff');
+    return handleHumanHandoffIntent(clinic.id, input, customerName);
+  }
+
+  if (currentStep === 'awaiting_handoff_note') {
+    const normalized = normalizeTurkishSearchText(input.text);
+    if (['hayir', 'yok', 'gerek yok', 'not yok', 'istemiyorum'].some(pattern => normalized === pattern || normalized.includes(pattern))) {
+      await resetWhatsAppConversationState(clinic.id, input.phone, customerName);
+      return 'Tamam, ek not olmadan talebinizi yetkili ekibe ilettim.';
+    }
+    if (!['book_appointment', 'appointment_query', 'cancel_appointment', 'clinic_info', 'service_info'].includes(preflightIntent)) {
+      return handleHandoffNote(clinic.id, input, customerName, stateJson);
+    }
+  }
+
+  if (preflightIntent === 'clinic_info') {
+    logGlobalIntent(input.phone, input.text, currentStep, 'clinic_info');
+    return answerClinicInfo(clinic, input.text, currentStep, selectedDate);
+  }
+
+  if (preflightIntent === 'off_topic_or_smalltalk') {
+    logGlobalIntent(input.phone, input.text, currentStep, 'off_topic_or_smalltalk');
+    return answerSmallTalk(clinic, input.text, currentStep, selectedDate);
+  }
+
+  if (preflightIntent === 'symptom_or_complaint') {
+    logGlobalIntent(input.phone, input.text, currentStep, 'symptom_or_complaint');
+    return handleGeneralAssessmentStart({
+      clinicId: clinic.id,
+      input,
+      customerName,
+      symptom: true,
+    });
+  }
+
+  if (isAppointmentQueryIntentValue(preflightIntent)) {
+    logGlobalIntent(input.phone, input.text, currentStep, 'appointment_query');
+    await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, step: null, currentIntent: 'appointment_query', lastMessage: input.text, ...clearBookingState() });
+    const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
+    return formatAppointmentLookupForMessage(appointments);
+  }
+
+  if (preflightIntent === 'cancel_appointment') {
+    logGlobalIntent(input.phone, input.text, currentStep, 'cancel_appointment');
+    await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, step: null, currentIntent: 'cancel_appointment', lastMessage: input.text, ...clearBookingState() });
+    return handleCancelIntent(clinic.id, input.phone);
+  }
+
+  if (currentStep === 'awaiting_general_date') {
+    return handleGeneralDateStep({ clinic, input, customerName, stateJson });
+  }
+
+  if (currentStep === 'awaiting_general_time') {
+    return handleGeneralTimeStep({ clinic, input, customerName, selectedDate, stateJson });
+  }
+
+  if (
+    preflightIntent === 'book_appointment'
+    && !extracted.appointmentTypeId
+    && !extracted.appointmentTypeName
+    && (prefersGeneralAssessment(input.text) || Boolean(getPreferredTimeRangeFromText(input.text)))
+    && (!currentStep || currentStep === 'main_menu' || currentStep === 'awaiting_service')
+  ) {
+    logGlobalIntent(input.phone, input.text, currentStep, 'general_assessment_booking');
+    return handleGeneralAssessmentStart({
+      clinicId: clinic.id,
+      input,
+      customerName,
+      symptom: false,
+    });
+  }
+
   if (!existingPatient && currentStep !== 'awaiting_name') {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_name', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     await upsertWhatsAppConversationState(clinic.id, input.phone, {
@@ -1259,6 +2281,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   if ((!currentStep || currentStep === 'main_menu') && (isGreetingMessage(input.text) || normalizedText === '0')) {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'main_menu', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: null, step: 'main_menu', lastMessage: input.text, stateJson: null });
+    if (currentStep === 'main_menu') {
+      const firstName = getFirstNameFromCustomerName(customerName);
+      return firstName ? `Merhaba ${firstName}, size nasıl yardımcı olabilirim?` : 'Merhaba, size nasıl yardımcı olabilirim?';
+    }
     return formatMainMenu(customerName, true, clinic.name);
   }
 
@@ -1276,7 +2302,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     if (normalizedText === '4') {
       return ['Hizmetlerimiz şu şekilde:', ...services.map((s, i) => `${i + 1}. ${s.name}`)].join('\n');
     }
-    if (/^\d+$/.test(normalizedText)) return formatMainMenu(customerName, true, clinic.name);
+    if (/^\d+$/.test(normalizedText)) return 'Bu numarayı mevcut seçenekler içinde anlayamadım. İsterseniz ne yapmak istediğinizi kısaca yazabilirsiniz.';
   }
 
   if (currentStep === 'awaiting_cancel_selection') {
@@ -1358,17 +2384,6 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     const firstName = getFirstNameFromCustomerName(customerName);
     return firstName ? `Rica ederim ${firstName}. Sağlıklı günler dilerim. Tekrar görüşmek üzere! 😊` : 'Rica ederim. Sağlıklı günler dilerim. Tekrar görüşmek üzere! 😊';
   }
-
-  const extracted = await resolveAssistantExtraction(input.text, services, {
-    currentIntent: state?.currentIntent, step: state?.step, customerName: state?.customerName,
-    selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate,
-  });
-
-  console.info('[whatsapp-assistant] detected', {
-    intent: extracted.intent, step: state?.step ?? null, confidence: extracted.confidence,
-    needsClarification: extracted.needsClarification, exactTime: extracted.exactTime,
-    afterTime: extracted.afterTime, timePreference: extracted.timePreference,
-  });
 
   return routeResolvedWhatsAppIntent({
     extraction: extracted, state, customerName, clinicName: clinic.name, inputText: input.text, services,

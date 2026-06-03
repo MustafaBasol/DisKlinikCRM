@@ -10,6 +10,8 @@ import {
 } from '../services/whatsappBookingFlow.js';
 import type { SavedAvailableSlot } from '../services/whatsappAvailability.js';
 import { routeResolvedWhatsAppIntent } from '../services/whatsappResolvedIntentRouter.js';
+import { buildFallbackWhatsAppAgentDecision } from '../services/whatsappConversationAgent.js';
+import { normalizeWhatsAppAgentDecision } from '../services/whatsappAgentSchema.js';
 import { getWebhookIgnoreReason, normalizeEvolutionWebhookPayload } from '../services/whatsappWebhookPayload.js';
 import { interpretTimeRequest } from '../services/whatsappInterpreter.js';
 import { normalizeDateFromTurkishInput } from '../utils/whatsappDate.js';
@@ -30,6 +32,29 @@ const baseServices: BookingServiceOption[] = [
   { id: 'svc-2', name: 'Dis Beyazlatma', durationMinutes: 45 },
   { id: 'svc-3', name: 'Implant Muayenesi', durationMinutes: 60 },
 ];
+
+const createAgentArgs = (latestMessage: string, overrides: Partial<Parameters<typeof buildFallbackWhatsAppAgentDecision>[0]> = {}) => ({
+  latestMessage,
+  customerName,
+  currentIntent: null,
+  currentStep: null,
+  selectedAppointmentTypeName: null,
+  selectedDate: null,
+  services: baseServices,
+  recentMessages: [],
+  clinicFacts: {
+    clinicName: 'Disklinik',
+    timezone: 'Europe/Istanbul',
+    hasAddress: false,
+    hasPhone: false,
+    hasEmail: false,
+    hasWebsite: false,
+    doctorCountKnown: false,
+    doctorCount: null,
+    workingHoursKnown: false,
+  },
+  ...overrides,
+});
 
 const createSlot = (localStartTime: string, practitionerId: string, practitionerName: string): SavedAvailableSlot => ({
   practitionerId,
@@ -75,6 +100,49 @@ const runFixture = async (name: string, test: () => Promise<void> | void) => {
 };
 
 const run = async () => {
+  await runFixture('whatsapp agent schema normalizes unknown actions into safe replies', () => {
+    const decision = normalizeWhatsAppAgentDecision({
+      intent: 'book_appointment',
+      confidence: 1.3,
+      action: 'delete_patient',
+      reply: 'Tamam',
+      slots: {
+        serviceName: 'Implant Muayenesi',
+      },
+      safetyFlags: ['unexpected_action'],
+    });
+
+    assert.equal(decision?.intent, 'book_appointment');
+    assert.equal(decision?.action, 'unknown_safe_reply');
+    assert.equal(decision?.confidence, 1);
+    assert.equal(decision?.slots.serviceName, 'Implant Muayenesi');
+  });
+
+  await runFixture('whatsapp agent fallback recognizes typo-heavy human handoff requests', () => {
+    const decision = buildFallbackWhatsAppAgentDecision(createAgentArgs('yetklye bagla beni lutfen'));
+
+    assert.equal(decision?.intent, 'human_handoff');
+    assert.equal(decision?.action, 'human_handoff');
+    assert.ok((decision?.confidence ?? 0) >= 0.95);
+  });
+
+  await runFixture('whatsapp agent fallback routes messy tooth pain to general assessment without medical advice', () => {
+    const decision = buildFallbackWhatsAppAgentDecision(createAgentArgs('dism cok agriyo hangi hizmet bilmiyom'));
+
+    assert.equal(decision?.intent, 'symptom_or_complaint');
+    assert.equal(decision?.action, 'start_general_assessment');
+    assert.deepEqual(decision?.safetyFlags, ['no_diagnosis', 'no_treatment_advice']);
+    assert.doesNotMatch(decision?.reply ?? '', /ilaç|tedavi|teşhis|tani|tanı/i);
+  });
+
+  await runFixture('whatsapp agent fallback classifies clinic fact questions without fabricating answers', () => {
+    const decision = buildFallbackWhatsAppAgentDecision(createAgentArgs('klinikte kac hekim calisiyo acaba'));
+
+    assert.equal(decision?.intent, 'clinic_info');
+    assert.equal(decision?.action, 'answer_clinic_info');
+    assert.equal(decision?.reply, null);
+  });
+
   await runFixture('clarification routes booking requests to awaiting_service', () => {
     const result = buildClarificationMessage({
       intent: 'unknown',
@@ -1235,7 +1303,50 @@ const run = async () => {
     assert.equal(recorder.calls.length, 0);
   });
 
-  await runFixture('resolved intent router falls back to main menu on unknown high-confidence requests', async () => {
+  await runFixture('resolved intent router treats APPOINTMENT_QUERY as appointment lookup', async () => {
+    let resetCalls = 0;
+    const message = await routeResolvedWhatsAppIntent({
+      extraction: {
+        intent: 'appointment_query',
+        appointmentTypeName: null,
+        appointmentTypeId: null,
+        dateText: null,
+        exactTime: null,
+        afterTime: null,
+        timePreference: null,
+        clarificationReason: null,
+        confidence: 0.92,
+        needsClarification: false,
+      },
+      state: { currentIntent: 'book_appointment', step: 'awaiting_service' },
+      customerName,
+      clinicName: 'Disklinik',
+      inputText: 'randevum var mi',
+      services: baseServices,
+      upsertState: async () => undefined,
+      resetState: async () => {
+        resetCalls += 1;
+      },
+      getAppointments: async () => [{
+        id: 'apt-2',
+        date: '2026-05-18',
+        startTime: '10:00',
+        endTime: '10:30',
+        serviceName: 'Dis Temizligi',
+        practitionerName: 'Dr. B',
+        status: 'confirmed',
+      }],
+      formatAppointmentLookup: appointments => `lookup:${appointments.length}`,
+      formatServiceList: () => 'services',
+      formatMainMenu: () => 'main menu',
+      handleCancelIntent: async () => 'cancel',
+    });
+
+    assert.equal(message, 'lookup:1');
+    assert.equal(resetCalls, 1);
+  });
+
+  await runFixture('resolved intent router asks for clarification instead of repeating the main menu on unknown requests', async () => {
     const recorder = createStateRecorder();
     const message = await routeResolvedWhatsAppIntent({
       extraction: {
@@ -1264,9 +1375,10 @@ const run = async () => {
       handleCancelIntent: async () => 'cancel',
     });
 
-    assert.equal(message, 'Ayse Demir|true|Disklinik');
+    assert.match(message, /mesajınızı tam anlayamadım/i);
+    assert.doesNotMatch(message, /1\. Randevu almak/i);
     assert.equal(recorder.calls.length, 1);
-    assert.equal(recorder.calls[0].step, 'main_menu');
+    assert.equal(recorder.calls[0].step, null);
     assert.equal(recorder.calls[0].currentIntent, null);
   });
 

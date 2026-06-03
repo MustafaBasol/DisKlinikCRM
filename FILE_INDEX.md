@@ -33,6 +33,20 @@ health-crm-agent-docs/
 │  ├─ 27-sprint10-whatsapp-provider-abstraction.md  — Sprint 10: provider-agnostic WhatsApp mimarisi
 │  ├─ 28-sprint11-whatsapp-inbox.md  — Sprint 11: paylaşımlı WA gelen kutusu, klinik çözümleme
 │  ├─ 29-sprint12-finance-billing-dashboard.md  — Sprint 12: finans/fatura panosu, BILLING redirect
+│  ├─ 30-sprint13-operational-monitoring.md
+│  ├─ 31-role-based-access-qa-sweep.md
+│  ├─ 32-whatsapp-connection-management.md
+│  ├─ 33-sprint16-meta-cloud-api.md
+│  ├─ 34-sprint17-whatsapp-ui-panel-first.md
+│  ├─ 35-docker-deploy-runbook.md
+│  ├─ 36-smoke-test-checklist.md
+│  ├─ 37-sprint21-platform-admin-panel.md
+│  ├─ 38-instagram-dm-integration.md
+│  ├─ 38-sprint22-excel-import.md
+│  ├─ 39-session-cookie-auth-migration.md
+│  ├─ 40-frontend-bundle-splitting.md
+│  ├─ 41-whatsapp-conversation-management.md  — WhatsApp menü botu davranışını klinik danışma asistanına yaklaştıran uygulama notu
+│  ├─ 42-whatsapp-ai-agent-router-plan.md  — Doğal dil, yazım hatası ve bozuk hasta mesajları için AI agent router planı
 │  ├─ crm_improvement_plan.md
 │  ├─ top_5_critical_plan.md
 │  └─ whatsapp-evolution-backend-agent.md
@@ -69,8 +83,11 @@ health-crm-agent-docs/
       ├─ services/              — Dış servis entegrasyonları
       │  ├─ evolutionApi.ts      — WhatsApp mesaj gönderimi
       │  ├─ googleAiStudio.ts    — Yapay zeka metin çıkarma
+      │  ├─ whatsappAgentPrompt.ts — WhatsApp AI conversation agent prompt oluşturucu
+      │  ├─ whatsappAgentSchema.ts — WhatsApp AI conversation agent karar şeması
       │  ├─ whatsappAvailability.ts — Müsaitlik slotları
       │  ├─ whatsappBookingFlow.ts  — Rezervasyon akış adımları
+      │  ├─ whatsappConversationAgent.ts — Doğal dil mesajları için AI agent karar katmanı
       │  ├─ whatsappInterpreter.ts  — Zaman/niyet yorumlama
       │  ├─ whatsappPublicApi.ts    — Public API şema ve doğrulama
       │  ├─ whatsappResolvedIntentRouter.ts — Çözümlenen niyet yönlendirmesi
@@ -81,6 +98,8 @@ health-crm-agent-docs/
       │  ├─ roles.ts             — Backend rol/izin yardımcıları (canViewFinanceDashboard dahil)
       │  └─ whatsappDate.ts      — Türkçe tarih biçimlendirme
       └─ tests/                 — Birim ve entegrasyon testleri
+         ├─ whatsappConversationFixtures.ts — WhatsApp konuşma, booking ve AI agent fixture testleri
+         ├─ whatsappAgentEvaluation.test.ts — WhatsApp AI agent fallback evaluation seti
          ├─ whatsappProvider.test.ts  — Sprint 10: provider soyutlama testleri (28 test)
          ├─ whatsappInbox.test.ts     — Sprint 11: gelen kutusu izin + çözümleme testleri (25 test)
          └─ financeDashboard.test.ts  — Sprint 12: finans panosu erişim + metrik testleri (24 test)
