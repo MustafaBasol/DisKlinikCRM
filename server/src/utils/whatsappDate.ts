@@ -147,6 +147,31 @@ export const normalizeDateFromTurkishInput = (input: string, now: Date, timeZone
     }
   }
 
+  // "N gün sonra" → bugün + N gün
+  const nDaysLaterMatch = normalized.match(/\b(\d+)\s*g[uü]n\s+sonra\b/);
+  if (nDaysLaterMatch) {
+    return formatIsoDate(addUtcDays(today, Number(nDaysLaterMatch[1])));
+  }
+
+  // "N hafta sonra" → bugün + N*7 gün
+  const nWeeksLaterMatch = normalized.match(/\b(\d+)\s*hafta\s+sonra\b/);
+  if (nWeeksLaterMatch) {
+    return formatIsoDate(addUtcDays(today, Number(nWeeksLaterMatch[1]) * 7));
+  }
+
+  // "N gün sonraki [haftaiçi]" → pivotDate = bugün + N, o tarihten itibaren ilk o gün
+  const nDaysWeekdayMatch = normalized.match(/\b(\d+)\s*g[uü]n\s+sonraki\s+([a-zçğıöşü]+)/);
+  if (nDaysWeekdayMatch) {
+    const offsetDays = Number(nDaysWeekdayMatch[1]);
+    const targetWd = turkishWeekdays[nDaysWeekdayMatch[2]];
+    if (targetWd !== undefined) {
+      const pivotDate = addUtcDays(today, offsetDays);
+      let delta = targetWd - pivotDate.getUTCDay();
+      if (delta < 0) delta += 7;
+      return formatIsoDate(addUtcDays(pivotDate, delta));
+    }
+  }
+
   const dayMonthTextMatch = normalized.match(/(?:^|\D)(\d{1,2})\s+([a-zçğıöşü]+)(?:\s+(\d{4}))?(?:\D|$)/i);
   if (dayMonthTextMatch) {
     const day = Number(dayMonthTextMatch[1]);
@@ -160,22 +185,40 @@ export const normalizeDateFromTurkishInput = (input: string, now: Date, timeZone
     return parsed ? formatIsoDate(parsed) : null;
   }
 
-  let modifier: 'plain' | 'this' | 'next' = 'plain';
+  // Haftaiçi gün belirleyicileri (modifier)
+  let modifier: 'plain' | 'this' | 'next' | 'forward' = 'plain';
   let weekdayLabel = normalized;
 
   if (weekdayLabel.startsWith('bu ')) {
     modifier = 'this';
     weekdayLabel = weekdayLabel.slice(3).trim();
-  } else if (weekdayLabel.startsWith('gelecek ')) {
+  } else if (weekdayLabel.startsWith('gelecek ') || weekdayLabel.startsWith('haftaya ')) {
     modifier = 'next';
-    weekdayLabel = weekdayLabel.slice(8).trim();
+    weekdayLabel = weekdayLabel.startsWith('gelecek ')
+      ? weekdayLabel.slice(8).trim()
+      : weekdayLabel.slice(8).trim();
+  } else if (
+    weekdayLabel.startsWith('önümüzdeki ')
+    || weekdayLabel.startsWith('onumuzdeki ')
+    || weekdayLabel.startsWith('yaklaşan ')
+    || weekdayLabel.startsWith('yaklasan ')
+  ) {
+    // "önümüzdeki": bugünden sonraki ilk o gün (bugün hariç)
+    modifier = 'forward';
+    weekdayLabel = weekdayLabel.replace(/^[a-zçğıöşü]+\s+/, '').trim();
+  } else if (weekdayLabel.startsWith('bu haftaki ') || weekdayLabel.startsWith('bu haftanın ')) {
+    modifier = 'this';
+    weekdayLabel = weekdayLabel.replace(/^bu hafta[nk][iı]\s+/, '').trim();
   }
 
   const targetWeekday = turkishWeekdays[weekdayLabel];
   if (targetWeekday !== undefined) {
     let delta = targetWeekday - today.getUTCDay();
-    if (delta < 0) {
-      delta += 7;
+    if (modifier === 'forward') {
+      // Bugün dahil değil: delta <= 0 ise haftaya
+      if (delta <= 0) delta += 7;
+    } else {
+      if (delta < 0) delta += 7;
     }
     if (modifier === 'next') {
       delta += 7;

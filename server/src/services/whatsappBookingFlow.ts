@@ -264,6 +264,7 @@ export type AwaitingDateDependencies = {
   logAvailabilitySave: (totalSlots: number, shownSlots: number) => void;
   minutesToTime: (minutes: number) => string;
   now?: Date;
+  interpretDateWithAi?: (text: string) => Promise<string | null>;
   interpretTimeWithAi?: (text: string) => Promise<{
     exactTime: string | null;
     afterTime: string | null;
@@ -449,6 +450,7 @@ export const handleAwaitingDateStep = async ({
   logAvailabilitySave,
   minutesToTime,
   now,
+  interpretDateWithAi,
   interpretTimeWithAi,
   upsertState,
 }: AwaitingDateDependencies) => {
@@ -467,7 +469,8 @@ export const handleAwaitingDateStep = async ({
     return 'Önce hizmet seçelim. Lütfen listedeki hizmet numarasını paylaşın.';
   }
 
-  const normalizedDate = normalizeDateFromTurkishInput(text, now ?? new Date(), WHATSAPP_ASSISTANT_TIME_ZONE);
+  const normalizedDate = normalizeDateFromTurkishInput(text, now ?? new Date(), WHATSAPP_ASSISTANT_TIME_ZONE)
+    ?? (interpretDateWithAi ? await interpretDateWithAi(text) : null);
   if (!normalizedDate) {
     await upsertState({
       customerName,

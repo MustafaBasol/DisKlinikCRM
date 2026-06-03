@@ -6,7 +6,7 @@ import {
   resolveClinicForIncomingMessage,
   upsertInboxEntry,
 } from '../services/whatsapp/clinicResolver.js';
-import { extractAssistantInputWithGoogleAi } from '../services/googleAiStudio.js';
+import { extractAssistantInputWithGoogleAi, normalizeDateWithGoogleAi } from '../services/googleAiStudio.js';
 import { resolveWhatsAppConversationAgentDecision, type WhatsAppConversationAgentSource } from '../services/whatsappConversationAgent.js';
 import type { WhatsAppAgentDecision } from '../services/whatsappAgentSchema.js';
 import {
@@ -1619,7 +1619,8 @@ const handleGeneralDateStep = async (args: {
   customerName?: string | null;
   stateJson: ConversationStateJson;
 }) => {
-  const normalizedDate = normalizeDateFromTurkishInput(args.input.text, new Date(), args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE);
+  const normalizedDate = normalizeDateFromTurkishInput(args.input.text, new Date(), args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE)
+    ?? await normalizeDateWithGoogleAi(args.input.text, new Date().toISOString().slice(0, 10), args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE);
   const nextRange = getPreferredTimeRangeFromText(args.input.text);
   const preferredTimeRange = mergePreferredTimeRange(args.stateJson.preferredTimeRange, nextRange);
   if (!normalizedDate) {
@@ -1815,6 +1816,11 @@ const executeAgentDecision = async (args: {
   }
 
   if (decision.action === 'start_general_assessment' || intent === 'symptom_or_complaint') {
+    // awaiting_service adımındayken semptomu genel muayeneye yönlendirme —
+    // lokal handler semptomu hizmet seçimine yardımcı olarak kullanmalı.
+    if (args.currentStep === 'awaiting_service') {
+      return null;
+    }
     logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'symptom_or_complaint');
     return handleGeneralAssessmentStart({
       clinicId: args.clinic.id,
@@ -2160,6 +2166,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       prisma, clinicId: clinic.id, text: input.text, customerName,
       state: { selectedAppointmentTypeId, selectedAppointmentTypeName, selectedPractitionerId },
       buildAvailableSlots, formatAvailabilityMessage, logAvailabilitySave, minutesToTime,
+      interpretDateWithAi: text => normalizeDateWithGoogleAi(text, new Date().toISOString().slice(0, 10), clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE),
       interpretTimeWithAi: async messageText => {
         const extracted = await resolveAssistantExtraction(messageText, services, {
           currentIntent: state?.currentIntent, step: state?.step, customerName: state?.customerName,
@@ -2372,6 +2379,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       prisma, clinicId: clinic.id, text: input.text, customerName,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId },
       buildAvailableSlots, formatAvailabilityMessage, logAvailabilitySave, minutesToTime,
+      interpretDateWithAi: text => normalizeDateWithGoogleAi(text, new Date().toISOString().slice(0, 10), clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE),
       interpretTimeWithAi: async messageText => {
         const extracted = await resolveAssistantExtraction(messageText, services, {
           currentIntent: state?.currentIntent, step: state?.step, customerName: state?.customerName,

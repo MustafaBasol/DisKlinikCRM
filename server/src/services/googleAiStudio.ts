@@ -226,3 +226,66 @@ export const extractAssistantInputWithGoogleAi = async (
   const result = assistantExtractionSchema.safeParse(sanitized);
   return result.success ? result.data : null;
 };
+
+/**
+ * Kullanıcı mesajındaki tarih ifadesini ISO 8601 (YYYY-MM-DD) formatında döner.
+ * Lokal parser'ın çözümleyemediği doğal dil ifadeleri için Gemini fallback olarak kullanılır.
+ * Tarih ifadesi yoksa ya da anlaşılamıyorsa null döner.
+ */
+export const normalizeDateWithGoogleAi = async (
+  text: string,
+  todayIso: string,
+  timeZone: string,
+): Promise<string | null> => {
+  const config = getGoogleAiStudioConfig();
+  if (!config.apiKey) return null;
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
+
+  const prompt = [
+    'Extract the target date from the user message and return it in ISO 8601 format (YYYY-MM-DD).',
+    'Return JSON only. No markdown, no explanation.',
+    `Today\'s date: ${todayIso}`,
+    `Timezone: ${timeZone}`,
+    'The user is writing in Turkish. Recognize natural Turkish relative date expressions such as:',
+    '- "önümüzdeki cuma" → next upcoming Friday (≥ 1 day from today)',
+    '- "gelecek pazartesi" → next Monday',
+    '- "3 gün sonra" → 3 days from today',
+    '- "2 gün sonraki cuma" → the Friday on or after 2 days from today',
+    '- "haftaya çarşamba" → Wednesday of next week',
+    '- "bu hafta cumartesi" → this Saturday',
+    '- "yarın" → tomorrow',
+    '- "bugün" → today',
+    '- "2 hafta sonra" → 14 days from today',
+    `User message: ${JSON.stringify(text)}`,
+    '',
+    'Return: { "isoDate": "YYYY-MM-DD" | null }',
+    'Only return a date if the user is clearly referring to a specific date or relative date. If no date is mentioned, return null.',
+  ].join('\n');
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const payload = await response.json();
+    const responseText = readResponseText(payload);
+    if (!responseText) return null;
+
+    const parsed = JSON.parse(stripCodeFence(responseText));
+    if (!parsed || typeof parsed.isoDate !== 'string') return null;
+
+    // Validate ISO date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.isoDate)) return null;
+    return parsed.isoDate;
+  } catch {
+    return null;
+  }
+};

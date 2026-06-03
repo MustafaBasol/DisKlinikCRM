@@ -1557,6 +1557,48 @@ const run = async () => {
     assert.equal(result.exactTime, '14:30');
   });
 
+  // --- Tarih ayrıştırma testleri (whatsappDate.ts) ---
+
+  await runFixture('normalizeDateFromTurkishInput — "3 gün sonra"', () => {
+    const today = new Date('2025-06-03T10:00:00.000Z'); // Salı
+    const result = normalizeDateFromTurkishInput('3 gün sonra gelebilirim', today, 'Europe/Istanbul');
+    assert.equal(result, '2025-06-06');
+  });
+
+  await runFixture('normalizeDateFromTurkishInput — "2 hafta sonra"', () => {
+    const today = new Date('2025-06-03T10:00:00.000Z');
+    const result = normalizeDateFromTurkishInput('2 hafta sonra', today, 'Europe/Istanbul');
+    assert.equal(result, '2025-06-17');
+  });
+
+  await runFixture('normalizeDateFromTurkishInput — "2 gün sonraki cuma"', () => {
+    // Bugün Salı (2025-06-03), pivotDate = Perşembe (2025-06-05), en yakın Cuma = 2025-06-06
+    const today = new Date('2025-06-03T10:00:00.000Z');
+    const result = normalizeDateFromTurkishInput('2 gün sonraki cuma', today, 'Europe/Istanbul');
+    assert.equal(result, '2025-06-06');
+  });
+
+  await runFixture('normalizeDateFromTurkishInput — "önümüzdeki cuma" (geçmemişse bu hafta)', () => {
+    // Bugün Salı (gün 2), Cuma = gün 5, delta = 3 → 2025-06-06
+    const today = new Date('2025-06-03T10:00:00.000Z');
+    const result = normalizeDateFromTurkishInput('önümüzdeki cuma', today, 'Europe/Istanbul');
+    assert.equal(result, '2025-06-06');
+  });
+
+  await runFixture('normalizeDateFromTurkishInput — "önümüzdeki cuma" bugün Cuma ise gelecek Cuma', () => {
+    // Bugün Cuma (2025-06-06), "önümüzdeki cuma" → forward modifier → delta=0 → delta+=7 → 2025-06-13
+    const today = new Date('2025-06-06T10:00:00.000Z');
+    const result = normalizeDateFromTurkishInput('önümüzdeki cuma', today, 'Europe/Istanbul');
+    assert.equal(result, '2025-06-13');
+  });
+
+  await runFixture('normalizeDateFromTurkishInput — "haftaya perşembe"', () => {
+    // Bugün Salı (2025-06-03), Perşembe = gün 4, delta = 2, +7 = 9 → 2025-06-12
+    const today = new Date('2025-06-03T10:00:00.000Z');
+    const result = normalizeDateFromTurkishInput('haftaya perşembe', today, 'Europe/Istanbul');
+    assert.equal(result, '2025-06-12');
+  });
+
   console.log('All WhatsApp conversation fixtures passed.');
 };
 
