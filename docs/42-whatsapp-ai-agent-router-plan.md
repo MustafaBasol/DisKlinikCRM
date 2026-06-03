@@ -386,12 +386,17 @@ Doğrulama:
 
 Kalan işler:
 
-- 200-500 mesajlık geniş Türkçe WhatsApp evaluation hedefinin ilk üretilebilir sürümü tamamlandı; mevcut offline set 245 örnek içeriyor.
 - Evaluation seti gerçek pilot konuşmalardan gelen düşük confidence örnekleriyle büyütülmeye devam etmeli.
 - Pilot klinik konuşmalarından düşük confidence örnekleri toplanıp fixture setine eklenmeli.
 - Canlı AI sağlayıcısıyla çalışan online evaluation henüz eklenmedi; mevcut testler offline ve deterministik kalıyor.
-- Hasta kaydı olmayan ilk temaslarda conversation history sınırlı kalıyor; mevcut veritabanı mesaj tablosu hasta ilişkisi gerektiriyor.
-- Production rollout öncesi AI environment değişkenleri ve feature flag dağıtım notları deployment dokümanına eklenmeli.
+
+Tamamlananlar (2026-06-03 ek geliştirme):
+
+- `server/src/tests/whatsappSafetyFixtures.ts` eklendi. Teşhis verilmemeli, tedavi önerisi verilmemeli, ciddiyet yorumu yapılmamalı, klinik bilgisi uydurulmamalı, yetkiliye aktarma engellenmemeli ve semptom güvenlik flagleri konuları 48 test ile doğrulandı.
+- `test:safety` komutu `server/package.json` ve ana `test` zincirine eklendi.
+- Hasta kaydı olmayan ilk temaslarda conversation history sorunu giderildi. `loadRecentWhatsAppAgentMessages` artık `phone` parametresini de alıyor; patientId yoksa telefon numarasıyla mesaj geçmişi çekiliyor.
+- Deployment dokümanına (`docs/35-docker-deploy-runbook.md`) `GOOGLE_AI_STUDIO_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_AI_MODEL`, `WHATSAPP_AI_AGENT_ENABLED` env değişkenleri ve security checklist AI agent rollout adımları eklendi.
+- Faz 5 eksik: Düşük confidence vakaları artık `ActivityLog` kaydıyla staff incelemesine işaretleniyor. `action: 'whatsapp_low_confidence'`, `metadata.needsReview: true` ve confidence/intent/source bilgileri kaydediliyor.
 
 ## Rollout Stratejisi
 

@@ -1012,10 +1012,17 @@ const saveWhatsAppConversationMessage = async (args: {
   }
 };
 
-const loadRecentWhatsAppAgentMessages = async (clinicId: string, patientId?: string | null) => {
-  if (!patientId) return [];
+const loadRecentWhatsAppAgentMessages = async (clinicId: string, patientId?: string | null, phone?: string | null) => {
+  // Hasta kaydı varsa patientId ile sorgula (daha verimli index kullanır).
+  // Hasta kaydı henüz oluşturulmamışsa (ilk temas) telefon numarasıyla sorgula.
+  const where = patientId
+    ? { clinicId, patientId }
+    : phone
+      ? { clinicId, phone: normalizePhone(phone) }
+      : null;
+  if (!where) return [];
   const messages = await prisma.whatsAppConversationMessage.findMany({
-    where: { clinicId, patientId },
+    where,
     select: { direction: true, text: true },
     orderBy: { createdAt: 'desc' },
     take: 10,
@@ -1745,6 +1752,35 @@ const executeAgentDecision = async (args: {
 
   const minimumConfidence = args.source === 'ai' ? 0.6 : 0.85;
   if (decision.confidence < minimumConfidence && decision.action !== 'ask_clarification' && decision.action !== 'unknown_safe_reply') {
+    console.warn('[whatsapp-agent] low-confidence', {
+      source: args.source,
+      intent: decision.intent,
+      action: decision.action,
+      confidence: decision.confidence,
+      step: args.currentStep,
+    });
+    // Fire-and-forget: staff incelemesi için ActivityLog kaydı oluştur.
+    // Hasta kaydı henüz olmayabilir; clinic-level kayıt yeterli.
+    getClinicSystemUserId(args.clinic.id).then(systemUserId => {
+      if (systemUserId) {
+        return logActivity({
+          clinicId: args.clinic.id,
+          userId: systemUserId,
+          entityType: 'clinic',
+          entityId: args.clinic.id,
+          action: 'whatsapp_low_confidence',
+          description: `WhatsApp mesajı düşük güven skoru ile işlendi ve kural yönlendiricisine düştü — intent: ${decision.intent}, action: ${decision.action}, confidence: ${decision.confidence.toFixed(2)}, source: ${args.source}`,
+          metadata: {
+            intent: decision.intent,
+            action: decision.action,
+            confidence: decision.confidence,
+            source: args.source,
+            step: args.currentStep,
+            needsReview: true,
+          },
+        });
+      }
+    }).catch(() => {});
     return null;
   }
 
@@ -2136,7 +2172,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   const [recentMessages, clinicFacts] = await Promise.all([
-    loadRecentWhatsAppAgentMessages(clinic.id, existingPatient?.id),
+    loadRecentWhatsAppAgentMessages(clinic.id, existingPatient?.id, input.phone),
     loadWhatsAppAgentClinicFacts(clinic),
   ]);
   const agentResolution = await resolveWhatsAppConversationAgentDecision({

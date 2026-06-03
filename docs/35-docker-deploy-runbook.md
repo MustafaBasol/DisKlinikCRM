@@ -31,6 +31,14 @@ META_APP_SECRET=
 META_GRAPH_API_VERSION=v23.0
 META_REDIRECT_URI=
 META_WEBHOOK_VERIFY_TOKEN=
+# WhatsApp AI Conversation Agent (optional — enables natural language routing)
+# Obtain an API key from https://aistudio.google.com/
+GOOGLE_AI_STUDIO_API_KEY=          # or use GEMINI_API_KEY as alias
+GEMINI_API_KEY=
+GOOGLE_AI_MODEL=gemini-2.0-flash   # optional, defaults to gemini-2.0-flash
+# Set to 0, false, off, or disabled to turn off the AI agent entirely.
+# The rule-based fallback router remains active when the agent is disabled.
+WHATSAPP_AI_AGENT_ENABLED=true
 ```
 
 ### Frontend: `/docker/disklinikcrm/app/.env`
@@ -132,3 +140,6 @@ docker exec -it disklinikcrm_api sh -c "cd /app && npx tsx prisma/seed.ts"
 - [ ] Automated PostgreSQL backups configured
 - [ ] SSL certificate active (Let's Encrypt / Certbot)
 - [ ] `ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=false` once all connections migrated to panel
+- [ ] WhatsApp AI agent: `GOOGLE_AI_STUDIO_API_KEY` or `GEMINI_API_KEY` set if AI routing is enabled
+- [ ] `WHATSAPP_AI_AGENT_ENABLED=true` confirmed; set to `false` to fall back to rule-based router without AI
+- [ ] AI agent piloted on a single clinic account before enabling for all tenants
