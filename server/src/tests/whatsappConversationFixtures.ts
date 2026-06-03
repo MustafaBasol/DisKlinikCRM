@@ -318,6 +318,7 @@ const run = async () => {
         selectedAppointmentTypeId: 'svc-1',
         selectedAppointmentTypeName: 'Dis Temizligi',
       },
+      now: new Date('2026-05-16T21:36:00.000Z'),
       buildAvailableSlots: async () => [],
       formatAvailabilityMessage,
       logAvailabilitySave: () => undefined,

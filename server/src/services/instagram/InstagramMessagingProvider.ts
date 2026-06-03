@@ -21,13 +21,14 @@ import { decryptSecret } from '../../utils/encryption.js';
 export type InstagramConnectionRecord = {
   id: string;
   organizationId: string;
-  status: string;
+  status?: string | null;
   instagramAccountId?: string | null;
   instagramUsername?: string | null;
   accessTokenEncrypted?: string | null;
   pageAccessTokenEncrypted?: string | null;
   webhookVerifyToken?: string | null;
   webhookSecret?: string | null;
+  isActive?: boolean;
 };
 
 export type TestConnectionResult = {
@@ -60,6 +61,8 @@ export type ParsedInstagramEvent = {
   senderId?: string | null;
   /** Instagram-scoped recipient ID (usually the page/account's IGSID) */
   recipientId?: string | null;
+  /** Instagram page/account id from the webhook entry */
+  pageId?: string | null;
   text?: string | null;
   timestamp?: number | null;
   /** Full raw entry payload for debugging / future field extraction */
@@ -92,6 +95,9 @@ function resolveToken(conn: InstagramConnectionRecord): string | null {
 export async function testConnection(
   conn: InstagramConnectionRecord,
 ): Promise<TestConnectionResult> {
+  if (conn.isActive === false) {
+    return { success: false, message: 'Instagram connection is inactive.' };
+  }
   const token = resolveToken(conn);
   if (!token) {
     return { success: false, message: 'Access token is not configured.' };
@@ -135,6 +141,9 @@ export async function sendMessage(
   conn: InstagramConnectionRecord,
   payload: SendMessagePayload,
 ): Promise<SendMessageResult> {
+  if (conn.isActive === false) {
+    return { success: false, error: 'Instagram connection is inactive.' };
+  }
   const token = resolveToken(conn);
   if (!token) {
     return { success: false, error: 'Access token is not configured.' };
@@ -194,6 +203,7 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
   for (const entry of entries) {
     if (!entry || typeof entry !== 'object') continue;
     const entryObj = entry as Record<string, unknown>;
+    const pageId = typeof entryObj.id === 'string' ? entryObj.id : null;
     const messaging = Array.isArray(entryObj.messaging) ? entryObj.messaging : [];
 
     for (const msg of messaging) {
@@ -220,6 +230,7 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
           externalMessageId: externalMessageId ?? null,
           senderId: sender ?? null,
           recipientId: recipient ?? null,
+          pageId,
           text: text ?? null,
           timestamp,
           rawPayload: msgObj,
@@ -235,6 +246,7 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
           externalMessageId: externalMessageId ?? null,
           senderId: sender ?? null,
           recipientId: recipient ?? null,
+          pageId,
           text: null,
           timestamp,
           rawPayload: msgObj,
@@ -248,6 +260,7 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
         externalMessageId: externalMessageId ?? null,
         senderId: sender ?? null,
         recipientId: recipient ?? null,
+        pageId,
         text,
         timestamp,
         rawPayload: msgObj,

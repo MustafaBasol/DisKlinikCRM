@@ -22,6 +22,7 @@ import type { AuthRequest } from '../middleware/auth.js';
 import { getParam } from '../utils/helpers.js';
 import { normalizeRole } from '../utils/roles.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { findPatientInClinic } from '../utils/relationGuards.js';
 
 const router = express.Router();
 
@@ -318,12 +319,9 @@ router.post(
       // Validate patient if provided
       let resolvedPatientId: string | null = entry.patientId ?? null;
       if (patientId) {
-        const patient = await prisma.patient.findFirst({
-          where: { id: patientId, organizationId: user.organizationId, deletedAt: null },
-          select: { id: true },
-        });
+        const patient = await findPatientInClinic(patientId, clinicId);
         if (!patient) {
-          return res.status(404).json({ error: 'Patient not found in this organization' });
+          return res.status(404).json({ error: 'Patient not found in this clinic' });
         }
         resolvedPatientId = patient.id;
       }
@@ -391,6 +389,10 @@ router.post(
         return res.status(404).json({ error: 'Inbox entry not found' });
       }
 
+      if (!entry.clinicId) {
+        return res.status(400).json({ error: 'Conversation must be assigned to a clinic before linking a patient' });
+      }
+
       // CLINIC_MANAGER / RECEPTIONIST: only link patients in clinics they can access
       const role = normalizeRole(user.role, user.canAccessAllClinics);
       if (
@@ -404,12 +406,9 @@ router.post(
       }
 
       // Validate patient — must be in same org, not deleted
-      const patient = await prisma.patient.findFirst({
-        where: { id: patientId, organizationId: user.organizationId, deletedAt: null },
-        select: { id: true, firstName: true, lastName: true, phone: true },
-      });
+      const patient = await findPatientInClinic(patientId, entry.clinicId);
       if (!patient) {
-        return res.status(404).json({ error: 'Patient not found in this organization' });
+        return res.status(404).json({ error: 'Patient not found in this clinic' });
       }
 
       const updated = await prisma.whatsAppInboxEntry.update({

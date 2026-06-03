@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import {
   Building2, Users, UserPlus, Activity, TrendingUp,
   CheckCircle2, XCircle, Clock, Ban, AlertCircle, Loader2,
   ChevronRight, BarChart3, Package,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { usePlatformApi, usePlatformAuth } from '../context/PlatformAuthContext';
 
 interface Clinic {
   id: string;
@@ -37,7 +35,8 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = 
 const PlatformAdmin: React.FC = () => {
   const { t, i18n } = useTranslation(['platform']);
   const navigate = useNavigate();
-  const [token] = useState(() => localStorage.getItem('platform_token'));
+  const platformApi = usePlatformApi();
+  const { isAuthenticated, login, logout } = usePlatformAuth();
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -48,21 +47,19 @@ const PlatformAdmin: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
 
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
-
   const fetchData = async () => {
-    if (!token) return;
+    if (!isAuthenticated) return;
     setLoading(true);
     try {
       const [statsRes, clinicsRes] = await Promise.all([
-        axios.get(`${API_URL}/platform/stats`, { headers: authHeader }),
-        axios.get(`${API_URL}/platform/clinics`, { headers: authHeader, params: statusFilter ? { status: statusFilter } : {} }),
+        platformApi.get('/platform/stats'),
+        platformApi.get('/platform/clinics', { params: statusFilter ? { status: statusFilter } : {} }),
       ]);
       setStats(statsRes.data);
-      setClinics(clinicsRes.data);
+      setClinics(clinicsRes.data.data ?? clinicsRes.data ?? []);
     } catch (err: any) {
       if (err.response?.status === 401) {
-        localStorage.removeItem('platform_token');
+        logout();
         navigate('/platform/login');
       }
     } finally {
@@ -71,20 +68,15 @@ const PlatformAdmin: React.FC = () => {
   };
 
   useEffect(() => {
-    if (token) fetchData();
-  }, [token, statusFilter]);
+    if (isAuthenticated) fetchData();
+  }, [isAuthenticated, statusFilter]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setLoginLoading(true);
     try {
-      const res = await axios.post(`${API_URL}/platform/auth/login`, {
-        email: loginEmail,
-        password: loginPassword,
-      });
-      localStorage.setItem('platform_token', res.data.token);
-      window.location.reload();
+      await login(loginEmail, loginPassword);
     } catch (err: any) {
       setLoginError(err.response?.data?.error ?? t('platform:errors.loginFailed'));
     } finally {
@@ -94,7 +86,7 @@ const PlatformAdmin: React.FC = () => {
 
   const updateStatus = async (clinicId: string, status: string) => {
     try {
-      await axios.patch(`${API_URL}/platform/clinics/${clinicId}/status`, { status }, { headers: authHeader });
+      await platformApi.patch(`/platform/clinics/${clinicId}/status`, { status });
       fetchData();
     } catch {
       alert(t('platform:errors.statusUpdateFailed'));
@@ -102,7 +94,7 @@ const PlatformAdmin: React.FC = () => {
   };
 
   // Login formu
-  if (!token) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
         <div className="max-w-sm w-full">
@@ -151,7 +143,7 @@ const PlatformAdmin: React.FC = () => {
           <span className="font-semibold text-gray-200">Platform Admin</span>
         </div>
         <button
-          onClick={() => { localStorage.removeItem('platform_token'); window.location.reload(); }}
+          onClick={() => { logout(); navigate('/platform/login'); }}
           className="text-sm text-gray-400 hover:text-white"
         >
           {t('platform:admin.logout')}

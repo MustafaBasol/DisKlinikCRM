@@ -62,6 +62,7 @@
     "google": "Google",
     "facebook": "Facebook",
     "whatsapp": "WhatsApp",
+    "doctolib": "Doctolib",
     "other": "Diğer",
     "totalPatientsInRange": "Toplam Kayıtlı Hasta (Dönem)",
     "sourceCount": "{{count}} farklı kaynak",

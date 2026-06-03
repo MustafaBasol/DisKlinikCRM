@@ -6,6 +6,7 @@ import { getParam } from '../utils/helpers.js';
 import { taskSchema } from '../schemas/index.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';
+import { validateTaskRelations } from '../utils/relationGuards.js';
 
 const router = express.Router();
 
@@ -62,7 +63,6 @@ router.get('/tasks/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DEN
     });
 
     if (!task) return res.status(404).json({ error: 'Task not found' });
-    await sendTaskAssignmentNotification(clinicId, task);
 
     res.json(task);
   } catch {
@@ -78,6 +78,9 @@ router.post('/tasks', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIS
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const relationValidation = await validateTaskRelations(validation.data, clinicId);
+    if (relationValidation.error) return res.status(400).json({ error: relationValidation.error });
+
     const task = await prisma.task.create({
       data: { ...validation.data, clinicId, createdById: req.user!.id },
       include: {
@@ -110,6 +113,14 @@ router.put('/tasks/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DEN
     const existing = await prisma.task.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Task not found' });
     const clinicId = existing.clinicId;
+
+    const relationValidation = await validateTaskRelations({
+      patientId: validation.data.patientId === undefined ? existing.patientId : validation.data.patientId,
+      appointmentId: validation.data.appointmentId === undefined ? existing.appointmentId : validation.data.appointmentId,
+      treatmentCaseId: existing.treatmentCaseId,
+      assignedToId: validation.data.assignedToId === undefined ? existing.assignedToId : validation.data.assignedToId,
+    }, clinicId);
+    if (relationValidation.error) return res.status(400).json({ error: relationValidation.error });
 
     const updated = await prisma.task.update({
       where: { id },

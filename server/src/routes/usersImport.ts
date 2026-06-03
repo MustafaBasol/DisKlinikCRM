@@ -51,7 +51,7 @@ function handleExcelUpload(req: AuthRequest, res: Response, next: NextFunction) 
     if (err?.message === 'INVALID_FILE_TYPE') {
       return res.status(400).json({ error: 'Yalnızca .xlsx dosyaları kabul edilir' });
     }
-    return res.status(400).json({ error: 'Dosya yükleme hatası', detail: err?.message });
+    return res.status(400).json({ error: 'Dosya yükleme hatası' });
   });
 }
 
@@ -249,7 +249,7 @@ router.post(
       });
     } catch (err: any) {
       console.error('[users/import-preview]', err?.message);
-      res.status(500).json({ error: 'Dosya işlenemedi', detail: err?.message });
+      res.status(500).json({ error: 'Dosya işlenemedi' });
     }
   }
 );
@@ -353,7 +353,7 @@ router.post(
           skipped.push({
             rowNumber: row.rowNumber,
             status: 'invalid',
-            errors: [`Veritabanı hatası: ${rowErr?.message ?? 'bilinmiyor'}`],
+            errors: ['Veritabanı hatası'],
           });
         }
       }
@@ -372,7 +372,7 @@ router.post(
       });
     } catch (err: any) {
       console.error('[users/import-confirm]', err?.message);
-      res.status(500).json({ error: 'İçe aktarma başarısız', detail: err?.message });
+      res.status(500).json({ error: 'İçe aktarma başarısız' });
     }
   }
 );

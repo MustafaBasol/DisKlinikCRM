@@ -1,18 +1,33 @@
 import axios from 'axios';
 
 export const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+const CSRF_COOKIE_NAME = 'csrf_token';
+const UNSAFE_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const cookie = document.cookie
+    .split('; ')
+    .find((part) => part.startsWith(`${name}=`));
+  return cookie ? decodeURIComponent(cookie.substring(name.length + 1)) : null;
+}
 
 const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('hcrm_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const method = config.method?.toLowerCase();
+  if (method && UNSAFE_METHODS.has(method)) {
+    const csrfToken = readCookie(CSRF_COOKIE_NAME);
+    if (csrfToken) {
+      config.headers = config.headers ?? {};
+      config.headers['X-CSRF-Token'] = csrfToken;
+    }
   }
 
   // Tüm isteklere seçili klinik filtresi ekle (GET listesi + mutation'lar)
@@ -28,7 +43,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    const url = String(error.config?.url ?? '');
+    const isAuthProbe = url === '/auth/me' || url === '/auth/login' || url === '/auth/logout';
+    if (error.response && error.response.status === 401 && !isAuthProbe) {
       window.dispatchEvent(new CustomEvent('auth:expired'));
     }
     return Promise.reject(error);
@@ -38,6 +55,8 @@ api.interceptors.response.use(
 export const authService = {
   login: (credentials: any) => api.post('/auth/login', credentials),
   me: () => api.get('/auth/me'),
+  csrf: () => api.get('/auth/csrf'),
+  logout: () => api.post('/auth/logout'),
 };
 
 export const patientService = {

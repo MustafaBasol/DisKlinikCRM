@@ -2,8 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../db.js';
 import { normalizeRole } from '../utils/roles.js';
+import { getSecret } from '../utils/secrets.js';
+import { CLINIC_SESSION_COOKIE, createSessionId, getCookie } from '../utils/sessionCookies.js';
+import { isBearerFallbackEnabled } from '../utils/authFallback.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'health-crm-secret-key-change-this';
+const JWT_SECRET = getSecret('JWT_SECRET', 'health-crm-secret-key-change-this');
 
 // Simple in-memory cache: clinicId → { status, organizationId, expiresAt }
 const clinicStatusCache = new Map<string, { status: string; organizationId: string; expiresAt: number }>();
@@ -29,24 +32,85 @@ export interface AuthRequest extends Request {
     organizationId: string;
     allowedClinicIds: string[];   // Gerçek klinik erişim listesi (UserClinic'ten)
     canAccessAllClinics: boolean; // OWNER/ORG_ADMIN için true
+    sessionId?: string;
   };
+  authSource?: 'cookie' | 'bearer';
 }
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized: Missing token' });
-  }
+  const cookieToken = getCookie(req, CLINIC_SESSION_COOKIE);
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined;
+  const bearerFallbackEnabled = isBearerFallbackEnabled('clinic');
+  const token = cookieToken || (bearerFallbackEnabled ? bearerToken : undefined);
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({
+      error: bearerToken && !bearerFallbackEnabled
+        ? 'Unauthorized: Cookie session required'
+        : 'Unauthorized: Missing token',
+    });
+  }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const authSource = cookieToken ? 'cookie' : 'bearer';
+
+    if (decoded.type && decoded.type !== 'clinic') {
+      return res.status(403).json({ error: 'Forbidden: Invalid token type' });
+    }
+
+    if (authSource === 'cookie' && !decoded.jti) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid session' });
+    }
+
+    if (authSource === 'bearer') {
+      console.warn('[auth] Bearer token fallback used for clinic auth');
+    }
 
     // Klinik erişim kontrolü
-    const clinicInfo = await getClinicInfo(decoded.clinicId);
+    const dbUser = await prisma.user.findUnique({
+      where: { id: decoded.sub || decoded.id },
+      select: {
+        id: true,
+        clinicId: true,
+        defaultClinicId: true,
+        role: true,
+        isActive: true,
+        organizationId: true,
+        canAccessAllClinics: true,
+        userClinics: {
+          where: { isActive: true },
+          select: { clinicId: true },
+        },
+      },
+    });
+
+    if (!dbUser || !dbUser.isActive) {
+      return res.status(401).json({ error: 'Unauthorized: User is inactive' });
+    }
+
+    const canAccessAllClinics = dbUser.canAccessAllClinics === true;
+    const activeAssignedClinicIds = dbUser.userClinics.map(uc => uc.clinicId);
+    const allowedClinicIds = canAccessAllClinics
+      ? activeAssignedClinicIds
+      : Array.from(new Set([dbUser.clinicId, ...activeAssignedClinicIds].filter(Boolean)));
+
+    if (!canAccessAllClinics && allowedClinicIds.length === 0) {
+      return res.status(403).json({ error: 'No active clinic access' });
+    }
+
+    const requestedDefaultClinicId = decoded.clinicId || dbUser.defaultClinicId || dbUser.clinicId;
+    const clinicId = canAccessAllClinics || allowedClinicIds.includes(requestedDefaultClinicId)
+      ? requestedDefaultClinicId
+      : allowedClinicIds[0];
+
+    const clinicInfo = await getClinicInfo(clinicId);
     if (!clinicInfo) {
       return res.status(403).json({ error: 'Clinic not found' });
+    }
+    if (clinicInfo.organizationId !== dbUser.organizationId) {
+      return res.status(403).json({ error: 'Clinic does not belong to user organization' });
     }
     if (clinicInfo.status === 'suspended') {
       return res.status(403).json({ error: 'Clinic access suspended. Please contact support.' });
@@ -55,20 +119,17 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(403).json({ error: 'Clinic subscription cancelled.' });
     }
 
-    const canAccessAllClinics = decoded.canAccessAllClinics ?? false;
     req.user = {
-      id: decoded.id,
-      clinicId: decoded.clinicId,
-      role: decoded.role,
-      normalizedRole: normalizeRole(decoded.role, canAccessAllClinics),
-      organizationId: clinicInfo.organizationId,
-      // Eski token uyumluluğu: allowedClinicIds yoksa veya boşsa, clinicId'yi fallback kullan.
-      // Yeni tokenlar login sırasında UserClinic tablosundan doldurulur.
-      allowedClinicIds: decoded.allowedClinicIds?.length > 0
-        ? decoded.allowedClinicIds
-        : [decoded.clinicId],
+      id: dbUser.id,
+      clinicId,
+      role: dbUser.role,
+      normalizedRole: normalizeRole(dbUser.role, canAccessAllClinics),
+      organizationId: dbUser.organizationId,
+      allowedClinicIds,
       canAccessAllClinics,
+      sessionId: decoded.jti,
     };
+    req.authSource = authSource;
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
@@ -118,10 +179,16 @@ export const generateToken = (user: {
   allowedClinicIds: string[];   // Boş dizi ASLA "hepsine erişim" anlamına GELMEZ
   canAccessAllClinics: boolean; // true ise allowedClinicIds göz ardı edilir
   role: string;
+  sessionId?: string;
 }) => {
+  const sessionId = user.sessionId ?? createSessionId();
+
   return jwt.sign(
     {
+      sub: user.id,
       id: user.id,
+      type: 'clinic',
+      jti: sessionId,
       clinicId: user.clinicId,
       organizationId: user.organizationId,
       allowedClinicIds: user.allowedClinicIds,

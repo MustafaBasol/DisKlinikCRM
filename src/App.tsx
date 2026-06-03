@@ -4,58 +4,66 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlatformAuthProvider, usePlatformAuth } from './context/PlatformAuthContext';
 import { ClinicProvider } from './context/ClinicContext';
 import { ClinicPreferencesProvider } from './context/ClinicPreferencesContext';
-import MainLayout from './layouts/MainLayout';
-import PlatformAdminLayout from './layouts/PlatformAdminLayout';
-import GlobalSearch from './components/GlobalSearch';
-import Dashboard from './pages/Dashboard';
-import Patients from './pages/Patients';
-import PatientDetail from './pages/PatientDetail';
-import Appointments from './pages/Appointments';
-import AppointmentRequests from './pages/AppointmentRequests';
-import AppointmentDetail from './pages/AppointmentDetail';
-import Tasks from './pages/Tasks';
-import TreatmentCases from './pages/TreatmentCases';
-import TreatmentCaseDetail from './pages/TreatmentCaseDetail';
-import Payments from './pages/Payments';
-import InsuranceProvisions from './pages/InsuranceProvisions';
-import InsuranceProvisionDetail from './pages/InsuranceProvisionDetail';
-import Messages from './pages/Messages';
-import MessageTemplates from './pages/MessageTemplates';
-import Settings from './pages/Settings';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import PlatformLogin from './pages/platform/PlatformLogin';
-import PlatformDashboard from './pages/platform/PlatformDashboard';
-import PlatformOrganizations from './pages/platform/PlatformOrganizations';
-import PlatformClinics from './pages/platform/PlatformClinics';
-import PlatformUsers from './pages/platform/PlatformUsers';
-import PlatformPlans from './pages/platform/PlatformPlans';
-import PlatformSystem from './pages/platform/PlatformSystem';
-import BookingWidget from './pages/BookingWidget';
-import Reports from './pages/Reports';
-import PaymentPlans from './pages/PaymentPlans';
-import PractitionerEarnings from './pages/PractitionerEarnings';
-import MyEarnings from './pages/MyEarnings';
-import Inventory from './pages/Inventory';
-import OrganizationDashboard from './pages/OrganizationDashboard';
-import Branches from './pages/Branches';
-import ClinicSchedule from './pages/ClinicSchedule';
-import WhatsAppConnections from './pages/WhatsAppConnections';
-import WhatsAppInbox from './pages/WhatsAppInbox';
-import InstagramConnections from './pages/InstagramConnections';
-import InstagramInbox from './pages/InstagramInbox';
-import FinanceDashboard from './pages/FinanceDashboard';
-import Operations from './pages/Operations';
-import Users from './pages/Users';
-import MetaCallbackPage from './pages/MetaCallbackPage';
-import NoShows from './pages/NoShows';
-import LandingPage from './pages/LandingPage';
-import LegalCenterPage from './pages/legal/LegalCenterPage';
-import PrivacyNoticePage from './pages/legal/PrivacyNoticePage';
-import CookiePolicyPage from './pages/legal/CookiePolicyPage';
-import CommunicationsNoticePage from './pages/legal/CommunicationsNoticePage';
 
 import { useTranslation } from 'react-i18next';
+
+const MainLayout = React.lazy(() => import('./layouts/MainLayout'));
+const PlatformAdminLayout = React.lazy(() => import('./layouts/PlatformAdminLayout'));
+const GlobalSearch = React.lazy(() => import('./components/GlobalSearch'));
+
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Patients = React.lazy(() => import('./pages/Patients'));
+const PatientDetail = React.lazy(() => import('./pages/PatientDetail'));
+const Appointments = React.lazy(() => import('./pages/Appointments'));
+const AppointmentRequests = React.lazy(() => import('./pages/AppointmentRequests'));
+const AppointmentDetail = React.lazy(() => import('./pages/AppointmentDetail'));
+const Tasks = React.lazy(() => import('./pages/Tasks'));
+const TreatmentCases = React.lazy(() => import('./pages/TreatmentCases'));
+const TreatmentCaseDetail = React.lazy(() => import('./pages/TreatmentCaseDetail'));
+const Payments = React.lazy(() => import('./pages/Payments'));
+const InsuranceProvisions = React.lazy(() => import('./pages/InsuranceProvisions'));
+const InsuranceProvisionDetail = React.lazy(() => import('./pages/InsuranceProvisionDetail'));
+const Messages = React.lazy(() => import('./pages/Messages'));
+const MessageTemplates = React.lazy(() => import('./pages/MessageTemplates'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const Login = React.lazy(() => import('./pages/Login'));
+const Register = React.lazy(() => import('./pages/Register'));
+const PlatformLogin = React.lazy(() => import('./pages/platform/PlatformLogin'));
+const PlatformDashboard = React.lazy(() => import('./pages/platform/PlatformDashboard'));
+const PlatformOrganizations = React.lazy(() => import('./pages/platform/PlatformOrganizations'));
+const PlatformClinics = React.lazy(() => import('./pages/platform/PlatformClinics'));
+const PlatformUsers = React.lazy(() => import('./pages/platform/PlatformUsers'));
+const PlatformPlans = React.lazy(() => import('./pages/platform/PlatformPlans'));
+const PlatformSystem = React.lazy(() => import('./pages/platform/PlatformSystem'));
+const BookingWidget = React.lazy(() => import('./pages/BookingWidget'));
+const Reports = React.lazy(() => import('./pages/Reports'));
+const PaymentPlans = React.lazy(() => import('./pages/PaymentPlans'));
+const PractitionerEarnings = React.lazy(() => import('./pages/PractitionerEarnings'));
+const MyEarnings = React.lazy(() => import('./pages/MyEarnings'));
+const Inventory = React.lazy(() => import('./pages/Inventory'));
+const OrganizationDashboard = React.lazy(() => import('./pages/OrganizationDashboard'));
+const Branches = React.lazy(() => import('./pages/Branches'));
+const ClinicSchedule = React.lazy(() => import('./pages/ClinicSchedule'));
+const WhatsAppConnections = React.lazy(() => import('./pages/WhatsAppConnections'));
+const WhatsAppInbox = React.lazy(() => import('./pages/WhatsAppInbox'));
+const InstagramConnections = React.lazy(() => import('./pages/InstagramConnections'));
+const InstagramInbox = React.lazy(() => import('./pages/InstagramInbox'));
+const FinanceDashboard = React.lazy(() => import('./pages/FinanceDashboard'));
+const Operations = React.lazy(() => import('./pages/Operations'));
+const Users = React.lazy(() => import('./pages/Users'));
+const MetaCallbackPage = React.lazy(() => import('./pages/MetaCallbackPage'));
+const NoShows = React.lazy(() => import('./pages/NoShows'));
+const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const LegalCenterPage = React.lazy(() => import('./pages/legal/LegalCenterPage'));
+const PrivacyNoticePage = React.lazy(() => import('./pages/legal/PrivacyNoticePage'));
+const CookiePolicyPage = React.lazy(() => import('./pages/legal/CookiePolicyPage'));
+const CommunicationsNoticePage = React.lazy(() => import('./pages/legal/CommunicationsNoticePage'));
+
+const RouteFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+    <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 const ProtectedRoute = () => {
   const { isAuthenticated } = useAuth();
@@ -63,7 +71,14 @@ const ProtectedRoute = () => {
 };
 
 const PlatformRoute = () => {
-  const { isAuthenticated } = usePlatformAuth();
+  const { isAuthenticated, isLoading } = usePlatformAuth();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
   return isAuthenticated ? <Outlet /> : <Navigate to="/platform/login" replace />;
 };
 
@@ -112,7 +127,12 @@ const ProductApplication: React.FC = () => {
         <ClinicProvider>
           <ClinicPreferencesProvider>
           <ToastContainer />
-          <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+          {searchOpen && (
+            <React.Suspense fallback={null}>
+              <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+            </React.Suspense>
+          )}
+          <React.Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -171,6 +191,7 @@ const ProductApplication: React.FC = () => {
               </Route>
             </Route>
           </Routes>
+          </React.Suspense>
           </ClinicPreferencesProvider>
         </ClinicProvider>
       </PlatformAuthProvider>
@@ -180,6 +201,7 @@ const ProductApplication: React.FC = () => {
 
 const App: React.FC = () => (
   <Router>
+    <React.Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
@@ -189,6 +211,7 @@ const App: React.FC = () => (
       <Route path="/legal/communications" element={<CommunicationsNoticePage />} />
       <Route path="*" element={<ProductApplication />} />
     </Routes>
+    </React.Suspense>
   </Router>
 );
 

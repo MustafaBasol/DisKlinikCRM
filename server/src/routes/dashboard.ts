@@ -7,9 +7,10 @@ import { getClinicOperatingPreferences } from '../services/clinicOperatingPrefer
 const router = express.Router();
 
 // GET /api/dashboard/stats
-router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
+router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { normalizedRole, id: userId } = req.user!;
   const selectedClinicId = req.query.clinicId as string | undefined;
+  const canViewPatientAgenda = normalizedRole !== 'BILLING';
 
   try {
     const scope = await validateAndGetScope(req.user!, selectedClinicId, res);
@@ -93,25 +94,27 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
     const stats: any = {};
     keys.forEach((key, i) => { stats[key] = results[i]; });
 
-    const agenda = await prisma.appointment.findMany({
-      where: {
-        ...clinicIdWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
-        ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
-      },
-      include: {
-        patient: { select: { firstName: true, lastName: true, phone: true } },
-        practitioner: { select: { firstName: true, lastName: true } },
-        appointmentType: { select: { name: true, color: true } },
-      },
-      orderBy: { startTime: 'asc' },
-      take: 10,
-    });
+    const agenda = canViewPatientAgenda
+      ? await prisma.appointment.findMany({
+          where: {
+            ...clinicIdWhere, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' },
+            ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
+          },
+          include: {
+            patient: { select: { firstName: true, lastName: true, phone: true } },
+            practitioner: { select: { firstName: true, lastName: true } },
+            appointmentType: { select: { name: true, color: true } },
+          },
+          orderBy: { startTime: 'asc' },
+          take: 10,
+        })
+      : [];
 
     const alerts: any[] = [];
-    if (stats.overdueTasks > 0) {
+    if (canViewPatientAgenda && stats.overdueTasks > 0) {
       alerts.push({ type: 'danger', icon: 'Clock', title: 'overdueTasks', count: stats.overdueTasks, link: '/tasks?overdue=true' });
     }
-    if (stats.noShowsMonth > 0) {
+    if (canViewPatientAgenda && stats.noShowsMonth > 0) {
       alerts.push({ type: 'warning', icon: 'UserMinus', title: 'noShowFollowUp', count: stats.noShowsMonth, link: '/appointments?status=no_show' });
     }
     const pendingAmount = stats.pendingPayments?._sum?.amount ?? 0;
@@ -119,21 +122,23 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       alerts.push({ type: 'info', icon: 'DollarSign', title: 'pendingCollections', value: pendingAmount, link: '/payments?status=pending' });
     }
 
-    const activities = await prisma.activityLog.findMany({
-      where: {
-        ...clinicIdWhere,
-        ...(normalizedRole === 'DENTIST' ? {
-          OR: [
-            { userId },
-            { entityType: 'appointment', appointment: { practitionerId: userId } },
-            { entityType: 'treatment_case', treatmentCase: { practitionerId: userId } },
-          ],
-        } : {}),
-      },
-      include: { user: { select: { firstName: true, lastName: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    });
+    const activities = canViewPatientAgenda
+      ? await prisma.activityLog.findMany({
+          where: {
+            ...clinicIdWhere,
+            ...(normalizedRole === 'DENTIST' ? {
+              OR: [
+                { userId },
+                { entityType: 'appointment', appointment: { practitionerId: userId } },
+                { entityType: 'treatment_case', treatmentCase: { practitionerId: userId } },
+              ],
+            } : {}),
+          },
+          include: { user: { select: { firstName: true, lastName: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        })
+      : [];
 
     // ── Doctor-specific extra data ─────────────────────────────────────
     let doctorExtras: any = null;
@@ -239,8 +244,8 @@ router.get('/dashboard/stats', async (req: AuthRequest, res: Response) => {
       doctorExtras,
       charts: normalizedRole !== 'DENTIST' ? await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth, chartPreferenceClinicId) : null,
     });
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+    console.error('[dashboard] stats error:', error?.message ?? error);
     res.status(500).json({ error: 'Failed to fetch dashboard stats' });
   }
 });

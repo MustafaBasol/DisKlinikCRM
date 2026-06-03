@@ -14,6 +14,13 @@ import { appointmentSchema, appointmentUpdateSchema } from '../schemas/index.js'
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { patientContactSelect, userNameSelect, userPublicSelect } from '../utils/prismaSelects.js';
+import {
+  findAppointmentTypeInClinic,
+  findPatientInClinic,
+  findTreatmentCaseInClinic,
+  findUserAssignedToClinic,
+} from '../utils/relationGuards.js';
 
 const router = express.Router();
 const SLOT_STEP_MINUTES = 30;
@@ -87,7 +94,12 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
 
     const appointments = await prisma.appointment.findMany({
       where,
-      include: { patient: true, practitioner: true, appointmentType: true, treatmentCase: { select: { id: true, title: true } } },
+      include: {
+        patient: { select: patientContactSelect },
+        practitioner: { select: userPublicSelect },
+        appointmentType: true,
+        treatmentCase: { select: { id: true, title: true } },
+      },
       orderBy: { startTime: 'asc' },
     });
     res.json(appointments);
@@ -264,11 +276,11 @@ router.get('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
     const appointment = await prisma.appointment.findFirst({
       where: { id, clinicId: { in: accessibleIds }, deletedAt: null },
       include: {
-        patient: true,
-        practitioner: true,
+        patient: { select: patientContactSelect },
+        practitioner: { select: userPublicSelect },
         appointmentType: true,
         treatmentCase: { select: { id: true, title: true } },
-        activityLogs: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+        activityLogs: { include: { user: { select: userNameSelect } }, orderBy: { createdAt: 'desc' } },
       },
     });
 
@@ -296,21 +308,18 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
 
   try {
     const [patient, practitionerUser, type] = await Promise.all([
-      prisma.patient.findFirst({ where: { id: patientId, clinicId, deletedAt: null } }),
-      prisma.user.findFirst({ where: { id: practitionerId } }),
-      prisma.appointmentType.findFirst({ where: { id: appointmentTypeId, clinicId, isActive: true } }),
+      findPatientInClinic(patientId, clinicId),
+      findUserAssignedToClinic(practitionerId, clinicId, { roles: ['DENTIST'] }),
+      findAppointmentTypeInClinic(appointmentTypeId, clinicId),
     ]);
 
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
     if (!practitionerUser) return res.status(400).json({ error: 'Invalid practitioner' });
     if (!type) return res.status(400).json({ error: 'Invalid appointment type' });
 
-    // Çok şubeli kontrol: doktor bu klinikle UserClinic veya legacy User.clinicId üzerinden ilişkili olmalı
-    const isAssigned =
-      practitionerUser.clinicId === clinicId ||
-      !!(await prisma.userClinic.findFirst({ where: { userId: practitionerId, clinicId, isActive: true } }));
-    if (!isAssigned) {
-      return res.status(400).json({ error: 'Practitioner is not assigned to this clinic' });
+    if (validation.data.treatmentCaseId) {
+      const treatmentCase = await findTreatmentCaseInClinic(validation.data.treatmentCaseId, clinicId, patientId);
+      if (!treatmentCase) return res.status(400).json({ error: 'Invalid treatment case' });
     }
     const practitioner = practitionerUser;
 
@@ -337,7 +346,7 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
 
     const appointment = await prisma.appointment.create({
       data: { ...validation.data, clinicId, status: 'confirmed' },
-      include: { patient: true, practitioner: true, appointmentType: true },
+      include: { patient: { select: patientContactSelect }, practitioner: { select: userPublicSelect }, appointmentType: true },
     });
 
     await logActivity({
@@ -405,9 +414,39 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
       }
     }
 
-    const nextPractitionerId = validation.data.practitionerId || existing.practitionerId;
+    const relationChangedByDentist =
+      normalizedRole === 'DENTIST' &&
+      (
+        (validation.data.patientId !== undefined && validation.data.patientId !== existing.patientId) ||
+        (validation.data.practitionerId !== undefined && validation.data.practitionerId !== existing.practitionerId) ||
+        (validation.data.appointmentTypeId !== undefined && validation.data.appointmentTypeId !== existing.appointmentTypeId) ||
+        (validation.data.treatmentCaseId !== undefined && validation.data.treatmentCaseId !== existing.treatmentCaseId)
+      );
+    if (relationChangedByDentist) {
+      return res.status(403).json({ error: 'Doctors cannot reassign appointment relations' });
+    }
+
+    const nextPatientId = validation.data.patientId ?? existing.patientId;
+    const nextPractitionerId = validation.data.practitionerId ?? existing.practitionerId;
+    const nextAppointmentTypeId = validation.data.appointmentTypeId ?? existing.appointmentTypeId;
+    const nextTreatmentCaseId = validation.data.treatmentCaseId === undefined
+      ? existing.treatmentCaseId
+      : validation.data.treatmentCaseId;
     const nextStartTime = validation.data.startTime || existing.startTime;
     const nextEndTime = validation.data.endTime || existing.endTime;
+
+    const [nextPatient, nextPractitioner, nextAppointmentType, nextTreatmentCase] = await Promise.all([
+      findPatientInClinic(nextPatientId, clinicId),
+      findUserAssignedToClinic(nextPractitionerId, clinicId, { roles: ['DENTIST'] }),
+      findAppointmentTypeInClinic(nextAppointmentTypeId, clinicId),
+      nextTreatmentCaseId ? findTreatmentCaseInClinic(nextTreatmentCaseId, clinicId, nextPatientId) : Promise.resolve(null),
+    ]);
+
+    if (!nextPatient) return res.status(400).json({ error: 'Invalid patient' });
+    if (!nextPractitioner) return res.status(400).json({ error: 'Invalid practitioner' });
+    if (!nextAppointmentType) return res.status(400).json({ error: 'Invalid appointment type' });
+    if (nextTreatmentCaseId && !nextTreatmentCase) return res.status(400).json({ error: 'Invalid treatment case' });
+
     const timeOrPractitionerChanged =
       nextPractitionerId !== existing.practitionerId ||
       nextStartTime.getTime() !== existing.startTime.getTime() ||
@@ -439,7 +478,7 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
       validation.data.status === 'completed' &&
       existing.status !== 'completed';
 
-    let autoCreatedTreatmentCase: { id: string; title: string } | null = null;
+    let autoCreatedTreatmentCase: any = null;
     const operatingPreferences = shouldCreateTreatmentCase
       ? await getClinicOperatingPreferences(clinicId)
       : null;
@@ -449,8 +488,8 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         where: { id },
         data: validation.data,
         include: {
-          patient: true,
-          practitioner: true,
+          patient: { select: patientContactSelect },
+          practitioner: { select: userPublicSelect },
           appointmentType: true,
           clinic: { select: { currency: true } },
           treatmentCase: true,
@@ -487,8 +526,8 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         where: { id },
         data: { treatmentCaseId: treatmentCase.id },
         include: {
-          patient: true,
-          practitioner: true,
+          patient: { select: patientContactSelect },
+          practitioner: { select: userPublicSelect },
           appointmentType: true,
           treatmentCase: true,
         },
@@ -514,12 +553,13 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         ...extractRequestMeta(req),
       });
 
-      if (autoCreatedTreatmentCase) {
+      const createdTreatmentCaseForLog = autoCreatedTreatmentCase as { id: string; title: string } | null;
+      if (createdTreatmentCaseForLog) {
         await logActivity({
           clinicId,
           userId,
           entityType: 'treatment_case',
-          entityId: autoCreatedTreatmentCase.id,
+          entityId: createdTreatmentCaseForLog.id,
           action: 'created',
           description: `Tamamlanan randevudan "${autoCreatedTreatmentCase.title}" tedavi dosyası otomatik oluşturuldu`,
           metadata: { appointmentId: id },
@@ -563,18 +603,19 @@ router.patch('/appointments/:id/treatment-case', authorize(['OWNER', 'ORG_ADMIN'
     const clinicId = existing.clinicId;
 
     if (treatmentCaseId) {
-      const tc = await prisma.treatmentCase.findFirst({ where: { id: treatmentCaseId, clinicId } });
+      const tc = await findTreatmentCaseInClinic(treatmentCaseId, clinicId, existing.patientId);
       if (!tc) return res.status(400).json({ error: 'Invalid treatment case' });
-      // ensure appointment belongs to same patient
-      if (tc.patientId !== existing.patientId) {
-        return res.status(400).json({ error: 'Treatment case does not belong to this appointment\'s patient' });
-      }
     }
 
     const updated = await prisma.appointment.update({
       where: { id },
       data: { treatmentCaseId: treatmentCaseId ?? null },
-      include: { patient: true, practitioner: true, appointmentType: true, treatmentCase: { select: { id: true, title: true } } },
+      include: {
+        patient: { select: patientContactSelect },
+        practitioner: { select: userPublicSelect },
+        appointmentType: true,
+        treatmentCase: { select: { id: true, title: true } },
+      },
     });
 
     await logActivity({

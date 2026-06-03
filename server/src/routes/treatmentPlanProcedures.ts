@@ -9,7 +9,7 @@ const router = express.Router();
 // GET /api/treatment-cases/:caseId/procedures — list procedures
 router.get(
   '/treatment-cases/:caseId/procedures',
-  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId as string;
     const caseId = getParam(req, 'caseId');
@@ -17,6 +17,9 @@ router.get(
     try {
       const tc = await prisma.treatmentCase.findFirst({ where: { id: caseId, clinicId, deletedAt: null } });
       if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+      if (req.user!.normalizedRole === 'DENTIST' && tc.practitionerId !== req.user!.id) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
 
       const procedures = await prisma.treatmentPlanProcedure.findMany({
         where: { treatmentCaseId: caseId, clinicId },
@@ -37,13 +40,20 @@ router.get(
 // GET /api/patients/:patientId/treatment-procedures — all procedures for dental chart overlay
 router.get(
   '/patients/:patientId/treatment-procedures',
-  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const clinicId = req.user!.clinicId as string;
     const patientId = getParam(req, 'patientId');
 
     try {
-      const patient = await prisma.patient.findFirst({ where: { id: patientId, clinicId, deletedAt: null } });
+      const patientWhere: any = { id: patientId, clinicId, deletedAt: null };
+      if (req.user!.normalizedRole === 'DENTIST') {
+        patientWhere.OR = [
+          { appointments: { some: { practitionerId: req.user!.id, deletedAt: null } } },
+          { treatmentCases: { some: { practitionerId: req.user!.id, deletedAt: null } } },
+        ];
+      }
+      const patient = await prisma.patient.findFirst({ where: patientWhere });
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
       const procedures = await prisma.treatmentPlanProcedure.findMany({
@@ -80,9 +90,12 @@ router.post(
     try {
       const tc = await prisma.treatmentCase.findFirst({
         where: { id: caseId, clinicId, deletedAt: null },
-        select: { id: true, patientId: true },
+        select: { id: true, patientId: true, practitionerId: true },
       });
       if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+      if (req.user!.normalizedRole === 'DENTIST' && tc.practitionerId !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
 
       if (serviceId) {
         const svc = await prisma.appointmentType.findFirst({ where: { id: serviceId, clinicId } });
@@ -138,6 +151,15 @@ router.put(
     const { toothFdi, procedureName, serviceId, status, notes, estimatedCost, scheduledDate } = req.body;
 
     try {
+      const tc = await prisma.treatmentCase.findFirst({
+        where: { id: caseId, clinicId, deletedAt: null },
+        select: { id: true, practitionerId: true },
+      });
+      if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+      if (req.user!.normalizedRole === 'DENTIST' && tc.practitionerId !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
       const existing = await prisma.treatmentPlanProcedure.findFirst({
         where: { id, treatmentCaseId: caseId, clinicId },
       });
@@ -193,6 +215,15 @@ router.delete(
     const id = getParam(req, 'id');
 
     try {
+      const tc = await prisma.treatmentCase.findFirst({
+        where: { id: caseId, clinicId, deletedAt: null },
+        select: { id: true, practitionerId: true },
+      });
+      if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+      if (req.user!.normalizedRole === 'DENTIST' && tc.practitionerId !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
       const existing = await prisma.treatmentPlanProcedure.findFirst({
         where: { id, treatmentCaseId: caseId, clinicId },
       });

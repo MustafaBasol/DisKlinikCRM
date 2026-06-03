@@ -1,0 +1,480 @@
+warning: in the working copy of '.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'AGENTS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'FILE_INDEX.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/01-product-brief.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/02-mvp-scope.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/03-user-roles-permissions.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/04-data-model.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/05-modules-and-pages.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/06-appointment-workflow.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/07-messaging-reminders.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/08-security-gdpr-health-data.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/09-development-roadmap.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/10-agent-task-list.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/11-ui-design-guidelines.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/12-agent-start-prompt.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/13-comptario-inspired-health-crm-design-strategy.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/15-i18n-strategy.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/16-demo-guide.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/17-security-and-demo-qa-report.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/18-mvp-freeze-notes.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/19-insurance-provision-tracking.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/20-aile-dis-adaptation-plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/21-whatsapp-n8n-clinic-integration.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/22-hostinger-vps-postgres-deploy-plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/23-finansal-yonetim-plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/24-multitenant-plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/25-multibranch-plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/26-role-permissions.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/27-sprint10-whatsapp-provider-abstraction.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/28-sprint11-whatsapp-inbox.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/29-sprint12-finance-billing-dashboard.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/30-sprint13-operational-monitoring.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/31-role-based-access-qa-sweep.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/32-whatsapp-connection-management.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/33-sprint16-meta-cloud-api.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/34-sprint17-whatsapp-ui-panel-first.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/35-docker-deploy-runbook.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/36-smoke-test-checklist.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/37-sprint21-platform-admin-panel.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/38-instagram-dm-integration.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/38-sprint22-excel-import.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/crm_improvement_plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/copy/landing-page-copy-tr.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/design/design-tokens.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/docs/antigravity-setup.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/docs/landing-page-strategy.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/implementation/acceptance-checklist.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/implementation/component-map.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/prompts/01-build-landing-page.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/landing-page/prompts/02-open-design-usage.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/top_5_critical_plan.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/whatsapp-evolution-backend-agent.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'nginx.conf', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'postcss.config.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/check_db.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma.config.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260513115238_init_postgres_baseline/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260515103000_add_whatsapp_conversation_state/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260515113000_add_whatsapp_conversation_messages/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518100000_harden_whatsapp_webhook_processing/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518103000_normalize_turkish_demo_labels/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518110000_add_patient_attachments/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518120000_add_tooth_records/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518134306_financial_management_phase1/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518141910_practitioner_earnings/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518160425_inventory_tracking/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518163834_treatment_plan_procedures/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260518180000_appointment_treatment_case_link/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260519100000_add_doctor_off_days/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260519110000_add_notifications/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260519120000_add_procedure_scheduled_date/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260520090000_multitenant_org_baseline/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260520093000_whatsapp_connection_models/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260521_sprint13_operational_monitoring/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260521_whatsapp_inbox_entry/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260524000000_sprint23_instagram_dm_integration/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260525100000_add_clinic_working_hours/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260526000000_add_meta_token_expiry/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/20260527000000_add_appointment_no_show_recovery_fields/migration.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/migrations/migration_lock.toml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/schema.prisma', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/seed.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/index.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/index.ts.bak', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/jobs/reminders.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/middleware/auth.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/middleware/clinicAccess.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/middleware/planLimits.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/middleware/platformAuth.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/appointmentRequests.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/appointments.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/attachments.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/auth.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/clinicRegistration.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/compensationRules.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/dashboard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/dentalChart.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/financeDashboard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/gdprExport.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/instagramInbox.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/instagramWebhook.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/insuranceProvisions.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/inventory.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/messages.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/metaWhatsAppWebhook.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/noShows.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/notifications.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/operationalMonitoring.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/organizationBranches.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/organizationDashboard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/organizationInstagram.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/organizationWhatsApp.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/patients.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/patientsImport.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/paymentPlans.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/payments.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/platformAdmin.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/practitionerEarnings.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/practitionerPayouts.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/publicBooking.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/reports.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/schedules.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/services.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/settings.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/tasks.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/treatmentCases.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/treatmentPlanProcedures.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/users.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/usersImport.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/whatsapp.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/whatsappInbox.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/schemas/index.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/scripts/backfill-whatsapp-connections.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/scripts/migrate-to-multibranch.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/scripts/repair-owner-admin.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/clinicOperatingPreferences.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/earningService.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/evolutionApi.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/googleAiStudio.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/instagram/InstagramMessagingProvider.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/instagram/instagramClinicResolver.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/notificationPreferences.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/operationalEventService.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/taskAssignmentNotifier.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsapp/EvolutionWhatsAppProvider.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsapp/WhatsAppProvider.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsapp/clinicResolver.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsapp/whatsappProviderFactory.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsapp/whatsappService.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsappAvailability.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsappBookingFlow.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsappClarification.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsappInterpreter.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsappPublicApi.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsappResolvedIntentRouter.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/whatsappWebhookPayload.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/dashboard.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/excelImport.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/financeDashboard.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/instagramConversion.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/instagramProvider.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/multiBranchAccess.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/noShow.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/operationalMonitoring.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/organizationDashboard.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/platformAdmin.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/scheduleAccess.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/servicePricing.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/whatsappConversationFixtures.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/whatsappInbox.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/tests/whatsappProvider.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/activity.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/auditLog.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/clinicScope.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/encryption.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/excelImport.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/helpers.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/legacyWhatsApp.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/roles.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/tenantGuard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/utils/whatsappDate.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/test_isolation.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/tsconfig.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/App.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/AppointmentForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/CalendarTimelineView.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ClinicSwitcher.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/DentalChart.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/DoctorAvailabilityManager.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/GlobalSearch.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/InsuranceProvisionForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/MessageTemplateForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/MultiDoctorDayView.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/NotificationBell.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PatientForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PatientImportModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PaymentForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PaymentPlanForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/PrepareMessageModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ReceiptModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ServiceList.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/TaskForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/TreatmentCaseForm.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/UserClinicAssignmentModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/UserImportModal.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/UserList.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/DashboardMockup.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/DemoCtaSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/FaqSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/FeatureGrid.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/HeroSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/IntegrationSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/LandingFooter.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/LandingHeader.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/MultiClinicSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/ProblemSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/PublicLanguageSelector.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/PublicThemeToggle.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/TrustSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/WorkflowSection.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/landing/landing.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/legal/LegalLayout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/legal/legal.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/context/AuthContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/context/ClinicContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/context/ClinicPreferencesContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/context/PlatformAuthContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/data/landing.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/i18n/config.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/i18n/namespaces.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/index.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/layouts/MainLayout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/layouts/PlatformAdminLayout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/appointmentRequests.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/appointments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/booking.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/branches.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/earnings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/errors.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/instagram.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/insurance.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/inventory.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/landing.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/legal.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/messageTemplates.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/messages.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/noShows.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/organization.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/platform.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/reports.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/services.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/settings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/tasks.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/treatmentCases.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/users.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/validation.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/de/whatsapp.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/appointmentRequests.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/appointments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/booking.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/branches.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/earnings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/errors.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/instagram.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/insurance.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/inventory.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/landing.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/legal.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/messageTemplates.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/messages.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/noShows.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/organization.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/platform.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/reports.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/services.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/settings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/tasks.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/treatmentCases.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/users.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/validation.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/en/whatsapp.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/appointmentRequests.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/appointments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/booking.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/branches.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/earnings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/errors.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/instagram.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/insurance.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/inventory.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/landing.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/legal.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/messageTemplates.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/messages.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/noShows.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/organization.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/platform.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/reports.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/services.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/settings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/tasks.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/treatmentCases.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/users.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/validation.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/fr/whatsapp.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/appointmentRequests.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/appointments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/auth.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/booking.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/branches.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/common.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/dashboard.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/earnings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/errors.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/instagram.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/insurance.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/inventory.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/landing.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/legal.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/messageTemplates.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/messages.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/noShows.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/organization.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/patients.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/payments.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/platform.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/reports.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/services.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/settings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/tasks.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/treatmentCases.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/users.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/validation.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/locales/tr/whatsapp.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/AppointmentDetail.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/AppointmentRequests.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Appointments.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/BookingWidget.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Branches.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/ClinicSchedule.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Dashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/FinanceDashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/InstagramConnections.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/InstagramInbox.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/InsuranceProvisionDetail.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/InsuranceProvisions.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Inventory.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/LandingPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Login.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/MessageTemplates.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Messages.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/MetaCallbackPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/MyEarnings.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/NoShows.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Operations.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/OrganizationDashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PatientDetail.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Patients.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PaymentPlans.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Payments.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PlatformAdmin.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/PractitionerEarnings.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Register.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Reports.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Settings.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Tasks.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/TreatmentCaseDetail.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/TreatmentCases.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Users.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/WhatsAppConnections.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/WhatsAppInbox.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/legal/CommunicationsNoticePage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/legal/CookiePolicyPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/legal/LegalCenterPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/legal/PrivacyNoticePage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformClinics.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformDashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformLogin.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformOrganizations.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformPlans.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformSystem.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/platform/PlatformUsers.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/services/api.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/clinicPreferences.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/darkMode.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/dateTime.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/emailVerification.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/localStorageSafe.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/logger.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/permissions.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/sessionManager.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/vite-env.d.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tailwind.config.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tsconfig.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tsconfig.node.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'vite.config.d.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'vite.config.ts', LF will be replaced by CRLF the next time Git touches it
+ .env.example                                       |   3 [32m+[m
+ .gitignore                                         |  10 [32m+[m[31m-[m
+ package-lock.json                                  |  28 [32m++[m[31m---[m
+ package.json                                       |   4 [32m+[m[31m-[m
+ server/.env.example                                |  23 [32m+++[m[31m-[m
+ server/package-lock.json                           |  25 [32m++[m[31m--[m
+ server/package.json                                |   8 [32m+[m[31m-[m
+ server/src/index.ts                                |  50 [32m+++++++[m[31m-[m
+ server/src/jobs/reminders.ts                       |  38 [32m++++[m[31m--[m
+ server/src/middleware/auth.ts                      | 101 [32m++++++++++++[m[31m---[m
+ server/src/middleware/platformAuth.ts              |  54 [32m++++++[m[31m--[m
+ server/src/routes/appointmentRequests.ts           |   8 [32m+[m[31m-[m
+ server/src/routes/appointments.ts                  |  97 [32m++++++++++[m[31m-----[m
+ server/src/routes/attachments.ts                   |  57 [32m+++++++[m[31m--[m
+ server/src/routes/auth.ts                          |  30 [32m++++[m[31m-[m
+ server/src/routes/dashboard.ts                     |  71 [32m++++++[m[31m-----[m
+ server/src/routes/dentalChart.ts                   |  14 [32m+[m[31m--[m
+ server/src/routes/instagramInbox.ts                |  38 [32m+++[m[31m---[m
+ server/src/routes/instagramWebhook.ts              |  21 [32m+++[m[31m-[m
+ server/src/routes/insuranceProvisions.ts           |   6 [32m+[m[31m-[m
+ server/src/routes/messages.ts                      |  88 [32m+++++++++++[m[31m--[m
+ server/src/routes/metaWhatsAppWebhook.ts           |  31 [32m++++[m[31m-[m
+ server/src/routes/patients.ts                      |  43 [32m+++++[m[31m--[m
+ server/src/routes/patientsImport.ts                |   8 [32m+[m[31m-[m
+ server/src/routes/payments.ts                      |  23 [32m+++[m[31m-[m
+ server/src/routes/platformAdmin.ts                 |  39 [32m+++++[m[31m-[m
+ server/src/routes/reports.ts                       |   2 [32m+[m[31m-[m
+ server/src/routes/tasks.ts                         |  13 [32m+[m[31m-[m
+ server/src/routes/treatmentCases.ts                |  56 [32m++++++++[m[31m-[m
+ server/src/routes/treatmentPlanProcedures.ts       |  39 [32m+++++[m[31m-[m
+ server/src/routes/users.ts                         |  12 [32m++[m
+ server/src/routes/usersImport.ts                   |   8 [32m+[m[31m-[m
+ server/src/routes/whatsapp.ts                      |  44 [32m++++[m[31m---[m
+ server/src/routes/whatsappInbox.ts                 |  19 [32m++[m[31m-[m
+ .../instagram/InstagramMessagingProvider.ts        |  15 [32m++[m[31m-[m
+ server/src/tests/platformAdmin.test.ts             |  35 [32m++++++[m
+ server/src/tests/whatsappConversationFixtures.ts   |   1 [32m+[m
+ server/tsconfig.json                               |   2 [32m+[m[31m-[m
+ src/App.tsx                                        | 127 [32m+++++++++++[m[31m--------[m
+ src/context/AuthContext.tsx                        |  56 [32m+++[m[31m------[m
+ src/context/PlatformAuthContext.tsx                | 129 [32m++++++++++++++[m[31m-----[m
+ src/layouts/PlatformAdminLayout.tsx                |   8 [32m+[m[31m-[m
+ src/locales/de/appointments.json                   |   1 [32m+[m
+ src/locales/de/reports.json                        |   1 [32m+[m
+ src/locales/en/reports.json                        |   1 [32m+[m
+ src/locales/fr/appointments.json                   |   1 [32m+[m
+ src/locales/fr/reports.json                        |   1 [32m+[m
+ src/locales/tr/reports.json                        |   1 [32m+[m
+ src/pages/Login.tsx                                |   2 [32m+[m[31m-[m
+ src/pages/PlatformAdmin.tsx                        |  36 [32m+++[m[31m---[m
+ src/pages/Reports.tsx                              |   3 [32m+[m[31m-[m
+ src/services/api.ts                                |  27 [32m+++[m[31m-[m
+ tatus                                              | 138 [31m---------------------[m
+ vite.config.ts                                     |  13 [32m++[m
+ 54 files changed, 1157 insertions(+), 552 deletions(-)

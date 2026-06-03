@@ -56,13 +56,13 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (token: string, user: User) => void;
+  login: (user: User) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const AUTH_VERSION = 'aile-dis-v1';
+const AUTH_VERSION = 'aile-dis-cookie-v1';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation('common');
@@ -72,35 +72,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      const savedAuthVersion = localStorage.getItem('hcrm_auth_version');
-      if (savedAuthVersion !== AUTH_VERSION) {
-        localStorage.removeItem('hcrm_token');
-        localStorage.removeItem('hcrm_user');
-        localStorage.setItem('hcrm_auth_version', AUTH_VERSION);
-        setLoading(false);
-        return;
-      }
+      localStorage.removeItem('hcrm_token');
+      localStorage.removeItem('hcrm_user');
+      localStorage.setItem('hcrm_auth_version', AUTH_VERSION);
 
-      const savedToken = localStorage.getItem('hcrm_token');
-      const savedUser = localStorage.getItem('hcrm_user');
-      
-      if (savedToken && savedUser) {
-        try {
-          // Verify token
-          const { data } = await authService.me();
-          setToken(savedToken);
-          setUser(data);
-          // Also update local storage if user details changed
-          localStorage.setItem('hcrm_user', JSON.stringify(data));
-        } catch (error) {
-          // Token invalid or expired
-          setToken(null);
-          setUser(null);
-          localStorage.removeItem('hcrm_token');
-          localStorage.removeItem('hcrm_user');
-        }
+      try {
+        const { data } = await authService.me();
+        await authService.csrf().catch(() => undefined);
+        setUser(data);
+      } catch {
+        setUser(null);
+      } finally {
+        setToken(null);
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initAuth();
@@ -110,23 +95,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       localStorage.removeItem('hcrm_token');
       localStorage.removeItem('hcrm_user');
-      // Dispatch an event for App.tsx to catch and show a toast, or we can just let ProtectedRoute handle the redirect.
-      // We will clear state, which will cause isAuthenticated to become false.
     };
 
     window.addEventListener('auth:expired', handleAuthExpired);
     return () => window.removeEventListener('auth:expired', handleAuthExpired);
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
+  const login = (newUser: User) => {
+    setToken(null);
     setUser(newUser);
-    localStorage.setItem('hcrm_token', newToken);
-    localStorage.setItem('hcrm_user', JSON.stringify(newUser));
+    localStorage.removeItem('hcrm_token');
+    localStorage.removeItem('hcrm_user');
     localStorage.setItem('hcrm_auth_version', AUTH_VERSION);
   };
 
   const logout = () => {
+    authService.logout().catch(() => undefined);
     setToken(null);
     setUser(null);
     localStorage.removeItem('hcrm_token');
@@ -145,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

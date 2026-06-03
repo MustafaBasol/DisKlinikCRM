@@ -1,7 +1,8 @@
 import express from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import dotenv from 'dotenv';
 import { authenticate } from './middleware/auth.js';
+import { csrfProtection } from './middleware/csrf.js';
 import authRoutes from './routes/auth.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import usersRoutes from './routes/users.js';
@@ -46,6 +47,8 @@ import patientsImportRoutes from './routes/patientsImport.js';
 import usersImportRoutes from './routes/usersImport.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
+import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
+import { getBearerFallbackWarnings } from './utils/authFallback.js';
 
 dotenv.config();
 
@@ -58,11 +61,51 @@ if (!isEncryptionKeyConfigured()) {
   );
 }
 
+for (const warning of getSessionCookieDeploymentWarnings()) {
+  console.warn(`[WARN] ${warning}`);
+}
+
+for (const warning of getBearerFallbackWarnings()) {
+  console.warn(`[WARN] ${warning}`);
+}
+
 const app = express();
 const port = process.env.PORT || 5000;
+const configuredCorsOrigins = (process.env.CORS_ORIGIN || process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+const allowedCorsOrigins = configuredCorsOrigins.filter(origin => origin !== '*');
 
-app.use(cors());
-app.use(express.json());
+if (configuredCorsOrigins.includes('*')) {
+  console.warn('[WARN] CORS wildcard origin is not allowed for credentialed session-cookie auth. Configure explicit origins.');
+}
+
+const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedCorsOrigins.length === 0) {
+      return callback(null, process.env.NODE_ENV !== 'production');
+    }
+    return callback(null, allowedCorsOrigins.includes(origin));
+  },
+  credentials: true,
+};
+
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
+app.use(cors(corsOptions));
+app.use(express.json({
+  limit: process.env.JSON_BODY_LIMIT || '1mb',
+  verify: (req: any, _res, buf) => {
+    req.rawBody = Buffer.from(buf);
+  },
+}));
 
 // Unprotected routes
 app.use('/api/auth', authRoutes);
@@ -79,6 +122,7 @@ app.use('/api/register', clinicRegistrationRoutes);
 
 // Global auth middleware for all /api routes below
 app.use('/api', authenticate as express.RequestHandler);
+app.use('/api', csrfProtection('clinic'));
 
 // Protected routes
 app.use('/api', patientsImportRoutes);

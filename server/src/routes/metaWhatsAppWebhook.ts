@@ -28,6 +28,7 @@ import {
   upsertInboxEntry,
 } from '../services/whatsapp/clinicResolver.js';
 import { writeAuditLog } from '../utils/auditLog.js';
+import { requireWebhookSecretInProduction } from '../utils/secrets.js';
 
 const router = express.Router();
 
@@ -77,6 +78,12 @@ function validateHubSignature(
   } catch {
     return expected === signature;
   }
+}
+
+function getRawBody(req: Request): Buffer {
+  const rawBody = (req as any).rawBody;
+  if (rawBody instanceof Buffer) return rawBody;
+  return Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
 }
 
 /**
@@ -155,7 +162,7 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
   res.status(200).json({ status: 'ok' });
 
   try {
-    const rawBody: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+    const rawBody = getRawBody(req);
     let payload: unknown;
     try {
       payload = JSON.parse(rawBody.toString('utf8'));
@@ -175,6 +182,16 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
 
     // Validate signature if secret configured
     const secret = connection.metaWebhookSecret || connection.webhookSecret;
+    if (!secret && !requireWebhookSecretInProduction(secret)) {
+      logWebhookEvent(
+        connection.organizationId,
+        connection.id,
+        'meta_webhook_no_secret_rejected',
+        'Meta webhook rejected: no webhook secret configured in production',
+        {},
+      );
+      return;
+    }
     if (secret) {
       const sig = req.headers['x-hub-signature-256'] as string | undefined;
       const valid = validateHubSignature(rawBody, sig, secret);
@@ -281,7 +298,7 @@ router.post(
     const connectionId = req.params['connectionId'] as string;
 
     try {
-      const rawBody: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+      const rawBody = getRawBody(req);
       let payload: unknown;
       try {
         payload = JSON.parse(rawBody.toString('utf8'));
@@ -303,6 +320,16 @@ router.post(
 
       // Validate signature if secret configured
       const secret = connection.metaWebhookSecret || connection.webhookSecret;
+      if (!secret && !requireWebhookSecretInProduction(secret)) {
+        logWebhookEvent(
+          connection.organizationId,
+          connection.id,
+          'meta_webhook_no_secret_rejected',
+          'Meta webhook rejected: no webhook secret configured in production',
+          { connectionId },
+        );
+        return;
+      }
       if (secret) {
         const sig = req.headers['x-hub-signature-256'] as string | undefined;
         const valid = validateHubSignature(rawBody, sig, secret);

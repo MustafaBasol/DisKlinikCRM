@@ -9,8 +9,28 @@ import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { recordOperationalEvent } from '../services/operationalEventService.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { patientContactSelect, userNameSelect, userPublicSelect } from '../utils/prismaSelects.js';
 
 const router = express.Router();
+const LOW_SENSITIVITY_CHANNELS = new Set(['sms', 'whatsapp']);
+const SENSITIVE_MESSAGE_VARIABLES = ['treatment_title', 'remaining_balance'];
+
+function dentistPatientAccessWhere(userId: string) {
+  return {
+    OR: [
+      { appointments: { some: { practitionerId: userId, deletedAt: null } } },
+      { treatmentCases: { some: { practitionerId: userId, deletedAt: null } } },
+    ],
+  };
+}
+
+function getUnsafeMessageVariable(channel: string | null | undefined, ...texts: Array<string | null | undefined>) {
+  if (!LOW_SENSITIVITY_CHANNELS.has(String(channel ?? '').toLowerCase())) return null;
+  const combined = texts.filter(Boolean).join('\n');
+  return SENSITIVE_MESSAGE_VARIABLES.find(variable =>
+    new RegExp(`{{\\s*${variable}\\s*}}`, 'i').test(combined)
+  ) ?? null;
+}
 
 function formatDateForTemplate(value: Date, preferences: ClinicOperatingPreferences): string {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -104,6 +124,13 @@ router.post('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const unsafeVariable = getUnsafeMessageVariable(validation.data.channel, validation.data.subject, validation.data.body);
+    if (unsafeVariable) {
+      return res.status(400).json({
+        error: `SMS/WhatsApp templates cannot include sensitive variable {{${unsafeVariable}}}`,
+      });
+    }
+
     const template = await prisma.messageTemplate.create({
       data: { ...validation.data, clinicId, createdById: req.user!.id },
     });
@@ -128,8 +155,21 @@ router.put('/message-templates/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const existing = await prisma.messageTemplate.findFirst({ where: { id, clinicId } });
+    if (!existing) return res.status(404).json({ error: 'Template not found' });
+
+    const nextChannel = validation.data.channel ?? existing.channel;
+    const nextSubject = validation.data.subject ?? existing.subject;
+    const nextBody = validation.data.body ?? existing.body;
+    const unsafeVariable = getUnsafeMessageVariable(nextChannel, nextSubject, nextBody);
+    if (unsafeVariable) {
+      return res.status(400).json({
+        error: `SMS/WhatsApp templates cannot include sensitive variable {{${unsafeVariable}}}`,
+      });
+    }
+
     const template = await prisma.messageTemplate.update({
-      where: { id, clinicId },
+      where: { id },
       data: validation.data,
     });
 
@@ -177,7 +217,7 @@ router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_
     {
       name: 'Payment Reminder',
       channel: 'whatsapp',
-      body: 'Hello {{patient_name}}, this is a friendly reminder regarding a pending balance of {{remaining_balance}} at {{clinic_name}}. You can settle this at your next visit or via bank transfer.',
+      body: 'Hello {{patient_name}}, this is a friendly reminder about your pending clinic balance at {{clinic_name}}. Please contact the clinic for details.',
       language: 'en',
     },
     {
@@ -212,18 +252,24 @@ router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_
 // POST /api/messages/prepare
 router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
+  const { normalizedRole, id: userId } = req.user!;
   const validation = prepareMessageSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   const { templateId, patientId, appointmentId, treatmentCaseId, paymentId, channelOverride, customSubject, customBody } = validation.data;
 
   try {
+    const patientWhere: any = { id: patientId, clinicId };
+    if (normalizedRole === 'DENTIST') {
+      Object.assign(patientWhere, dentistPatientAccessWhere(userId));
+    }
+
     const [patient, clinic, template, appointment, treatmentCase, payment] = await Promise.all([
-      prisma.patient.findFirst({ where: { id: patientId, clinicId } }),
+      prisma.patient.findFirst({ where: patientWhere, select: patientContactSelect }),
       prisma.clinic.findUnique({ where: { id: clinicId } }),
       templateId ? prisma.messageTemplate.findFirst({ where: { id: templateId, clinicId } }) : Promise.resolve(null),
       appointmentId
-        ? prisma.appointment.findFirst({ where: { id: appointmentId, clinicId, patientId }, include: { practitioner: true } })
+        ? prisma.appointment.findFirst({ where: { id: appointmentId, clinicId, patientId }, include: { practitioner: { select: userPublicSelect } } })
         : Promise.resolve(null),
       treatmentCaseId
         ? prisma.treatmentCase.findFirst({ where: { id: treatmentCaseId, clinicId, patientId } })
@@ -242,11 +288,22 @@ router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
       remainingBalance = (treatmentCase.acceptedAmount || treatmentCase.estimatedAmount || 0) - totalPaid;
     }
 
+    const channel = channelOverride || (template?.channel as any) || 'sms';
+    const unsafeVariable = getUnsafeMessageVariable(
+      channel,
+      customSubject ?? template?.subject,
+      customBody ?? template?.body,
+    );
+    if (unsafeVariable) {
+      return res.status(400).json({
+        error: `SMS/WhatsApp messages cannot include sensitive variable {{${unsafeVariable}}}`,
+      });
+    }
+
     const context = { patient, clinic, appointment, treatmentCase, payment, remainingBalance };
 
     const subject = customSubject || (template ? await renderTemplate(template.subject || '', context) : '');
     const body = customBody || (template ? await renderTemplate(template.body, context) : '');
-    const channel = channelOverride || (template?.channel as any) || 'sms';
 
     const message = await prisma.sentMessage.create({
       data: {
@@ -272,8 +329,8 @@ router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
     });
 
     res.json(message);
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+    console.error('[messages] prepare error:', error?.message ?? error);
     res.status(500).json({ error: 'Failed to prepare message' });
   }
 });
@@ -281,6 +338,7 @@ router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
 // GET /api/messages
 router.get('/messages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
+  const { normalizedRole, id: userId } = req.user!;
   const { patientId, appointmentId, treatmentCaseId, channel, status } = req.query;
 
   try {
@@ -290,10 +348,13 @@ router.get('/messages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
     if (treatmentCaseId) where.treatmentCaseId = String(treatmentCaseId);
     if (channel) where.channel = String(channel);
     if (status) where.status = String(status);
+    if (normalizedRole === 'DENTIST') {
+      where.patient = dentistPatientAccessWhere(userId);
+    }
 
     const messages = await prisma.sentMessage.findMany({
       where,
-      include: { patient: true, createdBy: true },
+      include: { patient: { select: patientContactSelect }, createdBy: { select: userNameSelect } },
       orderBy: { createdAt: 'desc' },
     });
     res.json(messages);
@@ -306,11 +367,16 @@ router.get('/messages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
 router.get('/messages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const clinicId = req.user!.clinicId;
+  const { normalizedRole, id: userId } = req.user!;
 
   try {
+    const where: any = { id, clinicId };
+    if (normalizedRole === 'DENTIST') {
+      where.patient = dentistPatientAccessWhere(userId);
+    }
     const message = await prisma.sentMessage.findFirst({
-      where: { id, clinicId },
-      include: { patient: true, createdBy: true, template: true },
+      where,
+      include: { patient: { select: patientContactSelect }, createdBy: { select: userNameSelect }, template: true },
     });
     if (!message) return res.status(404).json({ error: 'Message not found' });
     res.json(message);
@@ -327,7 +393,7 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
   try {
     const message = await prisma.sentMessage.findFirst({
       where: { id, clinicId },
-      include: { patient: true },
+      include: { patient: { select: patientContactSelect } },
     });
     if (!message) return res.status(404).json({ error: 'Message not found' });
     if (message.status !== 'prepared') {

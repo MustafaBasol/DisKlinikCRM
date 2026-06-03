@@ -6,6 +6,8 @@ import {
   generatePlatformToken,
   PlatformAdminRequest,
 } from '../middleware/platformAuth.js';
+import { csrfProtection } from '../middleware/csrf.js';
+import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 
 const router = express.Router();
 
@@ -40,9 +42,17 @@ router.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = generatePlatformToken({ id: admin.id, email: admin.email });
+    const sessionId = createSessionId();
+    const token = generatePlatformToken({
+      id: admin.id,
+      email: admin.email,
+      sessionId,
+      sessionType: 'platform',
+    });
+    const csrfToken = issueSessionCookies(res, 'platform', token, sessionId);
+
     res.json({
-      token,
+      csrfToken,
       admin: { id: admin.id, name: admin.name, email: admin.email, createdAt: admin.createdAt },
     });
   } catch {
@@ -50,8 +60,31 @@ router.post('/auth/login', async (req, res) => {
   }
 });
 
+// GET /api/platform/auth/csrf
+router.get('/auth/csrf', authenticatePlatformAdmin as express.RequestHandler, (req: PlatformAdminRequest, res) => {
+  const sessionId = req.platformAdmin?.sessionId;
+  if (!sessionId) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid session' });
+  }
+
+  const csrfToken = createCsrfToken('platform', sessionId);
+  setCsrfCookie(res, 'platform', csrfToken);
+  res.json({ csrfToken });
+});
+
+// POST /api/platform/auth/logout
+router.post(
+  '/auth/logout',
+  authenticatePlatformAdmin as express.RequestHandler,
+  csrfProtection('platform'),
+  (_req: PlatformAdminRequest, res) => {
+    clearAuthCookies(res, 'platform');
+    res.json({ success: true });
+  },
+);
+
 // All routes below require platform admin auth
-router.use(authenticatePlatformAdmin as express.RequestHandler);
+router.use(authenticatePlatformAdmin as express.RequestHandler, csrfProtection('platform'));
 
 // GET /api/platform/me
 router.get('/me', async (req: PlatformAdminRequest, res: Response) => {

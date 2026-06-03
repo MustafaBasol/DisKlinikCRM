@@ -2,8 +2,10 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
 import { authenticate, generateToken, AuthRequest } from '../middleware/auth.js';
+import { csrfProtection } from '../middleware/csrf.js';
 import { logActivity } from '../utils/activity.js';
 import { checkLoginAttempt, recordLoginAttempt, resetLoginAttempts } from '../utils/helpers.js';
+import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import {
   normalizeRole,
   canAccessOrganizationDashboard,
@@ -61,6 +63,7 @@ router.post('/login', async (req, res) => {
     const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);
     const canAccessAllClinics = user.canAccessAllClinics;
 
+    const sessionId = createSessionId();
     const token = generateToken({
       id: user.id,
       clinicId: user.defaultClinicId ?? allowedClinicIds[0] ?? user.clinicId,
@@ -68,7 +71,9 @@ router.post('/login', async (req, res) => {
       allowedClinicIds,
       canAccessAllClinics,
       role: user.role,
+      sessionId,
     });
+    const csrfToken = issueSessionCookies(res, 'clinic', token, sessionId);
 
     await logActivity({
       clinicId: user.clinicId,
@@ -80,7 +85,7 @@ router.post('/login', async (req, res) => {
     });
 
     res.json({
-      token,
+      csrfToken,
       user: {
         id: user.id,
         firstName: user.firstName,
@@ -102,6 +107,29 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
+// GET /api/auth/csrf
+router.get('/csrf', authenticate as express.RequestHandler, (req: AuthRequest, res) => {
+  const sessionId = req.user?.sessionId;
+  if (!sessionId) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid session' });
+  }
+
+  const csrfToken = createCsrfToken('clinic', sessionId);
+  setCsrfCookie(res, 'clinic', csrfToken);
+  res.json({ csrfToken });
+});
+
+// POST /api/auth/logout
+router.post(
+  '/logout',
+  authenticate as express.RequestHandler,
+  csrfProtection('clinic'),
+  (_req: AuthRequest, res) => {
+    clearAuthCookies(res, 'clinic');
+    res.json({ success: true });
+  },
+);
 
 // GET /api/auth/me
 router.get('/me', authenticate as express.RequestHandler, async (req: AuthRequest, res) => {

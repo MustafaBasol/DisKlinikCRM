@@ -325,7 +325,7 @@ router.get('/reports/doctor-performance', authorize(['OWNER', 'ORG_ADMIN', 'CLIN
     res.json({ dateFrom: from.toISOString(), dateTo: to.toISOString(), doctors: results });
   } catch (err: any) {
     console.error('Doctor performance report error:', err?.message ?? err);
-    res.status(500).json({ error: 'Failed to generate doctor performance report', detail: err?.message });
+    res.status(500).json({ error: 'Failed to generate doctor performance report' });
   }
 });
 

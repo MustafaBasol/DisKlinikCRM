@@ -5,6 +5,8 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { insuranceProvisionSchema, insuranceProvisionUpdateSchema, insuranceStatusSchema } from '../schemas/index.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { userNameSelect } from '../utils/prismaSelects.js';
+import { findUserAssignedToClinic } from '../utils/relationGuards.js';
 
 const router = express.Router();
 
@@ -41,7 +43,7 @@ async function validateInsuranceRelations(data: any, clinicId: string) {
   }
 
   if (data.assignedToId) {
-    const assignee = await prisma.user.findFirst({ where: { id: data.assignedToId, clinicId, isActive: true } });
+    const assignee = await findUserAssignedToClinic(data.assignedToId, clinicId);
     if (!assignee) return { error: 'Invalid assignee' };
   }
 
@@ -89,7 +91,7 @@ router.get('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
       where,
       include: {
         ...insuranceInclude,
-        activityLogs: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+        activityLogs: { include: { user: { select: userNameSelect } }, orderBy: { createdAt: 'desc' } },
       },
     });
 
