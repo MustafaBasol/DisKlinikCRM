@@ -1516,6 +1516,47 @@ const run = async () => {
     assert.match(JSON.stringify(result.error?.format() ?? {}), /Preferred end time must be after preferred start time/);
   });
 
+  // ── Türkçe sözel saat ifadeleri ─────────────────────────────────────────────
+
+  await runFixture('interpreter parses "öğleden sonra iki buçuk ve sonrası" as afterTimeMinutes 14:30', () => {
+    const result = interpretTimeRequest('öğleden sonra iki buçuk ve sonrası uygun benim için');
+    assert.equal(result.afterTimeMinutes, 14 * 60 + 30, 'afterTimeMinutes 870 olmalı (14:30)');
+    assert.equal(result.exactTime, null, 'exactTime null olmalı');
+    assert.equal(result.preference, 'afternoon');
+  });
+
+  await runFixture('interpreter parses "öğleden sonra iki buçuk" as exactTime 14:30', () => {
+    const result = interpretTimeRequest('öğleden sonra iki buçuk uygun');
+    assert.equal(result.exactTime, '14:30');
+    assert.equal(result.afterTimeMinutes, null);
+  });
+
+  await runFixture('interpreter parses "öğleden sonra üç" as exactTime 15:00', () => {
+    const result = interpretTimeRequest('öğleden sonra üç gibi gelebilirim');
+    assert.equal(result.exactTime, '15:00');
+  });
+
+  await runFixture('interpreter parses "sabah sekiz" as exactTime 08:00', () => {
+    const result = interpretTimeRequest('sabah sekiz gibi gelebilirim');
+    assert.equal(result.exactTime, '08:00');
+    assert.equal(result.preference, 'morning');
+  });
+
+  await runFixture('interpreter parses "üç buçuk sonrası" as afterTimeMinutes 15:30 without PM context', () => {
+    const result = interpretTimeRequest('üç buçuk sonrası uygun benim için');
+    assert.equal(result.afterTimeMinutes, 3 * 60 + 30);
+  });
+
+  await runFixture('interpreter parses "öğleden sonra dört buçuktan sonra" as afterTimeMinutes 16:30', () => {
+    const result = interpretTimeRequest('öğleden sonra dört buçuktan sonra olur');
+    assert.equal(result.afterTimeMinutes, 16 * 60 + 30);
+  });
+
+  await runFixture('interpreter parses "on dört buçuk" as exactTime 14:30 without needing PM context', () => {
+    const result = interpretTimeRequest('on dört buçukta gelebilirim');
+    assert.equal(result.exactTime, '14:30');
+  });
+
   console.log('All WhatsApp conversation fixtures passed.');
 };
 
