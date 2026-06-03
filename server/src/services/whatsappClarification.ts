@@ -1,11 +1,16 @@
 import type { TimePreference } from './whatsappInterpreter.js';
 
 export type ClarificationIntent =
+  | 'greeting'
   | 'book_appointment'
+  | 'appointment_query'
   | 'check_appointment'
   | 'cancel_appointment'
+  | 'human_handoff'
+  | 'clinic_info'
   | 'service_info'
-  | 'greeting'
+  | 'symptom_or_complaint'
+  | 'off_topic_or_smalltalk'
   | 'unknown';
 
 export type ClarificationExtraction = {
