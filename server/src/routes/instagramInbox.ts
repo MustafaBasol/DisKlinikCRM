@@ -29,6 +29,8 @@ import {
   canReplyInstagramMessages,
 } from '../utils/roles.js';
 import { sendMessage } from '../services/instagram/InstagramMessagingProvider.js';
+import { findPatientInClinic, findUserAssignedToClinic } from '../utils/relationGuards.js';
+import { patientContactSelect } from '../utils/prismaSelects.js';
 
 const router = express.Router();
 
@@ -184,11 +186,8 @@ router.post(
 
       // If patientId provided, verify it belongs to the org
       if (patientId) {
-        const patient = await prisma.patient.findFirst({
-          where: { id: patientId, organizationId: user.organizationId },
-          select: { id: true },
-        });
-        if (!patient) return res.status(404).json({ error: 'Patient not found' });
+        const patient = await findPatientInClinic(patientId, clinicId);
+        if (!patient) return res.status(404).json({ error: 'Patient not found in this clinic' });
       }
 
       await prisma.instagramInboxEntry.update({
@@ -239,18 +238,14 @@ router.post(
 
     try {
       // Cross-org guard
-      const [entry, patient] = await Promise.all([
-        prisma.instagramInboxEntry.findFirst({
-          where: { id, organizationId: user.organizationId },
-          select: { id: true },
-        }),
-        prisma.patient.findFirst({
-          where: { id: patientId, organizationId: user.organizationId },
-          select: { id: true },
-        }),
-      ]);
+      const entry = await prisma.instagramInboxEntry.findFirst({
+        where: { id, organizationId: user.organizationId },
+        select: { id: true, clinicId: true },
+      });
 
       if (!entry) return res.status(404).json({ error: 'Inbox entry not found' });
+      if (!entry.clinicId) return res.status(400).json({ error: 'Conversation must be assigned to a clinic before linking a patient' });
+      const patient = await findPatientInClinic(patientId, entry.clinicId);
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
       await prisma.instagramInboxEntry.update({
@@ -556,11 +551,11 @@ router.post(
       if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
       // Validate patient
-      const patient = await prisma.patient.findFirst({
-        where: { id: patientId, organizationId: user.organizationId, deletedAt: null },
-        select: { id: true, firstName: true, lastName: true },
-      });
-      if (!patient) return res.status(404).json({ error: 'Patient not found' });
+      const patient = await findPatientInClinic(patientId, clinicId);
+      if (!patient) return res.status(404).json({ error: 'Patient not found in this clinic' });
+
+      const practitioner = await findUserAssignedToClinic(practitionerId, clinicId, { roles: ['DENTIST'] });
+      if (!practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
 
       // Validate appointment type
       const apptType = await prisma.appointmentType.findFirst({
@@ -610,7 +605,7 @@ router.post(
           createdById: user.id,
         },
         include: {
-          patient: true,
+          patient: { select: patientContactSelect },
           practitioner: { select: { id: true, firstName: true, lastName: true } },
           appointmentType: true,
         },
@@ -676,4 +671,3 @@ router.patch(
 );
 
 export default router;
-

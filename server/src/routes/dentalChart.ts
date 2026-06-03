@@ -17,7 +17,7 @@ const VALID_STATUS = new Set(['planned', 'treated', 'issue', 'missing', 'crown',
 // GET /api/patients/:patientId/dental-chart
 router.get(
   '/patients/:patientId/dental-chart',
-  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const clinicId = req.user!.clinicId;
@@ -34,8 +34,8 @@ router.get(
         orderBy: { toothFdi: 'asc' },
       });
       res.json(records);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('[dental-chart] list error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to fetch dental chart' });
     }
   },
@@ -95,8 +95,8 @@ router.put(
       });
 
       res.json(record);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('[dental-chart] save error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to save tooth record' });
     }
   },
@@ -135,8 +135,8 @@ router.delete(
       });
 
       res.json({ success: true });
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('[dental-chart] delete error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to delete tooth record' });
     }
   },

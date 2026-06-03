@@ -7,6 +7,11 @@ import { treatmentCaseSchema } from '../schemas/index.js';
 import { generateEarningFromTreatmentCase } from '../services/earningService.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import {
+  findAppointmentTypeInClinic,
+  findPatientInClinic,
+  findUserAssignedToClinic,
+} from '../utils/relationGuards.js';
 
 const router = express.Router();
 
@@ -22,7 +27,7 @@ const treatmentCaseInclude = {
 };
 
 // GET /api/treatment-cases
-router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
+router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { normalizedRole, id: userId } = req.user!;
   const { status, patientId, practitionerId, clinicId: selectedClinicId } = req.query;
 
@@ -51,7 +56,7 @@ router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
 });
 
 // GET /api/treatment-cases/:id
-router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
+router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const { normalizedRole, id: userId } = req.user!;
 
@@ -98,13 +103,16 @@ router.post('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
     if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
     const practitionerId = validation.data.practitionerId ?? undefined;
-    const [patient, practitioner] = await Promise.all([
-      prisma.patient.findFirst({ where: { id: validation.data.patientId, organizationId: req.user!.organizationId, deletedAt: null } }),
-      practitionerId ? prisma.user.findFirst({ where: { id: practitionerId, clinicId, role: 'doctor' } }) : Promise.resolve(null),
+    const appointmentTypeId = validation.data.appointmentTypeId ?? undefined;
+    const [patient, practitioner, appointmentType] = await Promise.all([
+      findPatientInClinic(validation.data.patientId, clinicId),
+      practitionerId ? findUserAssignedToClinic(practitionerId, clinicId, { roles: ['DENTIST'] }) : Promise.resolve(null),
+      appointmentTypeId ? findAppointmentTypeInClinic(appointmentTypeId, clinicId) : Promise.resolve(null),
     ]);
 
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
     if (practitionerId && !practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
+    if (appointmentTypeId && !appointmentType) return res.status(400).json({ error: 'Invalid appointment type' });
 
     const tc = await prisma.treatmentCase.create({
       data: {
@@ -152,6 +160,28 @@ router.put('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
     if (normalizedRole === 'DENTIST' && existing.practitionerId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
+
+    const nextPatientId = validation.data.patientId ?? existing.patientId;
+    const nextPractitionerId = validation.data.practitionerId === undefined
+      ? existing.practitionerId
+      : validation.data.practitionerId;
+    const nextAppointmentTypeId = validation.data.appointmentTypeId === undefined
+      ? existing.appointmentTypeId
+      : validation.data.appointmentTypeId;
+
+    if (normalizedRole === 'DENTIST' && nextPractitionerId !== userId) {
+      return res.status(403).json({ error: 'Doctors cannot reassign treatment cases' });
+    }
+
+    const [patient, practitioner, appointmentType] = await Promise.all([
+      findPatientInClinic(nextPatientId, clinicId),
+      nextPractitionerId ? findUserAssignedToClinic(nextPractitionerId, clinicId, { roles: ['DENTIST'] }) : Promise.resolve(null),
+      nextAppointmentTypeId ? findAppointmentTypeInClinic(nextAppointmentTypeId, clinicId) : Promise.resolve(null),
+    ]);
+
+    if (!patient) return res.status(400).json({ error: 'Invalid patient' });
+    if (nextPractitionerId && !practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
+    if (nextAppointmentTypeId && !appointmentType) return res.status(400).json({ error: 'Invalid appointment type' });
 
     const updated = await prisma.treatmentCase.update({
       where: { id },
@@ -207,7 +237,7 @@ async function checkAndNotifyLowStock(clinicId: string, itemId: string) {
 }
 
 // GET /api/treatment-cases/:id/materials
-router.get('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
+router.get('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = String(getParam(req, 'id'));
   try {
     const accessibleIds = await getAccessibleClinicIds(req.user!);
@@ -216,6 +246,9 @@ router.get('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', 'C
     // Validate treatment case belongs to accessible clinic
     const tc = await prisma.treatmentCase.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+    if (req.user!.normalizedRole === 'DENTIST' && tc.practitionerId !== req.user!.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const clinicId = tc.clinicId;
 
     const materials = await prisma.inventoryTransaction.findMany({
@@ -247,6 +280,9 @@ router.post('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', '
 
     const tc = await prisma.treatmentCase.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+    if (req.user!.normalizedRole === 'DENTIST' && tc.practitionerId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const clinicId = tc.clinicId;
 
     const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, clinicId, isActive: true } });
@@ -310,6 +346,14 @@ router.delete('/treatment-cases/:id/materials/:txId', authorize(['OWNER', 'ORG_A
     });
     if (!tx) return res.status(404).json({ error: 'Material record not found' });
     const clinicId = tx.clinicId;
+
+    if (req.user!.normalizedRole === 'DENTIST') {
+      const tc = await prisma.treatmentCase.findFirst({
+        where: { id, clinicId, practitionerId: userId },
+        select: { id: true },
+      });
+      if (!tc) return res.status(403).json({ error: 'Forbidden' });
+    }
 
     // Restore stock
     await prisma.inventoryItem.update({

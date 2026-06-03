@@ -29,6 +29,7 @@ import {
   upsertInstagramInboxEntry,
 } from '../services/instagram/instagramClinicResolver.js';
 import { writeAuditLog } from '../utils/auditLog.js';
+import { requireWebhookSecretInProduction } from '../utils/secrets.js';
 
 const router = express.Router();
 
@@ -73,6 +74,12 @@ function validateHubSignature(
   } catch {
     return expected === signature;
   }
+}
+
+function getRawBody(req: Request): Buffer {
+  const rawBody = (req as any).rawBody;
+  if (rawBody instanceof Buffer) return rawBody;
+  return req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
 }
 
 /** Find Instagram connection by instagramAccountId matching the recipient in the payload. */
@@ -146,7 +153,7 @@ router.post(
 
     let rawBody: Buffer;
     try {
-      rawBody = req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
+      rawBody = getRawBody(req);
       const body = JSON.parse(rawBody.toString());
       await handleInstagramWebhookPayload(body, req.headers['x-hub-signature-256'] as string | undefined, rawBody);
     } catch {
@@ -166,7 +173,7 @@ router.post(
     const connectionId = req.params["connectionId"] as string;
 
     try {
-      const rawBody = req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
+      const rawBody = getRawBody(req);
       const body = JSON.parse(rawBody.toString());
 
       const conn = await prisma.instagramConnection.findUnique({
@@ -184,6 +191,11 @@ router.post(
 
       // Validate signature if secret is configured
       const sig = req.headers['x-hub-signature-256'] as string | undefined;
+      if (!conn.webhookSecret && !requireWebhookSecretInProduction(conn.webhookSecret)) {
+        logWebhookEvent(conn.organizationId, conn.id, 'instagram_webhook_no_secret_rejected',
+          'Instagram webhook rejected: no webhook secret configured in production');
+        return;
+      }
       if (conn.webhookSecret) {
         const valid = validateHubSignature(rawBody, sig, conn.webhookSecret);
         if (valid === false) {
@@ -221,6 +233,11 @@ async function handleInstagramWebhookPayload(
   }
 
   // Validate signature if secret is configured
+  if (!conn.webhookSecret && !requireWebhookSecretInProduction(conn.webhookSecret)) {
+    logWebhookEvent(conn.organizationId, conn.id, 'instagram_webhook_no_secret_rejected',
+      'Instagram webhook rejected: no webhook secret configured in production');
+    return;
+  }
   if (conn.webhookSecret) {
     const valid = validateHubSignature(rawBody, signature, conn.webhookSecret);
     if (valid === false) {

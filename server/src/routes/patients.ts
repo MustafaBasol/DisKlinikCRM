@@ -6,12 +6,14 @@ import { getParam } from '../utils/helpers.js';
 import { patientSchema, patientUpdateSchema } from '../schemas/index.js';
 import { checkPatientLimit } from '../middleware/planLimits.js';
 import { validateAndGetScope, resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { patientListSelect, userNameRoleSelect, userNameSelect } from '../utils/prismaSelects.js';
 
 const router = express.Router();
 
 // GET /api/patients
 router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { search, status, source, includeArchived, clinicId: selectedClinicId } = req.query;
+  const { normalizedRole, id: userId } = req.user!;
 
   try {
     const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
@@ -36,11 +38,23 @@ router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
 
     if (source) where.source = String(source);
 
-    const patients = await prisma.patient.findMany({ where, orderBy: { createdAt: 'desc' } });
+    if (normalizedRole === 'DENTIST') {
+      where.AND = [
+        ...(where.AND ?? []),
+        {
+          OR: [
+            { appointments: { some: { practitionerId: userId, deletedAt: null } } },
+            { treatmentCases: { some: { practitionerId: userId, deletedAt: null } } },
+          ],
+        },
+      ];
+    }
+
+    const patients = await prisma.patient.findMany({ where, select: patientListSelect, orderBy: { createdAt: 'desc' } });
     res.json(patients);
   } catch (err: any) {
     console.error('[patients] list error:', err?.message ?? err);
-    res.status(500).json({ error: 'Failed to fetch patients', detail: err?.message });
+    res.status(500).json({ error: 'Failed to fetch patients' });
   }
 });
 
@@ -48,21 +62,30 @@ router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
 router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const orgId = req.user!.organizationId;
+  const { normalizedRole, id: userId } = req.user!;
 
   try {
+    const patientWhere: any = { id, organizationId: orgId, deletedAt: null };
+    if (normalizedRole === 'DENTIST') {
+      patientWhere.OR = [
+        { appointments: { some: { practitionerId: userId, deletedAt: null } } },
+        { treatmentCases: { some: { practitionerId: userId, deletedAt: null } } },
+      ];
+    }
+
     const patient = await prisma.patient.findFirst({
-      where: { id, organizationId: orgId, deletedAt: null },
+      where: patientWhere,
       include: {
         appointments: {
-          include: { practitioner: true, appointmentType: true },
+          include: { practitioner: { select: userNameSelect }, appointmentType: true },
           orderBy: { startTime: 'desc' },
         },
         activityLogs: {
-          include: { user: true },
+          include: { user: { select: userNameSelect } },
           orderBy: { createdAt: 'desc' },
         },
         insuranceProvisions: {
-          include: { treatmentCase: true, assignedTo: true },
+          include: { treatmentCase: true, assignedTo: { select: userNameRoleSelect } },
           orderBy: { updatedAt: 'desc' },
         },
         treatmentCases: {
@@ -128,7 +151,7 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
     res.json({ ...patient, treatmentCases: treatmentCasesEnriched, toothRecords, whatsappConversationMessages });
   } catch (err: any) {
     console.error('[patients/:id] error:', err?.message ?? err);
-    res.status(500).json({ error: 'Failed to fetch patient', detail: err?.message });
+    res.status(500).json({ error: 'Failed to fetch patient' });
   }
 });
 
@@ -152,7 +175,7 @@ router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'REC
     res.json(patient);
   } catch (err: any) {
     console.error('[patients] create error:', err?.message ?? err);
-    res.status(500).json({ error: 'Failed to create patient', detail: err?.message });
+    res.status(500).json({ error: 'Failed to create patient' });
   }
 });
 
@@ -194,7 +217,7 @@ router.put('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
     res.json(patient);
   } catch (err: any) {
     console.error('[patients] update error:', err?.message ?? err);
-    res.status(500).json({ error: 'Failed to update patient', detail: err?.message });
+    res.status(500).json({ error: 'Failed to update patient' });
   }
 });
 
@@ -229,7 +252,7 @@ router.delete('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
     res.json({ message: 'Patient archived successfully' });
   } catch (err: any) {
     console.error('[patients] archive error:', err?.message ?? err);
-    res.status(500).json({ error: 'Failed to archive patient', detail: err?.message });
+    res.status(500).json({ error: 'Failed to archive patient' });
   }
 });
 

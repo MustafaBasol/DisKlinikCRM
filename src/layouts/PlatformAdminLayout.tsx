@@ -14,6 +14,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { usePlatformAuth } from '../context/PlatformAuthContext';
 
 type NavItem = { path: string; icon: React.ReactNode; labelKey: string };
 
@@ -30,14 +31,11 @@ const PlatformAdminLayout: React.FC = () => {
   const { t } = useTranslation('platform');
   const location = useLocation();
   const navigate = useNavigate();
+  const { admin, logout } = usePlatformAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const adminRaw = localStorage.getItem('platform_admin');
-  const admin = adminRaw ? JSON.parse(adminRaw) : null;
-
   const handleLogout = () => {
-    localStorage.removeItem('platform_token');
-    localStorage.removeItem('platform_admin');
+    logout();
     navigate('/platform/login');
   };
 

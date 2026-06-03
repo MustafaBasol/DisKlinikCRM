@@ -19,6 +19,41 @@ const ALLOWED_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
+const ALLOWED_EXTENSIONS_BY_MIME: Record<string, string[]> = {
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/gif': ['.gif'],
+  'image/webp': ['.webp'],
+  'application/pdf': ['.pdf'],
+  'application/msword': ['.doc'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+};
+
+function hasMagic(bytes: Buffer, magic: number[]) {
+  return magic.every((value, index) => bytes[index] === value);
+}
+
+function detectMimeFromSignature(filePath: string): string | null {
+  const bytes = fs.readFileSync(filePath).subarray(0, 16);
+  if (hasMagic(bytes, [0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (hasMagic(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  if (bytes.subarray(0, 6).toString('ascii') === 'GIF87a' || bytes.subarray(0, 6).toString('ascii') === 'GIF89a') return 'image/gif';
+  if (bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  if (bytes.subarray(0, 5).toString('ascii') === '%PDF-') return 'application/pdf';
+  if (hasMagic(bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return 'application/msword';
+  if (hasMagic(bytes, [0x50, 0x4b, 0x03, 0x04])) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  return null;
+}
+
+function isAllowedFileSignature(filePath: string, declaredMime: string, originalName: string) {
+  const ext = path.extname(originalName).toLowerCase();
+  const allowedExts = ALLOWED_EXTENSIONS_BY_MIME[declaredMime] ?? [];
+  if (!allowedExts.includes(ext)) return false;
+
+  const detectedMime = detectMimeFromSignature(filePath);
+  return detectedMime === declaredMime;
+}
+
 const storage = multer.diskStorage({
   destination: (req: any, _file, cb) => {
     // req.user is populated by authenticate middleware before this point
@@ -65,7 +100,7 @@ function handleUpload(req: AuthRequest, res: Response, next: NextFunction) {
       });
     }
     console.error('[attachments] upload middleware error:', err?.message ?? err);
-    return res.status(500).json({ error: 'Yükleme başlatılamadı', detail: err?.message });
+    return res.status(500).json({ error: 'Yükleme başlatılamadı' });
   });
 }
 
@@ -97,6 +132,14 @@ router.post(
         return res.status(404).json({ error: 'Patient not found' });
       }
 
+      if (!isAllowedFileSignature(req.file.path, req.file.mimetype, req.file.originalname)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({
+          error: 'Dosya içeriği doğrulanamadı',
+          detail: 'Dosya uzantısı, MIME tipi veya dosya imzası desteklenen türlerle eşleşmiyor',
+        });
+      }
+
       const attachment = await prisma.patientAttachment.create({
         data: {
           clinicId,
@@ -126,7 +169,7 @@ router.post(
     } catch (err: any) {
       if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       console.error('[attachments] upload error:', err?.message ?? err);
-      res.status(500).json({ error: 'Failed to upload attachment', detail: err?.message });
+      res.status(500).json({ error: 'Failed to upload attachment' });
     }
   },
 );
@@ -134,7 +177,7 @@ router.post(
 // ── GET /api/patients/:patientId/attachments ──────────────────────────
 router.get(
   '/patients/:patientId/attachments',
-  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const clinicId = req.user!.clinicId;
@@ -148,7 +191,7 @@ router.get(
       res.json(attachments);
     } catch (err: any) {
       console.error('[attachments] list error:', err?.message ?? err);
-      res.status(500).json({ error: 'Failed to fetch attachments', detail: err?.message });
+      res.status(500).json({ error: 'Failed to fetch attachments' });
     }
   },
 );
@@ -156,7 +199,7 @@ router.get(
 // ── GET /api/patients/:patientId/attachments/:id/download ─────────────
 router.get(
   '/patients/:patientId/attachments/:id/download',
-  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']),
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
@@ -174,7 +217,7 @@ router.get(
       fs.createReadStream(attachment.filePath).pipe(res as any);
     } catch (err: any) {
       console.error('[attachments] download error:', err?.message ?? err);
-      res.status(500).json({ error: 'Failed to download attachment', detail: err?.message });
+      res.status(500).json({ error: 'Failed to download attachment' });
     }
   },
 );
@@ -214,7 +257,7 @@ router.delete(
       res.json({ success: true });
     } catch (err: any) {
       console.error('[attachments] delete error:', err?.message ?? err);
-      res.status(500).json({ error: 'Failed to delete attachment', detail: err?.message });
+      res.status(500).json({ error: 'Failed to delete attachment' });
     }
   },
 );

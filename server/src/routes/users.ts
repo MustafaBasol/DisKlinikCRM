@@ -63,6 +63,11 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
     return res.status(400).json({ error: validation.error.format() });
   }
 
+  const passwordValidation = validatePassword(validation.data.password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ error: 'Password does not meet security requirements', details: passwordValidation.errors });
+  }
+
   try {
     const existing = await prisma.user.findFirst({ where: { email: validation.data.email, clinicId } });
     if (existing) return res.status(409).json({ error: 'Email is already in use in this clinic' });
@@ -111,6 +116,13 @@ router.put('/users/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), as
       }
     }
     return res.status(400).json({ error: validation.error.format() });
+  }
+
+  if (validation.data.password) {
+    const passwordValidation = validatePassword(validation.data.password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: 'Password does not meet security requirements', details: passwordValidation.errors });
+    }
   }
 
   try {

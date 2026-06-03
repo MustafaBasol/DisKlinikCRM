@@ -344,12 +344,22 @@ const formatWarmPrompt = (message: string, customerName?: string | null) => {
   return `${firstName}, ${message.charAt(0).toLocaleLowerCase('tr-TR')}${message.slice(1)}`;
 };
 
+const redactPhone = (phone: string | null | undefined) => {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  if (digits.length <= 4) return '***';
+  return `***${digits.slice(-4)}`;
+};
+
+const summarizeTextForLog = (text: string | null | undefined) => ({
+  length: String(text ?? '').length,
+});
+
 const logGlobalIntent = (phone: string, text: string, previousStep: string | null | undefined, globalIntent: string) => {
-  console.log('[whatsapp-assistant] global-intent', { phone, text, previousStep: previousStep ?? null, globalIntent });
+  console.log('[whatsapp-assistant] global-intent', { phone: redactPhone(phone), text: summarizeTextForLog(text), previousStep: previousStep ?? null, globalIntent });
 };
 
 const logStateTransition = (phone: string, fromStep: string | null | undefined, toStep: string | null | undefined, reason: string) => {
-  console.log('[whatsapp-assistant] state-transition', { phone, fromStep: fromStep ?? null, toStep: toStep ?? null, reason });
+  console.log('[whatsapp-assistant] state-transition', { phone: redactPhone(phone), fromStep: fromStep ?? null, toStep: toStep ?? null, reason });
 };
 
 const logAvailabilitySave = (totalSlots: number, shownSlots: number) => {
@@ -1021,7 +1031,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       });
       if (directAppts.length === 1) {
         targetAppointment = directAppts[0];
-        console.log(`[reminders] Reminder confirmation matched via direct appointment lookup for ${inputPhone} (apptId=${directAppts[0].id})`);
+        console.log(`[reminders] Reminder confirmation matched via direct appointment lookup for ${redactPhone(inputPhone)} (apptId=${directAppts[0].id})`);
       }
     }
 
@@ -1049,7 +1059,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
             metadata: { source: 'whatsapp_reminder_reply', phone: inputPhone },
           });
         }
-        console.log(`[reminders] Appointment ${targetAppointment.id} confirmed via WhatsApp reply from ${inputPhone}`);
+        console.log(`[reminders] Appointment ${targetAppointment.id} confirmed via WhatsApp reply from ${redactPhone(inputPhone)}`);
         await upsertWhatsAppConversationState(clinic.id, inputPhone, { customerName, step: null, currentIntent: null, lastMessage: input.text });
         return `Teşekkürler! ${apptLabel} tarihli ${serviceName} randevunuz onaylandı. Görüşmek üzere! 😊`;
       } else {
@@ -1073,7 +1083,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
             metadata: { source: 'whatsapp_reminder_reply', phone: inputPhone },
           });
         }
-        console.log(`[reminders] Appointment ${targetAppointment.id} cancelled via WhatsApp reply from ${inputPhone}`);
+        console.log(`[reminders] Appointment ${targetAppointment.id} cancelled via WhatsApp reply from ${redactPhone(inputPhone)}`);
         await upsertWhatsAppConversationState(clinic.id, inputPhone, { customerName, step: null, currentIntent: null, lastMessage: input.text });
         return `Anladım, ${apptLabel} tarihli randevunuzu iptal ettim. Yeni bir randevu almak isterseniz "randevu al" yazabilirsiniz.`;
       }
@@ -1081,8 +1091,8 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
   // ── END REMINDER CONFIRMATION ──
 
-  console.log('[whatsapp-assistant] route-start', { phone: input.phone, text: input.text, previousStep: state?.step ?? null });
-  console.info('[whatsapp-assistant] incoming', { phone: input.phone, text: input.text.slice(0, 200) });
+  console.log('[whatsapp-assistant] route-start', { phone: redactPhone(input.phone), text: summarizeTextForLog(input.text), previousStep: state?.step ?? null });
+  console.info('[whatsapp-assistant] incoming', { phone: redactPhone(input.phone), text: summarizeTextForLog(input.text) });
 
   if (isMainMenuCommand(input.text)) {
     logGlobalIntent(input.phone, input.text, currentStep, 'main_menu');
@@ -1219,7 +1229,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if (!existingPatient && currentStep !== 'awaiting_name') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'awaiting_name', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_name', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     await upsertWhatsAppConversationState(clinic.id, input.phone, {
       customerName: null, currentIntent: null, step: 'awaiting_name',
       selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedPractitionerId: null,
@@ -1229,7 +1239,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if (currentStep === 'awaiting_name') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'awaiting_name', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_name', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     const parsedName = splitNameForPatient(input.text);
     if (!parsedName.firstName || !hasValidLastName(parsedName.lastName)) {
       await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName: null, currentIntent: null, step: 'awaiting_name', lastMessage: input.text, stateJson: null });
@@ -1247,13 +1257,13 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if ((!currentStep || currentStep === 'main_menu') && (isGreetingMessage(input.text) || normalizedText === '0')) {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'main_menu', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'main_menu', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: null, step: 'main_menu', lastMessage: input.text, stateJson: null });
     return formatMainMenu(customerName, true, clinic.name);
   }
 
   if (currentStep === 'main_menu') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'main_menu', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'main_menu', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     if (normalizedText === '1') {
       await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: 'book_appointment', step: 'awaiting_service', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null, selectedTime: null, lastMessage: input.text, stateJson: null });
       return formatServiceList(services);
@@ -1270,7 +1280,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if (currentStep === 'awaiting_cancel_selection') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'awaiting_cancel_selection', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_cancel_selection', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     const appointments = stateJson.cancellableAppointments ?? [];
     const selectedAppointment = /^\d+$/.test(normalizedText) ? appointments[Number(normalizedText) - 1] : null;
     if (!selectedAppointment) return formatWarmPrompt('iptal etmek istediğiniz randevunun numarasını paylaşır mısınız?', customerName);
@@ -1284,7 +1294,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if (currentStep === 'awaiting_service') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'awaiting_service', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_service', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
     return handleAwaitingServiceStep({
       text: input.text, phone: input.phone, customerName, services,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate },
@@ -1295,7 +1305,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if (currentStep === 'awaiting_date') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'awaiting_date', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_date', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
     return handleAwaitingDateStep({
       prisma, clinicId: clinic.id, text: input.text, customerName,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId },
@@ -1312,7 +1322,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if (currentStep === 'awaiting_time') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'awaiting_time', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_time', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
     return handleAwaitingTimeStep({
       prisma, clinicId: clinic.id, phone: input.phone, text: input.text, customerName,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
@@ -1332,7 +1342,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
 
   if (currentStep === 'awaiting_confirmation') {
-    console.log('[whatsapp-assistant] route-handler', { phone: input.phone, handler: 'awaiting_confirmation', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_confirmation', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
     return handleAwaitingConfirmationStep({
       clinicId: clinic.id, phone: input.phone, text: input.text, customerName,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
@@ -1470,7 +1480,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
       await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: patient.id, phone: incomingMessage.phone, direction: 'outgoing', text: responseText });
     }
     await markWhatsAppProviderMessageProcessed(clinic.id, incomingMessage.phone, incomingMessage.messageId);
-    console.info('[whatsapp-assistant] send-result', { phone: incomingMessage.phone, instance: normalizedPayload.instance ?? null });
+    console.info('[whatsapp-assistant] send-result', { phone: redactPhone(incomingMessage.phone), instance: normalizedPayload.instance ?? null });
     res.status(200).json({ ok: true });
   } catch (error) {
     if (error instanceof Error && error.message === 'DUPLICATE_WHATSAPP_MESSAGE') {

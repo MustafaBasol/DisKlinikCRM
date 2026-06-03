@@ -12,6 +12,7 @@ import type { ClinicOperatingPreferences } from '../services/clinicOperatingPref
 import { getNotificationPreferences } from '../services/notificationPreferences.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { logActivity } from '../utils/activity.js';
+import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 
 type ClinicForReminder = {
   id: string;
@@ -21,12 +22,22 @@ type ClinicForReminder = {
 
 const SEND_WINDOW_MINUTES = 5;
 
+const redactPhone = (phone: string | null | undefined) => {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  if (digits.length <= 4) return '***';
+  return `***${digits.slice(-4)}`;
+};
+
 function renderTemplate(text: string, vars: Record<string, string>): string {
   let out = text;
   for (const [key, value] of Object.entries(vars)) {
     out = out.replace(new RegExp(`{{${key}}}`, 'g'), value);
   }
   return out;
+}
+
+function hasSensitiveLowChannelVariable(text: string | null | undefined): boolean {
+  return /{{\s*(treatment_title|remaining_balance)\s*}}/i.test(text ?? '');
 }
 
 function getLocalParts(date: Date, timezone: string) {
@@ -191,8 +202,8 @@ async function runPatientAppointmentRemindersForClinic(
       status: { in: ['scheduled', 'confirmed'] },
     },
     include: {
-      patient: true,
-      practitioner: true,
+      patient: { select: patientContactSelect },
+      practitioner: { select: userPublicSelect },
     },
   });
 
@@ -278,7 +289,7 @@ async function runPatientAppointmentRemindersForClinic(
         where: { id: sentMessage.id },
         data: { status: 'failed' },
       });
-      console.error(`[reminders] Failed to send appointment reminder to ${patient.phone}: ${sendErr.message}`);
+      console.error(`[reminders] Failed to send appointment reminder to ${redactPhone(patient.phone)}: ${sendErr.message}`);
     }
   }
 }
@@ -297,8 +308,8 @@ async function runPractitionerDailyScheduleForClinic(
       status: { in: ['scheduled', 'confirmed'] },
     },
     include: {
-      patient: true,
-      practitioner: true,
+      patient: { select: patientContactSelect },
+      practitioner: { select: userPublicSelect },
     },
     orderBy: { startTime: 'asc' },
   });
@@ -387,7 +398,7 @@ async function runPaymentRemindersForClinic(
     include: {
       plan: {
         include: {
-          patient: true,
+          patient: { select: patientContactSelect },
         },
       },
     },
@@ -400,6 +411,9 @@ async function runPaymentRemindersForClinic(
     findWhatsAppTemplate(clinic.id, ['Payment', 'Ödeme', 'Odeme']),
     getSystemUserForClinic(clinic.id, clinic.organizationId),
   ]);
+  const safePaymentTemplate = paymentTemplate && !hasSensitiveLowChannelVariable(paymentTemplate.body)
+    ? paymentTemplate
+    : null;
 
   for (const installment of installments) {
     const patient = installment.plan.patient;
@@ -424,17 +438,17 @@ async function runPaymentRemindersForClinic(
       appointment_time: '',
       practitioner_name: '',
       treatment_title: '',
-      remaining_balance: formatMoney(installment.amount, installment.plan.currency, operatingPreferences),
+      remaining_balance: '',
     };
-    const body = paymentTemplate
-      ? renderTemplate(paymentTemplate.body, vars)
-      : `Sayın ${vars.patient_name}, ${clinic.name} ödeme planınızdaki ${formatMoney(installment.amount, installment.plan.currency, operatingPreferences)} tutarındaki taksit için son ödeme tarihi ${dueDate}. Detaylar için kliniğinizle iletişime geçebilirsiniz.`;
+    const body = safePaymentTemplate
+      ? renderTemplate(safePaymentTemplate.body, vars)
+      : `Sayın ${vars.patient_name}, ${clinic.name} ödeme planınızdaki taksit için son ödeme tarihi ${dueDate}. Detaylar için kliniğinizle iletişime geçebilirsiniz.`;
 
     const sentMessage = await prisma.sentMessage.create({
       data: {
         clinicId: clinic.id,
         patientId: patient.id,
-        templateId: paymentTemplate?.id,
+        templateId: safePaymentTemplate?.id,
         channel: 'whatsapp',
         recipient: patient.phone,
         subject: subjectKey,
@@ -469,7 +483,7 @@ async function runPaymentRemindersForClinic(
         where: { id: sentMessage.id },
         data: { status: 'failed' },
       });
-      console.error(`[reminders] Failed to send payment reminder to ${patient.phone}: ${sendErr.message}`);
+      console.error(`[reminders] Failed to send payment reminder to ${redactPhone(patient.phone)}: ${sendErr.message}`);
     }
   }
 }

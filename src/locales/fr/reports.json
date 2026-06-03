@@ -62,6 +62,7 @@
     "google": "Google",
     "facebook": "Facebook",
     "whatsapp": "WhatsApp",
+    "doctolib": "Doctolib",
     "other": "Autre",
     "totalPatientsInRange": "Patients enregistrés (période)",
     "sourceCount": "{{count}} sources différentes",

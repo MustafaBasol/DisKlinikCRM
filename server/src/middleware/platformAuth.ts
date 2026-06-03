@@ -1,13 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { getSecret } from '../utils/secrets.js';
+import { PLATFORM_SESSION_COOKIE, createSessionId, getCookie } from '../utils/sessionCookies.js';
+import { isBearerFallbackEnabled } from '../utils/authFallback.js';
 
-const PLATFORM_JWT_SECRET = process.env.PLATFORM_JWT_SECRET || 'platform-admin-secret-change-this';
+const PLATFORM_JWT_SECRET = getSecret('PLATFORM_JWT_SECRET', 'platform-admin-secret-change-this');
 
 export interface PlatformAdminRequest extends Request {
   platformAdmin?: {
     id: string;
     email: string;
+    sessionId?: string;
   };
+  authSource?: 'cookie' | 'bearer';
 }
 
 export const authenticatePlatformAdmin = (
@@ -16,27 +21,58 @@ export const authenticatePlatformAdmin = (
   next: NextFunction,
 ) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized: Missing token' });
-  }
+  const cookieToken = getCookie(req, PLATFORM_SESSION_COOKIE);
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined;
+  const bearerFallbackEnabled = isBearerFallbackEnabled('platform');
+  const token = cookieToken || (bearerFallbackEnabled ? bearerToken : undefined);
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({
+      error: bearerToken && !bearerFallbackEnabled
+        ? 'Unauthorized: Cookie session required'
+        : 'Unauthorized: Missing token',
+    });
+  }
 
   try {
     const decoded = jwt.verify(token, PLATFORM_JWT_SECRET) as any;
-    if (decoded.type !== 'platform_admin') {
+    const authSource = cookieToken ? 'cookie' : 'bearer';
+
+    if (decoded.type !== 'platform' && decoded.type !== 'platform_admin') {
       return res.status(403).json({ error: 'Forbidden: Not a platform admin token' });
     }
-    req.platformAdmin = { id: decoded.id, email: decoded.email };
+
+    if (authSource === 'cookie' && !decoded.jti) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid session' });
+    }
+
+    if (authSource === 'bearer') {
+      console.warn('[platform-auth] Bearer token fallback used for platform auth');
+    }
+
+    req.platformAdmin = {
+      id: decoded.sub || decoded.id,
+      email: decoded.email,
+      sessionId: decoded.jti,
+    };
+    req.authSource = authSource;
     next();
   } catch {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 };
 
-export const generatePlatformToken = (admin: { id: string; email: string }) => {
+export const generatePlatformToken = (admin: {
+  id: string;
+  email: string;
+  sessionId?: string;
+  sessionType?: 'platform' | 'platform_admin';
+}) => {
+  const sessionId = admin.sessionId ?? createSessionId();
+  const type = admin.sessionType ?? 'platform_admin';
+
   return jwt.sign(
-    { type: 'platform_admin', id: admin.id, email: admin.email },
+    { type, sub: admin.id, id: admin.id, email: admin.email, jti: sessionId },
     PLATFORM_JWT_SECRET,
     { expiresIn: '8h' },
   );

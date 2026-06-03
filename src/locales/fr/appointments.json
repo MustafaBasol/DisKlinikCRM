@@ -37,6 +37,7 @@
   "status": {
     "scheduled": "Planifié",
     "confirmed": "Confirmé",
+    "in_progress": "En cours",
     "completed": "Terminé",
     "cancelled": "Annulé",
     "rescheduled": "Replanifié",

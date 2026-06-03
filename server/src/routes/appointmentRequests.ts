@@ -4,6 +4,8 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam, checkPractitionerAvailability } from '../utils/helpers.js';
 import { appointmentRequestStatusSchema, appointmentRequestConvertSchema } from '../schemas/index.js';
+import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
+import { findUserAssignedToClinic } from '../utils/relationGuards.js';
 
 const router = express.Router();
 
@@ -136,7 +138,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
   try {
     const request = await prisma.appointmentRequest.findFirst({
       where: { id, clinicId },
-      include: { patient: true },
+      include: { patient: { select: patientContactSelect } },
     });
 
     if (!request) return res.status(404).json({ error: 'Appointment request not found' });
@@ -154,7 +156,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
 
     const [service, practitioner] = await Promise.all([
       prisma.appointmentType.findFirst({ where: { id: appointmentTypeId, clinicId, isActive: true } }),
-      prisma.user.findFirst({ where: { id: practitionerId, clinicId, role: 'doctor', isActive: true } }),
+      findUserAssignedToClinic(practitionerId, clinicId, { roles: ['DENTIST'] }),
     ]);
 
     if (!service) return res.status(400).json({ error: 'Invalid appointment type' });
@@ -214,7 +216,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
         notes: validation.data.notes || request.notes || 'WhatsApp randevu talebinden oluşturuldu.',
         createdById: req.user!.id,
       },
-      include: { patient: true, practitioner: true, appointmentType: true },
+      include: { patient: { select: patientContactSelect }, practitioner: { select: userPublicSelect }, appointmentType: true },
     });
 
     const updatedRequest = await prisma.appointmentRequest.update({

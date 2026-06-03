@@ -168,9 +168,8 @@ const Reports: React.FC = () => {
     if (practitionerId) params.set('practitionerId', practitionerId);
     if (paymentMethod) params.set('paymentMethod', paymentMethod);
     if (selectedClinicId && selectedClinicId !== 'all') params.set('clinicId', selectedClinicId);
-    const token = localStorage.getItem('hcrm_token');
     const url = `${baseUrl}/reports/revenue/export.csv?${params.toString()}`;
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(url, { credentials: 'include' })
       .then(async r => {
         if (!r.ok) throw new Error('Export failed');
         return r.blob();

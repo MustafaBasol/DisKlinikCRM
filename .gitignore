@@ -5,12 +5,12 @@ dist/
 *.log
 .DS_Store
 coverage/
+uploads/
+server/uploads/
+.tmp/
+server/.tmp/
+.npm-cache/
 *.db
 *.sqlite
 *.sqlite3
 *.tsbuildinfo
-
-# npm cache
-.npm-cache/
-server/.npm-cache/
-

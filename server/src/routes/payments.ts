@@ -8,6 +8,8 @@ import { generateEarningFromPayment } from '../services/earningService.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { findPatientInClinic, findTreatmentCaseInClinic } from '../utils/relationGuards.js';
+import { patientContactSelect } from '../utils/prismaSelects.js';
 
 const router = express.Router();
 
@@ -43,7 +45,7 @@ router.get('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILL
     const payments = await prisma.payment.findMany({
       where,
       include: {
-        patient: true,
+        patient: { select: patientContactSelect },
         treatmentCase: {
           include: {
             practitioner: { select: { firstName: true, lastName: true } },
@@ -71,13 +73,11 @@ router.post('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BIL
     });
     if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
-    const patient = await prisma.patient.findFirst({ where: { id: validation.data.patientId, organizationId: req.user!.organizationId } });
+    const patient = await findPatientInClinic(validation.data.patientId, clinicId);
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
 
     if (validation.data.treatmentCaseId) {
-      const tc = await prisma.treatmentCase.findFirst({
-        where: { id: validation.data.treatmentCaseId, clinicId, patientId: validation.data.patientId },
-      });
+      const tc = await findTreatmentCaseInClinic(validation.data.treatmentCaseId, clinicId, validation.data.patientId);
       if (!tc) return res.status(400).json({ error: 'Invalid treatment case' });
     }
 
@@ -134,6 +134,19 @@ router.put('/payments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
     const existing = await prisma.payment.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Payment not found' });
     const clinicId = existing.clinicId;
+
+    const nextPatientId = validation.data.patientId ?? existing.patientId;
+    const nextTreatmentCaseId = validation.data.treatmentCaseId === undefined
+      ? existing.treatmentCaseId
+      : validation.data.treatmentCaseId;
+
+    const patient = await findPatientInClinic(nextPatientId, clinicId);
+    if (!patient) return res.status(400).json({ error: 'Invalid patient' });
+
+    if (nextTreatmentCaseId) {
+      const treatmentCase = await findTreatmentCaseInClinic(nextTreatmentCaseId, clinicId, nextPatientId);
+      if (!treatmentCase) return res.status(400).json({ error: 'Invalid treatment case' });
+    }
 
     const updated = await prisma.payment.update({ where: { id }, data: validation.data });
 

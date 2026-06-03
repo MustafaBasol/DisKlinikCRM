@@ -93,6 +93,26 @@ function makeRes() {
   return res;
 }
 
+async function withEnv(updates: Record<string, string | undefined>, fn: () => void | Promise<void>) {
+  const previous = Object.fromEntries(
+    Object.keys(updates).map((key) => [key, process.env[key]]),
+  ) as Record<string, string | undefined>;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  try {
+    await fn();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 section('parsePagination — Sayfalama yardımcısı');
@@ -177,6 +197,21 @@ await test('Geçerli platform tokenıyla next() çağrılır', async () => {
   assert.ok(req.platformAdmin, 'platformAdmin req üzerine set edilmeli');
   assert.equal(req.platformAdmin.id, 'admin-1');
   assert.equal(req.platformAdmin.email, 'admin@platform.com');
+});
+
+await test('Bearer fallback kapatilinca gecerli platform Bearer tokeni 401 doner', async () => {
+  await withEnv({ PLATFORM_BEARER_FALLBACK_ENABLED: 'false' }, async () => {
+    const token = generatePlatformToken({ id: 'admin-1', email: 'admin@platform.com' });
+    const req = makeReq(`Bearer ${token}`);
+    const res = makeRes();
+    let nextCalled = false;
+
+    await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
+
+    assert.equal(nextCalled, false);
+    assert.equal(res._status, 401);
+    assert.equal(res._body.error, 'Unauthorized: Cookie session required');
+  });
 });
 
 await test('Authorization header eksikse 401 döner', async () => {
