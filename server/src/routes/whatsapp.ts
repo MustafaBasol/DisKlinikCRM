@@ -2274,7 +2274,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     preflightIntent === 'book_appointment'
     && !extracted.appointmentTypeId
     && !extracted.appointmentTypeName
-    && (prefersGeneralAssessment(input.text) || Boolean(getPreferredTimeRangeFromText(input.text)))
+    && prefersGeneralAssessment(input.text)
     && (!currentStep || currentStep === 'main_menu' || currentStep === 'awaiting_service')
   ) {
     logGlobalIntent(input.phone, input.text, currentStep, 'general_assessment_booking');
