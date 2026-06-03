@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   AlertCircle,
   CalendarPlus,
-  CheckCircle2,
   Clock,
   Loader2,
   MessageCircle,
@@ -350,16 +349,10 @@ const AppointmentRequests: React.FC = () => {
                     </button>
                   )}
                   {request.status === 'pending' && (
-                    <>
-                      <button onClick={() => updateStatus(request, 'approved')} disabled={workingId === request.id} className="btn-secondary">
-                        <CheckCircle2 size={16} />
-                        {t('appointmentRequests:actions.approve')}
-                      </button>
-                      <button onClick={() => updateStatus(request, 'rejected')} disabled={workingId === request.id} className="btn-secondary text-red-600">
-                        <XCircle size={16} />
-                        {t('appointmentRequests:actions.reject')}
-                      </button>
-                    </>
+                    <button onClick={() => updateStatus(request, 'rejected')} disabled={workingId === request.id} className="btn-secondary text-red-600">
+                      <XCircle size={16} />
+                      {t('appointmentRequests:actions.reject')}
+                    </button>
                   )}
                   {request.status !== 'closed' && request.status !== 'converted' && (
                     <button onClick={() => updateStatus(request, 'closed')} disabled={workingId === request.id} className="btn-secondary">
