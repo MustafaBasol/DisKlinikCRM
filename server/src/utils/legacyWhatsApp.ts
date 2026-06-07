@@ -34,9 +34,9 @@
  *
  * ─── Flag semantics ──────────────────────────────────────────────────────────
  *
- * ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=true   → use env fallback if no DB record (default)
+ * ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=true   → use env fallback if no DB record
  * ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=false  → panel-first; error if no DB record
- * ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=       → treated as enabled (safe default)
+ * ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=       → enabled outside production, disabled in production
  */
 
 export interface LegacyEvolutionConfig {
@@ -47,13 +47,14 @@ export interface LegacyEvolutionConfig {
 
 /**
  * Returns true when the legacy env-var fallback is active.
- * Default is true (backwards-compatible). Set to "false" or "0" in production
- * once all connections have been imported via the panel.
+ * Default is true outside production and false in production. Set explicitly
+ * during migration so webhook routing behavior is predictable.
  */
 export function isLegacyFallbackEnabled(): boolean {
   const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
+  if (flag === 'true' || flag === '1') return true;
   if (flag === 'false' || flag === '0') return false;
-  return true; // safe default
+  return process.env.NODE_ENV !== 'production';
 }
 
 /**

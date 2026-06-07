@@ -40,6 +40,8 @@ import {
 import { logActivity } from '../utils/activity.js';
 import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE } from '../utils/whatsappDate.js';
 import { getZonedDateParts, minutesToTime, timeToMinutes, formatClinicDateTime, localDateTimeToClinicDate } from '../utils/helpers.js';
+import { isLegacyFallbackEnabled } from '../utils/legacyWhatsApp.js';
+import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 
 const router = express.Router();
 
@@ -895,8 +897,10 @@ const checkPractitionerAvailability = async (clinicId: string, practitionerId: s
 const getDefaultClinic = async () => prisma.clinic.findFirst({ orderBy: { createdAt: 'asc' } });
 
 const getClinicForWhatsAppInstance = async (instanceName?: string | null) => {
+  if (!isLegacyFallbackEnabled() || process.env.NODE_ENV === 'production') return null;
+
   const normalizedInstance = instanceName?.trim();
-  if (!normalizedInstance) return getDefaultClinic();
+  if (!normalizedInstance) return null;
 
   const configuredInstance = process.env.EVOLUTION_INSTANCE_NAME?.trim();
   const mappedSetting = await prisma.setting.findFirst({
@@ -2610,14 +2614,24 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
 
   try {
     // ── Sprint 11: DB-based connection + clinic resolution (takes precedence) ──
-    if (normalizedPayload.instance?.trim()) {
-      const dbConnection = await prisma.whatsAppConnection.findFirst({
+    const normalizedInstance = normalizedPayload.instance?.trim();
+    if (normalizedInstance) {
+      const dbConnectionMatches = await prisma.whatsAppConnection.findMany({
         where: {
-          evolutionInstanceName: normalizedPayload.instance.trim(),
+          evolutionInstanceName: normalizedInstance,
           isActive: true,
         },
         select: { id: true, organizationId: true },
       });
+      const dbConnection = selectUniqueProviderConnection(dbConnectionMatches);
+
+      if (!dbConnection && dbConnectionMatches.length > 1) {
+        console.warn('[whatsapp-assistant] duplicate evolution instance match', {
+          instance: normalizedInstance,
+          matchCount: dbConnectionMatches.length,
+        });
+        return res.status(200).json({ ignored: true, reason: 'duplicate_connection_match' });
+      }
 
       if (dbConnection) {
         const resolution = await resolveClinicForIncomingMessage(
@@ -2678,13 +2692,29 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
         }
 
         // no_clinic_links — connection exists in DB but has no clinic assignments
-        // Fall through to legacy resolution below
+        console.warn('[whatsapp-assistant] no clinic assignment for WhatsApp connection', {
+          instance: normalizedPayload.instance ?? null,
+          organizationId: dbConnection.organizationId,
+          resolutionSource: resolution.resolutionSource,
+        });
+        return res.status(200).json({ ignored: true, reason: 'no_clinic_assignment' });
       }
     }
 
     // ── Legacy resolution (existing single-clinic behavior) ──
+    if (!normalizedInstance) {
+      return res.status(200).json({ ignored: true, reason: 'missing_instance' });
+    }
+
+    if (!isLegacyFallbackEnabled() || process.env.NODE_ENV === 'production') {
+      console.warn('[whatsapp-assistant] no DB WhatsApp connection for webhook instance', {
+        instance: normalizedPayload.instance ?? null,
+      });
+      return res.status(200).json({ ignored: true, reason: 'no_connection' });
+    }
+
     const clinic = await getClinicForWhatsAppInstance(normalizedPayload.instance);
-    if (!clinic) return res.status(404).json({ error: 'Clinic not found for WhatsApp instance' });
+    if (!clinic) return res.status(200).json({ ignored: true, reason: 'legacy_clinic_not_found' });
 
     const duplicate = await hasProcessedWhatsAppProviderMessage(clinic.id, incomingMessage.phone, incomingMessage.messageId);
     if (duplicate) return res.status(200).json({ ignored: true, reason: 'duplicate_message' });

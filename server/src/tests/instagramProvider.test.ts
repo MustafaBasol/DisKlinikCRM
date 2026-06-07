@@ -39,6 +39,8 @@ import {
   sendMessage,
   parseWebhook,
 } from '../services/instagram/InstagramMessagingProvider.js';
+import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
+import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 import type { InstagramConnectionRecord } from '../services/instagram/InstagramMessagingProvider.js';import {
   canManageInstagramConnections,
   canAssignInstagramToClinic,
@@ -162,6 +164,59 @@ async function main() {
     });
     const events = parseWebhook(JSON.parse(raw));
     assert.equal(events.length, 0);
+  });
+
+  section('Instagram webhook verification and routing guards');
+
+  await test('global GET verification: correct token returns 200-equivalent challenge', () => {
+    const result = verifyMetaWebhookChallenge({
+      mode: 'subscribe',
+      token: 'dentheria',
+      challenge: 'test12345',
+      expectedToken: 'dentheria',
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.challenge, 'test12345');
+  });
+
+  await test('global GET verification: wrong token returns 403-equivalent failure', () => {
+    const result = verifyMetaWebhookChallenge({
+      mode: 'subscribe',
+      token: 'wrong-token',
+      challenge: 'test12345',
+      expectedToken: 'dentheria',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.reason, 'token_mismatch');
+  });
+
+  await test('global GET verification: token comparison trims whitespace', () => {
+    const result = verifyMetaWebhookChallenge({
+      mode: 'subscribe',
+      token: '  dentheria  ',
+      challenge: 'test12345',
+      expectedToken: ' dentheria ',
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.challenge, 'test12345');
+  });
+
+  await test('POST routing guard: unknown Instagram provider ID does not select a clinic connection', () => {
+    const payload = {
+      object: 'instagram',
+      entry: [{
+        id: 'unknown-page-id',
+        messaging: [{
+          sender: { id: 'sender-1' },
+          recipient: { id: 'unknown-recipient-id' },
+          message: { mid: 'msg-1', text: 'Hello' },
+        }],
+      }],
+    };
+    const events = parseWebhook(payload);
+    assert.equal(events[0].recipientId, 'unknown-recipient-id');
+    assert.equal(events[0].pageId, 'unknown-page-id');
+    assert.equal(selectUniqueProviderConnection([]), null);
   });
 
   // ── InstagramMessagingProvider: testConnection ─────────────────────────────

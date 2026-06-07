@@ -42,6 +42,11 @@ import { encryptSecret, decryptSecret, isEncryptionKeyConfigured } from '../util
 import { getWhatsAppProvider } from '../services/whatsapp/whatsappProviderFactory.js';
 import { EvolutionWhatsAppProvider } from '../services/whatsapp/EvolutionWhatsAppProvider.js';
 import { MetaCloudWhatsAppProvider } from '../services/whatsapp/MetaCloudWhatsAppProvider.js';
+import {
+  resolveSingleLinkedClinic,
+  selectUniqueProviderConnection,
+} from '../utils/webhookRouting.js';
+import { isLegacyFallbackEnabled } from '../utils/legacyWhatsApp.js';
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 
@@ -394,6 +399,34 @@ async function main() {
     assert.equal(MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload({ object: 'other' }), null);
     assert.equal(MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload(null), null);
     assert.equal(MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload({}), null);
+  });
+
+  await test('Meta webhook routing: unknown phone_number_id selects no connection', () => {
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        changes: [{
+          value: {
+            metadata: { phone_number_id: 'unknown-phone-id' },
+            messages: [{ from: '905551234567', id: 'wamid-1', type: 'text', text: { body: 'Hello' } }],
+          },
+        }],
+      }],
+    };
+    assert.equal(MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload(payload), 'unknown-phone-id');
+    assert.equal(selectUniqueProviderConnection([]), null);
+  });
+
+  await test('Evolution webhook routing: unknown evolutionInstanceName selects no connection', () => {
+    const providerMatches: Array<{ id: string; organizationId: string }> = [];
+    assert.equal(selectUniqueProviderConnection(providerMatches), null);
+  });
+
+  await test('Webhook routing: known provider ID resolves to the single linked clinic', () => {
+    const connection = selectUniqueProviderConnection([{ id: 'conn-1', organizationId: 'org-1' }]);
+    const clinicId = resolveSingleLinkedClinic([{ clinicId: 'clinic-1' }]);
+    assert.equal(connection?.id, 'conn-1');
+    assert.equal(clinicId, 'clinic-1');
   });
 
   // ── validateHubSignature (X-Hub-Signature-256) ────────────────────────────────
@@ -1269,14 +1302,30 @@ async function sprintSeventeenBTests() {
 
   await test('flag defaults to true when env var is not set', () => {
     const saved = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    const savedNodeEnv = process.env.NODE_ENV;
     delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    delete process.env.NODE_ENV;
     function isLegacyFallbackEnabled(): boolean {
       const flag = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK?.trim().toLowerCase();
       if (flag === 'false' || flag === '0') return false;
-      return true;
+      return process.env.NODE_ENV !== 'production';
     }
     assert.equal(isLegacyFallbackEnabled(), true);
     if (saved !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = saved;
+    if (savedNodeEnv !== undefined) process.env.NODE_ENV = savedNodeEnv;
+    else delete process.env.NODE_ENV;
+  });
+
+  await test('flag defaults to false in production when env var is not set', () => {
+    const saved = process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    const savedNodeEnv = process.env.NODE_ENV;
+    delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    process.env.NODE_ENV = 'production';
+    assert.equal(isLegacyFallbackEnabled(), false);
+    if (saved !== undefined) process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK = saved;
+    else delete process.env.ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK;
+    if (savedNodeEnv !== undefined) process.env.NODE_ENV = savedNodeEnv;
+    else delete process.env.NODE_ENV;
   });
 
   await test('flag is true when set to "true"', () => {

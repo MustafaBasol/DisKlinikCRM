@@ -18,6 +18,7 @@
  */
 
 import prisma from '../../db.js';
+import { resolveSingleLinkedClinic } from '../../utils/webhookRouting.js';
 
 export interface InstagramClinicResolutionResult {
   clinicId: string | null;
@@ -40,12 +41,13 @@ export async function resolveClinicForInstagramMessage(
   });
 
   if (clinicLinks.length === 0) {
-    return { clinicId: null, needsClinicResolution: false, resolutionSource: 'no_clinic_links' };
+    return { clinicId: null, needsClinicResolution: true, resolutionSource: 'no_clinic_links' };
   }
 
-  if (clinicLinks.length === 1) {
+  const singleClinicId = resolveSingleLinkedClinic(clinicLinks);
+  if (singleClinicId) {
     return {
-      clinicId: clinicLinks[0].clinicId,
+      clinicId: singleClinicId,
       needsClinicResolution: false,
       resolutionSource: 'single_clinic',
     };
@@ -91,6 +93,7 @@ export async function upsertInstagramInboxEntry(params: {
         updatedAt: new Date(),
         // If we now know the clinic (e.g. staff just assigned), keep it
         ...(params.clinicId !== null && { clinicId: params.clinicId, needsClinicResolution: false }),
+        ...(params.clinicId === null && params.needsClinicResolution && { needsClinicResolution: true }),
       },
     });
   } else {

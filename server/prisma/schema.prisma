@@ -950,14 +950,14 @@ model WhatsAppConnection {
 
   // Evolution API fields
   evolutionApiUrl          String?
-  evolutionInstanceName    String?
+  evolutionInstanceName    String? @unique
   // TODO: encrypt before storing (no encryption utility in this project yet)
   evolutionApiKeyEncrypted String?
 
   // Meta Cloud API foundation fields
   metaBusinessId           String?
   metaWabaId               String?
-  metaPhoneNumberId        String?
+  metaPhoneNumberId        String? @unique
   metaAppId                String?
   // TODO: encrypt before storing
   metaAccessTokenEncrypted String?
@@ -1101,7 +1101,7 @@ model InstagramConnection {
   name                    String
   /// disconnected | connecting | connected | error
   status                  String   @default("disconnected")
-  instagramAccountId      String?
+  instagramAccountId      String? @unique
   instagramUsername       String?
   facebookPageId          String?
   /// AES-256-GCM encrypted Meta access token

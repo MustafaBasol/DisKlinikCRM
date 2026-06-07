@@ -91,6 +91,12 @@ Use per-connection URLs when different clinics have separate Meta Apps.
 
 Signature validation (X-Hub-Signature-256) is enforced automatically if `metaWebhookSecret` or `webhookSecret` is stored on the connection.
 
+Tenant-safe routing: the global WhatsApp Meta callback is shared across clinics.
+Incoming POST payloads are resolved by `metadata.phone_number_id` ->
+`WhatsAppConnection.metaPhoneNumberId`, then by `ClinicWhatsAppConnection`.
+Unknown or duplicate provider identifiers are acknowledged but not processed.
+Production should use `ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=false`.
+
 ---
 
 ## Embedded Signup Flow

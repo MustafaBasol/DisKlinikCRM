@@ -31,6 +31,7 @@ META_APP_SECRET=
 META_GRAPH_API_VERSION=v23.0
 META_REDIRECT_URI=
 META_WEBHOOK_VERIFY_TOKEN=
+INSTAGRAM_WEBHOOK_VERIFY_TOKEN=
 # WhatsApp AI Conversation Agent (optional — enables natural language routing)
 # Obtain an API key from https://aistudio.google.com/
 GOOGLE_AI_STUDIO_API_KEY=          # or use GEMINI_API_KEY as alias
