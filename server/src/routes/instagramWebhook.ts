@@ -1,21 +1,9 @@
 /**
- * instagramWebhook.ts — Meta Instagram Webhook Routes (public, no JWT auth)
+ * Public Meta Instagram webhook routes.
  *
- * Routes:
- *   GET  /api/public/instagram/webhook  — Meta webhook verification challenge
- *   POST /api/public/instagram/webhook  — Incoming Instagram DM events
- *
- * Optional connection-specific routes:
- *   GET  /api/public/instagram/:connectionId/webhook
- *   POST /api/public/instagram/:connectionId/webhook
- *
- * Security rules:
- *   - Webhook challenge uses hub.verify_token from connection or env fallback.
- *   - Payload signature validated using X-Hub-Signature-256 when webhookSecret configured.
- *   - Incoming messages are stored in InstagramInboxEntry.
- *   - Cross-organization leakage is impossible: each connection is org-scoped.
- *   - Never expose tokens, secrets, or raw encrypted fields in responses.
- *   - Always return 200 to Meta quickly (errors are logged, not propagated).
+ * GET /api/public/instagram/webhook verifies the global Meta callback.
+ * POST /api/public/instagram/webhook resolves the clinic from provider IDs in
+ * the payload, never from the URL alone.
  */
 
 import express, { Request, Response } from 'express';
@@ -23,6 +11,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import prisma from '../db.js';
 import {
   parseWebhook,
+  type ParsedInstagramEvent,
 } from '../services/instagram/InstagramMessagingProvider.js';
 import {
   resolveClinicForInstagramMessage,
@@ -30,10 +19,18 @@ import {
 } from '../services/instagram/instagramClinicResolver.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
+import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
+import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 
 const router = express.Router();
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+type InstagramWebhookConnection = {
+  id: string;
+  organizationId: string;
+  instagramAccountId?: string | null;
+  facebookPageId?: string | null;
+  webhookSecret?: string | null;
+};
 
 function logWebhookEvent(
   organizationId: string,
@@ -50,14 +47,10 @@ function logWebhookEvent(
     description,
     metadata,
   }).catch(() => {
-    // Operational log failure must never block webhook processing
+    // Operational log failure must never block webhook processing.
   });
 }
 
-/**
- * Validate X-Hub-Signature-256 from Meta.
- * Returns true if valid, false if invalid, null if no secret configured.
- */
 function validateHubSignature(
   rawBody: Buffer,
   signature: string | undefined,
@@ -65,6 +58,7 @@ function validateHubSignature(
 ): boolean | null {
   if (!secret) return null;
   if (!signature) return false;
+
   const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
   try {
     if (expected.length === signature.length) {
@@ -82,47 +76,136 @@ function getRawBody(req: Request): Buffer {
   return req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
 }
 
-/** Find Instagram connection by instagramAccountId matching the recipient in the payload. */
-async function findConnectionByRecipientId(
-  recipientId: string,
-): Promise<{ id: string; organizationId: string; webhookSecret?: string | null } | null> {
-  return prisma.instagramConnection.findFirst({
-    where: { instagramAccountId: recipientId, isActive: true },
-    select: { id: true, organizationId: true, webhookSecret: true },
+function summarizeProviderId(value: string | null | undefined) {
+  if (!value) return null;
+  return { length: value.length, suffix: value.slice(-4) };
+}
+
+function logInstagramResolutionFailure(
+  reason: 'no_match' | 'multiple_matches' | 'identifier_mismatch',
+  metadata: Record<string, unknown>,
+) {
+  console.warn('[instagram-webhook] connection resolution failed', {
+    reason,
+    ...metadata,
   });
 }
 
-// ── Global webhook verify (GET) ───────────────────────────────────────────────
+async function findUniqueConnectionByProviderIdentifiers(params: {
+  recipientId?: string | null;
+  pageId?: string | null;
+}): Promise<InstagramWebhookConnection | null> {
+  const identifiers = [params.recipientId, params.pageId]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map(value => value.trim());
 
-router.get('/instagram/webhook', (req: Request, res: Response) => {
-  const mode = req.query['hub.mode'] as string | undefined;
-  const token = req.query['hub.verify_token'] as string | undefined;
-  const challenge = req.query['hub.challenge'] as string | undefined;
-
-  if (mode !== 'subscribe') {
-    return res.sendStatus(400);
+  if (identifiers.length === 0) {
+    logInstagramResolutionFailure('no_match', {
+      recipientId: null,
+      pageId: null,
+      matchCount: 0,
+    });
+    return null;
   }
 
-  const globalToken = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN || '';
-  if (!token || token !== globalToken) {
+  const matches = await prisma.instagramConnection.findMany({
+    where: {
+      isActive: true,
+      OR: identifiers.flatMap(identifier => [
+        { instagramAccountId: identifier },
+        { facebookPageId: identifier },
+      ]),
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      instagramAccountId: true,
+      facebookPageId: true,
+      webhookSecret: true,
+    },
+  });
+
+  const connection = selectUniqueProviderConnection(matches);
+  if (!connection) {
+    logInstagramResolutionFailure(matches.length === 0 ? 'no_match' : 'multiple_matches', {
+      recipientId: summarizeProviderId(params.recipientId),
+      pageId: summarizeProviderId(params.pageId),
+      matchCount: matches.length,
+    });
+  }
+
+  return connection;
+}
+
+function eventMatchesConnectionIdentifiers(
+  event: ParsedInstagramEvent,
+  connection: InstagramWebhookConnection,
+): boolean {
+  const eventIds = new Set(
+    [event.recipientId, event.pageId]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .map(value => value.trim()),
+  );
+  if (eventIds.size === 0) return false;
+
+  const connectionIds = [connection.instagramAccountId, connection.facebookPageId]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map(value => value.trim());
+
+  return connectionIds.some(identifier => eventIds.has(identifier));
+}
+
+function acceptsInstagramWebhookSignature(
+  connection: InstagramWebhookConnection,
+  signature: string | undefined,
+  rawBody: Buffer,
+  route: 'global' | 'connection',
+): boolean {
+  if (!connection.webhookSecret && !requireWebhookSecretInProduction(connection.webhookSecret)) {
+    logWebhookEvent(connection.organizationId, connection.id, 'instagram_webhook_no_secret_rejected',
+      'Instagram webhook rejected: no webhook secret configured in production', { route });
+    return false;
+  }
+
+  if (connection.webhookSecret) {
+    const valid = validateHubSignature(rawBody, signature, connection.webhookSecret);
+    if (valid === false) {
+      logWebhookEvent(connection.organizationId, connection.id, 'instagram_webhook_signature_invalid',
+        'X-Hub-Signature-256 validation failed', {
+          route,
+          hasSignatureHeader: Boolean(signature),
+        });
+      return false;
+    }
+  }
+
+  return true;
+}
+
+router.get('/instagram/webhook', (req: Request, res: Response) => {
+  const verification = verifyMetaWebhookChallenge({
+    mode: req.query['hub.mode'],
+    token: req.query['hub.verify_token'],
+    challenge: req.query['hub.challenge'],
+    expectedToken: process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
+  });
+
+  if (!verification.ok) {
+    console.warn('[instagram-webhook] verification failed', {
+      route: 'global',
+      reason: verification.reason,
+      hasToken: Boolean(req.query['hub.verify_token']),
+      expectedConfigured: Boolean(process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN?.trim()),
+      hasChallenge: Boolean(req.query['hub.challenge']),
+    });
     return res.sendStatus(403);
   }
 
-  return res.status(200).send(challenge as string);
+  return res.status(200).send(verification.challenge);
 });
 
-// ── Connection-specific webhook verify (GET) ──────────────────────────────────
-
 router.get('/instagram/:connectionId/webhook', async (req: Request, res: Response) => {
-  const mode = req.query['hub.mode'] as string | undefined;
-  const token = req.query['hub.verify_token'] as string | undefined;
-  const challenge = req.query['hub.challenge'] as string | undefined;
-
-  if (mode !== 'subscribe') {
-    return res.sendStatus(400);
-  }
-
-  const connectionId = req.params["connectionId"] as string;
+  const connectionId = req.params['connectionId'] as string;
 
   try {
     const conn = await prisma.instagramConnection.findUnique({
@@ -132,37 +215,50 @@ router.get('/instagram/:connectionId/webhook', async (req: Request, res: Respons
 
     if (!conn) return res.sendStatus(404);
 
-    if (!token || token !== conn.webhookVerifyToken) {
+    const verification = verifyMetaWebhookChallenge({
+      mode: req.query['hub.mode'],
+      token: req.query['hub.verify_token'],
+      challenge: req.query['hub.challenge'],
+      expectedToken: conn.webhookVerifyToken,
+    });
+
+    if (!verification.ok) {
+      console.warn('[instagram-webhook] verification failed', {
+        route: 'connection',
+        connectionId,
+        reason: verification.reason,
+        hasToken: Boolean(req.query['hub.verify_token']),
+        expectedConfigured: Boolean(conn.webhookVerifyToken?.trim()),
+        hasChallenge: Boolean(req.query['hub.challenge']),
+      });
       return res.sendStatus(403);
     }
 
-    return res.status(200).send(challenge as string);
+    return res.status(200).send(verification.challenge);
   } catch {
     return res.sendStatus(500);
   }
 });
 
-// ── Global webhook receive (POST) ─────────────────────────────────────────────
-
 router.post(
   '/instagram/webhook',
   express.raw({ type: 'application/json' }),
   async (req: Request, res: Response) => {
-    // Always respond 200 immediately — Meta will retry on non-2xx
     res.sendStatus(200);
 
-    let rawBody: Buffer;
     try {
-      rawBody = getRawBody(req);
+      const rawBody = getRawBody(req);
       const body = JSON.parse(rawBody.toString());
-      await handleInstagramWebhookPayload(body, req.headers['x-hub-signature-256'] as string | undefined, rawBody);
+      await handleInstagramWebhookPayload(
+        body,
+        req.headers['x-hub-signature-256'] as string | undefined,
+        rawBody,
+      );
     } catch {
-      // Ignore parse errors silently — don't block the 200
+      // Errors must not block the 200 response already sent.
     }
   },
 );
-
-// ── Connection-specific webhook receive (POST) ────────────────────────────────
 
 router.post(
   '/instagram/:connectionId/webhook',
@@ -170,7 +266,7 @@ router.post(
   async (req: Request, res: Response) => {
     res.sendStatus(200);
 
-    const connectionId = req.params["connectionId"] as string;
+    const connectionId = req.params['connectionId'] as string;
 
     try {
       const rawBody = getRawBody(req);
@@ -181,38 +277,24 @@ router.post(
         select: {
           id: true,
           organizationId: true,
-          webhookSecret: true,
           instagramAccountId: true,
+          facebookPageId: true,
+          webhookSecret: true,
           isActive: true,
         },
       });
 
       if (!conn || !conn.isActive) return;
 
-      // Validate signature if secret is configured
       const sig = req.headers['x-hub-signature-256'] as string | undefined;
-      if (!conn.webhookSecret && !requireWebhookSecretInProduction(conn.webhookSecret)) {
-        logWebhookEvent(conn.organizationId, conn.id, 'instagram_webhook_no_secret_rejected',
-          'Instagram webhook rejected: no webhook secret configured in production');
-        return;
-      }
-      if (conn.webhookSecret) {
-        const valid = validateHubSignature(rawBody, sig, conn.webhookSecret);
-        if (valid === false) {
-          logWebhookEvent(conn.organizationId, conn.id, 'instagram_webhook_signature_invalid',
-            'X-Hub-Signature-256 validation failed');
-          return;
-        }
-      }
+      if (!acceptsInstagramWebhookSignature(conn, sig, rawBody, 'connection')) return;
 
-      await processInstagramPayload(conn.id, conn.organizationId, body);
+      await processInstagramPayloadForConnection(conn, body);
     } catch {
-      // Errors must not block the 200 response already sent
+      // Errors must not block the 200 response already sent.
     }
   },
 );
-
-// ── Shared processing logic ───────────────────────────────────────────────────
 
 async function handleInstagramWebhookPayload(
   body: unknown,
@@ -222,61 +304,66 @@ async function handleInstagramWebhookPayload(
   const events = parseWebhook(body);
   if (events.length === 0) return;
 
-  // Determine connection by recipientId in the first relevant message event
-  const firstMessage = events.find(e => e.eventType === 'message');
-  if (!firstMessage?.recipientId) return;
+  for (const event of events) {
+    if (event.eventType !== 'message') continue;
+    if (!event.senderId) continue;
 
-  const conn = await findConnectionByRecipientId(firstMessage.recipientId);
-  if (!conn) {
-    // Unknown Instagram account — log and discard safely
-    return;
-  }
+    const conn = await findUniqueConnectionByProviderIdentifiers({
+      recipientId: event.recipientId,
+      pageId: event.pageId,
+    });
+    if (!conn) continue;
+    if (!acceptsInstagramWebhookSignature(conn, signature, rawBody, 'global')) continue;
 
-  // Validate signature if secret is configured
-  if (!conn.webhookSecret && !requireWebhookSecretInProduction(conn.webhookSecret)) {
-    logWebhookEvent(conn.organizationId, conn.id, 'instagram_webhook_no_secret_rejected',
-      'Instagram webhook rejected: no webhook secret configured in production');
-    return;
+    await processInstagramEventForConnection(conn, event);
   }
-  if (conn.webhookSecret) {
-    const valid = validateHubSignature(rawBody, signature, conn.webhookSecret);
-    if (valid === false) {
-      logWebhookEvent(conn.organizationId, conn.id, 'instagram_webhook_signature_invalid',
-        'X-Hub-Signature-256 validation failed on global route');
-      return;
-    }
-  }
-
-  await processInstagramPayload(conn.id, conn.organizationId, body);
 }
 
-async function processInstagramPayload(
-  connectionId: string,
-  organizationId: string,
+async function processInstagramPayloadForConnection(
+  connection: InstagramWebhookConnection,
   body: unknown,
 ): Promise<void> {
   const events = parseWebhook(body);
 
   for (const event of events) {
-    // Only store inbound text messages (not echo, not unsupported)
     if (event.eventType !== 'message') continue;
     if (!event.senderId) continue;
 
-    const resolution = await resolveClinicForInstagramMessage(connectionId);
-
-    await upsertInstagramInboxEntry({
-      organizationId,
-      instagramConnectionId: connectionId,
-      clinicId: resolution.clinicId,
-      needsClinicResolution: resolution.needsClinicResolution,
-      externalSenderId: event.senderId,
-      externalConversationId: event.externalConversationId ?? null,
-      senderUsername: null,  // Not available in basic webhook payload; resolved later if needed
-      lastMessageText: event.text ?? null,
-      externalMessageId: event.externalMessageId ?? null,
-      rawPayload: event.rawPayload as Record<string, unknown>,
-    });
+    await processInstagramEventForConnection(connection, event);
   }
+}
+
+async function processInstagramEventForConnection(
+  connection: InstagramWebhookConnection,
+  event: ParsedInstagramEvent,
+): Promise<void> {
+  if (!eventMatchesConnectionIdentifiers(event, connection)) {
+    logInstagramResolutionFailure('identifier_mismatch', {
+      connectionId: connection.id,
+      recipientId: summarizeProviderId(event.recipientId),
+      pageId: summarizeProviderId(event.pageId),
+    });
+    return;
+  }
+
+  const resolution = await resolveClinicForInstagramMessage(connection.id);
+  if (resolution.resolutionSource === 'no_clinic_links') {
+    logWebhookEvent(connection.organizationId, connection.id, 'instagram_webhook_no_clinic_links',
+      'Instagram webhook received for a connection with no clinic assignments');
+  }
+
+  await upsertInstagramInboxEntry({
+    organizationId: connection.organizationId,
+    instagramConnectionId: connection.id,
+    clinicId: resolution.clinicId,
+    needsClinicResolution: resolution.needsClinicResolution,
+    externalSenderId: event.senderId!,
+    externalConversationId: event.externalConversationId ?? null,
+    senderUsername: null,
+    lastMessageText: event.text ?? null,
+    externalMessageId: event.externalMessageId ?? null,
+    rawPayload: event.rawPayload as Record<string, unknown>,
+  });
 }
 
 export default router;

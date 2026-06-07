@@ -29,8 +29,15 @@ import {
 } from '../services/whatsapp/clinicResolver.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
+import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
+import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 
 const router = express.Router();
+
+function summarizeProviderId(value: string | null | undefined) {
+  if (!value) return null;
+  return { length: value.length, suffix: value.slice(-4) };
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -109,19 +116,31 @@ async function routeIncomingMetaMessage(
     await upsertInboxEntry({
       organizationId: connection.organizationId,
       whatsappConnectionId: connection.id,
+      clinicId: resolution.clinicId,
+      needsClinicResolution: false,
+      phone,
+      lastMessageText: text,
+      externalMessageId: messageId,
+    });
+  } else if (resolution.needsClinicResolution) {
+    // Priority D — unresolved shared-line, create inbox entry for manual resolution
+    await upsertInboxEntry({
+      organizationId: connection.organizationId,
+      whatsappConnectionId: connection.id,
+      clinicId: null,
+      needsClinicResolution: true,
       phone,
       lastMessageText: text,
       externalMessageId: messageId,
     });
   } else {
-    // Priority D — unresolved shared-line, create inbox entry for manual resolution
-    await upsertInboxEntry({
-      organizationId: connection.organizationId,
-      whatsappConnectionId: connection.id,
-      phone,
-      lastMessageText: text,
-      externalMessageId: messageId,
-    });
+    logWebhookEvent(
+      connection.organizationId,
+      connection.id,
+      'meta_webhook_no_clinic_links',
+      'Meta webhook received for a WhatsApp connection with no clinic assignments',
+      { phone: summarizeProviderId(phone) },
+    );
   }
 }
 
@@ -133,19 +152,21 @@ async function routeIncomingMetaMessage(
  * Responds to Meta's hub.verify_token challenge.
  */
 router.get('/whatsapp/meta/webhook', (req: Request, res: Response) => {
-  const mode = req.query['hub.mode'] as string | undefined;
-  const token = req.query['hub.verify_token'] as string | undefined;
-  const challenge = req.query['hub.challenge'] as string | undefined;
+  const verification = verifyMetaWebhookChallenge({
+    mode: req.query['hub.mode'],
+    token: req.query['hub.verify_token'],
+    challenge: req.query['hub.challenge'],
+    expectedToken: process.env.META_WEBHOOK_VERIFY_TOKEN,
+  });
 
-  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN?.trim();
-  if (!expectedToken) {
+  if (verification.ok) {
+    return res.status(200).send(verification.challenge);
+  }
+
+  if (verification.reason === 'missing_expected_token') {
     return res.status(503).json({
       error: 'META_WEBHOOK_VERIFY_TOKEN is not configured on this server.',
     });
-  }
-
-  if (mode === 'subscribe' && token === expectedToken) {
-    return res.status(200).send(challenge);
   }
 
   return res.status(403).json({ error: 'Webhook verification failed' });
@@ -174,11 +195,19 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
     const phoneNumberId = MetaCloudWhatsAppProvider.extractPhoneNumberIdFromPayload(payload);
     if (!phoneNumberId) return;
 
-    const connection = await prisma.whatsAppConnection.findFirst({
+    const connectionMatches = await prisma.whatsAppConnection.findMany({
       where: { metaPhoneNumberId: phoneNumberId, provider: 'meta_cloud_api', isActive: true },
       select: { id: true, organizationId: true, metaWebhookSecret: true, webhookSecret: true },
     });
-    if (!connection) return;
+    const connection = selectUniqueProviderConnection(connectionMatches);
+    if (!connection) {
+      console.warn('[meta-webhook] connection resolution failed', {
+        reason: connectionMatches.length === 0 ? 'no_match' : 'multiple_matches',
+        phoneNumberId: summarizeProviderId(phoneNumberId),
+        matchCount: connectionMatches.length,
+      });
+      return;
+    }
 
     // Validate signature if secret configured
     const secret = connection.metaWebhookSecret || connection.webhookSecret;
@@ -247,9 +276,6 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
  */
 router.get('/whatsapp/meta/:connectionId/webhook', async (req: Request, res: Response) => {
   const connectionId = req.params['connectionId'] as string;
-  const mode = req.query['hub.mode'] as string | undefined;
-  const token = req.query['hub.verify_token'] as string | undefined;
-  const challenge = req.query['hub.challenge'] as string | undefined;
 
   try {
     const connection = await prisma.whatsAppConnection.findFirst({
@@ -265,14 +291,21 @@ router.get('/whatsapp/meta/:connectionId/webhook', async (req: Request, res: Res
       connection.metaWebhookVerifyToken?.trim() ||
       process.env.META_WEBHOOK_VERIFY_TOKEN?.trim();
 
-    if (!expectedToken) {
+    const verification = verifyMetaWebhookChallenge({
+      mode: req.query['hub.mode'],
+      token: req.query['hub.verify_token'],
+      challenge: req.query['hub.challenge'],
+      expectedToken,
+    });
+
+    if (!verification.ok && verification.reason === 'missing_expected_token') {
       return res.status(503).json({
         error: 'No verify token configured for this connection. Set metaWebhookVerifyToken or META_WEBHOOK_VERIFY_TOKEN.',
       });
     }
 
-    if (mode === 'subscribe' && token === expectedToken) {
-      return res.status(200).send(challenge);
+    if (verification.ok) {
+      return res.status(200).send(verification.challenge);
     }
 
     return res.status(403).json({ error: 'Webhook verification failed' });

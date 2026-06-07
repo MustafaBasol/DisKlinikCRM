@@ -26,6 +26,7 @@
  */
 
 import prisma from '../../db.js';
+import { resolveSingleLinkedClinic } from '../../utils/webhookRouting.js';
 
 export interface ClinicResolutionResult {
   clinicId: string | null;
@@ -96,9 +97,10 @@ export async function resolveClinicForIncomingMessage(
   }
 
   // --- Priority C: Single-clinic connection (fast path) ---
-  if (clinicLinks.length === 1) {
+  const singleClinicId = resolveSingleLinkedClinic(clinicLinks);
+  if (singleClinicId) {
     return {
-      clinicId: clinicLinks[0].clinicId,
+      clinicId: singleClinicId,
       needsClinicResolution: false,
       resolutionSource: 'single_clinic',
     };
@@ -165,6 +167,8 @@ export async function resolveClinicForIncomingMessage(
 export async function upsertInboxEntry(params: {
   organizationId: string;
   whatsappConnectionId: string;
+  clinicId?: string | null;
+  needsClinicResolution?: boolean;
   phone: string;
   displayName?: string | null;
   lastMessageText?: string | null;
@@ -191,6 +195,8 @@ export async function upsertInboxEntry(params: {
         lastMessageText: params.lastMessageText ?? undefined,
         displayName: params.displayName ?? undefined,
         updatedAt: new Date(),
+        ...(params.clinicId ? { clinicId: params.clinicId, needsClinicResolution: false } : {}),
+        ...(params.clinicId === null && params.needsClinicResolution ? { needsClinicResolution: true } : {}),
       },
     });
   } else {
@@ -198,6 +204,7 @@ export async function upsertInboxEntry(params: {
       data: {
         organizationId: params.organizationId,
         whatsappConnectionId: params.whatsappConnectionId,
+        clinicId: params.clinicId ?? null,
         phone,
         displayName: params.displayName ?? null,
         lastMessageText: params.lastMessageText ?? null,
@@ -205,7 +212,7 @@ export async function upsertInboxEntry(params: {
         rawPayload: params.rawPayload
           ? (params.rawPayload as Parameters<typeof prisma.whatsAppInboxEntry.create>[0]['data']['rawPayload'])
           : undefined,
-        needsClinicResolution: true,
+        needsClinicResolution: params.needsClinicResolution ?? true,
         status: 'open',
         messageCount: 1,
       },

@@ -117,9 +117,9 @@ Bu durum prodüksiyonda env var'ların kaldırılmasını güçleştiriyordu ve 
 
 ```typescript
 // Bayrak semantiği:
-// ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=true   → env fallback aktif (default)
+// ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=true   → env fallback aktif
 // ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=false  → panel-first; DB kaydı zorunlu
-// ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=       → true ile aynı (güvenli default)
+// ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=       → prod dışında aktif, prod'da kapalı
 
 export function isLegacyFallbackEnabled(): boolean
 export function getLegacyEvolutionConfig(): LegacyEvolutionConfig | null
@@ -190,8 +190,8 @@ Bayrak `false` olduğunda liste boş görünür (veya yalnızca DB kayıtları g
 # Panel-first WhatsApp mode.
 # Set to "false" in production once all connections have been imported via the panel
 # (Organization → WhatsApp → Panel Yönetimine Aktar) and verified.
-# Default: "true" — safe for existing deployments that use env-var Evolution API config.
-ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=true
+# Default: false in production. Keep false for tenant-safe webhook routing.
+ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK=false
 ```
 
 ---
