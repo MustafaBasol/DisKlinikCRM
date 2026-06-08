@@ -47,6 +47,9 @@ model Clinic {
   whatsappConversationStates   WhatsAppConversationState[]
   whatsappConversationMessages WhatsAppConversationMessage[]
   settings                     Setting[]
+  recallSetting                ClinicRecallSetting?
+  recallCandidates             RecallCandidate[]
+  recallActions                RecallAction[]
   patientAttachments           PatientAttachment[]
   toothRecords                 ToothRecord[]
   paymentPlans                 PaymentPlan[]
@@ -124,6 +127,8 @@ model User {
   userClinics                UserClinic[]
   resolvedInboxEntries       WhatsAppInboxEntry[]           @relation("InboxEntryResolver")
   resolvedInstagramEntries   InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
+  assignedRecallCandidates   RecallCandidate[]              @relation("RecallCandidateAssignee")
+  performedRecallActions     RecallAction[]                 @relation("RecallActionPerformer")
 
   // Phase 1b: changed to organizationId scope for multi-branch
   @@unique([organizationId, email])
@@ -204,6 +209,8 @@ model Patient {
   patientClinics               PatientClinic[]
   whatsappInboxEntries         WhatsAppInboxEntry[]          @relation("InboxEntryPatient")
   instagramInboxEntries        InstagramInboxEntry[]         @relation("InstagramInboxEntryPatient")
+  recallCandidates             RecallCandidate[]
+  recallActions                RecallAction[]
 }
 
 model AppointmentType {
@@ -269,6 +276,8 @@ model Appointment {
   tasks          Task[]
   sentMessages   SentMessage[]
   activityLogs   ActivityLog[]
+  recallCandidates RecallCandidate[]
+  recallActions    RecallAction[]
   sourceRequests AppointmentRequest[] @relation("ConvertedAppointment")
 }
 
@@ -379,6 +388,7 @@ model TreatmentCase {
   inventoryTransactions InventoryTransaction[]
   procedures            TreatmentPlanProcedure[]
   packageApplications   TreatmentPackageApplication[]
+  recallCandidates      RecallCandidate[]
 }
 
 model TreatmentPackage {
@@ -557,6 +567,8 @@ model Task {
   completedAt     DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  recallActions RecallAction[]
 }
 
 model Payment {
@@ -580,6 +592,7 @@ model Payment {
   sentMessages         SentMessage[]
   installment          PaymentPlanInstallment?
   practitionerEarnings PractitionerEarning[]
+  recallCandidates     RecallCandidate[]
 }
 
 model MessageTemplate {
@@ -599,6 +612,7 @@ model MessageTemplate {
   createdBy   User?   @relation("TemplateCreator", fields: [createdById], references: [id])
 
   sentMessages SentMessage[]
+  recallCandidates RecallCandidate[]
 }
 
 model SentMessage {
@@ -633,6 +647,8 @@ model SentMessage {
   direction            String? // outgoing | incoming
   externalMessageId    String? // Provider message ID for tracking
   createdAt            DateTime            @default(now())
+
+  recallActions RecallAction[]
 }
 
 model ActivityLog {
@@ -670,6 +686,116 @@ model Setting {
   updatedAt DateTime @updatedAt
 
   @@unique([clinicId, key])
+}
+
+model ClinicRecallSetting {
+  id                                     String   @id @default(uuid())
+  clinicId                               String   @unique
+  clinic                                 Clinic   @relation(fields: [clinicId], references: [id])
+  isEnabled                              Boolean  @default(false)
+  defaultActionMode                      String   @default("LIST_ONLY") // LIST_ONLY | CREATE_TASK | CREATE_MESSAGE_DRAFT | AUTO_SEND_WHATSAPP
+  checkupEnabled                         Boolean  @default(true)
+  checkupAfterDays                       Int      @default(180)
+  checkupSendTiming                      String   @default("MANUAL") // SAME_DAY | NEXT_DAY | MANUAL
+  checkupSendTime                        String   @default("10:00")
+  checkupActionMode                      String   @default("LIST_ONLY")
+  checkupMessageTemplateId               String?
+  treatmentPlanFollowupEnabled           Boolean  @default(true)
+  treatmentPlanFollowupAfterDays         Int      @default(7)
+  treatmentPlanFollowupRepeatDays        Int      @default(14)
+  treatmentPlanFollowupMaxAttempts       Int      @default(3)
+  treatmentPlanFollowupActionMode        String   @default("CREATE_TASK")
+  treatmentPlanFollowupMessageTemplateId String?
+  incompleteTreatmentEnabled             Boolean  @default(true)
+  incompleteTreatmentAfterDays           Int      @default(14)
+  incompleteTreatmentActionMode          String   @default("CREATE_TASK")
+  incompleteTreatmentMessageTemplateId   String?
+  incompleteTreatmentAutoCreateTask      Boolean  @default(true)
+  noShowFollowupEnabled                  Boolean  @default(true)
+  noShowFollowupAfterHours               Int      @default(24)
+  noShowFollowupActionMode               String   @default("CREATE_TASK")
+  noShowFollowupMessageTemplateId        String?
+  noShowFollowupAutoCreateTask           Boolean  @default(true)
+  paymentFollowupEnabled                 Boolean  @default(true)
+  paymentFollowupAfterDays               Int      @default(3)
+  paymentFollowupActionMode              String   @default("CREATE_TASK")
+  paymentFollowupMessageTemplateId       String?
+  respectCommunicationConsent            Boolean  @default(true)
+  createdAt                              DateTime @default(now())
+  updatedAt                              DateTime @updatedAt
+
+  @@index([clinicId])
+}
+
+model RecallCandidate {
+  id                       String                  @id @default(uuid())
+  clinicId                 String
+  clinic                   Clinic                  @relation(fields: [clinicId], references: [id])
+  patientId                String
+  patient                  Patient                 @relation(fields: [patientId], references: [id])
+  recallType               String
+  priority                 String                  @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  status                   String                  @default("PENDING") // PENDING | TASK_CREATED | MESSAGE_DRAFTED | CONTACTED | APPOINTMENT_BOOKED | DECLINED | SNOOZED | COMPLETED | CANCELLED
+  sourceType               String
+  sourceId                 String
+  treatmentCaseId          String?
+  treatmentCase            TreatmentCase?          @relation(fields: [treatmentCaseId], references: [id])
+  treatmentPlanProcedureId String?
+  treatmentPlanProcedure   TreatmentPlanProcedure? @relation(fields: [treatmentPlanProcedureId], references: [id])
+  appointmentId            String?
+  appointment              Appointment?            @relation(fields: [appointmentId], references: [id])
+  paymentId                String?
+  payment                  Payment?                @relation(fields: [paymentId], references: [id])
+  estimatedValue           Float?
+  dueAt                    DateTime
+  lastContactedAt          DateTime?
+  nextActionAt             DateTime?
+  attemptsCount            Int                     @default(0)
+  maxAttempts              Int                     @default(3)
+  assignedToId             String?
+  assignedTo               User?                   @relation("RecallCandidateAssignee", fields: [assignedToId], references: [id])
+  messageTemplateId        String?
+  messageTemplate          MessageTemplate?        @relation(fields: [messageTemplateId], references: [id])
+  lastMessageDraft         String?
+  note                     String?
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  completedAt              DateTime?
+  cancelledAt              DateTime?
+
+  actions RecallAction[]
+
+  @@index([clinicId, status, dueAt])
+  @@index([clinicId, recallType, status])
+  @@index([clinicId, patientId])
+  @@index([clinicId, sourceType, sourceId])
+  @@index([assignedToId])
+}
+
+model RecallAction {
+  id            String          @id @default(uuid())
+  clinicId      String
+  clinic        Clinic          @relation(fields: [clinicId], references: [id])
+  candidateId   String
+  candidate     RecallCandidate @relation(fields: [candidateId], references: [id])
+  patientId     String
+  patient       Patient         @relation(fields: [patientId], references: [id])
+  actionType    String
+  status        String          @default("completed")
+  performedById String?
+  performedBy   User?           @relation("RecallActionPerformer", fields: [performedById], references: [id])
+  taskId        String?
+  task          Task?           @relation(fields: [taskId], references: [id])
+  messageId     String?
+  message       SentMessage?    @relation(fields: [messageId], references: [id])
+  appointmentId String?
+  appointment   Appointment?    @relation(fields: [appointmentId], references: [id])
+  note          String?
+  createdAt     DateTime        @default(now())
+
+  @@index([clinicId, candidateId])
+  @@index([clinicId, patientId])
+  @@index([clinicId, actionType, createdAt])
 }
 
 model PatientAttachment {
@@ -943,6 +1069,7 @@ model TreatmentPlanProcedure {
   updatedAt            DateTime                     @updatedAt
 
   inventoryTransactions InventoryTransaction[]
+  recallCandidates      RecallCandidate[]
 
   @@index([clinicId, treatmentCaseId])
   @@index([clinicId, patientId, toothFdi])

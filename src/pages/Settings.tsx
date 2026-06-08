@@ -30,6 +30,7 @@ import {
 import ServiceList from '../components/ServiceList';
 import UserList from '../components/UserList';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
+import RecallSettingsSection from '../components/recall/RecallSettingsSection';
 
 type TimedWhatsAppPreference = {
   enabled: boolean;
@@ -732,6 +733,12 @@ const Settings: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              <RecallSettingsSection
+                clinicId={selectedClinic?.id}
+                clinicName={selectedClinic?.name}
+                canEdit={canEditNotificationPrefs}
+              />
 
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">

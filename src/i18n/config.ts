@@ -26,6 +26,7 @@ import bookingEn from '../locales/en/booking.json';
 import branchesEn from '../locales/en/branches.json';
 import inventoryEn from '../locales/en/inventory.json';
 import noShowsEn from '../locales/en/noShows.json';
+import recallEn from '../locales/en/recall.json';
 import reportsEn from '../locales/en/reports.json';
 import earningsEn from '../locales/en/earnings.json';
 import platformEn from '../locales/en/platform.json';
@@ -56,6 +57,7 @@ import bookingTr from '../locales/tr/booking.json';
 import branchesTr from '../locales/tr/branches.json';
 import inventoryTr from '../locales/tr/inventory.json';
 import noShowsTr from '../locales/tr/noShows.json';
+import recallTr from '../locales/tr/recall.json';
 import reportsTr from '../locales/tr/reports.json';
 import earningsTr from '../locales/tr/earnings.json';
 import platformTr from '../locales/tr/platform.json';
@@ -86,6 +88,7 @@ import bookingFr from '../locales/fr/booking.json';
 import branchesFr from '../locales/fr/branches.json';
 import inventoryFr from '../locales/fr/inventory.json';
 import noShowsFr from '../locales/fr/noShows.json';
+import recallFr from '../locales/fr/recall.json';
 import reportsFr from '../locales/fr/reports.json';
 import earningsFr from '../locales/fr/earnings.json';
 import platformFr from '../locales/fr/platform.json';
@@ -116,6 +119,7 @@ import bookingDe from '../locales/de/booking.json';
 import branchesDe from '../locales/de/branches.json';
 import inventoryDe from '../locales/de/inventory.json';
 import noShowsDe from '../locales/de/noShows.json';
+import recallDe from '../locales/de/recall.json';
 import reportsDe from '../locales/de/reports.json';
 import earningsDe from '../locales/de/earnings.json';
 import platformDe from '../locales/de/platform.json';
@@ -145,6 +149,7 @@ const namespaces = [
   'branches',
   'inventory',
   'noShows',
+  'recall',
   'reports',
   'earnings',
   'platform',
@@ -178,6 +183,7 @@ const resources = {
     branches: branchesEn,
     inventory: inventoryEn,
     noShows: noShowsEn,
+    recall: recallEn,
     reports: reportsEn,
     earnings: earningsEn,
     platform: platformEn,
@@ -209,6 +215,7 @@ const resources = {
     branches: branchesTr,
     inventory: inventoryTr,
     noShows: noShowsTr,
+    recall: recallTr,
     reports: reportsTr,
     earnings: earningsTr,
     platform: platformTr,
@@ -240,6 +247,7 @@ const resources = {
     branches: branchesFr,
     inventory: inventoryFr,
     noShows: noShowsFr,
+    recall: recallFr,
     reports: reportsFr,
     earnings: earningsFr,
     platform: platformFr,
@@ -271,6 +279,7 @@ const resources = {
     branches: branchesDe,
     inventory: inventoryDe,
     noShows: noShowsDe,
+    recall: recallDe,
     reports: reportsDe,
     earnings: earningsDe,
     platform: platformDe,

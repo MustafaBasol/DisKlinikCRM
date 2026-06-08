@@ -281,6 +281,35 @@ export const clinicOperatingPreferencesService = {
     ),
 };
 
+export const recallService = {
+  getSettings: (clinicId?: string) =>
+    api.get('/recall/settings', {
+      params: clinicId ? { clinicId } : undefined,
+    }),
+  updateSettings: (settings: any, clinicId?: string) =>
+    api.put(
+      '/recall/settings',
+      { settings },
+      { params: clinicId ? { clinicId } : undefined },
+    ),
+  generate: (clinicId?: string) =>
+    api.post('/recall/generate', {}, {
+      params: clinicId ? { clinicId } : undefined,
+    }),
+  getCandidates: (params?: any) => api.get('/recall/candidates', { params }),
+  getCandidate: (id: string) => api.get(`/recall/candidates/${id}`),
+  updateStatus: (id: string, data: { status: string; note?: string }) =>
+    api.patch(`/recall/candidates/${id}/status`, data),
+  snooze: (id: string, data: { nextActionAt: string; note?: string }) =>
+    api.post(`/recall/candidates/${id}/snooze`, data),
+  createTask: (id: string, data?: { note?: string }) =>
+    api.post(`/recall/candidates/${id}/create-task`, data ?? {}),
+  prepareMessage: (id: string) =>
+    api.post(`/recall/candidates/${id}/prepare-message`),
+  logContact: (id: string, data?: { note?: string }) =>
+    api.post(`/recall/candidates/${id}/log-contact`, data ?? {}),
+};
+
 export const reportService = {
   getRevenue: (params?: any) => api.get('/reports/revenue', { params }),
   getDoctorPerformance: (params?: any) => api.get('/reports/doctor-performance', { params }),

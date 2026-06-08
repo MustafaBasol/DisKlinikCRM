@@ -1,0 +1,167 @@
+{
+  "nav": "Geri Kazanım",
+  "title": "Geri Kazanım",
+  "subtitle": "Kontrol zamanı gelen, tedavisi yarım kalan, randevusuna gelmeyen veya ödeme takibi gereken hastaları bulun.",
+  "summary": {
+    "today": "Bugün",
+    "checkups": "Kontroller",
+    "incomplete": "Yarım tedavi",
+    "plans": "Bekleyen plan",
+    "noShows": "No-show",
+    "revenue": "Bekleyen değer"
+  },
+  "filters": {
+    "search": "Hasta veya telefon ara",
+    "allTypes": "Tüm recall tipleri",
+    "allStatuses": "Tüm durumlar",
+    "allPriorities": "Tüm öncelikler"
+  },
+  "table": {
+    "patient": "Hasta",
+    "phone": "Telefon",
+    "type": "Recall tipi",
+    "priority": "Öncelik",
+    "lastContact": "Son temas",
+    "source": "Tedavi / randevu",
+    "value": "Değer",
+    "status": "Durum",
+    "nextAction": "Sonraki aksiyon"
+  },
+  "types": {
+    "ROUTINE_CHECKUP": "Rutin kontrol",
+    "TREATMENT_PLAN_NOT_STARTED": "Tedavi planı başlamadı",
+    "INCOMPLETE_TREATMENT": "Yarım kalan tedavi",
+    "NO_SHOW_FOLLOW_UP": "No-show takibi",
+    "PAYMENT_FOLLOW_UP": "Ödeme takibi",
+    "MANUAL": "Manuel"
+  },
+  "priorities": {
+    "LOW": "Düşük",
+    "MEDIUM": "Orta",
+    "HIGH": "Yüksek",
+    "URGENT": "Acil"
+  },
+  "statuses": {
+    "PENDING": "Bekliyor",
+    "TASK_CREATED": "Görev oluşturuldu",
+    "MESSAGE_DRAFTED": "Mesaj taslağı",
+    "CONTACTED": "İletişime geçildi",
+    "APPOINTMENT_BOOKED": "Randevu aldı",
+    "DECLINED": "Reddetti",
+    "SNOOZED": "Ertelendi",
+    "COMPLETED": "Tamamlandı",
+    "CANCELLED": "İptal edildi"
+  },
+  "actions": {
+    "generate": "Adayları üret",
+    "prepareMessage": "WhatsApp taslağı hazırla",
+    "createTask": "Görev oluştur",
+    "bookAppointment": "Randevu oluştur",
+    "logContact": "İletişime geçildi",
+    "snooze": "Ertele",
+    "decline": "Reddetti"
+  },
+  "empty": {
+    "title": "Recall adayı bulunamadı",
+    "description": "Aday üretin veya geri kazanılabilir hastaları görmek için filtreleri değiştirin."
+  },
+  "errors": {
+    "loadFailed": "Recall adayları yüklenemedi.",
+    "generateFailed": "Recall adayları üretilemedi.",
+    "settingsDisabled": "Bu klinikte recall sistemi kapalı.",
+    "messageFailed": "WhatsApp taslağı hazırlanamadı.",
+    "taskFailed": "Recall görevi oluşturulamadı.",
+    "statusFailed": "Recall durumu güncellenemedi.",
+    "actionFailed": "Recall aksiyonu tamamlanamadı."
+  },
+  "success": {
+    "generated": "{{count}} aday üretildi.",
+    "taskCreated": "Recall görevi oluşturuldu.",
+    "statusUpdated": "Recall durumu güncellendi.",
+    "snoozed": "Recall adayı ertelendi.",
+    "contactLogged": "Temas kaydedildi."
+  },
+  "actionModal": {
+    "note": "Not",
+    "snooze": {
+      "title": "Recall ertele",
+      "nextActionAt": "Sonraki aksiyon tarihi",
+      "notePlaceholder": "İsteğe bağlı neden veya sonraki adım",
+      "submit": "Ertele"
+    },
+    "contact": {
+      "title": "Temas kaydet",
+      "notePlaceholder": "Arama veya mesajlaşmada ne oldu?",
+      "submit": "Teması kaydet"
+    }
+  },
+  "messageModal": {
+    "title": "WhatsApp taslağı",
+    "privacyNote": "Bu taslak bilinçli olarak teşhis, tedavi detayı ve hassas sağlık verisi içermez.",
+    "copy": "Taslağı kopyala",
+    "close": "Kapat"
+  },
+  "settings": {
+    "title": "Akıllı Hasta Geri Kazanım ve Recall",
+    "subtitle": "Kontrol zamanı gelen, tedavisi yarım kalan veya dönüş yapmayan hastalar için otomatik takip kuralları oluşturun.",
+    "clinicScope": "{{clinic}} için kaydedilir",
+    "safeDefault": "Otomatik gönderim varsayılan olarak kullanılmaz. Liste, görev veya taslak aksiyonuyla başlayın.",
+    "save": "Recall ayarlarını kaydet",
+    "loading": "Recall ayarları yükleniyor...",
+    "loadError": "Recall ayarları yüklenemedi.",
+    "saveSuccess": "Recall ayarları kaydedildi.",
+    "saveError": "Recall ayarları kaydedilemedi.",
+    "readOnly": "Recall ayarlarını görüntüleyebilirsiniz; yalnızca yöneticiler düzenleyebilir.",
+    "noTemplate": "Güvenli varsayılan metni kullan",
+    "paymentGentleLanguage": "Nazik bir dil kullanın. Sert tahsilat dili kullanmayın.",
+    "fields": {
+      "enabled": "Akıllı recall sistemi aktif",
+      "enabledHelp": "Aday üretimini açar veya kapatır.",
+      "defaultActionMode": "Varsayılan davranış",
+      "respectConsent": "İletişim iznini dikkate al",
+      "respectConsentHelp": "İzin yoksa WhatsApp taslağı oluşturulmaz.",
+      "actionMode": "Davranış",
+      "messageTemplate": "Mesaj şablonu",
+      "afterDays": "Kaç gün sonra",
+      "afterHours": "Kaç saat sonra",
+      "repeatDays": "Tekrar aralığı",
+      "maxAttempts": "Maksimum deneme",
+      "sendTiming": "Gönderim günü",
+      "sendTime": "Gönderim saati",
+      "autoTask": "Otomatik görev"
+    },
+    "actionModes": {
+      "LIST_ONLY": "Sadece listele",
+      "CREATE_TASK": "Görev oluştur",
+      "CREATE_MESSAGE_DRAFT": "WhatsApp taslağı oluştur",
+      "AUTO_SEND_WHATSAPP": "Otomatik WhatsApp gönder"
+    },
+    "sendTimings": {
+      "SAME_DAY": "Aynı gün",
+      "NEXT_DAY": "1 gün sonra",
+      "MANUAL": "Manuel"
+    },
+    "rules": {
+      "checkup": {
+        "title": "Rutin kontrol recall",
+        "description": "Son tamamlanan randevu veya tedavisi belirlenen kontrol aralığını geçen hastaları bulur."
+      },
+      "treatmentPlan": {
+        "title": "Tedavi planı follow-up",
+        "description": "Tedavi planı verilen ama başlamayan hastaları bulur."
+      },
+      "incompleteTreatment": {
+        "title": "Yarım kalan tedavi follow-up",
+        "description": "Tamamlanmış ve bekleyen adımları olan tedavi dosyalarını bulur."
+      },
+      "noShow": {
+        "title": "No-show geri çağırma",
+        "description": "Yeni aktif randevusu olmayan kaçırılmış randevuları takip eder."
+      },
+      "payment": {
+        "title": "Ödeme takip hatırlatması",
+        "description": "Ödeme modeli uygunsa vadesi geçmiş taksitleri bulur."
+      }
+    }
+  }
+}

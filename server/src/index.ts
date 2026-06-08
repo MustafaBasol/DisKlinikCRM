@@ -44,6 +44,7 @@ import operationalMonitoringRoutes from './routes/operationalMonitoring.js';
 import metaWhatsAppWebhookRoutes from './routes/metaWhatsAppWebhook.js';
 import instagramWebhookRoutes from './routes/instagramWebhook.js';
 import noShowsRoutes from './routes/noShows.js';
+import recallRoutes from './routes/recall.js';
 import patientsImportRoutes from './routes/patientsImport.js';
 import usersImportRoutes from './routes/usersImport.js';
 import { startReminderJobs } from './jobs/reminders.js';
@@ -162,6 +163,7 @@ app.use('/api', financeDashboardRoutes);
 app.use('/api', schedulesRoutes);
 app.use('/api', operationalMonitoringRoutes);
 app.use('/api', noShowsRoutes);
+app.use('/api', recallRoutes);
 app.use('/api', usersImportRoutes);
 
 app.listen(port, () => {

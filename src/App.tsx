@@ -53,6 +53,7 @@ const Operations = React.lazy(() => import('./pages/Operations'));
 const Users = React.lazy(() => import('./pages/Users'));
 const MetaCallbackPage = React.lazy(() => import('./pages/MetaCallbackPage'));
 const NoShows = React.lazy(() => import('./pages/NoShows'));
+const RecallDashboard = React.lazy(() => import('./pages/RecallDashboard'));
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
 const LegalCenterPage = React.lazy(() => import('./pages/legal/LegalCenterPage'));
 const PrivacyNoticePage = React.lazy(() => import('./pages/legal/PrivacyNoticePage'));
@@ -187,6 +188,7 @@ const ProductApplication: React.FC = () => {
               <Route path="operations" element={<Operations />} />
               <Route path="users" element={<Users />} />
               <Route path="no-shows" element={<NoShows />} />
+              <Route path="recall" element={<RecallDashboard />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>
             </Route>

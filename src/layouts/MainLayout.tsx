@@ -31,6 +31,7 @@ import {
   Activity,
   UserX,
   Instagram,
+  RotateCcw,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -53,6 +54,7 @@ import {
   canViewFinanceDashboard,
   canViewOperations,
   canViewNoShowDashboard,
+  canViewRecallDashboard,
   canViewInstagramInbox,
 } from '../utils/permissions';
 
@@ -149,6 +151,9 @@ const MainLayoutInner: React.FC = () => {
     }
     if (canViewNoShowDashboard(user)) {
       items.push({ path: '/no-shows', icon: <UserX size={18} />, label: t('common:noShowTracking') });
+    }
+    if (canViewRecallDashboard(user)) {
+      items.push({ path: '/recall', icon: <RotateCcw size={18} />, label: t('recall:nav') });
     }
     if (items.length > 0) {
       navGroups.push({ id: 'hasta', label: t('common:navGroups.patientManagement'), collapsible: true, items });
