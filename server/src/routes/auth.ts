@@ -4,7 +4,7 @@ import prisma from '../db.js';
 import { authenticate, generateToken, AuthRequest } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { logActivity } from '../utils/activity.js';
-import { checkLoginAttempt, recordLoginAttempt, resetLoginAttempts } from '../utils/helpers.js';
+import { checkLoginAttempt, recordLoginAttempt, resetLoginAttempts, validatePassword } from '../utils/helpers.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import {
   normalizeRole,
@@ -128,6 +128,77 @@ router.post(
   (_req: AuthRequest, res) => {
     clearAuthCookies(res, 'clinic');
     res.json({ success: true });
+  },
+);
+
+// POST /api/auth/change-password
+router.post(
+  '/change-password',
+  authenticate as express.RequestHandler,
+  csrfProtection('clinic'),
+  async (req: AuthRequest, res) => {
+    const { currentPassword, newPassword } = req.body ?? {};
+
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+      return res.status(400).json({
+        error: 'Current password and new password are required',
+        code: 'PASSWORD_FIELDS_REQUIRED',
+      });
+    }
+
+    const trimmedCurrentPassword = currentPassword.trim();
+    if (!trimmedCurrentPassword || !newPassword) {
+      return res.status(400).json({
+        error: 'Current password and new password are required',
+        code: 'PASSWORD_FIELDS_REQUIRED',
+      });
+    }
+
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({
+        error: 'Password does not meet security requirements',
+        code: 'PASSWORD_WEAK',
+        details: passwordValidation.errors,
+      });
+    }
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, clinicId: true, email: true, passwordHash: true },
+      });
+
+      if (!user) {
+        return res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+      }
+
+      const currentPasswordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!currentPasswordMatches) {
+        return res.status(400).json({
+          error: 'Current password is incorrect',
+          code: 'CURRENT_PASSWORD_INCORRECT',
+        });
+      }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+      });
+
+      await logActivity({
+        clinicId: user.clinicId,
+        userId: user.id,
+        entityType: 'user',
+        entityId: user.id,
+        action: 'password_changed',
+        description: `${user.email} kullanici sifresini guncelledi`,
+      });
+
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ error: 'Failed to change password', code: 'PASSWORD_CHANGE_FAILED' });
+    }
   },
 );
 

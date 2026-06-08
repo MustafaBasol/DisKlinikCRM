@@ -639,6 +639,59 @@ const run = async () => {
     assert.ok(!message.includes('16:30'));
   });
 
+  await runFixture('awaiting_time treats numbered slot selection as authoritative and skips AI extraction', async () => {
+    const recorder = createStateRecorder();
+    let aiCalls = 0;
+    const availableSlots = [
+      createSlot('09:00', 'p1', 'Dt. Sabah Hekimi'),
+      createSlot('16:30', 'p2', 'Dt. Aksam Hekimi'),
+    ];
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: '2',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots,
+        lastShownSlots: availableSlots,
+      },
+      extractNumericSelection,
+      findSlotMatches: defaultFindSlotMatches,
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      interpretTimeWithAi: async () => {
+        aiCalls += 1;
+        return {
+          exactTime: '09:00',
+          afterTime: null,
+          timePreference: null,
+        };
+      },
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => ({ appointmentType: { name: 'Dis Temizligi' } }),
+    });
+
+    assert.equal(aiCalls, 0);
+    assert.match(message, /16:30/);
+    assert.match(message, /Dt\. Aksam Hekimi/);
+    assert.doesNotMatch(message, /09:00/);
+    assert.equal(recorder.calls[0].step, 'awaiting_confirmation');
+    assert.equal(recorder.calls[0].selectedTime, '16:30');
+    assert.equal(recorder.calls[0].selectedPractitionerId, 'p2');
+    const updatedState = recorder.calls[0].stateJson as BookingStateJson;
+    assert.equal(updatedState.pendingConfirmationSlot?.localStartTime, '16:30');
+    assert.equal(updatedState.pendingConfirmationSlot?.practitionerId, 'p2');
+  });
+
   await runFixture('awaiting_time uses AI fallback interpretation when local parsing finds no actionable time signal', async () => {
     const recorder = createStateRecorder();
     const availableSlots = [
@@ -1037,6 +1090,37 @@ const run = async () => {
 
     assert.match(approveMessage, /klinik onay ekranına aldım/i);
     assert.match(approveMessage, /personel tarafından kontrol edilecek/i);
+    assert.equal(createdRequests, 1);
+  });
+
+  await runFixture('awaiting_confirmation accepts numeric approval replies', async () => {
+    let createdRequests = 0;
+    const pendingSlot = createSlot('16:30', 'p1', 'Dt. Aysegul Akmese');
+
+    const message = await handleAwaitingConfirmationStep({
+      clinicId,
+      phone,
+      text: '1',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate,
+      },
+      stateJson: {
+        availableSlots: [pendingSlot],
+        lastShownSlots: [pendingSlot],
+        pendingConfirmationSlot: pendingSlot,
+      },
+      upsertState: async () => undefined,
+      resetState: async () => undefined,
+      createAppointment: async () => {
+        createdRequests += 1;
+        return { appointmentType: { name: 'Dis Temizligi' } };
+      },
+    });
+
+    assert.match(message, /klinik onay ekran/i);
     assert.equal(createdRequests, 1);
   });
 

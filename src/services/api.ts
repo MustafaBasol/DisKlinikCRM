@@ -57,6 +57,8 @@ export const authService = {
   me: () => api.get('/auth/me'),
   csrf: () => api.get('/auth/csrf'),
   logout: () => api.post('/auth/logout'),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.post('/auth/change-password', data),
 };
 
 export const patientService = {

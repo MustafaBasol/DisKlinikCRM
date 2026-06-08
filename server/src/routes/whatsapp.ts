@@ -15,7 +15,7 @@ import {
   saveSlotsForState,
   type SavedAvailableSlot,
 } from '../services/whatsappAvailability.js';
-import { handleAwaitingConfirmationStep, handleAwaitingDateStep, handleAwaitingServiceStep, handleAwaitingTimeStep } from '../services/whatsappBookingFlow.js';
+import { handleAwaitingConfirmationStep, handleAwaitingDateStep, handleAwaitingServiceStep, handleAwaitingTimeStep, isDeterministicConfirmationReply } from '../services/whatsappBookingFlow.js';
 import {
   extractExplicitRequestedTime as interpretExplicitRequestedTime,
   extractExplicitTimeThreshold as interpretExplicitTimeThreshold,
@@ -37,6 +37,10 @@ import {
   whatsappAppointmentRequestSchema,
   whatsappAvailabilityQuerySchema,
 } from '../services/whatsappPublicApi';
+import {
+  getClinicOperatingPreferences,
+  type ClinicOperatingPreferences,
+} from '../services/clinicOperatingPreferences.js';
 import { logActivity } from '../utils/activity.js';
 import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE } from '../utils/whatsappDate.js';
 import { getZonedDateParts, minutesToTime, timeToMinutes, formatClinicDateTime, localDateTimeToClinicDate } from '../utils/helpers.js';
@@ -112,12 +116,16 @@ type AssistantService = {
 
 type SavedAppointmentSummary = {
   id: string;
+  dateKey?: string | null;
   date: string;
   startTime: string;
   endTime: string;
   serviceName: string | null;
   practitionerName: string | null;
   status: string;
+  rawStatus?: string;
+  sourceType?: 'appointment' | 'appointment_request';
+  startsAt?: string | null;
 };
 
 type SavedServiceOption = {
@@ -270,6 +278,11 @@ const extractNumericSelection = (text: string) => {
   return match ? Number(match[1]) : null;
 };
 
+const extractStandaloneNumericSelection = (text: string) => {
+  const match = normalizeIntentText(text).match(/^(\d{1,2})(?:[.)])?$/);
+  return match ? Number(match[1]) : null;
+};
+
 const readConversationStateJson = (value: unknown): ConversationStateJson => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const stateValue = value as Record<string, unknown>;
@@ -353,13 +366,112 @@ const isPlaceholderPatientName = (patient: Pick<WhatsAppContactPatient, 'firstNa
 const formatServiceList = (services: AssistantService[]) =>
   ['Elbette, hangi hizmet için randevu planlamak istersiniz?', ...services.map((s, i) => `${i + 1}. ${s.name}`)].join('\n');
 
-const formatAppointmentLookupForMessage = (appointments: SavedAppointmentSummary[]) => {
-  if (appointments.length === 0) {
-    return 'Telefon numaranızla eşleşen aktif bir randevu göremedim. İsterseniz birlikte yeni bir randevu planlayabiliriz.';
+const getDatePartsForPreference = (value: Date, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+
+  return {
+    year: parts.find(part => part.type === 'year')?.value ?? '0000',
+    month: parts.find(part => part.type === 'month')?.value ?? '00',
+    day: parts.find(part => part.type === 'day')?.value ?? '00',
+  };
+};
+
+const formatDateWithClinicPreference = (value: Date, preferences: ClinicOperatingPreferences) => {
+  const { day, month, year } = getDatePartsForPreference(value, preferences.timezone);
+  if (preferences.dateFormat === 'MM/dd/yyyy') return `${month}/${day}/${year}`;
+  if (preferences.dateFormat === 'dd/MM/yyyy') return `${day}/${month}/${year}`;
+  if (preferences.dateFormat === 'yyyy-MM-dd') return `${year}-${month}-${day}`;
+  return `${day}.${month}.${year}`;
+};
+
+const formatTimeWithClinicPreference = (value: Date, preferences: ClinicOperatingPreferences) =>
+  new Intl.DateTimeFormat(preferences.locale, {
+    timeZone: preferences.timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: preferences.timeFormat === '12h',
+    hourCycle: preferences.timeFormat === '24h' ? 'h23' : undefined,
+  }).format(value);
+
+const formatAppointmentStatusLabel = (status: string, sourceType: SavedAppointmentSummary['sourceType']) => {
+  if (sourceType === 'appointment_request') {
+    if (status === 'pending') return 'Klinik onayı bekliyor';
+    if (status === 'approved') return 'Talep onaylandı';
+    if (status === 'converted') return 'Randevuya dönüştürüldü';
+    if (status === 'rejected') return 'Reddedildi';
+    return status;
   }
-  return ['Sistemde görebildiğim randevularınız şunlar:',
-    ...appointments.map((a, i) => `${i + 1}. ${a.date} ${a.startTime} - ${a.serviceName ?? 'Hizmet bilgisi yok'}${a.practitionerName ? ` / ${a.practitionerName}` : ''} / ${a.status}`),
-  ].join('\n');
+
+  const labels: Record<string, string> = {
+    scheduled: 'Planlandı',
+    confirmed: 'Onaylandı',
+    in_progress: 'Görüşme başladı',
+    completed: 'Tamamlandı',
+    rescheduled: 'Ertelendi',
+    no_show: 'Gelmedi',
+  };
+  return labels[status] ?? status;
+};
+
+const isPendingStatusQuestion = (text?: string | null) => {
+  const normalized = normalizeTurkishSearchText(text ?? '');
+  return normalized.includes('neden onay bekliyor')
+    || normalized.includes('niye onay bekliyor')
+    || normalized.includes('onay bekliyor ne demek')
+    || normalized.includes('onay bekleyen')
+    || normalized.includes('onay bekliyor');
+};
+
+const isDoctorAppointmentQuestion = (text?: string | null) => {
+  const normalized = normalizeTurkishSearchText(text ?? '');
+  return normalized.includes('hangi doktor')
+    || normalized.includes('hangi hekim')
+    || normalized.includes('doktorla randevum')
+    || normalized.includes('hekimle randevum')
+    || normalized.includes('doktor kim')
+    || normalized.includes('hekim kim');
+};
+
+const formatAppointmentSummaryLine = (appointment: SavedAppointmentSummary, index: number) => {
+  const serviceText = appointment.serviceName ?? 'Hizmet bilgisi yok';
+  const practitionerText = appointment.practitionerName
+    ? `Hekim: ${appointment.practitionerName}`
+    : 'Hekim: Henüz atanmadı';
+  return `${index + 1}. ${appointment.date} saat ${appointment.startTime} - ${serviceText} - ${practitionerText} - Durum: ${appointment.status}`;
+};
+
+const formatAppointmentLookupForMessage = (appointments: SavedAppointmentSummary[], questionText?: string | null) => {
+  if (appointments.length > 0) {
+    const normalizedQuestionDate = questionText
+      ? normalizeDateFromTurkishInput(questionText, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE)
+      : null;
+    const dateMatches = normalizedQuestionDate
+      ? appointments.filter(appointment => appointment.dateKey === normalizedQuestionDate)
+      : [];
+    const pendingAppointments = appointments.filter(appointment => appointment.sourceType === 'appointment_request' && appointment.rawStatus === 'pending');
+
+    const intro = dateMatches.length > 0
+      ? 'Evet, bu tarihle eşleşen randevu kaydınız var:'
+      : normalizedQuestionDate
+        ? 'Bu tarihte sistemde görünen bir randevu kaydı bulamadım. Kayıtlarınız şöyle:'
+        : isDoctorAppointmentQuestion(questionText)
+          ? 'Randevu kayıtlarınızdaki hekim bilgisi şöyle:'
+          : isPendingStatusQuestion(questionText) && pendingAppointments.length > 0
+            ? '“Klinik onayı bekliyor” ifadesi, talebinizin klinik ekibi tarafından henüz kesin randevu olarak onaylanmadığı anlamına gelir. Sistemde gördüğüm randevu kayıtlarınız şöyle:'
+            : 'Sistemde gördüğüm randevu kayıtlarınız şunlar:';
+
+    const rows = dateMatches.length > 0 ? dateMatches : appointments;
+    return [intro, ...rows.map(formatAppointmentSummaryLine)].join('\n');
+  }
+  if (appointments.length === 0) {
+    return 'Telefon numaranızla eşleşen randevu kaydı göremedim. İsterseniz birlikte yeni bir randevu planlayabiliriz.';
+  }
+  return 'Randevu kayıtlarınızı şu anda okunabilir şekilde hazırlayamadım. Lütfen biraz sonra tekrar deneyin veya klinik ekibine bağlanmak istediğinizi yazın.';
 };
 
 const formatAvailabilityMessage = (date: string, slots: SavedAvailableSlot[]) => {
@@ -414,8 +526,23 @@ const isAppointmentCancellationIntent = (text: string) => {
 
 const isCheckAppointmentIntent = (text: string) => {
   const normalized = normalizeTurkishSearchText(text);
+  if (normalized.includes('randevum') && !normalized.includes('iptal')) {
+    return true;
+  }
+  if (normalized.includes('randevu') && (
+    normalized.includes('ne zaman')
+    || normalized.includes('hangi doktor')
+    || normalized.includes('hangi hekim')
+    || normalized.includes('hangi tarih')
+    || normalized.includes('onay bekliyor')
+  )) {
+    return true;
+  }
   return ['randevumu sorgulamak istiyorum', 'randevum var mi', 'randevumu ogrenmek istiyorum',
-    'randevu bilgilerimi goster', 'randevu durumumu goster']
+    'randevu bilgilerimi goster', 'randevu durumumu goster', 'randevum ne zaman',
+    'randevum hangi gun', 'randevum hangi tarihte', 'hangi doktor', 'hangi hekim',
+    'doktorla randevum var', 'hekimle randevum var', 'neden onay bekliyor',
+    'onay bekliyor ne demek', 'onay bekleyen randevum']
     .some(pattern => normalized.includes(pattern));
 };
 
@@ -694,7 +821,22 @@ const extractAssistantInputRuleBased = (text: string, services: AssistantService
   };
 };
 
-const mergeAssistantExtractions = (ruleBased: AssistantExtraction, aiBased: AssistantExtraction | null, services: AssistantService[], text: string): AssistantExtraction => {
+type AssistantExtractionSource = 'rule_based' | 'ai' | 'mixed';
+
+const hasExtractionSlots = (extraction: AssistantExtraction | null | undefined) =>
+  Boolean(
+    extraction?.name
+    || extraction?.phone
+    || extraction?.appointmentTypeName
+    || extraction?.appointmentTypeId
+    || extraction?.dateText
+    || extraction?.time
+    || extraction?.exactTime
+    || extraction?.afterTime
+    || extraction?.timePreference
+  );
+
+const mergeAssistantExtractions = (ruleBased: AssistantExtraction, aiBased: AssistantExtraction | null, services: AssistantService[], text: string): { extraction: AssistantExtraction; source: AssistantExtractionSource } => {
   const aiService = aiBased?.appointmentTypeId
     ? services.find(s => s.id === aiBased.appointmentTypeId) ?? null
     : aiBased?.appointmentTypeName
@@ -723,20 +865,53 @@ const mergeAssistantExtractions = (ruleBased: AssistantExtraction, aiBased: Assi
       ? normalizedRuleIntent
       : normalizedAiIntent;
 
+  const name = ruleBased.name ?? aiBased?.name ?? null;
+  const phone = ruleBased.phone ?? aiBased?.phone ?? null;
+  const appointmentTypeName = ruleBased.appointmentTypeName ?? aiService?.name ?? aiBased?.appointmentTypeName ?? null;
+  const appointmentTypeId = ruleBased.appointmentTypeId ?? aiService?.id ?? aiBased?.appointmentTypeId ?? null;
+  const dateText = ruleBased.dateText ?? aiBased?.dateText ?? null;
+  const time = ruleBased.time ?? aiBased?.time ?? null;
+  const exactTime = ruleBased.exactTime ?? aiBased?.exactTime ?? null;
+  const afterTime = ruleBased.afterTime ?? aiBased?.afterTime ?? null;
+  const timePreference = ruleBased.timePreference ?? aiBased?.timePreference ?? null;
+  const aiIntentUsed = Boolean(aiBased)
+    && normalizedAiIntent !== 'unknown'
+    && (shouldPreferAiIntent || (normalizedRuleIntent === 'unknown' && resolvedIntent === normalizedAiIntent));
+  const aiSlotsUsed = Boolean(aiBased) && (
+    (!ruleBased.name && Boolean(aiBased?.name) && name === aiBased?.name)
+    || (!ruleBased.phone && Boolean(aiBased?.phone) && phone === aiBased?.phone)
+    || (!ruleBased.appointmentTypeName && !ruleBased.appointmentTypeId && Boolean(aiBased?.appointmentTypeName ?? aiBased?.appointmentTypeId) && Boolean(appointmentTypeName ?? appointmentTypeId))
+    || (!ruleBased.dateText && Boolean(aiBased?.dateText) && dateText === aiBased?.dateText)
+    || (!ruleBased.time && Boolean(aiBased?.time) && time === aiBased?.time)
+    || (!ruleBased.exactTime && Boolean(aiBased?.exactTime) && exactTime === aiBased?.exactTime)
+    || (!ruleBased.afterTime && Boolean(aiBased?.afterTime) && afterTime === aiBased?.afterTime)
+    || (!ruleBased.timePreference && Boolean(aiBased?.timePreference) && timePreference === aiBased?.timePreference)
+  );
+  const ruleFieldsUsed = (normalizedRuleIntent !== 'unknown' && resolvedIntent === normalizedRuleIntent) || hasExtractionSlots(ruleBased);
+  const source: AssistantExtractionSource = !aiBased || (!aiIntentUsed && !aiSlotsUsed)
+    ? 'rule_based'
+    : ruleFieldsUsed
+      ? 'mixed'
+      : 'ai';
+  const useAiClarification = source !== 'rule_based' && Boolean(aiBased);
+
   return {
-    intent: resolvedIntent,
-    name: ruleBased.name ?? aiBased?.name ?? null,
-    phone: ruleBased.phone ?? aiBased?.phone ?? null,
-    appointmentTypeName: ruleBased.appointmentTypeName ?? aiService?.name ?? aiBased?.appointmentTypeName ?? null,
-    appointmentTypeId: ruleBased.appointmentTypeId ?? aiService?.id ?? aiBased?.appointmentTypeId ?? null,
-    dateText: ruleBased.dateText ?? aiBased?.dateText ?? null,
-    time: ruleBased.time ?? aiBased?.time ?? null,
-    exactTime: ruleBased.exactTime ?? aiBased?.exactTime ?? null,
-    afterTime: ruleBased.afterTime ?? aiBased?.afterTime ?? null,
-    timePreference: ruleBased.timePreference ?? aiBased?.timePreference ?? null,
-    confidence: shouldPreferAiIntent ? (aiBased?.confidence ?? ruleBased.confidence) : (ruleBased.confidence > 0.2 ? ruleBased.confidence : (aiBased?.confidence ?? ruleBased.confidence)),
-    needsClarification: aiBased?.needsClarification ?? false,
-    clarificationReason: aiBased?.clarificationReason ?? null,
+    extraction: {
+      intent: resolvedIntent,
+      name,
+      phone,
+      appointmentTypeName,
+      appointmentTypeId,
+      dateText,
+      time,
+      exactTime,
+      afterTime,
+      timePreference,
+      confidence: shouldPreferAiIntent ? (aiBased?.confidence ?? ruleBased.confidence) : (ruleBased.confidence > 0.2 ? ruleBased.confidence : (aiBased?.confidence ?? ruleBased.confidence)),
+      needsClarification: useAiClarification ? (aiBased?.needsClarification ?? false) : ruleBased.needsClarification,
+      clarificationReason: useAiClarification ? (aiBased?.clarificationReason ?? null) : ruleBased.clarificationReason,
+    },
+    source,
   };
 };
 
@@ -754,15 +929,15 @@ const resolveAssistantExtraction = async (text: string, services: AssistantServi
     });
     const merged = mergeAssistantExtractions(ruleBased, aiBased, services, text);
     console.info('[whatsapp-assistant] extraction-source', {
-      usedAi: Boolean(aiBased),
-      intent: merged.intent,
-      timePreference: merged.timePreference,
-      exactTime: merged.exactTime,
-      afterTime: merged.afterTime,
-      confidence: merged.confidence,
-      needsClarification: merged.needsClarification,
+      source: merged.source,
+      intent: merged.extraction.intent,
+      timePreference: merged.extraction.timePreference,
+      exactTime: merged.extraction.exactTime,
+      afterTime: merged.extraction.afterTime,
+      confidence: merged.extraction.confidence,
+      needsClarification: merged.extraction.needsClarification,
     });
-    return merged;
+    return merged.extraction;
   } catch (error) {
     console.error('[whatsapp-assistant] ai-extraction-error', error);
     return ruleBased;
@@ -807,7 +982,7 @@ const resolveAssistantExtractionWithAgentDecision = async (
   if (agentDecision) {
     const ruleBased = extractAssistantInputRuleBased(text, services);
     const agentBased = buildAssistantExtractionFromAgentDecision(agentDecision, services);
-    return mergeAssistantExtractions(ruleBased, agentBased, services, text);
+    return mergeAssistantExtractions(ruleBased, agentBased, services, text).extraction;
   }
 
   return resolveAssistantExtraction(text, services, state);
@@ -1075,8 +1250,8 @@ const ensurePatientForWhatsApp = async (clinicId: string, phone: string, custome
 };
 
 const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
-  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
-  const timeZone = clinic?.timezone || 'Europe/Istanbul';
+  const preferences = await getClinicOperatingPreferences(clinicId);
+  const timeZone = preferences.timezone || 'Europe/Istanbul';
   const now = new Date();
   const normalizedPhone = normalizePhone(phone);
   const patient = await findExistingPatientByPhone(clinicId, phone);
@@ -1084,8 +1259,8 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
   const [appointments, pendingRequests] = await Promise.all([
     patient ? prisma.appointment.findMany({
       where: {
-        clinicId, deletedAt: null, status: { notIn: ['cancelled'] },
-        startTime: { gte: now }, patientId: patient.id,
+        clinicId, deletedAt: null, status: { notIn: ['cancelled', 'no_show'] },
+        patientId: patient.id,
       },
       select: {
         id: true, startTime: true, endTime: true, status: true,
@@ -1100,10 +1275,17 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
       where: {
         clinicId,
         phone: normalizedPhone,
+        requestType: 'appointment',
         status: { in: ['pending', 'approved'] },
+        OR: [
+          { preferredStartTime: { not: null } },
+          { preferredEndTime: { not: null } },
+          { practitionerId: { not: null } },
+          { appointmentTypeId: { not: null } },
+        ],
       },
       select: {
-        id: true, preferredStartTime: true, preferredEndTime: true, status: true,
+        id: true, preferredStartTime: true, preferredEndTime: true, status: true, convertedAppointmentId: true,
         appointmentType: { select: { name: true } },
         practitioner: { select: { firstName: true, lastName: true } },
         notes: true,
@@ -1115,31 +1297,52 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
 
   const appointmentSummaries: SavedAppointmentSummary[] = appointments.map(a => {
     const start = formatClinicDateTime(a.startTime, timeZone);
-    const end = formatClinicDateTime(a.endTime, timeZone);
     return {
-      id: a.id, date: start.date, startTime: start.time, endTime: end.time,
+      id: a.id,
+      dateKey: start.date,
+      date: formatDateWithClinicPreference(a.startTime, preferences),
+      startTime: formatTimeWithClinicPreference(a.startTime, preferences),
+      endTime: formatTimeWithClinicPreference(a.endTime, preferences),
       serviceName: a.appointmentType?.name ?? null,
       practitionerName: a.practitioner ? `${a.practitioner.firstName} ${a.practitioner.lastName}` : null,
-      status: a.status,
+      status: formatAppointmentStatusLabel(a.status, 'appointment'),
+      rawStatus: a.status,
+      sourceType: 'appointment',
+      startsAt: a.startTime.toISOString(),
     };
   });
 
-  const requestSummaries: SavedAppointmentSummary[] = pendingRequests.map(r => {
+  const requestSummaries: SavedAppointmentSummary[] = pendingRequests.filter(r => !r.convertedAppointmentId).map(r => {
     const start = r.preferredStartTime ? formatClinicDateTime(r.preferredStartTime, timeZone) : null;
-    const end = r.preferredEndTime ? formatClinicDateTime(r.preferredEndTime, timeZone) : null;
     const isGeneralAssessment = !r.appointmentType || r.notes?.includes('genel muayene');
     return {
       id: r.id,
-      date: start?.date ?? 'Tarih belirsiz',
-      startTime: start?.time ?? 'Saat belirsiz',
-      endTime: end?.time ?? '',
+      dateKey: start?.date ?? null,
+      date: r.preferredStartTime ? formatDateWithClinicPreference(r.preferredStartTime, preferences) : 'Tarih netleşmedi',
+      startTime: r.preferredStartTime ? formatTimeWithClinicPreference(r.preferredStartTime, preferences) : 'Saat netleşmedi',
+      endTime: r.preferredEndTime ? formatTimeWithClinicPreference(r.preferredEndTime, preferences) : '',
       serviceName: r.appointmentType?.name ?? (isGeneralAssessment ? 'Genel muayene / acil değerlendirme' : null),
       practitionerName: r.practitioner ? `${r.practitioner.firstName} ${r.practitioner.lastName}` : null,
-      status: r.status === 'approved' ? 'Onaylandı' : 'Onay bekliyor',
+      rawStatus: r.status,
+      sourceType: 'appointment_request',
+      startsAt: r.preferredStartTime?.toISOString() ?? null,
+      status: formatAppointmentStatusLabel(r.status, 'appointment_request'),
     };
   });
 
-  return [...appointmentSummaries, ...requestSummaries];
+  return [...appointmentSummaries, ...requestSummaries]
+    .sort((left, right) => {
+      if (!left.startsAt && !right.startsAt) return 0;
+      if (!left.startsAt) return 1;
+      if (!right.startsAt) return -1;
+      const leftTime = new Date(left.startsAt).getTime();
+      const rightTime = new Date(right.startsAt).getTime();
+      const leftFuture = leftTime >= now.getTime();
+      const rightFuture = rightTime >= now.getTime();
+      if (leftFuture !== rightFuture) return leftFuture ? -1 : 1;
+      return leftFuture ? leftTime - rightTime : rightTime - leftTime;
+    })
+    .slice(0, 10);
 };
 
 const createAppointmentRequestFromAssistant = async (
@@ -1997,7 +2200,7 @@ const executeAgentDecision = async (args: {
       ...clearBookingState(),
     });
     const appointments = await getAppointmentsForPhone(args.clinic.id, args.input.phone);
-    return formatAppointmentLookupForMessage(appointments);
+    return formatAppointmentLookupForMessage(appointments, args.input.text);
   }
 
   if (decision.action === 'cancel_appointment' || intent === 'cancel_appointment') {
@@ -2075,6 +2278,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   const stateJson = readConversationStateJson(state?.stateJson);
   const services = await getAssistantServices(clinic.id);
   const normalizedText = normalizeIntentText(input.text);
+  const standaloneNumericSelection = extractStandaloneNumericSelection(input.text);
   const persistedCustomerName = existingPatient ? getPatientFullName(existingPatient) : null;
   const customerName = state?.customerName || persistedCustomerName;
   const currentStep = (state?.step ?? null) as AssistantStep | 'main_menu' | null;
@@ -2228,7 +2432,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     logStateTransition(input.phone, currentStep, 'main_menu', 'global_check_appointment');
     await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, step: null, currentIntent: 'check_appointment', lastMessage: input.text, ...clearBookingState() });
     const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
-    return formatAppointmentLookupForMessage(appointments);
+    return formatAppointmentLookupForMessage(appointments, input.text);
   }
 
   // ── GLOBAL EXIT: closing/farewell detected at any step ───────────────────
@@ -2335,6 +2539,71 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     });
   }
 
+  if (currentStep === 'main_menu' && standaloneNumericSelection !== null) {
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'main_menu-deterministic', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
+    if (standaloneNumericSelection === 1) {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_service',
+        selectedAppointmentTypeId: null,
+        selectedAppointmentTypeName: null,
+        selectedDate: null,
+        selectedTime: null,
+        lastMessage: input.text,
+        stateJson: null,
+      });
+      return formatServiceList(services);
+    }
+    if (standaloneNumericSelection === 2) {
+      const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
+      return formatAppointmentLookupForMessage(appointments, input.text);
+    }
+    if (standaloneNumericSelection === 3) {
+      return handleCancelIntent(clinic.id, input.phone);
+    }
+    if (standaloneNumericSelection === 4) {
+      return ['Hizmetlerimiz şu şekilde:', ...services.map((s, i) => `${i + 1}. ${s.name}`)].join('\n');
+    }
+    return 'Bu numarayı mevcut seçenekler içinde anlayamadım. İsterseniz ne yapmak istediğinizi kısaca yazabilirsiniz.';
+  }
+
+  if (currentStep === 'awaiting_service' && standaloneNumericSelection !== null) {
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_service-deterministic', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    return handleAwaitingServiceStep({
+      text: input.text, phone: input.phone, customerName, services,
+      state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate },
+      stateJson: { matchedServices: stateJson.matchedServices },
+      extractNumericSelection, findServiceMatches, formatServiceList,
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+    });
+  }
+
+  if (currentStep === 'awaiting_time' && standaloneNumericSelection !== null) {
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_time-deterministic', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    return handleAwaitingTimeStep({
+      prisma, clinicId: clinic.id, phone: input.phone, text: input.text, customerName,
+      state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
+      stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots },
+      extractNumericSelection, findSlotMatches, formatAvailabilityMessage, minutesToTime, logAvailabilitySave,
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
+      createAppointment: createAppointmentRequestFromAssistant,
+    });
+  }
+
+  if (currentStep === 'awaiting_confirmation' && isDeterministicConfirmationReply(input.text)) {
+    console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_confirmation-deterministic', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    return handleAwaitingConfirmationStep({
+      clinicId: clinic.id, phone: input.phone, text: input.text, customerName,
+      state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
+      stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots, pendingConfirmationSlot: stateJson.pendingConfirmationSlot },
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
+      createAppointment: createAppointmentRequestFromAssistant,
+    });
+  }
+
   const [recentMessages, clinicFacts] = await Promise.all([
     loadRecentWhatsAppAgentMessages(clinic.id, existingPatient?.id, input.phone),
     loadWhatsAppAgentClinicFacts(clinic),
@@ -2417,7 +2686,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     logGlobalIntent(input.phone, input.text, currentStep, 'appointment_query');
     await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, step: null, currentIntent: 'appointment_query', lastMessage: input.text, ...clearBookingState() });
     const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
-    return formatAppointmentLookupForMessage(appointments);
+    return formatAppointmentLookupForMessage(appointments, input.text);
   }
 
   if (preflightIntent === 'cancel_appointment') {
@@ -2457,7 +2726,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   if (!existingPatient && currentStep !== 'awaiting_name') {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_name', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     await upsertWhatsAppConversationState(clinic.id, input.phone, {
-      customerName: null, currentIntent: null, step: 'awaiting_name',
+      customerName: null, currentIntent: preflightIntent === 'book_appointment' ? 'book_appointment' : null, step: 'awaiting_name',
       selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedPractitionerId: null,
       selectedDate: null, selectedTime: null, lastMessage: input.text, stateJson: null,
     });
@@ -2466,14 +2735,38 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
 
   if (currentStep === 'awaiting_name') {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_name', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
+    if (preflightIntent === 'book_appointment') {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName: null,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_name',
+        lastMessage: input.text,
+        stateJson: null,
+      });
+      return 'Randevu akışına devam edebilmem için önce adınızı ve soyadınızı yazar mısınız? Örneğin Mustafa Yılmaz gibi.';
+    }
     const parsedName = splitNameForPatient(input.text);
     if (!parsedName.firstName || !hasValidLastName(parsedName.lastName)) {
-      await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName: null, currentIntent: null, step: 'awaiting_name', lastMessage: input.text, stateJson: null });
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName: null,
+        currentIntent: state?.currentIntent === 'book_appointment' ? 'book_appointment' : null,
+        step: 'awaiting_name',
+        lastMessage: input.text,
+        stateJson: null,
+      });
       return 'Kaydınızı oluşturabilmem için ad ve soyadınızı birlikte paylaşır mısınız? Örneğin Mustafa Yılmaz gibi yazabilirsiniz.';
     }
     const createdPatient = await createPatientFromWhatsAppName(clinic.id, input.phone, input.text);
     await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: createdPatient.id, phone: input.phone, providerMessageId: input.messageId, direction: 'incoming', text: input.text, rawPayload: input.rawPayload });
     const fullName = getPatientFullName(createdPatient);
+    if (state?.currentIntent === 'book_appointment') {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+        customerName: fullName, currentIntent: 'book_appointment', step: 'awaiting_service',
+        selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedPractitionerId: null,
+        selectedDate: null, selectedTime: null, lastMessage: input.text, stateJson: null,
+      });
+      return formatServiceList(services);
+    }
     await upsertWhatsAppConversationState(clinic.id, input.phone, {
       customerName: fullName, currentIntent: null, step: 'main_menu',
       selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedPractitionerId: null,
@@ -2500,7 +2793,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     }
     if (normalizedText === '2') {
       const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
-      return formatAppointmentLookupForMessage(appointments);
+      return formatAppointmentLookupForMessage(appointments, input.text);
     }
     if (normalizedText === '3') return handleCancelIntent(clinic.id, input.phone);
     if (normalizedText === '4') {
