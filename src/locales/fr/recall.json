@@ -1,1 +1,79 @@
-{}
+{
+  "nav": "Récupération",
+  "settingsSummary": {
+    "title": "Récupération intelligente des patients",
+    "description": "Le système de récupération intelligente suit les patients arrivés au moment du contrôle ou dont le traitement est resté inachevé.",
+    "manage": "Gérer les paramètres"
+  },
+  "settings": {
+    "nav": "Récupération des patients",
+    "alternateNav": "Paramètres de recall",
+    "title": "Récupération intelligente des patients et recall",
+    "subtitle": "Créez des règles de suivi automatique pour les patients à contrôler, les traitements inachevés ou les retours manqués.",
+    "clinicScope": "Enregistré pour {{clinic}}",
+    "safeDefault": "L'envoi automatique n'est pas utilisé par défaut. Commencez avec une liste, une tâche ou un brouillon.",
+    "save": "Enregistrer les paramètres de recall",
+    "loading": "Chargement des paramètres de recall...",
+    "loadError": "Impossible de charger les paramètres de recall.",
+    "saveSuccess": "Paramètres de recall enregistrés.",
+    "saveError": "Impossible d'enregistrer les paramètres de recall.",
+    "readOnly": "Vous pouvez consulter ces paramètres, mais seuls les responsables peuvent les modifier.",
+    "expandRule": "Ouvrir les paramètres de la règle",
+    "collapseRule": "Fermer les paramètres de la règle",
+    "noTemplate": "Utiliser le texte sécurisé par défaut",
+    "paymentGentleLanguage": "Utilisez un ton courtois. N'utilisez pas de formulation agressive de recouvrement.",
+    "state": {
+      "active": "Actif",
+      "inactive": "Inactif"
+    },
+    "fields": {
+      "enabled": "Système de recall intelligent actif",
+      "enabledHelp": "Active ou désactive la génération de candidats.",
+      "defaultActionMode": "Comportement par défaut",
+      "respectConsent": "Respecter le consentement de communication",
+      "respectConsentHelp": "Aucun brouillon WhatsApp n'est créé sans consentement.",
+      "actionMode": "Comportement",
+      "messageTemplate": "Modèle de message",
+      "afterDays": "Après combien de jours",
+      "afterHours": "Après combien d'heures",
+      "repeatDays": "Intervalle de répétition",
+      "maxAttempts": "Nombre maximal de tentatives",
+      "sendTiming": "Jour d'envoi",
+      "sendTime": "Heure d'envoi",
+      "autoTask": "Tâche automatique"
+    },
+    "actionModes": {
+      "LIST_ONLY": "Lister seulement",
+      "CREATE_TASK": "Créer une tâche",
+      "CREATE_MESSAGE_DRAFT": "Créer un brouillon WhatsApp",
+      "AUTO_SEND_WHATSAPP": "Envoi WhatsApp automatique"
+    },
+    "sendTimings": {
+      "SAME_DAY": "Le même jour",
+      "NEXT_DAY": "1 jour plus tard",
+      "MANUAL": "Manuel"
+    },
+    "rules": {
+      "checkup": {
+        "title": "Recall de contrôle de routine",
+        "description": "Identifie les patients dont la dernière visite ou le traitement terminé dépasse l'intervalle de contrôle."
+      },
+      "treatmentPlan": {
+        "title": "Suivi du plan de traitement",
+        "description": "Identifie les patients ayant reçu un plan de traitement mais ne l'ayant pas commencé."
+      },
+      "incompleteTreatment": {
+        "title": "Suivi des traitements inachevés",
+        "description": "Identifie les dossiers de traitement avec des étapes terminées et des étapes restantes."
+      },
+      "noShow": {
+        "title": "Rappel après no-show",
+        "description": "Suit les rendez-vous manqués lorsqu'aucun nouveau rendez-vous actif n'existe."
+      },
+      "payment": {
+        "title": "Rappel de suivi de paiement",
+        "description": "Identifie les échéances de paiement en retard lorsque le modèle de paiement le permet."
+      }
+    }
+  }
+}

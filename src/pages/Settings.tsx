@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import { CLINIC_OPERATING_PREFERENCES_UPDATED_EVENT } from '../context/ClinicPreferencesContext';
@@ -53,7 +53,7 @@ type NotificationPreferences = {
   };
 };
 
-type SettingsTab = 'general' | 'users' | 'availability' | 'services' | 'integrations';
+type SettingsTab = 'general' | 'recall' | 'users' | 'availability' | 'services' | 'integrations';
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   whatsapp: {
@@ -236,7 +236,7 @@ const SimplePreferenceRow: React.FC<SimplePreferenceRowProps> = ({
 );
 
 const Settings: React.FC = () => {
-  const { t, i18n } = useTranslation(['common', 'settings']);
+  const { t, i18n } = useTranslation(['common', 'settings', 'recall']);
   const { user } = useAuth();
   const { availableClinics, selectedClinicId } = useClinic();
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
@@ -245,6 +245,7 @@ const Settings: React.FC = () => {
   const canEditNotificationPrefs = canManageUsers(user);
   const canEditOperatingPrefs = canManageUsers(user);
   const canSeeGeneral = !isDentist;
+  const canSeeRecall = canSeeGeneral;
   const canSeeServices = !isDentist && (canManageUsers(user) || userCanonicalRole === 'RECEPTIONIST');
   const canSeeUsers = !isDentist && canManageUsers(user);
   const canSeeIntegrationsTab = !isDentist && canSeeIntegrations;
@@ -285,6 +286,7 @@ const Settings: React.FC = () => {
   useEffect(() => {
     const activeTabAllowed =
       (activeTab === 'general' && canSeeGeneral) ||
+      (activeTab === 'recall' && canSeeRecall) ||
       (activeTab === 'services' && canSeeServices) ||
       (activeTab === 'users' && canSeeUsers) ||
       (activeTab === 'integrations' && canSeeIntegrationsTab) ||
@@ -297,6 +299,7 @@ const Settings: React.FC = () => {
     activeTab,
     canSeeAvailability,
     canSeeGeneral,
+    canSeeRecall,
     canSeeIntegrationsTab,
     canSeeServices,
     canSeeUsers,
@@ -488,6 +491,17 @@ const Settings: React.FC = () => {
               >
                 <UserCog size={18} />
                 {t('settings:generalPreferences')}
+              </button>
+            )}
+            {canSeeRecall && (
+              <button
+                onClick={() => setActiveTab('recall')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'recall' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <RotateCcw size={18} />
+                {t('recall:settings.nav')}
               </button>
             )}
             {canSeeServices && (
@@ -734,11 +748,29 @@ const Settings: React.FC = () => {
                 </div>
               </div>
 
-              <RecallSettingsSection
-                clinicId={selectedClinic?.id}
-                clinicName={selectedClinic?.name}
-                canEdit={canEditNotificationPrefs}
-              />
+              {canSeeRecall && (
+                <div className="card p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                        <RotateCcw size={20} />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold text-gray-900">{t('recall:settingsSummary.title')}</h2>
+                        <p className="mt-1 text-sm text-gray-500">{t('recall:settingsSummary.description')}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('recall')}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+                    >
+                      <RotateCcw size={16} />
+                      {t('recall:settingsSummary.manage')}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
@@ -1019,6 +1051,14 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {canSeeRecall && activeTab === 'recall' && (
+            <RecallSettingsSection
+              clinicId={selectedClinic?.id}
+              clinicName={selectedClinic?.name}
+              canEdit={canEditNotificationPrefs}
+            />
           )}
 
           {canSeeServices && activeTab === 'services' && (

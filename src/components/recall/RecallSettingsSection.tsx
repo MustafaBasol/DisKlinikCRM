@@ -4,6 +4,7 @@ import {
   BellRing,
   CalendarClock,
   CheckSquare,
+  ChevronDown,
   Clock,
   CreditCard,
   MessageSquare,
@@ -15,6 +16,7 @@ import { messageTemplateService, recallService } from '../../services/api';
 
 type RecallActionMode = 'LIST_ONLY' | 'CREATE_TASK' | 'CREATE_MESSAGE_DRAFT' | 'AUTO_SEND_WHATSAPP';
 type RecallSendTiming = 'SAME_DAY' | 'NEXT_DAY' | 'MANUAL';
+type RecallRuleId = 'checkup' | 'treatmentPlan' | 'incompleteTreatment' | 'noShow' | 'payment';
 
 type RecallSettings = {
   isEnabled: boolean;
@@ -123,14 +125,17 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, disabled, label, o
 );
 
 interface RuleCardProps {
+  id: RecallRuleId;
   title: string;
   description: string;
   icon: React.ReactNode;
   enabled: boolean;
   disabled: boolean;
+  isOpen: boolean;
   actionMode: RecallActionMode;
   templateId?: string | null;
   templates: MessageTemplate[];
+  onToggle: (id: RecallRuleId) => void;
   onEnabledChange: (enabled: boolean) => void;
   onActionModeChange: (mode: RecallActionMode) => void;
   onTemplateChange: (templateId: string | null) => void;
@@ -138,14 +143,17 @@ interface RuleCardProps {
 }
 
 const RuleCard: React.FC<RuleCardProps> = ({
+  id,
   title,
   description,
   icon,
   enabled,
   disabled,
+  isOpen,
   actionMode,
   templateId,
   templates,
+  onToggle,
   onEnabledChange,
   onActionModeChange,
   onTemplateChange,
@@ -154,60 +162,84 @@ const RuleCard: React.FC<RuleCardProps> = ({
   const { t } = useTranslation('recall');
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 gap-3">
-          <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+    <div className="rounded-lg border border-gray-200 bg-white">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+        <button
+          type="button"
+          onClick={() => onToggle(id)}
+          className="flex min-w-0 flex-1 gap-3 text-left"
+          aria-expanded={isOpen}
+        >
+          <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
             {icon}
-          </div>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-gray-900">{title}</h3>
-            <p className="mt-1 text-sm text-gray-500">{description}</p>
-          </div>
+          </span>
+          <span className="min-w-0">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-gray-900">{title}</span>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                enabled ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {enabled ? t('settings.state.active') : t('settings.state.inactive')}
+              </span>
+            </span>
+            <span className="mt-1 block text-sm text-gray-500">{description}</span>
+          </span>
+        </button>
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <ToggleSwitch checked={enabled} disabled={disabled} label={title} onChange={onEnabledChange} />
+          <button
+            type="button"
+            onClick={() => onToggle(id)}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+            aria-label={isOpen ? t('settings.collapseRule') : t('settings.expandRule')}
+          >
+            <ChevronDown size={18} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
         </div>
-        <ToggleSwitch checked={enabled} disabled={disabled} label={title} onChange={onEnabledChange} />
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 md:grid-cols-2 xl:grid-cols-4">
-        {children}
+      {isOpen && (
+        <div className="grid grid-cols-1 gap-3 border-t border-gray-100 p-4 pt-4 md:grid-cols-2 xl:grid-cols-4">
+          {children}
 
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-            {t('settings.fields.actionMode')}
-          </span>
-          <select
-            value={actionMode}
-            disabled={disabled || !enabled}
-            onChange={(event) => onActionModeChange(event.target.value as RecallActionMode)}
-            className="input-field w-full"
-          >
-            {actionModes.map((mode) => (
-              <option key={mode} value={mode}>
-                {t(`settings.actionModes.${mode}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+              {t('settings.fields.actionMode')}
+            </span>
+            <select
+              value={actionMode}
+              disabled={disabled || !enabled}
+              onChange={(event) => onActionModeChange(event.target.value as RecallActionMode)}
+              className="input-field w-full"
+            >
+              {actionModes.map((mode) => (
+                <option key={mode} value={mode}>
+                  {t(`settings.actionModes.${mode}`)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-            {t('settings.fields.messageTemplate')}
-          </span>
-          <select
-            value={templateId ?? ''}
-            disabled={disabled || !enabled}
-            onChange={(event) => onTemplateChange(event.target.value || null)}
-            className="input-field w-full"
-          >
-            <option value="">{t('settings.noTemplate')}</option>
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name} ({template.language})
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+              {t('settings.fields.messageTemplate')}
+            </span>
+            <select
+              value={templateId ?? ''}
+              disabled={disabled || !enabled}
+              onChange={(event) => onTemplateChange(event.target.value || null)}
+              className="input-field w-full"
+            >
+              <option value="">{t('settings.noTemplate')}</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} ({template.language})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
     </div>
   );
 };
@@ -225,6 +257,7 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [openRule, setOpenRule] = useState<RecallRuleId | null>('checkup');
 
   useEffect(() => {
     if (!clinicId) return;
@@ -277,120 +310,127 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
 
   const globalDisabled = !canEdit || !clinicId;
   const paymentNote = useMemo(() => t('settings.paymentGentleLanguage'), [t]);
+  const handleRuleToggle = (ruleId: RecallRuleId) => {
+    setOpenRule((current) => (current === ruleId ? null : ruleId));
+  };
 
   return (
-    <div className="card p-6">
-      <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
-        <BellRing size={20} className="text-gray-400" />
-        <div>
-          <h2 className="text-lg font-bold">{t('settings.title')}</h2>
-          <p className="mt-1 text-sm text-gray-500">{t('settings.subtitle')}</p>
-        </div>
-      </div>
-
-      <div className="mb-5 flex flex-col gap-3 border-b border-gray-100 pb-5 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          {clinicName && (
-            <p className="text-xs font-medium text-gray-500">
-              {t('settings.clinicScope', { clinic: clinicName })}
-            </p>
-          )}
-          <p className="mt-1 text-xs text-gray-500">{t('settings.safeDefault')}</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={globalDisabled || saving || loading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          {saving ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-          ) : (
-            <Save size={16} />
-          )}
-          {t('settings.save')}
-        </button>
-      </div>
-
-      {!canEdit && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {t('settings.readOnly')}
-        </div>
-      )}
-
-      {message && (
-        <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
-          message.type === 'success'
-            ? 'border-green-200 bg-green-50 text-green-700'
-            : 'border-red-200 bg-red-50 text-red-700'
-        }`}>
-          {message.text}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-          {t('settings.loading')}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="flex items-center justify-between gap-3 rounded-lg bg-white p-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{t('settings.fields.enabled')}</p>
-                  <p className="text-xs text-gray-500">{t('settings.fields.enabledHelp')}</p>
-                </div>
-                <ToggleSwitch
-                  checked={settings.isEnabled}
-                  disabled={globalDisabled}
-                  label={t('settings.fields.enabled')}
-                  onChange={(enabled) => updateSetting('isEnabled', enabled)}
-                />
-              </div>
-
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  {t('settings.fields.defaultActionMode')}
-                </span>
-                <select
-                  value={settings.defaultActionMode}
-                  disabled={globalDisabled}
-                  onChange={(event) => updateSetting('defaultActionMode', event.target.value as RecallActionMode)}
-                  className="input-field w-full"
-                >
-                  {actionModes.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {t(`settings.actionModes.${mode}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="flex items-center justify-between gap-3 rounded-lg bg-white p-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{t('settings.fields.respectConsent')}</p>
-                  <p className="text-xs text-gray-500">{t('settings.fields.respectConsentHelp')}</p>
-                </div>
-                <ToggleSwitch
-                  checked={settings.respectCommunicationConsent}
-                  disabled={globalDisabled}
-                  label={t('settings.fields.respectConsent')}
-                  onChange={(enabled) => updateSetting('respectCommunicationConsent', enabled)}
-                />
-              </div>
+    <div className="space-y-5">
+      <div className="card p-6">
+        <div className="mb-5 flex flex-col gap-4 border-b border-gray-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+              <BellRing size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">{t('settings.title')}</h2>
+              <p className="mt-1 text-sm text-gray-500">{t('settings.subtitle')}</p>
+              {clinicName && (
+                <p className="mt-2 text-xs font-medium text-gray-500">
+                  {t('settings.clinicScope', { clinic: clinicName })}
+                </p>
+              )}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={globalDisabled || saving || loading}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {saving ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <Save size={16} />
+            )}
+            {t('settings.save')}
+          </button>
+        </div>
 
+        {!canEdit && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {t('settings.readOnly')}
+          </div>
+        )}
+
+        {message && (
+          <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            message.type === 'success'
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+            {t('settings.loading')}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{t('settings.fields.enabled')}</p>
+                <p className="mt-1 text-xs text-gray-500">{t('settings.fields.enabledHelp')}</p>
+              </div>
+              <ToggleSwitch
+                checked={settings.isEnabled}
+                disabled={globalDisabled}
+                label={t('settings.fields.enabled')}
+                onChange={(enabled) => updateSetting('isEnabled', enabled)}
+              />
+            </div>
+
+            <label className="block rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <span className="mb-1 block text-sm font-semibold text-gray-900">
+                {t('settings.fields.defaultActionMode')}
+              </span>
+              <select
+                value={settings.defaultActionMode}
+                disabled={globalDisabled}
+                onChange={(event) => updateSetting('defaultActionMode', event.target.value as RecallActionMode)}
+                className="input-field w-full"
+              >
+                {actionModes.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {t(`settings.actionModes.${mode}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{t('settings.fields.respectConsent')}</p>
+                <p className="mt-1 text-xs text-gray-500">{t('settings.fields.respectConsentHelp')}</p>
+              </div>
+              <ToggleSwitch
+                checked={settings.respectCommunicationConsent}
+                disabled={globalDisabled}
+                label={t('settings.fields.respectConsent')}
+                onChange={(enabled) => updateSetting('respectCommunicationConsent', enabled)}
+              />
+            </div>
+          </div>
+        )}
+        <p className="mt-4 text-xs text-gray-500">{t('settings.safeDefault')}</p>
+      </div>
+
+      {!loading && (
+        <div className="space-y-3">
           <RuleCard
+            id="checkup"
             title={t('settings.rules.checkup.title')}
             description={t('settings.rules.checkup.description')}
             icon={<CalendarClock size={18} />}
             enabled={settings.checkupEnabled}
             disabled={globalDisabled}
+            isOpen={openRule === 'checkup'}
             actionMode={settings.checkupActionMode}
             templateId={settings.checkupMessageTemplateId}
             templates={templates}
+            onToggle={handleRuleToggle}
             onEnabledChange={(enabled) => updateSetting('checkupEnabled', enabled)}
             onActionModeChange={(mode) => updateSetting('checkupActionMode', mode)}
             onTemplateChange={(id) => updateSetting('checkupMessageTemplateId', id)}
@@ -425,14 +465,17 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
           </RuleCard>
 
           <RuleCard
+            id="treatmentPlan"
             title={t('settings.rules.treatmentPlan.title')}
             description={t('settings.rules.treatmentPlan.description')}
             icon={<MessageSquare size={18} />}
             enabled={settings.treatmentPlanFollowupEnabled}
             disabled={globalDisabled}
+            isOpen={openRule === 'treatmentPlan'}
             actionMode={settings.treatmentPlanFollowupActionMode}
             templateId={settings.treatmentPlanFollowupMessageTemplateId}
             templates={templates}
+            onToggle={handleRuleToggle}
             onEnabledChange={(enabled) => updateSetting('treatmentPlanFollowupEnabled', enabled)}
             onActionModeChange={(mode) => updateSetting('treatmentPlanFollowupActionMode', mode)}
             onTemplateChange={(id) => updateSetting('treatmentPlanFollowupMessageTemplateId', id)}
@@ -443,14 +486,17 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
           </RuleCard>
 
           <RuleCard
+            id="incompleteTreatment"
             title={t('settings.rules.incompleteTreatment.title')}
             description={t('settings.rules.incompleteTreatment.description')}
             icon={<Stethoscope size={18} />}
             enabled={settings.incompleteTreatmentEnabled}
             disabled={globalDisabled}
+            isOpen={openRule === 'incompleteTreatment'}
             actionMode={settings.incompleteTreatmentActionMode}
             templateId={settings.incompleteTreatmentMessageTemplateId}
             templates={templates}
+            onToggle={handleRuleToggle}
             onEnabledChange={(enabled) => updateSetting('incompleteTreatmentEnabled', enabled)}
             onActionModeChange={(mode) => updateSetting('incompleteTreatmentActionMode', mode)}
             onTemplateChange={(id) => updateSetting('incompleteTreatmentMessageTemplateId', id)}
@@ -460,14 +506,17 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
           </RuleCard>
 
           <RuleCard
+            id="noShow"
             title={t('settings.rules.noShow.title')}
             description={t('settings.rules.noShow.description')}
             icon={<UserX size={18} />}
             enabled={settings.noShowFollowupEnabled}
             disabled={globalDisabled}
+            isOpen={openRule === 'noShow'}
             actionMode={settings.noShowFollowupActionMode}
             templateId={settings.noShowFollowupMessageTemplateId}
             templates={templates}
+            onToggle={handleRuleToggle}
             onEnabledChange={(enabled) => updateSetting('noShowFollowupEnabled', enabled)}
             onActionModeChange={(mode) => updateSetting('noShowFollowupActionMode', mode)}
             onTemplateChange={(id) => updateSetting('noShowFollowupMessageTemplateId', id)}
@@ -477,14 +526,17 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
           </RuleCard>
 
           <RuleCard
+            id="payment"
             title={t('settings.rules.payment.title')}
             description={t('settings.rules.payment.description')}
             icon={<CreditCard size={18} />}
             enabled={settings.paymentFollowupEnabled}
             disabled={globalDisabled}
+            isOpen={openRule === 'payment'}
             actionMode={settings.paymentFollowupActionMode}
             templateId={settings.paymentFollowupMessageTemplateId}
             templates={templates}
+            onToggle={handleRuleToggle}
             onEnabledChange={(enabled) => updateSetting('paymentFollowupEnabled', enabled)}
             onActionModeChange={(mode) => updateSetting('paymentFollowupActionMode', mode)}
             onTemplateChange={(id) => updateSetting('paymentFollowupMessageTemplateId', id)}
