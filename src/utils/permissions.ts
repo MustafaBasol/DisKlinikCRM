@@ -439,6 +439,22 @@ export function canViewNoShowDashboard(user: UserForPermission | null | undefine
 }
 
 /**
+ * Recall / geri kazanım panosu görüntüleme.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST, DENTIST ve BILLING erişebilir.
+ */
+export function canViewRecallDashboard(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST' ||
+    role === 'DENTIST' ||
+    role === 'BILLING'
+  );
+}
+
+/**
  * No-show olarak işaretleme ve kurtarma durumu güncelleme.
  * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
  * DENTIST kendi randevularını işaretleyebilir (backend'de ayrıca kontrol edilir).

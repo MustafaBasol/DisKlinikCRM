@@ -1,0 +1,167 @@
+{
+  "nav": "Recovery",
+  "title": "Recovery",
+  "subtitle": "Find patients who are due for recall, left treatment unfinished, missed appointments, or need payment follow-up.",
+  "summary": {
+    "today": "Today",
+    "checkups": "Check-ups",
+    "incomplete": "Incomplete",
+    "plans": "Pending plans",
+    "noShows": "No-shows",
+    "revenue": "Pending value"
+  },
+  "filters": {
+    "search": "Search patient or phone",
+    "allTypes": "All recall types",
+    "allStatuses": "All statuses",
+    "allPriorities": "All priorities"
+  },
+  "table": {
+    "patient": "Patient",
+    "phone": "Phone",
+    "type": "Recall type",
+    "priority": "Priority",
+    "lastContact": "Last contact",
+    "source": "Treatment / appointment",
+    "value": "Value",
+    "status": "Status",
+    "nextAction": "Next action"
+  },
+  "types": {
+    "ROUTINE_CHECKUP": "Routine check-up",
+    "TREATMENT_PLAN_NOT_STARTED": "Treatment plan not started",
+    "INCOMPLETE_TREATMENT": "Incomplete treatment",
+    "NO_SHOW_FOLLOW_UP": "No-show follow-up",
+    "PAYMENT_FOLLOW_UP": "Payment follow-up",
+    "MANUAL": "Manual"
+  },
+  "priorities": {
+    "LOW": "Low",
+    "MEDIUM": "Medium",
+    "HIGH": "High",
+    "URGENT": "Urgent"
+  },
+  "statuses": {
+    "PENDING": "Pending",
+    "TASK_CREATED": "Task created",
+    "MESSAGE_DRAFTED": "Message drafted",
+    "CONTACTED": "Contacted",
+    "APPOINTMENT_BOOKED": "Appointment booked",
+    "DECLINED": "Declined",
+    "SNOOZED": "Snoozed",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+  "actions": {
+    "generate": "Generate candidates",
+    "prepareMessage": "Prepare WhatsApp draft",
+    "createTask": "Create task",
+    "bookAppointment": "Create appointment",
+    "logContact": "Mark contacted",
+    "snooze": "Snooze",
+    "decline": "Mark declined"
+  },
+  "empty": {
+    "title": "No recall candidates found",
+    "description": "Generate candidates or adjust filters to review recoverable patients."
+  },
+  "errors": {
+    "loadFailed": "Failed to load recall candidates.",
+    "generateFailed": "Failed to generate recall candidates.",
+    "settingsDisabled": "Recall system is disabled for this clinic.",
+    "messageFailed": "Failed to prepare WhatsApp draft.",
+    "taskFailed": "Failed to create recall task.",
+    "statusFailed": "Failed to update recall status.",
+    "actionFailed": "Failed to complete recall action."
+  },
+  "success": {
+    "generated": "{{count}} candidate(s) generated.",
+    "taskCreated": "Recall task created.",
+    "statusUpdated": "Recall status updated.",
+    "snoozed": "Recall candidate snoozed.",
+    "contactLogged": "Contact logged."
+  },
+  "actionModal": {
+    "note": "Note",
+    "snooze": {
+      "title": "Snooze recall",
+      "nextActionAt": "Next action date",
+      "notePlaceholder": "Optional reason or next step",
+      "submit": "Snooze"
+    },
+    "contact": {
+      "title": "Log contact",
+      "notePlaceholder": "What happened during the call or message?",
+      "submit": "Save contact"
+    }
+  },
+  "messageModal": {
+    "title": "WhatsApp draft",
+    "privacyNote": "This draft intentionally avoids diagnosis, treatment details, and sensitive health data.",
+    "copy": "Copy draft",
+    "close": "Close"
+  },
+  "settings": {
+    "title": "Smart Patient Recovery and Recall",
+    "subtitle": "Create automatic follow-up rules for patients due for check-up, unfinished treatment, or missed follow-up.",
+    "clinicScope": "Saved for {{clinic}}",
+    "safeDefault": "Automatic sending is not used by default. Start with list, task, or draft actions.",
+    "save": "Save recall settings",
+    "loading": "Loading recall settings...",
+    "loadError": "Failed to load recall settings.",
+    "saveSuccess": "Recall settings saved.",
+    "saveError": "Failed to save recall settings.",
+    "readOnly": "You can view recall settings, but only managers can edit them.",
+    "noTemplate": "Use safe default text",
+    "paymentGentleLanguage": "Use gentle language. Do not use aggressive collection wording.",
+    "fields": {
+      "enabled": "Smart recall system active",
+      "enabledHelp": "Turns candidate generation on or off.",
+      "defaultActionMode": "Default behavior",
+      "respectConsent": "Respect communication consent",
+      "respectConsentHelp": "No WhatsApp draft if consent is missing.",
+      "actionMode": "Behavior",
+      "messageTemplate": "Message template",
+      "afterDays": "After days",
+      "afterHours": "After hours",
+      "repeatDays": "Repeat days",
+      "maxAttempts": "Max attempts",
+      "sendTiming": "Send day",
+      "sendTime": "Send time",
+      "autoTask": "Auto-create task"
+    },
+    "actionModes": {
+      "LIST_ONLY": "List only",
+      "CREATE_TASK": "Create task",
+      "CREATE_MESSAGE_DRAFT": "Create WhatsApp draft",
+      "AUTO_SEND_WHATSAPP": "Auto WhatsApp send"
+    },
+    "sendTimings": {
+      "SAME_DAY": "Same day",
+      "NEXT_DAY": "1 day later",
+      "MANUAL": "Manual"
+    },
+    "rules": {
+      "checkup": {
+        "title": "Routine check-up recall",
+        "description": "Find patients whose last completed visit or treatment is past the configured check-up interval."
+      },
+      "treatmentPlan": {
+        "title": "Treatment plan follow-up",
+        "description": "Find patients who received a treatment plan but have not started it."
+      },
+      "incompleteTreatment": {
+        "title": "Incomplete treatment follow-up",
+        "description": "Find treatment cases with completed and pending steps."
+      },
+      "noShow": {
+        "title": "No-show recovery",
+        "description": "Follow up missed appointments when no new active appointment exists."
+      },
+      "payment": {
+        "title": "Payment follow-up reminder",
+        "description": "Find overdue payment plan installments when the payment model supports it."
+      }
+    }
+  }
+}
