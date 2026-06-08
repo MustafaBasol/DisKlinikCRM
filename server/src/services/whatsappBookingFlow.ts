@@ -182,7 +182,8 @@ const isConfirmationApproved = (text: string) => {
     'olustur',
     'randevuyu olustur',
     'olusturabilirsin',
-  ].some(pattern => normalized === pattern || normalized.includes(pattern));
+    '1',
+  ].some(pattern => normalized === pattern || (!/^\d+$/.test(pattern) && normalized.includes(pattern)));
 };
 
 const isShortAffirmation = (text: string) => {
@@ -218,8 +219,12 @@ const isConfirmationRejected = (text: string) => {
     'sadece uygun mu diye sormustum',
     'sadece sordum',
     'yalniz uygun mu diye sordum',
-  ].some(pattern => normalized === pattern || normalized.includes(pattern));
+    '2',
+  ].some(pattern => normalized === pattern || (!/^\d+$/.test(pattern) && normalized.includes(pattern)));
 };
+
+export const isDeterministicConfirmationReply = (text: string) =>
+  isConfirmationApproved(text) || isConfirmationRejected(text);
 
 const resolveTimeInterpretation = async (
   text: string,
@@ -648,6 +653,7 @@ export const handleAwaitingTimeStep = async ({
   const selectedDate = state.selectedDate ?? null;
   const selectedPractitionerId = state.selectedPractitionerId ?? null;
   const numericSelection = extractNumericSelection(text);
+  const hasNumericSlotReply = numericSelection !== null;
   const numericSlotSelection = numericSelection && numericSelection >= 1 && numericSelection <= lastShownSlots.length
     ? numericSelection
     : null;
@@ -664,16 +670,32 @@ export const handleAwaitingTimeStep = async ({
     handler: 'awaiting_time-selection',
     extractedTime: slotMatch.extractedTime,
     matchedPractitioner: selectedSlot?.practitionerName ?? (slotMatch.matches.length === 1 ? slotMatch.matches[0].slot.practitionerName : null),
-    matchedSlotIndex: selectedSlotIndex >= 0 ? selectedSlotIndex + 1 : null,
+    matchedSlotIndex: numericSlotSelection ?? (selectedSlotIndex >= 0 ? selectedSlotIndex + 1 : null),
+    matchedAvailableSlotIndex: selectedSlotIndex >= 0 ? selectedSlotIndex + 1 : null,
   });
 
-  const timeInterpretation = await resolveTimeInterpretation(text, interpretTimeWithAi);
-  const interpretedTimeRequest = timeInterpretation.interpretedTimeRequest;
-  const explicitRequestedTime = timeInterpretation.exactTime;
-  const explicitTimeThreshold = timeInterpretation.afterTimeMinutes;
-  const preference = timeInterpretation.preference;
-  const rangeStartMinutes = timeInterpretation.rangeStartMinutes;
-  const rangeEndMinutes = timeInterpretation.rangeEndMinutes;
+  if (hasNumericSlotReply && !numericSlotSelection) {
+    return `Lütfen listedeki saat numaralarından birini seçin. Bu listede 1 ile ${lastShownSlots.length} arasında bir numara yazabilirsiniz.`;
+  }
+
+  const timeInterpretation = hasNumericSlotReply
+    ? null
+    : await resolveTimeInterpretation(text, interpretTimeWithAi);
+  const interpretedTimeRequest = timeInterpretation?.interpretedTimeRequest ?? {
+    normalizedText: '',
+    exactTime: null,
+    afterTimeMinutes: null,
+    rangeStartMinutes: null,
+    rangeEndMinutes: null,
+    preference: null,
+    wantsMoreOptions: false,
+    wantsDifferentDate: false,
+  };
+  const explicitRequestedTime = timeInterpretation?.exactTime ?? null;
+  const explicitTimeThreshold = timeInterpretation?.afterTimeMinutes ?? null;
+  const preference = timeInterpretation?.preference ?? null;
+  const rangeStartMinutes = timeInterpretation?.rangeStartMinutes ?? null;
+  const rangeEndMinutes = timeInterpretation?.rangeEndMinutes ?? null;
   const normalizedDifferentDate = normalizeDateFromTurkishInput(text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE);
   const shouldTreatAsDateOnly = Boolean(normalizedDifferentDate) && isStandaloneNumericDateExpression(text);
 
@@ -1035,6 +1057,8 @@ export const handleAwaitingConfirmationStep = async ({
     appointmentTypeId: state.selectedAppointmentTypeId,
     date: state.selectedDate,
     time: pendingSlot.localStartTime,
+    practitionerId: pendingSlot.practitionerId,
+    practitionerName: pendingSlot.practitionerName,
   });
 
   try {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -32,12 +32,16 @@ import {
   UserX,
   Instagram,
   RotateCcw,
+  KeyRound,
+  AlertCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
 import NotificationBell from '../components/NotificationBell';
+import { authService } from '../services/api';
 import { useDarkMode } from '../utils/darkMode';
 import {
   canViewOrganizationDashboard,
@@ -61,6 +65,191 @@ import {
 type NavItem = { path: string; icon: React.ReactNode; label: string };
 type NavGroup = { id: string; label: string; collapsible: boolean; items: NavItem[] };
 
+type ChangePasswordForm = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+const emptyPasswordForm: ChangePasswordForm = {
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+};
+
+const getPasswordRuleErrors = (password: string, t: (key: string) => string) => {
+  const errors: string[] = [];
+  if (password.length < 8) errors.push(t('auth:passwordRequirements.minLength'));
+  if (!/[A-Z]/.test(password)) errors.push(t('auth:passwordRequirements.uppercase'));
+  if (!/[a-z]/.test(password)) errors.push(t('auth:passwordRequirements.lowercase'));
+  if (!/\d/.test(password)) errors.push(t('auth:passwordRequirements.number'));
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push(t('auth:passwordRequirements.special'));
+  return errors;
+};
+
+const resolvePasswordErrorMessage = (error: any, t: (key: string) => string) => {
+  const code = error?.response?.data?.code;
+  if (code === 'CURRENT_PASSWORD_INCORRECT') return t('common:profile.currentPasswordIncorrect');
+  if (code === 'PASSWORD_WEAK') return t('common:profile.passwordRequirementsNotMet');
+  if (code === 'PASSWORD_FIELDS_REQUIRED') return t('common:profile.requiredFields');
+  return error?.response?.data?.error || t('common:errorGeneric');
+};
+
+const ChangePasswordModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { t } = useTranslation(['common', 'auth']);
+  const [formData, setFormData] = useState<ChangePasswordForm>(emptyPasswordForm);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const passwordErrors = getPasswordRuleErrors(formData.newPassword, t);
+  const passwordsDoNotMatch = Boolean(formData.confirmPassword) && formData.newPassword !== formData.confirmPassword;
+  const canSubmit = Boolean(formData.currentPassword && formData.newPassword && formData.confirmPassword)
+    && passwordErrors.length === 0
+    && !passwordsDoNotMatch
+    && !loading;
+
+  const updateField = (field: keyof ChangePasswordForm, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setError('');
+    setSuccess('');
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
+      setError(t('common:profile.requiredFields'));
+      return;
+    }
+
+    if (passwordErrors.length > 0) {
+      setError(t('common:profile.passwordRequirementsNotMet'));
+      return;
+    }
+
+    if (formData.newPassword !== formData.confirmPassword) {
+      setError(t('common:profile.passwordsDoNotMatch'));
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await authService.changePassword({
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword,
+      });
+      setFormData(emptyPasswordForm);
+      setSuccess(t('common:profile.passwordUpdated'));
+    } catch (err: any) {
+      setError(resolvePasswordErrorMessage(err, t));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/50 px-4 py-6">
+      <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-900 shadow-xl border border-gray-200 dark:border-gray-700">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-200 dark:border-gray-700 px-5 py-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('common:profile.changePasswordTitle')}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('common:profile.changePasswordDescription')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            aria-label={t('common:close')}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
+          {error && (
+            <div className="flex gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="flex gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900/60 dark:bg-green-950/30 dark:text-green-300">
+              <CheckCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{success}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('common:profile.currentPassword')}
+            </label>
+            <input
+              type="password"
+              autoComplete="current-password"
+              className="input-field w-full"
+              value={formData.currentPassword}
+              onChange={event => updateField('currentPassword', event.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('common:profile.newPassword')}
+            </label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              className="input-field w-full"
+              value={formData.newPassword}
+              onChange={event => updateField('newPassword', event.target.value)}
+            />
+          </div>
+
+          {formData.newPassword && passwordErrors.length > 0 && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-900/60 dark:text-amber-300">
+              <p className="font-medium mb-2">{t('auth:passwordRequirements.title')}</p>
+              <ul className="list-disc pl-5 space-y-1">
+                {passwordErrors.map(rule => (
+                  <li key={rule}>{rule}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('common:profile.confirmNewPassword')}
+            </label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              className="input-field w-full"
+              value={formData.confirmPassword}
+              onChange={event => updateField('confirmPassword', event.target.value)}
+            />
+            {passwordsDoNotMatch && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{t('common:profile.passwordsDoNotMatch')}</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">
+              {t('common:cancel')}
+            </button>
+            <button type="submit" disabled={!canSubmit} className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed">
+              {loading ? t('common:profile.updatingPassword') : t('common:profile.updatePassword')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const MainLayoutInner: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
@@ -69,6 +258,9 @@ const MainLayoutInner: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Collapsible group state — persisted in localStorage
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
@@ -91,6 +283,23 @@ const MainLayoutInner: React.FC = () => {
     mq.addEventListener('change', handler as (e: MediaQueryListEvent) => void);
     return () => mq.removeEventListener('change', handler as (e: MediaQueryListEvent) => void);
   }, []);
+
+  useEffect(() => {
+    if (!isUserMenuOpen) return undefined;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isUserMenuOpen]);
+
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+  }, [location.pathname]);
 
   // Close sidebar when navigating on mobile
   const handleNavClick = () => {
@@ -442,14 +651,48 @@ const MainLayoutInner: React.FC = () => {
 
             <NotificationBell />
             <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
-            <div className="flex items-center gap-2 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none">{user?.firstName} {user?.lastName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 capitalize">{user?.role}</p>
-              </div>
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-health-100 flex items-center justify-center text-health-700 font-bold border-2 border-health-200 text-sm">
-                {user?.firstName[0]}{user?.lastName[0]}
-              </div>
+            <div ref={userMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsUserMenuOpen(prev => !prev)}
+                className="flex items-center gap-2 p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                aria-haspopup="menu"
+                aria-expanded={isUserMenuOpen}
+                aria-label={t('common:profile.accountMenu')}
+              >
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none">{user?.firstName} {user?.lastName}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 capitalize">{user?.role}</p>
+                </div>
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-health-100 flex items-center justify-center text-health-700 font-bold border-2 border-health-200 text-sm">
+                  {user?.firstName[0]}{user?.lastName[0]}
+                </div>
+                <ChevronDown size={14} className="hidden sm:block text-gray-400" />
+              </button>
+
+              {isUserMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-xl py-2 z-50"
+                >
+                  <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 sm:hidden">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{user?.firstName} {user?.lastName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 capitalize">{user?.role}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsPasswordModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-primary-50 dark:hover:bg-primary-900/30 hover:text-primary-600 transition-colors"
+                  >
+                    <KeyRound size={16} className="text-gray-400" />
+                    <span>{t('common:profile.changePassword')}</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -468,6 +711,10 @@ const MainLayoutInner: React.FC = () => {
             // Optionally show success toast
           }}
         />
+      )}
+
+      {isPasswordModalOpen && (
+        <ChangePasswordModal onClose={() => setIsPasswordModalOpen(false)} />
       )}
     </div>
   );
