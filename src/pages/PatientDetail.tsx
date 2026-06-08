@@ -466,7 +466,7 @@ const PatientDetail: React.FC = () => {
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold flex items-center gap-2">
-                    <span className="text-base">🦷</span>
+                    <ClipboardList size={17} className="text-primary-500" />
                     {t('patients:detail.overview.dentalSummary')}
                   </h3>
                   <button onClick={() => setActiveTab('dental')} className="text-xs text-primary-600 hover:underline">
@@ -1001,12 +1001,7 @@ const PatientDetail: React.FC = () => {
         )}
         {/* Dental Chart Tab */}
         {activeTab === 'dental' && (
-          <div className="card p-6">
-            <h3 className="font-bold flex items-center gap-2 mb-6">
-              <span>🦷</span> {t('patients:dentalChart.title')}
-            </h3>
-            <DentalChart patientId={id!} />
-          </div>
+          <DentalChart patientId={id!} patientName={`${patient.firstName} ${patient.lastName}`} />
         )}
         {activeTab === 'activity' && (
           <div className="card p-6">

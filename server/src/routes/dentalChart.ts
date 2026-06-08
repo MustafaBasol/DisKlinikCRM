@@ -12,7 +12,7 @@ const VALID_FDI = new Set([
   41, 42, 43, 44, 45, 46, 47, 48,
 ]);
 
-const VALID_STATUS = new Set(['planned', 'treated', 'issue', 'missing', 'crown', 'implant']);
+const VALID_STATUS = new Set(['planned', 'in_progress', 'treated', 'issue', 'missing', 'crown', 'implant']);
 
 // GET /api/patients/:patientId/dental-chart
 router.get(
