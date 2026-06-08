@@ -131,6 +131,7 @@ interface RuleCardProps {
   icon: React.ReactNode;
   enabled: boolean;
   disabled: boolean;
+  systemEnabled: boolean;
   isOpen: boolean;
   actionMode: RecallActionMode;
   templateId?: string | null;
@@ -149,6 +150,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
   icon,
   enabled,
   disabled,
+  systemEnabled,
   isOpen,
   actionMode,
   templateId,
@@ -160,9 +162,16 @@ const RuleCard: React.FC<RuleCardProps> = ({
   children,
 }) => {
   const { t } = useTranslation('recall');
+  const badgeLabel = !systemEnabled
+    ? t('settings.state.systemOff')
+    : enabled
+      ? t('settings.state.active')
+      : t('settings.state.inactive');
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white">
+    <div className={`rounded-lg border border-gray-200 transition-colors ${
+      systemEnabled ? 'bg-white' : 'bg-gray-50 opacity-75'
+    }`}>
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
         <button
           type="button"
@@ -170,16 +179,18 @@ const RuleCard: React.FC<RuleCardProps> = ({
           className="flex min-w-0 flex-1 gap-3 text-left"
           aria-expanded={isOpen}
         >
-          <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+          <span className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+            systemEnabled ? 'bg-primary-50 text-primary-600' : 'bg-gray-100 text-gray-400'
+          }`}>
             {icon}
           </span>
           <span className="min-w-0">
             <span className="flex flex-wrap items-center gap-2">
               <span className="font-semibold text-gray-900">{title}</span>
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                enabled ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+                systemEnabled && enabled ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
               }`}>
-                {enabled ? t('settings.state.active') : t('settings.state.inactive')}
+                {badgeLabel}
               </span>
             </span>
             <span className="mt-1 block text-sm text-gray-500">{description}</span>
@@ -309,6 +320,7 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
   };
 
   const globalDisabled = !canEdit || !clinicId;
+  const rulesDisabled = globalDisabled || !settings.isEnabled;
   const paymentNote = useMemo(() => t('settings.paymentGentleLanguage'), [t]);
   const handleRuleToggle = (ruleId: RecallRuleId) => {
     setOpenRule((current) => (current === ruleId ? null : ruleId));
@@ -414,6 +426,11 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             </div>
           </div>
         )}
+        {!loading && !settings.isEnabled && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {t('settings.systemDisabledNotice')}
+          </div>
+        )}
         <p className="mt-4 text-xs text-gray-500">{t('settings.safeDefault')}</p>
       </div>
 
@@ -425,7 +442,8 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             description={t('settings.rules.checkup.description')}
             icon={<CalendarClock size={18} />}
             enabled={settings.checkupEnabled}
-            disabled={globalDisabled}
+            disabled={rulesDisabled}
+            systemEnabled={settings.isEnabled}
             isOpen={openRule === 'checkup'}
             actionMode={settings.checkupActionMode}
             templateId={settings.checkupMessageTemplateId}
@@ -438,7 +456,7 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             <NumberField
               label={t('settings.fields.afterDays')}
               value={settings.checkupAfterDays}
-              disabled={globalDisabled || !settings.checkupEnabled}
+              disabled={rulesDisabled || !settings.checkupEnabled}
               onChange={(value) => updateSetting('checkupAfterDays', value)}
             />
             <label className="block">
@@ -447,7 +465,7 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
               </span>
               <select
                 value={settings.checkupSendTiming}
-                disabled={globalDisabled || !settings.checkupEnabled}
+                disabled={rulesDisabled || !settings.checkupEnabled}
                 onChange={(event) => updateSetting('checkupSendTiming', event.target.value as RecallSendTiming)}
                 className="input-field w-full"
               >
@@ -459,7 +477,7 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             <TimeField
               label={t('settings.fields.sendTime')}
               value={settings.checkupSendTime}
-              disabled={globalDisabled || !settings.checkupEnabled}
+              disabled={rulesDisabled || !settings.checkupEnabled}
               onChange={(value) => updateSetting('checkupSendTime', value)}
             />
           </RuleCard>
@@ -470,7 +488,8 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             description={t('settings.rules.treatmentPlan.description')}
             icon={<MessageSquare size={18} />}
             enabled={settings.treatmentPlanFollowupEnabled}
-            disabled={globalDisabled}
+            disabled={rulesDisabled}
+            systemEnabled={settings.isEnabled}
             isOpen={openRule === 'treatmentPlan'}
             actionMode={settings.treatmentPlanFollowupActionMode}
             templateId={settings.treatmentPlanFollowupMessageTemplateId}
@@ -480,9 +499,9 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             onActionModeChange={(mode) => updateSetting('treatmentPlanFollowupActionMode', mode)}
             onTemplateChange={(id) => updateSetting('treatmentPlanFollowupMessageTemplateId', id)}
           >
-            <NumberField label={t('settings.fields.afterDays')} value={settings.treatmentPlanFollowupAfterDays} disabled={globalDisabled || !settings.treatmentPlanFollowupEnabled} onChange={(value) => updateSetting('treatmentPlanFollowupAfterDays', value)} />
-            <NumberField label={t('settings.fields.repeatDays')} value={settings.treatmentPlanFollowupRepeatDays} disabled={globalDisabled || !settings.treatmentPlanFollowupEnabled} onChange={(value) => updateSetting('treatmentPlanFollowupRepeatDays', value)} />
-            <NumberField label={t('settings.fields.maxAttempts')} value={settings.treatmentPlanFollowupMaxAttempts} disabled={globalDisabled || !settings.treatmentPlanFollowupEnabled} onChange={(value) => updateSetting('treatmentPlanFollowupMaxAttempts', value)} />
+            <NumberField label={t('settings.fields.afterDays')} value={settings.treatmentPlanFollowupAfterDays} disabled={rulesDisabled || !settings.treatmentPlanFollowupEnabled} onChange={(value) => updateSetting('treatmentPlanFollowupAfterDays', value)} />
+            <NumberField label={t('settings.fields.repeatDays')} value={settings.treatmentPlanFollowupRepeatDays} disabled={rulesDisabled || !settings.treatmentPlanFollowupEnabled} onChange={(value) => updateSetting('treatmentPlanFollowupRepeatDays', value)} />
+            <NumberField label={t('settings.fields.maxAttempts')} value={settings.treatmentPlanFollowupMaxAttempts} disabled={rulesDisabled || !settings.treatmentPlanFollowupEnabled} onChange={(value) => updateSetting('treatmentPlanFollowupMaxAttempts', value)} />
           </RuleCard>
 
           <RuleCard
@@ -491,7 +510,8 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             description={t('settings.rules.incompleteTreatment.description')}
             icon={<Stethoscope size={18} />}
             enabled={settings.incompleteTreatmentEnabled}
-            disabled={globalDisabled}
+            disabled={rulesDisabled}
+            systemEnabled={settings.isEnabled}
             isOpen={openRule === 'incompleteTreatment'}
             actionMode={settings.incompleteTreatmentActionMode}
             templateId={settings.incompleteTreatmentMessageTemplateId}
@@ -501,8 +521,8 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             onActionModeChange={(mode) => updateSetting('incompleteTreatmentActionMode', mode)}
             onTemplateChange={(id) => updateSetting('incompleteTreatmentMessageTemplateId', id)}
           >
-            <NumberField label={t('settings.fields.afterDays')} value={settings.incompleteTreatmentAfterDays} disabled={globalDisabled || !settings.incompleteTreatmentEnabled} onChange={(value) => updateSetting('incompleteTreatmentAfterDays', value)} />
-            <SwitchField label={t('settings.fields.autoTask')} checked={settings.incompleteTreatmentAutoCreateTask} disabled={globalDisabled || !settings.incompleteTreatmentEnabled} onChange={(value) => updateSetting('incompleteTreatmentAutoCreateTask', value)} />
+            <NumberField label={t('settings.fields.afterDays')} value={settings.incompleteTreatmentAfterDays} disabled={rulesDisabled || !settings.incompleteTreatmentEnabled} onChange={(value) => updateSetting('incompleteTreatmentAfterDays', value)} />
+            <SwitchField label={t('settings.fields.autoTask')} checked={settings.incompleteTreatmentAutoCreateTask} disabled={rulesDisabled || !settings.incompleteTreatmentEnabled} onChange={(value) => updateSetting('incompleteTreatmentAutoCreateTask', value)} />
           </RuleCard>
 
           <RuleCard
@@ -511,7 +531,8 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             description={t('settings.rules.noShow.description')}
             icon={<UserX size={18} />}
             enabled={settings.noShowFollowupEnabled}
-            disabled={globalDisabled}
+            disabled={rulesDisabled}
+            systemEnabled={settings.isEnabled}
             isOpen={openRule === 'noShow'}
             actionMode={settings.noShowFollowupActionMode}
             templateId={settings.noShowFollowupMessageTemplateId}
@@ -521,8 +542,8 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             onActionModeChange={(mode) => updateSetting('noShowFollowupActionMode', mode)}
             onTemplateChange={(id) => updateSetting('noShowFollowupMessageTemplateId', id)}
           >
-            <NumberField label={t('settings.fields.afterHours')} value={settings.noShowFollowupAfterHours} disabled={globalDisabled || !settings.noShowFollowupEnabled} onChange={(value) => updateSetting('noShowFollowupAfterHours', value)} />
-            <SwitchField label={t('settings.fields.autoTask')} checked={settings.noShowFollowupAutoCreateTask} disabled={globalDisabled || !settings.noShowFollowupEnabled} onChange={(value) => updateSetting('noShowFollowupAutoCreateTask', value)} />
+            <NumberField label={t('settings.fields.afterHours')} value={settings.noShowFollowupAfterHours} disabled={rulesDisabled || !settings.noShowFollowupEnabled} onChange={(value) => updateSetting('noShowFollowupAfterHours', value)} />
+            <SwitchField label={t('settings.fields.autoTask')} checked={settings.noShowFollowupAutoCreateTask} disabled={rulesDisabled || !settings.noShowFollowupEnabled} onChange={(value) => updateSetting('noShowFollowupAutoCreateTask', value)} />
           </RuleCard>
 
           <RuleCard
@@ -531,7 +552,8 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             description={t('settings.rules.payment.description')}
             icon={<CreditCard size={18} />}
             enabled={settings.paymentFollowupEnabled}
-            disabled={globalDisabled}
+            disabled={rulesDisabled}
+            systemEnabled={settings.isEnabled}
             isOpen={openRule === 'payment'}
             actionMode={settings.paymentFollowupActionMode}
             templateId={settings.paymentFollowupMessageTemplateId}
@@ -541,7 +563,7 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
             onActionModeChange={(mode) => updateSetting('paymentFollowupActionMode', mode)}
             onTemplateChange={(id) => updateSetting('paymentFollowupMessageTemplateId', id)}
           >
-            <NumberField label={t('settings.fields.afterDays')} value={settings.paymentFollowupAfterDays} disabled={globalDisabled || !settings.paymentFollowupEnabled} onChange={(value) => updateSetting('paymentFollowupAfterDays', value)} />
+            <NumberField label={t('settings.fields.afterDays')} value={settings.paymentFollowupAfterDays} disabled={rulesDisabled || !settings.paymentFollowupEnabled} onChange={(value) => updateSetting('paymentFollowupAfterDays', value)} />
             <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800 xl:col-span-2">
               {paymentNote}
             </div>

@@ -119,13 +119,15 @@
     "saveSuccess": "Recall ayarları kaydedildi.",
     "saveError": "Recall ayarları kaydedilemedi.",
     "readOnly": "Recall ayarlarını görüntüleyebilirsiniz; yalnızca yöneticiler düzenleyebilir.",
+    "systemDisabledNotice": "Recall sistemi kapalı. Aşağıdaki kurallar sistem tekrar aktif edildiğinde çalışır.",
     "noTemplate": "Güvenli varsayılan metni kullan",
     "paymentGentleLanguage": "Nazik bir dil kullanın. Sert tahsilat dili kullanmayın.",
     "expandRule": "Kural ayarlarını aç",
     "collapseRule": "Kural ayarlarını kapat",
     "state": {
       "active": "Aktif",
-      "inactive": "Pasif"
+      "inactive": "Pasif",
+      "systemOff": "Sistem kapalı"
     },
     "fields": {
       "enabled": "Akıllı recall sistemi aktif",
