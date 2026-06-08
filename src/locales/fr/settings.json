@@ -243,7 +243,8 @@
     },
     "errors": {
       "loadFailed": "Impossible de charger les disponibilités",
-      "saveFailed": "Impossible d'enregistrer la disponibilité"
+      "saveFailed": "Impossible d'enregistrer la disponibilité",
+      "appointmentsConflict": "{{count}} rendez-vous actif(s) le {{dates}} se retrouveraient en dehors des nouvelles disponibilités. Vous ne pouvez pas fermer la journée ni réduire les horaires tant que ces rendez-vous existent."
     },
     "offDays": {
       "title": "Jours d'absence et jours fériés",
@@ -261,7 +262,8 @@
       "errors": {
         "loadFailed": "Impossible de charger les jours d'absence",
         "saveFailed": "Impossible d'ajouter le jour d'absence",
-        "invalidRange": "La date de fin ne peut pas être antérieure à la date de début"
+        "invalidRange": "La date de fin ne peut pas être antérieure à la date de début",
+        "appointmentsConflict": "{{count}} rendez-vous actif(s) existe(nt) le {{date}}. Une journée avec rendez-vous ne peut pas être marquée comme absence ou jour férié."
       }
     }
   }

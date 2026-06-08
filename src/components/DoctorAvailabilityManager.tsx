@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { doctorAvailabilityService, doctorOffDayService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
-import { canManageUsers } from '../utils/permissions';
+import { canManageUsers, normalizeRole } from '../utils/permissions';
 
 const weekdays = [1, 2, 3, 4, 5, 6, 0];
 
@@ -36,7 +36,35 @@ const DoctorAvailabilityManager: React.FC = () => {
   const [offDayError, setOffDayError] = useState('');
 
   const canSelectDoctor = canManageUsers(user);
+  const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
   const selectedDoctor = useMemo(() => doctors.find(d => d.id === selectedDoctorId), [doctors, selectedDoctorId]);
+
+  const formatConflictDate = (date: string) => formatDate(`${date}T00:00:00`);
+  const getConflictErrorMessage = (err: any, fallback: string) => {
+    const data = err?.response?.data;
+    const appointmentCount = Number(data?.appointmentCount || 1);
+    const dates = Array.isArray(data?.dates)
+      ? data.dates.map((date: string) => formatConflictDate(date)).join(', ')
+      : data?.date
+        ? formatConflictDate(data.date)
+        : '';
+
+    if (data?.code === 'AVAILABILITY_HAS_APPOINTMENTS') {
+      return t('settings:availability.errors.appointmentsConflict', {
+        count: appointmentCount,
+        dates,
+      });
+    }
+
+    if (data?.code === 'OFF_DAY_HAS_APPOINTMENTS') {
+      return t('settings:availability.offDays.errors.appointmentsConflict', {
+        count: appointmentCount,
+        date: dates,
+      });
+    }
+
+    return data?.error || fallback;
+  };
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -47,7 +75,7 @@ const DoctorAvailabilityManager: React.FC = () => {
           const res = await userService.getDoctors();
           setDoctors(res.data);
           setSelectedDoctorId(res.data[0]?.id || '');
-        } else if (user?.role === 'doctor') {
+        } else if (userCanonicalRole === 'DENTIST' && user) {
           setDoctors([user]);
           setSelectedDoctorId(user.id);
         }
@@ -59,7 +87,7 @@ const DoctorAvailabilityManager: React.FC = () => {
     };
 
     fetchDoctors();
-  }, [canSelectDoctor, user?.id]);
+  }, [canSelectDoctor, user, userCanonicalRole, t]);
 
   useEffect(() => {
     const fetchAvailability = async () => {
@@ -119,7 +147,7 @@ const DoctorAvailabilityManager: React.FC = () => {
         rows.filter(row => row.isActive)
       );
     } catch (err: any) {
-      setError(err.response?.data?.error || t('settings:availability.errors.saveFailed'));
+      setError(getConflictErrorMessage(err, t('settings:availability.errors.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -157,16 +185,23 @@ const DoctorAvailabilityManager: React.FC = () => {
       const newEntries = results
         .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
         .map(r => r.value.data);
+      const failedEntries = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
 
       setOffDays(prev =>
         [...prev.filter(d => !newEntries.find((n: any) => n.date === d.date)), ...newEntries]
           .sort((a, b) => a.date.localeCompare(b.date))
       );
+
+      if (failedEntries.length > 0) {
+        setOffDayError(getConflictErrorMessage(failedEntries[0].reason, t('settings:availability.offDays.errors.saveFailed')));
+        return;
+      }
+
       setOffDayDate('');
       setOffDayDateEnd('');
       setOffDayReason('');
     } catch (err: any) {
-      setOffDayError(err.response?.data?.error || t('settings:availability.offDays.errors.saveFailed'));
+      setOffDayError(getConflictErrorMessage(err, t('settings:availability.offDays.errors.saveFailed')));
     } finally {
       setOffDaySaving(false);
     }

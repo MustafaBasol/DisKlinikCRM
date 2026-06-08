@@ -67,6 +67,58 @@ export const appointmentTypeSchema = z.object({
   isService: z.boolean().default(true),
 });
 
+const nullableTrimmedString = (max: number) => z.preprocess(
+  value => value === '' ? null : value,
+  z.string().trim().max(max).optional().nullable(),
+);
+
+const optionalNonNegativeNumber = z.preprocess(
+  value => value === '' ? null : value,
+  z.coerce.number().nonnegative().optional().nullable(),
+);
+
+const optionalPositiveInt = z.preprocess(
+  value => value === '' ? null : value,
+  z.coerce.number().int().positive().optional().nullable(),
+);
+
+export const materialRecipeSchema = z.object({
+  inventoryItemId: z.string().uuid('Invalid inventory item ID'),
+  quantity: z.coerce.number().positive('Quantity must be positive'),
+  unit: nullableTrimmedString(50),
+  deductionTiming: z.enum(['ON_TREATMENT_COMPLETED']).default('ON_TREATMENT_COMPLETED'),
+  isOptional: z.boolean().default(false),
+  note: nullableTrimmedString(500),
+});
+
+export const treatmentPackageItemSchema = z.object({
+  serviceId: z.string().uuid('Invalid service ID'),
+  quantity: z.coerce.number().int().positive().max(100).default(1),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+  overridePrice: optionalNonNegativeNumber,
+  overrideDurationMin: optionalPositiveInt,
+});
+
+export const treatmentPackageSchema = z.object({
+  clinicId: z.string().uuid().optional(),
+  name: z.string().trim().min(1, 'Name is required').max(120),
+  description: nullableTrimmedString(1000),
+  category: nullableTrimmedString(80),
+  color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Color must be a valid hex code').optional().nullable(),
+  durationMinutes: optionalPositiveInt,
+  price: optionalNonNegativeNumber,
+  currency: z.enum(validCurrencies).optional().nullable(),
+  pricingMode: z.enum(['PACKAGE_PRICE', 'SERVICE_SUM']).default('PACKAGE_PRICE'),
+  isActive: z.boolean().default(true),
+  items: z.array(treatmentPackageItemSchema).min(1, 'At least one service is required').max(100),
+  materials: z.array(materialRecipeSchema).max(100).default([]),
+});
+
+export const treatmentPackageUpdateSchema = treatmentPackageSchema.partial().extend({
+  items: z.array(treatmentPackageItemSchema).min(1, 'At least one service is required').max(100).optional(),
+  materials: z.array(materialRecipeSchema).max(100).optional(),
+});
+
 // --- User ---
 
 const userBaseSchema = z.object({

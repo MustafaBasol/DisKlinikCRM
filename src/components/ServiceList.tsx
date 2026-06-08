@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, CheckCircle2, XCircle, Tag, Loader2, AlertCircle } from 'lucide-react';
-import { serviceService } from '../services/api';
+import { Plus, Edit2, CheckCircle2, XCircle, Tag, Loader2, AlertCircle, Package, Trash2 } from 'lucide-react';
+import { inventoryService, serviceService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import TreatmentPackageList from './TreatmentPackageList';
 
 const ServiceList: React.FC = () => {
-  const { t } = useTranslation(['services', 'settings', 'common']);
+  const { t } = useTranslation(['services', 'settings', 'common', 'treatmentCases']);
   const { formatNumber } = useClinicPreferences();
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
+  const [activeView, setActiveView] = useState<'services' | 'packages'>('services');
 
   const fetchServices = async () => {
     try {
@@ -54,12 +56,35 @@ const ServiceList: React.FC = () => {
           <h2 className="text-lg font-bold">{t('settings:services.title')}</h2>
           <p className="text-sm text-gray-500">{t('settings:services.subtitle')}</p>
         </div>
-        <button onClick={() => handleOpenModal()} className="btn-primary">
-          <Plus size={18} />
-          {t('settings:services.newService')}
+        {activeView === 'services' && (
+          <button onClick={() => handleOpenModal()} className="btn-primary">
+            <Plus size={18} />
+            {t('settings:services.newService')}
+          </button>
+        )}
+      </div>
+
+      <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
+        <button
+          type="button"
+          onClick={() => setActiveView('services')}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeView === 'services' ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          {t('services:tabs.services', { defaultValue: 'Hizmetler' })}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('packages')}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${activeView === 'packages' ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Package size={16} />
+          {t('services:tabs.packages', { defaultValue: 'Tedavi Paketleri' })}
         </button>
       </div>
 
+      {activeView === 'packages' ? (
+        <TreatmentPackageList />
+      ) : (
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -119,6 +144,7 @@ const ServiceList: React.FC = () => {
           </table>
         </div>
       </div>
+      )}
 
       {isModalOpen && (
         <ServiceModal
@@ -135,7 +161,7 @@ const ServiceList: React.FC = () => {
 };
 
 const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () => void }> = ({ service, onClose, onSuccess }) => {
-  const { t } = useTranslation(['services', 'settings', 'common']);
+  const { t } = useTranslation(['services', 'settings', 'common', 'treatmentCases']);
   const { defaultCurrency } = useClinicPreferences();
   const [formData, setFormData] = useState({
     name: service?.name || '',
@@ -148,6 +174,42 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchMaterials = async () => {
+      if (!service?.id) return;
+      setMaterialsLoading(true);
+      try {
+        const [materialRes, inventoryRes] = await Promise.all([
+          serviceService.getMaterials(service.id),
+          inventoryService.getAll({ isActive: 'true' }),
+        ]);
+        if (!isMounted) return;
+        setInventoryItems(inventoryRes.data);
+        setMaterials(materialRes.data.map((material: any) => ({
+          inventoryItemId: material.inventoryItemId,
+          quantity: String(material.quantity),
+          unit: material.unit || material.inventoryItem?.unit || '',
+          isOptional: Boolean(material.isOptional),
+          note: material.note || '',
+        })));
+      } catch {
+        if (isMounted) setError(t('services:materials.errors.loadFailed', { defaultValue: 'Malzeme recetesi yuklenemedi.' }));
+      } finally {
+        if (isMounted) setMaterialsLoading(false);
+      }
+    };
+
+    fetchMaterials();
+    return () => {
+      isMounted = false;
+    };
+  }, [service?.id, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,12 +225,25 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
 
       if (service) {
         await serviceService.update(service.id, payload);
+        await serviceService.replaceMaterials(
+          service.id,
+          materials
+            .filter(material => material.inventoryItemId && material.quantity)
+            .map(material => ({
+              inventoryItemId: material.inventoryItemId,
+              quantity: Number(material.quantity),
+              unit: material.unit || inventoryItems.find(item => item.id === material.inventoryItemId)?.unit || null,
+              isOptional: Boolean(material.isOptional),
+              note: material.note || null,
+            })),
+        );
       } else {
         await serviceService.create(payload);
       }
       onSuccess();
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || t('services:errors.validationFailed'));
+      const apiError = err.response?.data?.error;
+      setError(typeof apiError === 'string' ? apiError : apiError?.message || t('services:errors.validationFailed'));
     } finally {
       setLoading(false);
     }
@@ -176,7 +251,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center text-primary-600">
@@ -234,6 +309,96 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
                 <option value="CHF">CHF</option>
               </select>
             </div>
+          </div>
+
+          <div className="border border-gray-100 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-700">{t('services:materials.title', { defaultValue: 'Otomatik Stok Recetesi' })}</h3>
+                <p className="text-xs text-gray-500">{t('services:materials.hint', { defaultValue: 'Bu hizmet tamamlandiginda secilen malzemeler stoktan dusulur.' })}</p>
+              </div>
+              {service && (
+                <button
+                  type="button"
+                  className="btn-secondary py-1.5 px-3 text-xs"
+                  onClick={() => setMaterials(prev => [...prev, { inventoryItemId: '', quantity: '', unit: '', isOptional: false, note: '' }])}
+                >
+                  <Plus size={14} />
+                  {t('common:add')}
+                </button>
+              )}
+            </div>
+
+            {!service ? (
+              <p className="p-4 text-sm text-gray-400 italic">
+                {t('services:materials.saveServiceFirst', { defaultValue: 'Malzeme recetesi hizmet kaydedildikten sonra tanimlanabilir.' })}
+              </p>
+            ) : materialsLoading ? (
+              <div className="p-4 flex items-center gap-2 text-sm text-gray-500">
+                <Loader2 size={16} className="animate-spin" />
+                {t('common:loading')}
+              </div>
+            ) : materials.length === 0 ? (
+              <p className="p-4 text-sm text-gray-400 italic">{t('services:materials.empty', { defaultValue: 'Malzeme recetesi tanimlanmadi.' })}</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {materials.map((material, index) => (
+                  <div key={index} className="p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <div className="md:col-span-5">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.item', { defaultValue: 'Malzeme' })}</label>
+                      <select
+                        className="input-field w-full"
+                        value={material.inventoryItemId}
+                        onChange={e => {
+                          const item = inventoryItems.find(inv => inv.id === e.target.value);
+                          setMaterials(prev => prev.map((row, i) => i === index ? { ...row, inventoryItemId: e.target.value, unit: item?.unit || row.unit } : row));
+                        }}
+                      >
+                        <option value="">{t('common:select')}</option>
+                        {inventoryItems.map(item => (
+                          <option key={item.id} value={item.id}>{item.name} ({item.currentStock} {item.unit})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.quantity', { defaultValue: 'Miktar' })}</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        className="input-field w-full"
+                        value={material.quantity}
+                        onChange={e => setMaterials(prev => prev.map((row, i) => i === index ? { ...row, quantity: e.target.value } : row))}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:materials.unit', { defaultValue: 'Birim' })}</label>
+                      <input
+                        type="text"
+                        className="input-field w-full"
+                        value={material.unit}
+                        onChange={e => setMaterials(prev => prev.map((row, i) => i === index ? { ...row, unit: e.target.value } : row))}
+                      />
+                    </div>
+                    <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-600 pb-2">
+                      <input
+                        type="checkbox"
+                        checked={material.isOptional}
+                        onChange={e => setMaterials(prev => prev.map((row, i) => i === index ? { ...row, isOptional: e.target.checked } : row))}
+                      />
+                      {t('treatmentCases:procedures.optional', { defaultValue: 'opsiyonel' })}
+                    </label>
+                    <button
+                      type="button"
+                      className="md:col-span-1 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      onClick={() => setMaterials(prev => prev.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4 mt-6 border-t border-gray-100">

@@ -52,6 +52,8 @@ type NotificationPreferences = {
   };
 };
 
+type SettingsTab = 'general' | 'users' | 'availability' | 'services' | 'integrations';
+
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   whatsapp: {
     patientAppointmentReminder: { enabled: true, daysBefore: 1, sendTime: '10:00' },
@@ -236,7 +238,28 @@ const Settings: React.FC = () => {
   const { t, i18n } = useTranslation(['common', 'settings']);
   const { user } = useAuth();
   const { availableClinics, selectedClinicId } = useClinic();
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'availability' | 'services' | 'integrations'>('general');
+  const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
+  const isDentist = userCanonicalRole === 'DENTIST';
+  const canSeeIntegrations = canViewWhatsAppStatus(user) || canViewInstagramStatus(user);
+  const canEditNotificationPrefs = canManageUsers(user);
+  const canEditOperatingPrefs = canManageUsers(user);
+  const canSeeGeneral = !isDentist;
+  const canSeeServices = !isDentist && (canManageUsers(user) || userCanonicalRole === 'RECEPTIONIST');
+  const canSeeUsers = !isDentist && canManageUsers(user);
+  const canSeeIntegrationsTab = !isDentist && canSeeIntegrations;
+  const canSeeAvailability = canManageUsers(user) || isDentist;
+  const firstAllowedTab: SettingsTab = canSeeGeneral
+    ? 'general'
+    : canSeeAvailability
+      ? 'availability'
+      : canSeeServices
+        ? 'services'
+        : canSeeUsers
+          ? 'users'
+          : canSeeIntegrationsTab
+            ? 'integrations'
+            : 'general';
+  const [activeTab, setActiveTab] = useState<SettingsTab>(firstAllowedTab);
   const [copied, setCopied] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => cloneNotificationPreferences());
   const [prefsLoading, setPrefsLoading] = useState(false);
@@ -246,11 +269,6 @@ const Settings: React.FC = () => {
   const [operatingPrefsLoading, setOperatingPrefsLoading] = useState(false);
   const [operatingPrefsSaving, setOperatingPrefsSaving] = useState(false);
   const [operatingPrefsMessage, setOperatingPrefsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
-  const canSeeIntegrations = canViewWhatsAppStatus(user) || canViewInstagramStatus(user);
-  const canEditNotificationPrefs = canManageUsers(user);
-  const canEditOperatingPrefs = canManageUsers(user);
 
   const selectedClinic =
     selectedClinicId !== 'all'
@@ -264,7 +282,28 @@ const Settings: React.FC = () => {
     : '';
 
   useEffect(() => {
-    if (activeTab !== 'general' || !selectedClinic?.id) return;
+    const activeTabAllowed =
+      (activeTab === 'general' && canSeeGeneral) ||
+      (activeTab === 'services' && canSeeServices) ||
+      (activeTab === 'users' && canSeeUsers) ||
+      (activeTab === 'integrations' && canSeeIntegrationsTab) ||
+      (activeTab === 'availability' && canSeeAvailability);
+
+    if (!activeTabAllowed) {
+      setActiveTab(firstAllowedTab);
+    }
+  }, [
+    activeTab,
+    canSeeAvailability,
+    canSeeGeneral,
+    canSeeIntegrationsTab,
+    canSeeServices,
+    canSeeUsers,
+    firstAllowedTab,
+  ]);
+
+  useEffect(() => {
+    if (!canSeeGeneral || activeTab !== 'general' || !selectedClinic?.id) return;
 
     let alive = true;
     setPrefsLoading(true);
@@ -288,10 +327,10 @@ const Settings: React.FC = () => {
     return () => {
       alive = false;
     };
-  }, [activeTab, selectedClinic?.id, t]);
+  }, [activeTab, canSeeGeneral, selectedClinic?.id, t]);
 
   useEffect(() => {
-    if (activeTab !== 'general' || !selectedClinic?.id) return;
+    if (!canSeeGeneral || activeTab !== 'general' || !selectedClinic?.id) return;
 
     let alive = true;
     setOperatingPrefsLoading(true);
@@ -319,7 +358,7 @@ const Settings: React.FC = () => {
     return () => {
       alive = false;
     };
-  }, [activeTab, selectedClinic?.id, selectedClinic?.currency, selectedClinic?.timezone, user?.clinic?.currency, user?.clinic?.timezone, t]);
+  }, [activeTab, canSeeGeneral, selectedClinic?.id, selectedClinic?.currency, selectedClinic?.timezone, user?.clinic?.currency, user?.clinic?.timezone, t]);
 
   const handleCopy = () => {
     if (!bookingUrl) return;
@@ -439,16 +478,18 @@ const Settings: React.FC = () => {
         {/* Settings Sidebar */}
         <div className="w-full md:w-64 flex-shrink-0">
           <div className="card p-2 space-y-1">
-            <button 
-              onClick={() => setActiveTab('general')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
-                activeTab === 'general' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <UserCog size={18} />
-              {t('settings:generalPreferences')}
-            </button>
-            {(canManageUsers(user) || userCanonicalRole === 'RECEPTIONIST') && (
+            {canSeeGeneral && (
+              <button
+                onClick={() => setActiveTab('general')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'general' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <UserCog size={18} />
+                {t('settings:generalPreferences')}
+              </button>
+            )}
+            {canSeeServices && (
               <button 
                 onClick={() => setActiveTab('services')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
@@ -459,7 +500,7 @@ const Settings: React.FC = () => {
                 {t('settings:services.title')}
               </button>
             )}
-            {canManageUsers(user) && (
+            {canSeeUsers && (
               <button
                 onClick={() => setActiveTab('users')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
@@ -470,7 +511,7 @@ const Settings: React.FC = () => {
                 {t('settings:users.title')}
               </button>
             )}
-            {canSeeIntegrations && (
+            {canSeeIntegrationsTab && (
               <button
                 onClick={() => setActiveTab('integrations')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
@@ -481,7 +522,7 @@ const Settings: React.FC = () => {
                 {t('settings:integrations.title')}
               </button>
             )}
-            {(canManageUsers(user) || userCanonicalRole === 'DENTIST') && (
+            {canSeeAvailability && (
               <button
                 onClick={() => setActiveTab('availability')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
@@ -497,7 +538,7 @@ const Settings: React.FC = () => {
 
         {/* Settings Content */}
         <div className="flex-1">
-          {activeTab === 'general' && (
+          {canSeeGeneral && activeTab === 'general' && (
             <div className="space-y-6">
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
@@ -973,15 +1014,15 @@ const Settings: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'services' && (
+          {canSeeServices && activeTab === 'services' && (
             <ServiceList />
           )}
 
-          {activeTab === 'users' && (
+          {canSeeUsers && activeTab === 'users' && (
             <UserList />
           )}
 
-          {activeTab === 'integrations' && (
+          {canSeeIntegrationsTab && activeTab === 'integrations' && (
             <div className="card p-6">
               <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
                 <LinkIcon size={20} className="text-gray-400" />
@@ -1033,7 +1074,7 @@ const Settings: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'availability' && (
+          {canSeeAvailability && activeTab === 'availability' && (
             <DoctorAvailabilityManager />
           )}
         </div>

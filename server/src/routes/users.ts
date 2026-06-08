@@ -3,12 +3,96 @@ import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
-import { getParam, validatePassword } from '../utils/helpers.js';
+import {
+  formatClinicDateTime,
+  getParam,
+  getZonedDateParts,
+  localDateTimeToClinicDate,
+  timeToMinutes,
+  validatePassword,
+} from '../utils/helpers.js';
 import { userCreateSchema, userUpdateSchema, availabilityBatchSchema, doctorOffDaySchema } from '../schemas/index.js';
 import { checkUserLimit } from '../middleware/planLimits.js';
 import { getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
+const ACTIVE_APPOINTMENT_STATUSES = ['scheduled', 'confirmed', 'rescheduled', 'in_progress'];
+
+type AvailabilitySlotForConflictCheck = {
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  isActive?: boolean;
+};
+
+const addDaysToDateString = (date: string, days: number) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const result = new Date(Date.UTC(year, month - 1, day + days));
+  return [
+    result.getUTCFullYear(),
+    String(result.getUTCMonth() + 1).padStart(2, '0'),
+    String(result.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+const appointmentFitsAvailabilitySlots = (
+  weekday: number,
+  startMinutes: number,
+  endMinutes: number,
+  slots: AvailabilitySlotForConflictCheck[],
+) => slots.some(slot => {
+  if (slot.weekday !== weekday || slot.isActive === false) return false;
+  return startMinutes >= timeToMinutes(slot.startTime) && endMinutes <= timeToMinutes(slot.endTime);
+});
+
+const findAppointmentsOutsideAvailability = async (
+  clinicId: string,
+  practitionerId: string,
+  slots: AvailabilitySlotForConflictCheck[],
+  timeZone: string,
+) => {
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      clinicId,
+      practitionerId,
+      deletedAt: null,
+      status: { in: ACTIVE_APPOINTMENT_STATUSES },
+      endTime: { gte: new Date() },
+    },
+    select: { id: true, startTime: true, endTime: true },
+    orderBy: { startTime: 'asc' },
+  });
+
+  return appointments.filter(appointment => {
+    const start = getZonedDateParts(appointment.startTime, timeZone);
+    const end = getZonedDateParts(appointment.endTime, timeZone);
+
+    if (start.weekday !== end.weekday) return true;
+
+    return !appointmentFitsAvailabilitySlots(start.weekday, start.minutes, end.minutes, slots);
+  });
+};
+
+const countAppointmentsOnLocalDate = async (
+  clinicId: string,
+  practitionerId: string,
+  date: string,
+  timeZone: string,
+) => {
+  const dayStart = localDateTimeToClinicDate(date, '00:00', timeZone);
+  const nextDay = localDateTimeToClinicDate(addDaysToDateString(date, 1), '00:00', timeZone);
+
+  return prisma.appointment.count({
+    where: {
+      clinicId,
+      practitionerId,
+      deletedAt: null,
+      status: { in: ACTIVE_APPOINTMENT_STATUSES },
+      startTime: { lt: nextDay },
+      endTime: { gt: dayStart },
+    },
+  });
+};
 
 // GET /api/users
 router.get('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
@@ -217,10 +301,37 @@ router.put('/doctor-availabilities/:practitionerId', authorize(['OWNER', 'ORG_AD
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const practitioner = await prisma.user.findFirst({
-      where: { id: practitionerId, clinicId, role: 'doctor', isActive: true },
-    });
+    const [practitioner, clinic] = await Promise.all([
+      prisma.user.findFirst({
+        where: { id: practitionerId, clinicId, role: 'doctor', isActive: true },
+      }),
+      prisma.clinic.findUnique({
+        where: { id: clinicId },
+        select: { timezone: true },
+      }),
+    ]);
     if (!practitioner) return res.status(404).json({ error: 'Practitioner not found' });
+
+    const timeZone = clinic?.timezone || 'Europe/Istanbul';
+    const conflictingAppointments = await findAppointmentsOutsideAvailability(
+      clinicId,
+      practitionerId,
+      validation.data.slots.filter(slot => slot.isActive !== false),
+      timeZone,
+    );
+
+    if (conflictingAppointments.length > 0) {
+      const dates = Array.from(new Set(
+        conflictingAppointments.map(appointment => formatClinicDateTime(appointment.startTime, timeZone).date),
+      ));
+
+      return res.status(409).json({
+        error: 'Availability cannot be restricted while existing appointments fall outside the new schedule',
+        code: 'AVAILABILITY_HAS_APPOINTMENTS',
+        appointmentCount: conflictingAppointments.length,
+        dates: dates.slice(0, 5),
+      });
+    }
 
     const updated = await prisma.$transaction(async tx => {
       await tx.doctorAvailability.deleteMany({ where: { clinicId, practitionerId } });
@@ -301,10 +412,27 @@ router.post('/doctor-off-days', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
   }
 
   try {
-    const practitioner = await prisma.user.findFirst({
-      where: { id: practitionerId, clinicId, role: 'doctor', isActive: true },
-    });
+    const [practitioner, clinic] = await Promise.all([
+      prisma.user.findFirst({
+        where: { id: practitionerId, clinicId, role: 'doctor', isActive: true },
+      }),
+      prisma.clinic.findUnique({
+        where: { id: clinicId },
+        select: { timezone: true },
+      }),
+    ]);
     if (!practitioner) return res.status(404).json({ error: 'Practitioner not found' });
+
+    const timeZone = clinic?.timezone || 'Europe/Istanbul';
+    const appointmentCount = await countAppointmentsOnLocalDate(clinicId, practitionerId, date, timeZone);
+    if (appointmentCount > 0) {
+      return res.status(409).json({
+        error: 'Off day cannot be added while appointments exist on this date',
+        code: 'OFF_DAY_HAS_APPOINTMENTS',
+        appointmentCount,
+        date,
+      });
+    }
 
     const offDay = await prisma.doctorOffDay.upsert({
       where: { clinicId_practitionerId_date: { clinicId, practitionerId, date } },

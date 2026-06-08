@@ -69,6 +69,14 @@ const PatientDetail: React.FC = () => {
   const [paymentPlans, setPaymentPlans] = useState<any[]>([]);
   const [insuranceProvisions, setInsuranceProvisions] = useState<any[]>([]);
   const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || defaultCurrency;
+  const patientFullName = patient
+    ? String(
+        patient.fullName ||
+        patient.name ||
+        patient.displayName ||
+        [patient.firstName, patient.lastName].filter(Boolean).join(' '),
+      ).trim()
+    : '';
 
   const fetchPatient = async () => {
     if (!id) return;
@@ -1001,7 +1009,7 @@ const PatientDetail: React.FC = () => {
         )}
         {/* Dental Chart Tab */}
         {activeTab === 'dental' && (
-          <DentalChart patientId={id!} patientName={`${patient.firstName} ${patient.lastName}`} />
+          <DentalChart patientId={id!} patientName={patientFullName} />
         )}
         {activeTab === 'activity' && (
           <div className="card p-6">

@@ -243,7 +243,8 @@
     },
     "errors": {
       "loadFailed": "Müsaitlik bilgileri yüklenemedi",
-      "saveFailed": "Müsaitlik kaydedilemedi"
+      "saveFailed": "Müsaitlik kaydedilemedi",
+      "appointmentsConflict": "{{dates}} tarihinde {{count}} aktif randevu bu yeni müsaitlik saatlerinin dışında kalıyor. Bu randevu varken günü kapatamaz veya saatleri kısıtlayamazsınız."
     },
     "offDays": {
       "title": "İzin ve Tatil Günleri",
@@ -261,7 +262,8 @@
       "errors": {
         "loadFailed": "İzin günleri yüklenemedi",
         "saveFailed": "İzin günü eklenemedi",
-        "invalidRange": "Bitiş tarihi başlangıç tarihinden önce olamaz"
+        "invalidRange": "Bitiş tarihi başlangıç tarihinden önce olamaz",
+        "appointmentsConflict": "{{date}} tarihinde {{count}} aktif randevu var. Randevu bulunan gün izin/tatil günü olarak kapatılamaz."
       }
     }
   }
