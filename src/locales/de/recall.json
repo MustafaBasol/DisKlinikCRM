@@ -18,13 +18,15 @@
     "saveSuccess": "Recall-Einstellungen gespeichert.",
     "saveError": "Recall-Einstellungen konnten nicht gespeichert werden.",
     "readOnly": "Sie können diese Einstellungen anzeigen, aber nur Manager können sie ändern.",
+    "systemDisabledNotice": "Das Recall-System ist deaktiviert. Die folgenden Regeln laufen wieder, wenn das System erneut aktiviert wird.",
     "expandRule": "Regeleinstellungen öffnen",
     "collapseRule": "Regeleinstellungen schließen",
     "noTemplate": "Sicheren Standardtext verwenden",
     "paymentGentleLanguage": "Verwenden Sie eine freundliche Sprache. Keine aggressive Inkasso-Formulierung verwenden.",
     "state": {
       "active": "Aktiv",
-      "inactive": "Inaktiv"
+      "inactive": "Inaktiv",
+      "systemOff": "System deaktiviert"
     },
     "fields": {
       "enabled": "Intelligentes Recall-System aktiv",

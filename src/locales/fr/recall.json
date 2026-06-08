@@ -18,13 +18,15 @@
     "saveSuccess": "Paramètres de recall enregistrés.",
     "saveError": "Impossible d'enregistrer les paramètres de recall.",
     "readOnly": "Vous pouvez consulter ces paramètres, mais seuls les responsables peuvent les modifier.",
+    "systemDisabledNotice": "Le système de recall est désactivé. Les règles ci-dessous fonctionneront à nouveau lorsque le système sera réactivé.",
     "expandRule": "Ouvrir les paramètres de la règle",
     "collapseRule": "Fermer les paramètres de la règle",
     "noTemplate": "Utiliser le texte sécurisé par défaut",
     "paymentGentleLanguage": "Utilisez un ton courtois. N'utilisez pas de formulation agressive de recouvrement.",
     "state": {
       "active": "Actif",
-      "inactive": "Inactif"
+      "inactive": "Inactif",
+      "systemOff": "Système désactivé"
     },
     "fields": {
       "enabled": "Système de recall intelligent actif",
