@@ -16,6 +16,48 @@
     "active": "Aktif",
     "inactive": "Pasif"
   },
+  "tabs": {
+    "services": "Hizmetler",
+    "packages": "Tedavi Paketleri"
+  },
+  "packages": {
+    "title": "Tedavi Paketleri",
+    "subtitle": "Birden fazla hizmeti paket olarak planlayin.",
+    "newPackage": "Yeni Paket",
+    "edit": "Paketi Duzenle",
+    "empty": "Henuz tedavi paketi eklenmemis.",
+    "fields": {
+      "services": "Hizmetler",
+      "price": "Paket Fiyati",
+      "pricingMode": "Fiyatlama",
+      "quantity": "Adet"
+    },
+    "sections": {
+      "services": "Paket Hizmetleri"
+    },
+    "pricing": {
+      "packagePrice": "Sabit paket fiyati",
+      "serviceSum": "Hizmet toplam fiyatlari"
+    },
+    "errors": {
+      "loadFailed": "Tedavi paketleri yuklenemedi.",
+      "serviceRequired": "Paket icin en az bir hizmet secin.",
+      "saveFailed": "Tedavi paketi kaydedilemedi."
+    }
+  },
+  "materials": {
+    "title": "Otomatik Stok Recetesi",
+    "hint": "Bu hizmet tamamlandiginda secilen malzemeler stoktan dusulur.",
+    "saveServiceFirst": "Malzeme recetesi hizmet kaydedildikten sonra tanimlanabilir.",
+    "empty": "Malzeme recetesi tanimlanmadi.",
+    "unit": "Birim",
+    "packageTitle": "Paket Ekstra Malzemeleri",
+    "packageHint": "Bu malzemeler paketteki tum islemler tamamlaninca bir kez dusulur.",
+    "extraMaterialsCount": "{{count}} ekstra malzeme",
+    "errors": {
+      "loadFailed": "Malzeme recetesi yuklenemedi."
+    }
+  },
   "actions": {
     "edit": "Hizmeti Düzenle",
     "save": "Hizmeti Kaydet",

@@ -212,7 +212,7 @@ const TreatmentCaseDetail: React.FC = () => {
       setTreatmentPackages(res.data);
       setSelectedPackageId(res.data[0]?.id || '');
     } catch (err: any) {
-      setPackageError(err.response?.data?.error || t('treatmentCases:packages.errors.loadFailed', { defaultValue: 'Tedavi paketleri yuklenemedi.' }));
+      setPackageError(err.response?.data?.error || t('treatmentCases:packages.errors.loadFailed'));
     } finally {
       setPackageLoading(false);
     }
@@ -230,13 +230,13 @@ const TreatmentCaseDetail: React.FC = () => {
     } catch (err: any) {
       const data = err.response?.data;
       if (data?.code === 'PACKAGE_ALREADY_APPLIED') {
-        const shouldAddAgain = window.confirm(t('treatmentCases:packages.confirmDuplicate', { defaultValue: 'Bu paket bu tedavi dosyasina daha once eklenmis. Tekrar eklensin mi?' }));
+        const shouldAddAgain = window.confirm(t('treatmentCases:packages.confirmDuplicate'));
         if (shouldAddAgain) {
           await applySelectedPackage(true);
           return;
         }
       }
-      setPackageError(data?.error || t('treatmentCases:packages.errors.applyFailed', { defaultValue: 'Tedavi paketi eklenemedi.' }));
+      setPackageError(data?.error || t('treatmentCases:packages.errors.applyFailed'));
     } finally {
       setPackageSaving(false);
     }
@@ -771,7 +771,7 @@ const TreatmentCaseDetail: React.FC = () => {
                   <button
                     onClick={openPackageModal}
                     className="p-1 hover:bg-white rounded transition-colors text-indigo-600"
-                    title={t('treatmentCases:packages.add', { defaultValue: 'Paket ekle' })}
+                    title={t('treatmentCases:packages.add')}
                   >
                     <Package size={16} />
                   </button>
@@ -1088,10 +1088,10 @@ const TreatmentCaseDetail: React.FC = () => {
               <div>
                 <h3 className="font-bold text-lg flex items-center gap-2">
                   <Package size={18} className="text-indigo-500" />
-                  {t('treatmentCases:packages.add', { defaultValue: 'Paket Tedavi Ekle' })}
+                  {t('treatmentCases:packages.add')}
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  {t('treatmentCases:packages.description', { defaultValue: 'Secilen paketteki hizmetler tedavi planina islem olarak eklenir.' })}
+                  {t('treatmentCases:packages.description')}
                 </p>
               </div>
               <button onClick={() => setIsPackageModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg">
@@ -1113,7 +1113,7 @@ const TreatmentCaseDetail: React.FC = () => {
                 </div>
               ) : treatmentPackages.length === 0 ? (
                 <div className="p-8 text-center text-gray-400 text-sm italic">
-                  {t('treatmentCases:packages.empty', { defaultValue: 'Aktif tedavi paketi bulunmuyor.' })}
+                  {t('treatmentCases:packages.empty')}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
@@ -1136,8 +1136,8 @@ const TreatmentCaseDetail: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          {pkg.items?.length || 0} {t('services:tabs.services', { defaultValue: 'hizmet' })}
-                          {pkg.materials?.length ? ` / ${pkg.materials.length} ekstra malzeme` : ''}
+                          {pkg.items?.length || 0} {t('services:tabs.services')}
+                          {pkg.materials?.length ? ` / ${t('services:materials.extraMaterialsCount', { count: pkg.materials.length })}` : ''}
                         </p>
                       </button>
                     ))}
@@ -1152,14 +1152,18 @@ const TreatmentCaseDetail: React.FC = () => {
                               <h4 className="font-bold text-gray-900">{selectedPackage.name}</h4>
                               {selectedPackage.description && <p className="text-sm text-gray-500 mt-1">{selectedPackage.description}</p>}
                             </div>
-                            <span className="badge badge-blue">{selectedPackage.pricingMode === 'SERVICE_SUM' ? 'Hizmet toplami' : 'Paket fiyati'}</span>
+                            <span className="badge badge-blue">
+                              {selectedPackage.pricingMode === 'SERVICE_SUM'
+                                ? t('services:packages.pricing.serviceSum')
+                                : t('services:packages.pricing.packagePrice')}
+                            </span>
                           </div>
                         </div>
 
                         <div className="p-4 space-y-4">
                           <div>
                             <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
-                              {t('treatmentCases:packages.includedServices', { defaultValue: 'Paketteki Hizmetler' })}
+                              {t('treatmentCases:packages.includedServices')}
                             </h5>
                             <div className="space-y-2">
                               {selectedPackage.items?.map((item: any) => (
@@ -1181,7 +1185,7 @@ const TreatmentCaseDetail: React.FC = () => {
 
                           <div>
                             <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
-                              {t('services:materials.packageTitle', { defaultValue: 'Paket Ekstra Malzemeleri' })}
+                              {t('services:materials.packageTitle')}
                             </h5>
                             {selectedPackage.materials?.length ? (
                               <div className="space-y-2">
@@ -1193,7 +1197,7 @@ const TreatmentCaseDetail: React.FC = () => {
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-gray-400 italic">{t('services:materials.empty', { defaultValue: 'Ekstra malzeme tanimlanmadi.' })}</p>
+                              <p className="text-sm text-gray-400 italic">{t('services:materials.empty')}</p>
                             )}
                           </div>
                         </div>
@@ -1218,7 +1222,7 @@ const TreatmentCaseDetail: React.FC = () => {
                 className="btn-primary flex-1"
               >
                 {packageSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                {t('treatmentCases:packages.apply', { defaultValue: 'Paketi Plana Ekle' })}
+                {t('treatmentCases:packages.apply')}
               </button>
             </div>
           </div>

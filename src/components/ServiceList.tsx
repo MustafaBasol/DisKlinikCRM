@@ -14,6 +14,7 @@ const ServiceList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
   const [activeView, setActiveView] = useState<'services' | 'packages'>('services');
+  const [packageCreateRequest, setPackageCreateRequest] = useState(0);
 
   const fetchServices = async () => {
     try {
@@ -41,6 +42,14 @@ const ServiceList: React.FC = () => {
     fetchServices();
   };
 
+  const handlePrimaryCreate = () => {
+    if (activeView === 'services') {
+      handleOpenModal();
+      return;
+    }
+    setPackageCreateRequest((value) => value + 1);
+  };
+
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary-500" /></div>;
   }
@@ -51,17 +60,17 @@ const ServiceList: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h2 className="text-lg font-bold">{t('settings:services.title')}</h2>
           <p className="text-sm text-gray-500">{t('settings:services.subtitle')}</p>
         </div>
-        {activeView === 'services' && (
-          <button onClick={() => handleOpenModal()} className="btn-primary">
-            <Plus size={18} />
-            {t('settings:services.newService')}
-          </button>
-        )}
+        <button onClick={handlePrimaryCreate} className="btn-primary w-full sm:w-auto justify-center">
+          <Plus size={18} />
+          {activeView === 'services'
+            ? t('settings:services.newService')
+            : t('services:packages.newPackage')}
+        </button>
       </div>
 
       <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
@@ -70,7 +79,7 @@ const ServiceList: React.FC = () => {
           onClick={() => setActiveView('services')}
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeView === 'services' ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:text-gray-700'}`}
         >
-          {t('services:tabs.services', { defaultValue: 'Hizmetler' })}
+          {t('services:tabs.services')}
         </button>
         <button
           type="button"
@@ -78,12 +87,12 @@ const ServiceList: React.FC = () => {
           className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${activeView === 'packages' ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:text-gray-700'}`}
         >
           <Package size={16} />
-          {t('services:tabs.packages', { defaultValue: 'Tedavi Paketleri' })}
+          {t('services:tabs.packages')}
         </button>
       </div>
 
       {activeView === 'packages' ? (
-        <TreatmentPackageList />
+        <TreatmentPackageList createRequest={packageCreateRequest} />
       ) : (
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -199,7 +208,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
           note: material.note || '',
         })));
       } catch {
-        if (isMounted) setError(t('services:materials.errors.loadFailed', { defaultValue: 'Malzeme recetesi yuklenemedi.' }));
+        if (isMounted) setError(t('services:materials.errors.loadFailed'));
       } finally {
         if (isMounted) setMaterialsLoading(false);
       }
@@ -314,8 +323,8 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
           <div className="border border-gray-100 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-gray-700">{t('services:materials.title', { defaultValue: 'Otomatik Stok Recetesi' })}</h3>
-                <p className="text-xs text-gray-500">{t('services:materials.hint', { defaultValue: 'Bu hizmet tamamlandiginda secilen malzemeler stoktan dusulur.' })}</p>
+                <h3 className="text-sm font-bold text-gray-700">{t('services:materials.title')}</h3>
+                <p className="text-xs text-gray-500">{t('services:materials.hint')}</p>
               </div>
               {service && (
                 <button
@@ -331,7 +340,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
 
             {!service ? (
               <p className="p-4 text-sm text-gray-400 italic">
-                {t('services:materials.saveServiceFirst', { defaultValue: 'Malzeme recetesi hizmet kaydedildikten sonra tanimlanabilir.' })}
+                {t('services:materials.saveServiceFirst')}
               </p>
             ) : materialsLoading ? (
               <div className="p-4 flex items-center gap-2 text-sm text-gray-500">
@@ -339,13 +348,13 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
                 {t('common:loading')}
               </div>
             ) : materials.length === 0 ? (
-              <p className="p-4 text-sm text-gray-400 italic">{t('services:materials.empty', { defaultValue: 'Malzeme recetesi tanimlanmadi.' })}</p>
+              <p className="p-4 text-sm text-gray-400 italic">{t('services:materials.empty')}</p>
             ) : (
               <div className="divide-y divide-gray-50">
                 {materials.map((material, index) => (
                   <div key={index} className="p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                     <div className="md:col-span-5">
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.item', { defaultValue: 'Malzeme' })}</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.item')}</label>
                       <select
                         className="input-field w-full"
                         value={material.inventoryItemId}
@@ -361,7 +370,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
                       </select>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.quantity', { defaultValue: 'Miktar' })}</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.quantity')}</label>
                       <input
                         type="number"
                         min="0.01"
@@ -372,7 +381,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:materials.unit', { defaultValue: 'Birim' })}</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:materials.unit')}</label>
                       <input
                         type="text"
                         className="input-field w-full"
@@ -386,7 +395,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
                         checked={material.isOptional}
                         onChange={e => setMaterials(prev => prev.map((row, i) => i === index ? { ...row, isOptional: e.target.checked } : row))}
                       />
-                      {t('treatmentCases:procedures.optional', { defaultValue: 'opsiyonel' })}
+                      {t('treatmentCases:procedures.optional')}
                     </label>
                     <button
                       type="button"

@@ -115,6 +115,18 @@
       "deleteFailed": "Impossible de supprimer l'acte."
     }
   },
+  "packages": {
+    "add": "Ajouter un forfait de traitement",
+    "description": "Les services du forfait selectionne sont ajoutes au plan de traitement comme actes.",
+    "empty": "Aucun forfait de traitement actif trouve.",
+    "includedServices": "Services inclus",
+    "apply": "Ajouter le forfait au plan",
+    "confirmDuplicate": "Ce forfait a deja ete ajoute a ce dossier de traitement. L'ajouter de nouveau ?",
+    "errors": {
+      "loadFailed": "Impossible de charger les forfaits de traitement.",
+      "applyFailed": "Impossible d'ajouter le forfait de traitement."
+    }
+  },
   "materials": {
     "title": "Matériaux du traitement",
     "item": "Article",

@@ -16,6 +16,48 @@
     "active": "Aktiv",
     "inactive": "Inaktiv"
   },
+  "tabs": {
+    "services": "Leistungen",
+    "packages": "Behandlungspakete"
+  },
+  "packages": {
+    "title": "Behandlungspakete",
+    "subtitle": "Bundeln Sie mehrere Leistungen in einem Behandlungspaket.",
+    "newPackage": "Neues Paket",
+    "edit": "Paket bearbeiten",
+    "empty": "Es wurden noch keine Behandlungspakete hinzugefuegt.",
+    "fields": {
+      "services": "Leistungen",
+      "price": "Paketpreis",
+      "pricingMode": "Preisberechnung",
+      "quantity": "Menge"
+    },
+    "sections": {
+      "services": "Paketleistungen"
+    },
+    "pricing": {
+      "packagePrice": "Fester Paketpreis",
+      "serviceSum": "Summe der Leistungspreise"
+    },
+    "errors": {
+      "loadFailed": "Behandlungspakete konnten nicht geladen werden.",
+      "serviceRequired": "Waehlen Sie mindestens eine Leistung fuer das Paket aus.",
+      "saveFailed": "Behandlungspaket konnte nicht gespeichert werden."
+    }
+  },
+  "materials": {
+    "title": "Automatische Materialrezeptur",
+    "hint": "Wenn diese Leistung abgeschlossen wird, werden die ausgewaehlten Materialien vom Lager abgezogen.",
+    "saveServiceFirst": "Speichern Sie die Leistung, bevor Sie eine Materialrezeptur definieren.",
+    "empty": "Es wurde keine Materialrezeptur definiert.",
+    "unit": "Einheit",
+    "packageTitle": "Zusaetzliche Paketmaterialien",
+    "packageHint": "Diese Materialien werden einmal abgezogen, wenn alle Paketprozeduren abgeschlossen sind.",
+    "extraMaterialsCount": "{{count}} zusaetzliche Materialien",
+    "errors": {
+      "loadFailed": "Materialrezeptur konnte nicht geladen werden."
+    }
+  },
   "actions": {
     "edit": "Leistung bearbeiten",
     "save": "Leistung speichern",

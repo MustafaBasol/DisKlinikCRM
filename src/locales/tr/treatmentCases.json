@@ -116,6 +116,18 @@
       "deleteFailed": "İşlem silinemedi."
     }
   },
+  "packages": {
+    "add": "Paket Tedavi Ekle",
+    "description": "Secilen paketteki hizmetler tedavi planina islem olarak eklenir.",
+    "empty": "Aktif tedavi paketi bulunmuyor.",
+    "includedServices": "Paketteki Hizmetler",
+    "apply": "Paketi Plana Ekle",
+    "confirmDuplicate": "Bu paket bu tedavi dosyasina daha once eklenmis. Tekrar eklensin mi?",
+    "errors": {
+      "loadFailed": "Tedavi paketleri yuklenemedi.",
+      "applyFailed": "Tedavi paketi eklenemedi."
+    }
+  },
   "materials": {
     "title": "Tedavi Malzemeleri",
     "item": "Malzeme",

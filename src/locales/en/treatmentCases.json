@@ -115,6 +115,18 @@
       "deleteFailed": "Failed to delete procedure."
     }
   },
+  "packages": {
+    "add": "Add package treatment",
+    "description": "Services in the selected package are added to the treatment plan as procedures.",
+    "empty": "No active treatment packages found.",
+    "includedServices": "Included Services",
+    "apply": "Add Package to Plan",
+    "confirmDuplicate": "This package has already been added to this treatment case. Add it again?",
+    "errors": {
+      "loadFailed": "Failed to load treatment packages.",
+      "applyFailed": "Failed to add treatment package."
+    }
+  },
   "materials": {
     "title": "Treatment Materials",
     "item": "Item",
