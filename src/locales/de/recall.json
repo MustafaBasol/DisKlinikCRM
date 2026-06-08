@@ -1,1 +1,79 @@
-{}
+{
+  "nav": "Rückgewinnung",
+  "settingsSummary": {
+    "title": "Intelligente Patientenrückgewinnung",
+    "description": "Das System verfolgt Patienten, bei denen eine Kontrolle fällig ist oder deren Behandlung unvollständig geblieben ist.",
+    "manage": "Einstellungen verwalten"
+  },
+  "settings": {
+    "nav": "Patientenrückgewinnung",
+    "alternateNav": "Recall-Einstellungen",
+    "title": "Intelligente Patientenrückgewinnung und Recall",
+    "subtitle": "Erstellen Sie automatische Nachfassregeln für fällige Kontrollen, unvollständige Behandlungen oder verpasste Rückmeldungen.",
+    "clinicScope": "Gespeichert für {{clinic}}",
+    "safeDefault": "Automatisches Senden wird standardmäßig nicht verwendet. Beginnen Sie mit Liste, Aufgabe oder Entwurf.",
+    "save": "Recall-Einstellungen speichern",
+    "loading": "Recall-Einstellungen werden geladen...",
+    "loadError": "Recall-Einstellungen konnten nicht geladen werden.",
+    "saveSuccess": "Recall-Einstellungen gespeichert.",
+    "saveError": "Recall-Einstellungen konnten nicht gespeichert werden.",
+    "readOnly": "Sie können diese Einstellungen anzeigen, aber nur Manager können sie ändern.",
+    "expandRule": "Regeleinstellungen öffnen",
+    "collapseRule": "Regeleinstellungen schließen",
+    "noTemplate": "Sicheren Standardtext verwenden",
+    "paymentGentleLanguage": "Verwenden Sie eine freundliche Sprache. Keine aggressive Inkasso-Formulierung verwenden.",
+    "state": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv"
+    },
+    "fields": {
+      "enabled": "Intelligentes Recall-System aktiv",
+      "enabledHelp": "Schaltet die Kandidatenerzeugung ein oder aus.",
+      "defaultActionMode": "Standardverhalten",
+      "respectConsent": "Kommunikationszustimmung berücksichtigen",
+      "respectConsentHelp": "Ohne Zustimmung wird kein WhatsApp-Entwurf erstellt.",
+      "actionMode": "Verhalten",
+      "messageTemplate": "Nachrichtenvorlage",
+      "afterDays": "Nach wie vielen Tagen",
+      "afterHours": "Nach wie vielen Stunden",
+      "repeatDays": "Wiederholungsintervall",
+      "maxAttempts": "Maximale Versuche",
+      "sendTiming": "Sendetag",
+      "sendTime": "Sendezeit",
+      "autoTask": "Automatische Aufgabe"
+    },
+    "actionModes": {
+      "LIST_ONLY": "Nur auflisten",
+      "CREATE_TASK": "Aufgabe erstellen",
+      "CREATE_MESSAGE_DRAFT": "WhatsApp-Entwurf erstellen",
+      "AUTO_SEND_WHATSAPP": "WhatsApp automatisch senden"
+    },
+    "sendTimings": {
+      "SAME_DAY": "Am selben Tag",
+      "NEXT_DAY": "1 Tag später",
+      "MANUAL": "Manuell"
+    },
+    "rules": {
+      "checkup": {
+        "title": "Routinekontroll-Recall",
+        "description": "Findet Patienten, deren letzter abgeschlossener Besuch oder Behandlung das Kontrollintervall überschritten hat."
+      },
+      "treatmentPlan": {
+        "title": "Nachfassen zum Behandlungsplan",
+        "description": "Findet Patienten, die einen Behandlungsplan erhalten, aber noch nicht begonnen haben."
+      },
+      "incompleteTreatment": {
+        "title": "Nachfassen bei unvollständiger Behandlung",
+        "description": "Findet Behandlungsfälle mit abgeschlossenen und noch offenen Schritten."
+      },
+      "noShow": {
+        "title": "Rückruf nach No-show",
+        "description": "Verfolgt verpasste Termine, wenn kein neuer aktiver Termin vorhanden ist."
+      },
+      "payment": {
+        "title": "Zahlungsnachfass-Erinnerung",
+        "description": "Findet überfällige Zahlungsplanraten, wenn das Zahlungsmodell dies unterstützt."
+      }
+    }
+  }
+}

@@ -101,7 +101,14 @@
     "copy": "Copy draft",
     "close": "Close"
   },
+  "settingsSummary": {
+    "title": "Smart Patient Recovery",
+    "description": "The smart patient recovery system tracks patients who are due for check-up or left treatment unfinished.",
+    "manage": "Manage settings"
+  },
   "settings": {
+    "nav": "Patient Recovery",
+    "alternateNav": "Recall Settings",
     "title": "Smart Patient Recovery and Recall",
     "subtitle": "Create automatic follow-up rules for patients due for check-up, unfinished treatment, or missed follow-up.",
     "clinicScope": "Saved for {{clinic}}",
@@ -114,6 +121,12 @@
     "readOnly": "You can view recall settings, but only managers can edit them.",
     "noTemplate": "Use safe default text",
     "paymentGentleLanguage": "Use gentle language. Do not use aggressive collection wording.",
+    "expandRule": "Expand rule settings",
+    "collapseRule": "Collapse rule settings",
+    "state": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
     "fields": {
       "enabled": "Smart recall system active",
       "enabledHelp": "Turns candidate generation on or off.",

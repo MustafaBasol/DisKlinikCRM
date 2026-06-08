@@ -101,7 +101,14 @@
     "copy": "Taslağı kopyala",
     "close": "Kapat"
   },
+  "settingsSummary": {
+    "title": "Akıllı Hasta Geri Kazanım",
+    "description": "Akıllı Hasta Geri Kazanım sistemi, kontrol zamanı gelen ve tedavisi yarım kalan hastaları takip eder.",
+    "manage": "Ayarları yönet"
+  },
   "settings": {
+    "nav": "Hasta Geri Kazanım",
+    "alternateNav": "Recall Ayarları",
     "title": "Akıllı Hasta Geri Kazanım ve Recall",
     "subtitle": "Kontrol zamanı gelen, tedavisi yarım kalan veya dönüş yapmayan hastalar için otomatik takip kuralları oluşturun.",
     "clinicScope": "{{clinic}} için kaydedilir",
@@ -114,6 +121,12 @@
     "readOnly": "Recall ayarlarını görüntüleyebilirsiniz; yalnızca yöneticiler düzenleyebilir.",
     "noTemplate": "Güvenli varsayılan metni kullan",
     "paymentGentleLanguage": "Nazik bir dil kullanın. Sert tahsilat dili kullanmayın.",
+    "expandRule": "Kural ayarlarını aç",
+    "collapseRule": "Kural ayarlarını kapat",
+    "state": {
+      "active": "Aktif",
+      "inactive": "Pasif"
+    },
     "fields": {
       "enabled": "Akıllı recall sistemi aktif",
       "enabledHelp": "Aday üretimini açar veya kapatır.",
