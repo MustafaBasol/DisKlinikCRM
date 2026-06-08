@@ -36,7 +36,11 @@ const emptyMaterial = (): PackageMaterialForm => ({
   note: '',
 });
 
-const TreatmentPackageList: React.FC = () => {
+type TreatmentPackageListProps = {
+  createRequest?: number;
+};
+
+const TreatmentPackageList: React.FC<TreatmentPackageListProps> = ({ createRequest = 0 }) => {
   const { t } = useTranslation(['services', 'settings', 'common', 'treatmentCases']);
   const { formatCurrency, defaultCurrency } = useClinicPreferences();
   const [packages, setPackages] = useState<any[]>([]);
@@ -60,7 +64,7 @@ const TreatmentPackageList: React.FC = () => {
       setInventoryItems(inventoryRes.data);
       setError(null);
     } catch {
-      setError(t('services:packages.errors.loadFailed', { defaultValue: 'Tedavi paketleri yuklenemedi.' }));
+      setError(t('services:packages.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -74,6 +78,12 @@ const TreatmentPackageList: React.FC = () => {
     setEditingPackage(pkg);
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    if (createRequest > 0) {
+      openModal();
+    }
+  }, [createRequest]);
 
   const toggleActive = async (pkg: any) => {
     await treatmentPackageService.update(pkg.id, { isActive: !pkg.isActive });
@@ -90,15 +100,11 @@ const TreatmentPackageList: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6">
         <div>
-          <h2 className="text-lg font-bold">{t('services:packages.title', { defaultValue: 'Tedavi Paketleri' })}</h2>
-          <p className="text-sm text-gray-500">{t('services:packages.subtitle', { defaultValue: 'Birden fazla hizmeti paket olarak planlayin.' })}</p>
+          <h2 className="text-lg font-bold">{t('services:packages.title')}</h2>
+          <p className="text-sm text-gray-500">{t('services:packages.subtitle')}</p>
         </div>
-        <button onClick={() => openModal()} className="btn-primary">
-          <Plus size={18} />
-          {t('services:packages.newPackage', { defaultValue: 'Yeni Paket' })}
-        </button>
       </div>
 
       <div className="card overflow-hidden">
@@ -108,8 +114,8 @@ const TreatmentPackageList: React.FC = () => {
               <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase text-gray-500">
                 <th className="p-4 font-semibold">{t('services:fields.name')}</th>
                 <th className="p-4 font-semibold">{t('services:fields.category')}</th>
-                <th className="p-4 font-semibold">{t('services:packages.fields.services', { defaultValue: 'Hizmetler' })}</th>
-                <th className="p-4 font-semibold">{t('services:packages.fields.price', { defaultValue: 'Paket Fiyati' })}</th>
+                <th className="p-4 font-semibold">{t('services:packages.fields.services')}</th>
+                <th className="p-4 font-semibold">{t('services:packages.fields.price')}</th>
                 <th className="p-4 font-semibold">{t('services:fields.status')}</th>
                 <th className="p-4 font-semibold text-right">{t('common:actions')}</th>
               </tr>
@@ -124,7 +130,11 @@ const TreatmentPackageList: React.FC = () => {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{pkg.name}</p>
-                        <p className="text-xs text-gray-400">{pkg.pricingMode === 'SERVICE_SUM' ? 'Hizmet toplam fiyatlari' : 'Sabit paket fiyati'}</p>
+                        <p className="text-xs text-gray-400">
+                          {pkg.pricingMode === 'SERVICE_SUM'
+                            ? t('services:packages.pricing.serviceSum')
+                            : t('services:packages.pricing.packagePrice')}
+                        </p>
                       </div>
                     </div>
                   </td>
@@ -157,7 +167,7 @@ const TreatmentPackageList: React.FC = () => {
               {packages.length === 0 && (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-gray-500 italic">
-                    {t('services:packages.empty', { defaultValue: 'Henuz tedavi paketi eklenmemis.' })}
+                    {t('services:packages.empty')}
                   </td>
                 </tr>
               )}
@@ -241,7 +251,7 @@ const TreatmentPackageModal: React.FC<{
 
     const validItems = items.filter(item => item.serviceId);
     if (validItems.length === 0) {
-      setError(t('services:packages.errors.serviceRequired', { defaultValue: 'Paket icin en az bir hizmet secin.' }));
+      setError(t('services:packages.errors.serviceRequired'));
       return;
     }
 
@@ -275,7 +285,7 @@ const TreatmentPackageModal: React.FC<{
       }
       onSuccess();
     } catch (err: any) {
-      setError(err.response?.data?.error || t('services:packages.errors.saveFailed', { defaultValue: 'Tedavi paketi kaydedilemedi.' }));
+      setError(err.response?.data?.error || t('services:packages.errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -289,7 +299,7 @@ const TreatmentPackageModal: React.FC<{
             <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center text-primary-600">
               <Package size={20} />
             </div>
-            <h2 className="text-xl font-bold">{pkg ? t('services:packages.edit', { defaultValue: 'Paketi Duzenle' }) : t('services:packages.newPackage', { defaultValue: 'Yeni Paket' })}</h2>
+            <h2 className="text-xl font-bold">{pkg ? t('services:packages.edit') : t('services:packages.newPackage')}</h2>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50">
             <XCircle size={24} />
@@ -320,15 +330,15 @@ const TreatmentPackageModal: React.FC<{
               <textarea className="input-field w-full min-h-[72px]" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('services:packages.fields.pricingMode', { defaultValue: 'Fiyatlama' })}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('services:packages.fields.pricingMode')}</label>
               <select className="input-field w-full" value={formData.pricingMode} onChange={e => setFormData({ ...formData, pricingMode: e.target.value })}>
-                <option value="PACKAGE_PRICE">{t('services:packages.pricing.packagePrice', { defaultValue: 'Sabit paket fiyati' })}</option>
-                <option value="SERVICE_SUM">{t('services:packages.pricing.serviceSum', { defaultValue: 'Hizmet toplam fiyatlari' })}</option>
+                <option value="PACKAGE_PRICE">{t('services:packages.pricing.packagePrice')}</option>
+                <option value="SERVICE_SUM">{t('services:packages.pricing.serviceSum')}</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('services:packages.fields.price', { defaultValue: 'Fiyat' })}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('services:packages.fields.price')}</label>
                 <input type="number" min="0" step="0.01" className="input-field w-full" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} />
               </div>
               <div>
@@ -347,7 +357,7 @@ const TreatmentPackageModal: React.FC<{
 
           <section className="border border-gray-100 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-700">{t('services:packages.sections.services', { defaultValue: 'Paket Hizmetleri' })}</h3>
+              <h3 className="text-sm font-bold text-gray-700">{t('services:packages.sections.services')}</h3>
               <button type="button" className="btn-secondary py-1.5 px-3 text-xs" onClick={() => setItems(prev => [...prev, emptyItem(prev.length)])}>
                 <Plus size={14} />
                 {t('common:add')}
@@ -361,14 +371,14 @@ const TreatmentPackageModal: React.FC<{
                     <div className="md:col-span-5">
                       <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:fields.name')}</label>
                       <select className="input-field w-full" value={item.serviceId} onChange={e => updateItem(index, { serviceId: e.target.value })}>
-                        <option value="">{t('treatmentCases:procedures.selectService', { defaultValue: 'Hizmet secin' })}</option>
+                        <option value="">{t('treatmentCases:procedures.selectService')}</option>
                         {services.map(service => (
                           <option key={service.id} value={service.id}>{service.name}</option>
                         ))}
                       </select>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:packages.fields.quantity', { defaultValue: 'Adet' })}</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:packages.fields.quantity')}</label>
                       <input type="number" min="1" className="input-field w-full" value={item.quantity} onChange={e => updateItem(index, { quantity: Number(e.target.value) })} />
                     </div>
                     <div className="md:col-span-2">
@@ -391,8 +401,8 @@ const TreatmentPackageModal: React.FC<{
           <section className="border border-gray-100 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-gray-700">{t('services:materials.packageTitle', { defaultValue: 'Paket Ekstra Malzemeleri' })}</h3>
-                <p className="text-xs text-gray-500">{t('services:materials.packageHint', { defaultValue: 'Bu malzemeler paketteki tum islemler tamamlaninca bir kez dusulur.' })}</p>
+                <h3 className="text-sm font-bold text-gray-700">{t('services:materials.packageTitle')}</h3>
+                <p className="text-xs text-gray-500">{t('services:materials.packageHint')}</p>
               </div>
               <button type="button" className="btn-secondary py-1.5 px-3 text-xs" onClick={() => setMaterials(prev => [...prev, emptyMaterial()])}>
                 <Plus size={14} />
@@ -401,11 +411,11 @@ const TreatmentPackageModal: React.FC<{
             </div>
             <div className="divide-y divide-gray-50">
               {materials.length === 0 ? (
-                <p className="p-4 text-sm text-gray-400 italic">{t('services:materials.empty', { defaultValue: 'Ekstra malzeme tanimlanmadi.' })}</p>
+                <p className="p-4 text-sm text-gray-400 italic">{t('services:materials.empty')}</p>
               ) : materials.map((material, index) => (
                 <div key={index} className="p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                   <div className="md:col-span-5">
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.item', { defaultValue: 'Malzeme' })}</label>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.item')}</label>
                     <select
                       className="input-field w-full"
                       value={material.inventoryItemId}
@@ -421,16 +431,16 @@ const TreatmentPackageModal: React.FC<{
                     </select>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.quantity', { defaultValue: 'Miktar' })}</label>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t('treatmentCases:materials.quantity')}</label>
                     <input type="number" min="0.01" step="0.01" className="input-field w-full" value={material.quantity} onChange={e => updateMaterial(index, { quantity: e.target.value })} />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:materials.unit', { defaultValue: 'Birim' })}</label>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t('services:materials.unit')}</label>
                     <input type="text" className="input-field w-full" value={material.unit} onChange={e => updateMaterial(index, { unit: e.target.value })} />
                   </div>
                   <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-600 pb-2">
                     <input type="checkbox" checked={material.isOptional} onChange={e => updateMaterial(index, { isOptional: e.target.checked })} />
-                    {t('treatmentCases:procedures.optional', { defaultValue: 'opsiyonel' })}
+                    {t('treatmentCases:procedures.optional')}
                   </label>
                   <button type="button" className="md:col-span-1 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => setMaterials(prev => prev.filter((_, i) => i !== index))}>
                     <Trash2 size={16} />

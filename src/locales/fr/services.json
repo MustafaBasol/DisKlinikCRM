@@ -16,6 +16,48 @@
     "active": "Actif",
     "inactive": "Inactif"
   },
+  "tabs": {
+    "services": "Services",
+    "packages": "Forfaits de traitement"
+  },
+  "packages": {
+    "title": "Forfaits de traitement",
+    "subtitle": "Regroupez plusieurs services dans un forfait de traitement.",
+    "newPackage": "Nouveau forfait",
+    "edit": "Modifier le forfait",
+    "empty": "Aucun forfait de traitement n'a encore ete ajoute.",
+    "fields": {
+      "services": "Services",
+      "price": "Prix du forfait",
+      "pricingMode": "Tarification",
+      "quantity": "Quantite"
+    },
+    "sections": {
+      "services": "Services du forfait"
+    },
+    "pricing": {
+      "packagePrice": "Prix fixe du forfait",
+      "serviceSum": "Somme des prix des services"
+    },
+    "errors": {
+      "loadFailed": "Impossible de charger les forfaits de traitement.",
+      "serviceRequired": "Selectionnez au moins un service pour le forfait.",
+      "saveFailed": "Impossible d'enregistrer le forfait de traitement."
+    }
+  },
+  "materials": {
+    "title": "Recette de stock automatique",
+    "hint": "Lorsque ce service est termine, les materiaux selectionnes sont deduits du stock.",
+    "saveServiceFirst": "Enregistrez le service avant de definir une recette de materiaux.",
+    "empty": "Aucune recette de materiaux n'a ete definie.",
+    "unit": "Unite",
+    "packageTitle": "Materiaux supplementaires du forfait",
+    "packageHint": "Ces materiaux sont deduits une seule fois lorsque tous les actes du forfait sont termines.",
+    "extraMaterialsCount": "{{count}} materiaux supplementaires",
+    "errors": {
+      "loadFailed": "Impossible de charger la recette de materiaux."
+    }
+  },
   "actions": {
     "edit": "Modifier le service",
     "save": "Enregistrer le service",

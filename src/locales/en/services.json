@@ -16,6 +16,48 @@
     "active": "Active",
     "inactive": "Inactive"
   },
+  "tabs": {
+    "services": "Services",
+    "packages": "Treatment Packages"
+  },
+  "packages": {
+    "title": "Treatment Packages",
+    "subtitle": "Bundle multiple services into a treatment package.",
+    "newPackage": "New Package",
+    "edit": "Edit Package",
+    "empty": "No treatment packages have been added yet.",
+    "fields": {
+      "services": "Services",
+      "price": "Package Price",
+      "pricingMode": "Pricing",
+      "quantity": "Quantity"
+    },
+    "sections": {
+      "services": "Package Services"
+    },
+    "pricing": {
+      "packagePrice": "Fixed package price",
+      "serviceSum": "Sum of service prices"
+    },
+    "errors": {
+      "loadFailed": "Failed to load treatment packages.",
+      "serviceRequired": "Select at least one service for the package.",
+      "saveFailed": "Failed to save treatment package."
+    }
+  },
+  "materials": {
+    "title": "Automatic Stock Recipe",
+    "hint": "When this service is completed, selected materials are deducted from stock.",
+    "saveServiceFirst": "Save the service before defining a material recipe.",
+    "empty": "No material recipe has been defined.",
+    "unit": "Unit",
+    "packageTitle": "Package Extra Materials",
+    "packageHint": "These materials are deducted once when all package procedures are completed.",
+    "extraMaterialsCount": "{{count}} extra materials",
+    "errors": {
+      "loadFailed": "Failed to load material recipe."
+    }
+  },
   "actions": {
     "edit": "Edit Service",
     "save": "Save Service",

@@ -115,6 +115,18 @@
       "deleteFailed": "Prozedur konnte nicht gelöscht werden."
     }
   },
+  "packages": {
+    "add": "Behandlungspaket hinzufuegen",
+    "description": "Die Leistungen im ausgewaehlten Paket werden dem Behandlungsplan als Prozeduren hinzugefuegt.",
+    "empty": "Keine aktiven Behandlungspakete gefunden.",
+    "includedServices": "Enthaltene Leistungen",
+    "apply": "Paket zum Plan hinzufuegen",
+    "confirmDuplicate": "Dieses Paket wurde dieser Behandlungsakte bereits hinzugefuegt. Erneut hinzufuegen?",
+    "errors": {
+      "loadFailed": "Behandlungspakete konnten nicht geladen werden.",
+      "applyFailed": "Behandlungspaket konnte nicht hinzugefuegt werden."
+    }
+  },
   "materials": {
     "title": "Behandlungsmaterialien",
     "item": "Artikel",
