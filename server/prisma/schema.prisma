@@ -8,116 +8,122 @@ datasource db {
 }
 
 model Clinic {
-  id              String   @id @default(uuid())
+  id              String       @id @default(uuid())
   name            String
   legalName       String?
   address         String?
   phone           String?
   email           String?
   website         String?
-  timezone        String   @default("UTC")
-  currency        String   @default("USD")
-  defaultLanguage String   @default("en")
-  slug            String   // Phase 1b: NOT NULL — @@unique([organizationId, slug]) added below
-  status          String   @default("trial") // trial | active | suspended | cancelled
+  timezone        String       @default("UTC")
+  currency        String       @default("USD")
+  defaultLanguage String       @default("en")
+  slug            String // Phase 1b: NOT NULL — @@unique([organizationId, slug]) added below
+  status          String       @default("trial") // trial | active | suspended | cancelled
   trialEndsAt     DateTime?
-  maxUsers        Int      @default(10)  // Kept for backwards compat; plan limits read from Organization after migration
-  maxPatients     Int      @default(500) // Kept for backwards compat
-  planId          String?               // Staged migration: kept until Organization.planId is validated
-  plan            Plan?    @relation(fields: [planId], references: [id])
-  organizationId  String                // Phase 1b: NOT NULL after backfill
-  organization    Organization          @relation(fields: [organizationId], references: [id])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  maxUsers        Int          @default(10) // Kept for backwards compat; plan limits read from Organization after migration
+  maxPatients     Int          @default(500) // Kept for backwards compat
+  planId          String? // Staged migration: kept until Organization.planId is validated
+  plan            Plan?        @relation(fields: [planId], references: [id])
+  organizationId  String // Phase 1b: NOT NULL after backfill
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
-  users                User[]
-  doctorAvailabilities DoctorAvailability[]
-  doctorOffDays        DoctorOffDay[]
-  patients             Patient[]
-  appointmentTypes     AppointmentType[]
-  appointments         Appointment[]
-  appointmentRequests  AppointmentRequest[]
-  treatmentCases       TreatmentCase[]
-  tasks                Task[]
-  payments             Payment[]
-  insuranceProvisions  InsuranceProvision[]
-  messageTemplates     MessageTemplate[]
-  sentMessages         SentMessage[]
-  activityLogs         ActivityLog[]
-  whatsappConversationStates WhatsAppConversationState[]
+  users                        User[]
+  doctorAvailabilities         DoctorAvailability[]
+  doctorOffDays                DoctorOffDay[]
+  patients                     Patient[]
+  appointmentTypes             AppointmentType[]
+  appointments                 Appointment[]
+  appointmentRequests          AppointmentRequest[]
+  treatmentCases               TreatmentCase[]
+  tasks                        Task[]
+  payments                     Payment[]
+  insuranceProvisions          InsuranceProvision[]
+  messageTemplates             MessageTemplate[]
+  sentMessages                 SentMessage[]
+  activityLogs                 ActivityLog[]
+  whatsappConversationStates   WhatsAppConversationState[]
   whatsappConversationMessages WhatsAppConversationMessage[]
-  settings             Setting[]
-  patientAttachments   PatientAttachment[]
-  toothRecords         ToothRecord[]
-  paymentPlans         PaymentPlan[]
-  practitionerCompRules    PractitionerCompensationRule[]
-  serviceCompRules         ServiceCompensationRule[]
-  practitionerEarnings     PractitionerEarning[]
-  practitionerPayouts      PractitionerPayout[]
-  inventoryItems           InventoryItem[]
-  inventoryTransactions    InventoryTransaction[]
-  treatmentPlanProcedures  TreatmentPlanProcedure[]
-  notifications            Notification[]
-  invitations              ClinicInvitation[]
-  defaultUsers             User[]            @relation("UserDefaultClinic")
-  primaryPatients          Patient[]         @relation("PatientPrimaryClinic")
-  userClinics              UserClinic[]
-  patientClinics           PatientClinic[]
-  clinicWorkingHours       ClinicWorkingHours[]
-  clinicWhatsAppConnections ClinicWhatsAppConnection[]
-  whatsappInboxEntries  WhatsAppInboxEntry[] @relation("InboxEntryClinic")
-  clinicInstagramConnections ClinicInstagramConnection[]
-  instagramInboxEntries InstagramInboxEntry[] @relation("InstagramInboxEntryClinic")
+  settings                     Setting[]
+  patientAttachments           PatientAttachment[]
+  toothRecords                 ToothRecord[]
+  paymentPlans                 PaymentPlan[]
+  practitionerCompRules        PractitionerCompensationRule[]
+  serviceCompRules             ServiceCompensationRule[]
+  practitionerEarnings         PractitionerEarning[]
+  practitionerPayouts          PractitionerPayout[]
+  inventoryItems               InventoryItem[]
+  inventoryTransactions        InventoryTransaction[]
+  treatmentPlanProcedures      TreatmentPlanProcedure[]
+  treatmentPackages            TreatmentPackage[]
+  treatmentPackageItems        TreatmentPackageItem[]
+  appointmentTypeMaterials     AppointmentTypeMaterial[]
+  treatmentPackageMaterials    TreatmentPackageMaterial[]
+  treatmentPackageApplications TreatmentPackageApplication[]
+  notifications                Notification[]
+  invitations                  ClinicInvitation[]
+  defaultUsers                 User[]                         @relation("UserDefaultClinic")
+  primaryPatients              Patient[]                      @relation("PatientPrimaryClinic")
+  userClinics                  UserClinic[]
+  patientClinics               PatientClinic[]
+  clinicWorkingHours           ClinicWorkingHours[]
+  clinicWhatsAppConnections    ClinicWhatsAppConnection[]
+  whatsappInboxEntries         WhatsAppInboxEntry[]           @relation("InboxEntryClinic")
+  clinicInstagramConnections   ClinicInstagramConnection[]
+  instagramInboxEntries        InstagramInboxEntry[]          @relation("InstagramInboxEntryClinic")
 
   @@unique([organizationId, slug])
 }
 
 model User {
-  id           String    @id @default(uuid())
-  clinicId     String
-  clinic       Clinic    @relation(fields: [clinicId], references: [id])
-  firstName    String
-  lastName     String
-  email        String
-  phone        String?
-  role         String // OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING | ASSISTANT
-  passwordHash String
-  isActive       Boolean   @default(true)
-  lastLoginAt    DateTime?
-  commissionRate Float     @default(0)
-  organizationId      String                // Phase 1b: NOT NULL after backfill
-  organization        Organization          @relation(fields: [organizationId], references: [id])
-  defaultClinicId     String?               // UI default only — NOT used for authorization
-  defaultClinic       Clinic?               @relation("UserDefaultClinic", fields: [defaultClinicId], references: [id])
-  canAccessAllClinics Boolean               @default(false)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                  String       @id @default(uuid())
+  clinicId            String
+  clinic              Clinic       @relation(fields: [clinicId], references: [id])
+  firstName           String
+  lastName            String
+  email               String
+  phone               String?
+  role                String // OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING | ASSISTANT
+  passwordHash        String
+  isActive            Boolean      @default(true)
+  lastLoginAt         DateTime?
+  commissionRate      Float        @default(0)
+  organizationId      String // Phase 1b: NOT NULL after backfill
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  defaultClinicId     String? // UI default only — NOT used for authorization
+  defaultClinic       Clinic?      @relation("UserDefaultClinic", fields: [defaultClinicId], references: [id])
+  canAccessAllClinics Boolean      @default(false)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  tasksCreated        Task[]               @relation("TaskCreator")
-  tasksAssigned       Task[]               @relation("TaskAssignee")
-  appointments        Appointment[]        @relation("Practitioner")
-  appointmentRequests AppointmentRequest[] @relation("AppointmentRequestPractitioner")
-  availabilities      DoctorAvailability[] @relation("DoctorAvailability")
-  offDays             DoctorOffDay[]       @relation("DoctorOffDays")
-  treatmentCases      TreatmentCase[]      @relation("Practitioner")
-  insuranceAssigned   InsuranceProvision[] @relation("InsuranceAssignedTo")
-  insuranceCreated    InsuranceProvision[] @relation("InsuranceCreatedBy")
-  sentMessages        SentMessage[]
-  createdTemplates    MessageTemplate[]    @relation("TemplateCreator")
-  activityLogs        ActivityLog[]
-  uploadedAttachments PatientAttachment[]  @relation("AttachmentUploader")
-  toothRecordsCreated  ToothRecord[]        @relation("ToothRecordCreator")
-  paymentPlans         PaymentPlan[]
-  compensationRules    PractitionerCompensationRule[] @relation("PractitionerCompRules")
-  serviceCompRules     ServiceCompensationRule[]      @relation("ServiceCompRules")
-  practitionerEarnings PractitionerEarning[]          @relation("PractitionerEarnings")
-  practitionerPayouts  PractitionerPayout[]           @relation("PractitionerPayouts")
-  payoutsCreated       PractitionerPayout[]           @relation("PayoutCreator")
-  inventoryTransactions InventoryTransaction[]        @relation("InventoryPerformedBy")
-  proceduresCreated     TreatmentPlanProcedure[]      @relation("ProcedureCreator")
-  userClinics           UserClinic[]
-  resolvedInboxEntries  WhatsAppInboxEntry[] @relation("InboxEntryResolver")
-  resolvedInstagramEntries InstagramInboxEntry[] @relation("InstagramInboxEntryResolver")
+  tasksCreated               Task[]                         @relation("TaskCreator")
+  tasksAssigned              Task[]                         @relation("TaskAssignee")
+  appointments               Appointment[]                  @relation("Practitioner")
+  appointmentRequests        AppointmentRequest[]           @relation("AppointmentRequestPractitioner")
+  availabilities             DoctorAvailability[]           @relation("DoctorAvailability")
+  offDays                    DoctorOffDay[]                 @relation("DoctorOffDays")
+  treatmentCases             TreatmentCase[]                @relation("Practitioner")
+  insuranceAssigned          InsuranceProvision[]           @relation("InsuranceAssignedTo")
+  insuranceCreated           InsuranceProvision[]           @relation("InsuranceCreatedBy")
+  sentMessages               SentMessage[]
+  createdTemplates           MessageTemplate[]              @relation("TemplateCreator")
+  activityLogs               ActivityLog[]
+  uploadedAttachments        PatientAttachment[]            @relation("AttachmentUploader")
+  toothRecordsCreated        ToothRecord[]                  @relation("ToothRecordCreator")
+  paymentPlans               PaymentPlan[]
+  compensationRules          PractitionerCompensationRule[] @relation("PractitionerCompRules")
+  serviceCompRules           ServiceCompensationRule[]      @relation("ServiceCompRules")
+  practitionerEarnings       PractitionerEarning[]          @relation("PractitionerEarnings")
+  practitionerPayouts        PractitionerPayout[]           @relation("PractitionerPayouts")
+  payoutsCreated             PractitionerPayout[]           @relation("PayoutCreator")
+  inventoryTransactions      InventoryTransaction[]         @relation("InventoryPerformedBy")
+  proceduresCreated          TreatmentPlanProcedure[]       @relation("ProcedureCreator")
+  packageApplicationsCreated TreatmentPackageApplication[]  @relation("TreatmentPackageApplicationCreator")
+  userClinics                UserClinic[]
+  resolvedInboxEntries       WhatsAppInboxEntry[]           @relation("InboxEntryResolver")
+  resolvedInstagramEntries   InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
 
   // Phase 1b: changed to organizationId scope for multi-branch
   @@unique([organizationId, email])
@@ -145,7 +151,7 @@ model DoctorOffDay {
   clinic         Clinic   @relation(fields: [clinicId], references: [id])
   practitionerId String
   practitioner   User     @relation("DoctorOffDays", fields: [practitionerId], references: [id])
-  date           String   // YYYY-MM-DD (clinic local date)
+  date           String // YYYY-MM-DD (clinic local date)
   reason         String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -155,9 +161,9 @@ model DoctorOffDay {
 }
 
 model Patient {
-  id                   String    @id @default(uuid())
+  id                   String       @id @default(uuid())
   clinicId             String
-  clinic               Clinic    @relation(fields: [clinicId], references: [id])
+  clinic               Clinic       @relation(fields: [clinicId], references: [id])
   firstName            String
   lastName             String
   email                String?
@@ -167,36 +173,37 @@ model Patient {
   city                 String?
   postalCode           String?
   country              String?
-  patientStatus        String    @default("new") // new, active, inactive, archived
+  patientStatus        String       @default("new") // new, active, inactive, archived
   source               String? // google, referral, social_media, etc.
   notes                String?
-  communicationConsent Boolean   @default(false)
-  marketingConsent     Boolean   @default(false)
-  organizationId       String                // Phase 1b: NOT NULL after backfill
-  organization         Organization          @relation(fields: [organizationId], references: [id])
-  primaryClinicId      String?               // Default/preferred branch (not exclusive)
-  primaryClinic        Clinic?               @relation("PatientPrimaryClinic", fields: [primaryClinicId], references: [id])
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  communicationConsent Boolean      @default(false)
+  marketingConsent     Boolean      @default(false)
+  organizationId       String // Phase 1b: NOT NULL after backfill
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  primaryClinicId      String? // Default/preferred branch (not exclusive)
+  primaryClinic        Clinic?      @relation("PatientPrimaryClinic", fields: [primaryClinicId], references: [id])
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
   deletedAt            DateTime?
 
-  appointments        Appointment[]
-  appointmentRequests AppointmentRequest[]
-  treatmentCases      TreatmentCase[]
-  tasks               Task[]
-  payments            Payment[]
-  insuranceProvisions InsuranceProvision[]
-  sentMessages        SentMessage[]
-  activityLogs        ActivityLog[]
+  appointments                 Appointment[]
+  appointmentRequests          AppointmentRequest[]
+  treatmentCases               TreatmentCase[]
+  tasks                        Task[]
+  payments                     Payment[]
+  insuranceProvisions          InsuranceProvision[]
+  sentMessages                 SentMessage[]
+  activityLogs                 ActivityLog[]
   whatsappConversationMessages WhatsAppConversationMessage[]
-  attachments         PatientAttachment[]
-  toothRecords        ToothRecord[]
-  paymentPlans        PaymentPlan[]
-  practitionerEarnings PractitionerEarning[]
-  treatmentPlanProcedures TreatmentPlanProcedure[]
-  patientClinics          PatientClinic[]
-  whatsappInboxEntries    WhatsAppInboxEntry[] @relation("InboxEntryPatient")
-  instagramInboxEntries   InstagramInboxEntry[] @relation("InstagramInboxEntryPatient")
+  attachments                  PatientAttachment[]
+  toothRecords                 ToothRecord[]
+  paymentPlans                 PaymentPlan[]
+  practitionerEarnings         PractitionerEarning[]
+  treatmentPlanProcedures      TreatmentPlanProcedure[]
+  treatmentPackageApplications TreatmentPackageApplication[]
+  patientClinics               PatientClinic[]
+  whatsappInboxEntries         WhatsAppInboxEntry[]          @relation("InboxEntryPatient")
+  instagramInboxEntries        InstagramInboxEntry[]         @relation("InstagramInboxEntryPatient")
 }
 
 model AppointmentType {
@@ -215,12 +222,15 @@ model AppointmentType {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  appointments         Appointment[]
-  appointmentRequests  AppointmentRequest[]
-  treatmentCases       TreatmentCase[]
-  serviceCompRules     ServiceCompensationRule[] @relation("ServiceCompRules")
-  practitionerEarnings PractitionerEarning[]     @relation("EarningService")
+  appointments            Appointment[]
+  appointmentRequests     AppointmentRequest[]
+  treatmentCases          TreatmentCase[]
+  serviceCompRules        ServiceCompensationRule[] @relation("ServiceCompRules")
+  practitionerEarnings    PractitionerEarning[]     @relation("EarningService")
   treatmentPlanProcedures TreatmentPlanProcedure[]
+  packageItems            TreatmentPackageItem[]
+  materials               AppointmentTypeMaterial[]
+  inventoryTransactions   InventoryTransaction[]    @relation("InventoryTransactionService")
 }
 
 model Appointment {
@@ -243,7 +253,7 @@ model Appointment {
   // No-show recovery fields (Sprint 18)
   noShowMarkedAt     DateTime?
   noShowMarkedById   String?
-  recoveryStatus     String?         // unresolved | contacted | recovered
+  recoveryStatus     String? // unresolved | contacted | recovered
   recoveryNote       String?
   recoveredAt        DateTime?
   recoveredById      String?
@@ -358,16 +368,140 @@ model TreatmentCase {
   updatedAt         DateTime         @updatedAt
   deletedAt         DateTime?
 
-  tasks               Task[]
-  appointments        Appointment[]
-  payments            Payment[]
-  insuranceProvisions InsuranceProvision[]
-  sentMessages        SentMessage[]
-  activityLogs        ActivityLog[]
-  paymentPlans        PaymentPlan[]
-  practitionerEarnings PractitionerEarning[]
+  tasks                 Task[]
+  appointments          Appointment[]
+  payments              Payment[]
+  insuranceProvisions   InsuranceProvision[]
+  sentMessages          SentMessage[]
+  activityLogs          ActivityLog[]
+  paymentPlans          PaymentPlan[]
+  practitionerEarnings  PractitionerEarning[]
   inventoryTransactions InventoryTransaction[]
-  procedures          TreatmentPlanProcedure[]
+  procedures            TreatmentPlanProcedure[]
+  packageApplications   TreatmentPackageApplication[]
+}
+
+model TreatmentPackage {
+  id              String   @id @default(uuid())
+  clinicId        String
+  clinic          Clinic   @relation(fields: [clinicId], references: [id])
+  name            String
+  description     String?
+  category        String?
+  color           String?
+  durationMinutes Int?
+  price           Float?
+  currency        String   @default("TRY")
+  pricingMode     String   @default("PACKAGE_PRICE") // PACKAGE_PRICE | SERVICE_SUM
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items                 TreatmentPackageItem[]
+  materials             TreatmentPackageMaterial[]
+  applications          TreatmentPackageApplication[]
+  procedures            TreatmentPlanProcedure[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId, isActive])
+}
+
+model TreatmentPackageItem {
+  id                  String           @id @default(uuid())
+  clinicId            String
+  clinic              Clinic           @relation(fields: [clinicId], references: [id])
+  packageId           String
+  treatmentPackage    TreatmentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  serviceId           String
+  service             AppointmentType  @relation(fields: [serviceId], references: [id])
+  quantity            Int              @default(1)
+  sortOrder           Int              @default(0)
+  overridePrice       Float?
+  overrideDurationMin Int?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  procedures TreatmentPlanProcedure[]
+
+  @@unique([packageId, serviceId])
+  @@index([clinicId])
+  @@index([packageId])
+  @@index([serviceId])
+}
+
+model AppointmentTypeMaterial {
+  id              String          @id @default(uuid())
+  clinicId        String
+  clinic          Clinic          @relation(fields: [clinicId], references: [id])
+  serviceId       String
+  service         AppointmentType @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem   @relation(fields: [inventoryItemId], references: [id])
+  quantity        Float
+  unit            String?
+  deductionTiming String          @default("ON_TREATMENT_COMPLETED")
+  isOptional      Boolean         @default(false)
+  note            String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([serviceId, inventoryItemId])
+  @@index([clinicId])
+  @@index([serviceId])
+  @@index([inventoryItemId])
+}
+
+model TreatmentPackageMaterial {
+  id               String           @id @default(uuid())
+  clinicId         String
+  clinic           Clinic           @relation(fields: [clinicId], references: [id])
+  packageId        String
+  treatmentPackage TreatmentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  inventoryItemId  String
+  inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+  quantity         Float
+  unit             String?
+  deductionTiming  String           @default("ON_TREATMENT_COMPLETED")
+  isOptional       Boolean          @default(false)
+  note             String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([packageId, inventoryItemId])
+  @@index([clinicId])
+  @@index([packageId])
+  @@index([inventoryItemId])
+}
+
+model TreatmentPackageApplication {
+  id                            String           @id @default(uuid())
+  clinicId                      String
+  clinic                        Clinic           @relation(fields: [clinicId], references: [id])
+  treatmentCaseId               String
+  treatmentCase                 TreatmentCase    @relation(fields: [treatmentCaseId], references: [id])
+  patientId                     String
+  patient                       Patient          @relation(fields: [patientId], references: [id])
+  packageId                     String
+  treatmentPackage              TreatmentPackage @relation(fields: [packageId], references: [id])
+  pricingMode                   String
+  totalDurationMinutes          Int?
+  totalPrice                    Float?
+  currency                      String?
+  createdById                   String
+  createdBy                     User             @relation("TreatmentPackageApplicationCreator", fields: [createdById], references: [id])
+  extraMaterialsDeductedAt      DateTime?
+  extraMaterialsDeductionStatus String?
+  extraMaterialsDeductionError  String?
+  createdAt                     DateTime         @default(now())
+  updatedAt                     DateTime         @updatedAt
+
+  procedures            TreatmentPlanProcedure[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([clinicId, treatmentCaseId])
+  @@index([clinicId, packageId])
+  @@index([clinicId, patientId])
 }
 
 model InsuranceProvision {
@@ -468,37 +602,37 @@ model MessageTemplate {
 }
 
 model SentMessage {
-  id                String           @id @default(uuid())
-  clinicId          String
-  clinic            Clinic           @relation(fields: [clinicId], references: [id])
-  patientId         String
-  patient           Patient          @relation(fields: [patientId], references: [id])
-  appointmentId     String?
-  appointment       Appointment?     @relation(fields: [appointmentId], references: [id])
-  treatmentCaseId   String?
-  treatmentCase     TreatmentCase?   @relation(fields: [treatmentCaseId], references: [id])
-  paymentId         String?
-  payment           Payment?         @relation(fields: [paymentId], references: [id])
-  templateId        String?
-  template          MessageTemplate? @relation(fields: [templateId], references: [id])
-  channel           String
-  recipient         String
-  subject           String?
-  body              String
-  status            String           @default("prepared") // prepared, sent, failed, delivered, read
-  providerMessageId     String?
-  sentAt                DateTime?
-  createdById           String?
-  createdBy             User?            @relation(fields: [createdById], references: [id])
+  id                   String              @id @default(uuid())
+  clinicId             String
+  clinic               Clinic              @relation(fields: [clinicId], references: [id])
+  patientId            String
+  patient              Patient             @relation(fields: [patientId], references: [id])
+  appointmentId        String?
+  appointment          Appointment?        @relation(fields: [appointmentId], references: [id])
+  treatmentCaseId      String?
+  treatmentCase        TreatmentCase?      @relation(fields: [treatmentCaseId], references: [id])
+  paymentId            String?
+  payment              Payment?            @relation(fields: [paymentId], references: [id])
+  templateId           String?
+  template             MessageTemplate?    @relation(fields: [templateId], references: [id])
+  channel              String
+  recipient            String
+  subject              String?
+  body                 String
+  status               String              @default("prepared") // prepared, sent, failed, delivered, read
+  providerMessageId    String?
+  sentAt               DateTime?
+  createdById          String?
+  createdBy            User?               @relation(fields: [createdById], references: [id])
   // Provider-agnostic WhatsApp extension fields
-  organizationId        String?
-  organization          Organization?    @relation(fields: [organizationId], references: [id])
-  whatsappConnectionId  String?
-  whatsappConnection    WhatsAppConnection? @relation(fields: [whatsappConnectionId], references: [id])
-  provider              String?          // evolution_api | meta_cloud_api
-  direction             String?          // outgoing | incoming
-  externalMessageId     String?          // Provider message ID for tracking
-  createdAt             DateTime         @default(now())
+  organizationId       String?
+  organization         Organization?       @relation(fields: [organizationId], references: [id])
+  whatsappConnectionId String?
+  whatsappConnection   WhatsAppConnection? @relation(fields: [whatsappConnectionId], references: [id])
+  provider             String? // evolution_api | meta_cloud_api
+  direction            String? // outgoing | incoming
+  externalMessageId    String? // Provider message ID for tracking
+  createdAt            DateTime            @default(now())
 }
 
 model ActivityLog {
@@ -560,8 +694,8 @@ model ToothRecord {
   clinic      Clinic   @relation(fields: [clinicId], references: [id])
   patientId   String
   patient     Patient  @relation(fields: [patientId], references: [id])
-  toothFdi    Int      // FDI notation: 11-18, 21-28, 31-38, 41-48
-  status      String   // planned, treated, issue, missing, crown, implant
+  toothFdi    Int // FDI notation: 11-18, 21-28, 31-38, 41-48
+  status      String // planned, treated, issue, missing, crown, implant
   note        String?
   createdById String
   createdBy   User     @relation("ToothRecordCreator", fields: [createdById], references: [id])
@@ -573,24 +707,24 @@ model ToothRecord {
 }
 
 model PaymentPlan {
-  id              String    @id @default(uuid())
-  clinicId        String
-  clinic          Clinic    @relation(fields: [clinicId], references: [id])
-  patientId       String
-  patient         Patient   @relation(fields: [patientId], references: [id])
-  treatmentCaseId String?
-  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
-  totalAmount     Float
-  currency        String    @default("TRY")
+  id               String         @id @default(uuid())
+  clinicId         String
+  clinic           Clinic         @relation(fields: [clinicId], references: [id])
+  patientId        String
+  patient          Patient        @relation(fields: [patientId], references: [id])
+  treatmentCaseId  String?
+  treatmentCase    TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  totalAmount      Float
+  currency         String         @default("TRY")
   installmentCount Int
-  description     String?
-  status          String    @default("active") // active, completed, cancelled
-  createdById     String?
-  createdBy       User?     @relation(fields: [createdById], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  description      String?
+  status           String         @default("active") // active, completed, cancelled
+  createdById      String?
+  createdBy        User?          @relation(fields: [createdById], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  installments    PaymentPlanInstallment[]
+  installments PaymentPlanInstallment[]
 
   @@index([clinicId, patientId])
   @@index([clinicId, status])
@@ -618,20 +752,20 @@ model PaymentPlanInstallment {
 // ─── Practitioner Earnings ──────────────────────────────────────────────────
 
 model PractitionerCompensationRule {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   clinicId           String
-  clinic             Clinic   @relation(fields: [clinicId], references: [id])
+  clinic             Clinic    @relation(fields: [clinicId], references: [id])
   practitionerId     String
-  practitioner       User     @relation("PractitionerCompRules", fields: [practitionerId], references: [id])
-  compensationType   String   @default("percentage") // fixed | percentage | fixed_plus_percentage | per_service
+  practitioner       User      @relation("PractitionerCompRules", fields: [practitionerId], references: [id])
+  compensationType   String    @default("percentage") // fixed | percentage | fixed_plus_percentage | per_service
   fixedMonthlyAmount Float?
   defaultPercentage  Float?
-  calculationBase    String   @default("collected") // billed | collected
+  calculationBase    String    @default("collected") // billed | collected
   startDate          DateTime?
   endDate            DateTime?
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([clinicId, practitionerId, isActive])
 }
@@ -671,7 +805,7 @@ model PractitionerEarning {
   grossAmount           Float
   collectedAmount       Float               @default(0)
   earningAmount         Float
-  calculationBase       String              // billed | collected
+  calculationBase       String // billed | collected
   percentageApplied     Float?
   fixedAmountApplied    Float?
   status                String              @default("pending") // pending | approved | paid | cancelled
@@ -692,21 +826,21 @@ model PractitionerEarning {
 }
 
 model PractitionerPayout {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   clinicId       String
-  clinic         Clinic    @relation(fields: [clinicId], references: [id])
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
   practitionerId String
-  practitioner   User      @relation("PractitionerPayouts", fields: [practitionerId], references: [id])
+  practitioner   User     @relation("PractitionerPayouts", fields: [practitionerId], references: [id])
   amount         Float
   paymentDate    DateTime
   periodMonth    Int
   periodYear     Int
-  method         String    @default("bank_transfer") // cash | bank_transfer | card | other
+  method         String   @default("bank_transfer") // cash | bank_transfer | card | other
   note           String?
   createdById    String
-  createdBy      User      @relation("PayoutCreator", fields: [createdById], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdBy      User     @relation("PayoutCreator", fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   earnings PractitionerEarning[]
 
@@ -716,79 +850,104 @@ model PractitionerPayout {
 // ── Stok / Malzeme Takibi ────────────────────────────────────────────────────
 
 model InventoryItem {
-  id           String   @id @default(uuid())
-  clinicId     String
-  clinic       Clinic   @relation(fields: [clinicId], references: [id])
-  name         String
+  id             String       @id @default(uuid())
+  clinicId       String
+  clinic         Clinic       @relation(fields: [clinicId], references: [id])
+  name           String
   // implant | prosthetic | consumable | medication | equipment | other
-  category     String   @default("consumable")
-  unit         String   @default("piece") // piece | box | ml | gram | vial | set
-  currentStock Float    @default(0)
-  minimumStock Float    @default(0)   // triggers low-stock alert
-  unitCost     Float?
-  supplier     String?
-  barcode      String?
-  notes        String?
-  isActive     Boolean  @default(true)
-  organizationId String                // Phase 1b: NOT NULL after backfill
-  organization   Organization          @relation(fields: [organizationId], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  category       String       @default("consumable")
+  unit           String       @default("piece") // piece | box | ml | gram | vial | set
+  currentStock   Float        @default(0)
+  minimumStock   Float        @default(0) // triggers low-stock alert
+  unitCost       Float?
+  supplier       String?
+  barcode        String?
+  notes          String?
+  isActive       Boolean      @default(true)
+  organizationId String // Phase 1b: NOT NULL after backfill
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  transactions InventoryTransaction[]
+  transactions              InventoryTransaction[]
+  appointmentTypeMaterials  AppointmentTypeMaterial[]
+  treatmentPackageMaterials TreatmentPackageMaterial[]
 
   @@index([clinicId, category, isActive])
 }
 
 model InventoryTransaction {
-  id              String        @id @default(uuid())
-  clinicId        String
-  clinic          Clinic        @relation(fields: [clinicId], references: [id])
-  itemId          String
-  item            InventoryItem @relation(fields: [itemId], references: [id])
+  id                       String                       @id @default(uuid())
+  clinicId                 String
+  clinic                   Clinic                       @relation(fields: [clinicId], references: [id])
+  itemId                   String
+  item                     InventoryItem                @relation(fields: [itemId], references: [id])
   // in | out | adjustment
-  type            String
-  quantity        Float
-  unitCost        Float?
+  type                     String
+  quantity                 Float
+  unitCost                 Float?
   // purchase | usage | treatment_use | adjustment | wastage | return
-  reason          String?
-  treatmentCaseId String?
-  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
-  performedById   String
-  performedBy     User          @relation("InventoryPerformedBy", fields: [performedById], references: [id])
-  notes           String?
-  createdAt       DateTime      @default(now())
+  reason                   String?
+  treatmentCaseId          String?
+  treatmentCase            TreatmentCase?               @relation(fields: [treatmentCaseId], references: [id])
+  treatmentPlanProcedureId String?
+  treatmentPlanProcedure   TreatmentPlanProcedure?      @relation(fields: [treatmentPlanProcedureId], references: [id])
+  serviceId                String?
+  service                  AppointmentType?             @relation("InventoryTransactionService", fields: [serviceId], references: [id])
+  treatmentPackageId       String?
+  treatmentPackage         TreatmentPackage?            @relation(fields: [treatmentPackageId], references: [id])
+  packageApplicationId     String?
+  packageApplication       TreatmentPackageApplication? @relation(fields: [packageApplicationId], references: [id])
+  performedById            String
+  performedBy              User                         @relation("InventoryPerformedBy", fields: [performedById], references: [id])
+  notes                    String?
+  createdAt                DateTime                     @default(now())
 
   @@index([clinicId, itemId, createdAt])
+  @@index([clinicId, treatmentPlanProcedureId])
+  @@index([clinicId, packageApplicationId])
 }
 
 // ── Tedavi Planı Görselleştirme ───────────────────────────────────────────────
 
 model TreatmentPlanProcedure {
-  id              String           @id @default(uuid())
-  clinicId        String
-  clinic          Clinic           @relation(fields: [clinicId], references: [id])
-  treatmentCaseId String
-  treatmentCase   TreatmentCase    @relation(fields: [treatmentCaseId], references: [id])
-  patientId       String
-  patient         Patient          @relation(fields: [patientId], references: [id])
-  toothFdi        Int?             // FDI notation; null = procedure not tooth-specific
-  procedureName   String
-  serviceId       String?
-  service         AppointmentType? @relation(fields: [serviceId], references: [id])
+  id                   String                       @id @default(uuid())
+  clinicId             String
+  clinic               Clinic                       @relation(fields: [clinicId], references: [id])
+  treatmentCaseId      String
+  treatmentCase        TreatmentCase                @relation(fields: [treatmentCaseId], references: [id])
+  patientId            String
+  patient              Patient                      @relation(fields: [patientId], references: [id])
+  toothFdi             Int? // FDI notation; null = procedure not tooth-specific
+  procedureName        String
+  serviceId            String?
+  service              AppointmentType?             @relation(fields: [serviceId], references: [id])
+  packageApplicationId String?
+  packageApplication   TreatmentPackageApplication? @relation(fields: [packageApplicationId], references: [id])
+  treatmentPackageId   String?
+  treatmentPackage     TreatmentPackage?            @relation(fields: [treatmentPackageId], references: [id])
+  packageItemId        String?
+  packageItem          TreatmentPackageItem?        @relation(fields: [packageItemId], references: [id])
   // planned | in_progress | completed | cancelled
-  status          String           @default("planned")
-  notes           String?
-  estimatedCost   Float?
-  scheduledDate   DateTime?
-  completedAt     DateTime?
-  createdById     String
-  createdBy       User             @relation("ProcedureCreator", fields: [createdById], references: [id])
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  status               String                       @default("planned")
+  notes                String?
+  estimatedCost        Float?
+  scheduledDate        DateTime?
+  completedAt          DateTime?
+  stockDeductedAt      DateTime?
+  stockDeductionStatus String?
+  stockDeductionError  String?
+  createdById          String
+  createdBy            User                         @relation("ProcedureCreator", fields: [createdById], references: [id])
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  inventoryTransactions InventoryTransaction[]
 
   @@index([clinicId, treatmentCaseId])
   @@index([clinicId, patientId, toothFdi])
+  @@index([clinicId, packageApplicationId])
+  @@index([clinicId, treatmentPackageId])
 }
 
 // ── Kalıcı Bildirimler ────────────────────────────────────────────────────────
@@ -820,7 +979,7 @@ model Plan {
   displayName  String
   maxUsers     Int
   maxPatients  Int
-  features     Json     // { "whatsapp": true, "reports": true, "compensation": false }
+  features     Json // { "whatsapp": true, "reports": true, "compensation": false }
   monthlyPrice Decimal  @default(0) @db.Decimal(10, 2)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -840,17 +999,17 @@ model PlatformAdmin {
 }
 
 model ClinicInvitation {
-  id             String    @id @default(uuid())
+  id             String        @id @default(uuid())
   clinicId       String
-  clinic         Clinic    @relation(fields: [clinicId], references: [id])
+  clinic         Clinic        @relation(fields: [clinicId], references: [id])
   email          String
   role           String
-  token          String    @unique
+  token          String        @unique
   expiresAt      DateTime
   usedAt         DateTime?
-  organizationId String?               // Nullable: set when invitation is org-scoped
-  organization   Organization?         @relation(fields: [organizationId], references: [id])
-  createdAt      DateTime  @default(now())
+  organizationId String? // Nullable: set when invitation is org-scoped
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
 
   @@index([clinicId, email])
   @@index([token])
@@ -866,23 +1025,23 @@ model Organization {
   planId      String?
   plan        Plan?     @relation(fields: [planId], references: [id])
   trialEndsAt DateTime?
-  ownerId     String?   // ID of the founding user (informational)
+  ownerId     String? // ID of the founding user (informational)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  clinics               Clinic[]
-  users                 User[]
-  patients              Patient[]
-  invitations           ClinicInvitation[]
-  inventoryItems        InventoryItem[]
-  clinicWorkingHours    ClinicWorkingHours[]
-  whatsappConnections   WhatsAppConnection[]
-  clinicWhatsAppConnections ClinicWhatsAppConnection[]
-  sentMessages          SentMessage[]
-  whatsappInboxEntries  WhatsAppInboxEntry[]
-  instagramConnections  InstagramConnection[]
+  clinics                    Clinic[]
+  users                      User[]
+  patients                   Patient[]
+  invitations                ClinicInvitation[]
+  inventoryItems             InventoryItem[]
+  clinicWorkingHours         ClinicWorkingHours[]
+  whatsappConnections        WhatsAppConnection[]
+  clinicWhatsAppConnections  ClinicWhatsAppConnection[]
+  sentMessages               SentMessage[]
+  whatsappInboxEntries       WhatsAppInboxEntry[]
+  instagramConnections       InstagramConnection[]
   clinicInstagramConnections ClinicInstagramConnection[]
-  instagramInboxEntries InstagramInboxEntry[]
+  instagramInboxEntries      InstagramInboxEntry[]
 }
 
 model UserClinic {
@@ -891,7 +1050,7 @@ model UserClinic {
   user      User     @relation(fields: [userId], references: [id])
   clinicId  String
   clinic    Clinic   @relation(fields: [clinicId], references: [id])
-  role      String   // OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING | ASSISTANT
+  role      String // OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING | ASSISTANT
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -902,14 +1061,14 @@ model UserClinic {
 }
 
 model PatientClinic {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   patientId    String
-  patient      Patient  @relation(fields: [patientId], references: [id])
+  patient      Patient   @relation(fields: [patientId], references: [id])
   clinicId     String
-  clinic       Clinic   @relation(fields: [clinicId], references: [id])
+  clinic       Clinic    @relation(fields: [clinicId], references: [id])
   firstVisitAt DateTime?
   lastVisitAt  DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@unique([patientId, clinicId])
   @@index([clinicId])
@@ -924,7 +1083,7 @@ model ClinicWorkingHours {
   organization   Organization @relation(fields: [organizationId], references: [id])
   clinicId       String
   clinic         Clinic       @relation(fields: [clinicId], references: [id])
-  dayOfWeek      Int          // 0 Sunday, 1 Monday, ... 6 Saturday
+  dayOfWeek      Int // 0 Sunday, 1 Monday, ... 6 Saturday
   isClosed       Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -937,14 +1096,14 @@ model ClinicWorkingHours {
 
 /// Organization-level WhatsApp connection. One connection can be shared by multiple branches.
 model WhatsAppConnection {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   name           String
   // evolution_api | meta_cloud_api
-  provider       String   @default("evolution_api")
+  provider       String       @default("evolution_api")
   // disconnected | connecting | connected | error
-  status         String   @default("disconnected")
+  status         String       @default("disconnected")
   phoneNumber    String?
   displayName    String?
 
@@ -957,7 +1116,7 @@ model WhatsAppConnection {
   // Meta Cloud API foundation fields
   metaBusinessId           String?
   metaWabaId               String?
-  metaPhoneNumberId        String? @unique
+  metaPhoneNumberId        String?   @unique
   metaAppId                String?
   // TODO: encrypt before storing
   metaAccessTokenEncrypted String?
@@ -965,22 +1124,22 @@ model WhatsAppConnection {
   metaWebhookSecret        String?
   // Token lifecycle tracking — Meta tokens expire ~60 days unless refreshed
   // valid | expiring | expired | unknown
-  metaTokenStatus          String?  @default("unknown")
+  metaTokenStatus          String?   @default("unknown")
   metaTokenExpiresAt       DateTime?
   metaTokenLastCheckedAt   DateTime?
 
   // Shared webhook secret for this connection
-  webhookSecret    String?
-  lastConnectedAt  DateTime?
-  lastError        String?
-  isActive         Boolean  @default(true)
+  webhookSecret   String?
+  lastConnectedAt DateTime?
+  lastError       String?
+  isActive        Boolean   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clinics        ClinicWhatsAppConnection[]
-  sentMessages   SentMessage[]
-  inboxEntries   WhatsAppInboxEntry[]
+  clinics      ClinicWhatsAppConnection[]
+  sentMessages SentMessage[]
+  inboxEntries WhatsAppInboxEntry[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -990,16 +1149,16 @@ model WhatsAppConnection {
 /// Maps one WhatsAppConnection to one Clinic. Supports shared (one connection → many clinics)
 /// and dedicated (one connection → one clinic) topology.
 model ClinicWhatsAppConnection {
-  id                   String   @id @default(uuid())
+  id                   String             @id @default(uuid())
   organizationId       String
-  organization         Organization @relation(fields: [organizationId], references: [id])
+  organization         Organization       @relation(fields: [organizationId], references: [id])
   clinicId             String
-  clinic               Clinic   @relation(fields: [clinicId], references: [id])
+  clinic               Clinic             @relation(fields: [clinicId], references: [id])
   whatsappConnectionId String
   whatsappConnection   WhatsAppConnection @relation(fields: [whatsappConnectionId], references: [id])
-  isDefault            Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  isDefault            Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@unique([clinicId, whatsappConnectionId])
   @@index([organizationId])
@@ -1016,9 +1175,9 @@ model WhatsAppInboxEntry {
   organization          Organization        @relation(fields: [organizationId], references: [id])
   whatsappConnectionId  String?
   whatsappConnection    WhatsAppConnection? @relation(fields: [whatsappConnectionId], references: [id])
-  clinicId              String?             // null = unresolved
+  clinicId              String? // null = unresolved
   clinic                Clinic?             @relation("InboxEntryClinic", fields: [clinicId], references: [id])
-  patientId             String?             // null = no matched patient yet
+  patientId             String? // null = no matched patient yet
   patient               Patient?            @relation("InboxEntryPatient", fields: [patientId], references: [id])
   resolvedByUserId      String?
   resolvedBy            User?               @relation("InboxEntryResolver", fields: [resolvedByUserId], references: [id])
@@ -1052,8 +1211,8 @@ model AuditLog {
   clinicId       String?
   actorUserId    String?
   actorRole      String?
-  action         String   // user_login | branch_created | payment_created | ...
-  entityType     String   // user | branch | appointment | payment | whatsapp_connection | ...
+  action         String // user_login | branch_created | payment_created | ...
+  entityType     String // user | branch | appointment | payment | whatsapp_connection | ...
   entityId       String?
   description    String?
   metadata       Json?
@@ -1095,31 +1254,31 @@ model OperationalEvent {
 /// Organization-level Instagram DM connection. One connection can be shared by multiple branches.
 /// Architecture: dedicated InstagramConnection model (Option B) to avoid disrupting WhatsApp.
 model InstagramConnection {
-  id                      String   @id @default(uuid())
-  organizationId          String
-  organization            Organization @relation(fields: [organizationId], references: [id])
-  name                    String
+  id                       String       @id @default(uuid())
+  organizationId           String
+  organization             Organization @relation(fields: [organizationId], references: [id])
+  name                     String
   /// disconnected | connecting | connected | error
-  status                  String   @default("disconnected")
-  instagramAccountId      String? @unique
-  instagramUsername       String?
-  facebookPageId          String?
+  status                   String       @default("disconnected")
+  instagramAccountId       String?      @unique
+  instagramUsername        String?
+  facebookPageId           String?
   /// AES-256-GCM encrypted Meta access token
-  accessTokenEncrypted    String?
+  accessTokenEncrypted     String?
   /// Page-scoped access token (if different from user token)
   pageAccessTokenEncrypted String?
-  webhookVerifyToken      String?
-  webhookSecret           String?
-  metaAppId               String?
-  metaBusinessId          String?
+  webhookVerifyToken       String?
+  webhookSecret            String?
+  metaAppId                String?
+  metaBusinessId           String?
   /// valid | expiring | expired | unknown
-  tokenStatus             String?  @default("unknown")
-  tokenExpiresAt          DateTime?
-  lastConnectedAt         DateTime?
-  lastError               String?
-  isActive                Boolean  @default(true)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  tokenStatus              String?      @default("unknown")
+  tokenExpiresAt           DateTime?
+  lastConnectedAt          DateTime?
+  lastError                String?
+  isActive                 Boolean      @default(true)
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 
   clinics      ClinicInstagramConnection[]
   inboxEntries InstagramInboxEntry[]
@@ -1130,16 +1289,16 @@ model InstagramConnection {
 
 /// Maps one InstagramConnection to one Clinic (shared or dedicated topology).
 model ClinicInstagramConnection {
-  id                    String   @id @default(uuid())
+  id                    String              @id @default(uuid())
   organizationId        String
-  organization          Organization @relation(fields: [organizationId], references: [id])
+  organization          Organization        @relation(fields: [organizationId], references: [id])
   clinicId              String
-  clinic                Clinic   @relation(fields: [clinicId], references: [id])
+  clinic                Clinic              @relation(fields: [clinicId], references: [id])
   instagramConnectionId String
   instagramConnection   InstagramConnection @relation(fields: [instagramConnectionId], references: [id])
-  isDefault             Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  isDefault             Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   @@unique([clinicId, instagramConnectionId])
   @@index([organizationId])
@@ -1150,32 +1309,32 @@ model ClinicInstagramConnection {
 /// Incoming Instagram DMs stored for staff review, patient linking, and appointment conversion.
 /// Priority C (single-clinic) auto-assigns; Priority D creates an unresolved entry.
 model InstagramInboxEntry {
-  id                      String              @id @default(uuid())
-  organizationId          String
-  organization            Organization        @relation(fields: [organizationId], references: [id])
-  instagramConnectionId   String?
-  instagramConnection     InstagramConnection? @relation(fields: [instagramConnectionId], references: [id])
-  clinicId                String?
-  clinic                  Clinic?             @relation("InstagramInboxEntryClinic", fields: [clinicId], references: [id])
-  patientId               String?
-  patient                 Patient?            @relation("InstagramInboxEntryPatient", fields: [patientId], references: [id])
-  resolvedByUserId        String?
-  resolvedBy              User?               @relation("InstagramInboxEntryResolver", fields: [resolvedByUserId], references: [id])
+  id                     String               @id @default(uuid())
+  organizationId         String
+  organization           Organization         @relation(fields: [organizationId], references: [id])
+  instagramConnectionId  String?
+  instagramConnection    InstagramConnection? @relation(fields: [instagramConnectionId], references: [id])
+  clinicId               String?
+  clinic                 Clinic?              @relation("InstagramInboxEntryClinic", fields: [clinicId], references: [id])
+  patientId              String?
+  patient                Patient?             @relation("InstagramInboxEntryPatient", fields: [patientId], references: [id])
+  resolvedByUserId       String?
+  resolvedBy             User?                @relation("InstagramInboxEntryResolver", fields: [resolvedByUserId], references: [id])
   /// Instagram sender IGSID (unique Instagram-scoped user ID)
-  externalSenderId        String
+  externalSenderId       String
   /// Instagram conversation/thread ID if provided
-  externalConversationId  String?
-  senderUsername          String?
-  lastMessageText         String?
-  messageCount            Int                 @default(1)
-  externalMessageId       String?
-  rawPayload              Json?
-  needsClinicResolution   Boolean             @default(false)
+  externalConversationId String?
+  senderUsername         String?
+  lastMessageText        String?
+  messageCount           Int                  @default(1)
+  externalMessageId      String?
+  rawPayload             Json?
+  needsClinicResolution  Boolean              @default(false)
   /// open | resolved | ignored
-  status                  String              @default("open")
-  resolvedAt              DateTime?
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
+  status                 String               @default("open")
+  resolvedAt             DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
   @@index([organizationId, needsClinicResolution])
   @@index([organizationId, status])

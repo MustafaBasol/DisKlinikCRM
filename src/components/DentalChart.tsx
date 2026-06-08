@@ -38,6 +38,8 @@ interface DentalChartProps {
   showTreatmentPlan?: boolean;
 }
 
+type ChartSize = 'regular' | 'large' | 'presentation';
+
 interface QuadrantProps {
   label: string;
   teeth: number[];
@@ -47,7 +49,7 @@ interface QuadrantProps {
   records: Map<number, ToothRecord>;
   procedureMap: Map<number, TreatmentProcedure[]>;
   selectedTooth: number | null;
-  size: 'regular' | 'large';
+  size: ChartSize;
   patientMode: boolean;
   onSelect: (fdi: number) => void;
 }
@@ -63,7 +65,20 @@ interface JawRowProps {
   records: Map<number, ToothRecord>;
   procedureMap: Map<number, TreatmentProcedure[]>;
   selectedTooth: number | null;
-  size: 'regular' | 'large';
+  size: ChartSize;
+  patientMode: boolean;
+  onSelect: (fdi: number) => void;
+}
+
+interface FdiLineRowProps {
+  title: string;
+  leftTeeth: number[];
+  rightTeeth: number[];
+  isUpper: boolean;
+  labelPosition: 'top' | 'bottom';
+  records: Map<number, ToothRecord>;
+  procedureMap: Map<number, TreatmentProcedure[]>;
+  selectedTooth: number | null;
   patientMode: boolean;
   onSelect: (fdi: number) => void;
 }
@@ -163,6 +178,59 @@ const JawRow: React.FC<JawRowProps> = ({
         patientMode={patientMode}
         onSelect={onSelect}
       />
+    </div>
+  </section>
+);
+
+const FdiLineRow: React.FC<FdiLineRowProps> = ({
+  title,
+  leftTeeth,
+  rightTeeth,
+  isUpper,
+  labelPosition,
+  records,
+  procedureMap,
+  selectedTooth,
+  patientMode,
+  onSelect,
+}) => (
+  <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
+    <div className="mb-3 flex items-center justify-between">
+      <h4 className="text-base font-bold text-slate-800 dark:text-slate-100">{title}</h4>
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">FDI</span>
+    </div>
+    <div className="overflow-x-auto pb-1">
+      <div className="mx-auto flex min-w-max items-start justify-center gap-2">
+        {leftTeeth.map((fdi) => (
+          <ToothIcon
+            key={fdi}
+            fdi={fdi}
+            record={records.get(fdi)}
+            procedures={procedureMap.get(fdi)}
+            labelPosition={labelPosition}
+            isUpper={isUpper}
+            isSelected={selectedTooth === fdi}
+            size="presentation"
+            patientMode={patientMode}
+            onSelect={onSelect}
+          />
+        ))}
+        <div className="mx-1 mt-7 h-24 w-px shrink-0 rounded-full bg-slate-300 dark:bg-gray-600" />
+        {rightTeeth.map((fdi) => (
+          <ToothIcon
+            key={fdi}
+            fdi={fdi}
+            record={records.get(fdi)}
+            procedures={procedureMap.get(fdi)}
+            labelPosition={labelPosition}
+            isUpper={isUpper}
+            isSelected={selectedTooth === fdi}
+            size="presentation"
+            patientMode={patientMode}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
     </div>
   </section>
 );
@@ -279,6 +347,7 @@ const DentalChart: React.FC<DentalChartProps> = ({
   const selectedProcedures = selectedTooth !== null ? procedureMap.get(selectedTooth) ?? [] : [];
   const showChart = patientMode || !showTreatmentPlan || activeProcTab === 'chart';
   const showPlan = !patientMode && showTreatmentPlan && activeProcTab === 'plan';
+  const displayPatientName = patientName?.trim();
 
   const handleSelectTooth = (fdi: number) => {
     const existing = records.get(fdi);
@@ -330,8 +399,8 @@ const DentalChart: React.FC<DentalChartProps> = ({
     }
   };
 
-  const renderLegend = (compact = false) => (
-    <div className="flex flex-wrap items-center gap-2">
+  const renderLegend = (compact = false, patientFriendly = false) => (
+    <div className={patientFriendly ? 'flex flex-wrap items-center gap-1.5' : 'flex flex-wrap items-center gap-2'}>
       {TOOTH_STATUSES.map((status) => {
         const meta = TOOTH_STATUS_META[status];
         return (
@@ -345,11 +414,11 @@ const DentalChart: React.FC<DentalChartProps> = ({
           >
             <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
             {statusLabel(status, t)}
-            {counts[status] > 0 && <span className="font-bold">({counts[status]})</span>}
+            {!patientFriendly && counts[status] > 0 && <span className="font-bold">({counts[status]})</span>}
           </span>
         );
       })}
-      {showTreatmentPlan && (
+      {showTreatmentPlan && !patientFriendly && (
         <div className="flex flex-wrap items-center gap-2 border-l border-slate-200 pl-2 dark:border-gray-700">
           {Object.entries(PROCEDURE_STATUS_META).map(([status, meta]) => (
             <span key={status} className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -362,52 +431,92 @@ const DentalChart: React.FC<DentalChartProps> = ({
     </div>
   );
 
-  const renderChartStage = (size: 'regular' | 'large') => (
-    <div
-      className={[
-        'rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 md:p-4',
-        size === 'large' ? 'space-y-5 lg:p-6' : 'space-y-4',
-      ].join(' ')}
-    >
-      <JawRow
-        title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
-        leftLabel={t('patients:dentalChart.upperRight', { defaultValue: 'Upper Right' })}
-        rightLabel={t('patients:dentalChart.upperLeft', { defaultValue: 'Upper Left' })}
-        leftTeeth={UPPER_RIGHT}
-        rightTeeth={UPPER_LEFT}
-        isUpper
-        labelPosition="top"
-        records={records}
-        procedureMap={procedureMap}
-        selectedTooth={selectedTooth}
-        size={size}
-        patientMode={patientMode}
-        onSelect={handleSelectTooth}
-      />
-      <div className="mx-auto flex max-w-3xl items-center gap-3 px-4">
-        <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          FDI
-        </span>
-        <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
+  const renderChartStage = (size: ChartSize) => {
+    if (size === 'presentation') {
+      return (
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 xl:p-4">
+          <FdiLineRow
+            title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
+            leftTeeth={UPPER_RIGHT}
+            rightTeeth={UPPER_LEFT}
+            isUpper
+            labelPosition="top"
+            records={records}
+            procedureMap={procedureMap}
+            selectedTooth={selectedTooth}
+            patientMode={patientMode}
+            onSelect={handleSelectTooth}
+          />
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4">
+            <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              FDI
+            </span>
+            <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
+          </div>
+          <FdiLineRow
+            title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
+            leftTeeth={LOWER_RIGHT}
+            rightTeeth={LOWER_LEFT}
+            isUpper={false}
+            labelPosition="bottom"
+            records={records}
+            procedureMap={procedureMap}
+            selectedTooth={selectedTooth}
+            patientMode={patientMode}
+            onSelect={handleSelectTooth}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={[
+          'rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 md:p-4',
+          size === 'large' ? 'space-y-5 lg:p-6' : 'space-y-4',
+        ].join(' ')}
+      >
+        <JawRow
+          title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
+          leftLabel={t('patients:dentalChart.upperRight', { defaultValue: 'Upper Right' })}
+          rightLabel={t('patients:dentalChart.upperLeft', { defaultValue: 'Upper Left' })}
+          leftTeeth={UPPER_RIGHT}
+          rightTeeth={UPPER_LEFT}
+          isUpper
+          labelPosition="top"
+          records={records}
+          procedureMap={procedureMap}
+          selectedTooth={selectedTooth}
+          size={size}
+          patientMode={patientMode}
+          onSelect={handleSelectTooth}
+        />
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4">
+          <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            FDI
+          </span>
+          <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
+        </div>
+        <JawRow
+          title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
+          leftLabel={t('patients:dentalChart.lowerRight', { defaultValue: 'Lower Right' })}
+          rightLabel={t('patients:dentalChart.lowerLeft', { defaultValue: 'Lower Left' })}
+          leftTeeth={LOWER_RIGHT}
+          rightTeeth={LOWER_LEFT}
+          isUpper={false}
+          labelPosition="bottom"
+          records={records}
+          procedureMap={procedureMap}
+          selectedTooth={selectedTooth}
+          size={size}
+          patientMode={patientMode}
+          onSelect={handleSelectTooth}
+        />
       </div>
-      <JawRow
-        title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
-        leftLabel={t('patients:dentalChart.lowerRight', { defaultValue: 'Lower Right' })}
-        rightLabel={t('patients:dentalChart.lowerLeft', { defaultValue: 'Lower Left' })}
-        leftTeeth={LOWER_RIGHT}
-        rightTeeth={LOWER_LEFT}
-        isUpper={false}
-        labelPosition="bottom"
-        records={records}
-        procedureMap={procedureMap}
-        selectedTooth={selectedTooth}
-        size={size}
-        patientMode={patientMode}
-        onSelect={handleSelectTooth}
-      />
-    </div>
-  );
+    );
+  };
 
   const renderDetailPanel = (mode: 'card' | 'fullscreen') => (
     <ToothDetailPanel
@@ -511,10 +620,10 @@ const DentalChart: React.FC<DentalChartProps> = ({
 
           {showChart && (
             <>
-              {renderLegend()}
+              {renderLegend(false, patientMode)}
               <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
                 <div className="min-w-0">{renderChartStage('regular')}</div>
-                <div>{renderDetailPanel('card')}</div>
+                {!patientMode || selectedTooth !== null ? <div>{renderDetailPanel('card')}</div> : null}
               </div>
             </>
           )}
@@ -625,12 +734,13 @@ const DentalChart: React.FC<DentalChartProps> = ({
 
       <DentalChartFullscreenModal
         open={fullscreenOpen}
-        patientName={patientName}
+        patientName={displayPatientName}
         patientMode={patientMode}
+        showDetailPanel={!patientMode || selectedTooth !== null}
         onPatientModeChange={setPatientMode}
         onClose={() => setFullscreenOpen(false)}
-        legend={renderLegend(true)}
-        chart={renderChartStage('large')}
+        legend={renderLegend(true, patientMode)}
+        chart={renderChartStage('presentation')}
         detailPanel={renderDetailPanel('fullscreen')}
       />
     </>

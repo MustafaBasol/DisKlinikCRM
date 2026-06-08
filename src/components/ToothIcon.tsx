@@ -10,7 +10,7 @@ import {
   ToothStatus,
 } from './dentalChart.types';
 
-type ToothIconSize = 'regular' | 'large';
+type ToothIconSize = 'regular' | 'large' | 'presentation';
 
 interface ToothIconProps {
   fdi: number;
@@ -109,11 +109,19 @@ const ToothIcon: React.FC<ToothIconProps> = ({
   const shape = getToothShape(fdi);
   const status = record?.status;
   const meta = status ? TOOTH_STATUS_META[status] : null;
-  const buttonSize = size === 'large' ? 'h-[76px] w-[58px]' : 'h-[64px] w-[48px]';
-  const tileSize = size === 'large' ? 'w-[66px]' : 'w-[54px]';
+  const buttonSize =
+    size === 'presentation' ? 'h-[104px] w-[70px]' : size === 'large' ? 'h-[82px] w-[62px]' : 'h-[64px] w-[48px]';
+  const tileSize =
+    size === 'presentation' ? 'w-[78px]' : size === 'large' ? 'w-[70px]' : 'w-[54px]';
+  const labelClass =
+    size === 'presentation'
+      ? 'h-5 text-[13px] font-bold leading-5 text-slate-600 dark:text-slate-300'
+      : 'h-4 text-[11px] font-semibold leading-4 text-slate-500 dark:text-slate-400';
   const title = record
     ? `${fdi}: ${statusLabel(record.status, t)}${record.note ? ` - ${record.note}` : ''}`
-    : t('patients:dentalChart.toothWithNumber', { number: fdi });
+    : t('patients:dentalChart.patientNoRecord', {
+        defaultValue: 'No procedure record has been added for this tooth yet.',
+      });
 
   const toothGroupTransform = isUpper ? 'translate(0 88) scale(1 -1)' : undefined;
   const strokeClass = meta?.stroke ?? 'stroke-slate-300 dark:stroke-slate-500';
@@ -123,7 +131,7 @@ const ToothIcon: React.FC<ToothIconProps> = ({
   return (
     <div className={`relative flex ${tileSize} flex-col items-center gap-1`}>
       {labelPosition === 'top' && (
-        <span className="h-4 text-[11px] font-semibold leading-4 text-slate-500 dark:text-slate-400">
+        <span className={labelClass}>
           {fdi}
         </span>
       )}
@@ -141,7 +149,6 @@ const ToothIcon: React.FC<ToothIconProps> = ({
           buttonSize,
           statusClass,
           isSelected ? `ring-2 ${meta?.ring ?? 'ring-primary-200'} shadow-md` : '',
-          patientMode ? 'cursor-pointer' : 'cursor-pointer',
         ].join(' ')}
       >
         <svg
@@ -178,17 +185,17 @@ const ToothIcon: React.FC<ToothIconProps> = ({
                 strokeLinejoin="round"
               />
             )}
-            {status === 'treated' && (
-              <path
-                d="M23 38 L30 45 L44 28"
-                className="stroke-emerald-600 dark:stroke-emerald-200"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-            )}
           </g>
+          {status === 'treated' && (
+            <path
+              d="M23 38 L30 45 L44 28"
+              className="stroke-emerald-600 dark:stroke-emerald-200"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          )}
           {status === 'missing' && (
             <path
               d="M20 44 H44"
@@ -202,20 +209,22 @@ const ToothIcon: React.FC<ToothIconProps> = ({
         <ToothStatusMark status={status} />
       </button>
 
-      <div className="flex h-2.5 max-w-[48px] flex-wrap items-start justify-center gap-0.5">
-        {procedures.slice(0, 4).map((procedure) => (
-          <span
-            key={procedure.id}
-            title={`${procedure.procedureName} (${t(`patients:dentalChart.procedureStatus.${procedure.status}`, {
-              defaultValue: PROCEDURE_STATUS_META[procedure.status]?.fallback ?? procedure.status,
-            })})`}
-            className={`h-1.5 w-1.5 rounded-full ${PROCEDURE_STATUS_META[procedure.status]?.dot ?? 'bg-gray-400'}`}
-          />
-        ))}
-      </div>
+      {!patientMode && (
+        <div className="flex h-2.5 max-w-[48px] flex-wrap items-start justify-center gap-0.5">
+          {procedures.slice(0, 4).map((procedure) => (
+            <span
+              key={procedure.id}
+              title={`${procedure.procedureName} (${t(`patients:dentalChart.procedureStatus.${procedure.status}`, {
+                defaultValue: PROCEDURE_STATUS_META[procedure.status]?.fallback ?? procedure.status,
+              })})`}
+              className={`h-1.5 w-1.5 rounded-full ${PROCEDURE_STATUS_META[procedure.status]?.dot ?? 'bg-gray-400'}`}
+            />
+          ))}
+        </div>
+      )}
 
       {labelPosition === 'bottom' && (
-        <span className="h-4 text-[11px] font-semibold leading-4 text-slate-500 dark:text-slate-400">
+        <span className={labelClass}>
           {fdi}
         </span>
       )}

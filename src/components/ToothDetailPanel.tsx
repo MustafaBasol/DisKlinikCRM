@@ -87,25 +87,31 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
   const recordMeta = record ? TOOTH_STATUS_META[record.status] : activeMeta;
   const shape = getToothShape(selectedTooth);
   const lastUpdated = record?.updatedAt ? formatDateTime(record.updatedAt) : null;
+  const displayStatus = record?.status ?? editStatus;
+  const displayMeta = record ? TOOTH_STATUS_META[record.status] : activeMeta;
+  const showPatientNote = patientMode && Boolean(record?.note);
 
   return (
     <aside className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4 dark:border-gray-700">
-        <div>
-          <p className="text-xs font-semibold uppercase text-slate-400">
-            {t('patients:dentalChart.selectedTooth', { defaultValue: 'Selected Tooth' })}
-          </p>
-          <div className="mt-1 flex items-center gap-2">
-            <h4 className="text-lg font-bold text-slate-900 dark:text-white">
-              {t('patients:dentalChart.toothWithNumber', { number: selectedTooth })}
-            </h4>
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${recordMeta.badge}`}>
-              {record ? statusLabel(record.status, t) : t('patients:dentalChart.noRecordShort', { defaultValue: 'No record' })}
+        <div className="flex min-w-0 items-center gap-3">
+          <div className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl border ${recordMeta.badge}`}>
+            <span className="text-[10px] font-semibold uppercase leading-none opacity-70">
+              {t('patients:dentalChart.toothShort', { defaultValue: 'Tooth' })}
             </span>
+            <span className="mt-1 text-xl font-black leading-none">{selectedTooth}</span>
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {t(`patients:dentalChart.toothShape.${shape}`, { defaultValue: shape })}
-          </p>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase text-slate-400">
+              {t('patients:dentalChart.selectedTooth', { defaultValue: 'Selected Tooth' })}
+            </p>
+            <h4 className="mt-0.5 text-lg font-bold text-slate-900 dark:text-white">
+              {t(`patients:dentalChart.toothShape.${shape}`, { defaultValue: shape })}
+            </h4>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              FDI {selectedTooth}
+            </p>
+          </div>
         </div>
         <button
           type="button"
@@ -120,9 +126,13 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
       <div className="space-y-4 p-4">
         {!record && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-slate-300">
-            {t('patients:dentalChart.noRecord', {
-              defaultValue: 'No record has been added for this tooth yet.',
-            })}
+            {patientMode
+              ? t('patients:dentalChart.patientNoRecord', {
+                  defaultValue: 'No procedure record has been added for this tooth yet.',
+                })
+              : t('patients:dentalChart.noRecord', {
+                  defaultValue: 'No record has been added for this tooth yet.',
+                })}
           </div>
         )}
 
@@ -130,8 +140,15 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
           <p className="mb-2 text-xs font-semibold uppercase text-slate-400">
             {t('patients:dentalChart.currentStatus', { defaultValue: 'Current Status' })}
           </p>
-          <div className={`rounded-lg border p-3 ${activeMeta.badge}`}>
-            <span className="text-sm font-semibold">{statusLabel(editStatus, t)}</span>
+          <div className={`flex items-center gap-3 rounded-xl border p-4 ${record ? displayMeta.badge : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-slate-300'}`}>
+            <span className={`h-3 w-3 shrink-0 rounded-full ${record ? displayMeta.dot : 'bg-slate-300'}`} />
+            <span className="text-base font-bold">
+              {record
+                ? statusLabel(displayStatus, t)
+                : patientMode
+                  ? t('patients:dentalChart.patientNoRecordShort', { defaultValue: 'No procedure record' })
+                  : t('patients:dentalChart.noRecordShort', { defaultValue: 'No record' })}
+            </span>
           </div>
         </div>
 
@@ -169,6 +186,7 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
           </div>
         )}
 
+        {(!patientMode || showPatientNote) && (
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-400">
             <StickyNote size={13} />
@@ -189,6 +207,7 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
             </p>
           )}
         </div>
+        )}
 
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-400">
@@ -197,9 +216,13 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
           </div>
           {procedures.length === 0 ? (
             <p className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-slate-400">
-              {t('patients:dentalChart.noTreatmentForTooth', {
-                defaultValue: 'No treatment plan item is linked to this tooth.',
-              })}
+              {patientMode
+                ? t('patients:dentalChart.patientNoTreatmentForTooth', {
+                    defaultValue: 'No planned procedure is shown for this tooth.',
+                  })
+                : t('patients:dentalChart.noTreatmentForTooth', {
+                    defaultValue: 'No treatment plan item is linked to this tooth.',
+                  })}
             </p>
           ) : (
             <div className="space-y-2">

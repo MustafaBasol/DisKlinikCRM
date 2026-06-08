@@ -243,7 +243,8 @@
     },
     "errors": {
       "loadFailed": "Failed to load availability",
-      "saveFailed": "Failed to save availability"
+      "saveFailed": "Failed to save availability",
+      "appointmentsConflict": "{{count}} active appointment(s) on {{dates}} would fall outside the new availability. You cannot close the day or restrict hours while appointments exist."
     },
     "offDays": {
       "title": "Off Days & Holidays",
@@ -261,7 +262,8 @@
       "errors": {
         "loadFailed": "Failed to load off days",
         "saveFailed": "Failed to add off day",
-        "invalidRange": "End date cannot be before start date"
+        "invalidRange": "End date cannot be before start date",
+        "appointmentsConflict": "{{count}} active appointment(s) exist on {{date}}. A day with appointments cannot be marked as an off day or holiday."
       }
     }
   }

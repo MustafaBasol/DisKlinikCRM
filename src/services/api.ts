@@ -95,6 +95,19 @@ export const serviceService = {
   getAll: (params?: { onlyActive?: boolean, includeInactive?: boolean }) => api.get('/services', { params }),
   create: (data: any) => api.post('/services', data),
   update: (id: string, data: any) => api.put(`/services/${id}`, data),
+  getMaterials: (id: string) => api.get(`/services/${id}/materials`),
+  replaceMaterials: (id: string, materials: any[]) => api.put(`/services/${id}/materials`, { materials }),
+  addMaterial: (id: string, data: any) => api.post(`/services/${id}/materials`, data),
+  updateMaterial: (id: string, materialId: string, data: any) => api.put(`/services/${id}/materials/${materialId}`, data),
+  removeMaterial: (id: string, materialId: string) => api.delete(`/services/${id}/materials/${materialId}`),
+};
+
+export const treatmentPackageService = {
+  getAll: (params?: { includeInactive?: boolean; onlyActive?: boolean; search?: string }) => api.get('/treatment-packages', { params }),
+  getById: (id: string) => api.get(`/treatment-packages/${id}`),
+  create: (data: any) => api.post('/treatment-packages', data),
+  update: (id: string, data: any) => api.put(`/treatment-packages/${id}`, data),
+  deactivate: (id: string) => api.delete(`/treatment-packages/${id}`),
 };
 
 export const appointmentService = {
@@ -134,6 +147,7 @@ export const treatmentCaseService = {
   getMaterials: (id: string) => api.get(`/treatment-cases/${id}/materials`),
   addMaterial: (id: string, data: { itemId: string; quantity: number; notes?: string }) => api.post(`/treatment-cases/${id}/materials`, data),
   removeMaterial: (id: string, txId: string) => api.delete(`/treatment-cases/${id}/materials/${txId}`),
+  applyPackage: (id: string, data: { packageId: string; allowDuplicate?: boolean }) => api.post(`/treatment-cases/${id}/package-applications`, data),
 };
 
 export const insuranceProvisionService = {

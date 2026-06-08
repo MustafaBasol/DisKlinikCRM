@@ -243,7 +243,8 @@
     },
     "errors": {
       "loadFailed": "Verfügbarkeit konnte nicht geladen werden",
-      "saveFailed": "Verfügbarkeit konnte nicht gespeichert werden"
+      "saveFailed": "Verfügbarkeit konnte nicht gespeichert werden",
+      "appointmentsConflict": "{{count}} aktive(r) Termin(e) am {{dates}} würden außerhalb der neuen Verfügbarkeit liegen. Sie können den Tag nicht schließen oder die Zeiten einschränken, solange Termine vorhanden sind."
     },
     "offDays": {
       "title": "Freie Tage und Feiertage",
@@ -261,7 +262,8 @@
       "errors": {
         "loadFailed": "Freie Tage konnten nicht geladen werden",
         "saveFailed": "Freier Tag konnte nicht hinzugefügt werden",
-        "invalidRange": "Das Enddatum darf nicht vor dem Startdatum liegen"
+        "invalidRange": "Das Enddatum darf nicht vor dem Startdatum liegen",
+        "appointmentsConflict": "{{count}} aktive(r) Termin(e) am {{date}} vorhanden. Ein Tag mit Terminen kann nicht als freier Tag oder Feiertag markiert werden."
       }
     }
   }

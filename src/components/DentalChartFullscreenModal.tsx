@@ -6,17 +6,19 @@ interface DentalChartFullscreenModalProps {
   open: boolean;
   patientName?: string;
   patientMode: boolean;
+  showDetailPanel: boolean;
   onPatientModeChange: (enabled: boolean) => void;
   onClose: () => void;
   legend: React.ReactNode;
   chart: React.ReactNode;
-  detailPanel: React.ReactNode;
+  detailPanel?: React.ReactNode;
 }
 
 const DentalChartFullscreenModal: React.FC<DentalChartFullscreenModalProps> = ({
   open,
   patientName,
   patientMode,
+  showDetailPanel,
   onPatientModeChange,
   onClose,
   legend,
@@ -45,14 +47,14 @@ const DentalChartFullscreenModal: React.FC<DentalChartFullscreenModalProps> = ({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-slate-950/70 p-3 backdrop-blur-sm md:p-5">
-      <div className="mx-auto flex h-full max-w-[1440px] flex-col overflow-hidden rounded-2xl border border-white/20 bg-slate-50 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
-        <header className="flex flex-col gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-gray-700 dark:bg-gray-800 md:flex-row md:items-center md:justify-between">
+    <div className="fixed inset-0 z-[70] bg-slate-950/70 p-2 backdrop-blur-sm md:p-4">
+      <div className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden rounded-2xl border border-white/20 bg-slate-50 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+        <header className="flex flex-col gap-3 border-b border-slate-200 bg-white px-5 py-3 dark:border-gray-700 dark:bg-gray-800 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               {t('patients:dentalChart.patientPresentation', { defaultValue: 'Patient presentation' })}
             </p>
-            <h2 className="mt-1 text-xl font-bold text-slate-950 dark:text-white">
+            <h2 className="mt-1 text-2xl font-bold text-slate-950 dark:text-white">
               {patientName || t('patients:dentalChart.title')}
             </h2>
           </div>
@@ -81,11 +83,21 @@ const DentalChartFullscreenModal: React.FC<DentalChartFullscreenModalProps> = ({
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="mb-4">{legend}</div>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <main className="flex-1 overflow-auto p-3 md:p-4">
+          <div className="mb-3">{legend}</div>
+          <div
+            className={
+              !patientMode && showDetailPanel
+                ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]'
+                : 'space-y-4'
+            }
+          >
             <div className="min-w-0">{chart}</div>
-            <div className="xl:sticky xl:top-0">{detailPanel}</div>
+            {showDetailPanel && (
+              <div className={patientMode ? 'mx-auto w-full max-w-4xl' : 'xl:sticky xl:top-0'}>
+                {detailPanel}
+              </div>
+            )}
           </div>
         </main>
       </div>

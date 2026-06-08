@@ -25,7 +25,7 @@ import {
   Package
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService, serviceService } from '../services/api';
+import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService, serviceService, treatmentPackageService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
@@ -73,6 +73,12 @@ const TreatmentCaseDetail: React.FC = () => {
     notes: '',
     scheduledDate: '',
   });
+  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [packageLoading, setPackageLoading] = useState(false);
+  const [packageSaving, setPackageSaving] = useState(false);
+  const [packageError, setPackageError] = useState<string | null>(null);
+  const [treatmentPackages, setTreatmentPackages] = useState<any[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState('');
 
   // Treatment materials
   const [materials, setMaterials] = useState<any[]>([]);
@@ -196,6 +202,46 @@ const TreatmentCaseDetail: React.FC = () => {
       alert(err.response?.data?.error || t('treatmentCases:procedures.errors.deleteFailed'));
     }
   };
+
+  const openPackageModal = async () => {
+    setIsPackageModalOpen(true);
+    setPackageLoading(true);
+    setPackageError(null);
+    try {
+      const res = await treatmentPackageService.getAll({ includeInactive: false });
+      setTreatmentPackages(res.data);
+      setSelectedPackageId(res.data[0]?.id || '');
+    } catch (err: any) {
+      setPackageError(err.response?.data?.error || t('treatmentCases:packages.errors.loadFailed', { defaultValue: 'Tedavi paketleri yuklenemedi.' }));
+    } finally {
+      setPackageLoading(false);
+    }
+  };
+
+  const applySelectedPackage = async (allowDuplicate = false) => {
+    if (!id || !selectedPackageId) return;
+    setPackageSaving(true);
+    setPackageError(null);
+    try {
+      await treatmentCaseService.applyPackage(id, { packageId: selectedPackageId, allowDuplicate });
+      setIsPackageModalOpen(false);
+      const procRes = await treatmentPlanProceduresService.getByCaseId(id);
+      setProcedures(procRes.data);
+    } catch (err: any) {
+      const data = err.response?.data;
+      if (data?.code === 'PACKAGE_ALREADY_APPLIED') {
+        const shouldAddAgain = window.confirm(t('treatmentCases:packages.confirmDuplicate', { defaultValue: 'Bu paket bu tedavi dosyasina daha once eklenmis. Tekrar eklensin mi?' }));
+        if (shouldAddAgain) {
+          await applySelectedPackage(true);
+          return;
+        }
+      }
+      setPackageError(data?.error || t('treatmentCases:packages.errors.applyFailed', { defaultValue: 'Tedavi paketi eklenemedi.' }));
+    } finally {
+      setPackageSaving(false);
+    }
+  };
+
   const openLinkApptModal = async () => {
     if (!tCase) return;
     setLinkLoading(true);
@@ -272,6 +318,7 @@ const TreatmentCaseDetail: React.FC = () => {
   }), { requested: 0, approved: 0, patientResponsibility: 0 });
   const caseCurrency = tCase.currency || defaultCurrency;
   const paidTotal = payments.filter(p => p.paymentStatus === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
+  const selectedPackage = treatmentPackages.find((pkg) => pkg.id === selectedPackageId);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -720,13 +767,22 @@ const TreatmentCaseDetail: React.FC = () => {
                     </span>
                   )}
                 </h3>
-                <button
-                  onClick={() => openProcForm()}
-                  className="p-1 hover:bg-white rounded transition-colors text-primary-600"
-                  title={t('treatmentCases:procedures.add')}
-                >
-                  <Plus size={16} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={openPackageModal}
+                    className="p-1 hover:bg-white rounded transition-colors text-indigo-600"
+                    title={t('treatmentCases:packages.add', { defaultValue: 'Paket ekle' })}
+                  >
+                    <Package size={16} />
+                  </button>
+                  <button
+                    onClick={() => openProcForm()}
+                    className="p-1 hover:bg-white rounded transition-colors text-primary-600"
+                    title={t('treatmentCases:procedures.add')}
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
               </div>
               {procedures.length === 0 ? (
                 <div className="p-6 text-center text-gray-400 text-xs italic">
@@ -753,8 +809,20 @@ const TreatmentCaseDetail: React.FC = () => {
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
                               {t(`patients:dentalChart.procedureStatus.${proc.status}`, { defaultValue: proc.status })}
                             </span>
+                            {proc.packageApplication?.treatmentPackage && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-100 flex items-center gap-1">
+                                <Package size={11} />
+                                {proc.packageApplication.treatmentPackage.name}
+                              </span>
+                            )}
                           </div>
                           {proc.notes && <p className="text-xs text-gray-500 mt-0.5">{proc.notes}</p>}
+                          {proc.stockDeductionStatus === 'failed' && proc.stockDeductionError && (
+                            <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                              <AlertCircle size={12} />
+                              {proc.stockDeductionError}
+                            </p>
+                          )}
                           {proc.estimatedCost && (
                             <p className="text-xs text-gray-400 mt-0.5">{t('patients:dentalChart.estimated')}: {formatCurrency(Number(proc.estimatedCost), caseCurrency)}</p>
                           )}
@@ -1010,6 +1078,151 @@ const TreatmentCaseDetail: React.FC = () => {
             fetchDetail();
           }}
         />
+      )}
+
+      {/* Package treatment modal */}
+      {isPackageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="card p-0 w-full max-w-4xl shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                  <Package size={18} className="text-indigo-500" />
+                  {t('treatmentCases:packages.add', { defaultValue: 'Paket Tedavi Ekle' })}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {t('treatmentCases:packages.description', { defaultValue: 'Secilen paketteki hizmetler tedavi planina islem olarak eklenir.' })}
+                </p>
+              </div>
+              <button onClick={() => setIsPackageModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                <XCircle size={18} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-5 max-h-[75vh] overflow-y-auto">
+              {packageError && (
+                <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2 mb-4">
+                  <AlertCircle size={16} />
+                  {packageError}
+                </div>
+              )}
+
+              {packageLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="animate-spin text-primary-600" size={32} />
+                </div>
+              ) : treatmentPackages.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-sm italic">
+                  {t('treatmentCases:packages.empty', { defaultValue: 'Aktif tedavi paketi bulunmuyor.' })}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                  <div className="lg:col-span-2 space-y-2">
+                    {treatmentPackages.map((pkg) => (
+                      <button
+                        key={pkg.id}
+                        type="button"
+                        onClick={() => setSelectedPackageId(pkg.id)}
+                        className={`w-full text-left p-4 rounded-xl border transition-colors ${
+                          selectedPackageId === pkg.id
+                            ? 'border-indigo-200 bg-indigo-50'
+                            : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-bold text-gray-900">{pkg.name}</p>
+                          <span className="text-xs font-bold text-primary-600">
+                            {formatCurrency(Number(pkg.price ?? 0), pkg.currency || caseCurrency)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {pkg.items?.length || 0} {t('services:tabs.services', { defaultValue: 'hizmet' })}
+                          {pkg.materials?.length ? ` / ${pkg.materials.length} ekstra malzeme` : ''}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="lg:col-span-3 border border-gray-100 rounded-xl overflow-hidden">
+                    {selectedPackage ? (
+                      <>
+                        <div className="p-4 bg-gray-50 border-b border-gray-100">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <h4 className="font-bold text-gray-900">{selectedPackage.name}</h4>
+                              {selectedPackage.description && <p className="text-sm text-gray-500 mt-1">{selectedPackage.description}</p>}
+                            </div>
+                            <span className="badge badge-blue">{selectedPackage.pricingMode === 'SERVICE_SUM' ? 'Hizmet toplami' : 'Paket fiyati'}</span>
+                          </div>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                          <div>
+                            <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
+                              {t('treatmentCases:packages.includedServices', { defaultValue: 'Paketteki Hizmetler' })}
+                            </h5>
+                            <div className="space-y-2">
+                              {selectedPackage.items?.map((item: any) => (
+                                <div key={item.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-white border border-gray-100">
+                                  <div>
+                                    <p className="text-sm font-semibold text-gray-900">{item.service?.name}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {item.quantity} adet
+                                      {item.overrideDurationMin || item.service?.durationMinutes ? ` / ${item.overrideDurationMin || item.service?.durationMinutes} dk` : ''}
+                                    </p>
+                                  </div>
+                                  <span className="text-sm font-semibold text-primary-600">
+                                    {formatCurrency(Number(item.overridePrice ?? item.service?.basePrice ?? 0), selectedPackage.currency || caseCurrency)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
+                              {t('services:materials.packageTitle', { defaultValue: 'Paket Ekstra Malzemeleri' })}
+                            </h5>
+                            {selectedPackage.materials?.length ? (
+                              <div className="space-y-2">
+                                {selectedPackage.materials.map((material: any) => (
+                                  <div key={material.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-gray-50">
+                                    <span className="text-sm text-gray-700">{material.inventoryItem?.name}</span>
+                                    <span className="text-xs font-semibold text-gray-500">{material.quantity} {material.unit || material.inventoryItem?.unit}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic">{t('services:materials.empty', { defaultValue: 'Ekstra malzeme tanimlanmadi.' })}</p>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="p-6 text-center text-gray-400 text-sm italic">
+                        {t('common:select')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-gray-100 flex gap-3">
+              <button onClick={() => setIsPackageModalOpen(false)} className="btn-secondary flex-1">
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={() => applySelectedPackage(false)}
+                disabled={packageSaving || !selectedPackageId}
+                className="btn-primary flex-1"
+              >
+                {packageSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                {t('treatmentCases:packages.apply', { defaultValue: 'Paketi Plana Ekle' })}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Procedure add/edit modal */}
