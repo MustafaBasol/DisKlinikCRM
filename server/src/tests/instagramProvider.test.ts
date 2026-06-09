@@ -41,7 +41,8 @@ import {
 } from '../services/instagram/InstagramMessagingProvider.js';
 import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
 import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
-import type { InstagramConnectionRecord } from '../services/instagram/InstagramMessagingProvider.js';import {
+import type { InstagramConnectionRecord } from '../services/instagram/InstagramMessagingProvider.js';
+import {
   canManageInstagramConnections,
   canAssignInstagramToClinic,
   canViewInstagramStatus,
@@ -49,6 +50,16 @@ import type { InstagramConnectionRecord } from '../services/instagram/InstagramM
   canReplyInstagramMessages,
   canResolveInstagramConversation,
 } from '../utils/roles.js';
+import {
+  buildInstagramAppointmentFallbackPhone,
+  buildInstagramConversationKey,
+  canProcessInstagramAi,
+} from '../services/instagram/instagramAiConversationProcessor.js';
+import {
+  processInstagramEventForConnection,
+  type InstagramWebhookConnection,
+  type InstagramWebhookProcessingDeps,
+} from '../routes/instagramWebhook.js';
 
 // ─── Fake connection record ────────────────────────────────────────────────────
 
@@ -217,6 +228,162 @@ async function main() {
     assert.equal(events[0].recipientId, 'unknown-recipient-id');
     assert.equal(events[0].pageId, 'unknown-page-id');
     assert.equal(selectUniqueProviderConnection([]), null);
+  });
+
+  section('Instagram AI conversation adapter guards');
+
+  await test('AI adapter runs only when clinic is resolved', () => {
+    assert.equal(canProcessInstagramAi({ clinicId: 'clinic-1', needsClinicResolution: false }), true);
+    assert.equal(canProcessInstagramAi({ clinicId: null, needsClinicResolution: true }), false);
+    assert.equal(canProcessInstagramAi({ clinicId: 'clinic-1', needsClinicResolution: true }), false);
+  });
+
+  await test('conversation key is scoped by connection and sender', () => {
+    const first = buildInstagramConversationKey('conn-a', 'sender-1');
+    const second = buildInstagramConversationKey('conn-b', 'sender-1');
+    assert.equal(first, 'instagram:conn-a:sender-1');
+    assert.notEqual(first, second);
+  });
+
+  await test('AppointmentRequest phone fallback uses Instagram sender id', () => {
+    assert.equal(buildInstagramAppointmentFallbackPhone(' igsid-123 '), 'igsid-123');
+  });
+
+  section('Instagram webhook AI idempotency integration');
+
+  await test('duplicate Instagram mid skips AI, reply, AppointmentRequest, and inbox increment', async () => {
+    const payload = {
+      object: 'instagram',
+      entry: [{
+        id: 'ig-page-id',
+        messaging: [{
+          sender: { id: 'sender-igsid-123' },
+          recipient: { id: '123456789' },
+          message: { mid: 'ig-mid-duplicate', text: 'Randevu almak istiyorum' },
+        }],
+      }],
+    };
+    const event = parseWebhook(payload)[0];
+    assert.equal(event.eventType, 'message');
+
+    const connection: InstagramWebhookConnection = {
+      id: 'ig-conn-1',
+      organizationId: 'org-1',
+      instagramAccountId: '123456789',
+      facebookPageId: 'ig-page-id',
+      webhookSecret: null,
+    };
+
+    let inboundCalls = 0;
+    let inboxMessageCount = 0;
+    let aiCalls = 0;
+    let replyCalls = 0;
+    let appointmentRequestCreates = 0;
+    let processedCalls = 0;
+    let failedCalls = 0;
+
+    const deps: InstagramWebhookProcessingDeps = {
+      resolveClinicForInstagramMessage: async () => ({
+        clinicId: 'clinic-1',
+        needsClinicResolution: false,
+        resolutionSource: 'single_clinic',
+      }),
+      createInboundEventOrDetectDuplicate: async () => {
+        inboundCalls++;
+        return inboundCalls === 1
+          ? { status: 'created', eventId: 'event-1' }
+          : { status: 'duplicate' };
+      },
+      upsertInstagramInboxEntry: async () => {
+        inboxMessageCount++;
+      },
+      processInstagramIncomingMessage: async () => {
+        aiCalls++;
+        replyCalls++;
+        appointmentRequestCreates++;
+        return { status: 'processed', replySent: true, replyText: 'ok' };
+      },
+      markInboundEventProcessed: async () => {
+        processedCalls++;
+        return null;
+      },
+      markInboundEventFailed: async () => {
+        failedCalls++;
+        return null;
+      },
+    };
+
+    await processInstagramEventForConnection(connection, event, deps);
+    await processInstagramEventForConnection(connection, event, deps);
+
+    assert.equal(inboundCalls, 2);
+    assert.equal(inboxMessageCount, 1);
+    assert.equal(aiCalls, 1);
+    assert.equal(replyCalls, 1);
+    assert.equal(appointmentRequestCreates, 1);
+    assert.equal(processedCalls, 1);
+    assert.equal(failedCalls, 0);
+  });
+
+  await test('unresolved Instagram clinic skips AI reply and AppointmentRequest', async () => {
+    const payload = {
+      object: 'instagram',
+      entry: [{
+        id: 'ig-page-id',
+        messaging: [{
+          sender: { id: 'sender-igsid-999' },
+          recipient: { id: '123456789' },
+          message: { mid: 'ig-mid-unresolved', text: 'Merhaba' },
+        }],
+      }],
+    };
+    const event = parseWebhook(payload)[0];
+    assert.equal(event.eventType, 'message');
+
+    const connection: InstagramWebhookConnection = {
+      id: 'ig-conn-2',
+      organizationId: 'org-1',
+      instagramAccountId: '123456789',
+      facebookPageId: 'ig-page-id',
+      webhookSecret: null,
+    };
+
+    let inboxMessageCount = 0;
+    let aiCalls = 0;
+    let replyCalls = 0;
+    let appointmentRequestCreates = 0;
+    let processedCalls = 0;
+
+    const deps: InstagramWebhookProcessingDeps = {
+      resolveClinicForInstagramMessage: async () => ({
+        clinicId: null,
+        needsClinicResolution: true,
+        resolutionSource: 'unresolved',
+      }),
+      createInboundEventOrDetectDuplicate: async () => ({ status: 'created', eventId: 'event-unresolved' }),
+      upsertInstagramInboxEntry: async () => {
+        inboxMessageCount++;
+      },
+      processInstagramIncomingMessage: async () => {
+        aiCalls++;
+        replyCalls++;
+        appointmentRequestCreates++;
+        return { status: 'processed', replySent: true, replyText: 'should-not-send' };
+      },
+      markInboundEventProcessed: async () => {
+        processedCalls++;
+        return null;
+      },
+      markInboundEventFailed: async () => null,
+    };
+
+    await processInstagramEventForConnection(connection, event, deps);
+
+    assert.equal(inboxMessageCount, 1);
+    assert.equal(aiCalls, 0);
+    assert.equal(replyCalls, 0);
+    assert.equal(appointmentRequestCreates, 0);
+    assert.equal(processedCalls, 1);
   });
 
   // ── InstagramMessagingProvider: testConnection ─────────────────────────────

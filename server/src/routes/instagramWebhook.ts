@@ -26,15 +26,34 @@ import {
   markInboundEventFailed,
   markInboundEventProcessed,
 } from '../services/messagingInboundIdempotency.js';
+import { processInstagramIncomingMessage } from '../services/instagram/instagramAiConversationProcessor.js';
 
 const router = express.Router();
 
-type InstagramWebhookConnection = {
+export type InstagramWebhookConnection = {
   id: string;
   organizationId: string;
   instagramAccountId?: string | null;
   facebookPageId?: string | null;
   webhookSecret?: string | null;
+};
+
+export type InstagramWebhookProcessingDeps = {
+  resolveClinicForInstagramMessage: typeof resolveClinicForInstagramMessage;
+  createInboundEventOrDetectDuplicate: typeof createInboundEventOrDetectDuplicate;
+  upsertInstagramInboxEntry: typeof upsertInstagramInboxEntry;
+  processInstagramIncomingMessage: typeof processInstagramIncomingMessage;
+  markInboundEventProcessed: typeof markInboundEventProcessed;
+  markInboundEventFailed: typeof markInboundEventFailed;
+};
+
+const defaultInstagramWebhookProcessingDeps: InstagramWebhookProcessingDeps = {
+  resolveClinicForInstagramMessage,
+  createInboundEventOrDetectDuplicate,
+  upsertInstagramInboxEntry,
+  processInstagramIncomingMessage,
+  markInboundEventProcessed,
+  markInboundEventFailed,
 };
 
 function logWebhookEvent(
@@ -343,9 +362,10 @@ async function processInstagramPayloadForConnection(
   }
 }
 
-async function processInstagramEventForConnection(
+export async function processInstagramEventForConnection(
   connection: InstagramWebhookConnection,
   event: ParsedInstagramEvent,
+  deps: InstagramWebhookProcessingDeps = defaultInstagramWebhookProcessingDeps,
 ): Promise<void> {
   if (!eventMatchesConnectionIdentifiers(event, connection)) {
     logInstagramResolutionFailure('identifier_mismatch', {
@@ -356,13 +376,13 @@ async function processInstagramEventForConnection(
     return;
   }
 
-  const resolution = await resolveClinicForInstagramMessage(connection.id);
+  const resolution = await deps.resolveClinicForInstagramMessage(connection.id);
   if (resolution.resolutionSource === 'no_clinic_links') {
     logWebhookEvent(connection.organizationId, connection.id, 'instagram_webhook_no_clinic_links',
       'Instagram webhook received for a connection with no clinic assignments');
   }
 
-  const inboundEvent = await createInboundEventOrDetectDuplicate({
+  const inboundEvent = await deps.createInboundEventOrDetectDuplicate({
     channel: 'instagram',
     provider: 'meta_graph',
     connectionId: connection.id,
@@ -391,7 +411,7 @@ async function processInstagramEventForConnection(
   }
 
   try {
-    await upsertInstagramInboxEntry({
+    await deps.upsertInstagramInboxEntry({
       organizationId: connection.organizationId,
       instagramConnectionId: connection.id,
       clinicId: resolution.clinicId,
@@ -404,12 +424,32 @@ async function processInstagramEventForConnection(
       rawPayload: asJsonRecord(event.rawPayload),
     });
 
+    if (resolution.clinicId && !resolution.needsClinicResolution && event.text?.trim()) {
+      await deps.processInstagramIncomingMessage({
+        organizationId: connection.organizationId,
+        clinicId: resolution.clinicId,
+        needsClinicResolution: resolution.needsClinicResolution,
+        instagramConnectionId: connection.id,
+        externalSenderId: event.senderId!,
+        externalConversationId: event.externalConversationId ?? null,
+        externalMessageId: event.externalMessageId ?? null,
+        senderUsername: null,
+        text: event.text,
+        rawPayload: asJsonRecord(event.rawPayload),
+      });
+    } else {
+      console.info('[instagram-webhook] ai processing skipped', {
+        connectionId: connection.id,
+        reason: resolution.clinicId ? 'clinic_resolution_required' : 'clinic_unresolved',
+      });
+    }
+
     if (inboundEvent.status === 'created') {
-      await markInboundEventProcessed(inboundEvent.eventId);
+      await deps.markInboundEventProcessed(inboundEvent.eventId);
     }
   } catch (error) {
     if (inboundEvent.status === 'created') {
-      await markInboundEventFailed(inboundEvent.eventId, error).catch(() => {});
+      await deps.markInboundEventFailed(inboundEvent.eventId, error).catch(() => {});
     }
     throw error;
   }
