@@ -27,6 +27,11 @@ import {
 } from '../services/whatsappInterpreter.js';
 import { routeResolvedWhatsAppIntent } from '../services/whatsappResolvedIntentRouter.js';
 import {
+  createInboundEventOrDetectDuplicate,
+  markInboundEventFailed,
+  markInboundEventProcessed,
+} from '../services/messagingInboundIdempotency.js';
+import {
   getWebhookIgnoreReason,
   normalizeEvolutionWebhookPayload,
   type NormalizedWhatsAppMessage,
@@ -2904,6 +2909,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
 
   const incomingMessage = normalizedPayload.message;
   if (!incomingMessage) return res.status(200).json({ ignored: true, reason: 'no_text_message' });
+  let inboundEventId: string | null = null;
 
   try {
     // ── Sprint 11: DB-based connection + clinic resolution (takes precedence) ──
@@ -2959,10 +2965,46 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
             where: { id: resolution.clinicId },
           });
           if (resolvedClinic) {
+            const inboundEvent = await createInboundEventOrDetectDuplicate({
+              channel: 'whatsapp',
+              provider: 'evolution',
+              connectionId: dbConnection.id,
+              clinicId: resolvedClinic.id,
+              organizationId: dbConnection.organizationId,
+              providerMessageId: incomingMessage.messageId,
+              providerConversationId: incomingMessage.phone,
+              fromExternalId: incomingMessage.phone,
+              toExternalId: normalizedPayload.instance ?? null,
+              fromPhone: incomingMessage.phone,
+              rawPayload: normalizedPayload as Record<string, unknown>,
+            });
+            if (inboundEvent.status === 'duplicate') {
+              console.info('[whatsapp-assistant] duplicate inbound event', {
+                channel: 'whatsapp',
+                provider: 'evolution',
+                connectionId: dbConnection.id,
+                messageId: incomingMessage.messageId ?? null,
+              });
+              return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+            }
+            if (inboundEvent.status === 'created') {
+              inboundEventId = inboundEvent.eventId;
+            } else {
+              console.warn('[whatsapp-assistant] idempotency skipped', {
+                reason: inboundEvent.reason,
+                channel: 'whatsapp',
+                provider: 'evolution',
+                connectionId: dbConnection.id,
+              });
+            }
+
             const duplicate = await hasProcessedWhatsAppProviderMessage(
               resolvedClinic.id, incomingMessage.phone, incomingMessage.messageId,
             );
-            if (duplicate) return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+            if (duplicate) {
+              await markInboundEventProcessed(inboundEventId);
+              return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+            }
 
             const responseText = await handleIncomingWhatsAppMessage(incomingMessage, resolvedClinic);
             const patient = await findExistingPatientByPhone(resolvedClinic.id, incomingMessage.phone);
@@ -2974,6 +3016,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
               });
             }
             await markWhatsAppProviderMessageProcessed(resolvedClinic.id, incomingMessage.phone, incomingMessage.messageId);
+            await markInboundEventProcessed(inboundEventId);
             console.info('[whatsapp-assistant] send-result (db-resolved)', {
               phone: incomingMessage.phone,
               instance: normalizedPayload.instance ?? null,
@@ -3009,8 +3052,47 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
     const clinic = await getClinicForWhatsAppInstance(normalizedPayload.instance);
     if (!clinic) return res.status(200).json({ ignored: true, reason: 'legacy_clinic_not_found' });
 
+    const legacyConnectionId = normalizedPayload.instance?.trim()
+      ? `legacy:evolution:${normalizedPayload.instance.trim()}`
+      : null;
+    const inboundEvent = await createInboundEventOrDetectDuplicate({
+      channel: 'whatsapp',
+      provider: 'evolution',
+      connectionId: legacyConnectionId,
+      clinicId: clinic.id,
+      organizationId: clinic.organizationId,
+      providerMessageId: incomingMessage.messageId,
+      providerConversationId: incomingMessage.phone,
+      fromExternalId: incomingMessage.phone,
+      toExternalId: normalizedPayload.instance ?? null,
+      fromPhone: incomingMessage.phone,
+      rawPayload: normalizedPayload as Record<string, unknown>,
+    });
+    if (inboundEvent.status === 'duplicate') {
+      console.info('[whatsapp-assistant] duplicate inbound event', {
+        channel: 'whatsapp',
+        provider: 'evolution',
+        connectionId: legacyConnectionId,
+        messageId: incomingMessage.messageId ?? null,
+      });
+      return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+    }
+    if (inboundEvent.status === 'created') {
+      inboundEventId = inboundEvent.eventId;
+    } else {
+      console.warn('[whatsapp-assistant] idempotency skipped', {
+        reason: inboundEvent.reason,
+        channel: 'whatsapp',
+        provider: 'evolution',
+        connectionId: legacyConnectionId,
+      });
+    }
+
     const duplicate = await hasProcessedWhatsAppProviderMessage(clinic.id, incomingMessage.phone, incomingMessage.messageId);
-    if (duplicate) return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+    if (duplicate) {
+      await markInboundEventProcessed(inboundEventId);
+      return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+    }
 
     const responseText = await handleIncomingWhatsAppMessage(incomingMessage, clinic);
     const patient = await findExistingPatientByPhone(clinic.id, incomingMessage.phone);
@@ -3019,12 +3101,15 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
       await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: patient.id, phone: incomingMessage.phone, direction: 'outgoing', text: responseText });
     }
     await markWhatsAppProviderMessageProcessed(clinic.id, incomingMessage.phone, incomingMessage.messageId);
+    await markInboundEventProcessed(inboundEventId);
     console.info('[whatsapp-assistant] send-result', { phone: redactPhone(incomingMessage.phone), instance: normalizedPayload.instance ?? null });
     res.status(200).json({ ok: true });
   } catch (error) {
     if (error instanceof Error && error.message === 'DUPLICATE_WHATSAPP_MESSAGE') {
+      await markInboundEventProcessed(inboundEventId).catch(() => {});
       return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
     }
+    await markInboundEventFailed(inboundEventId, error).catch(() => {});
     console.error('[whatsapp-assistant] webhook-error', error);
     res.status(500).json({ error: 'Failed to process Evolution webhook' });
   }

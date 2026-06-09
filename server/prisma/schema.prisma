@@ -1378,6 +1378,37 @@ model OperationalEvent {
 
 // ── Sprint 23: Instagram DM Integration ──────────────────────────────────────
 
+/// Shared inbound message idempotency ledger for all messaging channels.
+/// connectionId is intentionally provider-agnostic: it can reference WhatsAppConnection,
+/// InstagramConnection, or a future channel-specific connection model.
+model MessagingInboundEvent {
+  id                     String    @id @default(uuid())
+  channel                String
+  provider               String
+  connectionId           String?
+  clinicId               String?
+  organizationId         String?
+  providerMessageId      String
+  providerConversationId String?
+  fromExternalId         String?
+  toExternalId           String?
+  fromPhone              String?
+  toPhone                String?
+  eventType              String    @default("message")
+  direction              String    @default("inbound")
+  status                 String    @default("received")
+  rawPayload             Json?
+  errorMessage           String?
+  processedAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([channel, provider, connectionId, providerMessageId])
+  @@index([organizationId, status, createdAt])
+  @@index([clinicId, status, createdAt])
+  @@index([channel, provider, providerMessageId])
+}
+
 /// Organization-level Instagram DM connection. One connection can be shared by multiple branches.
 /// Architecture: dedicated InstagramConnection model (Option B) to avoid disrupting WhatsApp.
 model InstagramConnection {
