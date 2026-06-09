@@ -21,6 +21,11 @@ import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
 import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
 import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
+import {
+  createInboundEventOrDetectDuplicate,
+  markInboundEventFailed,
+  markInboundEventProcessed,
+} from '../services/messagingInboundIdempotency.js';
 
 const router = express.Router();
 
@@ -74,6 +79,11 @@ function getRawBody(req: Request): Buffer {
   const rawBody = (req as any).rawBody;
   if (rawBody instanceof Buffer) return rawBody;
   return req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
+}
+
+function asJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
 }
 
 function summarizeProviderId(value: string | null | undefined) {
@@ -352,18 +362,57 @@ async function processInstagramEventForConnection(
       'Instagram webhook received for a connection with no clinic assignments');
   }
 
-  await upsertInstagramInboxEntry({
-    organizationId: connection.organizationId,
-    instagramConnectionId: connection.id,
+  const inboundEvent = await createInboundEventOrDetectDuplicate({
+    channel: 'instagram',
+    provider: 'meta_graph',
+    connectionId: connection.id,
     clinicId: resolution.clinicId,
-    needsClinicResolution: resolution.needsClinicResolution,
-    externalSenderId: event.senderId!,
-    externalConversationId: event.externalConversationId ?? null,
-    senderUsername: null,
-    lastMessageText: event.text ?? null,
-    externalMessageId: event.externalMessageId ?? null,
-    rawPayload: event.rawPayload as Record<string, unknown>,
+    organizationId: connection.organizationId,
+    providerMessageId: event.externalMessageId,
+    providerConversationId: event.externalConversationId ?? event.senderId ?? null,
+    fromExternalId: event.senderId ?? null,
+    toExternalId: event.recipientId ?? event.pageId ?? null,
+    rawPayload: asJsonRecord(event.rawPayload),
   });
+
+  if (inboundEvent.status === 'duplicate') {
+    console.info('[instagram-webhook] duplicate inbound message skipped', {
+      connectionId: connection.id,
+      messageId: event.externalMessageId,
+    });
+    return;
+  }
+
+  if (inboundEvent.status === 'skipped') {
+    console.warn('[instagram-webhook] inbound idempotency skipped', {
+      connectionId: connection.id,
+      reason: inboundEvent.reason,
+    });
+  }
+
+  try {
+    await upsertInstagramInboxEntry({
+      organizationId: connection.organizationId,
+      instagramConnectionId: connection.id,
+      clinicId: resolution.clinicId,
+      needsClinicResolution: resolution.needsClinicResolution,
+      externalSenderId: event.senderId!,
+      externalConversationId: event.externalConversationId ?? null,
+      senderUsername: null,
+      lastMessageText: event.text ?? null,
+      externalMessageId: event.externalMessageId ?? null,
+      rawPayload: asJsonRecord(event.rawPayload),
+    });
+
+    if (inboundEvent.status === 'created') {
+      await markInboundEventProcessed(inboundEvent.eventId);
+    }
+  } catch (error) {
+    if (inboundEvent.status === 'created') {
+      await markInboundEventFailed(inboundEvent.eventId, error).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 export default router;

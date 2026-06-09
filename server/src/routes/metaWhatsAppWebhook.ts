@@ -31,6 +31,11 @@ import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
 import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
 import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
+import {
+  createInboundEventOrDetectDuplicate,
+  markInboundEventFailed,
+  markInboundEventProcessed,
+} from '../services/messagingInboundIdempotency.js';
 
 const router = express.Router();
 
@@ -93,6 +98,11 @@ function getRawBody(req: Request): Buffer {
   return Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
 }
 
+function asJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 /**
  * Route an incoming parsed Meta webhook event to the correct clinic using the
  * existing clinic resolver + inbox logic. Mirrors the Evolution webhook flow.
@@ -102,6 +112,7 @@ async function routeIncomingMetaMessage(
   phone: string,
   text: string,
   messageId: string | undefined,
+  rawPayload: unknown,
 ): Promise<void> {
   const resolution = await resolveClinicForIncomingMessage(
     connection.id,
@@ -109,7 +120,36 @@ async function routeIncomingMetaMessage(
     phone,
   );
 
-  if (resolution.clinicId) {
+  const inboundEvent = await createInboundEventOrDetectDuplicate({
+    channel: 'whatsapp',
+    provider: 'meta_cloud_api',
+    connectionId: connection.id,
+    clinicId: resolution.clinicId,
+    organizationId: connection.organizationId,
+    providerMessageId: messageId,
+    providerConversationId: phone,
+    fromExternalId: phone,
+    fromPhone: phone,
+    rawPayload: asJsonRecord(rawPayload),
+  });
+
+  if (inboundEvent.status === 'duplicate') {
+    console.info('[meta-webhook] duplicate inbound message skipped', {
+      connectionId: connection.id,
+      messageId,
+    });
+    return;
+  }
+
+  if (inboundEvent.status === 'skipped') {
+    console.warn('[meta-webhook] inbound idempotency skipped', {
+      connectionId: connection.id,
+      reason: inboundEvent.reason,
+    });
+  }
+
+  try {
+    if (resolution.clinicId) {
     // Priority A/B/C resolved — clinic is known, existing booking-flow handles it
     // via the existing Evolution-style conversation state. Meta messages with a known
     // clinic are stored in the inbox for staff visibility.
@@ -141,6 +181,15 @@ async function routeIncomingMetaMessage(
       'Meta webhook received for a WhatsApp connection with no clinic assignments',
       { phone: summarizeProviderId(phone) },
     );
+  }
+    if (inboundEvent.status === 'created') {
+      await markInboundEventProcessed(inboundEvent.eventId);
+    }
+  } catch (error) {
+    if (inboundEvent.status === 'created') {
+      await markInboundEventFailed(inboundEvent.eventId, error).catch(() => {});
+    }
+    throw error;
   }
 }
 
@@ -259,6 +308,7 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
         event.phone,
         event.text,
         event.messageId,
+        event.raw,
       );
     }
   } catch (err) {
@@ -400,6 +450,7 @@ router.post(
           event.phone,
           event.text,
           event.messageId,
+          event.raw,
         );
       }
       // status_update events are logged but not yet persisted (future sprint)
