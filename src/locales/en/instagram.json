@@ -132,6 +132,12 @@
       "patientSearchPlaceholder": "Name or phone...",
       "resolve": "Resolve"
     },
+    "linkPatientModal": {
+      "title": "Link Patient",
+      "searchPatient": "Search Patient",
+      "patientSelected": "Patient selected",
+      "confirm": "Link"
+    },
     "replyModal": {
       "title": "Reply to Instagram DM",
       "recipient": "Recipient",

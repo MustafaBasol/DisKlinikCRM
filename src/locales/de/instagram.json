@@ -132,6 +132,12 @@
       "patientSearchPlaceholder": "Name oder Telefon...",
       "resolve": "Loesen"
     },
+    "linkPatientModal": {
+      "title": "Patient verknuepfen",
+      "searchPatient": "Patient suchen",
+      "patientSelected": "Patient ausgewaehlt",
+      "confirm": "Verknuepfen"
+    },
     "replyModal": {
       "title": "Auf Instagram-DM antworten",
       "recipient": "Empfaenger",

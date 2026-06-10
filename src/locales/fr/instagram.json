@@ -132,6 +132,12 @@
       "patientSearchPlaceholder": "Nom ou téléphone...",
       "resolve": "Résoudre"
     },
+    "linkPatientModal": {
+      "title": "Associer un patient",
+      "searchPatient": "Rechercher un patient",
+      "patientSelected": "Patient sélectionné",
+      "confirm": "Associer"
+    },
     "replyModal": {
       "title": "Répondre au DM Instagram",
       "recipient": "Destinataire",

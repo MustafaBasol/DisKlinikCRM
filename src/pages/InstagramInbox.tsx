@@ -60,6 +60,7 @@ interface ClinicOption {
 
 interface ResolveModal {
   entry: InboxEntry;
+  mode: 'assign_branch' | 'link_patient';
   clinicId: string;
   patientId: string;
   patientSearch: string;
@@ -202,7 +203,19 @@ export default function InstagramInbox() {
 
     setResolveModal({
       entry,
+      mode: 'assign_branch',
       clinicId: defaultClinicId,
+      patientId: '',
+      patientSearch: '',
+      patients: [],
+    });
+  }
+
+  async function openLinkPatientModal(entry: InboxEntry) {
+    setResolveModal({
+      entry,
+      mode: 'link_patient',
+      clinicId: entry.clinicId ?? '',
       patientId: '',
       patientSearch: '',
       patients: [],
@@ -211,16 +224,30 @@ export default function InstagramInbox() {
 
   // ── Resolve modal ──────────────────────────────────────────────────────────
 
-  async function searchPatients(query: string, modal: ResolveModal) {
+  async function searchPatients(query: string) {
     if (!query.trim()) {
-      setResolveModal({ ...modal, patients: [] });
+      setResolveModal(prev => prev ? { ...prev, patients: [] } : null);
       return;
     }
     try {
       const res = await patientService.getAll({ search: query, limit: 10 });
-      setResolveModal({ ...modal, patients: res.data.patients ?? [] });
+      setResolveModal(prev => prev ? { ...prev, patients: res.data.patients ?? [] } : null);
     } catch {
       // Ignore search errors
+    }
+  }
+
+  async function handleLinkPatientFromModal() {
+    if (!resolveModal || !resolveModal.patientId) return;
+    setResolving(true);
+    try {
+      await instagramInboxService.linkPatient(resolveModal.entry.id, resolveModal.patientId);
+      setResolveModal(null);
+      reload();
+    } catch {
+      setError(t('instagram:inbox.errors.linkPatientFailed'));
+    } finally {
+      setResolving(false);
     }
   }
 
@@ -582,7 +609,7 @@ export default function InstagramInbox() {
                 {/* Link patient */}
                 {canResolveInstagramConversation(user) && !entry.patientId && entry.status !== 'converted' && (
                   <button
-                    onClick={() => openResolveModal(entry)}
+                    onClick={() => openLinkPatientModal(entry)}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                   >
                     <User size={12} />
@@ -625,7 +652,11 @@ export default function InstagramInbox() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900 dark:text-white">{t('instagram:inbox.resolveModal.title')}</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-white">
+                {resolveModal.mode === 'link_patient'
+                  ? t('instagram:inbox.linkPatientModal.title', { defaultValue: 'Hasta Bağla' })
+                  : t('instagram:inbox.resolveModal.title')}
+              </h2>
               <button
                 onClick={() => setResolveModal(null)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -635,50 +666,63 @@ export default function InstagramInbox() {
             </div>
 
             <div className="px-6 py-4 space-y-4">
-              {/* Clinic */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('instagram:inbox.resolveModal.branch')} <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={resolveModal.clinicId}
-                  onChange={e => setResolveModal({ ...resolveModal, clinicId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{t('instagram:inbox.resolveModal.selectBranch')}</option>
-                  {clinics.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Clinic — only shown in assign_branch mode */}
+              {resolveModal.mode === 'assign_branch' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('instagram:inbox.resolveModal.branch')} <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={resolveModal.clinicId}
+                    onChange={e => setResolveModal({ ...resolveModal, clinicId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">{t('instagram:inbox.resolveModal.selectBranch')}</option>
+                    {clinics.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Patient search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('instagram:inbox.resolveModal.searchPatientOptional')}
+                  {resolveModal.mode === 'link_patient'
+                    ? t('instagram:inbox.linkPatientModal.searchPatient', { defaultValue: 'Hasta Ara' })
+                    : t('instagram:inbox.resolveModal.searchPatientOptional')}
+                  {resolveModal.mode === 'link_patient' && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 <input
                   type="text"
                   value={resolveModal.patientSearch}
                   onChange={e => {
-                    setResolveModal({ ...resolveModal, patientSearch: e.target.value });
-                    searchPatients(e.target.value, resolveModal);
+                    const q = e.target.value;
+                    setResolveModal(prev => prev ? { ...prev, patientSearch: q, patientId: q ? prev.patientId : '' } : null);
+                    searchPatients(q);
                   }}
                   placeholder={t('instagram:inbox.resolveModal.patientSearchPlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 {resolveModal.patients.length > 0 && (
-                  <div className="mt-1 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden max-h-32 overflow-y-auto">
+                  <div className="mt-1 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
                     {resolveModal.patients.map(p => (
                       <button
                         key={p.id}
-                        onClick={() => setResolveModal({ ...resolveModal, patientId: p.id, patientSearch: `${p.firstName} ${p.lastName}`, patients: [] })}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+                        onClick={() => setResolveModal(prev => prev ? { ...prev, patientId: p.id, patientSearch: `${p.firstName} ${p.lastName}`, patients: [] } : null)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 last:border-0"
                       >
-                        {p.firstName} {p.lastName} — {p.phone}
+                        <span className="font-medium">{p.firstName} {p.lastName}</span>
+                        <span className="text-gray-500 dark:text-gray-400 ml-2 text-xs">{p.phone}</span>
                       </button>
                     ))}
                   </div>
+                )}
+                {resolveModal.patientId && (
+                  <p className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                    <CheckCircle2 size={12} />
+                    {t('instagram:inbox.linkPatientModal.patientSelected', { defaultValue: 'Hasta seçildi' })}
+                  </p>
                 )}
               </div>
             </div>
@@ -691,12 +735,14 @@ export default function InstagramInbox() {
                 {t('common:cancel')}
               </button>
               <button
-                onClick={handleResolve}
-                disabled={resolving || !resolveModal.clinicId}
+                onClick={resolveModal.mode === 'link_patient' ? handleLinkPatientFromModal : handleResolve}
+                disabled={resolving || (resolveModal.mode === 'assign_branch' ? !resolveModal.clinicId : !resolveModal.patientId)}
                 className="flex items-center gap-2 px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
               >
                 {resolving && <Loader2 size={14} className="animate-spin" />}
-                {t('instagram:inbox.resolveModal.resolve')}
+                {resolveModal.mode === 'link_patient'
+                  ? t('instagram:inbox.linkPatientModal.confirm', { defaultValue: 'Bağla' })
+                  : t('instagram:inbox.resolveModal.resolve')}
               </button>
             </div>
           </div>

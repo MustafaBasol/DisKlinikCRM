@@ -74,8 +74,9 @@ model Clinic {
   clinicWorkingHours           ClinicWorkingHours[]
   clinicWhatsAppConnections    ClinicWhatsAppConnection[]
   whatsappInboxEntries         WhatsAppInboxEntry[]           @relation("InboxEntryClinic")
-  clinicInstagramConnections   ClinicInstagramConnection[]
-  instagramInboxEntries        InstagramInboxEntry[]          @relation("InstagramInboxEntryClinic")
+  clinicInstagramConnections        ClinicInstagramConnection[]
+  instagramInboxEntries             InstagramInboxEntry[]          @relation("InstagramInboxEntryClinic")
+  instagramConversationMessages     InstagramConversationMessage[]
 
   @@unique([organizationId, slug])
 }
@@ -207,9 +208,10 @@ model Patient {
   treatmentPlanProcedures      TreatmentPlanProcedure[]
   treatmentPackageApplications TreatmentPackageApplication[]
   patientClinics               PatientClinic[]
-  whatsappInboxEntries         WhatsAppInboxEntry[]          @relation("InboxEntryPatient")
-  instagramInboxEntries        InstagramInboxEntry[]         @relation("InstagramInboxEntryPatient")
-  recallCandidates             RecallCandidate[]
+  whatsappInboxEntries              WhatsAppInboxEntry[]          @relation("InboxEntryPatient")
+  instagramInboxEntries             InstagramInboxEntry[]         @relation("InstagramInboxEntryPatient")
+  instagramConversationMessages     InstagramConversationMessage[]
+  recallCandidates                  RecallCandidate[]
   recallActions                RecallAction[]
 }
 
@@ -1172,9 +1174,10 @@ model Organization {
   clinicWhatsAppConnections  ClinicWhatsAppConnection[]
   sentMessages               SentMessage[]
   whatsappInboxEntries       WhatsAppInboxEntry[]
-  instagramConnections       InstagramConnection[]
-  clinicInstagramConnections ClinicInstagramConnection[]
-  instagramInboxEntries      InstagramInboxEntry[]
+  instagramConnections            InstagramConnection[]
+  clinicInstagramConnections      ClinicInstagramConnection[]
+  instagramInboxEntries           InstagramInboxEntry[]
+  instagramConversationMessages   InstagramConversationMessage[]
 }
 
 model UserClinic {
@@ -1447,8 +1450,9 @@ model InstagramConnection {
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 
-  clinics      ClinicInstagramConnection[]
-  inboxEntries InstagramInboxEntry[]
+  clinics                      ClinicInstagramConnection[]
+  inboxEntries                 InstagramInboxEntry[]
+  conversationMessages         InstagramConversationMessage[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -1507,4 +1511,29 @@ model InstagramInboxEntry {
   @@index([organizationId, status])
   @@index([organizationId, clinicId])
   @@index([instagramConnectionId, externalSenderId])
+}
+
+/// Individual Instagram DM messages (inbound + outbound) for conversation history.
+model InstagramConversationMessage {
+  id                    String               @id @default(uuid())
+  organizationId        String
+  organization          Organization         @relation(fields: [organizationId], references: [id])
+  clinicId              String?
+  clinic                Clinic?              @relation(fields: [clinicId], references: [id])
+  patientId             String?
+  patient               Patient?             @relation(fields: [patientId], references: [id])
+  instagramConnectionId String?
+  instagramConnection   InstagramConnection? @relation(fields: [instagramConnectionId], references: [id])
+  externalSenderId      String
+  senderUsername        String?
+  externalMessageId     String?
+  /// incoming | outgoing
+  direction             String
+  text                  String
+  rawPayload            Json?
+  createdAt             DateTime             @default(now())
+
+  @@unique([organizationId, externalMessageId])
+  @@index([organizationId, externalSenderId, createdAt])
+  @@index([clinicId, patientId, createdAt])
 }

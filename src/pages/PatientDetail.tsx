@@ -183,10 +183,12 @@ const PatientDetail: React.FC = () => {
     return matchesDirection && matchesSearch;
   });
 
-  const filteredInstagramMessages = (patient.instagramInboxEntries || []).filter((entry: any) => {
+  const filteredInstagramMessages = (patient.instagramConversationMessages || []).filter((msg: any) => {
     const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase(locale);
-    const text = String(entry.lastMessageText || '').toLocaleLowerCase(locale);
-    return !normalizedSearch || text.includes(normalizedSearch);
+    const text = String(msg.text || '').toLocaleLowerCase(locale);
+    const matchesSearch = !normalizedSearch || text.includes(normalizedSearch);
+    const matchesDirection = whatsappDirection === 'all' || msg.direction === whatsappDirection;
+    return matchesSearch && matchesDirection;
   });
 
   const unifiedMessages = [
@@ -197,14 +199,14 @@ const PatientDetail: React.FC = () => {
       text: message.text,
       createdAt: message.createdAt,
     })),
-    ...filteredInstagramMessages.map((entry: any) => ({
-      id: `ig-${entry.id}`,
+    ...filteredInstagramMessages.map((msg: any) => ({
+      id: `ig-${msg.id}`,
       channel: 'instagram' as const,
-      direction: 'incoming' as const,
-      text: entry.lastMessageText || t('common:noData'),
-      createdAt: entry.updatedAt || entry.createdAt,
-      senderUsername: entry.senderUsername,
-      externalSenderId: entry.externalSenderId,
+      direction: msg.direction as 'incoming' | 'outgoing',
+      text: msg.text,
+      createdAt: msg.createdAt,
+      senderUsername: msg.senderUsername,
+      externalSenderId: msg.externalSenderId,
     })),
   ]
     .filter(message => messageChannel === 'all' || message.channel === messageChannel)
@@ -946,7 +948,7 @@ const PatientDetail: React.FC = () => {
 
               <div className="space-y-3">
                 {unifiedMessages.length > 0 ? unifiedMessages.map((message: any) => (
-                  <div key={message.id} className={`card p-5 border ${message.channel === 'instagram' || message.direction === 'incoming' ? 'border-emerald-100 bg-emerald-50/60' : 'border-sky-100 bg-sky-50/60'}`}>
+                  <div key={message.id} className={`card p-5 border ${message.direction === 'incoming' ? 'border-emerald-100 bg-emerald-50/60' : 'border-sky-100 bg-sky-50/60'}`}>
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2">
@@ -955,14 +957,16 @@ const PatientDetail: React.FC = () => {
                           </span>
                           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                             {message.channel === 'instagram'
-                              ? t('patients:detail.instagramIncoming', { defaultValue: 'Instagram Gelen' })
+                              ? message.direction === 'outgoing'
+                                ? t('patients:detail.instagramOutgoing', { defaultValue: 'Instagram Giden' })
+                                : t('patients:detail.instagramIncoming', { defaultValue: 'Instagram Gelen' })
                               : message.direction === 'incoming'
                                 ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Gelen' })
                                 : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Giden' })}
                           </p>
                         </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-900">{message.text}</p>
-                        {message.channel === 'instagram' && (message.senderUsername || message.externalSenderId) && (
+                        {message.channel === 'instagram' && message.direction === 'incoming' && (message.senderUsername || message.externalSenderId) && (
                           <p className="mt-1 text-xs text-gray-500">
                             {message.senderUsername ? `@${message.senderUsername}` : `ID • ...${String(message.externalSenderId).slice(-4)}`}
                           </p>

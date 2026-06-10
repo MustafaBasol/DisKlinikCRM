@@ -132,6 +132,12 @@
       "patientSearchPlaceholder": "Ad veya telefon...",
       "resolve": "Çözümle"
     },
+    "linkPatientModal": {
+      "title": "Hasta Bağla",
+      "searchPatient": "Hasta Ara",
+      "patientSelected": "Hasta seçildi",
+      "confirm": "Bağla"
+    },
     "replyModal": {
       "title": "Instagram DM Yanıtla",
       "recipient": "Alıcı",

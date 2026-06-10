@@ -1716,6 +1716,26 @@ export const processInstagramIncomingMessage = async (
 
   if (!connection || !clinic) return { status: 'skipped', reason: 'connection_unavailable' };
 
+  // Save inbound message for conversation history
+  await prisma.instagramConversationMessage.create({
+    data: {
+      organizationId: args.organizationId,
+      clinicId: args.clinicId ?? null,
+      patientId: inboxEntry?.patientId ?? null,
+      instagramConnectionId: args.instagramConnectionId,
+      externalSenderId: args.externalSenderId,
+      senderUsername: args.senderUsername ?? null,
+      externalMessageId: args.externalMessageId ?? null,
+      direction: 'incoming',
+      text,
+      rawPayload: args.rawPayload ? (args.rawPayload as import('@prisma/client').Prisma.InputJsonValue) : undefined,
+    },
+  }).catch(err => {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {
+      console.error('[instagram] inbound message save failed', err);
+    }
+  });
+
   const conversationKey = buildInstagramConversationKey(args.instagramConnectionId, args.externalSenderId);
   const replyText = await buildReplyText({
     clinic,
@@ -1757,6 +1777,65 @@ export const processInstagramIncomingMessage = async (
     },
     data: { updatedAt: new Date() },
   });
+
+  // Save outbound reply and log activity
+  const latestEntry = await prisma.instagramInboxEntry.findFirst({
+    where: {
+      organizationId: args.organizationId,
+      instagramConnectionId: args.instagramConnectionId,
+      externalSenderId: args.externalSenderId,
+    },
+    select: { patientId: true },
+    orderBy: { updatedAt: 'desc' },
+  });
+  const linkedPatientId = latestEntry?.patientId ?? inboxEntry?.patientId ?? null;
+
+  await prisma.instagramConversationMessage.create({
+    data: {
+      organizationId: args.organizationId,
+      clinicId: args.clinicId ?? null,
+      patientId: linkedPatientId,
+      instagramConnectionId: args.instagramConnectionId,
+      externalSenderId: args.externalSenderId,
+      direction: 'outgoing',
+      text: replyText,
+    },
+  }).catch(err => {
+    console.error('[instagram] outbound message save failed', err);
+  });
+
+  if (linkedPatientId) {
+    const systemUserId = await getClinicSystemUserId(clinic.id);
+    if (systemUserId) {
+      logActivity({
+        clinicId: clinic.id,
+        userId: systemUserId,
+        entityType: 'patient',
+        entityId: linkedPatientId,
+        action: 'instagram_message_received',
+        description: `Instagram DM alındı ve yanıtlandı${args.senderUsername ? ` (@${args.senderUsername})` : ''}`,
+        patientId: linkedPatientId,
+        metadata: {
+          systemGenerated: true,
+          source: 'instagram',
+          externalSenderId: args.externalSenderId,
+          instagramConnectionId: args.instagramConnectionId,
+          messagePreview: text.slice(0, 100),
+        },
+      }).catch(() => {});
+    }
+
+    // Back-fill patientId on any inbound messages saved before patient was linked
+    prisma.instagramConversationMessage.updateMany({
+      where: {
+        organizationId: args.organizationId,
+        instagramConnectionId: args.instagramConnectionId,
+        externalSenderId: args.externalSenderId,
+        patientId: null,
+      },
+      data: { patientId: linkedPatientId, clinicId: args.clinicId ?? undefined },
+    }).catch(() => {});
+  }
 
   return { status: 'processed', replySent: true, replyText };
 };
