@@ -20,7 +20,6 @@ import {
 import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
 import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
-import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 import {
   createInboundEventOrDetectDuplicate,
   markInboundEventFailed,
@@ -34,6 +33,7 @@ export type InstagramWebhookConnection = {
   id: string;
   organizationId: string;
   instagramAccountId?: string | null;
+  instagramLoginUserId?: string | null;
   facebookPageId?: string | null;
   webhookSecret?: string | null;
 };
@@ -110,6 +110,34 @@ function summarizeProviderId(value: string | null | undefined) {
   return { length: value.length, suffix: value.slice(-4) };
 }
 
+function summarizeConnectionIdentifiers(connection: InstagramWebhookConnection) {
+  return {
+    instagramAccountId: summarizeProviderId(connection.instagramAccountId),
+    instagramLoginUserId: summarizeProviderId(connection.instagramLoginUserId),
+    facebookPageId: summarizeProviderId(connection.facebookPageId),
+  };
+}
+
+type InstagramConnectionMatchReason =
+  | 'recipient_instagram_account_id'
+  | 'page_instagram_account_id'
+  | 'recipient_facebook_page_id'
+  | 'page_facebook_page_id'
+  | 'recipient_instagram_login_user_id'
+  | 'page_instagram_login_user_id';
+
+type InstagramConnectionMatchResult = {
+  connection: InstagramWebhookConnection | null;
+  matchReason: InstagramConnectionMatchReason | null;
+  matchCount: number;
+};
+
+function matchReasonPriority(reason: InstagramConnectionMatchReason): number {
+  if (reason === 'recipient_instagram_account_id' || reason === 'page_instagram_account_id') return 1;
+  if (reason === 'recipient_facebook_page_id' || reason === 'page_facebook_page_id') return 2;
+  return 3;
+}
+
 function logInstagramResolutionFailure(
   reason: 'no_match' | 'multiple_matches' | 'identifier_mismatch',
   metadata: Record<string, unknown>,
@@ -143,27 +171,111 @@ async function findUniqueConnectionByProviderIdentifiers(params: {
       OR: identifiers.flatMap(identifier => [
         { instagramAccountId: identifier },
         { facebookPageId: identifier },
+        { instagramLoginUserId: identifier },
       ]),
     },
     select: {
       id: true,
       organizationId: true,
       instagramAccountId: true,
+      instagramLoginUserId: true,
       facebookPageId: true,
       webhookSecret: true,
     },
   });
 
-  const connection = selectUniqueProviderConnection(matches);
-  if (!connection) {
-    logInstagramResolutionFailure(matches.length === 0 ? 'no_match' : 'multiple_matches', {
+  const resolved = resolveInstagramWebhookConnectionFromCandidates(params, matches);
+  if (!resolved.connection) {
+    logInstagramResolutionFailure(resolved.matchCount === 0 ? 'no_match' : 'multiple_matches', {
       recipientId: summarizeProviderId(params.recipientId),
       pageId: summarizeProviderId(params.pageId),
-      matchCount: matches.length,
+      matchCount: resolved.matchCount,
+      storedCandidates: matches.slice(0, 5).map(connection => ({
+        connectionId: connection.id,
+        ...summarizeConnectionIdentifiers(connection),
+        matchReason: getInstagramWebhookConnectionMatchReason(params, connection),
+      })),
     });
+    return null;
   }
 
-  return connection;
+  console.info('[instagram-webhook] connection resolved', {
+    matchReason: resolved.matchReason,
+    recipientId: summarizeProviderId(params.recipientId),
+    pageId: summarizeProviderId(params.pageId),
+    connectionId: resolved.connection.id,
+    ...summarizeConnectionIdentifiers(resolved.connection),
+  });
+
+  return resolved.connection;
+}
+
+export function getInstagramWebhookConnectionMatchReason(
+  params: { recipientId?: string | null; pageId?: string | null },
+  connection: InstagramWebhookConnection,
+): InstagramConnectionMatchReason | null {
+  const recipientId = params.recipientId?.trim();
+  const pageId = params.pageId?.trim();
+  const instagramAccountId = connection.instagramAccountId?.trim();
+  const facebookPageId = connection.facebookPageId?.trim();
+  const instagramLoginUserId = connection.instagramLoginUserId?.trim();
+
+  if (recipientId && instagramAccountId && recipientId === instagramAccountId) {
+    return 'recipient_instagram_account_id';
+  }
+  if (pageId && instagramAccountId && pageId === instagramAccountId) {
+    return 'page_instagram_account_id';
+  }
+  if (recipientId && facebookPageId && recipientId === facebookPageId) {
+    return 'recipient_facebook_page_id';
+  }
+  if (pageId && facebookPageId && pageId === facebookPageId) {
+    return 'page_facebook_page_id';
+  }
+  if (recipientId && instagramLoginUserId && recipientId === instagramLoginUserId) {
+    return 'recipient_instagram_login_user_id';
+  }
+  if (pageId && instagramLoginUserId && pageId === instagramLoginUserId) {
+    return 'page_instagram_login_user_id';
+  }
+
+  return null;
+}
+
+export function resolveInstagramWebhookConnectionFromCandidates(
+  params: { recipientId?: string | null; pageId?: string | null },
+  candidates: readonly InstagramWebhookConnection[],
+): InstagramConnectionMatchResult {
+  const matches = candidates
+    .map(connection => ({
+      connection,
+      matchReason: getInstagramWebhookConnectionMatchReason(params, connection),
+    }))
+    .filter((match): match is { connection: InstagramWebhookConnection; matchReason: InstagramConnectionMatchReason } => (
+      match.matchReason !== null
+    ));
+
+  const bestPriority = matches.reduce<number | null>((best, match) => {
+    const priority = matchReasonPriority(match.matchReason);
+    return best === null || priority < best ? priority : best;
+  }, null);
+  const bestMatches = bestPriority === null
+    ? []
+    : matches.filter(match => matchReasonPriority(match.matchReason) === bestPriority);
+
+  if (bestMatches.length !== 1) {
+    return {
+      connection: null,
+      matchReason: null,
+      matchCount: bestMatches.length,
+    };
+  }
+
+  return {
+    connection: bestMatches[0].connection,
+    matchReason: bestMatches[0].matchReason,
+    matchCount: bestMatches.length,
+  };
 }
 
 function eventMatchesConnectionIdentifiers(
@@ -177,11 +289,10 @@ function eventMatchesConnectionIdentifiers(
   );
   if (eventIds.size === 0) return false;
 
-  const connectionIds = [connection.instagramAccountId, connection.facebookPageId]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .map(value => value.trim());
-
-  return connectionIds.some(identifier => eventIds.has(identifier));
+  return Boolean(getInstagramWebhookConnectionMatchReason(
+    { recipientId: event.recipientId, pageId: event.pageId },
+    connection,
+  ));
 }
 
 function acceptsInstagramWebhookSignature(
@@ -307,6 +418,7 @@ router.post(
           id: true,
           organizationId: true,
           instagramAccountId: true,
+          instagramLoginUserId: true,
           facebookPageId: true,
           webhookSecret: true,
           isActive: true,
@@ -372,6 +484,11 @@ export async function processInstagramEventForConnection(
       connectionId: connection.id,
       recipientId: summarizeProviderId(event.recipientId),
       pageId: summarizeProviderId(event.pageId),
+      ...summarizeConnectionIdentifiers(connection),
+      matchReason: getInstagramWebhookConnectionMatchReason(
+        { recipientId: event.recipientId, pageId: event.pageId },
+        connection,
+      ),
     });
     return;
   }
