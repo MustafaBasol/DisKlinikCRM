@@ -61,6 +61,7 @@ export type ParsedInstagramEvent = {
   externalMessageId?: string | null;
   /** Instagram-scoped sender ID */
   senderId?: string | null;
+  senderUsername?: string | null;
   /** Instagram-scoped recipient ID (usually the page/account's IGSID) */
   recipientId?: string | null;
   /** Instagram page/account id from the webhook entry */
@@ -364,7 +365,14 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
       if (!msg || typeof msg !== 'object') continue;
       const msgObj = msg as Record<string, unknown>;
 
-      const sender = (msgObj.sender as Record<string, unknown> | undefined)?.id as string | undefined;
+      const senderObj = msgObj.sender as Record<string, unknown> | undefined;
+      const sender = senderObj?.id as string | undefined;
+      const senderUsername =
+        typeof senderObj?.username === 'string'
+          ? senderObj.username
+          : typeof senderObj?.name === 'string'
+          ? senderObj.name
+          : null;
       const recipient = (msgObj.recipient as Record<string, unknown> | undefined)?.id as string | undefined;
       const timestamp = typeof msgObj.timestamp === 'number' ? msgObj.timestamp : null;
 
@@ -383,6 +391,7 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
           channel: 'instagram',
           externalMessageId: externalMessageId ?? null,
           senderId: sender ?? null,
+          senderUsername,
           recipientId: recipient ?? null,
           pageId,
           text: text ?? null,
@@ -399,6 +408,7 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
           channel: 'instagram',
           externalMessageId: externalMessageId ?? null,
           senderId: sender ?? null,
+          senderUsername,
           recipientId: recipient ?? null,
           pageId,
           text: null,
@@ -413,6 +423,7 @@ export function parseWebhook(rawBody: unknown): ParsedInstagramEvent[] {
         channel: 'instagram',
         externalMessageId: externalMessageId ?? null,
         senderId: sender ?? null,
+        senderUsername,
         recipientId: recipient ?? null,
         pageId,
         text,

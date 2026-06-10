@@ -515,6 +515,7 @@ export const clinicInstagramService = {
 };
 
 export const instagramInboxService = {
+  getClinics: () => api.get('/instagram/inbox/clinics'),
   getUnassigned: () => api.get('/instagram/inbox/unassigned'),
   getConversations: (params?: { status?: string; clinicId?: string }) =>
     api.get('/instagram/inbox/conversations', { params }),

@@ -493,7 +493,7 @@ export async function processInstagramEventForConnection(
     return;
   }
 
-  const resolution = await deps.resolveClinicForInstagramMessage(connection.id);
+  const resolution = await deps.resolveClinicForInstagramMessage(connection.id, event.senderId);
   if (resolution.resolutionSource === 'no_clinic_links') {
     logWebhookEvent(connection.organizationId, connection.id, 'instagram_webhook_no_clinic_links',
       'Instagram webhook received for a connection with no clinic assignments');
@@ -535,7 +535,7 @@ export async function processInstagramEventForConnection(
       needsClinicResolution: resolution.needsClinicResolution,
       externalSenderId: event.senderId!,
       externalConversationId: event.externalConversationId ?? null,
-      senderUsername: null,
+      senderUsername: event.senderUsername ?? null,
       lastMessageText: event.text ?? null,
       externalMessageId: event.externalMessageId ?? null,
       rawPayload: asJsonRecord(event.rawPayload),
@@ -550,7 +550,7 @@ export async function processInstagramEventForConnection(
         externalSenderId: event.senderId!,
         externalConversationId: event.externalConversationId ?? null,
         externalMessageId: event.externalMessageId ?? null,
-        senderUsername: null,
+        senderUsername: event.senderUsername ?? null,
         text: event.text,
         rawPayload: asJsonRecord(event.rawPayload),
       });

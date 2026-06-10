@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
-import { instagramInboxService, patientService, organizationBranchService, userService, serviceService } from '../services/api';
+import { instagramInboxService, patientService, userService, serviceService } from '../services/api';
 import {
   canViewInstagramInbox,
   canResolveInstagramConversation,
@@ -64,6 +64,28 @@ interface ResolveModal {
   patientId: string;
   patientSearch: string;
   patients: PossiblePatient[];
+}
+
+function extractClinics(data: unknown): ClinicOption[] {
+  if (Array.isArray(data)) return data as ClinicOption[];
+  if (!data || typeof data !== 'object') return [];
+  const record = data as { clinics?: ClinicOption[]; branches?: ClinicOption[] };
+  return record.clinics ?? record.branches ?? [];
+}
+
+function isNumericPlatformId(value?: string | null): boolean {
+  return Boolean(value?.trim()) && /^\d{8,}$/.test(value!.trim());
+}
+
+function getInstagramDisplayName(entry: InboxEntry): string {
+  if (entry.patient) {
+    const patientName = `${entry.patient.firstName} ${entry.patient.lastName}`.trim();
+    if (patientName) return patientName;
+  }
+  if (entry.senderUsername?.trim() && !isNumericPlatformId(entry.senderUsername)) {
+    return `@${entry.senderUsername.trim()}`;
+  }
+  return 'Instagram Kullanıcısı';
 }
 
 interface ReplyModal {
@@ -114,10 +136,20 @@ export default function InstagramInbox() {
     }
   }, [user, navigate]);
 
+  async function loadClinics(): Promise<ClinicOption[]> {
+    try {
+      const res = await instagramInboxService.getClinics();
+      const clinicList = extractClinics(res.data);
+      setClinics(clinicList);
+      return clinicList;
+    } catch {
+      setClinics([]);
+      return [];
+    }
+  }
+
   useEffect(() => {
-    organizationBranchService.getAll().then((r: import('axios').AxiosResponse) => {
-      setClinics(r.data.clinics ?? r.data.branches ?? []);
-    }).catch(() => {});
+    loadClinics();
   }, []);
 
   useEffect(() => {
@@ -160,6 +192,21 @@ export default function InstagramInbox() {
   function reload() {
     if (activeTab === 'unassigned') loadUnassigned();
     else loadConversations();
+  }
+
+  async function openResolveModal(entry: InboxEntry) {
+    const clinicList = clinics.length > 0 ? clinics : await loadClinics();
+    const defaultClinicId =
+      entry.clinicId ??
+      (clinicList.length === 1 ? clinicList[0].id : '');
+
+    setResolveModal({
+      entry,
+      clinicId: defaultClinicId,
+      patientId: '',
+      patientSearch: '',
+      patients: [],
+    });
   }
 
   // ── Resolve modal ──────────────────────────────────────────────────────────
@@ -264,7 +311,7 @@ export default function InstagramInbox() {
       date: new Date().toISOString().split('T')[0],
       time: '09:00',
       notes: t('instagram:inbox.appointment.defaultNotes', {
-        sender: entry.senderUsername ? `@${entry.senderUsername}` : entry.externalSenderId,
+        sender: getInstagramDisplayName(entry),
       }),
       doctors: [],
       services: [],
@@ -472,7 +519,7 @@ export default function InstagramInbox() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="font-medium text-gray-900 dark:text-white text-sm">
-                    {entry.senderUsername ? `@${entry.senderUsername}` : entry.externalSenderId}
+                    {getInstagramDisplayName(entry)}
                   </span>
                   <StatusBadge entry={entry} />
                   {entry.instagramConnection && (
@@ -524,13 +571,7 @@ export default function InstagramInbox() {
                 {/* Resolve / assign clinic */}
                 {canResolveInstagramConversation(user) && entry.needsClinicResolution && (
                   <button
-                    onClick={() => setResolveModal({
-                      entry,
-                      clinicId: '',
-                      patientId: '',
-                      patientSearch: '',
-                      patients: [],
-                    })}
+                    onClick={() => openResolveModal(entry)}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-lg text-xs font-medium hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition-colors"
                   >
                     <Building2 size={12} />
@@ -541,13 +582,7 @@ export default function InstagramInbox() {
                 {/* Link patient */}
                 {canResolveInstagramConversation(user) && !entry.patientId && entry.status !== 'converted' && (
                   <button
-                    onClick={() => setResolveModal({
-                      entry,
-                      clinicId: entry.clinicId ?? '',
-                      patientId: '',
-                      patientSearch: '',
-                      patients: [],
-                    })}
+                    onClick={() => openResolveModal(entry)}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                   >
                     <User size={12} />
@@ -684,7 +719,7 @@ export default function InstagramInbox() {
 
             <div className="px-6 py-4 space-y-3">
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                {t('instagram:inbox.replyModal.recipient')}: <strong>{replyModal.entry.senderUsername ? `@${replyModal.entry.senderUsername}` : replyModal.entry.externalSenderId}</strong>
+                {t('instagram:inbox.replyModal.recipient')}: <strong>{getInstagramDisplayName(replyModal.entry)}</strong>
               </p>
 
               {replyResult && (
@@ -747,9 +782,8 @@ export default function InstagramInbox() {
                 <Instagram size={14} className="mt-0.5 shrink-0" />
                 <span>
                   {t('instagram:inbox.appointment.sourceNotice')}
-                  {apptModal.entry.senderUsername
-                    ? ` ${t('instagram:inbox.appointment.sender', { sender: `@${apptModal.entry.senderUsername}` })}`
-                    : ''}
+                  {' '}
+                  {t('instagram:inbox.appointment.sender', { sender: getInstagramDisplayName(apptModal.entry) })}
                 </span>
               </div>
 

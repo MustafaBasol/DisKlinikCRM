@@ -55,7 +55,11 @@ import {
   buildInstagramAppointmentFallbackPhone,
   buildInstagramConversationKey,
   canProcessInstagramAi,
+  formatInstagramCustomerName,
+  formatMainMenu,
 } from '../services/instagram/instagramAiConversationProcessor.js';
+import { resolveInstagramClinicFromKnownContext } from '../services/instagram/instagramClinicResolver.js';
+import { buildInstagramClinicAssignments } from '../routes/organizationInstagram.js';
 import {
   processInstagramEventForConnection,
   resolveInstagramWebhookConnectionFromCandidates,
@@ -115,7 +119,7 @@ function makeSuccessfulInstagramProcessingDeps(
     resolveClinicForInstagramMessage: async () => ({
       clinicId: 'clinic-1',
       needsClinicResolution: false,
-      resolutionSource: 'single_clinic',
+      resolutionSource: 'connection_single',
     }),
     createInboundEventOrDetectDuplicate: async () => {
       counters.inboundCalls++;
@@ -391,6 +395,137 @@ async function main() {
     assert.equal(resolved.matchReason, 'recipient_instagram_account_id');
   });
 
+  await test('Instagram connection clinic assignment: selected clinic is linked as default', () => {
+    const assignments = buildInstagramClinicAssignments({
+      organizationId: 'org-1',
+      instagramConnectionId: 'ig-conn-1',
+      clinicIds: ['clinic-a', 'clinic-b'],
+      selectedClinicId: 'clinic-b',
+    });
+
+    assert.equal(assignments.length, 2);
+    assert.equal(assignments.find(item => item.clinicId === 'clinic-b')?.isDefault, true);
+    assert.equal(assignments.find(item => item.clinicId === 'clinic-a')?.isDefault, false);
+  });
+
+  await test('Instagram connection clinic assignment: single clinic auto-link is default', () => {
+    const assignments = buildInstagramClinicAssignments({
+      organizationId: 'org-1',
+      instagramConnectionId: 'ig-conn-1',
+      clinicIds: ['clinic-only'],
+      selectedClinicId: null,
+    });
+
+    assert.equal(assignments.length, 1);
+    assert.equal(assignments[0].clinicId, 'clinic-only');
+    assert.equal(assignments[0].isDefault, true);
+  });
+
+  await test('Instagram clinic resolution: existing inbox entry wins first', () => {
+    const result = resolveInstagramClinicFromKnownContext({
+      existingInboxClinicId: 'clinic-existing',
+      clinicLinks: [{ clinicId: 'clinic-a', isDefault: true }],
+      organizationClinicIds: ['clinic-a'],
+    });
+
+    assert.equal(result.clinicId, 'clinic-existing');
+    assert.equal(result.needsClinicResolution, false);
+    assert.equal(result.resolutionSource, 'inbox_entry');
+  });
+
+  await test('Instagram clinic resolution: resolves from single connection clinic link', () => {
+    const result = resolveInstagramClinicFromKnownContext({
+      clinicLinks: [{ clinicId: 'clinic-a', isDefault: true }],
+      organizationClinicIds: [],
+    });
+
+    assert.equal(result.clinicId, 'clinic-a');
+    assert.equal(result.needsClinicResolution, false);
+    assert.equal(result.resolutionSource, 'connection_single');
+  });
+
+  await test('Instagram clinic resolution: resolves from one default among multiple links', () => {
+    const result = resolveInstagramClinicFromKnownContext({
+      clinicLinks: [
+        { clinicId: 'clinic-a', isDefault: false },
+        { clinicId: 'clinic-b', isDefault: true },
+      ],
+      organizationClinicIds: [],
+    });
+
+    assert.equal(result.clinicId, 'clinic-b');
+    assert.equal(result.needsClinicResolution, false);
+    assert.equal(result.resolutionSource, 'connection_default');
+  });
+
+  await test('Instagram clinic resolution: falls back to organization single clinic', () => {
+    const result = resolveInstagramClinicFromKnownContext({
+      clinicLinks: [],
+      organizationClinicIds: ['clinic-only'],
+    });
+
+    assert.equal(result.clinicId, 'clinic-only');
+    assert.equal(result.needsClinicResolution, false);
+    assert.equal(result.resolutionSource, 'organization_single');
+  });
+
+  await test('Instagram clinic resolution: multiple clinics without default remains unresolved', () => {
+    const result = resolveInstagramClinicFromKnownContext({
+      clinicLinks: [
+        { clinicId: 'clinic-a', isDefault: false },
+        { clinicId: 'clinic-b', isDefault: false },
+      ],
+      organizationClinicIds: [],
+    });
+
+    assert.equal(result.clinicId, null);
+    assert.equal(result.needsClinicResolution, true);
+    assert.equal(result.resolutionSource, 'unresolved');
+  });
+
+  await test('Instagram default reply: numeric sender id does not become a greeting name', () => {
+    const customerName = formatInstagramCustomerName(null, '1050315040903637', null);
+    const reply = formatMainMenu('Aile Dis', customerName);
+
+    assert.equal(customerName, null);
+    assert.ok(reply.startsWith('Merhaba,'));
+    assert.equal(reply.includes('1050315040903637'), false);
+  });
+
+  await test('Instagram default reply: patient name is used safely', () => {
+    const customerName = formatInstagramCustomerName({
+      id: 'entry-1',
+      patientId: 'patient-1',
+      senderUsername: null,
+      patient: { id: 'patient-1', firstName: 'Ayse', lastName: 'Yilmaz', phone: null },
+    }, '1050315040903637', null);
+    const reply = formatMainMenu('Aile Dis', customerName);
+
+    assert.equal(customerName, 'Ayse Yilmaz');
+    assert.ok(reply.startsWith('Merhaba Ayse,'));
+  });
+
+  await test('Instagram default reply: username can be used but numeric username is ignored', () => {
+    const usernameName = formatInstagramCustomerName(null, '1050315040903637', 'autoviseo');
+    const numericName = formatInstagramCustomerName(null, '1050315040903637', '1050315040903637');
+
+    assert.equal(usernameName, '@autoviseo');
+    assert.equal(numericName, null);
+    assert.equal(formatMainMenu('Aile Dis', numericName).includes('1050315040903637'), false);
+  });
+
+  await test('Instagram default reply: Turkish characters are preserved', () => {
+    const reply = formatMainMenu('Aile Dis', null);
+    assert.equal(reply, [
+      'Merhaba, size nasıl yardımcı olabilirim?',
+      '',
+      '1. Randevu almak',
+      '2. Randevumu sorgulamak',
+      '3. Randevumu iptal etmek',
+      '4. Hizmetler hakkında bilgi almak',
+    ].join('\n'));
+  });
+
   section('Instagram AI conversation adapter guards');
 
   await test('AI adapter runs only when clinic is resolved', () => {
@@ -447,7 +582,7 @@ async function main() {
       resolveClinicForInstagramMessage: async () => ({
         clinicId: 'clinic-1',
         needsClinicResolution: false,
-        resolutionSource: 'single_clinic',
+        resolutionSource: 'connection_single',
       }),
       createInboundEventOrDetectDuplicate: async () => {
         inboundCalls++;

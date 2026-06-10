@@ -66,6 +66,72 @@ function trimSecret(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(
+    values
+      .filter((value): value is string => Boolean(value?.trim()))
+      .map(value => value.trim()),
+  ));
+}
+
+export function buildInstagramClinicAssignments(params: {
+  organizationId: string;
+  instagramConnectionId: string;
+  clinicIds: string[];
+  selectedClinicId?: string | null;
+}) {
+  const defaultClinicId =
+    params.selectedClinicId && params.clinicIds.includes(params.selectedClinicId)
+      ? params.selectedClinicId
+      : params.clinicIds.length === 1
+      ? params.clinicIds[0]
+      : null;
+
+  return params.clinicIds.map(clinicId => ({
+    organizationId: params.organizationId,
+    clinicId,
+    instagramConnectionId: params.instagramConnectionId,
+    isDefault: defaultClinicId ? clinicId === defaultClinicId : false,
+  }));
+}
+
+async function resolveInstagramClinicLinkTargets(params: {
+  organizationId: string;
+  selectedClinicId?: string | null;
+  linkedClinicIds?: string[];
+}): Promise<{ clinicIds: string[]; selectedClinicId: string | null; source: 'request' | 'organization_single' | 'none' }> {
+  const selectedClinicId = trimSecret(params.selectedClinicId);
+  const requestedClinicIds = uniqueStrings([selectedClinicId, ...(params.linkedClinicIds ?? [])]);
+
+  if (requestedClinicIds.length > 0) {
+    const validClinics = await prisma.clinic.findMany({
+      where: { id: { in: requestedClinicIds }, organizationId: params.organizationId },
+      select: { id: true },
+    });
+    const validIds = validClinics.map(c => c.id);
+    return {
+      clinicIds: validIds,
+      selectedClinicId: selectedClinicId && validIds.includes(selectedClinicId) ? selectedClinicId : null,
+      source: 'request',
+    };
+  }
+
+  const organizationClinics = await prisma.clinic.findMany({
+    where: { organizationId: params.organizationId, status: 'active' },
+    select: { id: true },
+    take: 2,
+  });
+  if (organizationClinics.length === 1) {
+    return {
+      clinicIds: [organizationClinics[0].id],
+      selectedClinicId: organizationClinics[0].id,
+      source: 'organization_single',
+    };
+  }
+
+  return { clinicIds: [], selectedClinicId: null, source: 'none' };
+}
+
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
 const connectionCreateSchema = z.object({
@@ -80,6 +146,7 @@ const connectionCreateSchema = z.object({
   webhookSecret: z.string().max(120).optional().nullable(),
   metaAppId: z.string().max(80).optional().nullable(),
   metaBusinessId: z.string().max(80).optional().nullable(),
+  selectedClinicId: z.string().uuid().optional().nullable(),
   linkedClinicIds: z.array(z.string().uuid()).optional(),
 });
 
@@ -167,18 +234,29 @@ router.post(
         },
       });
 
+      const clinicTargets = await resolveInstagramClinicLinkTargets({
+        organizationId: user.organizationId,
+        selectedClinicId: data.selectedClinicId,
+        linkedClinicIds: data.linkedClinicIds,
+      });
+
+      console.info('[instagram-connection] clinic assignment targets', {
+        organizationId: user.organizationId,
+        connectionId: conn.id,
+        selectedClinicId: data.selectedClinicId ?? null,
+        linkedClinicCount: clinicTargets.clinicIds.length,
+        source: clinicTargets.source,
+      });
+
       // Sync clinic assignments
-      if (data.linkedClinicIds && data.linkedClinicIds.length > 0) {
-        const validClinics = await prisma.clinic.findMany({
-          where: { id: { in: data.linkedClinicIds }, organizationId: user.organizationId },
-          select: { id: true },
-        });
+      if (clinicTargets.clinicIds.length > 0) {
         await prisma.clinicInstagramConnection.createMany({
-          data: validClinics.map(c => ({
+          data: buildInstagramClinicAssignments({
             organizationId: user.organizationId,
-            clinicId: c.id,
             instagramConnectionId: conn.id,
-          })),
+            clinicIds: clinicTargets.clinicIds,
+            selectedClinicId: clinicTargets.selectedClinicId,
+          }),
           skipDuplicates: true,
         });
       }
@@ -302,29 +380,44 @@ router.put(
         data: updateData,
       });
 
-      // Sync clinic assignments if provided
-      if (data.linkedClinicIds !== undefined) {
-        // Validate all clinic IDs belong to the organization
-        const validClinics = await prisma.clinic.findMany({
-          where: { id: { in: data.linkedClinicIds }, organizationId: user.organizationId },
-          select: { id: true },
+      // Sync clinic assignments if provided, selected, or organization has a single fallback clinic
+      if (data.linkedClinicIds !== undefined || data.selectedClinicId !== undefined) {
+        const clinicTargets = await resolveInstagramClinicLinkTargets({
+          organizationId: user.organizationId,
+          selectedClinicId: data.selectedClinicId,
+          linkedClinicIds: data.linkedClinicIds,
         });
-        const validIds = validClinics.map(c => c.id);
+        const validIds = clinicTargets.clinicIds;
+
+        console.info('[instagram-connection] clinic assignment targets', {
+          organizationId: user.organizationId,
+          connectionId: id,
+          selectedClinicId: data.selectedClinicId ?? null,
+          linkedClinicCount: validIds.length,
+          source: clinicTargets.source,
+        });
 
         // Remove old links
         await prisma.clinicInstagramConnection.deleteMany({
           where: { instagramConnectionId: id, clinicId: { notIn: validIds } },
         });
 
-        // Add new links
-        await prisma.clinicInstagramConnection.createMany({
-          data: validIds.map(cid => ({
-            organizationId: user.organizationId,
-            clinicId: cid,
-            instagramConnectionId: id,
-          })),
-          skipDuplicates: true,
-        });
+        // Add or update links and default mapping
+        await Promise.all(buildInstagramClinicAssignments({
+          organizationId: user.organizationId,
+          instagramConnectionId: id,
+          clinicIds: validIds,
+          selectedClinicId: clinicTargets.selectedClinicId,
+        }).map(assignment => prisma.clinicInstagramConnection.upsert({
+          where: {
+            clinicId_instagramConnectionId: {
+              clinicId: assignment.clinicId,
+              instagramConnectionId: id,
+            },
+          },
+          create: assignment,
+          update: { isDefault: assignment.isDefault },
+        })));
       }
 
       await writeAuditLog({

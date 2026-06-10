@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { instagramConnectionService, organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import {
   canManageInstagramConnections,
@@ -58,6 +59,13 @@ interface InstagramConnection {
 interface ClinicOption {
   id: string;
   name: string;
+}
+
+function extractClinics(data: unknown): ClinicOption[] {
+  if (Array.isArray(data)) return data as ClinicOption[];
+  if (!data || typeof data !== 'object') return [];
+  const record = data as { clinics?: ClinicOption[]; branches?: ClinicOption[] };
+  return record.clinics ?? record.branches ?? [];
 }
 
 interface ConnectionFormData {
@@ -117,6 +125,7 @@ function CopyButton({ value }: { value: string }) {
 
 export default function InstagramConnections() {
   const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
   const { t } = useTranslation(['instagram', 'common']);
   const { formatDateTime } = useClinicPreferences();
   const [connections, setConnections] = useState<InstagramConnection[]>([]);
@@ -148,7 +157,7 @@ export default function InstagramConnections() {
         organizationBranchService.getAll(),
       ]);
       setConnections(connRes.data.connections ?? []);
-      setClinics(branchRes.data.clinics ?? branchRes.data.branches ?? []);
+      setClinics(extractClinics(branchRes.data));
     } catch {
       setError(t('instagram:connections.errors.loadFailed'));
     } finally {
@@ -160,7 +169,11 @@ export default function InstagramConnections() {
 
   function openCreate() {
     setEditingConnection(null);
-    setForm(EMPTY_FORM);
+    const selectedClinicIds = selectedClinicId !== 'all' ? [selectedClinicId] : [];
+    setForm({
+      ...EMPTY_FORM,
+      linkedClinicIds: selectedClinicIds,
+    });
     setFormError('');
     setModalOpen(true);
   }
@@ -198,6 +211,7 @@ export default function InstagramConnections() {
         facebookPageId: form.facebookPageId.trim() || null,
         metaAppId: form.metaAppId.trim() || null,
         metaBusinessId: form.metaBusinessId.trim() || null,
+        selectedClinicId: selectedClinicId !== 'all' ? selectedClinicId : null,
         linkedClinicIds: form.linkedClinicIds,
       };
       if (form.accessTokenEncrypted.trim()) {

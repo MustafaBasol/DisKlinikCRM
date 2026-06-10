@@ -34,6 +34,16 @@ import { patientContactSelect } from '../utils/prismaSelects.js';
 
 const router = express.Router();
 
+function instagramDisplayName(entry: { patient?: { firstName: string; lastName: string } | null; senderUsername?: string | null }): string {
+  if (entry.patient) {
+    const patientName = `${entry.patient.firstName} ${entry.patient.lastName}`.trim();
+    if (patientName) return patientName;
+  }
+  const username = entry.senderUsername?.trim();
+  if (username && !/^\d{8,}$/.test(username)) return `@${username}`;
+  return 'Instagram Kullanıcısı';
+}
+
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 async function getAllowedClinicIds(user: NonNullable<AuthRequest['user']>): Promise<string[] | null> {
@@ -42,6 +52,35 @@ async function getAllowedClinicIds(user: NonNullable<AuthRequest['user']>): Prom
   if (user.canAccessAllClinics) return null;
   return user.allowedClinicIds ?? [];
 }
+
+router.get(
+  '/instagram/inbox/clinics',
+  authenticate,
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
+  async (req: AuthRequest, res) => {
+    const user = req.user!;
+    if (!canViewInstagramInbox(user)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    try {
+      const allowedClinicIds = await getAllowedClinicIds(user);
+      const clinics = await prisma.clinic.findMany({
+        where: {
+          organizationId: user.organizationId,
+          status: 'active',
+          ...(allowedClinicIds ? { id: { in: allowedClinicIds } } : {}),
+        },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+
+      return res.json({ clinics });
+    } catch {
+      return res.status(500).json({ error: 'Failed to fetch clinics' });
+    }
+  },
+);
 
 // ── GET /api/instagram/inbox/unassigned ───────────────────────────────────────
 
@@ -437,12 +476,7 @@ router.post(
       }
 
       // Build patient name + phone from what we have
-      const patientName =
-        entry.patient
-          ? `${entry.patient.firstName} ${entry.patient.lastName}`.trim()
-          : entry.senderUsername
-          ? `@${entry.senderUsername}`
-          : entry.externalSenderId;
+      const patientName = instagramDisplayName(entry);
 
       const phone = entry.patient?.phone ?? entry.externalSenderId;
 
@@ -456,7 +490,7 @@ router.post(
           status: 'pending',
           requestType: 'appointment',
           rawMessage: entry.lastMessageText ?? undefined,
-          notes: `Instagram DM'den oluşturuldu. Gönderen: ${entry.senderUsername ? '@' + entry.senderUsername : entry.externalSenderId}`,
+          notes: `Instagram DM'den oluşturuldu. Gönderen: ${instagramDisplayName(entry)}`,
         },
         include: {
           patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
@@ -601,7 +635,7 @@ router.post(
           startTime,
           endTime: endDateTime,
           status: 'confirmed',
-          notes: notes ?? `Instagram DM'den oluşturuldu. Gönderen: ${entry.senderUsername ? '@' + entry.senderUsername : entry.externalSenderId}`,
+          notes: notes ?? `Instagram DM'den oluşturuldu. Gönderen: ${instagramDisplayName(entry)}`,
           createdById: user.id,
         },
         include: {

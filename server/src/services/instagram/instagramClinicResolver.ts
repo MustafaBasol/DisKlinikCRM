@@ -5,12 +5,11 @@
  * must be routed to the correct clinic. Mirrors the WhatsApp clinicResolver logic.
  *
  * Priority order:
- *   C — Single-clinic connection: linked to exactly one clinic → auto-assign.
- *   D — Multi-clinic / no prior context: mark as needsClinicResolution=true.
- *
- * Priorities A (reply context) and B (recent conversation) are not yet implemented
- * for Instagram in this MVP sprint, since we do not persist sent Instagram DMs
- * in a SentMessage-equivalent table yet.
+ *   A — Existing open inbox conversation with a clinic → keep same clinic.
+ *   B — Single-clinic connection → auto-assign.
+ *   C — Multi-clinic connection with one default → use default clinic.
+ *   D — No connection links and one active organization clinic → auto-assign.
+ *   E — Multi-clinic / no usable context → mark as needsClinicResolution=true.
  *
  * Rules:
  *   - Never randomly assign to the first linked clinic.
@@ -18,12 +17,70 @@
  */
 
 import prisma from '../../db.js';
-import { resolveSingleLinkedClinic } from '../../utils/webhookRouting.js';
 
 export interface InstagramClinicResolutionResult {
   clinicId: string | null;
   needsClinicResolution: boolean;
-  resolutionSource: 'single_clinic' | 'no_clinic_links' | 'unresolved';
+  resolutionSource:
+    | 'inbox_entry'
+    | 'connection_default'
+    | 'connection_single'
+    | 'organization_single'
+    | 'no_clinic_links'
+    | 'unresolved';
+}
+
+function logInstagramClinicResolution(metadata: Record<string, unknown>) {
+  console.info('[instagram-clinic-resolution]', metadata);
+}
+
+function summarizeIdentifier(value: string | null | undefined) {
+  if (!value) return null;
+  return { length: value.length, suffix: value.slice(-4) };
+}
+
+export function resolveInstagramClinicFromKnownContext(params: {
+  existingInboxClinicId?: string | null;
+  clinicLinks: Array<{ clinicId: string; isDefault?: boolean | null }>;
+  organizationClinicIds: string[];
+}): InstagramClinicResolutionResult {
+  if (params.existingInboxClinicId) {
+    return {
+      clinicId: params.existingInboxClinicId,
+      needsClinicResolution: false,
+      resolutionSource: 'inbox_entry',
+    };
+  }
+
+  if (params.clinicLinks.length === 1) {
+    return {
+      clinicId: params.clinicLinks[0].clinicId,
+      needsClinicResolution: false,
+      resolutionSource: 'connection_single',
+    };
+  }
+
+  if (params.clinicLinks.length > 1) {
+    const defaultLinks = params.clinicLinks.filter(link => link.isDefault);
+    if (defaultLinks.length === 1) {
+      return {
+        clinicId: defaultLinks[0].clinicId,
+        needsClinicResolution: false,
+        resolutionSource: 'connection_default',
+      };
+    }
+    return { clinicId: null, needsClinicResolution: true, resolutionSource: 'unresolved' };
+  }
+
+  if (params.organizationClinicIds.length === 1) {
+    return {
+      clinicId: params.organizationClinicIds[0],
+      needsClinicResolution: false,
+      resolutionSource: 'organization_single',
+    };
+  }
+
+  return { clinicId: null, needsClinicResolution: true, resolutionSource: 'no_clinic_links' };
 }
 
 /**
@@ -34,27 +91,77 @@ export interface InstagramClinicResolutionResult {
  */
 export async function resolveClinicForInstagramMessage(
   instagramConnectionId: string,
+  externalSenderId?: string | null,
 ): Promise<InstagramClinicResolutionResult> {
-  const clinicLinks = await prisma.clinicInstagramConnection.findMany({
-    where: { instagramConnectionId },
-    select: { clinicId: true },
+  const connection = await prisma.instagramConnection.findUnique({
+    where: { id: instagramConnectionId },
+    select: {
+      id: true,
+      organizationId: true,
+      clinics: {
+        select: { clinicId: true, isDefault: true },
+      },
+    },
   });
 
-  if (clinicLinks.length === 0) {
-    return { clinicId: null, needsClinicResolution: true, resolutionSource: 'no_clinic_links' };
+  if (!connection) {
+    logInstagramClinicResolution({
+      connectionId: summarizeIdentifier(instagramConnectionId),
+      organizationId: null,
+      linkedClinicCount: 0,
+      resolutionSource: 'unresolved',
+    });
+    return { clinicId: null, needsClinicResolution: true, resolutionSource: 'unresolved' };
   }
 
-  const singleClinicId = resolveSingleLinkedClinic(clinicLinks);
-  if (singleClinicId) {
-    return {
-      clinicId: singleClinicId,
-      needsClinicResolution: false,
-      resolutionSource: 'single_clinic',
-    };
+  let existingInboxClinicId: string | null = null;
+  if (externalSenderId?.trim()) {
+    const existingEntry = await prisma.instagramInboxEntry.findFirst({
+      where: {
+        organizationId: connection.organizationId,
+        instagramConnectionId,
+        externalSenderId: externalSenderId.trim(),
+        clinicId: { not: null },
+        status: 'open',
+      },
+      select: { clinicId: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    existingInboxClinicId = existingEntry?.clinicId ?? null;
   }
 
-  // Multi-clinic: cannot auto-resolve without additional context in MVP
-  return { clinicId: null, needsClinicResolution: true, resolutionSource: 'unresolved' };
+  const clinicLinks = connection.clinics;
+  const organizationClinics = clinicLinks.length === 0
+    ? await prisma.clinic.findMany({
+        where: { organizationId: connection.organizationId, status: 'active' },
+        select: { id: true },
+        take: 2,
+      })
+    : [];
+
+  const resolution = resolveInstagramClinicFromKnownContext({
+    existingInboxClinicId,
+    clinicLinks,
+    organizationClinicIds: organizationClinics.map(clinic => clinic.id),
+  });
+
+  logInstagramClinicResolution({
+    organizationId: summarizeIdentifier(connection.organizationId),
+    connectionId: summarizeIdentifier(instagramConnectionId),
+    externalSenderId: summarizeIdentifier(externalSenderId),
+    existingInboxClinicId: summarizeIdentifier(existingInboxClinicId),
+    linkedClinicCount: clinicLinks.length,
+    defaultClinicCount: clinicLinks.filter(link => link.isDefault).length,
+    linkedClinicIds: clinicLinks.slice(0, 5).map(link => ({
+      clinicId: summarizeIdentifier(link.clinicId),
+      isDefault: Boolean(link.isDefault),
+    })),
+    organizationClinicCount: organizationClinics.length,
+    resolvedClinicId: summarizeIdentifier(resolution.clinicId),
+    resolutionSource: resolution.resolutionSource,
+  });
+  return resolution;
 }
 
 /**

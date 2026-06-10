@@ -119,16 +119,25 @@ const normalizeSearchText = (value: string) => normalizeText(value)
   .replace(/\s+/g, ' ')
   .trim();
 
-const getFirstName = (customerName?: string | null) => customerName?.trim().split(/\s+/)[0] ?? null;
+const isNumericPlatformId = (value?: string | null) => Boolean(value?.trim()) && /^\d{8,}$/.test(value!.trim());
+
+const getFirstName = (customerName?: string | null) => {
+  if (!customerName?.trim() || isNumericPlatformId(customerName)) return null;
+  return customerName.trim().split(/\s+/)[0] ?? null;
+};
 
 const getPatientFullName = (patient: NonNullable<InstagramInboxContext['patient']>) =>
   `${patient.firstName.trim()} ${patient.lastName.trim()}`.trim();
 
-const formatCustomerName = (entry: InstagramInboxContext | null, externalSenderId: string, senderUsername?: string | null) => {
+export const formatInstagramCustomerName = (
+  entry: InstagramInboxContext | null,
+  _externalSenderId: string,
+  senderUsername?: string | null,
+): string | null => {
   if (entry?.patient) return getPatientFullName(entry.patient);
-  if (entry?.senderUsername?.trim()) return `@${entry.senderUsername.trim()}`;
-  if (senderUsername?.trim()) return `@${senderUsername.trim()}`;
-  return externalSenderId;
+  if (entry?.senderUsername?.trim() && !isNumericPlatformId(entry.senderUsername)) return `@${entry.senderUsername.trim()}`;
+  if (senderUsername?.trim() && !isNumericPlatformId(senderUsername)) return `@${senderUsername.trim()}`;
+  return null;
 };
 
 const isGreeting = (text: string) =>
@@ -252,14 +261,15 @@ const getAssistantServices = async (clinicId: string): Promise<InstagramAssistan
 const formatServiceList = (services: InstagramAssistantService[]) =>
   ['Elbette, hangi hizmet icin randevu planlamak istersiniz?', ...services.map((service, index) => `${index + 1}. ${service.name}`)].join('\n');
 
-const formatMainMenu = (clinicName: string, customerName?: string | null) => {
+export const formatMainMenu = (_clinicName: string, customerName?: string | null) => {
   const firstName = getFirstName(customerName);
   return [
-    firstName ? `Merhaba ${firstName}, size nasil yardimci olabilirim?` : `Merhaba, ${clinicName} asistanina hos geldiniz. Size nasil yardimci olabilirim?`,
+    firstName ? `Merhaba ${firstName}, size nasıl yardımcı olabilirim?` : 'Merhaba, size nasıl yardımcı olabilirim?',
+    '',
     '1. Randevu almak',
     '2. Randevumu sorgulamak',
     '3. Randevumu iptal etmek',
-    '4. Hizmetler hakkinda bilgi almak',
+    '4. Hizmetler hakkında bilgi almak',
   ].join('\n');
 };
 
@@ -562,7 +572,7 @@ const createHandoffRequest = async (args: {
   clinic: InstagramAssistantClinic;
   entry: InstagramInboxContext | null;
   externalSenderId: string;
-  customerName: string;
+  customerName: string | null;
   text: string;
   conversationKey: string;
 }) => {
@@ -570,7 +580,7 @@ const createHandoffRequest = async (args: {
     clinic: args.clinic,
     entry: args.entry,
     externalSenderId: args.externalSenderId,
-    patientName: args.customerName,
+    patientName: args.customerName ?? 'Instagram Kullanıcısı',
     requestType: 'info',
     rawMessage: args.text,
     notes: `Instagram DM uzerinden yetkili talebi alindi.\nIlk mesaj: ${args.text}`,
@@ -592,7 +602,7 @@ const handleHandoffNote = async (args: {
   clinic: InstagramAssistantClinic;
   conversationKey: string;
   stateJson: InstagramAssistantStateJson;
-  customerName: string;
+  customerName: string | null;
   text: string;
 }) => {
   const note = args.text.trim();
@@ -679,7 +689,7 @@ const loadClinicFacts = async (clinic: InstagramAssistantClinic) => {
 const applyAgentStatePatch = async (args: {
   clinicId: string;
   conversationKey: string;
-  customerName: string;
+  customerName: string | null;
   inputText: string;
   patch: WhatsAppAgentDecision['statePatch'];
 }) => {
@@ -711,7 +721,8 @@ const buildReplyText = async (args: {
   });
   const stateJson = readStateJson(state?.stateJson);
   const services = await getAssistantServices(args.clinic.id);
-  const customerName = state?.customerName || formatCustomerName(args.entry, args.externalSenderId, args.senderUsername);
+  const customerName = formatInstagramCustomerName(args.entry, args.externalSenderId, args.senderUsername)
+    ?? (state?.customerName && !isNumericPlatformId(state.customerName) ? state.customerName : null);
   const currentStep = (state?.step ?? null) as InstagramAssistantStep;
   const selectedDate = state?.selectedDate ?? null;
   const standaloneNumericSelection = extractStandaloneNumericSelection(args.text);
