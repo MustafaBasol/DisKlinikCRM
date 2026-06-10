@@ -3,6 +3,7 @@ import {
   AlertCircle,
   CalendarPlus,
   Clock,
+  Instagram,
   Loader2,
   MessageCircle,
   Pencil,
@@ -40,6 +41,7 @@ const AppointmentRequests: React.FC = () => {
   const { formatDateTime, formatTime } = useClinicPreferences();
   const [allRequests, setAllRequests] = useState<any[]>([]);
   const [status, setStatus] = useState('');
+  const [channel, setChannel] = useState('');
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState('');
   const [error, setError] = useState('');
@@ -68,7 +70,9 @@ const AppointmentRequests: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await appointmentRequestService.getAll({ source: 'whatsapp' });
+      const params: { source?: string } = {};
+      if (channel) params.source = channel;
+      const res = await appointmentRequestService.getAll(params);
       setAllRequests(res.data);
     } catch {
       setError(t('appointmentRequests:errors.loadFailed'));
@@ -77,7 +81,7 @@ const AppointmentRequests: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => { fetchRequests(); }, [channel]);
 
   const updateStatus = async (request: any, nextStatus: string) => {
     const rejectionReason = nextStatus === 'rejected'
@@ -232,6 +236,25 @@ const AppointmentRequests: React.FC = () => {
     visible: requests.length,
   };
 
+  const channelLabel = (source?: string | null) => {
+    const normalized = String(source || 'whatsapp').toLowerCase();
+    return t(`appointmentRequests:channels.${normalized}`, { defaultValue: normalized });
+  };
+
+  const channelBadgeClass = (source?: string | null) => {
+    switch (String(source || 'whatsapp').toLowerCase()) {
+      case 'instagram': return 'bg-purple-50 text-purple-700 border-purple-100';
+      case 'manual': return 'bg-gray-50 text-gray-700 border-gray-100';
+      case 'whatsapp':
+      default: return 'bg-green-50 text-green-700 border-green-100';
+    }
+  };
+
+  const channelIcon = (source?: string | null) => {
+    if (String(source || '').toLowerCase() === 'instagram') return <Instagram size={12} />;
+    return <MessageCircle size={12} />;
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -265,12 +288,20 @@ const AppointmentRequests: React.FC = () => {
           <MessageCircle size={18} className="text-green-600" />
           {t('appointmentRequests:filters.sourceHint')}
         </div>
-        <select className="input-field md:max-w-xs" value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="">{t('appointmentRequests:filters.allStatus')}</option>
-          {['pending', 'approved', 'rejected', 'converted', 'closed'].map(item => (
-            <option key={item} value={item}>{t(`appointmentRequests:status.${item}`)}</option>
-          ))}
-        </select>
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <select className="input-field md:max-w-xs" value={channel} onChange={e => setChannel(e.target.value)}>
+            <option value="">{t('appointmentRequests:filters.allChannels')}</option>
+            <option value="whatsapp">{t('appointmentRequests:channels.whatsapp')}</option>
+            <option value="instagram">{t('appointmentRequests:channels.instagram')}</option>
+            <option value="manual">{t('appointmentRequests:channels.manual')}</option>
+          </select>
+          <select className="input-field md:max-w-xs" value={status} onChange={e => setStatus(e.target.value)}>
+            <option value="">{t('appointmentRequests:filters.allStatus')}</option>
+            {['pending', 'approved', 'rejected', 'converted', 'closed'].map(item => (
+              <option key={item} value={item}>{t(`appointmentRequests:status.${item}`)}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && (
@@ -304,8 +335,9 @@ const AppointmentRequests: React.FC = () => {
                         {t('appointmentRequests:badges.scheduled')}
                       </span>
                     )}
-                    <span className="px-2 py-1 rounded text-xs font-bold bg-green-50 text-green-700 border border-green-100">
-                      WhatsApp
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold border ${channelBadgeClass(request.source)}`}>
+                      {channelIcon(request.source)}
+                      {channelLabel(request.source)}
                     </span>
                   </div>
 
@@ -315,7 +347,8 @@ const AppointmentRequests: React.FC = () => {
                     <span>{t(`appointmentRequests:requestType.${request.requestType}`)}</span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 text-sm">
+                    <InfoBlock label={t('appointmentRequests:fields.clinic')} value={request.clinic?.name || t('common:unassigned')} />
                     <InfoBlock label={t('appointmentRequests:fields.service')} value={request.appointmentType?.name || t('common:unassigned')} />
                     <InfoBlock label={t('appointmentRequests:fields.practitioner')} value={request.practitioner ? `${request.practitioner.firstName} ${request.practitioner.lastName}` : t('common:unassigned')} />
                     <InfoBlock label={t('appointmentRequests:fields.preferredTime')} value={formatPreferredRange(request.preferredStartTime, request.preferredEndTime)} />

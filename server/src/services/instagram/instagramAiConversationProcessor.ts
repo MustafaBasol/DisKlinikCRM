@@ -6,7 +6,6 @@ import {
   handleAwaitingDateStep,
   handleAwaitingServiceStep,
   handleAwaitingTimeStep,
-  isDeterministicConfirmationReply,
   type BookingStateJson,
 } from '../whatsappBookingFlow.js';
 import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';
@@ -36,6 +35,7 @@ type InstagramAssistantStep =
   | 'awaiting_date'
   | 'awaiting_time'
   | 'awaiting_confirmation'
+  | 'awaiting_name'
   | 'awaiting_handoff_note'
   | null;
 
@@ -105,6 +105,11 @@ export const buildInstagramAppointmentFallbackPhone = (externalSenderId: string)
 export const canProcessInstagramAi = (args: { clinicId?: string | null; needsClinicResolution?: boolean }) =>
   Boolean(args.clinicId?.trim()) && args.needsClinicResolution !== true;
 
+const summarizeIdentifier = (value: string | null | undefined) => {
+  if (!value) return null;
+  return { length: value.length, suffix: value.slice(-4) };
+};
+
 const normalizeText = (value: string) => value.trim().toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ');
 
 const normalizeSearchText = (value: string) => normalizeText(value)
@@ -125,6 +130,36 @@ const getFirstName = (customerName?: string | null) => {
   if (!customerName?.trim() || isNumericPlatformId(customerName)) return null;
   return customerName.trim().split(/\s+/)[0] ?? null;
 };
+
+export const hasUsableInstagramFullName = (value: string | null | undefined) => {
+  const parts = value?.trim().split(/\s+/).filter(Boolean) ?? [];
+  return parts.length >= 2 && !parts.some(part => /^\d+$/.test(part));
+};
+
+export function buildInstagramAppointmentRequestSourceMetadata(args: {
+  instagramConnectionId?: string | null;
+  externalSenderId: string;
+  externalConversationId?: string | null;
+  inboxEntryId?: string | null;
+}) {
+  return {
+    source: 'instagram',
+    externalSenderId: args.externalSenderId,
+    sourceConnectionId: args.instagramConnectionId ?? null,
+    sourceInboxEntryId: args.inboxEntryId ?? null,
+    sourceConversationId: args.externalConversationId ?? null,
+  };
+}
+
+export function formatInstagramBookingCreatedReply(args: {
+  customerName: string;
+  selectedDate: string;
+  localStartTime: string;
+  practitionerName: string;
+  serviceName: string;
+}) {
+  return `Teşekkürler ${args.customerName}. ${formatTurkishDateLong(args.selectedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} saat ${args.localStartTime} için ${args.practitionerName} adına ${args.serviceName} randevu talebinizi klinik onay ekranına aldım. Klinik ekibi onayladığında size bilgi verilecektir.`;
+}
 
 const getPatientFullName = (patient: NonNullable<InstagramInboxContext['patient']>) =>
   `${patient.firstName.trim()} ${patient.lastName.trim()}`.trim();
@@ -472,7 +507,9 @@ const logInstagramReplyFailure = async (args: {
 const createInstagramStaffRequest = async (args: {
   clinic: InstagramAssistantClinic;
   entry: InstagramInboxContext | null;
+  instagramConnectionId?: string | null;
   externalSenderId: string;
+  externalConversationId?: string | null;
   patientName: string;
   requestType: 'appointment' | 'info' | 'cancel' | 'reschedule';
   rawMessage: string;
@@ -493,12 +530,36 @@ const createInstagramStaffRequest = async (args: {
       preferredStartTime: args.preferredStartTime ?? null,
       preferredEndTime: args.preferredEndTime ?? null,
       requestType: args.requestType,
-      source: 'instagram',
+      ...buildInstagramAppointmentRequestSourceMetadata({
+        instagramConnectionId: args.instagramConnectionId,
+        externalSenderId: args.externalSenderId,
+        externalConversationId: args.externalConversationId,
+        inboxEntryId: args.entry?.id ?? null,
+      }),
       status: 'pending',
       rawMessage: args.rawMessage,
       notes: args.notes,
     },
-    include: { appointmentType: { select: { name: true } } },
+    include: {
+      appointmentType: { select: { name: true } },
+      practitioner: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  console.info('[appointment-request] created', {
+    channel: 'instagram',
+    clinicId: summarizeIdentifier(args.clinic.id),
+    inboxEntryId: summarizeIdentifier(args.entry?.id),
+    conversationId: summarizeIdentifier(args.externalConversationId),
+    patientId: summarizeIdentifier(args.entry?.patientId),
+    serviceId: summarizeIdentifier(args.appointmentTypeId),
+    serviceName: request.appointmentType?.name ?? null,
+    practitionerId: summarizeIdentifier(args.practitionerId),
+    practitionerName: request.practitioner
+      ? `${request.practitioner.firstName} ${request.practitioner.lastName}`
+      : null,
+    requestedDateTime: args.preferredStartTime?.toISOString() ?? null,
+    requestId: summarizeIdentifier(request.id),
   });
 
   const systemUserId = await getClinicSystemUserId(args.clinic.id);
@@ -511,7 +572,14 @@ const createInstagramStaffRequest = async (args: {
       action: 'created',
       description: 'Instagram DM assistant created appointment request for staff approval',
       patientId: args.entry?.patientId ?? undefined,
-      metadata: { systemGenerated: true, source: 'instagram', externalSenderId: args.externalSenderId },
+      metadata: {
+        systemGenerated: true,
+        source: 'instagram',
+        externalSenderId: args.externalSenderId,
+        instagramConnectionId: args.instagramConnectionId ?? null,
+        inboxEntryId: args.entry?.id ?? null,
+        conversationId: args.externalConversationId ?? null,
+      },
     });
   }
 
@@ -521,7 +589,9 @@ const createInstagramStaffRequest = async (args: {
 const createInstagramAppointmentRequest = async (args: {
   clinic: InstagramAssistantClinic;
   entry: InstagramInboxContext | null;
+  instagramConnectionId?: string | null;
   externalSenderId: string;
+  externalConversationId?: string | null;
   customerName: string;
   appointmentTypeId: string;
   selectedSlot: SavedAvailableSlot;
@@ -547,7 +617,9 @@ const createInstagramAppointmentRequest = async (args: {
   const request = await createInstagramStaffRequest({
     clinic: args.clinic,
     entry: args.entry,
+    instagramConnectionId: args.instagramConnectionId,
     externalSenderId: args.externalSenderId,
+    externalConversationId: args.externalConversationId,
     patientName: args.customerName,
     requestType: 'appointment',
     rawMessage: args.rawMessage ?? '',
@@ -571,7 +643,9 @@ const createInstagramAppointmentRequest = async (args: {
 const createHandoffRequest = async (args: {
   clinic: InstagramAssistantClinic;
   entry: InstagramInboxContext | null;
+  instagramConnectionId?: string | null;
   externalSenderId: string;
+  externalConversationId?: string | null;
   customerName: string | null;
   text: string;
   conversationKey: string;
@@ -579,7 +653,9 @@ const createHandoffRequest = async (args: {
   const request = await createInstagramStaffRequest({
     clinic: args.clinic,
     entry: args.entry,
+    instagramConnectionId: args.instagramConnectionId,
     externalSenderId: args.externalSenderId,
+    externalConversationId: args.externalConversationId,
     patientName: args.customerName ?? 'Instagram Kullanıcısı',
     requestType: 'info',
     rawMessage: args.text,
@@ -710,7 +786,9 @@ const applyAgentStatePatch = async (args: {
 const buildReplyText = async (args: {
   clinic: InstagramAssistantClinic;
   entry: InstagramInboxContext | null;
+  instagramConnectionId: string;
   externalSenderId: string;
+  externalConversationId?: string | null;
   senderUsername?: string | null;
   conversationKey: string;
   text: string;
@@ -784,7 +862,9 @@ const buildReplyText = async (args: {
       return createHandoffRequest({
         clinic: args.clinic,
         entry: args.entry,
+        instagramConnectionId: args.instagramConnectionId,
         externalSenderId: args.externalSenderId,
+        externalConversationId: args.externalConversationId,
         customerName,
         text: args.text,
         conversationKey: args.conversationKey,
@@ -877,7 +957,9 @@ const buildReplyText = async (args: {
         createInstagramAppointmentRequest({
           clinic: args.clinic,
           entry: args.entry,
+          instagramConnectionId: args.instagramConnectionId,
           externalSenderId: args.externalSenderId,
+          externalConversationId: args.externalConversationId,
           customerName: name,
           appointmentTypeId,
           selectedSlot,
@@ -886,7 +968,7 @@ const buildReplyText = async (args: {
     });
   }
 
-  if (currentStep === 'awaiting_confirmation' && isDeterministicConfirmationReply(args.text)) {
+  if (currentStep === 'awaiting_confirmation') {
     return handleAwaitingConfirmationStep({
       clinicId: args.clinic.id,
       phone: args.conversationKey,
@@ -912,13 +994,103 @@ const buildReplyText = async (args: {
         createInstagramAppointmentRequest({
           clinic: args.clinic,
           entry: args.entry,
+          instagramConnectionId: args.instagramConnectionId,
           externalSenderId: args.externalSenderId,
+          externalConversationId: args.externalConversationId,
           customerName: name,
           appointmentTypeId,
           selectedSlot,
           rawMessage,
         }),
     });
+  }
+
+  if (currentStep === 'awaiting_name') {
+    const pendingSlot = stateJson.pendingConfirmationSlot ?? null;
+    const appointmentTypeId = state?.selectedAppointmentTypeId ?? null;
+    const selectedDateForRequest = state?.selectedDate ?? null;
+    const providedName = args.text.trim().replace(/\s+/g, ' ');
+
+    if (!hasUsableInstagramFullName(providedName)) {
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+        customerName: null,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_name',
+        selectedAppointmentTypeId: appointmentTypeId,
+        selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+        selectedPractitionerId: pendingSlot?.practitionerId ?? state?.selectedPractitionerId ?? null,
+        selectedDate: selectedDateForRequest,
+        selectedTime: pendingSlot?.localStartTime ?? state?.selectedTime ?? null,
+        lastMessage: args.text,
+        lastProviderMessageId: args.externalMessageId ?? null,
+        stateJson: {
+          availableSlots: stateJson.availableSlots,
+          lastShownSlots: stateJson.lastShownSlots,
+          pendingConfirmationSlot: pendingSlot,
+        },
+      });
+      return 'Randevu talebinizi tamamlayabilmem için adınızı ve soyadınızı birlikte paylaşır mısınız? Örneğin: Anatoly Echo';
+    }
+
+    if (!pendingSlot || !appointmentTypeId || !selectedDateForRequest) {
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+        customerName: providedName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_service',
+        selectedAppointmentTypeId: null,
+        selectedAppointmentTypeName: null,
+        selectedPractitionerId: null,
+        selectedDate: null,
+        selectedTime: null,
+        lastMessage: args.text,
+        lastProviderMessageId: args.externalMessageId ?? null,
+        stateJson: null,
+      });
+      return formatServiceList(services);
+    }
+
+    try {
+      const request = await createInstagramAppointmentRequest({
+        clinic: args.clinic,
+        entry: args.entry,
+        instagramConnectionId: args.instagramConnectionId,
+        externalSenderId: args.externalSenderId,
+        externalConversationId: args.externalConversationId,
+        customerName: providedName,
+        appointmentTypeId,
+        selectedSlot: pendingSlot,
+        rawMessage: args.text,
+      });
+
+      await resetInstagramConversationState(args.clinic.id, args.conversationKey, providedName);
+      const serviceName = state?.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
+      return formatInstagramBookingCreatedReply({
+        customerName: providedName,
+        selectedDate: selectedDateForRequest,
+        localStartTime: pendingSlot.localStartTime,
+        practitionerName: pendingSlot.practitionerName,
+        serviceName,
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName: providedName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_date',
+          selectedAppointmentTypeId: appointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: null,
+        });
+        return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
+      }
+
+      console.error('[instagram-assistant] appointment-create-error', error);
+      return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
+    }
   }
 
   const clinicFacts = await loadClinicFacts(args.clinic);
@@ -963,7 +1135,9 @@ const buildReplyText = async (args: {
     return createHandoffRequest({
       clinic: args.clinic,
       entry: args.entry,
+      instagramConnectionId: args.instagramConnectionId,
       externalSenderId: args.externalSenderId,
+      externalConversationId: args.externalConversationId,
       customerName,
       text: args.text,
       conversationKey: args.conversationKey,
@@ -995,7 +1169,9 @@ const buildReplyText = async (args: {
     return createHandoffRequest({
       clinic: args.clinic,
       entry: args.entry,
+      instagramConnectionId: args.instagramConnectionId,
       externalSenderId: args.externalSenderId,
+      externalConversationId: args.externalConversationId,
       customerName,
       text: args.text,
       conversationKey: args.conversationKey,
@@ -1006,7 +1182,9 @@ const buildReplyText = async (args: {
     return createHandoffRequest({
       clinic: args.clinic,
       entry: args.entry,
+      instagramConnectionId: args.instagramConnectionId,
       externalSenderId: args.externalSenderId,
+      externalConversationId: args.externalConversationId,
       customerName,
       text: args.text,
       conversationKey: args.conversationKey,
@@ -1102,7 +1280,9 @@ export const processInstagramIncomingMessage = async (
   const replyText = await buildReplyText({
     clinic,
     entry: inboxEntry,
+    instagramConnectionId: args.instagramConnectionId,
     externalSenderId: args.externalSenderId,
+    externalConversationId: args.externalConversationId,
     senderUsername: args.senderUsername,
     conversationKey,
     text,

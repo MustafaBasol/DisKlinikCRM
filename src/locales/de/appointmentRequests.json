@@ -1,7 +1,7 @@
 {
-  "title": "WhatsApp-Terminanfragen",
-  "subtitle": "Prüfen Sie Termin-, Verschiebungs- und Stornierungsanfragen aus der WhatsApp-Leitung.",
-  "empty": "Für diesen Filter wurden keine WhatsApp-Anfragen gefunden.",
+  "title": "Terminanfragen",
+  "subtitle": "Verwalten Sie Terminanfragen aus WhatsApp, Instagram und künftigen Kanälen.",
+  "empty": "Für diesen Filter wurden keine Terminanfragen gefunden.",
   "summary": {
     "visible": "Sichtbare Anfragen",
     "pending": "Ausstehende Anfragen",
@@ -13,9 +13,16 @@
   },
   "filters": {
     "allStatus": "Alle Status",
-    "sourceHint": "Diese Seite zeigt nur Anfragen aus WhatsApp."
+    "allChannels": "Alle Kanäle",
+    "sourceHint": "Verwalten Sie WhatsApp-, Instagram- und manuelle Anfragen auf einer Seite."
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manuell"
   },
   "fields": {
+    "clinic": "Klinik",
     "service": "Leistung",
     "practitioner": "Behandler",
     "preferredTime": "Gewünschte Zeit"
@@ -42,12 +49,30 @@
     "approve": "Genehmigen",
     "reject": "Ablehnen",
     "close": "Schließen",
+    "edit": "Bearbeiten",
     "rejectionPrompt": "Geben Sie den Ablehnungsgrund ein"
   },
+  "edit": {
+    "title": "Anfrage bearbeiten",
+    "titleConvert": "Termindetails vervollständigen",
+    "convertHint": "Bitte füllen Sie Leistung, Behandler und Uhrzeit aus, um diese Anfrage in einen Termin umzuwandeln.",
+    "service": "Leistung",
+    "practitioner": "Behandler",
+    "date": "Datum",
+    "availableSlots": "Verfügbare Zeiten",
+    "loadingSlots": "Zeiten werden geladen...",
+    "noSlots": "An diesem Datum sind keine Zeiten verfügbar.",
+    "clinicClosed": "Die Klinik ist an diesem Tag geschlossen.",
+    "offDay": "Der Behandler ist an diesem Tag abwesend.",
+    "save": "Speichern",
+    "selectService": "Leistung auswählen",
+    "selectPractitioner": "Behandler auswählen"
+  },
   "errors": {
-    "loadFailed": "WhatsApp-Anfragen konnten nicht geladen werden.",
+    "loadFailed": "Terminanfragen konnten nicht geladen werden.",
     "convertFailed": "Die Anfrage konnte nicht konvertiert werden.",
     "outsideAvailability": "Die ausgewählte Zeit liegt außerhalb der Verfügbarkeit des Behandlers.",
-    "overlap": "Der Behandler hat zu dieser Zeit bereits einen anderen Termin."
+    "overlap": "Der Behandler hat zu dieser Zeit bereits einen anderen Termin.",
+    "missingRequiredFields": "Leistung, Behandler, Startzeit und Endzeit sind für die Konvertierung erforderlich."
   }
 }

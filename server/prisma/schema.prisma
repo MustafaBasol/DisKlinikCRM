@@ -298,6 +298,10 @@ model AppointmentRequest {
   preferredEndTime       DateTime?
   requestType            String           @default("appointment") // appointment, reschedule, cancel, info
   source                 String           @default("whatsapp")
+  externalSenderId       String?
+  sourceConnectionId     String?
+  sourceInboxEntryId     String?
+  sourceConversationId   String?
   status                 String           @default("pending") // pending, approved, rejected, converted, closed
   rawMessage             String?
   notes                  String?
@@ -310,6 +314,8 @@ model AppointmentRequest {
   @@index([clinicId, status, createdAt])
   @@index([clinicId, phone])
   @@index([clinicId, practitionerId])
+  @@index([source, status, createdAt])
+  @@index([sourceInboxEntryId])
 }
 
 model WhatsAppConversationState {

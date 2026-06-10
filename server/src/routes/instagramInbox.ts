@@ -44,6 +44,11 @@ function instagramDisplayName(entry: { patient?: { firstName: string; lastName: 
   return 'Instagram Kullanıcısı';
 }
 
+function summarizeIdentifier(value: string | null | undefined) {
+  if (!value) return null;
+  return { length: value.length, suffix: value.slice(-4) };
+}
+
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 async function getAllowedClinicIds(user: NonNullable<AuthRequest['user']>): Promise<string[] | null> {
@@ -487,6 +492,10 @@ router.post(
           patientName,
           phone,
           source: 'instagram',
+          externalSenderId: entry.externalSenderId,
+          sourceConnectionId: entry.instagramConnectionId,
+          sourceInboxEntryId: entry.id,
+          sourceConversationId: entry.externalConversationId ?? null,
           status: 'pending',
           requestType: 'appointment',
           rawMessage: entry.lastMessageText ?? undefined,
@@ -497,6 +506,20 @@ router.post(
           appointmentType: true,
           practitioner: { select: { id: true, firstName: true, lastName: true } },
         },
+      });
+
+      console.info('[appointment-request] created', {
+        channel: 'instagram',
+        clinicId: summarizeIdentifier(entry.clinicId),
+        inboxEntryId: summarizeIdentifier(entry.id),
+        conversationId: summarizeIdentifier(entry.externalConversationId),
+        patientId: summarizeIdentifier(entry.patientId),
+        serviceId: null,
+        serviceName: null,
+        practitionerId: null,
+        practitionerName: null,
+        requestedDateTime: null,
+        requestId: summarizeIdentifier(appointmentRequest.id),
       });
 
       // Mark inbox entry as converted

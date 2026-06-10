@@ -54,12 +54,20 @@ import {
 import {
   buildInstagramAppointmentFallbackPhone,
   buildInstagramConversationKey,
+  buildInstagramAppointmentRequestSourceMetadata,
   canProcessInstagramAi,
   formatInstagramCustomerName,
+  formatInstagramBookingCreatedReply,
   formatMainMenu,
+  hasUsableInstagramFullName,
 } from '../services/instagram/instagramAiConversationProcessor.js';
+import { handleAwaitingConfirmationStep } from '../services/whatsappBookingFlow.js';
 import { resolveInstagramClinicFromKnownContext } from '../services/instagram/instagramClinicResolver.js';
 import { buildInstagramClinicAssignments } from '../routes/organizationInstagram.js';
+import {
+  resolveAppointmentRequestSourceFilter,
+  shouldIncludeLegacyWhatsappAppointmentRows,
+} from '../routes/appointmentRequests.js';
 import {
   processInstagramEventForConnection,
   resolveInstagramWebhookConnectionFromCandidates,
@@ -524,6 +532,92 @@ async function main() {
       '3. Randevumu iptal etmek',
       '4. Hizmetler hakkında bilgi almak',
     ].join('\n'));
+  });
+
+  await test('Instagram booking state: confirmation without name preserves pending slot context', async () => {
+    const pendingSlot = {
+      practitionerId: 'doctor-1',
+      practitionerName: 'Dt. Salim Fatih Girgin',
+      startTime: '2026-06-11T11:00:00.000Z',
+      endTime: '2026-06-11T11:30:00.000Z',
+      localStartTime: '14:00',
+      localEndTime: '14:30',
+    };
+    const savedStates: Record<string, unknown>[] = [];
+
+    const reply = await handleAwaitingConfirmationStep({
+      clinicId: 'clinic-1',
+      phone: 'instagram:conn-1:sender-1',
+      text: 'evet',
+      customerName: null,
+      state: {
+        selectedAppointmentTypeId: 'service-1',
+        selectedAppointmentTypeName: 'Ağız, Diş ve Çene Cerrahisi',
+        selectedPractitionerId: pendingSlot.practitionerId,
+        selectedDate: '2026-06-11',
+      },
+      stateJson: {
+        availableSlots: [pendingSlot],
+        lastShownSlots: [pendingSlot],
+        pendingConfirmationSlot: pendingSlot,
+      },
+      upsertState: async data => {
+        savedStates.push(data as Record<string, unknown>);
+      },
+      resetState: async () => null,
+      createAppointment: async () => {
+        throw new Error('createAppointment should not be called before name is collected');
+      },
+    });
+
+    assert.equal(reply.includes('adınızı ve soyadınızı') || reply.includes('adÄ±nÄ±zÄ± ve soyadÄ±nÄ±zÄ±'), true);
+    const savedState = savedStates[0];
+    assert.equal(savedState.currentIntent, 'book_appointment');
+    assert.equal(savedState.step, 'awaiting_name');
+    assert.equal(savedState.selectedAppointmentTypeId, 'service-1');
+    assert.equal(savedState.selectedDate, '2026-06-11');
+    assert.deepEqual((savedState.stateJson as any)?.pendingConfirmationSlot, pendingSlot);
+  });
+
+  await test('Instagram booking state: Anatoly Echo completion reply does not show service menu again', () => {
+    assert.equal(hasUsableInstagramFullName('Anatoly Echo'), true);
+    const reply = formatInstagramBookingCreatedReply({
+      customerName: 'Anatoly Echo',
+      selectedDate: '2026-06-11',
+      localStartTime: '14:00',
+      practitionerName: 'Dt. Salim Fatih Girgin',
+      serviceName: 'Ağız, Diş ve Çene Cerrahisi',
+    });
+
+    assert.ok(reply.includes('Teşekkürler Anatoly Echo.'));
+    assert.ok(reply.includes('14:00'));
+    assert.ok(reply.includes('Ağız, Diş ve Çene Cerrahisi'));
+    assert.equal(reply.includes('hangi hizmet'), false);
+  });
+
+  await test('Instagram appointment request metadata: source is instagram with conversation context', () => {
+    const metadata = buildInstagramAppointmentRequestSourceMetadata({
+      instagramConnectionId: 'ig-conn-1',
+      externalSenderId: 'sender-igsid-1',
+      externalConversationId: 'conversation-1',
+      inboxEntryId: 'inbox-1',
+    });
+
+    assert.equal(metadata.source, 'instagram');
+    assert.equal(metadata.externalSenderId, 'sender-igsid-1');
+    assert.equal(metadata.sourceConnectionId, 'ig-conn-1');
+    assert.equal(metadata.sourceInboxEntryId, 'inbox-1');
+    assert.equal(metadata.sourceConversationId, 'conversation-1');
+  });
+
+  await test('Unified appointment request API filters: default includes WhatsApp legacy and channel filter resolves Instagram', () => {
+    assert.equal(resolveAppointmentRequestSourceFilter({}), null);
+    assert.equal(resolveAppointmentRequestSourceFilter({ channel: 'instagram' }), 'instagram');
+    assert.equal(resolveAppointmentRequestSourceFilter({ source: 'whatsapp' }), 'whatsapp');
+    assert.equal(shouldIncludeLegacyWhatsappAppointmentRows({}), true);
+    assert.equal(shouldIncludeLegacyWhatsappAppointmentRows({ channel: 'instagram' }), false);
+    assert.equal(shouldIncludeLegacyWhatsappAppointmentRows({ source: 'whatsapp', status: 'pending' }), false);
+    assert.equal(shouldIncludeLegacyWhatsappAppointmentRows({ source: 'whatsapp', status: 'converted' }), true);
   });
 
   section('Instagram AI conversation adapter guards');

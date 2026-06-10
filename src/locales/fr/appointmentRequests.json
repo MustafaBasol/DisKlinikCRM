@@ -1,7 +1,7 @@
 {
-  "title": "Demandes de rendez-vous WhatsApp",
-  "subtitle": "Examinez les demandes de rendez-vous, de report et d'annulation provenant de la ligne WhatsApp.",
-  "empty": "Aucune demande WhatsApp trouvée pour ce filtre.",
+  "title": "Demandes de rendez-vous",
+  "subtitle": "Gérez les demandes de rendez-vous provenant de WhatsApp, Instagram et des futurs canaux.",
+  "empty": "Aucune demande de rendez-vous trouvée pour ce filtre.",
   "summary": {
     "visible": "Demandes visibles",
     "pending": "Demandes en attente",
@@ -13,9 +13,16 @@
   },
   "filters": {
     "allStatus": "Tous les statuts",
-    "sourceHint": "Cette page affiche uniquement les demandes provenant de WhatsApp."
+    "allChannels": "Tous les canaux",
+    "sourceHint": "Gérez les demandes WhatsApp, Instagram et manuelles sur une seule page."
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manuel"
   },
   "fields": {
+    "clinic": "Clinique",
     "service": "Service",
     "practitioner": "Praticien",
     "preferredTime": "Heure demandée"
@@ -42,12 +49,30 @@
     "approve": "Approuver",
     "reject": "Rejeter",
     "close": "Fermer",
+    "edit": "Modifier",
     "rejectionPrompt": "Saisissez le motif du rejet"
   },
+  "edit": {
+    "title": "Modifier la demande",
+    "titleConvert": "Compléter les détails du rendez-vous",
+    "convertHint": "Veuillez renseigner le service, le praticien et l'heure pour convertir cette demande en rendez-vous.",
+    "service": "Service",
+    "practitioner": "Praticien",
+    "date": "Date",
+    "availableSlots": "Créneaux disponibles",
+    "loadingSlots": "Chargement des créneaux...",
+    "noSlots": "Aucun créneau disponible à cette date.",
+    "clinicClosed": "La clinique est fermée ce jour-là.",
+    "offDay": "Le praticien est absent ce jour-là.",
+    "save": "Enregistrer",
+    "selectService": "Sélectionner un service",
+    "selectPractitioner": "Sélectionner un praticien"
+  },
   "errors": {
-    "loadFailed": "Impossible de charger les demandes WhatsApp.",
+    "loadFailed": "Impossible de charger les demandes de rendez-vous.",
     "convertFailed": "La demande n'a pas pu être convertie.",
     "outsideAvailability": "L'heure sélectionnée est en dehors des disponibilités du praticien.",
-    "overlap": "Le praticien a déjà un autre rendez-vous à cette heure."
+    "overlap": "Le praticien a déjà un autre rendez-vous à cette heure.",
+    "missingRequiredFields": "Le service, le praticien, l'heure de début et l'heure de fin sont requis pour convertir cette demande."
   }
 }

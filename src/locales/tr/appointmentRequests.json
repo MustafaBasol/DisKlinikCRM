@@ -1,7 +1,7 @@
 {
-  "title": "WhatsApp Randevu Talepleri",
-  "subtitle": "WhatsApp hattından gelen randevu, değişiklik ve iptal taleplerini yönetin.",
-  "empty": "Bu filtre için WhatsApp talebi bulunamadı.",
+  "title": "Randevu Talepleri",
+  "subtitle": "WhatsApp, Instagram ve gelecekteki kanallardan gelen randevu taleplerini yönetin.",
+  "empty": "Bu filtre için randevu talebi bulunamadı.",
   "summary": {
     "visible": "Listelenen Talep",
     "pending": "Bekleyen Talep",
@@ -13,9 +13,16 @@
   },
   "filters": {
     "allStatus": "Tüm Durumlar",
-    "sourceHint": "Bu ekran yalnızca WhatsApp kaynaklı talepleri gösterir."
+    "allChannels": "Tüm Kanallar",
+    "sourceHint": "WhatsApp, Instagram ve manuel kaynaklı talepleri tek ekrandan yönetin."
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manuel"
   },
   "fields": {
+    "clinic": "Klinik",
     "service": "Hizmet",
     "practitioner": "Hekim",
     "preferredTime": "Talep Edilen Saat"
@@ -62,7 +69,7 @@
     "selectPractitioner": "Hekim seçin"
   },
   "errors": {
-    "loadFailed": "WhatsApp talepleri yüklenemedi.",
+    "loadFailed": "Randevu talepleri yüklenemedi.",
     "convertFailed": "Talep randevuya çevrilemedi.",
     "outsideAvailability": "Seçilen saat hekimin müsaitlik saatleri dışında.",
     "overlap": "Seçilen saatte hekimin başka bir randevusu var.",

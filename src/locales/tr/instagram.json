@@ -104,7 +104,7 @@
       "allBranches": "Tüm Şubeler"
     },
     "status": {
-      "converted": "Dönüştürüldü",
+      "converted": "Randevu talebi oluşturuldu",
       "needsBranch": "Şube Atanacak",
       "resolved": "Çözümlendi",
       "open": "Açık",

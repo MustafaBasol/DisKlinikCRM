@@ -9,10 +9,35 @@ import { findUserAssignedToClinic } from '../utils/relationGuards.js';
 
 const router = express.Router();
 
+function appointmentRequestSourceLabel(source: string | null | undefined) {
+  const normalized = String(source ?? '').toLowerCase();
+  if (normalized === 'instagram') return 'Instagram';
+  if (normalized === 'manual') return 'Manual';
+  return 'WhatsApp';
+}
+
+export function resolveAppointmentRequestSourceFilter(query: { source?: unknown; channel?: unknown }) {
+  const value = query.channel || query.source;
+  return value ? String(value) : null;
+}
+
+export function shouldIncludeLegacyWhatsappAppointmentRows(query: {
+  source?: unknown;
+  channel?: unknown;
+  status?: unknown;
+  requestType?: unknown;
+}) {
+  const sourceFilter = resolveAppointmentRequestSourceFilter(query);
+  return (!sourceFilter || sourceFilter === 'whatsapp') &&
+    (!query.status || String(query.status) === 'converted') &&
+    (!query.requestType || String(query.requestType) === 'appointment');
+}
+
 // GET /api/appointment-requests
 router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;
-  const { status, requestType, source } = req.query;
+  const { status, requestType, source, channel } = req.query;
+  const sourceFilter = resolveAppointmentRequestSourceFilter({ source, channel });
 
   try {
     const requests = await prisma.appointmentRequest.findMany({
@@ -20,9 +45,10 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
         clinicId,
         ...(status ? { status: String(status) } : {}),
         ...(requestType ? { requestType: String(requestType) } : {}),
-        ...(source ? { source: String(source) } : {}),
+        ...(sourceFilter ? { source: sourceFilter } : {}),
       },
       include: {
+        clinic: { select: { id: true, name: true } },
         patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
         appointmentType: true,
         practitioner: { select: { id: true, firstName: true, lastName: true } },
@@ -31,10 +57,12 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
       orderBy: { createdAt: 'desc' },
     });
 
-    const shouldIncludeLegacyWhatsappAppointments =
-      String(source ?? '') === 'whatsapp' &&
-      (!status || String(status) === 'converted') &&
-      (!requestType || String(requestType) === 'appointment');
+    const shouldIncludeLegacyWhatsappAppointments = shouldIncludeLegacyWhatsappAppointmentRows({
+      source,
+      channel,
+      status,
+      requestType,
+    });
 
     if (!shouldIncludeLegacyWhatsappAppointments) return res.json(requests);
 
@@ -56,6 +84,7 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
     const legacyRequestRows = legacyAppointments.map(appointment => ({
       id: `legacy-${appointment.id}`,
       clinicId,
+      clinic: null,
       patientId: appointment.patientId,
       patient: appointment.patient,
       patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`.trim(),
@@ -69,6 +98,10 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
       preferredEndTime: appointment.endTime,
       requestType: 'appointment',
       source: 'whatsapp',
+      externalSenderId: appointment.patient.phone,
+      sourceConnectionId: null,
+      sourceInboxEntryId: null,
+      sourceConversationId: appointment.patient.phone,
       status: 'converted',
       rawMessage: null,
       notes: appointment.notes,
@@ -119,7 +152,7 @@ router.put('/appointment-requests/:id/status', authorize(['OWNER', 'ORG_ADMIN', 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'appointment_request', entityId: id,
       action: validation.data.status,
-      description: `WhatsApp appointment request marked as ${validation.data.status}`,
+      description: `Appointment request marked as ${validation.data.status}`,
     });
 
     res.json(updated);
@@ -176,9 +209,9 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
           lastName: lastNameParts.join(' ') || '-',
           phone: request.phone,
           email: request.email,
-          source: 'whatsapp',
+          source: request.source || 'whatsapp',
           communicationConsent: true,
-          notes: 'WhatsApp randevu talebinden oluşturuldu.',
+          notes: `${appointmentRequestSourceLabel(request.source)} randevu talebinden oluşturuldu.`,
         },
       });
       patientId = patient.id;
@@ -213,7 +246,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
         startTime,
         endTime,
         status: 'scheduled',
-        notes: validation.data.notes || request.notes || 'WhatsApp randevu talebinden oluşturuldu.',
+        notes: validation.data.notes || request.notes || `${appointmentRequestSourceLabel(request.source)} randevu talebinden oluşturuldu.`,
         createdById: req.user!.id,
       },
       include: { patient: { select: patientContactSelect }, practitioner: { select: userPublicSelect }, appointmentType: true },
@@ -238,7 +271,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'appointment_request', entityId: id,
       action: 'converted',
-      description: 'WhatsApp appointment request converted to appointment',
+      description: `${appointmentRequestSourceLabel(request.source)} appointment request converted to appointment`,
       appointmentId: appointment.id,
     });
 
@@ -284,7 +317,7 @@ router.put('/appointment-requests/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'appointment_request', entityId: id,
       action: 'updated',
-      description: 'WhatsApp appointment request details updated by staff',
+      description: 'Appointment request details updated by staff',
     });
 
     res.json(updated);

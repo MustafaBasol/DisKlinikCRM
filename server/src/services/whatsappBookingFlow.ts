@@ -1045,10 +1045,20 @@ export const handleAwaitingConfirmationStep = async ({
 
   if (!customerName) {
     await upsertState({
-      currentIntent: null,
+      customerName: null,
+      currentIntent: 'book_appointment',
       step: 'awaiting_name',
+      selectedAppointmentTypeId: state.selectedAppointmentTypeId,
+      selectedAppointmentTypeName: state.selectedAppointmentTypeName,
+      selectedPractitionerId: pendingSlot.practitionerId,
+      selectedDate: state.selectedDate,
+      selectedTime: pendingSlot.localStartTime,
       lastMessage: text,
-      stateJson: null,
+      stateJson: {
+        availableSlots,
+        lastShownSlots,
+        pendingConfirmationSlot: pendingSlot,
+      },
     });
     return 'Devam edebilmem için önce adınızı ve soyadınızı paylaşır mısınız?';
   }

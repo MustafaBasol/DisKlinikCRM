@@ -500,6 +500,11 @@ const redactPhone = (phone: string | null | undefined) => {
   return `***${digits.slice(-4)}`;
 };
 
+const summarizeIdentifier = (value: string | null | undefined) => {
+  if (!value) return null;
+  return { length: value.length, suffix: value.slice(-4) };
+};
+
 const summarizeTextForLog = (text: string | null | undefined) => ({
   length: String(text ?? '').length,
 });
@@ -1377,6 +1382,8 @@ const createAppointmentRequestFromAssistant = async (
       patientName: getPatientFullName(patient), phone: normalizePhone(phone), appointmentTypeId,
       practitionerId: selectedSlot.practitionerId, preferredStartTime: startTime, preferredEndTime: endTime,
       requestType: 'appointment', source: 'whatsapp', status: 'pending',
+      externalSenderId: normalizePhone(phone),
+      sourceConversationId: normalizePhone(phone),
       rawMessage: rawMessage ?? null,
       notes: 'WhatsApp assistant üzerinden personel onayına gönderildi.',
     },
@@ -1384,6 +1391,22 @@ const createAppointmentRequestFromAssistant = async (
       appointmentType: { select: { name: true } },
       practitioner: { select: { firstName: true, lastName: true } },
     },
+  });
+
+  console.info('[appointment-request] created', {
+    channel: 'whatsapp',
+    clinicId: summarizeIdentifier(clinicId),
+    inboxEntryId: null,
+    conversationId: redactPhone(phone),
+    patientId: summarizeIdentifier(patient.id),
+    serviceId: summarizeIdentifier(appointmentTypeId),
+    serviceName: request.appointmentType?.name ?? null,
+    practitionerId: summarizeIdentifier(selectedSlot.practitionerId),
+    practitionerName: request.practitioner
+      ? `${request.practitioner.firstName} ${request.practitioner.lastName}`
+      : null,
+    requestedDateTime: startTime.toISOString(),
+    requestId: summarizeIdentifier(request.id),
   });
 
   const systemUserId = await getClinicSystemUserId(clinicId);
@@ -1529,23 +1552,49 @@ const createWhatsAppStaffRequest = async (args: {
   practitionerId?: string | null;
   preferredStartTime?: Date | null;
   preferredEndTime?: Date | null;
-}) => prisma.appointmentRequest.create({
-  data: {
-    clinicId: args.clinicId,
-    patientId: args.patientId ?? null,
-    patientName: args.patientName,
-    phone: normalizePhone(args.phone),
-    appointmentTypeId: args.appointmentTypeId ?? null,
-    practitionerId: args.practitionerId ?? null,
-    preferredStartTime: args.preferredStartTime ?? null,
-    preferredEndTime: args.preferredEndTime ?? null,
-    requestType: args.requestType,
-    source: 'whatsapp',
-    status: 'pending',
-    rawMessage: args.rawMessage,
-    notes: args.notes,
-  },
-});
+}) => {
+  const request = await prisma.appointmentRequest.create({
+    data: {
+      clinicId: args.clinicId,
+      patientId: args.patientId ?? null,
+      patientName: args.patientName,
+      phone: normalizePhone(args.phone),
+      appointmentTypeId: args.appointmentTypeId ?? null,
+      practitionerId: args.practitionerId ?? null,
+      preferredStartTime: args.preferredStartTime ?? null,
+      preferredEndTime: args.preferredEndTime ?? null,
+      requestType: args.requestType,
+      source: 'whatsapp',
+      externalSenderId: normalizePhone(args.phone),
+      sourceConversationId: normalizePhone(args.phone),
+      status: 'pending',
+      rawMessage: args.rawMessage,
+      notes: args.notes,
+    },
+    include: {
+      appointmentType: { select: { name: true } },
+      practitioner: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  console.info('[appointment-request] created', {
+    channel: 'whatsapp',
+    clinicId: summarizeIdentifier(args.clinicId),
+    inboxEntryId: null,
+    conversationId: redactPhone(args.phone),
+    patientId: summarizeIdentifier(args.patientId),
+    serviceId: summarizeIdentifier(args.appointmentTypeId),
+    serviceName: request.appointmentType?.name ?? null,
+    practitionerId: summarizeIdentifier(args.practitionerId),
+    practitionerName: request.practitioner
+      ? `${request.practitioner.firstName} ${request.practitioner.lastName}`
+      : null,
+    requestedDateTime: args.preferredStartTime?.toISOString() ?? null,
+    requestId: summarizeIdentifier(request.id),
+  });
+
+  return request;
+};
 
 const handleHumanHandoffIntent = async (
   clinicId: string,
@@ -2765,6 +2814,39 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: createdPatient.id, phone: input.phone, providerMessageId: input.messageId, direction: 'incoming', text: input.text, rawPayload: input.rawPayload });
     const fullName = getPatientFullName(createdPatient);
     if (state?.currentIntent === 'book_appointment') {
+      const pendingSlot = stateJson.pendingConfirmationSlot ?? null;
+      if (pendingSlot && state.selectedAppointmentTypeId && state.selectedDate) {
+        try {
+          const request = await createAppointmentRequestFromAssistant(
+            clinic.id,
+            input.phone,
+            fullName,
+            state.selectedAppointmentTypeId,
+            pendingSlot,
+            input.text,
+          );
+          await resetWhatsAppConversationState(clinic.id, input.phone, fullName);
+          const serviceName = state.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
+          return `Talebinizi klinik onay ekranına aldım. ${serviceName} için ${formatTurkishDateLong(state.selectedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${pendingSlot.localStartTime} talebiniz personel tarafından kontrol edilecek. Klinik ekibi onay durumunu size bildirecek.`;
+        } catch (error) {
+          if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+            await upsertWhatsAppConversationState(clinic.id, input.phone, {
+              customerName: fullName,
+              currentIntent: 'book_appointment',
+              step: 'awaiting_date',
+              selectedAppointmentTypeId: state.selectedAppointmentTypeId,
+              selectedAppointmentTypeName: state.selectedAppointmentTypeName,
+              selectedDate: null,
+              selectedTime: null,
+              lastMessage: input.text,
+              stateJson: null,
+            });
+            return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
+          }
+          console.error('[whatsapp-assistant] appointment-create-error', error);
+          return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
+        }
+      }
       await upsertWhatsAppConversationState(clinic.id, input.phone, {
         customerName: fullName, currentIntent: 'book_appointment', step: 'awaiting_service',
         selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedPractitionerId: null,
@@ -3220,9 +3302,24 @@ router.post('/appointment-requests', authorizeWhatsappApi, async (req, res) => {
         appointmentTypeId: validation.data.appointmentTypeId, practitionerId: validation.data.practitionerId,
         preferredStartTime: validation.data.preferredStartTime, preferredEndTime: validation.data.preferredEndTime,
         requestType: validation.data.requestType, source: 'whatsapp',
+        externalSenderId: phone,
+        sourceConversationId: phone,
         rawMessage: validation.data.rawMessage, notes: validation.data.notes,
       },
       include: { appointmentType: true, practitioner: { select: { id: true, firstName: true, lastName: true } } },
+    });
+    console.info('[appointment-request] created', {
+      channel: 'whatsapp',
+      clinicId: summarizeIdentifier(clinic.id),
+      inboxEntryId: null,
+      conversationId: redactPhone(phone),
+      patientId: summarizeIdentifier(existingPatient?.id),
+      serviceId: summarizeIdentifier(validation.data.appointmentTypeId),
+      serviceName: request.appointmentType?.name ?? null,
+      practitionerId: summarizeIdentifier(validation.data.practitionerId),
+      practitionerName: request.practitioner ? `${request.practitioner.firstName} ${request.practitioner.lastName}` : null,
+      requestedDateTime: validation.data.preferredStartTime?.toISOString() ?? null,
+      requestId: summarizeIdentifier(request.id),
     });
     res.status(201).json(request);
   } catch {
@@ -3244,8 +3341,23 @@ router.post('/cancel-request', authorizeWhatsappApi, async (req, res) => {
         clinicId: clinic.id, patientId: existingPatient?.id,
         patientName: validation.data.patientName, phone: cancelPhone, email: validation.data.email,
         requestType: 'cancel', source: 'whatsapp',
+        externalSenderId: cancelPhone,
+        sourceConversationId: cancelPhone,
         rawMessage: validation.data.rawMessage, notes: validation.data.notes,
       },
+    });
+    console.info('[appointment-request] created', {
+      channel: 'whatsapp',
+      clinicId: summarizeIdentifier(clinic.id),
+      inboxEntryId: null,
+      conversationId: redactPhone(cancelPhone),
+      patientId: summarizeIdentifier(existingPatient?.id),
+      serviceId: null,
+      serviceName: null,
+      practitionerId: null,
+      practitionerName: null,
+      requestedDateTime: null,
+      requestId: summarizeIdentifier(request.id),
     });
     res.status(201).json(request);
   } catch {

@@ -1,7 +1,7 @@
 {
-  "title": "WhatsApp Appointment Requests",
-  "subtitle": "Review appointment, reschedule, and cancel requests coming from the WhatsApp line.",
-  "empty": "No WhatsApp requests found for this filter.",
+  "title": "Appointment Requests",
+  "subtitle": "Review appointment requests from WhatsApp, Instagram, and future channels.",
+  "empty": "No appointment requests found for this filter.",
   "summary": {
     "visible": "Visible Requests",
     "pending": "Pending Requests",
@@ -13,9 +13,16 @@
   },
   "filters": {
     "allStatus": "All Statuses",
-    "sourceHint": "This page shows WhatsApp-sourced requests only."
+    "allChannels": "All Channels",
+    "sourceHint": "Manage WhatsApp, Instagram, and manual requests in one page."
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manual"
   },
   "fields": {
+    "clinic": "Clinic",
     "service": "Service",
     "practitioner": "Practitioner",
     "preferredTime": "Requested Time"
@@ -62,7 +69,7 @@
     "selectPractitioner": "Select a practitioner"
   },
   "errors": {
-    "loadFailed": "Failed to load WhatsApp requests.",
+    "loadFailed": "Failed to load appointment requests.",
     "convertFailed": "Request could not be converted.",
     "outsideAvailability": "The selected time is outside practitioner availability.",
     "overlap": "The practitioner already has another appointment at this time.",
