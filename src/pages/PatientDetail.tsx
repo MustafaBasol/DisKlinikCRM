@@ -250,41 +250,41 @@ const PatientDetail: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button 
           onClick={() => navigate('/patients')}
           className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft size={20} />
-          {t('patients:detail.backToList')}
+          <span className="hidden sm:inline">{t('patients:detail.backToList')}</span>
         </button>
-        <div className="flex gap-3">
-          <button onClick={handleArchive} className="btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200">
+        <div className="flex gap-2">
+          <button onClick={handleArchive} className="btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200 !px-2 sm:!px-4">
             <Archive size={18} />
-            {t('common:archive')}
+            <span className="hidden sm:inline">{t('common:archive')}</span>
           </button>
           <button 
             onClick={() => setIsMessageModalOpen(true)}
-            className="btn-secondary"
+            className="btn-secondary !px-2 sm:!px-4"
           >
             <MessageSquare size={18} />
-            {t('messages:prepare', { defaultValue: 'Prepare Message' })}
+            <span className="hidden sm:inline">{t('messages:prepare', { defaultValue: 'Prepare Message' })}</span>
           </button>
-          <button onClick={() => setIsEditOpen(true)} className="btn-primary">
+          <button onClick={() => setIsEditOpen(true)} className="btn-primary !px-2 sm:!px-4">
             <Edit2 size={18} />
-            {t('patients:editPatient')}
+            <span className="hidden sm:inline">{t('patients:editPatient')}</span>
           </button>
         </div>
       </div>
 
-      <div className="flex gap-6 border-b border-gray-200">
+      <div className="flex gap-1 sm:gap-4 border-b border-gray-200 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
         {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'dental', 'activity'] as const).map(tab => (
           <button 
             key={tab}
             data-tab={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            className={`flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
             {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'dental' ? t('patients:dentalChart.title') : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
