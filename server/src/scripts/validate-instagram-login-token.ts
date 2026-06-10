@@ -8,7 +8,7 @@
 
 import { validateInstagramLoginToken } from '../services/instagram/InstagramMessagingProvider.js';
 
-const EXPECTED_ID = '17841477329539113';
+const EXPECTED_ID = '35431205066470793';
 const EXPECTED_USERNAME = 'autoviseo';
 
 async function main() {
@@ -25,13 +25,13 @@ async function main() {
   }
 
   console.log('Instagram token validation result:', {
-    id: result.accountId,
+    id: result.instagramLoginUserId,
     username: result.username,
     expectedId: EXPECTED_ID,
     expectedUsername: EXPECTED_USERNAME,
   });
 
-  if (result.accountId !== EXPECTED_ID || result.username !== EXPECTED_USERNAME) {
+  if (result.instagramLoginUserId !== EXPECTED_ID || result.username !== EXPECTED_USERNAME) {
     console.error('Token validated, but the returned Instagram account did not match the expected account.');
     process.exit(1);
   }

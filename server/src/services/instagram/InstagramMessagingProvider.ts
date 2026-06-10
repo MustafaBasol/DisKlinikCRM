@@ -23,6 +23,7 @@ export type InstagramConnectionRecord = {
   organizationId: string;
   status?: string | null;
   instagramAccountId?: string | null;
+  instagramLoginUserId?: string | null;
   instagramUsername?: string | null;
   accessTokenEncrypted?: string | null;
   pageAccessTokenEncrypted?: string | null;
@@ -34,7 +35,7 @@ export type InstagramConnectionRecord = {
 export type TestConnectionResult = {
   success: boolean;
   message: string;
-  accountId?: string | null;
+  instagramLoginUserId?: string | null;
   username?: string | null;
 };
 
@@ -112,7 +113,7 @@ type MetaJsonResponse = {
 type InstagramLoginTokenValidationResult = {
   success: boolean;
   message: string;
-  accountId?: string | null;
+  instagramLoginUserId?: string | null;
   username?: string | null;
 };
 
@@ -235,16 +236,16 @@ export async function validateInstagramLoginToken(
       return { success: false, message: 'Instagram API response was not valid JSON.' };
     }
 
-    const accountId = typeof body.id === 'string' ? body.id : null;
+    const instagramLoginUserId = typeof body.id === 'string' ? body.id : null;
     const username = typeof body.username === 'string' ? body.username : null;
-    if (!accountId) {
+    if (!instagramLoginUserId) {
       return { success: false, message: 'Instagram API response did not include an account id.' };
     }
 
     return {
       success: true,
       message: username ? `Connected as @${username}` : 'Connection successful (username not returned).',
-      accountId,
+      instagramLoginUserId,
       username,
     };
   } catch (err: unknown) {
@@ -274,15 +275,6 @@ export async function testConnection(
 
   const result = await validateInstagramLoginToken(resolvedToken.token);
   if (!result.success) return result;
-
-  if (conn.instagramAccountId && result.accountId && conn.instagramAccountId !== result.accountId) {
-    return {
-      success: false,
-      message: `Instagram account ID mismatch: token belongs to ${result.accountId}, connection is configured for ${conn.instagramAccountId}.`,
-      accountId: result.accountId,
-      username: result.username ?? null,
-    };
-  }
 
   return result;
 }

@@ -71,6 +71,7 @@ function trimSecret(value: string | null | undefined): string | null {
 const connectionCreateSchema = z.object({
   name: z.string().min(1).max(80),
   instagramAccountId: z.string().max(100).optional().nullable(),
+  instagramLoginUserId: z.string().max(100).optional().nullable(),
   instagramUsername: z.string().max(100).optional().nullable(),
   facebookPageId: z.string().max(100).optional().nullable(),
   accessTokenEncrypted: z.string().max(1000).optional().nullable(),
@@ -153,6 +154,7 @@ router.post(
           organizationId: user.organizationId,
           name: data.name,
           instagramAccountId: data.instagramAccountId ?? null,
+          instagramLoginUserId: data.instagramLoginUserId ?? null,
           instagramUsername: data.instagramUsername ?? null,
           facebookPageId: data.facebookPageId ?? null,
           accessTokenEncrypted,
@@ -287,6 +289,7 @@ router.put(
       };
       if (data.name !== undefined) updateData.name = data.name;
       if (data.instagramAccountId !== undefined) updateData.instagramAccountId = data.instagramAccountId;
+      if (data.instagramLoginUserId !== undefined) updateData.instagramLoginUserId = data.instagramLoginUserId;
       if (data.instagramUsername !== undefined) updateData.instagramUsername = data.instagramUsername;
       if (data.facebookPageId !== undefined) updateData.facebookPageId = data.facebookPageId;
       if (data.webhookVerifyToken !== undefined) updateData.webhookVerifyToken = data.webhookVerifyToken || existing.webhookVerifyToken;
@@ -374,7 +377,7 @@ router.post(
           status: result.success ? 'connected' : 'error',
           lastError: result.success ? null : result.message,
           lastConnectedAt: result.success ? new Date() : undefined,
-          instagramAccountId: result.success ? result.accountId ?? conn.instagramAccountId : conn.instagramAccountId,
+          instagramLoginUserId: result.success ? result.instagramLoginUserId ?? conn.instagramLoginUserId : conn.instagramLoginUserId,
           instagramUsername: result.success ? result.username ?? conn.instagramUsername : conn.instagramUsername,
         },
       });

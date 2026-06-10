@@ -58,6 +58,7 @@ import {
 } from '../services/instagram/instagramAiConversationProcessor.js';
 import {
   processInstagramEventForConnection,
+  resolveInstagramWebhookConnectionFromCandidates,
   type InstagramWebhookConnection,
   type InstagramWebhookProcessingDeps,
 } from '../routes/instagramWebhook.js';
@@ -97,6 +98,45 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+type InstagramProcessingCounters = {
+  inboundCalls: number;
+  inboxMessageCount: number;
+  aiCalls: number;
+  processedCalls: number;
+  failedCalls: number;
+};
+
+function makeSuccessfulInstagramProcessingDeps(
+  counters: InstagramProcessingCounters,
+): InstagramWebhookProcessingDeps {
+  return {
+    resolveClinicForInstagramMessage: async () => ({
+      clinicId: 'clinic-1',
+      needsClinicResolution: false,
+      resolutionSource: 'single_clinic',
+    }),
+    createInboundEventOrDetectDuplicate: async () => {
+      counters.inboundCalls++;
+      return { status: 'created', eventId: `event-${counters.inboundCalls}` };
+    },
+    upsertInstagramInboxEntry: async () => {
+      counters.inboxMessageCount++;
+    },
+    processInstagramIncomingMessage: async () => {
+      counters.aiCalls++;
+      return { status: 'processed', replySent: true, replyText: 'ok' };
+    },
+    markInboundEventProcessed: async () => {
+      counters.processedCalls++;
+      return null;
+    },
+    markInboundEventFailed: async () => {
+      counters.failedCalls++;
+      return null;
+    },
+  };
 }
 
 // ─── Run tests ────────────────────────────────────────────────────────────────
@@ -251,6 +291,104 @@ async function main() {
     assert.equal(events[0].recipientId, 'unknown-recipient-id');
     assert.equal(events[0].pageId, 'unknown-page-id');
     assert.equal(selectUniqueProviderConnection([]), null);
+  });
+
+  await test('webhook resolver: real recipient id matches configured Instagram account when Login API id differs', async () => {
+    const webhookRecipientId = '17841477329539113';
+    const instagramLoginUserId = '35431205066470793';
+    const facebookPageId = '761577810379281';
+    const payload = {
+      object: 'instagram',
+      entry: [{
+        id: webhookRecipientId,
+        messaging: [{
+          sender: { id: 'sender-igsid-real' },
+          recipient: { id: webhookRecipientId },
+          message: { mid: 'ig-mid-real', text: 'Bonjour' },
+        }],
+      }],
+    };
+    const event = parseWebhook(payload)[0];
+    const connection: InstagramWebhookConnection = {
+      id: 'ig-conn-real',
+      organizationId: 'org-1',
+      instagramAccountId: webhookRecipientId,
+      instagramLoginUserId,
+      facebookPageId,
+      webhookSecret: null,
+    };
+
+    const resolved = resolveInstagramWebhookConnectionFromCandidates({
+      recipientId: event.recipientId,
+      pageId: event.pageId,
+    }, [connection]);
+    assert.equal(resolved.connection?.id, connection.id);
+    assert.equal(resolved.matchReason, 'recipient_instagram_account_id');
+
+    const counters: InstagramProcessingCounters = {
+      inboundCalls: 0,
+      inboxMessageCount: 0,
+      aiCalls: 0,
+      processedCalls: 0,
+      failedCalls: 0,
+    };
+    await processInstagramEventForConnection(
+      resolved.connection!,
+      event,
+      makeSuccessfulInstagramProcessingDeps(counters),
+    );
+
+    assert.equal(counters.inboundCalls, 1);
+    assert.equal(counters.inboxMessageCount, 1);
+    assert.equal(counters.aiCalls, 1);
+    assert.equal(counters.processedCalls, 1);
+    assert.equal(counters.failedCalls, 0);
+  });
+
+  await test('webhook resolver: legacy same Instagram account and Login API id still matches primary account id', () => {
+    const sharedId = '123456789';
+    const resolved = resolveInstagramWebhookConnectionFromCandidates({
+      recipientId: sharedId,
+      pageId: sharedId,
+    }, [{
+      id: 'ig-conn-legacy',
+      organizationId: 'org-1',
+      instagramAccountId: sharedId,
+      instagramLoginUserId: sharedId,
+      facebookPageId: null,
+      webhookSecret: null,
+    }]);
+
+    assert.equal(resolved.connection?.id, 'ig-conn-legacy');
+    assert.equal(resolved.matchReason, 'recipient_instagram_account_id');
+  });
+
+  await test('webhook resolver: primary instagramAccountId match wins over fallback Login API id match', () => {
+    const incomingId = '17841477329539113';
+    const resolved = resolveInstagramWebhookConnectionFromCandidates({
+      recipientId: incomingId,
+      pageId: incomingId,
+    }, [
+      {
+        id: 'ig-conn-primary',
+        organizationId: 'org-1',
+        instagramAccountId: incomingId,
+        instagramLoginUserId: '35431205066470793',
+        facebookPageId: null,
+        webhookSecret: null,
+      },
+      {
+        id: 'ig-conn-fallback',
+        organizationId: 'org-2',
+        instagramAccountId: null,
+        instagramLoginUserId: incomingId,
+        facebookPageId: null,
+        webhookSecret: null,
+      },
+    ]);
+
+    assert.equal(resolved.connection?.id, 'ig-conn-primary');
+    assert.equal(resolved.matchReason, 'recipient_instagram_account_id');
   });
 
   section('Instagram AI conversation adapter guards');
@@ -434,7 +572,7 @@ async function main() {
     }, async () => {
       const result = await testConnection(makeConn());
       assert.equal(result.success, true);
-      assert.equal(result.accountId, '123456789');
+      assert.equal(result.instagramLoginUserId, '123456789');
       assert.equal(result.username, 'testclinic');
     });
 
@@ -461,14 +599,13 @@ async function main() {
     assert.equal(url.searchParams.get('access_token'), 'spaced-token');
   });
 
-  await test('testConnection: rejects a token for a different Instagram account id', async () => {
+  await test('testConnection: accepts distinct webhook recipient id and Instagram Login API id', async () => {
     await withMockFetch(() => {
-      return jsonResponse({ id: '17841477329539113', username: 'autoviseo' });
+      return jsonResponse({ id: '35431205066470793', username: 'autoviseo' });
     }, async () => {
-      const result = await testConnection(makeConn({ instagramAccountId: '123456789' }));
-      assert.equal(result.success, false);
-      assert.ok(result.message.includes('mismatch'));
-      assert.equal(result.accountId, '17841477329539113');
+      const result = await testConnection(makeConn({ instagramAccountId: '17841477329539113' }));
+      assert.equal(result.success, true);
+      assert.equal(result.instagramLoginUserId, '35431205066470793');
       assert.equal(result.username, 'autoviseo');
     });
   });
