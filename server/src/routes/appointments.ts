@@ -21,6 +21,7 @@ import {
   findTreatmentCaseInClinic,
   findUserAssignedToClinic,
 } from '../utils/relationGuards.js';
+import { triggerOnAppointmentCompleted } from '../services/postTreatmentMessaging.js';
 
 const router = express.Router();
 const SLOT_STEP_MINUTES = 30;
@@ -584,6 +585,19 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
     }
 
     res.json(updated);
+
+    // Fire-and-forget: post-treatment messaging trigger
+    if (shouldCreateTreatmentCase) {
+      triggerOnAppointmentCompleted({
+        appointmentId: id,
+        clinicId,
+        organizationId: req.user!.organizationId as string,
+        patientId: (updated as any).patientId,
+        serviceId: (updated as any).appointmentTypeId ?? '',
+        appointmentTypeId: (updated as any).appointmentTypeId ?? '',
+        treatmentCaseId: (updated as any).treatmentCaseId ?? null,
+      }).catch(() => {/* non-critical, logged inside service */});
+    }
   } catch {
     res.status(500).json({ error: 'Failed to update appointment' });
   }

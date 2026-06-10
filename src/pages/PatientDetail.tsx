@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { patientService, taskService, treatmentCaseService, paymentService, paymentPlanService, insuranceProvisionService, attachmentService } from '../services/api';
+import api from '../services/api';
 import DentalChart from '../components/DentalChart';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
@@ -44,7 +45,7 @@ import { normalizeRole } from '../utils/permissions';
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases', 'appointments']);
+  const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases', 'appointments', 'postTreatment']);
   const { user } = useAuth();
   const { defaultCurrency, locale, timezone, formatCurrency, formatNumber, formatDate, formatTime, formatDateTime } = useClinicPreferences();
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
@@ -63,7 +64,8 @@ const PatientDetail: React.FC = () => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [whatsappSearch, setWhatsappSearch] = useState('');
   const [whatsappDirection, setWhatsappDirection] = useState<'all' | 'incoming' | 'outgoing'>('all');
-  const [messageChannel, setMessageChannel] = useState<'all' | 'whatsapp' | 'instagram'>('all');
+  const [messageChannel, setMessageChannel] = useState<'all' | 'whatsapp' | 'instagram' | 'post-treatment'>('all');
+  const [postTreatmentQueue, setPostTreatmentQueue] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
@@ -107,6 +109,13 @@ const PatientDetail: React.FC = () => {
 
       const attachRes = await attachmentService.getAll(id);
       setAttachments(attachRes.data);
+
+      try {
+        const ptRes = await (api as any).get('/post-treatment-queue', { params: { patientId: id, limit: 100 } });
+        setPostTreatmentQueue(ptRes.data ?? []);
+      } catch {
+        setPostTreatmentQueue([]);
+      }
     } catch (error: any) {
       console.error('Failed to fetch patient:', error);
       if (error?.response?.status === 404) {
@@ -191,6 +200,12 @@ const PatientDetail: React.FC = () => {
     return matchesSearch && matchesDirection;
   });
 
+  const filteredPostTreatmentMessages = postTreatmentQueue.filter((entry: any) => {
+    const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase(locale);
+    const text = String(entry.messageBodyRendered || '').toLocaleLowerCase(locale);
+    return !normalizedSearch || text.includes(normalizedSearch);
+  });
+
   const unifiedMessages = [
     ...filteredWhatsappMessages.map((message: any) => ({
       id: `wa-${message.id}`,
@@ -207,6 +222,15 @@ const PatientDetail: React.FC = () => {
       createdAt: msg.createdAt,
       senderUsername: msg.senderUsername,
       externalSenderId: msg.externalSenderId,
+    })),
+    ...filteredPostTreatmentMessages.map((entry: any) => ({
+      id: `pt-${entry.id}`,
+      channel: 'post-treatment' as const,
+      direction: 'outgoing' as const,
+      text: entry.messageBodyRendered,
+      createdAt: entry.scheduledAt,
+      status: entry.status,
+      templateTitle: entry.template?.title,
     })),
   ]
     .filter(message => messageChannel === 'all' || message.channel === messageChannel)
@@ -905,7 +929,7 @@ const PatientDetail: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(['all', 'whatsapp', 'instagram'] as const).map(channel => (
+                    {(['all', 'whatsapp', 'instagram', 'post-treatment'] as const).map(channel => (
                       <button
                         key={channel}
                         onClick={() => setMessageChannel(channel)}
@@ -915,7 +939,9 @@ const PatientDetail: React.FC = () => {
                           ? t('patients:detail.messagesFilterAllChannels', { defaultValue: 'Tüm Kanallar' })
                           : channel === 'whatsapp'
                             ? 'WhatsApp'
-                            : 'Instagram'}
+                            : channel === 'instagram'
+                              ? 'Instagram'
+                              : t('postTreatment:nav', { defaultValue: 'Tedavi Sonrası' })}
                       </button>
                     ))}
                   </div>
@@ -948,22 +974,32 @@ const PatientDetail: React.FC = () => {
 
               <div className="space-y-3">
                 {unifiedMessages.length > 0 ? unifiedMessages.map((message: any) => (
-                  <div key={message.id} className={`card p-5 border ${message.direction === 'incoming' ? 'border-emerald-100 bg-emerald-50/60' : 'border-sky-100 bg-sky-50/60'}`}>
+                  <div key={message.id} className={`card p-5 border ${message.channel === 'post-treatment' ? 'border-violet-100 bg-violet-50/60' : message.direction === 'incoming' ? 'border-emerald-100 bg-emerald-50/60' : 'border-sky-100 bg-sky-50/60'}`}>
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${message.channel === 'instagram' ? 'border-purple-200 text-purple-700 bg-purple-50' : 'border-green-200 text-green-700 bg-green-50'}`}>
-                            {message.channel === 'instagram' ? 'Instagram' : 'WhatsApp'}
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${message.channel === 'instagram' ? 'border-purple-200 text-purple-700 bg-purple-50' : message.channel === 'post-treatment' ? 'border-violet-200 text-violet-700 bg-violet-50' : 'border-green-200 text-green-700 bg-green-50'}`}>
+                            {message.channel === 'instagram' ? 'Instagram' : message.channel === 'post-treatment' ? t('postTreatment:nav', { defaultValue: 'Tedavi Sonrası' }) : 'WhatsApp'}
                           </span>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                            {message.channel === 'instagram'
-                              ? message.direction === 'outgoing'
-                                ? t('patients:detail.instagramOutgoing', { defaultValue: 'Instagram Giden' })
-                                : t('patients:detail.instagramIncoming', { defaultValue: 'Instagram Gelen' })
-                              : message.direction === 'incoming'
-                                ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Gelen' })
-                                : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Giden' })}
-                          </p>
+                          {message.channel === 'post-treatment' && message.status && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${message.status === 'sent' ? 'bg-green-100 text-green-700' : message.status === 'waiting_approval' ? 'bg-blue-100 text-blue-700' : message.status === 'failed' ? 'bg-red-100 text-red-700' : message.status === 'cancelled' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {t(`postTreatment:queue.status.${message.status}`, { defaultValue: message.status })}
+                            </span>
+                          )}
+                          {message.channel !== 'post-treatment' && (
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              {message.channel === 'instagram'
+                                ? message.direction === 'outgoing'
+                                  ? t('patients:detail.instagramOutgoing', { defaultValue: 'Instagram Giden' })
+                                  : t('patients:detail.instagramIncoming', { defaultValue: 'Instagram Gelen' })
+                                : message.direction === 'incoming'
+                                  ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Gelen' })
+                                  : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Giden' })}
+                            </p>
+                          )}
+                          {message.channel === 'post-treatment' && message.templateTitle && (
+                            <p className="text-xs text-gray-500">{message.templateTitle}</p>
+                          )}
                         </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-900">{message.text}</p>
                         {message.channel === 'instagram' && message.direction === 'incoming' && (message.senderUsername || message.externalSenderId) && (

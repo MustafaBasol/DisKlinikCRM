@@ -77,6 +77,8 @@ model Clinic {
   clinicInstagramConnections        ClinicInstagramConnection[]
   instagramInboxEntries             InstagramInboxEntry[]          @relation("InstagramInboxEntryClinic")
   instagramConversationMessages     InstagramConversationMessage[]
+  postTreatmentTemplates            PostTreatmentMessageTemplate[]
+  postTreatmentQueue                PostTreatmentMessageQueue[]
 
   @@unique([organizationId, slug])
 }
@@ -211,6 +213,7 @@ model Patient {
   whatsappInboxEntries              WhatsAppInboxEntry[]          @relation("InboxEntryPatient")
   instagramInboxEntries             InstagramInboxEntry[]         @relation("InstagramInboxEntryPatient")
   instagramConversationMessages     InstagramConversationMessage[]
+  postTreatmentQueue                PostTreatmentMessageQueue[]
   recallCandidates                  RecallCandidate[]
   recallActions                RecallAction[]
 }
@@ -240,6 +243,8 @@ model AppointmentType {
   packageItems            TreatmentPackageItem[]
   materials               AppointmentTypeMaterial[]
   inventoryTransactions   InventoryTransaction[]    @relation("InventoryTransactionService")
+  postTreatmentTemplates  PostTreatmentMessageTemplate[]
+  postTreatmentQueue      PostTreatmentMessageQueue[]
 }
 
 model Appointment {
@@ -420,6 +425,8 @@ model TreatmentPackage {
   applications          TreatmentPackageApplication[]
   procedures            TreatmentPlanProcedure[]
   inventoryTransactions InventoryTransaction[]
+  postTreatmentTemplates PostTreatmentMessageTemplate[]
+  postTreatmentQueue    PostTreatmentMessageQueue[]
 
   @@unique([clinicId, name])
   @@index([clinicId, isActive])
@@ -1178,6 +1185,8 @@ model Organization {
   clinicInstagramConnections      ClinicInstagramConnection[]
   instagramInboxEntries           InstagramInboxEntry[]
   instagramConversationMessages   InstagramConversationMessage[]
+  postTreatmentTemplates          PostTreatmentMessageTemplate[]
+  postTreatmentQueue              PostTreatmentMessageQueue[]
 }
 
 model UserClinic {
@@ -1536,4 +1545,74 @@ model InstagramConversationMessage {
   @@unique([organizationId, externalMessageId])
   @@index([organizationId, externalSenderId, createdAt])
   @@index([clinicId, patientId, createdAt])
+}
+
+/// Clinic-defined post-treatment message templates.
+/// A single service/package can have multiple templates.
+model PostTreatmentMessageTemplate {
+  id                  String            @id @default(uuid())
+  organizationId      String
+  organization        Organization      @relation(fields: [organizationId], references: [id])
+  clinicId            String
+  clinic              Clinic            @relation(fields: [clinicId], references: [id])
+  title               String
+  /// service | package
+  targetType          String
+  serviceId           String?
+  service             AppointmentType?  @relation(fields: [serviceId], references: [id])
+  treatmentPackageId  String?
+  treatmentPackage    TreatmentPackage? @relation(fields: [treatmentPackageId], references: [id])
+  messageBody         String
+  /// whatsapp | instagram | preferred
+  channel             String            @default("preferred")
+  sendDelayMinutes    Int               @default(0)
+  requireStaffApproval Boolean         @default(false)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  messageQueue PostTreatmentMessageQueue[]
+
+  @@index([clinicId, isActive])
+  @@index([clinicId, serviceId])
+  @@index([clinicId, treatmentPackageId])
+}
+
+/// Queue of scheduled/sent post-treatment messages.
+model PostTreatmentMessageQueue {
+  id                            String                       @id @default(uuid())
+  organizationId                String
+  organization                  Organization                 @relation(fields: [organizationId], references: [id])
+  clinicId                      String
+  clinic                        Clinic                       @relation(fields: [clinicId], references: [id])
+  patientId                     String
+  patient                       Patient                      @relation(fields: [patientId], references: [id])
+  templateId                    String
+  template                      PostTreatmentMessageTemplate @relation(fields: [templateId], references: [id])
+  appointmentId                 String?
+  treatmentCaseId               String?
+  treatmentProcedureId          String?
+  treatmentPackageApplicationId String?
+  serviceId                     String?
+  service                       AppointmentType?             @relation(fields: [serviceId], references: [id])
+  packageId                     String?
+  treatmentPackage              TreatmentPackage?            @relation(fields: [packageId], references: [id])
+  channel                       String
+  recipient                     String?
+  messageBodyRendered           String
+  /// pending | sent | failed | cancelled | waiting_approval | no_recipient
+  status                        String                       @default("pending")
+  scheduledAt                   DateTime
+  sentAt                        DateTime?
+  errorMessage                  String?
+  /// appointment_completed | procedure_completed | package_item_completed | package_completed
+  sourceType                    String
+  createdAt                     DateTime                     @default(now())
+  updatedAt                     DateTime                     @updatedAt
+
+  /// Duplicate prevention: same template cannot be enqueued twice for same patient+source record
+  @@unique([patientId, templateId, appointmentId, treatmentProcedureId])
+  @@index([clinicId, status, scheduledAt])
+  @@index([clinicId, patientId])
+  @@index([templateId])
 }

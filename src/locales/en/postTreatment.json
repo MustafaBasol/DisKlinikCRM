@@ -1,0 +1,72 @@
+{
+  "nav": "Post-Treatment Messages",
+  "title": "Post-Treatment Messages",
+  "subtitle": "Automatically send messages to patients when appointments or procedures are completed.",
+  "tabs": {
+    "templates": "Templates",
+    "queue": "Message History"
+  },
+  "template": {
+    "new": "New Template",
+    "edit": "Edit Template",
+    "delete": "Delete Template",
+    "deleteConfirm": "Are you sure you want to delete this template?",
+    "noTemplates": "No templates created yet.",
+    "fields": {
+      "title": "Template Name",
+      "targetType": "Target Type",
+      "targetType_service": "Service (Appointment type)",
+      "targetType_package": "Treatment Package",
+      "service": "Service",
+      "package": "Package",
+      "messageBody": "Message Body",
+      "channel": "Channel",
+      "channel_whatsapp": "WhatsApp",
+      "channel_instagram": "Instagram",
+      "channel_preferred": "Preferred channel",
+      "sendDelayMinutes": "Send Delay (minutes)",
+      "sendDelayMinutes_help": "0 = send immediately. E.g. 60 = 1 hour later.",
+      "requireStaffApproval": "Require Staff Approval",
+      "requireStaffApproval_help": "When enabled the message is held for manual approval before sending.",
+      "isActive": "Active"
+    },
+    "variables": {
+      "title": "Available variables",
+      "patientName": "Patient name",
+      "clinicName": "Clinic name",
+      "doctorName": "Doctor name",
+      "treatmentName": "Treatment / service name",
+      "packageName": "Package name",
+      "appointmentDate": "Appointment date",
+      "clinicPhone": "Clinic phone"
+    }
+  },
+  "queue": {
+    "noEntries": "No message history yet.",
+    "columns": {
+      "patient": "Patient",
+      "template": "Template",
+      "channel": "Channel",
+      "status": "Status",
+      "scheduledAt": "Scheduled At",
+      "sentAt": "Sent At",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Pending",
+      "waiting_approval": "Awaiting Approval",
+      "sent": "Sent",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "no_recipient": "No Recipient"
+    },
+    "approve": "Approve & Send",
+    "cancel": "Cancel",
+    "approveConfirm": "Send this message now?",
+    "cancelConfirm": "Cancel this message?"
+  },
+  "save": "Save",
+  "cancel": "Cancel",
+  "saved": "Saved",
+  "saveError": "Failed to save"
+}

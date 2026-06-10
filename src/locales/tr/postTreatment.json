@@ -1,0 +1,72 @@
+{
+  "nav": "Tedavi Sonrası Mesajlar",
+  "title": "Tedavi Sonrası Mesajlar",
+  "subtitle": "Randevu veya prosedür tamamlandığında hastalara otomatik mesaj gönderin.",
+  "tabs": {
+    "templates": "Şablonlar",
+    "queue": "Gönderim Geçmişi"
+  },
+  "template": {
+    "new": "Yeni Şablon",
+    "edit": "Şablonu Düzenle",
+    "delete": "Şablonu Sil",
+    "deleteConfirm": "Bu şablonu silmek istediğinizden emin misiniz?",
+    "noTemplates": "Henüz şablon oluşturulmamış.",
+    "fields": {
+      "title": "Şablon Adı",
+      "targetType": "Hedef Tipi",
+      "targetType_service": "Hizmet (Randevu tipi)",
+      "targetType_package": "Tedavi Paketi",
+      "service": "Hizmet",
+      "package": "Paket",
+      "messageBody": "Mesaj İçeriği",
+      "channel": "Kanal",
+      "channel_whatsapp": "WhatsApp",
+      "channel_instagram": "Instagram",
+      "channel_preferred": "Tercih edilen kanal",
+      "sendDelayMinutes": "Gönderim Gecikmesi (dakika)",
+      "sendDelayMinutes_help": "0 = hemen gönder. Örn. 60 = 1 saat sonra.",
+      "requireStaffApproval": "Personel Onayı Gereksin",
+      "requireStaffApproval_help": "Açıksa mesaj otomatik gönderilmez, personelin onaylaması gerekir.",
+      "isActive": "Aktif"
+    },
+    "variables": {
+      "title": "Kullanılabilir değişkenler",
+      "patientName": "Hasta adı",
+      "clinicName": "Klinik adı",
+      "doctorName": "Doktor adı",
+      "treatmentName": "İşlem/hizmet adı",
+      "packageName": "Paket adı",
+      "appointmentDate": "Randevu tarihi",
+      "clinicPhone": "Klinik telefonu"
+    }
+  },
+  "queue": {
+    "noEntries": "Henüz gönderim kaydı yok.",
+    "columns": {
+      "patient": "Hasta",
+      "template": "Şablon",
+      "channel": "Kanal",
+      "status": "Durum",
+      "scheduledAt": "Planlanan Tarih",
+      "sentAt": "Gönderim Tarihi",
+      "actions": "İşlemler"
+    },
+    "status": {
+      "pending": "Bekliyor",
+      "waiting_approval": "Onay Bekliyor",
+      "sent": "Gönderildi",
+      "failed": "Başarısız",
+      "cancelled": "İptal",
+      "no_recipient": "Alıcı Yok"
+    },
+    "approve": "Onayla ve Gönder",
+    "cancel": "İptal Et",
+    "approveConfirm": "Bu mesajı hemen göndermek istiyor musunuz?",
+    "cancelConfirm": "Bu mesajı iptal etmek istiyor musunuz?"
+  },
+  "save": "Kaydet",
+  "cancel": "İptal",
+  "saved": "Kaydedildi",
+  "saveError": "Kaydetme başarısız"
+}

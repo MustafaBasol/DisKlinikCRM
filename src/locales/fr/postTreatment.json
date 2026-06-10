@@ -1,0 +1,72 @@
+{
+  "nav": "Messages Post-Traitement",
+  "title": "Messages Post-Traitement",
+  "subtitle": "Envoyez automatiquement des messages aux patients lors de la complétion d'un rendez-vous ou d'une procédure.",
+  "tabs": {
+    "templates": "Modèles",
+    "queue": "Historique des envois"
+  },
+  "template": {
+    "new": "Nouveau modèle",
+    "edit": "Modifier le modèle",
+    "delete": "Supprimer le modèle",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce modèle ?",
+    "noTemplates": "Aucun modèle créé.",
+    "fields": {
+      "title": "Nom du modèle",
+      "targetType": "Type de cible",
+      "targetType_service": "Service (type de rendez-vous)",
+      "targetType_package": "Forfait de traitement",
+      "service": "Service",
+      "package": "Forfait",
+      "messageBody": "Contenu du message",
+      "channel": "Canal",
+      "channel_whatsapp": "WhatsApp",
+      "channel_instagram": "Instagram",
+      "channel_preferred": "Canal préféré",
+      "sendDelayMinutes": "Délai d'envoi (minutes)",
+      "sendDelayMinutes_help": "0 = envoyer immédiatement. Ex. 60 = 1 heure plus tard.",
+      "requireStaffApproval": "Approbation du personnel requise",
+      "requireStaffApproval_help": "Lorsque activé, le message est retenu pour approbation manuelle avant envoi.",
+      "isActive": "Actif"
+    },
+    "variables": {
+      "title": "Variables disponibles",
+      "patientName": "Nom du patient",
+      "clinicName": "Nom de la clinique",
+      "doctorName": "Nom du médecin",
+      "treatmentName": "Nom du traitement / service",
+      "packageName": "Nom du forfait",
+      "appointmentDate": "Date du rendez-vous",
+      "clinicPhone": "Téléphone de la clinique"
+    }
+  },
+  "queue": {
+    "noEntries": "Aucun historique d'envoi.",
+    "columns": {
+      "patient": "Patient",
+      "template": "Modèle",
+      "channel": "Canal",
+      "status": "Statut",
+      "scheduledAt": "Prévu le",
+      "sentAt": "Envoyé le",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "En attente",
+      "waiting_approval": "En attente d'approbation",
+      "sent": "Envoyé",
+      "failed": "Échoué",
+      "cancelled": "Annulé",
+      "no_recipient": "Pas de destinataire"
+    },
+    "approve": "Approuver et envoyer",
+    "cancel": "Annuler",
+    "approveConfirm": "Envoyer ce message maintenant ?",
+    "cancelConfirm": "Annuler ce message ?"
+  },
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "saved": "Enregistré",
+  "saveError": "Échec de l'enregistrement"
+}

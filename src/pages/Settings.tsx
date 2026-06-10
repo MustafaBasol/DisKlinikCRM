@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import { CLINIC_OPERATING_PREFERENCES_UPDATED_EVENT } from '../context/ClinicPreferencesContext';
@@ -31,6 +31,7 @@ import ServiceList from '../components/ServiceList';
 import UserList from '../components/UserList';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 import RecallSettingsSection from '../components/recall/RecallSettingsSection';
+import PostTreatmentMessages from '../components/PostTreatmentMessages';
 
 type TimedWhatsAppPreference = {
   enabled: boolean;
@@ -53,7 +54,7 @@ type NotificationPreferences = {
   };
 };
 
-type SettingsTab = 'general' | 'recall' | 'users' | 'availability' | 'services' | 'integrations';
+type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations';
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   whatsapp: {
@@ -246,6 +247,7 @@ const Settings: React.FC = () => {
   const canEditOperatingPrefs = canManageUsers(user);
   const canSeeGeneral = !isDentist;
   const canSeeRecall = canSeeGeneral;
+  const canSeePostTreatment = canSeeGeneral;
   const canSeeServices = !isDentist && (canManageUsers(user) || userCanonicalRole === 'RECEPTIONIST');
   const canSeeUsers = !isDentist && canManageUsers(user);
   const canSeeIntegrationsTab = !isDentist && canSeeIntegrations;
@@ -287,6 +289,7 @@ const Settings: React.FC = () => {
     const activeTabAllowed =
       (activeTab === 'general' && canSeeGeneral) ||
       (activeTab === 'recall' && canSeeRecall) ||
+      (activeTab === 'post-treatment' && canSeePostTreatment) ||
       (activeTab === 'services' && canSeeServices) ||
       (activeTab === 'users' && canSeeUsers) ||
       (activeTab === 'integrations' && canSeeIntegrationsTab) ||
@@ -502,6 +505,17 @@ const Settings: React.FC = () => {
               >
                 <RotateCcw size={18} />
                 {t('recall:settings.nav')}
+              </button>
+            )}
+            {canSeePostTreatment && (
+              <button
+                onClick={() => setActiveTab('post-treatment')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'post-treatment' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Send size={18} />
+                {t('postTreatment:nav')}
               </button>
             )}
             {canSeeServices && (
@@ -1057,6 +1071,13 @@ const Settings: React.FC = () => {
             <RecallSettingsSection
               clinicId={selectedClinic?.id}
               clinicName={selectedClinic?.name}
+              canEdit={canEditNotificationPrefs}
+            />
+          )}
+
+          {canSeePostTreatment && activeTab === 'post-treatment' && (
+            <PostTreatmentMessages
+              clinicId={selectedClinic?.id}
               canEdit={canEditNotificationPrefs}
             />
           )}

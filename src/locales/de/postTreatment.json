@@ -1,0 +1,72 @@
+{
+  "nav": "Nachrichten nach Behandlung",
+  "title": "Nachrichten nach Behandlung",
+  "subtitle": "Senden Sie automatisch Nachrichten an Patienten, wenn Termine oder Eingriffe abgeschlossen sind.",
+  "tabs": {
+    "templates": "Vorlagen",
+    "queue": "Sendeverlauf"
+  },
+  "template": {
+    "new": "Neue Vorlage",
+    "edit": "Vorlage bearbeiten",
+    "delete": "Vorlage löschen",
+    "deleteConfirm": "Möchten Sie diese Vorlage wirklich löschen?",
+    "noTemplates": "Noch keine Vorlagen erstellt.",
+    "fields": {
+      "title": "Vorlagenname",
+      "targetType": "Zieltyp",
+      "targetType_service": "Dienst (Termintyp)",
+      "targetType_package": "Behandlungspaket",
+      "service": "Dienst",
+      "package": "Paket",
+      "messageBody": "Nachrichteninhalt",
+      "channel": "Kanal",
+      "channel_whatsapp": "WhatsApp",
+      "channel_instagram": "Instagram",
+      "channel_preferred": "Bevorzugter Kanal",
+      "sendDelayMinutes": "Sendeverzögerung (Minuten)",
+      "sendDelayMinutes_help": "0 = sofort senden. Z.B. 60 = 1 Stunde später.",
+      "requireStaffApproval": "Mitarbeiterfreigabe erforderlich",
+      "requireStaffApproval_help": "Wenn aktiviert, wird die Nachricht vor dem Senden manuell genehmigt.",
+      "isActive": "Aktiv"
+    },
+    "variables": {
+      "title": "Verfügbare Variablen",
+      "patientName": "Patientenname",
+      "clinicName": "Klinikname",
+      "doctorName": "Arztname",
+      "treatmentName": "Behandlungs- / Dienstname",
+      "packageName": "Paketname",
+      "appointmentDate": "Termindatum",
+      "clinicPhone": "Kliniktelefon"
+    }
+  },
+  "queue": {
+    "noEntries": "Noch kein Sendeverlauf.",
+    "columns": {
+      "patient": "Patient",
+      "template": "Vorlage",
+      "channel": "Kanal",
+      "status": "Status",
+      "scheduledAt": "Geplant am",
+      "sentAt": "Gesendet am",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "pending": "Ausstehend",
+      "waiting_approval": "Wartet auf Freigabe",
+      "sent": "Gesendet",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen",
+      "no_recipient": "Kein Empfänger"
+    },
+    "approve": "Genehmigen & Senden",
+    "cancel": "Abbrechen",
+    "approveConfirm": "Diese Nachricht jetzt senden?",
+    "cancelConfirm": "Diese Nachricht abbrechen?"
+  },
+  "save": "Speichern",
+  "cancel": "Abbrechen",
+  "saved": "Gespeichert",
+  "saveError": "Speichern fehlgeschlagen"
+}

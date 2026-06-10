@@ -13,6 +13,7 @@ import { getNotificationPreferences } from '../services/notificationPreferences.
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { logActivity } from '../utils/activity.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
+import { processScheduledPostTreatmentMessages } from '../services/postTreatmentMessaging.js';
 
 type ClinicForReminder = {
   id: string;
@@ -548,6 +549,9 @@ export function startReminderJobs(): void {
   cron.schedule('*/5 * * * *', () => {
     runDailyReminderJob().catch((err) =>
       console.error('[reminders] Unhandled error in notification reminder job:', err),
+    );
+    processScheduledPostTreatmentMessages().catch((err) =>
+      console.error('[reminders] Unhandled error in post-treatment messaging job:', err),
     );
   });
 

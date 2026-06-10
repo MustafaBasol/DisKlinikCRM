@@ -47,6 +47,7 @@ import noShowsRoutes from './routes/noShows.js';
 import recallRoutes from './routes/recall.js';
 import patientsImportRoutes from './routes/patientsImport.js';
 import usersImportRoutes from './routes/usersImport.js';
+import postTreatmentRoutes from './routes/postTreatment.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
@@ -165,6 +166,7 @@ app.use('/api', operationalMonitoringRoutes);
 app.use('/api', noShowsRoutes);
 app.use('/api', recallRoutes);
 app.use('/api', usersImportRoutes);
+app.use('/api', postTreatmentRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

@@ -10,6 +10,7 @@ import {
   markPackageExtraStockDeductionFailed,
   markProcedureStockDeductionFailed,
 } from '../services/treatmentStockDeduction.js';
+import { triggerOnProcedureCompleted } from '../services/postTreatmentMessaging.js';
 
 const router = express.Router();
 
@@ -189,6 +190,18 @@ router.post(
         description: `Prosedür eklendi: ${procedure.procedureName}${toothFdi ? ` (Diş ${toothFdi})` : ''}`,
       });
 
+      if (completingOnCreate) {
+        triggerOnProcedureCompleted({
+          procedureId: procedure.id,
+          clinicId,
+          organizationId: req.user!.organizationId as string,
+          patientId: procedure.patientId,
+          treatmentCaseId: procedure.treatmentCaseId,
+          serviceId: procedure.serviceId ?? undefined,
+          packageApplicationId: (procedure as any).packageApplicationId ?? undefined,
+        }).catch(() => {});
+      }
+
       return res.status(201).json(procedure);
     } catch (err) {
       if (isTreatmentStockDeductionError(err)) {
@@ -302,6 +315,18 @@ router.put(
         entityId: id,
         description: `Prosedür güncellendi: ${updated.procedureName} → ${updated.status}`,
       });
+
+      if (completingNow) {
+        triggerOnProcedureCompleted({
+          procedureId: updated.id,
+          clinicId,
+          organizationId: req.user!.organizationId as string,
+          patientId: updated.patientId,
+          treatmentCaseId: updated.treatmentCaseId,
+          serviceId: updated.serviceId ?? undefined,
+          packageApplicationId: (updated as any).packageApplicationId ?? undefined,
+        }).catch(() => {});
+      }
 
       return res.json(updated);
     } catch (err) {

@@ -21,6 +21,7 @@ export const NS = {
   ERRORS: 'errors',
   WHATSAPP: 'whatsapp',
   INSTAGRAM: 'instagram',
+  POST_TREATMENT: 'postTreatment',
 } as const;
 
 export type Namespace = typeof NS[keyof typeof NS];
