@@ -308,19 +308,21 @@ async function main() {
     assert.equal(patientName, '@testuser');
   });
 
-  await test('Anonymous sender without username: falls back to externalSenderId', () => {
+  await test('Anonymous sender without username: display name can fall back to externalSenderId', () => {
     const senderUsername = null;
     const externalSenderId = 'ig_1234567890';
     const patientName = senderUsername ? `@${senderUsername}` : externalSenderId;
     assert.equal(patientName, 'ig_1234567890');
   });
 
-  await test('Phone fallback for anonymous sender uses externalSenderId', () => {
-    const externalSenderId = 'ig_9876543210';
-    // The phone field is required on AppointmentRequest; for Instagram DM without linked patient, use externalSenderId
-    const phone = externalSenderId;
-    assert.equal(typeof phone, 'string');
-    assert.ok(phone.length > 0);
+  await test('Instagram sender ID must not be treated as patient phone', () => {
+    // A 16-digit Instagram scoped sender ID should not pass phone-like validation
+    const instagramScopedSenderId = '1050315040903637';
+    const digits = instagramScopedSenderId.replace(/\D/g, '');
+    const looksLikeRealPhone = digits.length >= 6 && digits.length <= 15;
+    // 16 digits is too long to be a valid phone number (E.164 max 15 digits)
+    assert.equal(digits.length > 15, true);
+    assert.equal(looksLikeRealPhone, false);
   });
 
   // ─── UI state logic ────────────────────────────────────────────────────────

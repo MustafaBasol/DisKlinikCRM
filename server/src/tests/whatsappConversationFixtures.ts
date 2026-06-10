@@ -1683,6 +1683,117 @@ const run = async () => {
     assert.equal(result, '2025-06-12');
   });
 
+  // ─── WhatsApp: date/time preserved through service selection ─────────────────
+
+  await runFixture('awaiting_service preserves selectedDate when transitioning to awaiting_date', async () => {
+    const recorder = createStateRecorder();
+    const message = await handleAwaitingServiceStep({
+      text: '1',
+      phone,
+      customerName,
+      services: baseServices,
+      state: {
+        selectedDate: '2026-06-11',
+        selectedTime: '14:00',
+      },
+      stateJson: {},
+      extractNumericSelection,
+      findServiceMatches: () => [],
+      formatServiceList: services => services.map((s, i) => `${i + 1}. ${s.name}`).join('\n'),
+      upsertState: recorder.upsertState,
+    });
+
+    assert.match(message, /Dis Temizligi/i);
+    assert.equal(recorder.calls.length, 1);
+    assert.equal(recorder.calls[0].step, 'awaiting_date');
+    assert.equal(recorder.calls[0].selectedDate, '2026-06-11');
+    assert.equal(recorder.calls[0].selectedTime, '14:00');
+  });
+
+  await runFixture('awaiting_time re-filters for 14:00 when user says "saat 14 demiştim"', async () => {
+    const allSlots: SavedAvailableSlot[] = [
+      createSlot('09:00', 'p1', 'Dt. Ahmet'),
+      createSlot('10:30', 'p1', 'Dt. Ahmet'),
+      createSlot('14:00', 'p2', 'Dt. Ayşe'),
+      createSlot('14:30', 'p2', 'Dt. Ayşe'),
+    ];
+    const recorder = createStateRecorder();
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: 'saat 14 demiştim',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate: '2026-06-11',
+      },
+      stateJson: { availableSlots: allSlots, lastShownSlots: allSlots.slice(0, 2) },
+      extractNumericSelection,
+      findSlotMatches: (text, slots) => {
+        const extracted = interpretTimeRequest(text).exactTime;
+        const matches = extracted ? slots.map((s, i) => ({ slot: s, index: i })).filter(({ slot }) => slot.localStartTime === extracted) : [];
+        return { extractedTime: extracted, hasPractitionerFragment: false, matches };
+      },
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      interpretTimeWithAi: async text => {
+        const r = interpretTimeRequest(text);
+        return { exactTime: r.exactTime, afterTime: r.afterTimeMinutes !== null ? minutesToTime(r.afterTimeMinutes) : null, timePreference: r.preference };
+      },
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => { throw new Error('should not be called'); },
+    });
+
+    assert.ok(!message.includes('09:00'), `Reply should not include 09:00 slot: ${message}`);
+    assert.ok(message.includes('14:00'), `Reply should include 14:00 slot: ${message}`);
+  });
+
+  await runFixture('awaiting_time "öğleden sonra" returns afternoon slots only', async () => {
+    const allSlots: SavedAvailableSlot[] = [
+      createSlot('09:00', 'p1', 'Dt. Ahmet'),
+      createSlot('14:00', 'p2', 'Dt. Ayşe'),
+      createSlot('15:30', 'p2', 'Dt. Ayşe'),
+    ];
+    const recorder = createStateRecorder();
+
+    const message = await handleAwaitingTimeStep({
+      prisma: {} as never,
+      clinicId,
+      phone,
+      text: 'öğleden sonra',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate: '2026-06-11',
+      },
+      stateJson: { availableSlots: allSlots, lastShownSlots: allSlots },
+      extractNumericSelection,
+      findSlotMatches: (text, slots) => {
+        const extracted = interpretTimeRequest(text).exactTime;
+        return { extractedTime: extracted, hasPractitionerFragment: false, matches: [] };
+      },
+      formatAvailabilityMessage,
+      minutesToTime,
+      logAvailabilitySave: () => undefined,
+      interpretTimeWithAi: async text => {
+        const r = interpretTimeRequest(text);
+        return { exactTime: r.exactTime, afterTime: r.afterTimeMinutes !== null ? minutesToTime(r.afterTimeMinutes) : null, timePreference: r.preference };
+      },
+      upsertState: recorder.upsertState,
+      resetState: async () => undefined,
+      createAppointment: async () => { throw new Error('should not be called'); },
+    });
+
+    assert.ok(!message.includes('09:00'), `Reply should not include 09:00 slot: ${message}`);
+    assert.ok(message.includes('14:00') || message.includes('15:30'), `Reply should include afternoon slots: ${message}`);
+  });
+
   console.log('All WhatsApp conversation fixtures passed.');
 };
 

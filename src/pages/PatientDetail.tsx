@@ -56,13 +56,14 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'whatsapp' | 'activity' | 'files' | 'dental'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'dental'>('overview');
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [whatsappSearch, setWhatsappSearch] = useState('');
   const [whatsappDirection, setWhatsappDirection] = useState<'all' | 'incoming' | 'outgoing'>('all');
+  const [messageChannel, setMessageChannel] = useState<'all' | 'whatsapp' | 'instagram'>('all');
   const [tasks, setTasks] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
@@ -182,6 +183,33 @@ const PatientDetail: React.FC = () => {
     return matchesDirection && matchesSearch;
   });
 
+  const filteredInstagramMessages = (patient.instagramInboxEntries || []).filter((entry: any) => {
+    const normalizedSearch = whatsappSearch.trim().toLocaleLowerCase(locale);
+    const text = String(entry.lastMessageText || '').toLocaleLowerCase(locale);
+    return !normalizedSearch || text.includes(normalizedSearch);
+  });
+
+  const unifiedMessages = [
+    ...filteredWhatsappMessages.map((message: any) => ({
+      id: `wa-${message.id}`,
+      channel: 'whatsapp' as const,
+      direction: message.direction,
+      text: message.text,
+      createdAt: message.createdAt,
+    })),
+    ...filteredInstagramMessages.map((entry: any) => ({
+      id: `ig-${entry.id}`,
+      channel: 'instagram' as const,
+      direction: 'incoming' as const,
+      text: entry.lastMessageText || t('common:noData'),
+      createdAt: entry.updatedAt || entry.createdAt,
+      senderUsername: entry.senderUsername,
+      externalSenderId: entry.externalSenderId,
+    })),
+  ]
+    .filter(message => messageChannel === 'all' || message.channel === messageChannel)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
   const getActivityActorLabel = (log: any) => {
     try {
       const metadata = log.metadataJson ? JSON.parse(log.metadataJson) : null;
@@ -225,14 +253,14 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="flex gap-6 border-b border-gray-200">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'whatsapp', 'files', 'dental', 'activity'] as const).map(tab => (
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'dental', 'activity'] as const).map(tab => (
           <button 
             key={tab}
             data-tab={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {tab === 'whatsapp' ? t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'dental' ? t('patients:dentalChart.title') : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'dental' ? t('patients:dentalChart.title') : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -864,15 +892,30 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
           )}
-          {activeTab === 'whatsapp' && (
+          {activeTab === 'messages' && (
             <div className="space-y-4">
               <div className="card p-6 space-y-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <h3 className="font-bold text-lg">{t('patients:detail.whatsappTab', { defaultValue: 'WhatsApp' })}</h3>
+                    <h3 className="font-bold text-lg">{t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' })}</h3>
                     <p className="text-sm text-gray-500">
-                      {t('patients:detail.whatsappMessagesCount', { count: patient.whatsappConversationMessages?.length || 0 })}
+                      {t('patients:detail.messagesCount', { count: unifiedMessages.length, defaultValue: '{{count}} mesaj bulundu' })}
                     </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(['all', 'whatsapp', 'instagram'] as const).map(channel => (
+                      <button
+                        key={channel}
+                        onClick={() => setMessageChannel(channel)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${messageChannel === channel ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+                      >
+                        {channel === 'all'
+                          ? t('patients:detail.messagesFilterAllChannels', { defaultValue: 'Tüm Kanallar' })
+                          : channel === 'whatsapp'
+                            ? 'WhatsApp'
+                            : 'Instagram'}
+                      </button>
+                    ))}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(['all', 'incoming', 'outgoing'] as const).map(direction => (
@@ -895,27 +938,41 @@ const PatientDetail: React.FC = () => {
                     type="text"
                     value={whatsappSearch}
                     onChange={(event) => setWhatsappSearch(event.target.value)}
-                    placeholder={t('patients:detail.whatsappSearchPlaceholder', { defaultValue: 'Search WhatsApp messages...' })}
+                    placeholder={t('patients:detail.messagesSearchPlaceholder', { defaultValue: 'Mesajlarda ara...' })}
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-primary-400"
                   />
                 </div>
               </div>
 
               <div className="space-y-3">
-                {filteredWhatsappMessages.length > 0 ? filteredWhatsappMessages.map((message: any) => (
-                  <div key={message.id} className={`card p-5 border ${message.direction === 'incoming' ? 'border-emerald-100 bg-emerald-50/60' : 'border-sky-100 bg-sky-50/60'}`}>
+                {unifiedMessages.length > 0 ? unifiedMessages.map((message: any) => (
+                  <div key={message.id} className={`card p-5 border ${message.channel === 'instagram' || message.direction === 'incoming' ? 'border-emerald-100 bg-emerald-50/60' : 'border-sky-100 bg-sky-50/60'}`}>
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          {message.direction === 'incoming' ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Incoming' }) : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Outgoing' })}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${message.channel === 'instagram' ? 'border-purple-200 text-purple-700 bg-purple-50' : 'border-green-200 text-green-700 bg-green-50'}`}>
+                            {message.channel === 'instagram' ? 'Instagram' : 'WhatsApp'}
+                          </span>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            {message.channel === 'instagram'
+                              ? t('patients:detail.instagramIncoming', { defaultValue: 'Instagram Gelen' })
+                              : message.direction === 'incoming'
+                                ? t('patients:detail.whatsappIncoming', { defaultValue: 'WhatsApp Gelen' })
+                                : t('patients:detail.whatsappOutgoing', { defaultValue: 'WhatsApp Giden' })}
+                          </p>
+                        </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-900">{message.text}</p>
+                        {message.channel === 'instagram' && (message.senderUsername || message.externalSenderId) && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            {message.senderUsername ? `@${message.senderUsername}` : `ID • ...${String(message.externalSenderId).slice(-4)}`}
+                          </p>
+                        )}
                       </div>
                       <span className="text-xs text-gray-500 whitespace-nowrap">{formatDateTime(message.createdAt)}</span>
                     </div>
                   </div>
                 )) : (
-                  <div className="card p-8 text-center text-gray-400 italic">{t('patients:detail.whatsappNoMessages', { defaultValue: 'No WhatsApp messages found for this filter.' })}</div>
+                  <div className="card p-8 text-center text-gray-400 italic">{t('patients:detail.messagesEmpty', { defaultValue: 'Bu filtre için mesaj bulunamadı.' })}</div>
                 )}
               </div>
             </div>

@@ -39,6 +39,7 @@ export type AwaitingServiceState = {
   selectedAppointmentTypeId?: string | null;
   selectedAppointmentTypeName?: string | null;
   selectedDate?: string | null;
+  selectedTime?: string | null;
 };
 
 export type AwaitingDateState = {
@@ -205,6 +206,11 @@ const isShortAffirmation = (text: string) => {
 
 const isStandaloneNumericDateExpression = (text: string) => {
   return /^\s*\d{1,2}[./]\d{1,2}(?:[./]\d{4})?\s*$/i.test(text);
+};
+
+const parseIsoDateInput = (text: string) => {
+  const trimmed = text.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
 };
 
 const isConfirmationRejected = (text: string) => {
@@ -436,8 +442,8 @@ export const handleAwaitingServiceStep = async ({
     step: 'awaiting_date',
     selectedAppointmentTypeId: selectedService.id,
     selectedAppointmentTypeName: selectedService.name,
-    selectedDate: null,
-    selectedTime: null,
+    selectedDate: state.selectedDate ?? null,
+    selectedTime: state.selectedTime ?? null,
     lastMessage: text,
     stateJson: null,
   });
@@ -475,6 +481,7 @@ export const handleAwaitingDateStep = async ({
   }
 
   const normalizedDate = normalizeDateFromTurkishInput(text, now ?? new Date(), WHATSAPP_ASSISTANT_TIME_ZONE)
+    ?? parseIsoDateInput(text)
     ?? (interpretDateWithAi ? await interpretDateWithAi(text) : null);
   if (!normalizedDate) {
     await upsertState({
@@ -1085,6 +1092,14 @@ export const handleAwaitingConfirmationStep = async ({
     const serviceName = state.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
     return `Talebinizi klinik onay ekranına aldım. ${serviceName} için ${formatTurkishDateLong(state.selectedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${pendingSlot.localStartTime} talebiniz personel tarafından kontrol edilecek. Klinik ekibi onay durumunu size bildirecek.`;
   } catch (error) {
+    if (error instanceof Error && error.message === 'INSTAGRAM_NAME_REQUIRED') {
+      return 'Randevu talebinizi tamamlayabilmem için adınızı ve soyadınızı paylaşır mısınız?';
+    }
+
+    if (error instanceof Error && error.message === 'INSTAGRAM_PHONE_REQUIRED') {
+      return 'Randevu talebinizi tamamlamak için telefon numaranızı da paylaşır mısınız?';
+    }
+
     if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
       await upsertState({
         customerName,

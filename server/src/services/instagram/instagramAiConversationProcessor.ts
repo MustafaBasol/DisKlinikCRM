@@ -36,6 +36,7 @@ type InstagramAssistantStep =
   | 'awaiting_time'
   | 'awaiting_confirmation'
   | 'awaiting_name'
+  | 'awaiting_phone'
   | 'awaiting_handoff_note'
   | null;
 
@@ -59,6 +60,8 @@ type InstagramAssistantService = {
   name: string;
   durationMinutes: number;
 };
+
+const INSTAGRAM_UNKNOWN_PHONE = '0000000000';
 
 type InstagramInboxContext = {
   id: string;
@@ -100,7 +103,19 @@ const FALLBACK_SERVICES: InstagramAssistantService[] = [
 export const buildInstagramConversationKey = (connectionId: string, externalSenderId: string) =>
   `instagram:${connectionId}:${externalSenderId}`;
 
-export const buildInstagramAppointmentFallbackPhone = (externalSenderId: string) => externalSenderId.trim();
+const normalizePhoneDigits = (value: string) => value.replace(/@.+$/, '').replace(/\D/g, '');
+
+export const normalizeInstagramPatientPhone = (value: string | null | undefined) => {
+  if (!value?.trim()) return null;
+  const digits = normalizePhoneDigits(value);
+  if (digits.length < 6 || digits.length > 15) return null;
+  return digits;
+};
+
+export const buildInstagramAppointmentFallbackPhone = (externalSenderId: string) =>
+  normalizeInstagramPatientPhone(externalSenderId) ?? INSTAGRAM_UNKNOWN_PHONE;
+
+const hasRealPatientPhone = (value: string | null | undefined) => Boolean(normalizeInstagramPatientPhone(value));
 
 export const canProcessInstagramAi = (args: { clinicId?: string | null; needsClinicResolution?: boolean }) =>
   Boolean(args.clinicId?.trim()) && args.needsClinicResolution !== true;
@@ -191,13 +206,27 @@ const isNegativeHandoffNote = (text: string) => {
 };
 
 const extractNumericSelection = (text: string) => {
-  const match = normalizeText(text).match(/(?:^|\D)(\d{1,2})(?:\D|$)/);
+  const match = normalizeText(text).match(/^(\d{1,2})(?:[.)])?$/);
   return match ? Number(match[1]) : null;
 };
 
 const extractStandaloneNumericSelection = (text: string) => {
   const match = normalizeText(text).match(/^(\d{1,2})(?:[.)])?$/);
   return match ? Number(match[1]) : null;
+};
+
+const isPoliteClosingMessage = (text: string) => {
+  const normalized = normalizeSearchText(text);
+  return [
+    'tesekkurler',
+    'tesekkur ederim',
+    'cok sag ol',
+    'sag ol',
+    'sag olun',
+    'tamam',
+    'iyi gunler',
+    'oldun zaten',
+  ].some(pattern => normalized === pattern || normalized.includes(pattern));
 };
 
 const readStateJson = (value: unknown): InstagramAssistantStateJson => {
@@ -400,9 +429,15 @@ const loadAppointmentLookup = async (
     prisma.appointmentRequest.findMany({
       where: {
         clinicId: clinic.id,
-        phone: buildInstagramAppointmentFallbackPhone(externalSenderId),
         requestType: 'appointment',
         status: { in: ['pending', 'approved'] },
+        OR: [
+          ...(entry?.patientId ? [{ patientId: entry.patientId }] : []),
+          {
+            source: 'instagram',
+            externalSenderId: externalSenderId.trim(),
+          },
+        ],
       },
       select: {
         preferredStartTime: true,
@@ -446,6 +481,44 @@ const getClinicSystemUserId = async (clinicId: string) => {
     orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
   });
   return user?.id ?? null;
+};
+
+const getPhoneVariants = (value?: string | null) => {
+  const digits = value ? normalizePhoneDigits(value) : '';
+  const variants = new Set<string>();
+  if (!digits) return variants;
+  variants.add(digits);
+  if (digits.startsWith('90') && digits.length === 12) {
+    variants.add(digits.slice(2));
+    variants.add(`0${digits.slice(2)}`);
+  } else if (digits.startsWith('0') && digits.length === 11) {
+    variants.add(digits.slice(1));
+    variants.add(`90${digits.slice(1)}`);
+  } else if (digits.length === 10) {
+    variants.add(`0${digits}`);
+    variants.add(`90${digits}`);
+  }
+  return variants;
+};
+
+const phonesMatch = (left?: string | null, right?: string | null) => {
+  const leftVariants = getPhoneVariants(left);
+  const rightVariants = getPhoneVariants(right);
+  return [...leftVariants].some(variant => rightVariants.has(variant));
+};
+
+const findExistingPatientByPhone = async (clinicId: string, phone: string) => {
+  const exactMatch = await prisma.patient.findFirst({
+    where: { clinicId, phone, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+  if (exactMatch) return exactMatch;
+
+  const candidates = await prisma.patient.findMany({
+    where: { clinicId, phone: { not: null }, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+  return candidates.find(candidate => phonesMatch(candidate.phone, phone)) ?? null;
 };
 
 const logInstagramReplyFailure = async (args: {
@@ -510,7 +583,9 @@ const createInstagramStaffRequest = async (args: {
   instagramConnectionId?: string | null;
   externalSenderId: string;
   externalConversationId?: string | null;
+  patientId?: string | null;
   patientName: string;
+  patientPhone?: string | null;
   requestType: 'appointment' | 'info' | 'cancel' | 'reschedule';
   rawMessage: string;
   notes: string;
@@ -522,9 +597,9 @@ const createInstagramStaffRequest = async (args: {
   const request = await prisma.appointmentRequest.create({
     data: {
       clinicId: args.clinic.id,
-      patientId: args.entry?.patientId ?? null,
+      patientId: args.patientId ?? args.entry?.patientId ?? null,
       patientName: args.patientName,
-      phone: buildInstagramAppointmentFallbackPhone(args.externalSenderId),
+      phone: normalizeInstagramPatientPhone(args.patientPhone) ?? INSTAGRAM_UNKNOWN_PHONE,
       appointmentTypeId: args.appointmentTypeId ?? null,
       practitionerId: args.practitionerId ?? null,
       preferredStartTime: args.preferredStartTime ?? null,
@@ -593,6 +668,8 @@ const createInstagramAppointmentRequest = async (args: {
   externalSenderId: string;
   externalConversationId?: string | null;
   customerName: string;
+  patientPhone: string;
+  patientId?: string | null;
   appointmentTypeId: string;
   selectedSlot: SavedAvailableSlot;
   rawMessage?: string | null;
@@ -620,7 +697,9 @@ const createInstagramAppointmentRequest = async (args: {
     instagramConnectionId: args.instagramConnectionId,
     externalSenderId: args.externalSenderId,
     externalConversationId: args.externalConversationId,
+    patientId: args.patientId,
     patientName: args.customerName,
+    patientPhone: args.patientPhone,
     requestType: 'appointment',
     rawMessage: args.rawMessage ?? '',
     appointmentTypeId: args.appointmentTypeId,
@@ -638,6 +717,69 @@ const createInstagramAppointmentRequest = async (args: {
   }
 
   return request;
+};
+
+const ensureInstagramPatientProfile = async (args: {
+  clinic: InstagramAssistantClinic;
+  entry: InstagramInboxContext | null;
+  instagramConnectionId: string;
+  externalSenderId: string;
+  fullName: string;
+  phoneInput: string;
+}) => {
+  const normalizedPhone = normalizeInstagramPatientPhone(args.phoneInput);
+  if (!normalizedPhone) return null;
+
+  const parsedName = args.fullName.trim().split(/\s+/).filter(Boolean);
+  const firstName = parsedName[0] ?? 'Instagram';
+  const lastName = parsedName.slice(1).join(' ') || 'Kullanicisi';
+
+  const existingByPhone = await findExistingPatientByPhone(args.clinic.id, normalizedPhone);
+  if (existingByPhone) {
+    await prisma.instagramInboxEntry.updateMany({
+      where: {
+        organizationId: args.clinic.organizationId,
+        instagramConnectionId: args.instagramConnectionId,
+        externalSenderId: args.externalSenderId,
+      },
+      data: { patientId: existingByPhone.id },
+    });
+    return {
+      id: existingByPhone.id,
+      fullName: `${existingByPhone.firstName} ${existingByPhone.lastName}`.trim(),
+      phone: normalizeInstagramPatientPhone(existingByPhone.phone) ?? normalizedPhone,
+    };
+  }
+
+  const createdPatient = await prisma.patient.create({
+    data: {
+      clinicId: args.clinic.id,
+      organizationId: args.clinic.organizationId,
+      firstName,
+      lastName,
+      phone: normalizedPhone,
+      source: 'instagram',
+      patientStatus: 'new',
+      communicationConsent: false,
+      notes: 'Instagram üzerinden ilk temas sonrası oluşturuldu.',
+    },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+
+  await prisma.instagramInboxEntry.updateMany({
+    where: {
+      organizationId: args.clinic.organizationId,
+      instagramConnectionId: args.instagramConnectionId,
+      externalSenderId: args.externalSenderId,
+    },
+    data: { patientId: createdPatient.id },
+  });
+
+  return {
+    id: createdPatient.id,
+    fullName: `${createdPatient.firstName} ${createdPatient.lastName}`.trim(),
+    phone: normalizeInstagramPatientPhone(createdPatient.phone) ?? normalizedPhone,
+  };
 };
 
 const createHandoffRequest = async (args: {
@@ -725,6 +867,9 @@ const answerSmallTalk = (clinic: InstagramAssistantClinic, text: string, current
   const continuation = currentStep && currentStep !== 'main_menu'
     ? ' Randevu akisina devam etmek isterseniz kaldigimiz yerden ilerleyebiliriz.'
     : '';
+  if (!continuation && isPoliteClosingMessage(text)) {
+    return 'Rica ederim, sağlıklı günler dilerim.';
+  }
   if (normalized.includes('saat kac') || normalized.includes('su an saat')) {
     const time = new Intl.DateTimeFormat('tr-TR', {
       timeZone: clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE,
@@ -803,7 +948,21 @@ const buildReplyText = async (args: {
     ?? (state?.customerName && !isNumericPlatformId(state.customerName) ? state.customerName : null);
   const currentStep = (state?.step ?? null) as InstagramAssistantStep;
   const selectedDate = state?.selectedDate ?? null;
+  const selectedTime = state?.selectedTime ?? null;
+  const parsedTime = interpretTimeRequest(args.text);
+  const normalizedDateCandidate = await normalizeDateWithGoogleAi(
+    args.text,
+    new Date().toISOString().slice(0, 10),
+    args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE,
+  );
+  const extractedDateFromInput = normalizedDateCandidate ?? null;
+  const extractedTimeFromInput = parsedTime.exactTime ?? null;
+  const extractedThresholdMinutes = parsedTime.afterTimeMinutes;
+  const extractedThresholdTime = extractedThresholdMinutes !== null ? minutesToTime(extractedThresholdMinutes) : null;
   const standaloneNumericSelection = extractStandaloneNumericSelection(args.text);
+
+  const nextSelectedDate = selectedDate ?? extractedDateFromInput;
+  const nextSelectedTime = selectedTime ?? extractedTimeFromInput ?? extractedThresholdTime;
 
   if (isMainMenuCommand(args.text)) {
     await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
@@ -874,7 +1033,7 @@ const buildReplyText = async (args: {
   }
 
   if (currentStep === 'awaiting_service') {
-    return handleAwaitingServiceStep({
+    const serviceReply = await handleAwaitingServiceStep({
       text: args.text,
       phone: args.conversationKey,
       customerName,
@@ -882,7 +1041,8 @@ const buildReplyText = async (args: {
       state: {
         selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
         selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
-        selectedDate: state?.selectedDate,
+        selectedDate: nextSelectedDate,
+        selectedTime: nextSelectedTime,
       },
       stateJson: { matchedServices: stateJson.matchedServices },
       extractNumericSelection,
@@ -890,6 +1050,53 @@ const buildReplyText = async (args: {
       formatServiceList,
       upsertState: data => upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         ...data,
+        lastProviderMessageId: args.externalMessageId ?? null,
+      }),
+    });
+
+    const stateAfterService = await prisma.whatsAppConversationState.findUnique({
+      where: { clinicId_phone: { clinicId: args.clinic.id, phone: args.conversationKey } },
+      select: {
+        step: true,
+        selectedAppointmentTypeId: true,
+        selectedAppointmentTypeName: true,
+        selectedPractitionerId: true,
+        selectedDate: true,
+      },
+    });
+
+    const shouldAutoContinueToDate = stateAfterService?.step === 'awaiting_date'
+      && Boolean(stateAfterService.selectedAppointmentTypeId)
+      && Boolean(nextSelectedDate);
+
+    if (!shouldAutoContinueToDate) return serviceReply;
+
+    return handleAwaitingDateStep({
+      prisma,
+      clinicId: args.clinic.id,
+      text: nextSelectedDate!,
+      customerName,
+      state: {
+        selectedAppointmentTypeId: stateAfterService?.selectedAppointmentTypeId,
+        selectedAppointmentTypeName: stateAfterService?.selectedAppointmentTypeName,
+        selectedPractitionerId: stateAfterService?.selectedPractitionerId,
+      },
+      buildAvailableSlots,
+      formatAvailabilityMessage,
+      logAvailabilitySave: (totalSlots, shownSlots) => {
+        console.log('[instagram-assistant] availability-save', { totalSlots, shownSlots });
+      },
+      minutesToTime,
+      interpretDateWithAi: () => Promise.resolve(nextSelectedDate!),
+      interpretTimeWithAi: async () => ({
+        exactTime: nextSelectedTime,
+        afterTime: nextSelectedTime,
+        timePreference: parsedTime.preference,
+      }),
+      upsertState: data => upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+        ...data,
+        selectedDate: data.selectedDate ?? nextSelectedDate,
+        selectedTime: data.selectedTime ?? nextSelectedTime,
         lastProviderMessageId: args.externalMessageId ?? null,
       }),
     });
@@ -917,8 +1124,18 @@ const buildReplyText = async (args: {
         new Date().toISOString().slice(0, 10),
         args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE,
       ),
+      interpretTimeWithAi: async messageText => {
+        const interpreted = interpretTimeRequest(messageText);
+        return {
+          exactTime: interpreted.exactTime,
+          afterTime: interpreted.afterTimeMinutes !== null ? minutesToTime(interpreted.afterTimeMinutes) : null,
+          timePreference: interpreted.preference,
+        };
+      },
       upsertState: data => upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         ...data,
+        selectedDate: data.selectedDate ?? nextSelectedDate,
+        selectedTime: data.selectedTime ?? nextSelectedTime,
         lastProviderMessageId: args.externalMessageId ?? null,
       }),
     });
@@ -948,23 +1165,77 @@ const buildReplyText = async (args: {
       logAvailabilitySave: (totalSlots, shownSlots) => {
         console.log('[instagram-assistant] availability-save', { totalSlots, shownSlots });
       },
+      interpretTimeWithAi: async messageText => {
+        const interpreted = interpretTimeRequest(messageText);
+        return {
+          exactTime: interpreted.exactTime,
+          afterTime: interpreted.afterTimeMinutes !== null ? minutesToTime(interpreted.afterTimeMinutes) : null,
+          timePreference: interpreted.preference,
+        };
+      },
       upsertState: data => upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         ...data,
         lastProviderMessageId: args.externalMessageId ?? null,
       }),
       resetState: nextCustomerName => resetInstagramConversationState(args.clinic.id, args.conversationKey, nextCustomerName),
-      createAppointment: (_clinicId, _phone, name, appointmentTypeId, selectedSlot, rawMessage) =>
-        createInstagramAppointmentRequest({
+      createAppointment: async (_clinicId, _phone, name, appointmentTypeId, selectedSlot, rawMessage) => {
+        if (!hasUsableInstagramFullName(name)) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName: null,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_name',
+            selectedAppointmentTypeId: appointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+            selectedPractitionerId: selectedSlot.practitionerId,
+            selectedDate: state?.selectedDate ?? null,
+            selectedTime: selectedSlot.localStartTime,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: {
+              availableSlots: stateJson.availableSlots,
+              lastShownSlots: stateJson.lastShownSlots,
+              pendingConfirmationSlot: selectedSlot,
+            },
+          });
+          throw new Error('INSTAGRAM_NAME_REQUIRED');
+        }
+
+        const patientPhone = hasRealPatientPhone(args.entry?.patient?.phone) ? normalizeInstagramPatientPhone(args.entry?.patient?.phone)! : null;
+        if (!patientPhone) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName: name,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_phone',
+            selectedAppointmentTypeId: appointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+            selectedPractitionerId: selectedSlot.practitionerId,
+            selectedDate: state?.selectedDate ?? null,
+            selectedTime: selectedSlot.localStartTime,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: {
+              availableSlots: stateJson.availableSlots,
+              lastShownSlots: stateJson.lastShownSlots,
+              pendingConfirmationSlot: selectedSlot,
+            },
+          });
+          throw new Error('INSTAGRAM_PHONE_REQUIRED');
+        }
+
+        return createInstagramAppointmentRequest({
           clinic: args.clinic,
           entry: args.entry,
           instagramConnectionId: args.instagramConnectionId,
           externalSenderId: args.externalSenderId,
           externalConversationId: args.externalConversationId,
           customerName: name,
+          patientPhone,
+          patientId: args.entry?.patientId ?? null,
           appointmentTypeId,
           selectedSlot,
           rawMessage,
-        }),
+        });
+      },
     });
   }
 
@@ -990,18 +1261,64 @@ const buildReplyText = async (args: {
         lastProviderMessageId: args.externalMessageId ?? null,
       }),
       resetState: nextCustomerName => resetInstagramConversationState(args.clinic.id, args.conversationKey, nextCustomerName),
-      createAppointment: (_clinicId, _phone, name, appointmentTypeId, selectedSlot, rawMessage) =>
-        createInstagramAppointmentRequest({
+      createAppointment: async (_clinicId, _phone, name, appointmentTypeId, selectedSlot, rawMessage) => {
+        if (!hasUsableInstagramFullName(name)) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName: null,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_name',
+            selectedAppointmentTypeId: appointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+            selectedPractitionerId: selectedSlot.practitionerId,
+            selectedDate: state?.selectedDate ?? null,
+            selectedTime: selectedSlot.localStartTime,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: {
+              availableSlots: stateJson.availableSlots,
+              lastShownSlots: stateJson.lastShownSlots,
+              pendingConfirmationSlot: selectedSlot,
+            },
+          });
+          throw new Error('INSTAGRAM_NAME_REQUIRED');
+        }
+
+        const patientPhone = hasRealPatientPhone(args.entry?.patient?.phone) ? normalizeInstagramPatientPhone(args.entry?.patient?.phone)! : null;
+        if (!patientPhone) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName: name,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_phone',
+            selectedAppointmentTypeId: appointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+            selectedPractitionerId: selectedSlot.practitionerId,
+            selectedDate: state?.selectedDate ?? null,
+            selectedTime: selectedSlot.localStartTime,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: {
+              availableSlots: stateJson.availableSlots,
+              lastShownSlots: stateJson.lastShownSlots,
+              pendingConfirmationSlot: selectedSlot,
+            },
+          });
+          throw new Error('INSTAGRAM_PHONE_REQUIRED');
+        }
+
+        return createInstagramAppointmentRequest({
           clinic: args.clinic,
           entry: args.entry,
           instagramConnectionId: args.instagramConnectionId,
           externalSenderId: args.externalSenderId,
           externalConversationId: args.externalConversationId,
           customerName: name,
+          patientPhone,
+          patientId: args.entry?.patientId ?? null,
           appointmentTypeId,
           selectedSlot,
           rawMessage,
-        }),
+        });
+      },
     });
   }
 
@@ -1050,6 +1367,28 @@ const buildReplyText = async (args: {
     }
 
     try {
+      const patientPhone = hasRealPatientPhone(args.entry?.patient?.phone) ? normalizeInstagramPatientPhone(args.entry?.patient?.phone)! : null;
+      if (!patientPhone) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName: providedName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_phone',
+          selectedAppointmentTypeId: appointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+          selectedPractitionerId: pendingSlot.practitionerId,
+          selectedDate: selectedDateForRequest,
+          selectedTime: pendingSlot.localStartTime,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: {
+            availableSlots: stateJson.availableSlots,
+            lastShownSlots: stateJson.lastShownSlots,
+            pendingConfirmationSlot: pendingSlot,
+          },
+        });
+        return `Teşekkürler ${providedName}. Randevu talebinizi tamamlamak için telefon numaranızı da paylaşır mısınız?`;
+      }
+
       const request = await createInstagramAppointmentRequest({
         clinic: args.clinic,
         entry: args.entry,
@@ -1057,6 +1396,8 @@ const buildReplyText = async (args: {
         externalSenderId: args.externalSenderId,
         externalConversationId: args.externalConversationId,
         customerName: providedName,
+        patientPhone,
+        patientId: args.entry?.patientId ?? null,
         appointmentTypeId,
         selectedSlot: pendingSlot,
         rawMessage: args.text,
@@ -1075,6 +1416,105 @@ const buildReplyText = async (args: {
       if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
         await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
           customerName: providedName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_date',
+          selectedAppointmentTypeId: appointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: null,
+        });
+        return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
+      }
+
+      console.error('[instagram-assistant] appointment-create-error', error);
+      return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
+    }
+  }
+
+  if (currentStep === 'awaiting_phone') {
+    const pendingSlot = stateJson.pendingConfirmationSlot ?? null;
+    const appointmentTypeId = state?.selectedAppointmentTypeId ?? null;
+    const selectedDateForRequest = state?.selectedDate ?? null;
+    const persistedName = customerName?.trim() || null;
+
+    if (!persistedName || !pendingSlot || !appointmentTypeId || !selectedDateForRequest) {
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+        customerName: persistedName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_service',
+        selectedAppointmentTypeId: null,
+        selectedAppointmentTypeName: null,
+        selectedPractitionerId: null,
+        selectedDate: null,
+        selectedTime: null,
+        lastMessage: args.text,
+        lastProviderMessageId: args.externalMessageId ?? null,
+        stateJson: null,
+      });
+      return formatServiceList(services);
+    }
+
+    const resolvedPatient = await ensureInstagramPatientProfile({
+      clinic: args.clinic,
+      entry: args.entry,
+      instagramConnectionId: args.instagramConnectionId,
+      externalSenderId: args.externalSenderId,
+      fullName: persistedName,
+      phoneInput: args.text,
+    });
+
+    if (!resolvedPatient?.phone) {
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+        customerName: persistedName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_phone',
+        selectedAppointmentTypeId: appointmentTypeId,
+        selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
+        selectedPractitionerId: pendingSlot.practitionerId,
+        selectedDate: selectedDateForRequest,
+        selectedTime: pendingSlot.localStartTime,
+        lastMessage: args.text,
+        lastProviderMessageId: args.externalMessageId ?? null,
+        stateJson: {
+          availableSlots: stateJson.availableSlots,
+          lastShownSlots: stateJson.lastShownSlots,
+          pendingConfirmationSlot: pendingSlot,
+        },
+      });
+      return 'Telefon numarasını tam anlayamadım. Lütfen ülke koduyla birlikte yazabilir misiniz? Örneğin: +33 6 ...';
+    }
+
+    try {
+      const request = await createInstagramAppointmentRequest({
+        clinic: args.clinic,
+        entry: args.entry,
+        instagramConnectionId: args.instagramConnectionId,
+        externalSenderId: args.externalSenderId,
+        externalConversationId: args.externalConversationId,
+        customerName: resolvedPatient.fullName,
+        patientPhone: resolvedPatient.phone,
+        patientId: resolvedPatient.id,
+        appointmentTypeId,
+        selectedSlot: pendingSlot,
+        rawMessage: args.text,
+      });
+
+      await resetInstagramConversationState(args.clinic.id, args.conversationKey, resolvedPatient.fullName);
+      const serviceName = state?.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
+      return formatInstagramBookingCreatedReply({
+        customerName: resolvedPatient.fullName,
+        selectedDate: selectedDateForRequest,
+        localStartTime: pendingSlot.localStartTime,
+        practitionerName: pendingSlot.practitionerName,
+        serviceName,
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName: resolvedPatient.fullName,
           currentIntent: 'book_appointment',
           step: 'awaiting_date',
           selectedAppointmentTypeId: appointmentTypeId,
@@ -1214,8 +1654,8 @@ const buildReplyText = async (args: {
       selectedAppointmentTypeId: null,
       selectedAppointmentTypeName: null,
       selectedPractitionerId: null,
-      selectedDate: null,
-      selectedTime: null,
+      selectedDate: nextSelectedDate,
+      selectedTime: nextSelectedTime,
       lastMessage: args.text,
       lastProviderMessageId: args.externalMessageId ?? null,
       stateJson: null,

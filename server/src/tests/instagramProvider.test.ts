@@ -60,6 +60,7 @@ import {
   formatInstagramBookingCreatedReply,
   formatMainMenu,
   hasUsableInstagramFullName,
+  normalizeInstagramPatientPhone,
 } from '../services/instagram/instagramAiConversationProcessor.js';
 import { handleAwaitingConfirmationStep } from '../services/whatsappBookingFlow.js';
 import { resolveInstagramClinicFromKnownContext } from '../services/instagram/instagramClinicResolver.js';
@@ -635,8 +636,14 @@ async function main() {
     assert.notEqual(first, second);
   });
 
-  await test('AppointmentRequest phone fallback uses Instagram sender id', () => {
-    assert.equal(buildInstagramAppointmentFallbackPhone(' igsid-123 '), 'igsid-123');
+  await test('Instagram phone normalizer accepts only phone-like values', () => {
+    assert.equal(normalizeInstagramPatientPhone('+33 6 12 34 56 78'), '33612345678');
+    assert.equal(normalizeInstagramPatientPhone('1050315040903637'), null);
+    assert.equal(normalizeInstagramPatientPhone('igsid-123'), null);
+  });
+
+  await test('AppointmentRequest fallback phone remains synthetic placeholder when input is not phone-like', () => {
+    assert.equal(buildInstagramAppointmentFallbackPhone(' igsid-123 '), '0000000000');
   });
 
   section('Instagram webhook AI idempotency integration');

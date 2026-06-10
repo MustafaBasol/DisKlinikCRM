@@ -31,6 +31,7 @@ import {
 import { sendMessage } from '../services/instagram/InstagramMessagingProvider.js';
 import { findPatientInClinic, findUserAssignedToClinic } from '../utils/relationGuards.js';
 import { patientContactSelect } from '../utils/prismaSelects.js';
+import { normalizeInstagramPatientPhone } from '../services/instagram/instagramAiConversationProcessor.js';
 
 const router = express.Router();
 
@@ -483,7 +484,13 @@ router.post(
       // Build patient name + phone from what we have
       const patientName = instagramDisplayName(entry);
 
-      const phone = entry.patient?.phone ?? entry.externalSenderId;
+      const phone = normalizeInstagramPatientPhone(entry.patient?.phone);
+      if (!phone) {
+        return res.status(400).json({
+          error: 'Linked patient must have a valid phone number before creating an Instagram appointment request.',
+          code: 'MISSING_PATIENT_PHONE',
+        });
+      }
 
       const appointmentRequest = await prisma.appointmentRequest.create({
         data: {

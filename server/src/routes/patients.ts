@@ -121,6 +121,27 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
       console.warn('[patients/:id] whatsappConversationMessages query failed (migration pending?):', waErr?.message);
     }
 
+    let instagramInboxEntries: any[] = [];
+    try {
+      instagramInboxEntries = await prisma.instagramInboxEntry.findMany({
+        where: { patientId: id, clinicId },
+        select: {
+          id: true,
+          externalSenderId: true,
+          externalConversationId: true,
+          senderUsername: true,
+          lastMessageText: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      });
+    } catch (igErr: any) {
+      console.warn('[patients/:id] instagramInboxEntries query failed (migration pending?):', igErr?.message);
+    }
+
     // Fetch tooth records separately — resilient to missing migrations
     let toothRecords: any[] = [];
     try {
@@ -148,7 +169,7 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
       console.warn('[patients/:id] enriched treatmentCases query failed (migration pending?):', tcErr?.message);
     }
 
-    res.json({ ...patient, treatmentCases: treatmentCasesEnriched, toothRecords, whatsappConversationMessages });
+    res.json({ ...patient, treatmentCases: treatmentCasesEnriched, toothRecords, whatsappConversationMessages, instagramInboxEntries });
   } catch (err: any) {
     console.error('[patients/:id] error:', err?.message ?? err);
     res.status(500).json({ error: 'Failed to fetch patient' });
