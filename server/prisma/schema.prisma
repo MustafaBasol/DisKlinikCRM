@@ -1418,7 +1418,10 @@ model InstagramConnection {
   name                     String
   /// disconnected | connecting | connected | error
   status                   String       @default("disconnected")
+  /// Meta Instagram webhook recipient/account id used for routing incoming DMs
   instagramAccountId       String?      @unique
+  /// ID returned by Instagram Login API graph.instagram.com/me
+  instagramLoginUserId     String?      @unique
   instagramUsername        String?
   facebookPageId           String?
   /// AES-256-GCM encrypted Meta access token
