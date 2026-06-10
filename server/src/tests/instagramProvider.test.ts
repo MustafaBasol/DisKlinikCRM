@@ -35,6 +35,7 @@ process.env.ENCRYPTION_KEY = 'b'.repeat(64);
 
 import { encryptSecret, decryptSecret } from '../utils/encryption.js';
 import {
+  INSTAGRAM_LOGIN_GRAPH_API_BASE,
   testConnection,
   sendMessage,
   parseWebhook,
@@ -74,6 +75,28 @@ function makeConn(overrides: Partial<InstagramConnectionRecord> = {}): Instagram
     isActive: true,
     ...overrides,
   };
+}
+
+type FetchMock = (input: string | URL | Request, init?: RequestInit) => Response | Promise<Response>;
+
+async function withMockFetch(mock: FetchMock, fn: () => Promise<void>) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    return Promise.resolve(mock(input, init));
+  }) as typeof fetch;
+
+  try {
+    await fn();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 // ─── Run tests ────────────────────────────────────────────────────────────────
@@ -402,6 +425,70 @@ async function main() {
     assert.equal(result.success, false);
   });
 
+  await test('testConnection: validates Instagram Login token through graph.instagram.com /me', async () => {
+    let requestedUrl = '';
+
+    await withMockFetch((input) => {
+      requestedUrl = input.toString();
+      return jsonResponse({ id: '123456789', username: 'testclinic' });
+    }, async () => {
+      const result = await testConnection(makeConn());
+      assert.equal(result.success, true);
+      assert.equal(result.accountId, '123456789');
+      assert.equal(result.username, 'testclinic');
+    });
+
+    const url = new URL(requestedUrl);
+    assert.equal(`${url.origin}${url.pathname}`, `${INSTAGRAM_LOGIN_GRAPH_API_BASE}/me`);
+    assert.equal(url.searchParams.get('fields'), 'id,username');
+    assert.equal(url.searchParams.get('access_token'), 'fake-page-access-token');
+    assert.equal(requestedUrl.includes('graph.facebook.com'), false);
+  });
+
+  await test('testConnection: trims token before calling Instagram Login validation', async () => {
+    let requestedUrl = '';
+    const conn = makeConn({ accessTokenEncrypted: encryptSecret('  spaced-token  ') });
+
+    await withMockFetch((input) => {
+      requestedUrl = input.toString();
+      return jsonResponse({ id: '123456789', username: 'testclinic' });
+    }, async () => {
+      const result = await testConnection(conn);
+      assert.equal(result.success, true);
+    });
+
+    const url = new URL(requestedUrl);
+    assert.equal(url.searchParams.get('access_token'), 'spaced-token');
+  });
+
+  await test('testConnection: rejects a token for a different Instagram account id', async () => {
+    await withMockFetch(() => {
+      return jsonResponse({ id: '17841477329539113', username: 'autoviseo' });
+    }, async () => {
+      const result = await testConnection(makeConn({ instagramAccountId: '123456789' }));
+      assert.equal(result.success, false);
+      assert.ok(result.message.includes('mismatch'));
+      assert.equal(result.accountId, '17841477329539113');
+      assert.equal(result.username, 'autoviseo');
+    });
+  });
+
+  await test('testConnection: returns Meta error message from Instagram Login endpoint', async () => {
+    await withMockFetch(() => {
+      return jsonResponse({
+        error: {
+          message: 'Invalid OAuth access token - Cannot parse access token',
+          type: 'OAuthException',
+          code: 190,
+        },
+      }, 400);
+    }, async () => {
+      const result = await testConnection(makeConn());
+      assert.equal(result.success, false);
+      assert.equal(result.message, 'Meta API error: Invalid OAuth access token - Cannot parse access token');
+    });
+  });
+
   // ── sendMessage: validation ────────────────────────────────────────────────
   section('InstagramMessagingProvider.sendMessage');
 
@@ -416,9 +503,49 @@ async function main() {
     // Implementation silently truncates to 1000 chars
     const conn = makeConn();
     const longText = 'a'.repeat(1001);
-    const result = await sendMessage(conn, { recipientIgsid: 'igsid-123', text: longText });
-    // Will fail with network error (no real API) but should NOT be a validation error about length
-    assert.ok(result.success === false); // No real API in test — expect network failure
+    let requestedUrl = '';
+    let requestBody: Record<string, unknown> | null = null;
+
+    await withMockFetch((input, init) => {
+      requestedUrl = input.toString();
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return jsonResponse({ message_id: 'ig-mid-1' });
+    }, async () => {
+      const result = await sendMessage(conn, { recipientIgsid: 'igsid-123', text: longText });
+      assert.equal(result.success, true);
+      assert.equal(result.externalMessageId, 'ig-mid-1');
+    });
+    assert.ok(requestBody);
+    const message = (requestBody as Record<string, unknown>).message as Record<string, unknown>;
+    const text = message.text;
+    assert.equal(typeof text, 'string');
+    assert.equal((text as string).length, 1000);
+    const url = new URL(requestedUrl);
+    assert.equal(`${url.origin}${url.pathname}`, `${INSTAGRAM_LOGIN_GRAPH_API_BASE}/123456789/messages`);
+  });
+
+  await test('sendMessage: page token records keep Facebook Graph send endpoint', async () => {
+    let requestedUrl = '';
+    let requestBody: Record<string, unknown> | null = null;
+    const conn = makeConn({
+      accessTokenEncrypted: null,
+      pageAccessTokenEncrypted: encryptSecret('page-access-token'),
+    });
+
+    await withMockFetch((input, init) => {
+      requestedUrl = input.toString();
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return jsonResponse({ message_id: 'fb-mid-1' });
+    }, async () => {
+      const result = await sendMessage(conn, { recipientIgsid: 'igsid-123', text: 'Merhaba' });
+      assert.equal(result.success, true);
+      assert.equal(result.externalMessageId, 'fb-mid-1');
+    });
+
+    const url = new URL(requestedUrl);
+    assert.equal(`${url.origin}${url.pathname}`, 'https://graph.facebook.com/v20.0/123456789/messages');
+    assert.ok(requestBody);
+    assert.equal((requestBody as Record<string, unknown>).access_token, 'page-access-token');
   });
 
   await test('sendMessage: missing instagram account ID returns failure', async () => {

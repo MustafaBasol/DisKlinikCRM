@@ -60,6 +60,12 @@ function generateVerifyToken(): string {
   return randomBytes(16).toString('hex');
 }
 
+function trimSecret(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
 const connectionCreateSchema = z.object({
@@ -131,12 +137,15 @@ router.post(
       // Auto-generate verify token if not provided
       const verifyToken = data.webhookVerifyToken || generateVerifyToken();
 
+      const accessToken = trimSecret(data.accessTokenEncrypted);
+      const pageAccessToken = trimSecret(data.pageAccessTokenEncrypted);
+
       // Encrypt tokens
-      const accessTokenEncrypted = data.accessTokenEncrypted
-        ? encryptSecret(data.accessTokenEncrypted)
+      const accessTokenEncrypted = accessToken
+        ? encryptSecret(accessToken)
         : null;
-      const pageAccessTokenEncrypted = data.pageAccessTokenEncrypted
-        ? encryptSecret(data.pageAccessTokenEncrypted)
+      const pageAccessTokenEncrypted = pageAccessToken
+        ? encryptSecret(pageAccessToken)
         : null;
 
       const conn = await prisma.instagramConnection.create({
@@ -258,15 +267,18 @@ router.put(
       });
       if (!existing) return res.status(404).json({ error: 'Not found' });
 
-      // Preserve existing encrypted token if no new value provided
+      const accessToken = trimSecret(data.accessTokenEncrypted);
+      const pageAccessToken = trimSecret(data.pageAccessTokenEncrypted);
+
+      // Preserve existing encrypted token if no new non-empty value is provided
       const accessTokenEncrypted =
-        data.accessTokenEncrypted
-          ? encryptSecret(data.accessTokenEncrypted)
+        accessToken
+          ? encryptSecret(accessToken)
           : existing.accessTokenEncrypted;
 
       const pageAccessTokenEncrypted =
-        data.pageAccessTokenEncrypted
-          ? encryptSecret(data.pageAccessTokenEncrypted)
+        pageAccessToken
+          ? encryptSecret(pageAccessToken)
           : existing.pageAccessTokenEncrypted;
 
       const updateData: Record<string, unknown> = {
@@ -362,7 +374,8 @@ router.post(
           status: result.success ? 'connected' : 'error',
           lastError: result.success ? null : result.message,
           lastConnectedAt: result.success ? new Date() : undefined,
-          instagramUsername: result.username ?? conn.instagramUsername,
+          instagramAccountId: result.success ? result.accountId ?? conn.instagramAccountId : conn.instagramAccountId,
+          instagramUsername: result.success ? result.username ?? conn.instagramUsername : conn.instagramUsername,
         },
       });
 
