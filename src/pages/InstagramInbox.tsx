@@ -123,6 +123,7 @@ export default function InstagramInbox() {
   const [filterClinic, setFilterClinic] = useState('');
   const [resolveModal, setResolveModal] = useState<ResolveModal | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [modalError, setModalError] = useState('');
   const [replyModal, setReplyModal] = useState<ReplyModal | null>(null);
   const [replying, setReplying] = useState(false);
   const [replyResult, setReplyResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -212,10 +213,15 @@ export default function InstagramInbox() {
   }
 
   async function openLinkPatientModal(entry: InboxEntry) {
+    if (!entry.clinicId) {
+      setError(t('instagram:inbox.errors.assignClinicFirst', { defaultValue: 'Hasta bağlamak için önce şube atanması gerekiyor.' }));
+      return;
+    }
+    setModalError('');
     setResolveModal({
       entry,
       mode: 'link_patient',
-      clinicId: entry.clinicId ?? '',
+      clinicId: entry.clinicId,
       patientId: '',
       patientSearch: '',
       patients: [],
@@ -230,7 +236,8 @@ export default function InstagramInbox() {
       return;
     }
     try {
-      const res = await patientService.getAll({ search: query, limit: 10 });
+      const clinicId = resolveModal?.clinicId || undefined;
+      const res = await patientService.getAll({ search: query, limit: 10, ...(clinicId ? { clinicId } : {}) });
       setResolveModal(prev => prev ? { ...prev, patients: res.data.patients ?? [] } : null);
     } catch {
       // Ignore search errors
@@ -240,12 +247,14 @@ export default function InstagramInbox() {
   async function handleLinkPatientFromModal() {
     if (!resolveModal || !resolveModal.patientId) return;
     setResolving(true);
+    setModalError('');
     try {
       await instagramInboxService.linkPatient(resolveModal.entry.id, resolveModal.patientId);
       setResolveModal(null);
       reload();
-    } catch {
-      setError(t('instagram:inbox.errors.linkPatientFailed'));
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setModalError(msg ?? t('instagram:inbox.errors.linkPatientFailed'));
     } finally {
       setResolving(false);
     }
@@ -658,7 +667,7 @@ export default function InstagramInbox() {
                   : t('instagram:inbox.resolveModal.title')}
               </h2>
               <button
-                onClick={() => setResolveModal(null)}
+                onClick={() => { setResolveModal(null); setModalError(''); }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >
                 <XCircle size={20} />
@@ -666,6 +675,14 @@ export default function InstagramInbox() {
             </div>
 
             <div className="px-6 py-4 space-y-4">
+              {/* Modal-level error */}
+              {modalError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg text-sm flex items-center gap-2">
+                  <AlertCircle size={14} />
+                  {modalError}
+                </div>
+              )}
+
               {/* Clinic — only shown in assign_branch mode */}
               {resolveModal.mode === 'assign_branch' && (
                 <div>
@@ -729,7 +746,7 @@ export default function InstagramInbox() {
 
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
               <button
-                onClick={() => setResolveModal(null)}
+                onClick={() => { setResolveModal(null); setModalError(''); }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
               >
                 {t('common:cancel')}
