@@ -36,6 +36,7 @@ import {
   markInboundEventFailed,
   markInboundEventProcessed,
 } from '../services/messagingInboundIdempotency.js';
+import { processMetaWhatsAppIncomingMessage } from '../services/whatsapp/metaWhatsAppAiProcessor.js';
 
 const router = express.Router();
 
@@ -150,38 +151,49 @@ async function routeIncomingMetaMessage(
 
   try {
     if (resolution.clinicId) {
-    // Priority A/B/C resolved — clinic is known, existing booking-flow handles it
-    // via the existing Evolution-style conversation state. Meta messages with a known
-    // clinic are stored in the inbox for staff visibility.
-    await upsertInboxEntry({
-      organizationId: connection.organizationId,
-      whatsappConnectionId: connection.id,
-      clinicId: resolution.clinicId,
-      needsClinicResolution: false,
-      phone,
-      lastMessageText: text,
-      externalMessageId: messageId,
-    });
-  } else if (resolution.needsClinicResolution) {
-    // Priority D — unresolved shared-line, create inbox entry for manual resolution
-    await upsertInboxEntry({
-      organizationId: connection.organizationId,
-      whatsappConnectionId: connection.id,
-      clinicId: null,
-      needsClinicResolution: true,
-      phone,
-      lastMessageText: text,
-      externalMessageId: messageId,
-    });
-  } else {
-    logWebhookEvent(
-      connection.organizationId,
-      connection.id,
-      'meta_webhook_no_clinic_links',
-      'Meta webhook received for a WhatsApp connection with no clinic assignments',
-      { phone: summarizeProviderId(phone) },
-    );
-  }
+      // Priority A/B/C resolved — clinic known: write inbox then run AI processor.
+      await upsertInboxEntry({
+        organizationId: connection.organizationId,
+        whatsappConnectionId: connection.id,
+        clinicId: resolution.clinicId,
+        needsClinicResolution: false,
+        phone,
+        lastMessageText: text,
+        externalMessageId: messageId,
+      });
+
+      if (text.trim()) {
+        await processMetaWhatsAppIncomingMessage({
+          organizationId: connection.organizationId,
+          clinicId: resolution.clinicId,
+          connectionId: connection.id,
+          phone,
+          messageId,
+          text,
+          rawPayload: asJsonRecord(rawPayload),
+        });
+      }
+    } else if (resolution.needsClinicResolution) {
+      // Priority D — unresolved shared-line: inbox only, no AI.
+      await upsertInboxEntry({
+        organizationId: connection.organizationId,
+        whatsappConnectionId: connection.id,
+        clinicId: null,
+        needsClinicResolution: true,
+        phone,
+        lastMessageText: text,
+        externalMessageId: messageId,
+      });
+    } else {
+      logWebhookEvent(
+        connection.organizationId,
+        connection.id,
+        'meta_webhook_no_clinic_links',
+        'Meta webhook received for a WhatsApp connection with no clinic assignments',
+        { phone: summarizeProviderId(phone) },
+      );
+    }
+
     if (inboundEvent.status === 'created') {
       await markInboundEventProcessed(inboundEvent.eventId);
     }
