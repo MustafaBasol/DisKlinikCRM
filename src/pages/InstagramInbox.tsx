@@ -236,8 +236,7 @@ export default function InstagramInbox() {
       return;
     }
     try {
-      const clinicId = resolveModal?.clinicId || undefined;
-      const res = await patientService.getAll({ search: query, limit: 10, ...(clinicId ? { clinicId } : {}) });
+      const res = await patientService.getAll({ search: query, limit: 10 });
       setResolveModal(prev => prev ? { ...prev, patients: res.data.patients ?? [] } : null);
     } catch {
       // Ignore search errors
