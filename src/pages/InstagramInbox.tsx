@@ -236,8 +236,11 @@ export default function InstagramInbox() {
       return;
     }
     try {
-      const res = await patientService.getAll({ search: query, limit: 10 });
-      setResolveModal(prev => prev ? { ...prev, patients: res.data.patients ?? [] } : null);
+      const res = await patientService.getAll({ search: query });
+      const list: PossiblePatient[] = Array.isArray(res.data)
+        ? res.data
+        : (res.data.patients ?? []);
+      setResolveModal(prev => prev ? { ...prev, patients: list.slice(0, 10) } : null);
     } catch {
       // Ignore search errors
     }
