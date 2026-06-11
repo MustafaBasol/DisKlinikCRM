@@ -53,6 +53,7 @@ import {
 } from '../../utils/whatsappDate.js';
 import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
+import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -627,41 +628,91 @@ const createMetaWaAppointmentRequest = async (args: {
   const startTime = new Date(args.selectedSlot.startTime);
   const endTime = new Date(args.selectedSlot.endTime);
 
+  // Availability check is against stable schedule data (doctor hours/off-days)
+  // and can safely run outside the transaction.
   const availability = await checkPractitionerAvailability(
     args.clinic.id,
     args.selectedSlot.practitionerId,
     startTime,
     endTime,
   );
-  if (!availability.ok) throw new Error('APPOINTMENT_OUTSIDE_AVAILABILITY');
+  if (!availability.ok) throw new SlotConflictError('APPOINTMENT_OUTSIDE_AVAILABILITY');
 
-  const overlap = await prisma.appointment.findFirst({
-    where: {
+  // 1. Advisory lock  →  2. overlap re-check  →  3. create — all inside one tx.
+  // Under PostgreSQL READ COMMITTED, $transaction alone is insufficient:
+  // two concurrent tx can both read "no conflict" before either commits.
+  const request = await prisma.$transaction(async (tx) => {
+    await acquireAppointmentSlotLock(tx, {
       clinicId: args.clinic.id,
       practitionerId: args.selectedSlot.practitionerId,
-      deletedAt: null,
-      status: { notIn: ['cancelled'] },
-      OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
-    },
-    select: { id: true },
-  });
-  if (overlap) throw new Error('APPOINTMENT_OVERLAP');
+      startTime,
+    });
 
-  return createMetaWaStaffRequest({
-    clinic: args.clinic,
-    inboxEntryId: args.inboxEntryId,
-    connectionId: args.connectionId,
-    phone: args.phone,
-    customerName: args.customerName,
-    patientId: args.patientId,
-    requestType: 'appointment',
-    rawMessage: args.rawMessage ?? '',
-    appointmentTypeId: args.appointmentTypeId,
-    practitionerId: args.selectedSlot.practitionerId,
-    preferredStartTime: startTime,
-    preferredEndTime: endTime,
-    notes: 'Meta WhatsApp AI asistani uzerinden personel onayina gonderildi.',
+    await assertSlotAvailable(tx, {
+      clinicId: args.clinic.id,
+      practitionerId: args.selectedSlot.practitionerId,
+      startTime,
+      endTime,
+    });
+
+    return tx.appointmentRequest.create({
+      data: {
+        clinicId: args.clinic.id,
+        patientId: args.patientId ?? null,
+        patientName: args.customerName,
+        phone: normalizePhoneDigits(args.phone) || args.phone,
+        appointmentTypeId: args.appointmentTypeId,
+        practitionerId: args.selectedSlot.practitionerId,
+        preferredStartTime: startTime,
+        preferredEndTime: endTime,
+        requestType: 'appointment',
+        ...buildMetaWaSourceMetadata({
+          connectionId: args.connectionId,
+          phone: args.phone,
+          inboxEntryId: args.inboxEntryId,
+        }),
+        status: 'pending',
+        rawMessage: args.rawMessage ?? '',
+        notes: 'Meta WhatsApp AI asistani uzerinden personel onayina gonderildi.',
+      },
+      include: {
+        appointmentType: { select: { name: true } },
+        practitioner: { select: { firstName: true, lastName: true } },
+      },
+    });
   });
+
+  // Logging runs after the transaction commits to avoid coupling activity logs
+  // to the transaction's rollback.
+  console.info('[meta-wa-assistant] appointment-request created', {
+    channel: 'meta_whatsapp',
+    clinicId: summarizeId(args.clinic.id),
+    inboxEntryId: summarizeId(args.inboxEntryId),
+    patientId: summarizeId(args.patientId),
+    requestId: summarizeId(request.id),
+    requestType: 'appointment',
+  });
+
+  const systemUserId = await getClinicSystemUserId(args.clinic.id);
+  if (systemUserId) {
+    await logActivity({
+      clinicId: args.clinic.id,
+      userId: systemUserId,
+      entityType: 'appointment_request',
+      entityId: request.id,
+      action: 'created',
+      description: 'Meta WhatsApp AI assistant created appointment request for staff approval',
+      patientId: args.patientId ?? undefined,
+      metadata: {
+        systemGenerated: true,
+        source: 'meta_whatsapp',
+        phone: summarizeId(args.phone),
+        connectionId: args.connectionId,
+      },
+    });
+  }
+
+  return request;
 };
 
 // ── Handoff ───────────────────────────────────────────────────────────────────

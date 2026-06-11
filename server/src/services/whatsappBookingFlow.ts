@@ -1100,7 +1100,7 @@ export const handleAwaitingConfirmationStep = async ({
       return 'Randevu talebinizi tamamlamak için telefon numaranızı da paylaşır mısınız?';
     }
 
-    if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+    if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP' || error.message === 'APPOINTMENT_REQUEST_CONFLICT')) {
       await upsertState({
         customerName,
         currentIntent: 'book_appointment',
