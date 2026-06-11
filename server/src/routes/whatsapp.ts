@@ -53,6 +53,7 @@ import { isLegacyFallbackEnabled } from '../utils/legacyWhatsApp.js';
 import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
+import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../services/appointmentRequestSafety.js';
 
 const router = express.Router();
 
@@ -1365,36 +1366,48 @@ const createAppointmentRequestFromAssistant = async (
   const startTime = new Date(selectedSlot.startTime);
   const endTime = new Date(selectedSlot.endTime);
 
+  // Availability check is against stable schedule data (doctor hours/off-days)
+  // and can safely run outside the transaction.
   const availability = await checkPractitionerAvailability(clinicId, selectedSlot.practitionerId, startTime, endTime);
-  if (!availability.ok) throw new Error('APPOINTMENT_OUTSIDE_AVAILABILITY');
+  if (!availability.ok) throw new SlotConflictError('APPOINTMENT_OUTSIDE_AVAILABILITY');
 
-  const overlap = await prisma.appointment.findFirst({
-    where: {
-      clinicId, practitionerId: selectedSlot.practitionerId, deletedAt: null,
-      status: { notIn: ['cancelled'] },
-      OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
-    },
-    select: { id: true },
+  // 1. Advisory lock  →  2. overlap re-check  →  3. create — all inside one tx.
+  // The lock serializes concurrent writes for the same slot; under PostgreSQL
+  // READ COMMITTED a $transaction alone is not sufficient (two tx can both read
+  // "no conflict" before either commits its row).
+  const request = await prisma.$transaction(async (tx) => {
+    await acquireAppointmentSlotLock(tx, {
+      clinicId,
+      practitionerId: selectedSlot.practitionerId,
+      startTime,
+    });
+
+    await assertSlotAvailable(tx, {
+      clinicId,
+      practitionerId: selectedSlot.practitionerId,
+      startTime,
+      endTime,
+    });
+
+    return tx.appointmentRequest.create({
+      data: {
+        clinicId, patientId: patient.id,
+        patientName: getPatientFullName(patient), phone: normalizePhone(phone), appointmentTypeId,
+        practitionerId: selectedSlot.practitionerId, preferredStartTime: startTime, preferredEndTime: endTime,
+        requestType: 'appointment', source: 'whatsapp', status: 'pending',
+        externalSenderId: normalizePhone(phone),
+        sourceConversationId: normalizePhone(phone),
+        rawMessage: rawMessage ?? null,
+        notes: 'WhatsApp assistant üzerinden personel onayına gönderildi.',
+      },
+      include: {
+        appointmentType: { select: { name: true } },
+        practitioner: { select: { firstName: true, lastName: true } },
+      },
+    });
   });
-  if (overlap) throw new Error('APPOINTMENT_OVERLAP');
 
-  const request = await prisma.appointmentRequest.create({
-    data: {
-      clinicId, patientId: patient.id,
-      patientName: getPatientFullName(patient), phone: normalizePhone(phone), appointmentTypeId,
-      practitionerId: selectedSlot.practitionerId, preferredStartTime: startTime, preferredEndTime: endTime,
-      requestType: 'appointment', source: 'whatsapp', status: 'pending',
-      externalSenderId: normalizePhone(phone),
-      sourceConversationId: normalizePhone(phone),
-      rawMessage: rawMessage ?? null,
-      notes: 'WhatsApp assistant üzerinden personel onayına gönderildi.',
-    },
-    include: {
-      appointmentType: { select: { name: true } },
-      practitioner: { select: { firstName: true, lastName: true } },
-    },
-  });
-
+  // Logging runs after the transaction commits.
   console.info('[appointment-request] created', {
     channel: 'whatsapp',
     clinicId: summarizeIdentifier(clinicId),
@@ -2833,7 +2846,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
           const serviceName = state.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
           return `Talebinizi klinik onay ekranına aldım. ${serviceName} için ${formatTurkishDateLong(state.selectedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${pendingSlot.localStartTime} talebiniz personel tarafından kontrol edilecek. Klinik ekibi onay durumunu size bildirecek.`;
         } catch (error) {
-          if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+          if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP' || error.message === 'APPOINTMENT_REQUEST_CONFLICT')) {
             await upsertWhatsAppConversationState(clinic.id, input.phone, {
               customerName: fullName,
               currentIntent: 'book_appointment',

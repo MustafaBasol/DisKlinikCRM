@@ -30,6 +30,7 @@ import {
 } from '../../utils/whatsappDate.js';
 import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
+import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
 
 type InstagramAssistantStep =
   | 'main_menu'
@@ -678,38 +679,92 @@ const createInstagramAppointmentRequest = async (args: {
 }) => {
   const startTime = new Date(args.selectedSlot.startTime);
   const endTime = new Date(args.selectedSlot.endTime);
-  const availability = await checkPractitionerAvailability(args.clinic.id, args.selectedSlot.practitionerId, startTime, endTime);
-  if (!availability.ok) throw new Error('APPOINTMENT_OUTSIDE_AVAILABILITY');
 
-  const overlap = await prisma.appointment.findFirst({
-    where: {
+  // Availability check is against stable schedule data and can run outside tx.
+  const availability = await checkPractitionerAvailability(args.clinic.id, args.selectedSlot.practitionerId, startTime, endTime);
+  if (!availability.ok) throw new SlotConflictError('APPOINTMENT_OUTSIDE_AVAILABILITY');
+
+  // 1. Advisory lock  →  2. overlap re-check  →  3. create — all inside one tx.
+  // Under PostgreSQL READ COMMITTED, $transaction alone is insufficient.
+  const request = await prisma.$transaction(async (tx) => {
+    await acquireAppointmentSlotLock(tx, {
       clinicId: args.clinic.id,
       practitionerId: args.selectedSlot.practitionerId,
-      deletedAt: null,
-      status: { notIn: ['cancelled'] },
-      OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
-    },
-    select: { id: true },
-  });
-  if (overlap) throw new Error('APPOINTMENT_OVERLAP');
+      startTime,
+    });
 
-  const request = await createInstagramStaffRequest({
-    clinic: args.clinic,
-    entry: args.entry,
-    instagramConnectionId: args.instagramConnectionId,
-    externalSenderId: args.externalSenderId,
-    externalConversationId: args.externalConversationId,
-    patientId: args.patientId,
-    patientName: args.customerName,
-    patientPhone: args.patientPhone,
-    requestType: 'appointment',
-    rawMessage: args.rawMessage ?? '',
-    appointmentTypeId: args.appointmentTypeId,
-    practitionerId: args.selectedSlot.practitionerId,
-    preferredStartTime: startTime,
-    preferredEndTime: endTime,
-    notes: 'Instagram DM asistani uzerinden personel onayina gonderildi.',
+    await assertSlotAvailable(tx, {
+      clinicId: args.clinic.id,
+      practitionerId: args.selectedSlot.practitionerId,
+      startTime,
+      endTime,
+    });
+
+    return tx.appointmentRequest.create({
+      data: {
+        clinicId: args.clinic.id,
+        patientId: args.patientId ?? args.entry?.patientId ?? null,
+        patientName: args.customerName,
+        phone: normalizeInstagramPatientPhone(args.patientPhone) ?? INSTAGRAM_UNKNOWN_PHONE,
+        appointmentTypeId: args.appointmentTypeId,
+        practitionerId: args.selectedSlot.practitionerId,
+        preferredStartTime: startTime,
+        preferredEndTime: endTime,
+        requestType: 'appointment',
+        ...buildInstagramAppointmentRequestSourceMetadata({
+          instagramConnectionId: args.instagramConnectionId,
+          externalSenderId: args.externalSenderId,
+          externalConversationId: args.externalConversationId,
+          inboxEntryId: args.entry?.id ?? null,
+        }),
+        status: 'pending',
+        rawMessage: args.rawMessage ?? '',
+        notes: 'Instagram DM asistani uzerinden personel onayina gonderildi.',
+      },
+      include: {
+        appointmentType: { select: { name: true } },
+        practitioner: { select: { firstName: true, lastName: true } },
+      },
+    });
   });
+
+  // Logging runs after the transaction commits.
+  console.info('[appointment-request] created', {
+    channel: 'instagram',
+    clinicId: summarizeIdentifier(args.clinic.id),
+    inboxEntryId: summarizeIdentifier(args.entry?.id),
+    conversationId: summarizeIdentifier(args.externalConversationId),
+    patientId: summarizeIdentifier(args.entry?.patientId),
+    serviceId: summarizeIdentifier(args.appointmentTypeId),
+    serviceName: request.appointmentType?.name ?? null,
+    practitionerId: summarizeIdentifier(args.selectedSlot.practitionerId),
+    practitionerName: request.practitioner
+      ? `${request.practitioner.firstName} ${request.practitioner.lastName}`
+      : null,
+    requestedDateTime: startTime.toISOString(),
+    requestId: summarizeIdentifier(request.id),
+  });
+
+  const systemUserId = await getClinicSystemUserId(args.clinic.id);
+  if (systemUserId) {
+    await logActivity({
+      clinicId: args.clinic.id,
+      userId: systemUserId,
+      entityType: 'appointment_request',
+      entityId: request.id,
+      action: 'created',
+      description: 'Instagram DM assistant created appointment request for staff approval',
+      patientId: args.entry?.patientId ?? undefined,
+      metadata: {
+        systemGenerated: true,
+        source: 'instagram',
+        externalSenderId: args.externalSenderId,
+        instagramConnectionId: args.instagramConnectionId ?? null,
+        inboxEntryId: args.entry?.id ?? null,
+        conversationId: args.externalConversationId ?? null,
+      },
+    });
+  }
 
   if (args.entry) {
     await prisma.instagramInboxEntry.update({
@@ -1415,7 +1470,7 @@ const buildReplyText = async (args: {
         serviceName,
       });
     } catch (error) {
-      if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+      if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP' || error.message === 'APPOINTMENT_REQUEST_CONFLICT')) {
         await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
           customerName: providedName,
           currentIntent: 'book_appointment',
@@ -1514,7 +1569,7 @@ const buildReplyText = async (args: {
         serviceName,
       });
     } catch (error) {
-      if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP')) {
+      if (error instanceof Error && (error.message === 'APPOINTMENT_OUTSIDE_AVAILABILITY' || error.message === 'APPOINTMENT_OVERLAP' || error.message === 'APPOINTMENT_REQUEST_CONFLICT')) {
         await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
           customerName: resolvedPatient.fullName,
           currentIntent: 'book_appointment',
