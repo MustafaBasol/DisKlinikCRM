@@ -28,6 +28,8 @@ import {
   formatTurkishDateLong,
   WHATSAPP_ASSISTANT_TIME_ZONE,
 } from '../../utils/whatsappDate.js';
+import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
+import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 
 type InstagramAssistantStep =
   | 'main_menu'
@@ -1677,10 +1679,16 @@ const buildReplyText = async (args: {
 export const processInstagramIncomingMessage = async (
   args: ProcessInstagramIncomingMessageArgs,
 ): Promise<ProcessInstagramIncomingMessageResult> => {
-  const text = args.text.trim().slice(0, 2000);
+  // Security: sanitize and cap text length before reaching AI.
+  const text = sanitizeInboundMessageText(args.text);
   if (!text) return { status: 'skipped', reason: 'empty_text' };
   if (!canProcessInstagramAi({ clinicId: args.clinicId, needsClinicResolution: args.needsClinicResolution })) {
     return { status: 'skipped', reason: 'clinic_unresolved' };
+  }
+
+  // Rate limiting: 8 messages per 60 seconds per sender per connection.
+  if (!checkInboundRateLimit('instagram', args.instagramConnectionId, args.externalSenderId)) {
+    return { status: 'skipped', reason: 'empty_text' };
   }
 
   const [connection, clinic, inboxEntry] = await Promise.all([

@@ -51,6 +51,8 @@ import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTAN
 import { getZonedDateParts, minutesToTime, timeToMinutes, formatClinicDateTime, localDateTimeToClinicDate } from '../utils/helpers.js';
 import { isLegacyFallbackEnabled } from '../utils/legacyWhatsApp.js';
 import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
+import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
+import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
 
 const router = express.Router();
 
@@ -2315,6 +2317,8 @@ const executeAgentDecision = async (args: {
 const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>) => {
   const inputPhone = normalizePhone(input.phone);
   input.phone = inputPhone;
+  // Security: cap text length before any AI processing.
+  input.text = sanitizeInboundMessageText(input.text);
 
   const existingPatient = await findExistingPatientByPhone(clinic.id, inputPhone);
   const state = await prisma.whatsAppConversationState.findUnique({
@@ -3086,6 +3090,12 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
             if (duplicate) {
               await markInboundEventProcessed(inboundEventId);
               return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
+            }
+
+            // Rate limiting: 8 messages per 60 seconds per sender per connection.
+            if (!checkInboundRateLimit('evolution', dbConnection.id, incomingMessage.phone)) {
+              await markInboundEventProcessed(inboundEventId);
+              return res.status(200).json({ ignored: true, reason: 'rate_limited' });
             }
 
             const responseText = await handleIncomingWhatsAppMessage(incomingMessage, resolvedClinic);

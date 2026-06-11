@@ -51,6 +51,8 @@ import {
   formatTurkishDateLong,
   WHATSAPP_ASSISTANT_TIME_ZONE,
 } from '../../utils/whatsappDate.js';
+import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
+import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1235,12 +1237,17 @@ const buildReplyText = async (args: {
 export const processMetaWhatsAppIncomingMessage = async (
   args: ProcessMetaWhatsAppIncomingMessageArgs,
 ): Promise<ProcessMetaWhatsAppIncomingMessageResult> => {
-  // Security: text is truncated to 2000 chars before reaching AI.
-  const text = args.text.trim().slice(0, 2000);
+  // Security: sanitize and cap text length before reaching AI.
+  const text = sanitizeInboundMessageText(args.text);
   if (!text) return { status: 'skipped', reason: 'empty_text' };
 
   // clinicId is required — idempotency gate and webhook caller must validate before invoking.
   if (!args.clinicId?.trim()) return { status: 'skipped', reason: 'clinic_unresolved' };
+
+  // Rate limiting: 8 messages per 60 seconds per sender per connection.
+  if (!checkInboundRateLimit('meta_whatsapp', args.connectionId, args.phone)) {
+    return { status: 'skipped', reason: 'empty_text' };
+  }
 
   const [connection, clinic, inboxEntry] = await Promise.all([
     prisma.whatsAppConnection.findFirst({
