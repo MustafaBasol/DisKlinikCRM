@@ -285,7 +285,7 @@ router.post(
       // Cross-org guard
       const entry = await prisma.instagramInboxEntry.findFirst({
         where: { id, organizationId: user.organizationId },
-        select: { id: true, clinicId: true },
+        select: { id: true, clinicId: true, externalSenderId: true, instagramConnectionId: true },
       });
 
       if (!entry) return res.status(404).json({ error: 'Inbox entry not found' });
@@ -296,6 +296,21 @@ router.post(
       await prisma.instagramInboxEntry.update({
         where: { id },
         data: { patientId },
+      });
+
+      // Back-fill patientId on all conversation messages for this sender
+      // so they appear on the patient detail messages tab immediately.
+      await prisma.instagramConversationMessage.updateMany({
+        where: {
+          organizationId: user.organizationId,
+          externalSenderId: entry.externalSenderId,
+          ...(entry.instagramConnectionId ? { instagramConnectionId: entry.instagramConnectionId } : {}),
+          patientId: null,
+        },
+        data: {
+          patientId,
+          clinicId: entry.clinicId,
+        },
       });
 
       return res.json({ success: true });
