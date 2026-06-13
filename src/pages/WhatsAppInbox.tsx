@@ -210,7 +210,7 @@ export default function WhatsAppInbox() {
 
       {/* Filters for All tab */}
       {activeTab === 'all' && (
-        <div className="flex gap-3 mb-4">
+        <div className="flex gap-2 mb-4 flex-wrap">
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}
@@ -225,7 +225,7 @@ export default function WhatsAppInbox() {
             placeholder={t('whatsapp:inbox.filters.clinicIdPlaceholder')}
             value={filterClinic}
             onChange={e => setFilterClinic(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-56"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-[140px]"
           />
           <button
             onClick={loadConversations}
@@ -264,9 +264,9 @@ export default function WhatsAppInbox() {
             <div className="space-y-3">
               {unassigned.map(entry => (
                 <div key={entry.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold text-gray-800">{entry.phone}</span>
                         {entry.displayName && (
                           <span className="text-sm text-gray-500">({entry.displayName})</span>
@@ -295,7 +295,7 @@ export default function WhatsAppInbox() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 sm:shrink-0">
                       <span className="text-xs text-gray-400">
                         {formatDate(entry.createdAt)}
                       </span>
@@ -325,9 +325,9 @@ export default function WhatsAppInbox() {
             <div className="space-y-3">
               {conversations.map(entry => (
                 <div key={entry.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold text-gray-800">{entry.phone}</span>
                         {entry.displayName && (
                           <span className="text-sm text-gray-500">({entry.displayName})</span>
