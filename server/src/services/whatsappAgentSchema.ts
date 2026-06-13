@@ -27,6 +27,7 @@ export const whatsappAgentActionValues = [
   'cancel_appointment',
   'human_handoff',
   'store_handoff_note',
+  'refuse_off_topic',
   'unknown_safe_reply',
 ] as const;
 

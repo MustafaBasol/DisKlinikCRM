@@ -50,6 +50,7 @@ import {
   _resetRateLimitStore,
 } from '../utils/inboundRateLimiter.js';
 import { buildWhatsAppAgentPrompt } from '../services/whatsappAgentPrompt.js';
+import { whatsappAgentActionValues, normalizeWhatsAppAgentDecision } from '../services/whatsappAgentSchema.js';
 
 // ─── 1: Text length capping — shared helper ───────────────────────────────────
 
@@ -312,6 +313,118 @@ await test('rate limiter allows evolution, meta, and instagram independently', (
   assert.ok(checkInboundRateLimit('evolution', 'c1', 's1'), 'evolution allowed');
   assert.ok(checkInboundRateLimit('meta_whatsapp', 'c1', 's1'), 'meta_whatsapp allowed');
   assert.ok(checkInboundRateLimit('instagram', 'c1', 's1'), 'instagram allowed');
+});
+
+// ─── 8: Off-topic abuse guard — schema ───────────────────────────────────────
+
+section('8. Off-topic abuse guard — schema');
+
+await test('whatsappAgentActionValues includes refuse_off_topic', () => {
+  assert.ok(
+    (whatsappAgentActionValues as readonly string[]).includes('refuse_off_topic'),
+    'Schema must include refuse_off_topic as an allowed action',
+  );
+});
+
+await test('normalizeWhatsAppAgentDecision accepts refuse_off_topic action', () => {
+  const decision = normalizeWhatsAppAgentDecision({
+    intent: 'off_topic_or_smalltalk',
+    confidence: 0.95,
+    action: 'refuse_off_topic',
+    reply: null,
+    slots: {},
+    statePatch: {},
+    needsHuman: false,
+    safetyFlags: ['off_topic'],
+  });
+  assert.ok(decision !== null, 'Decision must not be null for refuse_off_topic action');
+  assert.strictEqual(decision?.action, 'refuse_off_topic');
+  assert.strictEqual(decision?.intent, 'off_topic_or_smalltalk');
+});
+
+await test('normalizeWhatsAppAgentDecision rejects unknown action and falls back to unknown_safe_reply', () => {
+  const decision = normalizeWhatsAppAgentDecision({
+    intent: 'unknown',
+    confidence: 0.5,
+    action: 'some_invalid_action',
+    reply: null,
+    slots: {},
+    statePatch: {},
+    needsHuman: false,
+    safetyFlags: [],
+  });
+  assert.ok(decision !== null, 'normalizeWhatsAppAgentDecision must not return null for partially-valid input');
+  assert.strictEqual(decision?.action, 'unknown_safe_reply', 'Invalid action must fall back to unknown_safe_reply');
+});
+
+// ─── 9: Off-topic abuse guard — prompt rules ─────────────────────────────────
+
+section('9. Off-topic abuse guard — prompt rules');
+
+await test('prompt includes refuse_off_topic in allowed actions', () => {
+  const prompt = buildWhatsAppAgentPrompt(makePromptArgs());
+  assert.ok(
+    prompt.includes('refuse_off_topic'),
+    'Prompt must include refuse_off_topic action',
+  );
+});
+
+await test('prompt states the assistant is not a general-purpose AI', () => {
+  const prompt = buildWhatsAppAgentPrompt(makePromptArgs());
+  assert.ok(
+    prompt.includes('NOT a general-purpose AI') || prompt.includes('not a general-purpose AI'),
+    'Prompt must explicitly state this is not a general-purpose AI',
+  );
+});
+
+await test('prompt mentions code fixing as out-of-scope', () => {
+  const prompt = buildWhatsAppAgentPrompt(makePromptArgs());
+  assert.ok(
+    prompt.includes('code') || prompt.includes('kod'),
+    'Prompt must mention code fixing as an example of out-of-scope requests',
+  );
+});
+
+await test('prompt mentions homework as out-of-scope', () => {
+  const prompt = buildWhatsAppAgentPrompt(makePromptArgs());
+  assert.ok(
+    prompt.includes('homework') || prompt.includes('ödev') || prompt.includes('odev'),
+    'Prompt must mention homework solving as an example of out-of-scope requests',
+  );
+});
+
+await test('prompt mentions essay writing as out-of-scope', () => {
+  const prompt = buildWhatsAppAgentPrompt(makePromptArgs());
+  assert.ok(
+    prompt.includes('essay') || prompt.toLowerCase().includes('essay'),
+    'Prompt must mention essay writing as an example of out-of-scope requests',
+  );
+});
+
+await test('prompt covers prompt-injection + off-topic combo', () => {
+  const prompt = buildWhatsAppAgentPrompt(makePromptArgs());
+  assert.ok(
+    prompt.includes('önceki talimatları unut') || prompt.includes('prompt injection'),
+    'Prompt must explicitly address prompt injection combined with off-topic requests',
+  );
+});
+
+await test('prompt still includes existing booking scope', () => {
+  const prompt = buildWhatsAppAgentPrompt(makePromptArgs());
+  assert.ok(
+    prompt.includes('Randevu almak istiyorum') || prompt.includes('appointments'),
+    'Prompt must still include clinic appointment scope',
+  );
+});
+
+await test('buildWhatsAppAgentPrompt with booking intent still works', () => {
+  const prompt = buildWhatsAppAgentPrompt({
+    ...makePromptArgs(),
+    latestMessage: 'Randevu almak istiyorum',
+    currentIntent: 'book_appointment',
+  });
+  assert.ok(prompt.includes('Randevu almak istiyorum'), 'Prompt must include the latest booking message');
+  assert.ok(prompt.includes('refuse_off_topic'), 'Prompt must still include refuse_off_topic guard even in booking context');
 });
 
 // ─── Summary ──────────────────────────────────────────────────────────────────

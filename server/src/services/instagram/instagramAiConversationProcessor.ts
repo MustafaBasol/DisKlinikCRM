@@ -1688,6 +1688,10 @@ const buildReplyText = async (args: {
     });
   }
 
+  if (decision.action === 'refuse_off_topic') {
+    return 'Bu kanal yalnızca klinik randevuları ve klinik bilgilendirme için kullanılmaktadır. Randevu almak, randevunuzu değiştirmek veya yetkiliyle görüşmek isterseniz yardımcı olabilirim.';
+  }
+
   if (decision.action === 'reply_only' && intent === 'off_topic_or_smalltalk') {
     return answerSmallTalk(args.clinic, args.text, currentStep);
   }

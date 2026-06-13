@@ -189,6 +189,10 @@ const authorizeWhatsappApi: express.RequestHandler = (req, res, next) => {
 
 // ---- Constants ----
 
+const OFF_TOPIC_REFUSAL_MESSAGE =
+  'Bu kanal yalnızca klinik randevuları ve klinik bilgilendirme için kullanılmaktadır. ' +
+  'Randevu almak, randevunuzu değiştirmek veya yetkiliyle görüşmek isterseniz yardımcı olabilirim.';
+
 const WHATSAPP_FALLBACK_SERVICES: AssistantService[] = [
   { id: '11111111-1111-4111-8111-111111111111', name: 'Ağız, Diş ve Çene Cerrahisi', durationMinutes: 30 },
   { id: '22222222-2222-4222-8222-222222222222', name: 'Diş Beyazlatma Bleaching', durationMinutes: 30 },
@@ -2213,6 +2217,18 @@ const executeAgentDecision = async (args: {
   if (decision.action === 'answer_clinic_info' || intent === 'clinic_info') {
     logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'clinic_info');
     return answerClinicInfo(args.clinic, args.input.text, args.currentStep, args.selectedDate);
+  }
+
+  if (decision.action === 'refuse_off_topic') {
+    logGlobalIntent(args.input.phone, args.input.text, args.currentStep, 'off_topic_or_smalltalk');
+    await upsertWhatsAppConversationState(args.clinic.id, args.input.phone, {
+      customerName: args.customerName,
+      currentIntent: null,
+      step: null,
+      lastMessage: args.input.text,
+      stateJson: null,
+    });
+    return OFF_TOPIC_REFUSAL_MESSAGE;
   }
 
   if (decision.action === 'reply_only' && intent === 'off_topic_or_smalltalk') {
