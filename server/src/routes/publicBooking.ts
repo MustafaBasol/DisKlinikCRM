@@ -1,6 +1,12 @@
 import express, { Request, Response } from 'express';
 import prisma from '../db.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import {
+  checkPractitionerAvailabilityForSlot,
+  acquireAppointmentSlotLock,
+  assertSlotAvailable,
+  SlotConflictError,
+} from '../services/appointments/appointmentAvailabilityService.js';
 
 const router = express.Router();
 
@@ -106,9 +112,11 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
     const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
-    // Validate optional FK references belong to this clinic
+    // Validate optional FK references belong to this clinic.
+    // Keep svc so we can compute preferredEndTime from durationMinutes.
+    let svc: { durationMinutes: number } | null = null;
     if (serviceId) {
-      const svc = await prisma.appointmentType.findFirst({ where: { id: serviceId, clinicId } });
+      svc = await prisma.appointmentType.findFirst({ where: { id: serviceId, clinicId } });
       if (!svc) return res.status(400).json({ error: 'Invalid serviceId' });
     }
     if (practitionerId) {
@@ -116,11 +124,17 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
       if (!doc) return res.status(400).json({ error: 'Invalid practitionerId' });
     }
 
-    // Build preferredStartTime
+    // Build preferredStartTime / preferredEndTime.
     let preferredStartTime: Date | undefined;
+    let preferredEndTime: Date | undefined;
     if (preferredDate && preferredTime) {
       const dt = new Date(`${preferredDate}T${preferredTime}:00`);
-      if (!isNaN(dt.getTime())) preferredStartTime = dt;
+      if (!isNaN(dt.getTime())) {
+        preferredStartTime = dt;
+        if (svc) {
+          preferredEndTime = new Date(dt.getTime() + svc.durationMinutes * 60 * 1000);
+        }
+      }
     }
 
     // Try to match an existing patient by phone in this clinic
@@ -129,6 +143,79 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
       select: { id: true },
     });
 
+    // ── Slot safety (only when we have full slot info) ─────────────────────
+    // Full slot info = practitionerId + preferredStartTime + preferredEndTime.
+    // When any piece is missing the request is under-specified; staff will
+    // assign the final slot during review, so no lock/overlap check needed.
+    const hasFullSlotInfo = !!(practitionerId && preferredStartTime && preferredEndTime);
+
+    if (hasFullSlotInfo) {
+      // 1. Practitioner availability check (outside transaction — stable schedule data).
+      const availability = await checkPractitionerAvailabilityForSlot(
+        clinicId,
+        practitionerId!,
+        preferredStartTime!,
+        preferredEndTime!,
+      );
+      if (!availability.ok) {
+        return res.status(409).json({
+          error: 'This slot is no longer available. Please choose another time.',
+          code: 'SLOT_UNAVAILABLE',
+        });
+      }
+
+      // 2. Advisory lock → overlap check → request conflict check → create (all in one tx).
+      //    pg_advisory_xact_lock serializes concurrent public submissions for the same slot.
+      try {
+        const request = await prisma.$transaction(async (tx) => {
+          await acquireAppointmentSlotLock(tx, {
+            clinicId,
+            practitionerId: practitionerId!,
+            startTime: preferredStartTime!,
+          });
+
+          // assertSlotAvailable checks both Appointment overlap and
+          // pending/approved AppointmentRequest conflict in a single call.
+          await assertSlotAvailable(tx, {
+            clinicId,
+            practitionerId: practitionerId!,
+            startTime: preferredStartTime!,
+            endTime: preferredEndTime!,
+          });
+
+          return tx.appointmentRequest.create({
+            data: {
+              clinicId,
+              patientId: existingPatient?.id ?? null,
+              patientName: cleanName,
+              phone: cleanPhone,
+              email: cleanEmail,
+              appointmentTypeId: serviceId ?? null,
+              practitionerId: practitionerId ?? null,
+              preferredStartTime: preferredStartTime ?? null,
+              preferredEndTime: preferredEndTime ?? null,
+              requestType: 'appointment',
+              source: 'widget',
+              status: 'pending',
+              notes: cleanNotes,
+            },
+          });
+        });
+
+        return res.status(201).json({ success: true, requestId: request.id });
+      } catch (slotErr) {
+        if (slotErr instanceof SlotConflictError) {
+          return res.status(409).json({
+            error: 'This slot is no longer available. Please choose another time.',
+            code: 'SLOT_UNAVAILABLE',
+          });
+        }
+        throw slotErr;
+      }
+    }
+
+    // ── Partial request (no full slot info) — staff will review ────────────
+    // No lock/overlap check: practitioner or slot is unresolved.
     const request = await prisma.appointmentRequest.create({
       data: {
         clinicId,
@@ -139,6 +226,7 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
         appointmentTypeId: serviceId ?? null,
         practitionerId: practitionerId ?? null,
         preferredStartTime: preferredStartTime ?? null,
+        preferredEndTime: preferredEndTime ?? null,
         requestType: 'appointment',
         source: 'widget',
         status: 'pending',
