@@ -278,6 +278,19 @@ const PatientDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* Mobile-only compact patient header */}
+      <div className="flex items-center gap-3 lg:hidden">
+        <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-sm font-bold border border-primary-100 flex-shrink-0">
+          {patient.firstName[0]}{patient.lastName[0]}
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-gray-900 truncate">{patient.firstName} {patient.lastName}</h2>
+          <span className={`badge text-xs ${patient.patientStatus === 'active' ? 'badge-green' : patient.patientStatus === 'new' ? 'badge-blue' : 'badge-gray'}`}>
+            {t(`patients:status.${patient.patientStatus}`)}
+          </span>
+        </div>
+      </div>
+
       <div className="flex gap-1 sm:gap-4 border-b border-gray-200 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
         {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'dental', 'activity'] as const).map(tab => (
           <button 
@@ -292,8 +305,8 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column - Profile Summary */}
-        <div className="lg:col-span-1 space-y-6">
+        {/* Left Column - Profile Summary (desktop only) */}
+        <div className="hidden lg:block lg:col-span-1 space-y-6">
           <div className="card p-8 text-center">
             <div className="w-24 h-24 rounded-3xl bg-primary-50 text-primary-600 flex items-center justify-center text-3xl font-bold mx-auto mb-6 border-2 border-primary-100">
               {patient.firstName[0]}{patient.lastName[0]}
@@ -418,6 +431,94 @@ const PatientDetail: React.FC = () => {
         <div className="lg:col-span-2 space-y-8">
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Mobile-only: profile details, consents, clinical alerts, financial summary */}
+              <div className="lg:hidden space-y-4">
+                <div className="card p-4 space-y-3">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Mail size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm truncate">{patient.email || t('common:noData')}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Phone size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm">{patient.phone || t('common:noData')}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Calendar size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? formatDate(patient.dateOfBirth) : t('common:noData')}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <MapPin size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
+                  </div>
+                </div>
+                <div className="card p-4 space-y-3">
+                  <h3 className="font-bold text-gray-900 text-sm">{t('patients:detail.consents')}</h3>
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
+                    <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.communicationConsent')}</span>
+                    {patient.communicationConsent ? (
+                      <span className="flex items-center gap-1 text-green-600 text-xs font-bold"><CheckCircle2 size={13} /> {t('common:yes')}</span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-gray-400 text-xs font-bold"><AlertCircle size={13} /> {t('common:no')}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
+                    <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.marketingConsent')}</span>
+                    {patient.marketingConsent ? (
+                      <span className="flex items-center gap-1 text-green-600 text-xs font-bold"><CheckCircle2 size={13} /> {t('common:yes')}</span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-gray-400 text-xs font-bold"><AlertCircle size={13} /> {t('common:no')}</span>
+                    )}
+                  </div>
+                </div>
+                <div className={`card p-4 ${patient.notes ? 'border-amber-200 bg-amber-50' : ''}`}>
+                  <h3 className="font-bold flex items-center gap-2 mb-2 text-sm">
+                    <AlertTriangle size={15} className={patient.notes ? 'text-amber-500' : 'text-gray-400'} />
+                    {t('patients:detail.overview.clinicalAlerts')}
+                  </h3>
+                  {patient.notes ? (
+                    <p className="text-sm text-amber-800 bg-white rounded-lg border border-amber-200 p-2 whitespace-pre-line">{patient.notes}</p>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noClinicalAlerts')}</p>
+                  )}
+                </div>
+                <div className="card p-4">
+                  <h3 className="font-bold flex items-center gap-2 mb-2 text-sm">
+                    <TrendingUp size={15} className="text-primary-500" />
+                    {t('patients:detail.overview.financialSummary')}
+                  </h3>
+                  {(() => {
+                    const totalTreatment = treatmentCases.reduce((sum: number, tc: any) => sum + (tc.acceptedAmount ?? tc.estimatedAmount ?? 0), 0);
+                    const totalPaid = payments.filter((p: any) => p.paymentStatus === 'paid').reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                    const remaining = Math.max(0, totalTreatment - totalPaid);
+                    const lastPmt = payments.find((p: any) => p.paymentStatus === 'paid');
+                    const currency = paymentCurrency;
+                    const fmt = (n: number) => formatCurrency(n, currency, { maximumFractionDigits: 0 });
+                    if (totalTreatment === 0 && payments.length === 0) {
+                      return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
+                    }
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">{t('patients:detail.overview.totalTreatment')}</span>
+                          <span className="font-semibold">{fmt(totalTreatment)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">{t('patients:detail.overview.totalPaid')}</span>
+                          <span className="font-semibold text-green-600">{fmt(totalPaid)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm border-t border-gray-100 pt-2">
+                          <span className="text-gray-500 font-medium">{t('patients:detail.overview.remaining')}</span>
+                          <span className={`font-bold ${remaining > 0 ? 'text-amber-600' : 'text-green-600'}`}>{fmt(remaining)}</span>
+                        </div>
+                        {lastPmt && (
+                          <p className="text-xs text-gray-400 pt-1">{t('patients:detail.overview.lastPayment')}: {formatDate(lastPmt.paidAt || lastPmt.createdAt)}</p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
               {/* Upcoming Appointments */}
               <div className="card overflow-hidden">
                 <div className="flex items-center justify-between p-4 border-b border-gray-100">

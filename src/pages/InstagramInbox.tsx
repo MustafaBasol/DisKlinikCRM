@@ -591,10 +591,9 @@ export default function InstagramInbox() {
                     </span>
                   )}
                 </div>
-              </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                {/* Actions */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
                 {/* Reply */}
                 {canReplyInstagramMessages(user) && entry.status !== 'converted' && (
                   <button
@@ -652,6 +651,7 @@ export default function InstagramInbox() {
                     {t('instagram:inbox.actions.appointment')}
                   </button>
                 )}
+                </div>
               </div>
             </div>
           </div>
