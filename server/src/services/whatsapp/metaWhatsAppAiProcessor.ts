@@ -1233,6 +1233,10 @@ const buildReplyText = async (args: {
     return formatServiceList(services);
   }
 
+  if (decision.action === 'refuse_off_topic') {
+    return 'Bu kanal yalnızca klinik randevuları ve klinik bilgilendirme için kullanılmaktadır. Randevu almak, randevunuzu değiştirmek veya yetkiliyle görüşmek isterseniz yardımcı olabilirim.';
+  }
+
   if (decision.action === 'reply_only' || intent === 'off_topic_or_smalltalk') {
     if (isPoliteClosingMessage(args.text) && !currentStep) {
       return 'Rica ederim, saglikli gunler dilerim.';
