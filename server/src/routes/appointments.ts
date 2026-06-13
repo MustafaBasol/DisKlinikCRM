@@ -10,6 +10,11 @@ import {
   minutesToTime,
   timeToMinutes,
 } from '../utils/helpers.js';
+import {
+  checkAppointmentOverlap,
+  checkAppointmentRequestConflict,
+} from '../services/appointments/appointmentAvailabilityService.js';
+import { NON_BLOCKING_APPOINTMENT_STATUSES } from '../services/appointmentRequestSafety.js';
 import { appointmentSchema, appointmentUpdateSchema } from '../schemas/index.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
@@ -167,7 +172,7 @@ router.get('/appointments/available-slots', authorize(['OWNER', 'ORG_ADMIN', 'CL
           clinicId,
           practitionerId: doctorId,
           deletedAt: null,
-          status: { notIn: ['cancelled'] },
+          status: { notIn: [...NON_BLOCKING_APPOINTMENT_STATUSES] },
           ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
           startTime: { lt: nextDay },
           endTime: { gt: dayStart },
@@ -334,15 +339,29 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
       });
     }
 
-    const overlap = await prisma.appointment.findFirst({
-      where: {
-        clinicId, practitionerId, deletedAt: null, status: { notIn: ['cancelled'] },
-        OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
-      },
+    const overlap = await checkAppointmentOverlap(prisma, {
+      clinicId,
+      practitionerId,
+      startTime,
+      endTime,
     });
 
     if (overlap) {
       return res.status(409).json({ error: 'Practitioner already has an appointment during this time', code: 'APPOINTMENT_OVERLAP' });
+    }
+
+    const requestConflict = await checkAppointmentRequestConflict(prisma, {
+      clinicId,
+      practitionerId,
+      startTime,
+      endTime,
+    });
+
+    if (requestConflict) {
+      return res.status(409).json({
+        error: 'This slot already has a pending or approved appointment request.',
+        code: 'APPOINTMENT_REQUEST_CONFLICT',
+      });
     }
 
     const appointment = await prisma.appointment.create({
@@ -464,15 +483,29 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
         });
       }
 
-      const overlap = await prisma.appointment.findFirst({
-        where: {
-          id: { not: id }, clinicId, practitionerId: nextPractitionerId, deletedAt: null,
-          status: { notIn: ['cancelled'] },
-          OR: [{ startTime: { lt: nextEndTime }, endTime: { gt: nextStartTime } }],
-        },
+      const overlap = await checkAppointmentOverlap(prisma, {
+        clinicId,
+        practitionerId: nextPractitionerId,
+        startTime: nextStartTime,
+        endTime: nextEndTime,
+        excludeAppointmentId: id,
       });
 
       if (overlap) return res.status(409).json({ error: 'Overlap detected with another appointment' });
+
+      const requestConflict = await checkAppointmentRequestConflict(prisma, {
+        clinicId,
+        practitionerId: nextPractitionerId,
+        startTime: nextStartTime,
+        endTime: nextEndTime,
+      });
+
+      if (requestConflict) {
+        return res.status(409).json({
+          error: 'This slot already has a pending or approved appointment request.',
+          code: 'APPOINTMENT_REQUEST_CONFLICT',
+        });
+      }
     }
 
     const shouldCreateTreatmentCase =
