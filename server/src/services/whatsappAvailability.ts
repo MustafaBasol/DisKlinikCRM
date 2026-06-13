@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import type { TimePreference } from './whatsappInterpreter.js';
+import { NON_BLOCKING_APPOINTMENT_STATUSES } from './appointmentRequestSafety.js';
 
 export type SavedAvailableSlot = {
   practitionerId: string;
@@ -188,6 +189,12 @@ export const buildAvailableSlots = async (
   const now = new Date();
 
   for (const practitioner of practitioners) {
+    // Skip practitioner if they have an off-day on this date
+    const offDay = await prisma.doctorOffDay.findFirst({
+      where: { clinicId, practitionerId: practitioner.id, date },
+    });
+    if (offDay) continue;
+
     const availabilities = await prisma.doctorAvailability.findMany({
       where: { clinicId, practitionerId: practitioner.id, weekday, isActive: true },
       orderBy: { startTime: 'asc' },
@@ -208,7 +215,7 @@ export const buildAvailableSlots = async (
             clinicId,
             practitionerId: practitioner.id,
             deletedAt: null,
-            status: { notIn: ['cancelled'] },
+            status: { notIn: [...NON_BLOCKING_APPOINTMENT_STATUSES] },
             OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
           },
           select: { id: true },

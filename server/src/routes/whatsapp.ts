@@ -54,6 +54,7 @@ import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../services/appointmentRequestSafety.js';
+import { checkPractitionerAvailabilityForSlot } from '../services/appointments/appointmentAvailabilityService.js';
 
 const router = express.Router();
 
@@ -1057,31 +1058,6 @@ const upsertWhatsAppConversationState = async (
 
 // ---- Availability / Appointment Helpers ----
 
-const checkPractitionerAvailability = async (clinicId: string, practitionerId: string, startTime: Date, endTime: Date) => {
-  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
-  const timeZone = clinic?.timezone || 'Europe/Istanbul';
-  const start = getZonedDateParts(startTime, timeZone);
-  const end = getZonedDateParts(endTime, timeZone);
-  if (start.weekday !== end.weekday) return { ok: false, slots: [], timeZone };
-
-  // Klinik o gün kapalıysa randevu kabul etme
-  const clinicHours = await prisma.clinicWorkingHours.findUnique({
-    where: { clinicId_dayOfWeek: { clinicId, dayOfWeek: start.weekday } },
-  });
-  if (clinicHours?.isClosed) return { ok: false, slots: [], timeZone, reason: 'clinic_closed' };
-
-  const slots = await prisma.doctorAvailability.findMany({
-    where: { clinicId, practitionerId, weekday: start.weekday, isActive: true },
-    orderBy: { startTime: 'asc' },
-  });
-  const ok = slots.some(slot => {
-    const slotStart = timeToMinutes(slot.startTime);
-    const slotEnd = timeToMinutes(slot.endTime);
-    return start.minutes >= slotStart && end.minutes <= slotEnd;
-  });
-  return { ok, slots, timeZone };
-};
-
 const getDefaultClinic = async () => prisma.clinic.findFirst({ orderBy: { createdAt: 'asc' } });
 
 const getClinicForWhatsAppInstance = async (instanceName?: string | null) => {
@@ -1368,7 +1344,7 @@ const createAppointmentRequestFromAssistant = async (
 
   // Availability check is against stable schedule data (doctor hours/off-days)
   // and can safely run outside the transaction.
-  const availability = await checkPractitionerAvailability(clinicId, selectedSlot.practitionerId, startTime, endTime);
+  const availability = await checkPractitionerAvailabilityForSlot(clinicId, selectedSlot.practitionerId, startTime, endTime);
   if (!availability.ok) throw new SlotConflictError('APPOINTMENT_OUTSIDE_AVAILABILITY');
 
   // 1. Advisory lock  →  2. overlap re-check  →  3. create — all inside one tx.

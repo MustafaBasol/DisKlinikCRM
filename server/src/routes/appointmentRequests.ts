@@ -3,6 +3,10 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam, checkPractitionerAvailability } from '../utils/helpers.js';
+import {
+  checkAppointmentOverlap,
+  checkAppointmentRequestConflict,
+} from '../services/appointments/appointmentAvailabilityService.js';
 import { appointmentRequestStatusSchema, appointmentRequestConvertSchema, appointmentRequestUpdateSchema } from '../schemas/index.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { findUserAssignedToClinic } from '../utils/relationGuards.js';
@@ -226,15 +230,30 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
       });
     }
 
-    const overlap = await prisma.appointment.findFirst({
-      where: {
-        clinicId, practitionerId, deletedAt: null, status: { notIn: ['cancelled'] },
-        OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
-      },
+    const overlap = await checkAppointmentOverlap(prisma, {
+      clinicId,
+      practitionerId,
+      startTime,
+      endTime,
     });
 
     if (overlap) {
       return res.status(409).json({ error: 'Practitioner already has an appointment during this time', code: 'APPOINTMENT_OVERLAP' });
+    }
+
+    const requestConflict = await checkAppointmentRequestConflict(prisma, {
+      clinicId,
+      practitionerId,
+      startTime,
+      endTime,
+      excludeRequestId: id, // do not conflict with the request being converted
+    });
+
+    if (requestConflict) {
+      return res.status(409).json({
+        error: 'This slot already has a pending or approved appointment request.',
+        code: 'APPOINTMENT_REQUEST_CONFLICT',
+      });
     }
 
     const appointment = await prisma.appointment.create({
