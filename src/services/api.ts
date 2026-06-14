@@ -131,6 +131,14 @@ export const appointmentRequestService = {
   convert: (id: string, data?: any) => api.post(`/appointment-requests/${id}/convert`, data || {}),
 };
 
+export const contactRequestService = {
+  getAll: (params?: any) => api.get('/contact-requests', { params }),
+  getById: (id: string) => api.get(`/contact-requests/${id}`),
+  getCounts: () => api.get('/contact-requests/counts'),
+  updateStatus: (id: string, status: string) => api.patch(`/contact-requests/${id}/status`, { status }),
+  assign: (id: string, assignedToId: string | null) => api.patch(`/contact-requests/${id}/assign`, { assignedToId }),
+};
+
 export const taskService = {
   getAll: (params?: any) => api.get('/tasks', { params }),
   getById: (id: string) => api.get(`/tasks/${id}`),

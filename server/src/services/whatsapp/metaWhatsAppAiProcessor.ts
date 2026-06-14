@@ -56,6 +56,7 @@ import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
 import { sanitizeAiMessageHistory } from '../privacy/redaction.js';
+import { upsertContactRequest } from '../../routes/contactRequests.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -729,16 +730,18 @@ const createHandoffRequest = async (args: {
   conversationKey: string;
   patientId?: string | null;
 }): Promise<string> => {
-  const request = await createMetaWaStaffRequest({
-    clinic: args.clinic,
-    inboxEntryId: args.inboxEntryId,
-    connectionId: args.connectionId,
-    phone: args.phone,
-    customerName: args.customerName ?? 'WhatsApp Kullanicisi',
-    patientId: args.patientId,
-    requestType: 'info',
-    rawMessage: args.text,
-    notes: `Meta WhatsApp uzerinden yetkili talebi alindi.\nIlk mesaj: ${args.text}`,
+  const normalizedPhone = normalizePhoneDigits(args.phone) || args.phone;
+  const contactRequest = await upsertContactRequest({
+    clinicId: args.clinic.id,
+    channel: 'meta_whatsapp',
+    externalSenderId: normalizedPhone,
+    patientId: args.patientId ?? null,
+    phone: normalizedPhone,
+    name: args.customerName ?? 'WhatsApp Kullanicisi',
+    type: 'staff_handoff',
+    note: `Meta WhatsApp uzerinden yetkili talebi alindi.\nIlk mesaj: ${args.text}`.slice(0, 2000),
+    lastMessage: args.text.slice(0, 500),
+    sourceConversationId: normalizedPhone,
   });
 
   await upsertMetaWaState(args.clinic.id, args.conversationKey, {
@@ -746,7 +749,7 @@ const createHandoffRequest = async (args: {
     currentIntent: 'human_handoff',
     step: 'awaiting_handoff_note',
     lastMessage: args.text,
-    stateJson: { pendingHandoffRequestId: request.id },
+    stateJson: { pendingHandoffRequestId: contactRequest.id },
   });
 
   const firstName = getFirstName(args.customerName);
@@ -760,11 +763,13 @@ const handleHandoffNote = async (args: {
   customerName: string | null;
   text: string;
 }): Promise<string> => {
+  const note = args.text.trim();
   if (args.stateJson.pendingHandoffRequestId) {
-    await prisma.appointmentRequest.updateMany({
+    await prisma.contactRequest.updateMany({
       where: { id: args.stateJson.pendingHandoffRequestId, clinicId: args.clinic.id },
       data: {
-        notes: `Meta WhatsApp uzerinden yetkili talebi alindi.\nKullanici notu: ${args.text.trim()}`,
+        note: `Meta WhatsApp uzerinden yetkili talebi alindi.\nKullanici notu: ${note}`.slice(0, 2000),
+        lastMessage: note.slice(0, 500),
       },
     });
   }

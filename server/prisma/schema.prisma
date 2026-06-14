@@ -37,6 +37,7 @@ model Clinic {
   appointmentTypes             AppointmentType[]
   appointments                 Appointment[]
   appointmentRequests          AppointmentRequest[]
+  contactRequests              ContactRequest[]
   treatmentCases               TreatmentCase[]
   tasks                        Task[]
   payments                     Payment[]
@@ -108,6 +109,8 @@ model User {
   tasksAssigned              Task[]                         @relation("TaskAssignee")
   appointments               Appointment[]                  @relation("Practitioner")
   appointmentRequests        AppointmentRequest[]           @relation("AppointmentRequestPractitioner")
+  contactRequestsAssigned    ContactRequest[]               @relation("ContactRequestAssignee")
+  contactRequestsResolved    ContactRequest[]               @relation("ContactRequestResolver")
   availabilities             DoctorAvailability[]           @relation("DoctorAvailability")
   offDays                    DoctorOffDay[]                 @relation("DoctorOffDays")
   treatmentCases             TreatmentCase[]                @relation("Practitioner")
@@ -196,6 +199,7 @@ model Patient {
 
   appointments                 Appointment[]
   appointmentRequests          AppointmentRequest[]
+  contactRequests              ContactRequest[]
   treatmentCases               TreatmentCase[]
   tasks                        Task[]
   payments                     Payment[]
@@ -323,6 +327,37 @@ model AppointmentRequest {
   @@index([clinicId, practitionerId])
   @@index([source, status, createdAt])
   @@index([sourceInboxEntryId])
+}
+
+model ContactRequest {
+  id                    String    @id @default(uuid())
+  clinicId              String
+  clinic                Clinic    @relation(fields: [clinicId], references: [id])
+  patientId             String?
+  patient               Patient?  @relation(fields: [patientId], references: [id])
+  channel               String    // whatsapp, meta_whatsapp, instagram, manual
+  sourceConversationId  String?
+  sourceMessageId       String?
+  externalSenderId      String?
+  phone                 String?
+  name                  String?
+  type                  String    @default("staff_handoff") // callback_request, staff_handoff, information_request, complaint, other
+  status                String    @default("pending")       // pending, in_progress, resolved, closed
+  priority              String    @default("normal")        // normal, urgent
+  note                  String?
+  lastMessage           String?
+  assignedToId          String?
+  assignedTo            User?     @relation("ContactRequestAssignee", fields: [assignedToId], references: [id])
+  resolvedById          String?
+  resolvedBy            User?     @relation("ContactRequestResolver", fields: [resolvedById], references: [id])
+  resolvedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([clinicId, status])
+  @@index([clinicId, channel])
+  @@index([clinicId, externalSenderId])
+  @@index([clinicId, createdAt])
 }
 
 model WhatsAppConversationState {

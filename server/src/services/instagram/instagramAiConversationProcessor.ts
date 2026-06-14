@@ -31,6 +31,7 @@ import {
 import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
+import { upsertContactRequest } from '../../routes/contactRequests.js';
 
 type InstagramAssistantStep =
   | 'main_menu'
@@ -849,16 +850,17 @@ const createHandoffRequest = async (args: {
   text: string;
   conversationKey: string;
 }) => {
-  const request = await createInstagramStaffRequest({
-    clinic: args.clinic,
-    entry: args.entry,
-    instagramConnectionId: args.instagramConnectionId,
+  const contactRequest = await upsertContactRequest({
+    clinicId: args.clinic.id,
+    channel: 'instagram',
     externalSenderId: args.externalSenderId,
-    externalConversationId: args.externalConversationId,
-    patientName: args.customerName ?? 'Instagram Kullanıcısı',
-    requestType: 'info',
-    rawMessage: args.text,
-    notes: `Instagram DM uzerinden yetkili talebi alindi.\nIlk mesaj: ${args.text}`,
+    patientId: args.entry?.patientId ?? null,
+    phone: hasRealPatientPhone(args.entry?.patient?.phone) ? normalizeInstagramPatientPhone(args.entry?.patient?.phone ?? '') : null,
+    name: args.customerName ?? 'Instagram Kullanıcısı',
+    type: 'staff_handoff',
+    note: `Instagram DM uzerinden yetkili talebi alindi.\nIlk mesaj: ${args.text}`.slice(0, 2000),
+    lastMessage: args.text.slice(0, 500),
+    sourceConversationId: args.externalConversationId ?? args.externalSenderId,
   });
 
   await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
@@ -866,7 +868,7 @@ const createHandoffRequest = async (args: {
     currentIntent: 'human_handoff',
     step: 'awaiting_handoff_note',
     lastMessage: args.text,
-    stateJson: { pendingHandoffRequestId: request.id },
+    stateJson: { pendingHandoffRequestId: contactRequest.id },
   });
 
   const firstName = getFirstName(args.customerName);
@@ -882,9 +884,12 @@ const handleHandoffNote = async (args: {
 }) => {
   const note = args.text.trim();
   if (args.stateJson.pendingHandoffRequestId) {
-    await prisma.appointmentRequest.updateMany({
+    await prisma.contactRequest.updateMany({
       where: { id: args.stateJson.pendingHandoffRequestId, clinicId: args.clinic.id },
-      data: { notes: `Instagram DM uzerinden yetkili talebi alindi.\nKullanici notu: ${note}` },
+      data: {
+        note: `Instagram DM uzerinden yetkili talebi alindi.\nKullanici notu: ${note}`.slice(0, 2000),
+        lastMessage: note.slice(0, 500),
+      },
     });
   }
   await resetInstagramConversationState(args.clinic.id, args.conversationKey, args.customerName);
