@@ -156,6 +156,7 @@ type ConversationStateJson = {
     endTime?: string | null;
   };
   practitionerOptions?: { id: string; name: string }[];
+  pendingPastDateClarification?: string | null;
 };
 
 // ---- Helper Middlewares ----
@@ -314,6 +315,7 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
     pendingHandoffRequestId: typeof stateValue.pendingHandoffRequestId === 'string' ? stateValue.pendingHandoffRequestId : undefined,
     generalRequestReason: typeof stateValue.generalRequestReason === 'string' ? stateValue.generalRequestReason : undefined,
     preferredTimeRange,
+    pendingPastDateClarification: typeof stateValue.pendingPastDateClarification === 'string' ? stateValue.pendingPastDateClarification : undefined,
   };
 };
 
@@ -2637,7 +2639,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_service-deterministic', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
     return handleAwaitingServiceStep({
       text: input.text, phone: input.phone, customerName, services,
-      state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate },
+      state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate, selectedTime: state?.selectedTime },
       stateJson: { matchedServices: stateJson.matchedServices },
       extractNumericSelection, findServiceMatches, formatServiceList,
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
@@ -2918,7 +2920,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_service', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
     return handleAwaitingServiceStep({
       text: input.text, phone: input.phone, customerName, services,
-      state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate },
+      state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate, selectedTime: state?.selectedTime },
       stateJson: { matchedServices: stateJson.matchedServices },
       extractNumericSelection, findServiceMatches, formatServiceList,
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
@@ -2930,6 +2932,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     return handleAwaitingDateStep({
       prisma, clinicId: clinic.id, text: input.text, customerName,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId },
+      stateJson: { pendingPastDateClarification: stateJson.pendingPastDateClarification },
       buildAvailableSlots, formatAvailabilityMessage, logAvailabilitySave, minutesToTime,
       interpretDateWithAi: text => normalizeDateWithGoogleAi(text, new Date().toISOString().slice(0, 10), clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE),
       interpretTimeWithAi: async messageText => {

@@ -230,6 +230,50 @@ export const normalizeDateFromTurkishInput = (input: string, now: Date, timeZone
   return null;
 };
 
+/**
+ * When a user types an explicit month+day without a year (e.g. "13 haziran" or "13.06"),
+ * and that date in the CURRENT year is already in the past, `normalizeDateFromTurkishInput`
+ * silently advances it to next year.  This function detects that case and returns the
+ * current-year ISO date so callers can ask the user to confirm which year they meant,
+ * rather than silently booking 13+ months in the future.
+ *
+ * Returns the current-year ISO date (e.g. "2026-06-13") when the input matches an
+ * explicit past month+day pattern, or null otherwise (relative expressions, weekday names,
+ * ISO dates with explicit years, etc. all return null).
+ */
+export const getPastMonthDayCorrectedDate = (input: string, now: Date, timeZone = WHATSAPP_ASSISTANT_TIME_ZONE): string | null => {
+  const normalized = normalizeText(input);
+  if (!normalized) return null;
+
+  const today = getTodayInTimeZone(now, timeZone);
+
+  // "13 haziran" — day + Turkish month name, no explicit year
+  const dayMonthTextMatch = normalized.match(/(?:^|\D)(\d{1,2})\s+([a-zçğıöşü]+)(?:\s+(\d{4}))?(?:\D|$)/i);
+  if (dayMonthTextMatch && !dayMonthTextMatch[3]) {
+    const day = Number(dayMonthTextMatch[1]);
+    const month = turkishMonths[dayMonthTextMatch[2]];
+    if (month) {
+      const candidate = buildUtcDate(today.getUTCFullYear(), month, day);
+      if (candidate && candidate.getTime() < today.getTime()) {
+        return formatIsoDate(candidate);
+      }
+    }
+  }
+
+  // "13.06" or "13/06" — numeric day.month without explicit year
+  const slashOrDotMatch = normalized.match(/(?:^|\D)(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?(?:\D|$)/);
+  if (slashOrDotMatch && !slashOrDotMatch[3]) {
+    const day = Number(slashOrDotMatch[1]);
+    const month = Number(slashOrDotMatch[2]);
+    const candidate = buildUtcDate(today.getUTCFullYear(), month, day);
+    if (candidate && candidate.getTime() < today.getTime()) {
+      return formatIsoDate(candidate);
+    }
+  }
+
+  return null;
+};
+
 export const formatTurkishDateLong = (isoDate: string, timeZone = WHATSAPP_ASSISTANT_TIME_ZONE) => {
   return new Intl.DateTimeFormat('tr-TR', {
     timeZone,

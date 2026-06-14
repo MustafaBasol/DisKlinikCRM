@@ -8,13 +8,13 @@ import {
   type BookingServiceOption,
   type BookingStateJson,
 } from '../services/whatsappBookingFlow.js';
-import type { SavedAvailableSlot } from '../services/whatsappAvailability.js';
+import type { RawAvailableSlot, SavedAvailableSlot } from '../services/whatsappAvailability.js';
 import { routeResolvedWhatsAppIntent } from '../services/whatsappResolvedIntentRouter.js';
 import { buildFallbackWhatsAppAgentDecision } from '../services/whatsappConversationAgent.js';
 import { normalizeWhatsAppAgentDecision } from '../services/whatsappAgentSchema.js';
 import { getWebhookIgnoreReason, normalizeEvolutionWebhookPayload } from '../services/whatsappWebhookPayload.js';
 import { interpretTimeRequest } from '../services/whatsappInterpreter.js';
-import { normalizeDateFromTurkishInput } from '../utils/whatsappDate.js';
+import { getPastMonthDayCorrectedDate, normalizeDateFromTurkishInput } from '../utils/whatsappDate.js';
 import {
   validateWhatsappApiSecret,
   whatsappAppointmentLookupQuerySchema,
@@ -64,6 +64,21 @@ const createSlot = (localStartTime: string, practitionerId: string, practitioner
   localStartTime,
   localEndTime: localStartTime,
 });
+
+const createRawSlot = (date: string, localStartTime: string, id: string, firstName: string, lastName: string): RawAvailableSlot => {
+  const start = new Date(`${date}T${localStartTime}:00.000Z`);
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+  const [h, m] = localStartTime.split(':').map(Number);
+  const endMinutes = h * 60 + m + 30;
+  const localEndTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+  return {
+    practitioner: { id, firstName, lastName },
+    startTime: start,
+    endTime: end,
+    localStartTime,
+    localEndTime,
+  };
+};
 
 const createStateRecorder = () => {
   const calls: Array<Record<string, unknown>> = [];
@@ -283,6 +298,7 @@ const run = async () => {
       clinicId,
       text: '18 Mayıs 15ten sonra var mı',
       customerName,
+      now: new Date('2026-05-15T10:00:00.000Z'),
       state: {
         selectedAppointmentTypeId: 'svc-1',
         selectedAppointmentTypeName: 'Dis Temizligi',
@@ -406,6 +422,7 @@ const run = async () => {
       clinicId,
       text: '24 mayis 18.30',
       customerName,
+      now: new Date('2026-05-16T21:36:00.000Z'),
       state: {
         selectedAppointmentTypeId: 'svc-1',
         selectedAppointmentTypeName: 'Dis Temizligi',
@@ -1163,6 +1180,7 @@ const run = async () => {
       clinicId,
       text: '18 Mayıs 15ten sonra var mı',
       customerName: 'Selami Sahin',
+      now: new Date('2026-05-15T10:00:00.000Z'),
       state: {
         selectedAppointmentTypeId: 'svc-1',
         selectedAppointmentTypeName: 'Estetik Dis Hekimligi',
@@ -1792,6 +1810,207 @@ const run = async () => {
 
     assert.ok(!message.includes('09:00'), `Reply should not include 09:00 slot: ${message}`);
     assert.ok(message.includes('14:00') || message.includes('15:30'), `Reply should include afternoon slots: ${message}`);
+  });
+
+  // ─── Bug B: getPastMonthDayCorrectedDate ──────────────────────────────────
+
+  await runFixture('getPastMonthDayCorrectedDate returns null for today and future month+day', () => {
+    const now = new Date('2026-06-14T10:00:00.000Z'); // 14 Haziran 2026
+    // Today → null (not in the past)
+    assert.equal(getPastMonthDayCorrectedDate('14 haziran', now), null);
+    // Future → null
+    assert.equal(getPastMonthDayCorrectedDate('15 haziran', now), null);
+    assert.equal(getPastMonthDayCorrectedDate('yarın', now), null);
+    assert.equal(getPastMonthDayCorrectedDate('pazartesi', now), null);
+  });
+
+  await runFixture('getPastMonthDayCorrectedDate returns current-year ISO for "13 haziran" on 2026-06-14', () => {
+    const now = new Date('2026-06-14T10:00:00.000Z');
+    const result = getPastMonthDayCorrectedDate('13 haziran', now);
+    assert.equal(result, '2026-06-13');
+  });
+
+  await runFixture('getPastMonthDayCorrectedDate returns current-year ISO for "11.06" on 2026-06-14', () => {
+    const now = new Date('2026-06-14T10:00:00.000Z');
+    const result = getPastMonthDayCorrectedDate('11.06', now);
+    assert.equal(result, '2026-06-11');
+  });
+
+  // ─── Bug B: handleAwaitingDateStep clarification ───────────────────────────
+
+  await runFixture('handleAwaitingDateStep asks for year clarification on explicit past month+day', async () => {
+    const recorder = createStateRecorder();
+    const now = new Date('2026-06-14T10:00:00.000Z');
+    const msg = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: '13 haziran 14.00',
+      customerName,
+      state: { selectedAppointmentTypeId: 'svc-1', selectedAppointmentTypeName: 'Dis Temizligi' },
+      stateJson: {},
+      buildAvailableSlots: async () => null,
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      now,
+      upsertState: recorder.upsertState,
+    });
+
+    assert.ok(msg.includes('geçmiş'), `Expected past-date warning in: "${msg}"`);
+    assert.ok(msg.includes('2026'), `Expected 2026 year in: "${msg}"`);
+    assert.ok(msg.includes('2027'), `Expected 2027 year option in: "${msg}"`);
+    assert.ok(!msg.includes('Tarihi anlayamadım'), `Should NOT be a "couldn't parse" reply: "${msg}"`);
+
+    // State must store NEXT-YEAR date (2027-06-13), not the past current-year date (2026-06-13)
+    // so that "evet" in the follow-up turn books for the future, not for yesterday.
+    assert.equal(recorder.calls.length, 1);
+    const stateJsonSaved = recorder.calls[0].stateJson as BookingStateJson | undefined;
+    assert.equal(stateJsonSaved?.pendingPastDateClarification, '2027-06-13');
+    assert.equal(recorder.calls[0].step, 'awaiting_date');
+  });
+
+  await runFixture('handleAwaitingDateStep uses pendingPastDateClarification when user confirms with evet — books NEXT YEAR (2027), not current year', async () => {
+    const recorder = createStateRecorder();
+    const now = new Date('2026-06-14T10:00:00.000Z');
+    const rawSlots: RawAvailableSlot[] = [
+      createRawSlot('2027-06-13', '10:00', 'p1', 'Dt.', 'Ahmet'),
+      createRawSlot('2027-06-13', '14:00', 'p2', 'Dt.', 'Ayşe'),
+    ];
+    const msg = await handleAwaitingDateStep({
+      prisma: {} as never,
+      clinicId,
+      text: 'evet',
+      customerName,
+      state: { selectedAppointmentTypeId: 'svc-1', selectedAppointmentTypeName: 'Dis Temizligi' },
+      stateJson: { pendingPastDateClarification: '2027-06-13' },
+      buildAvailableSlots: async () => rawSlots,
+      formatAvailabilityMessage,
+      logAvailabilitySave: () => undefined,
+      minutesToTime,
+      now,
+      upsertState: recorder.upsertState,
+    });
+
+    // Should show availability for 2027-06-13 (next year), not for 2026-06-13 (past)
+    assert.ok(msg.includes('2027') || msg.includes('10:00') || msg.includes('14:00'), `Expected 2027 slot list: "${msg}"`);
+    assert.ok(!msg.includes('geçmiş'), `Should NOT repeat past-date warning: "${msg}"`);
+
+    const finalState = recorder.calls[recorder.calls.length - 1];
+    assert.equal(finalState?.step, 'awaiting_time');
+    assert.equal(finalState?.selectedDate, '2027-06-13');
+  });
+
+  // ─── Bug A: handleAwaitingServiceStep short message when date preserved ────
+
+  await runFixture('handleAwaitingServiceStep returns short message (no date question) when state.selectedDate is set', async () => {
+    const recorder = createStateRecorder();
+    const msg = await handleAwaitingServiceStep({
+      text: '1',
+      phone,
+      customerName,
+      services: baseServices,
+      state: { selectedDate: '2026-06-15', selectedTime: '14:00' },
+      stateJson: {},
+      extractNumericSelection,
+      findServiceMatches: () => [],
+      formatServiceList: svcs => svcs.map((s, i) => `${i + 1}. ${s.name}`).join('\n'),
+      upsertState: recorder.upsertState,
+    });
+
+    assert.ok(msg.includes('Dis Temizligi'), `Should mention service: "${msg}"`);
+    assert.ok(!msg.includes('Hangi gün'), `Should NOT ask for date when date is already preserved: "${msg}"`);
+    assert.equal(recorder.calls[0].step, 'awaiting_date');
+    assert.equal(recorder.calls[0].selectedDate, '2026-06-15');
+  });
+
+  await runFixture('handleAwaitingServiceStep asks for date normally when state.selectedDate is null', async () => {
+    const recorder = createStateRecorder();
+    const msg = await handleAwaitingServiceStep({
+      text: '1',
+      phone,
+      customerName,
+      services: baseServices,
+      state: { selectedDate: null },
+      stateJson: {},
+      extractNumericSelection,
+      findServiceMatches: () => [],
+      formatServiceList: svcs => svcs.map((s, i) => `${i + 1}. ${s.name}`).join('\n'),
+      upsertState: recorder.upsertState,
+    });
+
+    assert.ok(msg.includes('Hangi gün'), `Should ask for date when no date preserved: "${msg}"`);
+    assert.equal(recorder.calls[0].step, 'awaiting_date');
+    assert.equal(recorder.calls[0].selectedDate, null);
+  });
+
+  // ─── Bug A: customerName preserved from initial AI slot extraction ─────────
+
+  await runFixture('handleAwaitingServiceStep preserves customerName provided at call site', async () => {
+    const recorder = createStateRecorder();
+    await handleAwaitingServiceStep({
+      text: '1',
+      phone,
+      customerName: 'Faruk Duman',
+      services: baseServices,
+      state: { selectedDate: '2026-06-15', selectedTime: '14:00' },
+      stateJson: {},
+      extractNumericSelection,
+      findServiceMatches: () => [],
+      formatServiceList: svcs => svcs.map((s, i) => `${i + 1}. ${s.name}`).join('\n'),
+      upsertState: recorder.upsertState,
+    });
+
+    assert.equal(recorder.calls[0].customerName, 'Faruk Duman');
+  });
+
+  // ─── Bug C: handleAwaitingConfirmationStep structured error logging ─────────
+
+  await runFixture('handleAwaitingConfirmationStep returns friendly error message on appointment creation failure', async () => {
+    const pendingSlot = createSlot('14:00', 'p2', 'Dt. Ayşe');
+    const recorder = createStateRecorder();
+    const msg = await handleAwaitingConfirmationStep({
+      clinicId,
+      phone,
+      text: 'evet',
+      customerName,
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate: '2026-06-15',
+      },
+      stateJson: { pendingConfirmationSlot: pendingSlot, availableSlots: [pendingSlot], lastShownSlots: [pendingSlot] },
+      resetState: async () => undefined,
+      upsertState: recorder.upsertState,
+      createAppointment: async () => { throw new Error('DB_CONSTRAINT_VIOLATION'); },
+    });
+
+    assert.ok(msg.includes('teknik bir sorun'), `Expected friendly error: "${msg}"`);
+    assert.ok(!msg.includes('DB_CONSTRAINT_VIOLATION'), `Error details must not leak to user: "${msg}"`);
+  });
+
+  await runFixture('handleAwaitingConfirmationStep handles PATIENT_NAME_REQUIRED by asking for full name', async () => {
+    const pendingSlot = createSlot('14:00', 'p2', 'Dt. Ayşe');
+    const recorder = createStateRecorder();
+    const msg = await handleAwaitingConfirmationStep({
+      clinicId,
+      phone,
+      text: 'evet',
+      customerName: 'Faruk',
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate: '2026-06-15',
+      },
+      stateJson: { pendingConfirmationSlot: pendingSlot, availableSlots: [pendingSlot], lastShownSlots: [pendingSlot] },
+      resetState: async () => undefined,
+      upsertState: recorder.upsertState,
+      createAppointment: async () => { throw new Error('PATIENT_NAME_REQUIRED'); },
+    });
+
+    assert.ok(msg.toLowerCase().includes('adınızı') || msg.includes('soyadınızı'), `Should ask for full name: "${msg}"`);
+    assert.ok(!msg.includes('teknik bir sorun'), `Should NOT show generic error for PATIENT_NAME_REQUIRED: "${msg}"`);
+    const stateCall = recorder.calls.find(c => c.step === 'awaiting_name');
+    assert.ok(stateCall, 'Should transition to awaiting_name step');
   });
 
   console.log('All WhatsApp conversation fixtures passed.');
