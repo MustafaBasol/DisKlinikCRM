@@ -9,7 +9,19 @@
     "language": "Langue",
     "subject": "Objet (facultatif)",
     "body": "Contenu du message",
-    "isActive": "Actif"
+    "isActive": "Actif",
+    "purpose": "Objectif d'utilisation"
+  },
+  "purpose": {
+    "label": "Objectif d'utilisation",
+    "helperText": "Ce champ détermine pour quel message automatique ce modèle sera utilisé. Par exemple, un modèle de rappel de rendez-vous sera utilisé dans les messages de rappel automatiques.",
+    "whatsappNote": "Les modèles utilisés dans les messages WhatsApp automatiques doivent avoir l'objectif correct défini et être approuvés par WhatsApp.",
+    "appointment_reminder": "Rappel de rendez-vous",
+    "payment_reminder": "Rappel de paiement",
+    "appointment_confirmation": "Confirmation de rendez-vous",
+    "no_show_recovery": "Suivi absence",
+    "post_treatment_followup": "Suivi post-traitement",
+    "general_message": "Message général"
   },
   "variables": {
     "title": "Variables disponibles",

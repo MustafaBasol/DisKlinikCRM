@@ -178,16 +178,26 @@ async function getSystemUserForClinic(clinicId: string, organizationId: string) 
   });
 }
 
-async function findWhatsAppTemplate(clinicId: string, names: string[]) {
-  return prisma.messageTemplate.findFirst({
-    where: {
-      clinicId,
-      isActive: true,
-      channel: 'whatsapp',
-      OR: names.map((name) => ({ name: { contains: name, mode: 'insensitive' as const } })),
-    },
-    orderBy: { createdAt: 'asc' },
+// Exported for testing: picks the most recently updated template from a candidate list.
+export function selectBestTemplate<T extends { updatedAt: Date; id: string }>(
+  templates: T[],
+  purpose: string,
+  clinicId: string,
+): T | null {
+  if (templates.length === 0) return null;
+  if (templates.length > 1) {
+    console.warn(
+      `[reminders] ${templates.length} active "${purpose}" templates for clinic ${clinicId}; using most recently updated (id: ${templates[0].id}).`,
+    );
+  }
+  return [...templates].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+}
+
+async function findWhatsAppTemplateByPurpose(clinicId: string, purpose: string) {
+  const templates = await prisma.messageTemplate.findMany({
+    where: { clinicId, isActive: true, channel: 'whatsapp', purpose },
   });
+  return selectBestTemplate(templates, purpose, clinicId);
 }
 
 async function runPatientAppointmentRemindersForClinic(
@@ -212,7 +222,7 @@ async function runPatientAppointmentRemindersForClinic(
   if (appointments.length === 0) return;
 
   const [reminderTemplate, systemUser] = await Promise.all([
-    findWhatsAppTemplate(clinic.id, ['Reminder', 'Hatırlatma', 'Hatirlama']),
+    findWhatsAppTemplateByPurpose(clinic.id, 'appointment_reminder'),
     getSystemUserForClinic(clinic.id, clinic.organizationId),
   ]);
   const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
@@ -416,7 +426,7 @@ async function runPaymentRemindersForClinic(
   if (installments.length === 0) return;
 
   const [paymentTemplate, systemUser] = await Promise.all([
-    findWhatsAppTemplate(clinic.id, ['Payment', 'Ödeme', 'Odeme']),
+    findWhatsAppTemplateByPurpose(clinic.id, 'payment_reminder'),
     getSystemUserForClinic(clinic.id, clinic.organizationId),
   ]);
   const safePaymentTemplate = paymentTemplate && !hasSensitiveLowChannelVariable(paymentTemplate.body)

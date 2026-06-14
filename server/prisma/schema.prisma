@@ -620,6 +620,7 @@ model MessageTemplate {
   body      String
   language  String   @default("en")
   isActive  Boolean  @default(true)
+  purpose   String   @default("general_message") // appointment_reminder | payment_reminder | appointment_confirmation | no_show_recovery | post_treatment_followup | general_message
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

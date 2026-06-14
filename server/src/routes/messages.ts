@@ -201,18 +201,21 @@ router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_
       channel: 'whatsapp',
       body: 'Hello {{patient_name}}, your appointment at {{clinic_name}} is confirmed for {{appointment_date}} at {{appointment_time}} with {{practitioner_name}}. See you soon!',
       language: 'en',
+      purpose: 'appointment_confirmation',
     },
     {
       name: 'Appointment Reminder (24h)',
       channel: 'sms',
       body: 'Reminder: You have an appointment tomorrow, {{appointment_date}} at {{appointment_time}}, at {{clinic_name}}. Please let us know if you cannot attend.',
       language: 'en',
+      purpose: 'appointment_reminder',
     },
     {
       name: 'No-Show Follow-Up',
       channel: 'whatsapp',
       body: 'Hello {{patient_name}}, we missed you today at {{clinic_name}}. Would you like to reschedule your appointment? Please contact us.',
       language: 'en',
+      purpose: 'no_show_recovery',
     },
     {
       name: 'Treatment Quote Follow-Up',
@@ -220,24 +223,28 @@ router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_
       subject: 'Follow-up on your treatment plan',
       body: 'Hello {{patient_name}}, we are following up on the treatment plan "{{treatment_title}}" discussed recently. Do you have any questions or would you like to proceed?',
       language: 'en',
+      purpose: 'general_message',
     },
     {
       name: 'Payment Reminder',
       channel: 'whatsapp',
       body: 'Hello {{patient_name}}, this is a friendly reminder about your pending clinic balance at {{clinic_name}}. Please contact the clinic for details.',
       language: 'en',
+      purpose: 'payment_reminder',
     },
     {
       name: 'Randevu Onayı',
       channel: 'whatsapp',
       body: 'Sayın {{patient_name}}, {{clinic_name}} bünyesindeki randevunuz {{appointment_date}} tarihinde saat {{appointment_time}} için onaylanmıştır. Görüşmek üzere!',
       language: 'tr',
+      purpose: 'appointment_confirmation',
     },
     {
       name: 'Randevu Hatırlatma (24s)',
       channel: 'sms',
       body: 'Hatırlatma: Yarın {{appointment_date}} saat {{appointment_time}} için {{clinic_name}} randevunuz bulunmaktadır. Gelemeyecekseniz lütfen bilgi veriniz.',
       language: 'tr',
+      purpose: 'appointment_reminder',
     },
   ];
 

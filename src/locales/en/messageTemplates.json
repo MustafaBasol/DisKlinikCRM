@@ -9,7 +9,19 @@
     "language": "Language",
     "subject": "Subject (Optional)",
     "body": "Message Body",
-    "isActive": "Is Active"
+    "isActive": "Is Active",
+    "purpose": "Usage Purpose"
+  },
+  "purpose": {
+    "label": "Usage Purpose",
+    "helperText": "This field determines which automated message this template will be used for. For example, an appointment reminder template will be used in automated appointment reminder messages.",
+    "whatsappNote": "Templates used in automated WhatsApp messages must have the correct purpose set and must be approved by WhatsApp.",
+    "appointment_reminder": "Appointment Reminder",
+    "payment_reminder": "Payment Reminder",
+    "appointment_confirmation": "Appointment Confirmation",
+    "no_show_recovery": "No-Show Follow-Up",
+    "post_treatment_followup": "Post-Treatment Follow-Up",
+    "general_message": "General Message"
   },
   "variables": {
     "title": "Available Variables",

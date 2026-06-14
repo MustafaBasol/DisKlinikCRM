@@ -311,6 +311,17 @@ export const paymentSchema = z.object({
 
 // --- Message Template ---
 
+export const MESSAGE_TEMPLATE_PURPOSES = [
+  'appointment_reminder',
+  'payment_reminder',
+  'appointment_confirmation',
+  'no_show_recovery',
+  'post_treatment_followup',
+  'general_message',
+] as const;
+
+export type MessageTemplatePurpose = typeof MESSAGE_TEMPLATE_PURPOSES[number];
+
 export const messageTemplateSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   channel: z.enum(['sms', 'whatsapp', 'email']),
@@ -318,6 +329,7 @@ export const messageTemplateSchema = z.object({
   body: z.string().min(1, 'Body is required'),
   language: z.enum(['en', 'fr', 'tr']),
   isActive: z.boolean().default(true),
+  purpose: z.enum(MESSAGE_TEMPLATE_PURPOSES).default('general_message'),
 });
 
 export const prepareMessageSchema = z.object({

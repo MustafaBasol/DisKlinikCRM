@@ -9,7 +9,19 @@
     "language": "Dil",
     "subject": "Konu (Opsiyonel)",
     "body": "Mesaj İçeriği",
-    "isActive": "Aktif mi"
+    "isActive": "Aktif mi",
+    "purpose": "Kullanım Amacı"
+  },
+  "purpose": {
+    "label": "Kullanım Amacı",
+    "helperText": "Bu alan, şablonun hangi otomatik mesajda kullanılacağını belirler. Örneğin randevu hatırlatma şablonu, otomatik randevu hatırlatma mesajlarında kullanılır.",
+    "whatsappNote": "Otomatik WhatsApp mesajlarında kullanılacak şablonların kullanım amacı doğru seçilmeli ve WhatsApp onayı alınmalıdır.",
+    "appointment_reminder": "Randevu Hatırlatma",
+    "payment_reminder": "Ödeme Hatırlatma",
+    "appointment_confirmation": "Randevu Onayı",
+    "no_show_recovery": "Gelmeyen Hasta Takibi",
+    "post_treatment_followup": "Tedavi Sonrası Takip",
+    "general_message": "Genel Mesaj"
   },
   "variables": {
     "title": "Kullanılabilir Değişkenler",

@@ -9,7 +9,19 @@
     "language": "Sprache",
     "subject": "Betreff (optional)",
     "body": "Nachrichtentext",
-    "isActive": "Aktiv"
+    "isActive": "Aktiv",
+    "purpose": "Verwendungszweck"
+  },
+  "purpose": {
+    "label": "Verwendungszweck",
+    "helperText": "Dieses Feld legt fest, für welche automatische Nachricht diese Vorlage verwendet wird. Eine Terminerinnerungsvorlage wird z.B. für automatische Terminerinnerungen verwendet.",
+    "whatsappNote": "Vorlagen für automatische WhatsApp-Nachrichten müssen den richtigen Verwendungszweck haben und von WhatsApp genehmigt sein.",
+    "appointment_reminder": "Terminerinnerung",
+    "payment_reminder": "Zahlungserinnerung",
+    "appointment_confirmation": "Terminbestätigung",
+    "no_show_recovery": "Nichterscheinen-Nachverfolgung",
+    "post_treatment_followup": "Nachsorge",
+    "general_message": "Allgemeine Nachricht"
   },
   "variables": {
     "title": "Verfügbare Variablen",
