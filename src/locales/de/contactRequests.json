@@ -1,0 +1,66 @@
+{
+  "title": "Kontaktanfragen",
+  "subtitle": "Verwalten Sie Weiterleitungs-, Rückruf- und Informationsanfragen von WhatsApp, Instagram und anderen Kanälen.",
+  "empty": "Keine Kontaktanfragen für diesen Filter gefunden.",
+  "summary": {
+    "total": "Anfragen gesamt",
+    "pending": "Ausstehend",
+    "inProgress": "In Bearbeitung",
+    "resolved": "Gelöst"
+  },
+  "filters": {
+    "allStatus": "Alle Status",
+    "allChannels": "Alle Kanäle",
+    "allTypes": "Anfragetyp"
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "meta_whatsapp": "Meta WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manuell"
+  },
+  "type": {
+    "callback_request": "Rückruf",
+    "staff_handoff": "Mitarbeiterübergabe",
+    "information_request": "Informationsanfrage",
+    "complaint": "Beschwerde",
+    "other": "Sonstiges"
+  },
+  "status": {
+    "pending": "Ausstehend",
+    "in_progress": "In Bearbeitung",
+    "resolved": "Gelöst",
+    "closed": "Geschlossen"
+  },
+  "priority": {
+    "normal": "Normal",
+    "urgent": "Dringend"
+  },
+  "fields": {
+    "name": "Name",
+    "phone": "Telefon",
+    "channel": "Kanal",
+    "type": "Anfragetyp",
+    "status": "Status",
+    "note": "Notiz",
+    "lastMessage": "Letzte Nachricht",
+    "createdAt": "Erstellt",
+    "updatedAt": "Aktualisiert",
+    "patient": "Patient"
+  },
+  "actions": {
+    "refresh": "Aktualisieren",
+    "takeAction": "Bearbeiten",
+    "resolve": "Als gelöst markieren",
+    "close": "Schließen",
+    "reopen": "Wiedereröffnen",
+    "openConversation": "Gespräch öffnen"
+  },
+  "errors": {
+    "loadFailed": "Kontaktanfragen konnten nicht geladen werden.",
+    "updateFailed": "Anfrage konnte nicht aktualisiert werden."
+  },
+  "success": {
+    "updated": "Anfrage aktualisiert."
+  }
+}

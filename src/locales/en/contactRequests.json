@@ -1,0 +1,66 @@
+{
+  "title": "Contact Requests",
+  "subtitle": "Manage staff handoff, callback, and information requests from WhatsApp, Instagram, and other channels.",
+  "empty": "No contact requests found for this filter.",
+  "summary": {
+    "total": "Total Requests",
+    "pending": "Pending",
+    "inProgress": "In Progress",
+    "resolved": "Resolved"
+  },
+  "filters": {
+    "allStatus": "All Statuses",
+    "allChannels": "All Channels",
+    "allTypes": "Request Type"
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "meta_whatsapp": "Meta WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manual"
+  },
+  "type": {
+    "callback_request": "Callback",
+    "staff_handoff": "Staff Handoff",
+    "information_request": "Information Request",
+    "complaint": "Complaint",
+    "other": "Other"
+  },
+  "status": {
+    "pending": "Pending",
+    "in_progress": "In Progress",
+    "resolved": "Resolved",
+    "closed": "Closed"
+  },
+  "priority": {
+    "normal": "Normal",
+    "urgent": "Urgent"
+  },
+  "fields": {
+    "name": "Name",
+    "phone": "Phone",
+    "channel": "Channel",
+    "type": "Request Type",
+    "status": "Status",
+    "note": "Note",
+    "lastMessage": "Last Message",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "patient": "Patient"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "takeAction": "Take Action",
+    "resolve": "Mark Resolved",
+    "close": "Close",
+    "reopen": "Reopen",
+    "openConversation": "Open Conversation"
+  },
+  "errors": {
+    "loadFailed": "Failed to load contact requests.",
+    "updateFailed": "Failed to update request."
+  },
+  "success": {
+    "updated": "Request updated."
+  }
+}

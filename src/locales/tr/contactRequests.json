@@ -1,0 +1,66 @@
+{
+  "title": "İletişim Talepleri",
+  "subtitle": "WhatsApp, Instagram ve diğer kanallardan gelen yetkili görüşmesi, geri arama ve bilgi taleplerini yönetin.",
+  "empty": "Bu filtre için iletişim talebi bulunamadı.",
+  "summary": {
+    "total": "Toplam Talep",
+    "pending": "Bekleyen",
+    "inProgress": "İşlemde",
+    "resolved": "Çözüldü"
+  },
+  "filters": {
+    "allStatus": "Tüm Durumlar",
+    "allChannels": "Tüm Kanallar",
+    "allTypes": "Talep Tipi"
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "meta_whatsapp": "Meta WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manuel"
+  },
+  "type": {
+    "callback_request": "Geri Arama",
+    "staff_handoff": "Yetkili Görüşmesi",
+    "information_request": "Bilgi Talebi",
+    "complaint": "Şikayet",
+    "other": "Diğer"
+  },
+  "status": {
+    "pending": "Bekliyor",
+    "in_progress": "İşlemde",
+    "resolved": "Çözüldü",
+    "closed": "Kapatıldı"
+  },
+  "priority": {
+    "normal": "Normal",
+    "urgent": "Acil"
+  },
+  "fields": {
+    "name": "Ad",
+    "phone": "Telefon",
+    "channel": "Kanal",
+    "type": "Talep Tipi",
+    "status": "Durum",
+    "note": "Not",
+    "lastMessage": "Son Mesaj",
+    "createdAt": "Oluşturuldu",
+    "updatedAt": "Güncellendi",
+    "patient": "Hasta"
+  },
+  "actions": {
+    "refresh": "Yenile",
+    "takeAction": "İşleme Al",
+    "resolve": "Çözüldü",
+    "close": "Kapat",
+    "reopen": "Yeniden Aç",
+    "openConversation": "Konuşmayı Aç"
+  },
+  "errors": {
+    "loadFailed": "İletişim talepleri yüklenemedi.",
+    "updateFailed": "Talep güncellenemedi."
+  },
+  "success": {
+    "updated": "Talep güncellendi."
+  }
+}
