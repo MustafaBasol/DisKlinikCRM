@@ -31,6 +31,7 @@
     "test:instagram": "tsx src/tests/instagramProvider.test.ts",
     "test:meta-wa": "tsx src/tests/metaWhatsAppWebhook.test.ts",
     "test:meta-template": "tsx src/tests/metaTemplateService.test.ts",
+    "test:outbound": "tsx src/tests/whatsappOutboundMessaging.test.ts",
     "test:overlap-safety": "tsx src/tests/appointmentRequestOverlapSafety.test.ts",
     "validate:instagram-token": "tsx src/scripts/validate-instagram-login-token.ts"
   },
