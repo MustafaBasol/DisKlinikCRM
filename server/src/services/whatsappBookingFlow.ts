@@ -13,6 +13,7 @@ import { interpretTimeRequest, type TimePreference } from './whatsappInterpreter
 import {
   formatTurkishDateLong,
   formatTurkishDateWithWeekday,
+  getPastMonthDayCorrectedDate,
   normalizeDateFromTurkishInput,
   WHATSAPP_ASSISTANT_TIME_ZONE,
 } from '../utils/whatsappDate.js';
@@ -33,6 +34,7 @@ export type BookingStateJson = {
   lastShownSlots?: SavedAvailableSlot[];
   matchedServices?: SavedServiceOption[];
   pendingConfirmationSlot?: SavedAvailableSlot | null;
+  pendingPastDateClarification?: string | null;
 };
 
 export type AwaitingServiceState = {
@@ -46,6 +48,7 @@ export type AwaitingDateState = {
   selectedAppointmentTypeId?: string | null;
   selectedAppointmentTypeName?: string | null;
   selectedPractitionerId?: string | null;
+  selectedDate?: string | null;
 };
 
 export type AwaitingConfirmationState = {
@@ -270,6 +273,7 @@ export type AwaitingDateDependencies = {
   text: string;
   customerName: string | null;
   state: AwaitingDateState;
+  stateJson?: BookingStateJson;
   buildAvailableSlots: typeof import('./whatsappAvailability.js').buildAvailableSlots;
   formatAvailabilityMessage: (date: string, slots: SavedAvailableSlot[]) => string;
   logAvailabilitySave: (totalSlots: number, shownSlots: number) => void;
@@ -447,6 +451,10 @@ export const handleAwaitingServiceStep = async ({
     lastMessage: text,
     stateJson: null,
   });
+  if (state.selectedDate) {
+    // Date was already provided; processor shortcut will check availability and skip this message.
+    return `${selectedService.name} hizmetini seçtiniz.`;
+  }
   return `${selectedService.name} hizmetini seçtiniz. Hangi gün için randevu istersiniz? Örneğin bugün, yarın, 16.05 veya 16 Mayıs yazabilirsiniz.`;
 };
 
@@ -456,6 +464,7 @@ export const handleAwaitingDateStep = async ({
   text,
   customerName,
   state,
+  stateJson,
   buildAvailableSlots,
   formatAvailabilityMessage,
   logAvailabilitySave,
@@ -480,7 +489,39 @@ export const handleAwaitingDateStep = async ({
     return 'Önce hizmet seçelim. Lütfen listedeki hizmet numarasını paylaşın.';
   }
 
-  const normalizedDate = normalizeDateFromTurkishInput(text, now ?? new Date(), WHATSAPP_ASSISTANT_TIME_ZONE)
+  const effectiveNow = now ?? new Date();
+
+  // If the previous turn asked the user to clarify a past month+day date, and the user
+  // has now affirmed it ("evet", "tamam", etc.), use that stored date directly.
+  const pendingPastDate = stateJson?.pendingPastDateClarification ?? null;
+  if (pendingPastDate && isShortAffirmation(text)) {
+    // Fall through with the confirmed past date — re-entry into the slot-checking logic below
+    return handleAwaitingDateStepWithDate({
+      prisma, clinicId, text, customerName, state, buildAvailableSlots,
+      formatAvailabilityMessage, logAvailabilitySave, minutesToTime,
+      interpretTimeWithAi, upsertState, resolvedDate: pendingPastDate,
+    });
+  }
+
+  // Detect explicit past month+day WITHOUT a year (e.g. "13 haziran" when today is 14 Haziran).
+  // normalizeDateFromTurkishInput would silently advance these to next year; instead we ask.
+  const pastCorrectedDate = getPastMonthDayCorrectedDate(text, effectiveNow, WHATSAPP_ASSISTANT_TIME_ZONE);
+  if (pastCorrectedDate) {
+    await upsertState({
+      customerName,
+      currentIntent: 'book_appointment',
+      step: 'awaiting_date',
+      selectedAppointmentTypeId: state.selectedAppointmentTypeId,
+      selectedAppointmentTypeName: state.selectedAppointmentTypeName,
+      lastMessage: text,
+      stateJson: { pendingPastDateClarification: pastCorrectedDate },
+    });
+    const formattedDate = formatTurkishDateLong(pastCorrectedDate, WHATSAPP_ASSISTANT_TIME_ZONE);
+    const nextYear = new Date(`${pastCorrectedDate}T12:00:00Z`).getUTCFullYear() + 1;
+    return `${formattedDate} geçmiş bir tarih. Bu yıl ${formattedDate} için mi randevu istiyorsunuz, yoksa ${nextYear} yılı için mi?`;
+  }
+
+  const normalizedDate = normalizeDateFromTurkishInput(text, effectiveNow, WHATSAPP_ASSISTANT_TIME_ZONE)
     ?? parseIsoDateInput(text)
     ?? (interpretDateWithAi ? await interpretDateWithAi(text) : null);
   if (!normalizedDate) {
@@ -500,13 +541,34 @@ export const handleAwaitingDateStep = async ({
     return 'Tarihi anlayamadım. Örneğin bugün, yarın, cumartesi, 16.05 veya 16 Mayıs yazabilirsiniz.';
   }
 
+  return handleAwaitingDateStepWithDate({
+    prisma, clinicId, text, customerName, state, buildAvailableSlots,
+    formatAvailabilityMessage, logAvailabilitySave, minutesToTime,
+    interpretTimeWithAi, upsertState, resolvedDate: normalizedDate,
+  });
+};
+
+const handleAwaitingDateStepWithDate = async ({
+  prisma,
+  clinicId,
+  text,
+  customerName,
+  state,
+  buildAvailableSlots,
+  formatAvailabilityMessage,
+  logAvailabilitySave,
+  minutesToTime,
+  interpretTimeWithAi,
+  upsertState,
+  resolvedDate,
+}: Omit<AwaitingDateDependencies, 'stateJson' | 'now' | 'interpretDateWithAi'> & { resolvedDate: string }): Promise<string> => {
   console.info('[whatsapp-assistant] availability-check', {
     appointmentTypeId: state.selectedAppointmentTypeId,
-    date: normalizedDate,
+    date: resolvedDate,
   });
 
   try {
-    const slots = await buildAvailableSlots(prisma, clinicId, state.selectedAppointmentTypeId, normalizedDate, state.selectedPractitionerId ?? undefined);
+    const slots = await buildAvailableSlots(prisma, clinicId, state.selectedAppointmentTypeId!, resolvedDate, state.selectedPractitionerId ?? undefined);
     if (!slots) {
       await upsertState({
         customerName,
@@ -542,7 +604,7 @@ export const handleAwaitingDateStep = async ({
         lastMessage: text,
         stateJson: null,
       });
-      return `${formatTurkishDateWithWeekday(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim.`;
+      return `${formatTurkishDateWithWeekday(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için uygun saat görünmüyor. İsterseniz başka bir gün kontrol edebilirim.`;
     }
 
     if (timeInterpretation.exactTime && !shouldTreatAsDateOnly) {
@@ -565,7 +627,7 @@ export const handleAwaitingDateStep = async ({
       step: 'awaiting_time',
       selectedAppointmentTypeId: state.selectedAppointmentTypeId,
       selectedAppointmentTypeName: state.selectedAppointmentTypeName,
-      selectedDate: normalizedDate,
+      selectedDate: resolvedDate,
       selectedTime: null,
       lastMessage: text,
       stateJson: { availableSlots: savedSlots, lastShownSlots },
@@ -582,53 +644,53 @@ export const handleAwaitingDateStep = async ({
             step: 'awaiting_time',
             selectedAppointmentTypeId: state.selectedAppointmentTypeId,
             selectedAppointmentTypeName: state.selectedAppointmentTypeName,
-            selectedDate: normalizedDate,
+            selectedDate: resolvedDate,
             selectedTime: null,
             lastMessage: text,
             stateJson: { availableSlots: savedSlots, lastShownSlots: nearbySlots },
           });
 
-          return formatSlotListMessage(`${formatTurkishDateWithWeekday(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} saat ${timeInterpretation.exactTime} için uygun saat görünmüyor; ancak yakın saatler şunlar:`, nearbySlots);
+          return formatSlotListMessage(`${formatTurkishDateWithWeekday(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} saat ${timeInterpretation.exactTime} için uygun saat görünmüyor; ancak yakın saatler şunlar:`, nearbySlots);
         }
 
-        return `${formatTurkishDateWithWeekday(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} saat ${timeInterpretation.exactTime} için uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
+        return `${formatTurkishDateWithWeekday(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} saat ${timeInterpretation.exactTime} için uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
       }
 
-      return formatSlotListMessage(`${formatTurkishDateWithWeekday(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} saat ${timeInterpretation.exactTime} için uygun seçenekler şunlar:`, lastShownSlots);
+      return formatSlotListMessage(`${formatTurkishDateWithWeekday(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} saat ${timeInterpretation.exactTime} için uygun seçenekler şunlar:`, lastShownSlots);
     }
 
     if (timeInterpretation.rangeStartMinutes !== null && timeInterpretation.rangeEndMinutes !== null) {
       if (lastShownSlots.length === 0) {
-        return `${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.rangeStartMinutes)} ile ${minutesToTime(timeInterpretation.rangeEndMinutes)} arasında uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
+        return `${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.rangeStartMinutes)} ile ${minutesToTime(timeInterpretation.rangeEndMinutes)} arasında uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
       }
 
-      return formatSlotListMessage(`Elbette, ${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.rangeStartMinutes)} ile ${minutesToTime(timeInterpretation.rangeEndMinutes)} arasındaki uygun saatler şunlar:`, lastShownSlots);
+      return formatSlotListMessage(`Elbette, ${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.rangeStartMinutes)} ile ${minutesToTime(timeInterpretation.rangeEndMinutes)} arasındaki uygun saatler şunlar:`, lastShownSlots);
     }
 
     if (timeInterpretation.afterTimeMinutes !== null) {
       if (lastShownSlots.length === 0) {
-        return `${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.afterTimeMinutes)} sonrası uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
+        return `${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.afterTimeMinutes)} sonrası uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
       }
 
-      return formatSlotListMessage(`Elbette, ${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.afterTimeMinutes)} sonrası uygun saatler şunlar:`, lastShownSlots);
+      return formatSlotListMessage(`Elbette, ${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için saat ${minutesToTime(timeInterpretation.afterTimeMinutes)} sonrası uygun saatler şunlar:`, lastShownSlots);
     }
 
     if (timeInterpretation.preference) {
       if (lastShownSlots.length === 0) {
-        return `${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için bu zaman tercihinize uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
+        return `${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için bu zaman tercihinize uygun saat görünmüyor. İsterseniz başka bir saat aralığı veya farklı bir gün kontrol edebilirim.`;
       }
 
       const heading = timeInterpretation.preference === 'afternoon'
-        ? `${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için öğleden sonraki uygun saatler şunlar:`
+        ? `${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için öğleden sonraki uygun saatler şunlar:`
         : timeInterpretation.preference === 'morning'
-          ? `${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için sabah uygun saatler şunlar:`
+          ? `${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için sabah uygun saatler şunlar:`
           : timeInterpretation.preference === 'noon'
-            ? `${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için öğle civarındaki uygun saatler şunlar:`
-            : `${formatTurkishDateLong(normalizedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için geç saatlerde uygun seçenekler şunlar:`;
+            ? `${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için öğle civarındaki uygun saatler şunlar:`
+            : `${formatTurkishDateLong(resolvedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} için geç saatlerde uygun seçenekler şunlar:`;
       return formatSlotListMessage(heading, lastShownSlots);
     }
 
-    return formatAvailabilityMessage(normalizedDate, lastShownSlots);
+    return formatAvailabilityMessage(resolvedDate, lastShownSlots);
   } catch (error) {
     console.error('[whatsapp-assistant] availability-error', error);
     return 'Şu anda randevu takvimine erişirken teknik bir sorun oluştu. Lütfen biraz sonra tekrar deneyin veya klinik ekibine iletilmek üzere talebinizi not edebilirim.';
@@ -705,6 +767,8 @@ export const handleAwaitingTimeStep = async ({
   const rangeEndMinutes = timeInterpretation?.rangeEndMinutes ?? null;
   const normalizedDifferentDate = normalizeDateFromTurkishInput(text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE);
   const shouldTreatAsDateOnly = Boolean(normalizedDifferentDate) && isStandaloneNumericDateExpression(text);
+  // Detect explicit past month+day before using normalizedDifferentDate (which would be silently 2027).
+  const pastDateInTimeStep = normalizedDifferentDate ? getPastMonthDayCorrectedDate(text, new Date(), WHATSAPP_ASSISTANT_TIME_ZONE) : null;
 
   if (!numericSlotSelection && slotMatch.extractedTime && slotMatch.hasPractitionerFragment && slotMatch.matches.length > 1) {
     const matchingSlots = slotMatch.matches.map(item => item.slot);
@@ -893,6 +957,13 @@ export const handleAwaitingTimeStep = async ({
 
     if (!normalizedDifferentDate) {
       return 'Elbette, başka bir gün de kontrol edebilirim. Lütfen tarihi örneğin yarın, 22 Mayıs veya cuma gibi paylaşın.';
+    }
+
+    // Guard: user typed an explicit past month+day without a year — ask to confirm which year.
+    if (pastDateInTimeStep) {
+      const formattedPastDate = formatTurkishDateLong(pastDateInTimeStep, WHATSAPP_ASSISTANT_TIME_ZONE);
+      const nextYear = new Date(`${pastDateInTimeStep}T12:00:00Z`).getUTCFullYear() + 1;
+      return `${formattedPastDate} geçmiş bir tarih. Bu yıl ${formattedPastDate} için mi randevu istiyorsunuz, yoksa ${nextYear} yılı için mi?`;
     }
 
     console.info('[whatsapp-assistant] availability-check', {
@@ -1115,7 +1186,10 @@ export const handleAwaitingConfirmationStep = async ({
       return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
     }
 
-    console.error('[whatsapp-assistant] appointment-create-error', error);
+    console.error('[whatsapp-assistant] appointment-create-error', {
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
     return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
   }
 };

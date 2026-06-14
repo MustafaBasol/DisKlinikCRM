@@ -49,6 +49,7 @@ import {
 } from '../../utils/helpers.js';
 import {
   formatTurkishDateLong,
+  formatTurkishDateWithWeekday,
   WHATSAPP_ASSISTANT_TIME_ZONE,
 } from '../../utils/whatsappDate.js';
 import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
@@ -1029,7 +1030,7 @@ const buildReplyText = async (args: {
       },
     });
 
-    // If date was also provided in the same message, jump straight to time slots
+    // If date was already provided in the initial message, jump straight to time slots.
     if (
       stateAfterService?.step === 'awaiting_date' &&
       stateAfterService.selectedAppointmentTypeId &&
@@ -1043,7 +1044,25 @@ const buildReplyText = async (args: {
         undefined,
       );
       if (slots && slots.length > 0) {
-        return formatAvailabilityMessage(nextSelectedDate, saveSlotsForState(slots).slice(0, 5));
+        const savedSlots = saveSlotsForState(slots);
+        const shownSlots = savedSlots.slice(0, 5);
+        await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_time',
+          selectedAppointmentTypeId: stateAfterService.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: stateAfterService.selectedAppointmentTypeName ?? null,
+          selectedDate: nextSelectedDate,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.messageId ?? null,
+          stateJson: { availableSlots: savedSlots, lastShownSlots: shownSlots },
+        });
+        return formatAvailabilityMessage(nextSelectedDate, shownSlots);
+      }
+      if (slots !== null) {
+        // slots === [] means no availability on the requested date — stay at awaiting_date.
+        return `${stateAfterService.selectedAppointmentTypeName ?? 'Seçtiğiniz hizmet'} için ${formatTurkishDateWithWeekday(nextSelectedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde uygun saat görünmüyor. Başka bir gün kontrol etmek ister misiniz?`;
       }
     }
 
@@ -1061,7 +1080,9 @@ const buildReplyText = async (args: {
         selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
         selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
         selectedPractitionerId: state?.selectedPractitionerId,
+        selectedDate: state?.selectedDate,
       },
+      stateJson,
       buildAvailableSlots,
       formatAvailabilityMessage,
       logAvailabilitySave: (total, shown) =>
@@ -1263,8 +1284,11 @@ const buildReplyText = async (args: {
     decision.action === 'continue_booking' ||
     intent === 'book_appointment'
   ) {
+    // AI may have extracted the customer's name from the initial message (e.g. "adım Faruk Duman").
+    // Prefer existing linked-patient name, then stored state name, then AI-extracted name.
+    const resolvedCustomerName = customerName ?? decision.slots.name ?? null;
     await upsertMetaWaState(args.clinic.id, args.conversationKey, {
-      customerName,
+      customerName: resolvedCustomerName,
       currentIntent: 'book_appointment',
       step: 'awaiting_service',
       selectedAppointmentTypeId: null,
