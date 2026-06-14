@@ -11,6 +11,7 @@ import { getClinicOperatingPreferences } from '../services/clinicOperatingPrefer
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { getNotificationPreferences } from '../services/notificationPreferences.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
+import { sendProactiveWhatsAppMessage } from '../services/whatsapp/whatsappOutboundMessaging.js';
 import { logActivity } from '../utils/activity.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { processScheduledPostTreatmentMessages } from '../services/postTreatmentMessaging.js';
@@ -265,7 +266,13 @@ async function runPatientAppointmentRemindersForClinic(
     });
 
     try {
-      const sendResult = await sendWhatsAppMessage(clinic.id, { phone: patient.phone, text: body });
+      const sendResult = await sendProactiveWhatsAppMessage({
+        clinicId: clinic.id,
+        phone: patient.phone,
+        text: body,
+        templateId: reminderTemplate?.id,
+        variables: vars,
+      });
       if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
 
       await prisma.sentMessage.update({
@@ -460,7 +467,13 @@ async function runPaymentRemindersForClinic(
     });
 
     try {
-      const sendResult = await sendWhatsAppMessage(clinic.id, { phone: patient.phone, text: body });
+      const sendResult = await sendProactiveWhatsAppMessage({
+        clinicId: clinic.id,
+        phone: patient.phone,
+        text: body,
+        templateId: safePaymentTemplate?.id,
+        variables: vars,
+      });
       if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
 
       await prisma.sentMessage.update({
