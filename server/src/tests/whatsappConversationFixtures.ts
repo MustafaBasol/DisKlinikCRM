@@ -1861,19 +1861,20 @@ const run = async () => {
     assert.ok(msg.includes('2027'), `Expected 2027 year option in: "${msg}"`);
     assert.ok(!msg.includes('Tarihi anlayamadım'), `Should NOT be a "couldn't parse" reply: "${msg}"`);
 
-    // State should store pendingPastDateClarification
+    // State must store NEXT-YEAR date (2027-06-13), not the past current-year date (2026-06-13)
+    // so that "evet" in the follow-up turn books for the future, not for yesterday.
     assert.equal(recorder.calls.length, 1);
     const stateJsonSaved = recorder.calls[0].stateJson as BookingStateJson | undefined;
-    assert.equal(stateJsonSaved?.pendingPastDateClarification, '2026-06-13');
+    assert.equal(stateJsonSaved?.pendingPastDateClarification, '2027-06-13');
     assert.equal(recorder.calls[0].step, 'awaiting_date');
   });
 
-  await runFixture('handleAwaitingDateStep uses pendingPastDateClarification when user confirms with evet', async () => {
+  await runFixture('handleAwaitingDateStep uses pendingPastDateClarification when user confirms with evet — books NEXT YEAR (2027), not current year', async () => {
     const recorder = createStateRecorder();
     const now = new Date('2026-06-14T10:00:00.000Z');
     const rawSlots: RawAvailableSlot[] = [
-      createRawSlot('2026-06-13', '10:00', 'p1', 'Dt.', 'Ahmet'),
-      createRawSlot('2026-06-13', '14:00', 'p2', 'Dt.', 'Ayşe'),
+      createRawSlot('2027-06-13', '10:00', 'p1', 'Dt.', 'Ahmet'),
+      createRawSlot('2027-06-13', '14:00', 'p2', 'Dt.', 'Ayşe'),
     ];
     const msg = await handleAwaitingDateStep({
       prisma: {} as never,
@@ -1881,7 +1882,7 @@ const run = async () => {
       text: 'evet',
       customerName,
       state: { selectedAppointmentTypeId: 'svc-1', selectedAppointmentTypeName: 'Dis Temizligi' },
-      stateJson: { pendingPastDateClarification: '2026-06-13' },
+      stateJson: { pendingPastDateClarification: '2027-06-13' },
       buildAvailableSlots: async () => rawSlots,
       formatAvailabilityMessage,
       logAvailabilitySave: () => undefined,
@@ -1890,13 +1891,13 @@ const run = async () => {
       upsertState: recorder.upsertState,
     });
 
-    // Should show availability for 2026-06-13, not ask for date again
-    assert.ok(msg.includes('2026-06-13') || msg.includes('10:00') || msg.includes('14:00'), `Expected slot list: "${msg}"`);
+    // Should show availability for 2027-06-13 (next year), not for 2026-06-13 (past)
+    assert.ok(msg.includes('2027') || msg.includes('10:00') || msg.includes('14:00'), `Expected 2027 slot list: "${msg}"`);
     assert.ok(!msg.includes('geçmiş'), `Should NOT repeat past-date warning: "${msg}"`);
 
     const finalState = recorder.calls[recorder.calls.length - 1];
     assert.equal(finalState?.step, 'awaiting_time');
-    assert.equal(finalState?.selectedDate, '2026-06-13');
+    assert.equal(finalState?.selectedDate, '2027-06-13');
   });
 
   // ─── Bug A: handleAwaitingServiceStep short message when date preserved ────
@@ -1985,6 +1986,31 @@ const run = async () => {
 
     assert.ok(msg.includes('teknik bir sorun'), `Expected friendly error: "${msg}"`);
     assert.ok(!msg.includes('DB_CONSTRAINT_VIOLATION'), `Error details must not leak to user: "${msg}"`);
+  });
+
+  await runFixture('handleAwaitingConfirmationStep handles PATIENT_NAME_REQUIRED by asking for full name', async () => {
+    const pendingSlot = createSlot('14:00', 'p2', 'Dt. Ayşe');
+    const recorder = createStateRecorder();
+    const msg = await handleAwaitingConfirmationStep({
+      clinicId,
+      phone,
+      text: 'evet',
+      customerName: 'Faruk',
+      state: {
+        selectedAppointmentTypeId: 'svc-1',
+        selectedAppointmentTypeName: 'Dis Temizligi',
+        selectedDate: '2026-06-15',
+      },
+      stateJson: { pendingConfirmationSlot: pendingSlot, availableSlots: [pendingSlot], lastShownSlots: [pendingSlot] },
+      resetState: async () => undefined,
+      upsertState: recorder.upsertState,
+      createAppointment: async () => { throw new Error('PATIENT_NAME_REQUIRED'); },
+    });
+
+    assert.ok(msg.toLowerCase().includes('adınızı') || msg.includes('soyadınızı'), `Should ask for full name: "${msg}"`);
+    assert.ok(!msg.includes('teknik bir sorun'), `Should NOT show generic error for PATIENT_NAME_REQUIRED: "${msg}"`);
+    const stateCall = recorder.calls.find(c => c.step === 'awaiting_name');
+    assert.ok(stateCall, 'Should transition to awaiting_name step');
   });
 
   console.log('All WhatsApp conversation fixtures passed.');

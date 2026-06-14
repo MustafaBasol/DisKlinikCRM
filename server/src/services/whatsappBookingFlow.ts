@@ -507,6 +507,9 @@ export const handleAwaitingDateStep = async ({
   // normalizeDateFromTurkishInput would silently advance these to next year; instead we ask.
   const pastCorrectedDate = getPastMonthDayCorrectedDate(text, effectiveNow, WHATSAPP_ASSISTANT_TIME_ZONE);
   if (pastCorrectedDate) {
+    // Store the NEXT-YEAR date so that "evet" books for the future, not the past.
+    const pastYear = new Date(`${pastCorrectedDate}T12:00:00Z`).getUTCFullYear();
+    const nextYearDate = `${pastYear + 1}${pastCorrectedDate.slice(4)}`;
     await upsertState({
       customerName,
       currentIntent: 'book_appointment',
@@ -514,11 +517,10 @@ export const handleAwaitingDateStep = async ({
       selectedAppointmentTypeId: state.selectedAppointmentTypeId,
       selectedAppointmentTypeName: state.selectedAppointmentTypeName,
       lastMessage: text,
-      stateJson: { pendingPastDateClarification: pastCorrectedDate },
+      stateJson: { pendingPastDateClarification: nextYearDate },
     });
     const formattedDate = formatTurkishDateLong(pastCorrectedDate, WHATSAPP_ASSISTANT_TIME_ZONE);
-    const nextYear = new Date(`${pastCorrectedDate}T12:00:00Z`).getUTCFullYear() + 1;
-    return `${formattedDate} geçmiş bir tarih. Bu yıl ${formattedDate} için mi randevu istiyorsunuz, yoksa ${nextYear} yılı için mi?`;
+    return `${formattedDate} geçmiş bir tarih. ${pastYear + 1} yılı için mi randevu istiyorsunuz?`;
   }
 
   const normalizedDate = normalizeDateFromTurkishInput(text, effectiveNow, WHATSAPP_ASSISTANT_TIME_ZONE)
@@ -960,10 +962,23 @@ export const handleAwaitingTimeStep = async ({
     }
 
     // Guard: user typed an explicit past month+day without a year — ask to confirm which year.
+    // Store next-year date and redirect to awaiting_date so the follow-up "evet" is handled there.
     if (pastDateInTimeStep) {
+      const pastYear = new Date(`${pastDateInTimeStep}T12:00:00Z`).getUTCFullYear();
+      const nextYearDate = `${pastYear + 1}${pastDateInTimeStep.slice(4)}`;
+      await upsertState({
+        customerName,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_date',
+        selectedAppointmentTypeId,
+        selectedAppointmentTypeName,
+        selectedDate: null,
+        selectedTime: null,
+        lastMessage: text,
+        stateJson: { pendingPastDateClarification: nextYearDate },
+      });
       const formattedPastDate = formatTurkishDateLong(pastDateInTimeStep, WHATSAPP_ASSISTANT_TIME_ZONE);
-      const nextYear = new Date(`${pastDateInTimeStep}T12:00:00Z`).getUTCFullYear() + 1;
-      return `${formattedPastDate} geçmiş bir tarih. Bu yıl ${formattedPastDate} için mi randevu istiyorsunuz, yoksa ${nextYear} yılı için mi?`;
+      return `${formattedPastDate} geçmiş bir tarih. ${pastYear + 1} yılı için mi randevu istiyorsunuz?`;
     }
 
     console.info('[whatsapp-assistant] availability-check', {
@@ -1163,8 +1178,20 @@ export const handleAwaitingConfirmationStep = async ({
     const serviceName = state.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
     return `Talebinizi klinik onay ekranına aldım. ${serviceName} için ${formatTurkishDateLong(state.selectedDate, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${pendingSlot.localStartTime} talebiniz personel tarafından kontrol edilecek. Klinik ekibi onay durumunu size bildirecek.`;
   } catch (error) {
-    if (error instanceof Error && error.message === 'INSTAGRAM_NAME_REQUIRED') {
-      return 'Randevu talebinizi tamamlayabilmem için adınızı ve soyadınızı paylaşır mısınız?';
+    if (error instanceof Error && (error.message === 'INSTAGRAM_NAME_REQUIRED' || error.message === 'PATIENT_NAME_REQUIRED' || error.message === 'PATIENT_LAST_NAME_REQUIRED')) {
+      await upsertState({
+        customerName: null,
+        currentIntent: 'book_appointment',
+        step: 'awaiting_name',
+        selectedAppointmentTypeId: state.selectedAppointmentTypeId,
+        selectedAppointmentTypeName: state.selectedAppointmentTypeName,
+        selectedPractitionerId: pendingSlot.practitionerId,
+        selectedDate: state.selectedDate,
+        selectedTime: pendingSlot.localStartTime,
+        lastMessage: text,
+        stateJson: { availableSlots, lastShownSlots, pendingConfirmationSlot: pendingSlot },
+      });
+      return 'Randevu talebinizi oluşturabilmem için adınızı ve soyadınızı paylaşır mısınız?';
     }
 
     if (error instanceof Error && error.message === 'INSTAGRAM_PHONE_REQUIRED') {
