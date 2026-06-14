@@ -10,6 +10,7 @@ import patientsEn from '../locales/en/patients.json';
 import usersEn from '../locales/en/users.json';
 import appointmentsEn from '../locales/en/appointments.json';
 import appointmentRequestsEn from '../locales/en/appointmentRequests.json';
+import contactRequestsEn from '../locales/en/contactRequests.json';
 import tasksEn from '../locales/en/tasks.json';
 import treatmentCasesEn from '../locales/en/treatmentCases.json';
 import paymentsEn from '../locales/en/payments.json';
@@ -42,6 +43,7 @@ import patientsTr from '../locales/tr/patients.json';
 import usersTr from '../locales/tr/users.json';
 import appointmentsTr from '../locales/tr/appointments.json';
 import appointmentRequestsTr from '../locales/tr/appointmentRequests.json';
+import contactRequestsTr from '../locales/tr/contactRequests.json';
 import tasksTr from '../locales/tr/tasks.json';
 import treatmentCasesTr from '../locales/tr/treatmentCases.json';
 import paymentsTr from '../locales/tr/payments.json';
@@ -74,6 +76,7 @@ import patientsFr from '../locales/fr/patients.json';
 import usersFr from '../locales/fr/users.json';
 import appointmentsFr from '../locales/fr/appointments.json';
 import appointmentRequestsFr from '../locales/fr/appointmentRequests.json';
+import contactRequestsFr from '../locales/fr/contactRequests.json';
 import tasksFr from '../locales/fr/tasks.json';
 import treatmentCasesFr from '../locales/fr/treatmentCases.json';
 import paymentsFr from '../locales/fr/payments.json';
@@ -106,6 +109,7 @@ import patientsDe from '../locales/de/patients.json';
 import usersDe from '../locales/de/users.json';
 import appointmentsDe from '../locales/de/appointments.json';
 import appointmentRequestsDe from '../locales/de/appointmentRequests.json';
+import contactRequestsDe from '../locales/de/contactRequests.json';
 import tasksDe from '../locales/de/tasks.json';
 import treatmentCasesDe from '../locales/de/treatmentCases.json';
 import paymentsDe from '../locales/de/payments.json';
@@ -139,6 +143,7 @@ const namespaces = [
   'users',
   'appointments',
   'appointmentRequests',
+  'contactRequests',
   'tasks',
   'treatmentCases',
   'payments',
@@ -174,6 +179,7 @@ const resources = {
     users: usersEn,
     appointments: appointmentsEn,
     appointmentRequests: appointmentRequestsEn,
+    contactRequests: contactRequestsEn,
     tasks: tasksEn,
     treatmentCases: treatmentCasesEn,
     payments: paymentsEn,
@@ -207,6 +213,7 @@ const resources = {
     users: usersTr,
     appointments: appointmentsTr,
     appointmentRequests: appointmentRequestsTr,
+    contactRequests: contactRequestsTr,
     tasks: tasksTr,
     treatmentCases: treatmentCasesTr,
     payments: paymentsTr,
@@ -240,6 +247,7 @@ const resources = {
     users: usersFr,
     appointments: appointmentsFr,
     appointmentRequests: appointmentRequestsFr,
+    contactRequests: contactRequestsFr,
     tasks: tasksFr,
     treatmentCases: treatmentCasesFr,
     payments: paymentsFr,
@@ -273,6 +281,7 @@ const resources = {
     users: usersDe,
     appointments: appointmentsDe,
     appointmentRequests: appointmentRequestsDe,
+    contactRequests: contactRequestsDe,
     tasks: tasksDe,
     treatmentCases: treatmentCasesDe,
     payments: paymentsDe,

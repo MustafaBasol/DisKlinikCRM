@@ -46,6 +46,7 @@ const Branches = React.lazy(() => import('./pages/Branches'));
 const ClinicSchedule = React.lazy(() => import('./pages/ClinicSchedule'));
 const WhatsAppConnections = React.lazy(() => import('./pages/WhatsAppConnections'));
 const WhatsAppInbox = React.lazy(() => import('./pages/WhatsAppInbox'));
+const ContactRequests = React.lazy(() => import('./pages/ContactRequests'));
 const InstagramConnections = React.lazy(() => import('./pages/InstagramConnections'));
 const InstagramInbox = React.lazy(() => import('./pages/InstagramInbox'));
 const FinanceDashboard = React.lazy(() => import('./pages/FinanceDashboard'));
@@ -182,6 +183,7 @@ const ProductApplication: React.FC = () => {
               <Route path="branches/:clinicId/schedule" element={<ClinicSchedule />} />
               <Route path="organization/whatsapp" element={<WhatsAppConnections />} />
               <Route path="whatsapp-inbox" element={<WhatsAppInbox />} />
+              <Route path="contact-requests" element={<ContactRequests />} />
               <Route path="organization/instagram" element={<InstagramConnections />} />
               <Route path="instagram-inbox" element={<InstagramInbox />} />
               <Route path="finance" element={<FinanceDashboard />} />

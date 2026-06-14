@@ -1,0 +1,66 @@
+{
+  "title": "Demandes de contact",
+  "subtitle": "Gérez les demandes de transfert, de rappel et d'information provenant de WhatsApp, Instagram et d'autres canaux.",
+  "empty": "Aucune demande de contact pour ce filtre.",
+  "summary": {
+    "total": "Total des demandes",
+    "pending": "En attente",
+    "inProgress": "En cours",
+    "resolved": "Résolues"
+  },
+  "filters": {
+    "allStatus": "Tous les statuts",
+    "allChannels": "Tous les canaux",
+    "allTypes": "Type de demande"
+  },
+  "channels": {
+    "whatsapp": "WhatsApp",
+    "meta_whatsapp": "Meta WhatsApp",
+    "instagram": "Instagram",
+    "manual": "Manuel"
+  },
+  "type": {
+    "callback_request": "Rappel",
+    "staff_handoff": "Transfert agent",
+    "information_request": "Demande d'information",
+    "complaint": "Réclamation",
+    "other": "Autre"
+  },
+  "status": {
+    "pending": "En attente",
+    "in_progress": "En cours",
+    "resolved": "Résolu",
+    "closed": "Fermé"
+  },
+  "priority": {
+    "normal": "Normal",
+    "urgent": "Urgent"
+  },
+  "fields": {
+    "name": "Nom",
+    "phone": "Téléphone",
+    "channel": "Canal",
+    "type": "Type de demande",
+    "status": "Statut",
+    "note": "Note",
+    "lastMessage": "Dernier message",
+    "createdAt": "Créé le",
+    "updatedAt": "Mis à jour le",
+    "patient": "Patient"
+  },
+  "actions": {
+    "refresh": "Actualiser",
+    "takeAction": "Prendre en charge",
+    "resolve": "Marquer résolu",
+    "close": "Fermer",
+    "reopen": "Rouvrir",
+    "openConversation": "Ouvrir la conversation"
+  },
+  "errors": {
+    "loadFailed": "Impossible de charger les demandes de contact.",
+    "updateFailed": "Impossible de mettre à jour la demande."
+  },
+  "success": {
+    "updated": "Demande mise à jour."
+  }
+}

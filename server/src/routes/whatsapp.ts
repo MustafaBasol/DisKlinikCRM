@@ -55,6 +55,7 @@ import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../services/appointmentRequestSafety.js';
 import { checkPractitionerAvailabilityForSlot } from '../services/appointments/appointmentAvailabilityService.js';
+import { upsertContactRequest } from './contactRequests.js';
 
 const router = express.Router();
 
@@ -1597,15 +1598,17 @@ const handleHumanHandoffIntent = async (
   customerName: string | null | undefined,
 ) => {
   const existingPatient = await findExistingPatientByPhone(clinicId, input.phone);
-  const patientName = getRequestPatientName(customerName, input);
-  const request = await createWhatsAppStaffRequest({
+  const contactRequest = await upsertContactRequest({
     clinicId,
-    phone: input.phone,
+    channel: 'whatsapp',
+    externalSenderId: normalizePhone(input.phone),
     patientId: existingPatient?.id ?? null,
-    patientName,
-    requestType: 'info',
-    rawMessage: input.text,
-    notes: `WhatsApp üzerinden insan yetkili talebi alındı.\nİlk mesaj: ${input.text}`,
+    phone: normalizePhone(input.phone),
+    name: getRequestPatientName(customerName, input),
+    type: 'staff_handoff',
+    note: `WhatsApp üzerinden insan yetkili talebi alındı.\nİlk mesaj: ${input.text}`.slice(0, 2000),
+    lastMessage: input.text.slice(0, 500),
+    sourceConversationId: normalizePhone(input.phone),
   });
 
   await upsertWhatsAppConversationState(clinicId, input.phone, {
@@ -1613,7 +1616,7 @@ const handleHumanHandoffIntent = async (
     currentIntent: 'human_handoff',
     step: 'awaiting_handoff_note',
     lastMessage: input.text,
-    stateJson: { pendingHandoffRequestId: request.id },
+    stateJson: { pendingHandoffRequestId: contactRequest.id },
     selectedAppointmentTypeId: null,
     selectedAppointmentTypeName: null,
     selectedPractitionerId: null,
@@ -1633,22 +1636,27 @@ const handleHandoffNote = async (
 ) => {
   const note = input.text.trim();
   if (stateJson.pendingHandoffRequestId) {
-    await prisma.appointmentRequest.updateMany({
+    // Update the open ContactRequest that was created when handoff started
+    await prisma.contactRequest.updateMany({
       where: { id: stateJson.pendingHandoffRequestId, clinicId },
       data: {
-        notes: `WhatsApp üzerinden insan yetkili talebi alındı.\nKullanıcı notu: ${note}`,
+        note: `WhatsApp üzerinden insan yetkili talebi alındı.\nKullanıcı notu: ${note}`.slice(0, 2000),
+        lastMessage: note.slice(0, 500),
       },
     });
   } else {
     const existingPatient = await findExistingPatientByPhone(clinicId, input.phone);
-    await createWhatsAppStaffRequest({
+    await upsertContactRequest({
       clinicId,
-      phone: input.phone,
+      channel: 'whatsapp',
+      externalSenderId: normalizePhone(input.phone),
       patientId: existingPatient?.id ?? null,
-      patientName: getRequestPatientName(customerName, input),
-      requestType: 'info',
-      rawMessage: input.text,
-      notes: `WhatsApp yetkili görüşme notu: ${note}`,
+      phone: normalizePhone(input.phone),
+      name: getRequestPatientName(customerName, input),
+      type: 'staff_handoff',
+      note: `WhatsApp yetkili görüşme notu: ${note}`.slice(0, 2000),
+      lastMessage: note.slice(0, 500),
+      sourceConversationId: normalizePhone(input.phone),
     });
   }
 

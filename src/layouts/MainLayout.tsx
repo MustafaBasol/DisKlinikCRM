@@ -41,7 +41,7 @@ import { useAuth } from '../context/AuthContext';
 import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
 import NotificationBell from '../components/NotificationBell';
-import { authService } from '../services/api';
+import { authService, contactRequestService } from '../services/api';
 import { useDarkMode } from '../utils/darkMode';
 import {
   canViewOrganizationDashboard,
@@ -62,7 +62,7 @@ import {
   canViewInstagramInbox,
 } from '../utils/permissions';
 
-type NavItem = { path: string; icon: React.ReactNode; label: string };
+type NavItem = { path: string; icon: React.ReactNode; label: string; badge?: number };
 type NavGroup = { id: string; label: string; collapsible: boolean; items: NavItem[] };
 
 type ChangePasswordForm = {
@@ -258,6 +258,7 @@ const MainLayoutInner: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [contactRequestCount, setContactRequestCount] = useState(0);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
@@ -299,6 +300,22 @@ const MainLayoutInner: React.FC = () => {
 
   useEffect(() => {
     setIsUserMenuOpen(false);
+  }, [location.pathname]);
+
+  // Fetch unresolved contact request count for sidebar badge
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCount = async () => {
+      try {
+        const res = await contactRequestService.getCounts();
+        if (!cancelled) setContactRequestCount(res.data.unresolved ?? 0);
+      } catch {
+        // Non-critical; badge just shows 0
+      }
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [location.pathname]);
 
   // Close sidebar when navigating on mobile
@@ -377,6 +394,12 @@ const MainLayoutInner: React.FC = () => {
     }
     if (canSeeAppointmentRequests) {
       items.push({ path: '/appointment-requests', icon: <CalendarPlus size={18} />, label: t('common:whatsappRequests') });
+      items.push({
+        path: '/contact-requests',
+        icon: <Inbox size={18} />,
+        label: t('common:contactRequests'),
+        badge: contactRequestCount > 0 ? contactRequestCount : undefined,
+      });
     }
     if (canViewPatients(user)) {
       items.push({ path: '/messages', icon: <MessageSquare size={18} />, label: t('common:messages') });
@@ -533,11 +556,21 @@ const MainLayoutInner: React.FC = () => {
                             : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800',
                         ].join(' ')}
                       >
-                        <span className={`shrink-0 ${isActive ? 'text-primary-600' : 'text-gray-400'}`}>
+                        <span className={`shrink-0 relative ${isActive ? 'text-primary-600' : 'text-gray-400'}`}>
                           {item.icon}
+                          {!showLabels && item.badge != null && (
+                            <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold px-0.5">
+                              {item.badge > 99 ? '99+' : item.badge}
+                            </span>
+                          )}
                         </span>
                         {showLabels && (
-                          <span className="truncate leading-snug">{item.label}</span>
+                          <span className="flex-1 truncate leading-snug">{item.label}</span>
+                        )}
+                        {showLabels && item.badge != null && (
+                          <span className="shrink-0 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1">
+                            {item.badge > 99 ? '99+' : item.badge}
+                          </span>
                         )}
                       </Link>
                     );

@@ -51,7 +51,11 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
       where: {
         ...scope,
         ...(status ? { status: String(status) } : {}),
-        ...(requestType ? { requestType: String(requestType) } : {}),
+        // When no explicit requestType filter is set, exclude staff-handoff-only records
+        // (requestType 'info') — those now live in ContactRequest.
+        ...(requestType
+          ? { requestType: String(requestType) }
+          : { requestType: { not: 'info' } }),
         ...(sourceFilter ? { source: sourceFilter } : {}),
       },
       include: {
