@@ -9,6 +9,15 @@ interface MessageTemplateFormProps {
   onSuccess: () => void;
 }
 
+const PURPOSES = [
+  'appointment_reminder',
+  'payment_reminder',
+  'appointment_confirmation',
+  'no_show_recovery',
+  'post_treatment_followup',
+  'general_message',
+] as const;
+
 const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onClose, onSuccess }) => {
   const { t } = useTranslation(['messageTemplates', 'common']);
   const [loading, setLoading] = useState(false);
@@ -19,6 +28,7 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
     subject: template?.subject || '',
     body: template?.body || '',
     isActive: template?.isActive ?? true,
+    purpose: template?.purpose || 'general_message',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,7 +49,7 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
   };
 
   const variables = [
-    'patient_name', 'clinic_name', 'appointment_date', 'appointment_time', 
+    'patient_name', 'clinic_name', 'appointment_date', 'appointment_time',
     'practitioner_name', 'treatment_title', 'remaining_balance'
   ];
 
@@ -66,8 +76,8 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('messageTemplates:fields.name')}</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 required
                 className="input-field"
                 value={formData.name}
@@ -93,10 +103,34 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
             </div>
           </div>
 
+          {/* Purpose select */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('messageTemplates:purpose.label')}</label>
+            <select
+              className="input-field"
+              value={formData.purpose}
+              onChange={(e) => setFormData({...formData, purpose: e.target.value})}
+            >
+              {PURPOSES.map((p) => (
+                <option key={p} value={p}>
+                  {t(`messageTemplates:purpose.${p}`)}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px] text-gray-500">
+              {t('messageTemplates:purpose.helperText')}
+            </p>
+            {formData.channel === 'whatsapp' && (
+              <p className="mt-1 text-[11px] text-blue-600">
+                {t('messageTemplates:purpose.whatsappNote')}
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('messageTemplates:fields.language')}</label>
-              <select 
+              <select
                 className="input-field"
                 value={formData.language}
                 onChange={(e) => setFormData({...formData, language: e.target.value})}
@@ -107,8 +141,8 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
               </select>
             </div>
             <div className="flex items-center gap-2 pt-6">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 id="isActive"
                 className="w-4 h-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
                 checked={formData.isActive}
@@ -121,8 +155,8 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
           {formData.channel === 'email' && (
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('messageTemplates:fields.subject')}</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 className="input-field"
                 value={formData.subject}
                 onChange={(e) => setFormData({...formData, subject: e.target.value})}
@@ -138,7 +172,7 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
                 {t('messageTemplates:variables.title')}
               </div>
             </div>
-            <textarea 
+            <textarea
               required
               rows={5}
               className="input-field"
@@ -147,7 +181,7 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
             />
             <div className="mt-2 flex flex-wrap gap-1">
               {variables.map(v => (
-                <button 
+                <button
                   key={v}
                   type="button"
                   onClick={() => insertVariable(v)}

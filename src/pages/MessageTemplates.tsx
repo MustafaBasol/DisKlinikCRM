@@ -197,6 +197,7 @@ const MessageTemplates: React.FC = () => {
               <tr className="bg-gray-50/50 border-b border-gray-100">
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('messageTemplates:fields.name')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('messageTemplates:fields.channel')}</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('messageTemplates:purpose.label')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('messageTemplates:fields.language')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('messageTemplates:fields.isActive')}</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">{t('messageTemplates:whatsappApproval.columnHeader')}</th>
@@ -206,7 +207,7 @@ const MessageTemplates: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center">
+                  <td colSpan={7} className="p-12 text-center">
                     <Loader2 className="animate-spin text-primary-600 mx-auto" size={32} />
                   </td>
                 </tr>
@@ -231,6 +232,11 @@ const MessageTemplates: React.FC = () => {
                           </span>
                           {t(`messageTemplates:channels.${template.channel}`)}
                         </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {t(`messageTemplates:purpose.${template.purpose ?? 'general_message'}`, { defaultValue: template.purpose ?? 'general_message' })}
+                        </span>
                       </td>
                       <td className="p-4">
                         <span className="flex items-center gap-2 text-xs text-gray-600">
@@ -309,7 +315,7 @@ const MessageTemplates: React.FC = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-gray-400">
+                  <td colSpan={7} className="p-12 text-center text-gray-400">
                     <MessageSquare size={48} className="mx-auto mb-3 opacity-20" />
                     <p>{t('common:noData')}</p>
                   </td>
