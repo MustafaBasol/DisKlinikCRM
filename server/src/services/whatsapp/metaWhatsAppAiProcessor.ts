@@ -54,6 +54,7 @@ import {
 import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
+import { sanitizeAiMessageHistory } from '../privacy/redaction.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1177,9 +1178,11 @@ const buildReplyText = async (args: {
     selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null,
     selectedDate: state?.selectedDate ?? null,
     services,
-    recentMessages: recentState?.lastMessage
-      ? [{ direction: 'incoming' as const, text: recentState.lastMessage }]
-      : [],
+    recentMessages: sanitizeAiMessageHistory(
+      recentState?.lastMessage
+        ? [{ direction: 'incoming' as const, text: recentState.lastMessage }]
+        : [],
+    ),
     clinicFacts,
   });
 
