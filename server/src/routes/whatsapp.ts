@@ -55,6 +55,7 @@ import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../services/appointmentRequestSafety.js';
 import { checkPractitionerAvailabilityForSlot } from '../services/appointments/appointmentAvailabilityService.js';
+import { sanitizeAiMessageHistory } from '../services/privacy/redaction.js';
 
 const router = express.Router();
 
@@ -1201,10 +1202,11 @@ const loadRecentWhatsAppAgentMessages = async (clinicId: string, patientId?: str
     orderBy: { createdAt: 'desc' },
     take: 10,
   });
-  return messages.reverse().map(message => ({
+  const raw = messages.reverse().map(message => ({
     direction: message.direction === 'outgoing' ? 'outgoing' as const : 'incoming' as const,
     text: message.text,
   }));
+  return sanitizeAiMessageHistory(raw);
 };
 
 const hasProcessedWhatsAppProviderMessage = async (clinicId: string, phone: string, providerMessageId?: string | null) => {

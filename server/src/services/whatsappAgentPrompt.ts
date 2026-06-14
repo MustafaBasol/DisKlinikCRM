@@ -136,7 +136,8 @@ export const buildWhatsAppAgentPrompt = (args: WhatsAppAgentPromptArgs) => [
   '}',
   '',
   'Known context:',
-  `Customer name: ${args.customerName ?? 'null'}`,
+  // Send only the first name to avoid forwarding the patient's full name to the AI provider.
+  `Customer name: ${args.customerName?.trim().split(/\s+/)[0] ?? 'null'}`,
   `Current intent: ${args.currentIntent ?? 'null'}`,
   `Current step: ${args.currentStep ?? 'null'}`,
   `Selected service: ${args.selectedAppointmentTypeName ?? 'null'}`,
