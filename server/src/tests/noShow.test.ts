@@ -835,6 +835,186 @@ await test('boş doktor listesi — doctorId temizlenir', () => {
   assert.equal(result.valid, false);
 });
 
+// ─── 17. No-show recovery WhatsApp — Meta template selection logic ────────────
+
+section('17. No-show recovery WhatsApp — template selection & variable mapping');
+
+// Pure-logic helpers that mirror the Prisma WHERE clause used in sendNoShowRecoveryWhatsApp
+type TemplateRecord = {
+  id: string;
+  clinicId: string;
+  channel: string;
+  purpose: string;
+  isActive: boolean;
+  metaTemplateStatus: string | null;
+  metaTemplateName: string | null;
+  createdAt: Date;
+};
+
+function selectNoShowRecoveryTemplate(
+  clinicId: string,
+  templates: TemplateRecord[],
+): TemplateRecord | null {
+  const candidates = templates.filter(
+    (t) =>
+      t.clinicId === clinicId &&
+      t.channel === 'whatsapp' &&
+      t.purpose === 'no_show_recovery' &&
+      t.isActive === true,
+  );
+  // Deterministic: first by createdAt ASC
+  candidates.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return candidates[0] ?? null;
+}
+
+function isApprovedForSend(template: TemplateRecord | null): boolean {
+  return (
+    template !== null &&
+    template.metaTemplateStatus === 'approved' &&
+    Boolean(template.metaTemplateName)
+  );
+}
+
+const baseTemplate = (overrides: Partial<TemplateRecord> = {}): TemplateRecord => ({
+  id: 'tpl-1',
+  clinicId: 'clinic-A',
+  channel: 'whatsapp',
+  purpose: 'no_show_recovery',
+  isActive: true,
+  metaTemplateStatus: 'approved',
+  metaTemplateName: 'gelmeyen_hasta_takibi',
+  createdAt: new Date('2026-01-01T10:00:00Z'),
+  ...overrides,
+});
+
+await test('selects active no_show_recovery whatsapp template for correct clinic', () => {
+  const tpl = selectNoShowRecoveryTemplate('clinic-A', [baseTemplate()]);
+  assert.ok(tpl !== null);
+  assert.equal(tpl!.id, 'tpl-1');
+});
+
+await test('does not select template from different clinic', () => {
+  const tpl = selectNoShowRecoveryTemplate('clinic-B', [baseTemplate()]);
+  assert.equal(tpl, null);
+});
+
+await test('does not select inactive template', () => {
+  const tpl = selectNoShowRecoveryTemplate('clinic-A', [baseTemplate({ isActive: false })]);
+  assert.equal(tpl, null);
+});
+
+await test('does not select template with wrong purpose (appointment_reminder)', () => {
+  const tpl = selectNoShowRecoveryTemplate('clinic-A', [
+    baseTemplate({ purpose: 'appointment_reminder' }),
+  ]);
+  assert.equal(tpl, null);
+});
+
+await test('does not select template with wrong purpose (general_message)', () => {
+  const tpl = selectNoShowRecoveryTemplate('clinic-A', [
+    baseTemplate({ purpose: 'general_message' }),
+  ]);
+  assert.equal(tpl, null);
+});
+
+await test('does not select template with wrong channel (sms)', () => {
+  const tpl = selectNoShowRecoveryTemplate('clinic-A', [
+    baseTemplate({ channel: 'sms' }),
+  ]);
+  assert.equal(tpl, null);
+});
+
+await test('multiple active templates — selects first by createdAt ASC (deterministic)', () => {
+  const older = baseTemplate({ id: 'tpl-older', createdAt: new Date('2026-01-01T08:00:00Z') });
+  const newer = baseTemplate({ id: 'tpl-newer', createdAt: new Date('2026-01-01T12:00:00Z') });
+  const tpl = selectNoShowRecoveryTemplate('clinic-A', [newer, older]);
+  assert.equal(tpl!.id, 'tpl-older', 'should pick the oldest (createdAt ASC)');
+});
+
+await test('approved template with metaTemplateName → isApprovedForSend = true', () => {
+  assert.equal(isApprovedForSend(baseTemplate()), true);
+});
+
+await test('submitted (not approved) template → isApprovedForSend = false', () => {
+  assert.equal(isApprovedForSend(baseTemplate({ metaTemplateStatus: 'submitted' })), false);
+});
+
+await test('null template → isApprovedForSend = false', () => {
+  assert.equal(isApprovedForSend(null), false);
+});
+
+await test('approved but no metaTemplateName → isApprovedForSend = false', () => {
+  assert.equal(isApprovedForSend(baseTemplate({ metaTemplateName: null })), false);
+});
+
+// Variable mapping for no-show recovery
+function buildNoShowVariables(opts: {
+  patientFirstName: string;
+  patientLastName: string;
+  clinicName: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  practitionerFirstName?: string;
+  practitionerLastName?: string;
+  serviceName?: string;
+}): Record<string, string> {
+  const vars: Record<string, string> = {
+    patient_name: `${opts.patientFirstName} ${opts.patientLastName}`,
+    clinic_name: opts.clinicName,
+    appointment_date: opts.appointmentDate,
+    appointment_time: opts.appointmentTime,
+  };
+  if (opts.practitionerFirstName && opts.practitionerLastName) {
+    vars.practitioner_name = `${opts.practitionerFirstName} ${opts.practitionerLastName}`.trim();
+  }
+  if (opts.serviceName) {
+    vars.service_name = opts.serviceName;
+  }
+  return vars;
+}
+
+await test('buildNoShowVariables — all fields present', () => {
+  const vars = buildNoShowVariables({
+    patientFirstName: 'Ayşe', patientLastName: 'Yılmaz',
+    clinicName: 'Merkez Diş', appointmentDate: '14 Haz', appointmentTime: '10:00',
+    practitionerFirstName: 'Dr.', practitionerLastName: 'Kaya',
+    serviceName: 'Kanal Tedavisi',
+  });
+  assert.equal(vars.patient_name, 'Ayşe Yılmaz');
+  assert.equal(vars.clinic_name, 'Merkez Diş');
+  assert.equal(vars.appointment_date, '14 Haz');
+  assert.equal(vars.appointment_time, '10:00');
+  assert.equal(vars.practitioner_name, 'Dr. Kaya');
+  assert.equal(vars.service_name, 'Kanal Tedavisi');
+});
+
+await test('buildNoShowVariables — practitioner absent → no practitioner_name key', () => {
+  const vars = buildNoShowVariables({
+    patientFirstName: 'Ayşe', patientLastName: 'Yılmaz',
+    clinicName: 'Merkez Diş', appointmentDate: '14 Haz', appointmentTime: '10:00',
+  });
+  assert.ok(!('practitioner_name' in vars), 'practitioner_name should not be included');
+});
+
+await test('buildNoShowVariables — service absent → no service_name key', () => {
+  const vars = buildNoShowVariables({
+    patientFirstName: 'Ayşe', patientLastName: 'Yılmaz',
+    clinicName: 'Merkez Diş', appointmentDate: '14 Haz', appointmentTime: '10:00',
+  });
+  assert.ok(!('service_name' in vars), 'service_name should not be included');
+});
+
+await test('buildNoShowVariables — does not include sensitive fields (insurance, balance, notes)', () => {
+  const vars = buildNoShowVariables({
+    patientFirstName: 'Ayşe', patientLastName: 'Yılmaz',
+    clinicName: 'Merkez Diş', appointmentDate: '14 Haz', appointmentTime: '10:00',
+  });
+  const sensitiveKeys = ['insurance', 'balance', 'remaining_balance', 'notes', 'internal_notes', 'medical'];
+  for (const key of sensitiveKeys) {
+    assert.ok(!(key in vars), `vars must not include sensitive field: ${key}`);
+  }
+});
+
 // ─── Sonuç ────────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(60)}`);
