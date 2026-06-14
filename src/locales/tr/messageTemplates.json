@@ -30,5 +30,23 @@
     "button": "Varsayılan Şablonları Yükle",
     "confirm": "Varsayılan şablonlar yüklensin mi?",
     "success": "Varsayılan şablonlar başarıyla oluşturuldu"
+  },
+  "whatsappApproval": {
+    "infoTitle": "WhatsApp Otomatik Mesaj Onayı",
+    "infoBody": "WhatsApp otomatik mesajları için bazı şablonların WhatsApp tarafından onaylanması gerekir. Randevu hatırlatma, gelmeyen hasta mesajı veya tedavi sonrası takip gibi otomatik mesajlar, onaylanan şablonlarla gönderilir.",
+    "infoHint": "Şablonu hazırlayın, WhatsApp onayına gönderin ve durumunu buradan takip edin. Onaylanan şablonlar otomatik mesajlarda kullanılabilir.",
+    "columnHeader": "WhatsApp Onayı",
+    "channelHint": "WhatsApp otomatik mesajlarında kullanılacak şablonların Meta/WhatsApp onayından geçmesi gerekir.",
+    "submitAction": "Onaya Gönder",
+    "syncAction": "Durumu Sorgula",
+    "rejectionAction": "Red Sebebini Gör",
+    "rejectedTitle": "WhatsApp tarafından reddedildi",
+    "rejectedMessage": "WhatsApp bu şablonu onaylamadı. Lütfen metni düzenleyip tekrar gönderin.",
+    "statusNotSent": "Gönderilmedi",
+    "statusPending": "Onay Bekleniyor",
+    "statusApproved": "Kullanıma Hazır",
+    "statusRejected": "Reddedildi",
+    "statusNeedsAttention": "Dikkat Gerekiyor",
+    "statusUnknown": "Bilinmiyor"
   }
 }

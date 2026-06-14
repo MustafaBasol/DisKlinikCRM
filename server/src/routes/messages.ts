@@ -4,12 +4,19 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';
-import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
+import { sendWhatsAppMessage, resolveConnectionForClinic } from '../services/whatsapp/whatsappService.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { recordOperationalEvent } from '../services/operationalEventService.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { patientContactSelect, userNameSelect, userPublicSelect } from '../utils/prismaSelects.js';
+import {
+  sanitizeMetaTemplateName,
+  convertBodyToMeta,
+  createMetaTemplate,
+  syncMetaTemplateStatus,
+  META_ERRORS,
+} from '../services/metaTemplateService.js';
 
 const router = express.Router();
 const LOW_SENSITIVITY_CHANNELS = new Set(['sms', 'whatsapp']);
@@ -440,6 +447,147 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// ── Meta WhatsApp Template Management ────────────────────────────────────────
+
+// POST /api/message-templates/:id/meta/submit
+router.post('/message-templates/:id/meta/submit', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const clinicId = req.user!.clinicId;
+
+  try {
+    const template = await prisma.messageTemplate.findFirst({ where: { id, clinicId } });
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    if (template.channel !== 'whatsapp') {
+      return res.status(400).json({ error: 'Only WhatsApp templates can be submitted for WhatsApp approval.' });
+    }
+
+    const connection = await resolveConnectionForClinic(clinicId);
+    if (!connection) {
+      return res.status(422).json({ code: META_ERRORS.CONNECTION_NOT_FOUND, error: 'Bu işlemi yapabilmek için önce WhatsApp Cloud API bağlantısı kurulmalıdır.' });
+    }
+    if (!connection.metaWabaId) {
+      return res.status(422).json({ code: META_ERRORS.WABA_ID_MISSING, error: 'WhatsApp işletme hesabı bilgileri eksik. Lütfen WhatsApp bağlantı ayarlarını kontrol edin.' });
+    }
+
+    const { metaBody, variableMap } = convertBodyToMeta(template.body);
+
+    const body = req.body as Record<string, unknown>;
+    const requestedName = typeof body.metaTemplateName === 'string' ? body.metaTemplateName.trim() : '';
+    const templateName = requestedName
+      ? sanitizeMetaTemplateName(requestedName)
+      : sanitizeMetaTemplateName(template.name);
+
+    const languageCode = typeof body.metaTemplateLanguage === 'string' ? body.metaTemplateLanguage : (template.language === 'tr' ? 'tr' : template.language === 'fr' ? 'fr' : 'en');
+    const category = typeof body.metaTemplateCategory === 'string' ? body.metaTemplateCategory : 'utility';
+
+    const result = await createMetaTemplate(connection, {
+      templateName,
+      languageCode,
+      category,
+      metaBody,
+      variableMap,
+    });
+
+    if (!result.success) {
+      return res.status(422).json({ code: result.code, error: result.message });
+    }
+
+    const updated = await prisma.messageTemplate.update({
+      where: { id },
+      data: {
+        metaTemplateName: templateName,
+        metaTemplateLanguage: languageCode,
+        metaTemplateCategory: category,
+        metaTemplateStatus: 'submitted',
+        metaTemplateId: result.metaTemplateId ?? undefined,
+        metaTemplateVariableMap: variableMap,
+        metaTemplateSubmittedAt: new Date(),
+        metaTemplateRejectionReason: null,
+      },
+    });
+
+    await logActivity({
+      clinicId, userId: req.user!.id, entityType: 'message_template', entityId: id,
+      action: 'meta_submitted', description: `"${template.name}" şablonu WhatsApp onayına gönderildi`,
+    });
+
+    res.json({
+      status: updated.metaTemplateStatus,
+      metaTemplateName: updated.metaTemplateName,
+      metaTemplateLanguage: updated.metaTemplateLanguage,
+      metaTemplateCategory: updated.metaTemplateCategory,
+      metaTemplateSubmittedAt: updated.metaTemplateSubmittedAt,
+      variableMap: updated.metaTemplateVariableMap,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to submit template for WhatsApp approval' });
+  }
+});
+
+// POST /api/message-templates/:id/meta/sync
+router.post('/message-templates/:id/meta/sync', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const clinicId = req.user!.clinicId;
+
+  try {
+    const template = await prisma.messageTemplate.findFirst({ where: { id, clinicId } });
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+    if (!template.metaTemplateName) {
+      return res.status(400).json({ error: 'This template has not been submitted for WhatsApp approval yet.' });
+    }
+
+    const connection = await resolveConnectionForClinic(clinicId);
+    if (!connection) {
+      return res.status(422).json({ code: META_ERRORS.CONNECTION_NOT_FOUND, error: 'Bu işlemi yapabilmek için önce WhatsApp Cloud API bağlantısı kurulmalıdır.' });
+    }
+    if (!connection.metaWabaId) {
+      return res.status(422).json({ code: META_ERRORS.WABA_ID_MISSING, error: 'WhatsApp işletme hesabı bilgileri eksik. Lütfen WhatsApp bağlantı ayarlarını kontrol edin.' });
+    }
+
+    const result = await syncMetaTemplateStatus(id, connection);
+    if (!result.success) {
+      return res.status(422).json({ code: result.code, error: result.message });
+    }
+
+    res.json({
+      status: result.status,
+      rejectionReason: result.rejectionReason,
+      lastSyncedAt: new Date(),
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to sync WhatsApp approval status' });
+  }
+});
+
+// GET /api/message-templates/:id/meta/status
+router.get('/message-templates/:id/meta/status', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const clinicId = req.user!.clinicId;
+
+  try {
+    const template = await prisma.messageTemplate.findFirst({
+      where: { id, clinicId },
+      select: {
+        id: true,
+        metaTemplateName: true,
+        metaTemplateLanguage: true,
+        metaTemplateCategory: true,
+        metaTemplateStatus: true,
+        metaTemplateRejectionReason: true,
+        metaTemplateLastSyncedAt: true,
+        metaTemplateSubmittedAt: true,
+        metaTemplateVariableMap: true,
+      },
+    });
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    res.json(template);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch WhatsApp approval status' });
   }
 });
 

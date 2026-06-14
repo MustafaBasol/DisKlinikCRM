@@ -76,7 +76,7 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('messageTemplates:fields.channel')}</label>
-              <select 
+              <select
                 className="input-field"
                 value={formData.channel}
                 onChange={(e) => setFormData({...formData, channel: e.target.value})}
@@ -85,6 +85,11 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
                 <option value="whatsapp">WhatsApp</option>
                 <option value="email">Email</option>
               </select>
+              {formData.channel === 'whatsapp' && (
+                <p className="mt-1.5 text-[11px] text-blue-600">
+                  {t('messageTemplates:whatsappApproval.channelHint')}
+                </p>
+              )}
             </div>
           </div>
 

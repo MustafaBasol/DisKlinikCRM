@@ -30,5 +30,23 @@
     "button": "Standardvorlagen erstellen",
     "confirm": "Standardvorlagen erstellen?",
     "success": "Standardvorlagen wurden erfolgreich erstellt"
+  },
+  "whatsappApproval": {
+    "infoTitle": "WhatsApp-Freigabe für automatische Nachrichten",
+    "infoBody": "Einige Vorlagen müssen von WhatsApp genehmigt werden, bevor sie für automatische Nachrichten verwendet werden können.",
+    "infoHint": "Bereiten Sie Ihre Vorlage vor, senden Sie sie zur WhatsApp-Genehmigung und verfolgen Sie den Status hier.",
+    "columnHeader": "WhatsApp-Freigabe",
+    "channelHint": "Vorlagen für automatische WhatsApp-Nachrichten müssen von Meta/WhatsApp genehmigt werden.",
+    "submitAction": "Zur Genehmigung senden",
+    "syncAction": "Status prüfen",
+    "rejectionAction": "Ablehnungsgrund anzeigen",
+    "rejectedTitle": "Von WhatsApp abgelehnt",
+    "rejectedMessage": "WhatsApp hat diese Vorlage nicht genehmigt. Bitte bearbeiten Sie die Nachricht und senden Sie sie erneut.",
+    "statusNotSent": "Nicht gesendet",
+    "statusPending": "Wartet auf Genehmigung",
+    "statusApproved": "Einsatzbereit",
+    "statusRejected": "Abgelehnt",
+    "statusNeedsAttention": "Aufmerksamkeit erforderlich",
+    "statusUnknown": "Unbekannt"
   }
 }
