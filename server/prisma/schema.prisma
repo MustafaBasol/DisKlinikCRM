@@ -626,6 +626,17 @@ model MessageTemplate {
   createdById String?
   createdBy   User?   @relation("TemplateCreator", fields: [createdById], references: [id])
 
+  // Meta WhatsApp Template Management
+  metaTemplateName            String?
+  metaTemplateLanguage        String?
+  metaTemplateCategory        String?   // utility, marketing, authentication
+  metaTemplateStatus          String?   // draft, submitted, approved, rejected, paused, disabled, unknown
+  metaTemplateId              String?
+  metaTemplateRejectionReason String?
+  metaTemplateLastSyncedAt    DateTime?
+  metaTemplateSubmittedAt     DateTime?
+  metaTemplateVariableMap     Json?
+
   sentMessages SentMessage[]
   recallCandidates RecallCandidate[]
 }

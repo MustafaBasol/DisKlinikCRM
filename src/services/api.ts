@@ -176,6 +176,10 @@ export const messageTemplateService = {
   create: (data: any) => api.post('/message-templates', data),
   update: (id: string, data: any) => api.put(`/message-templates/${id}`, data),
   seed: () => api.post('/message-templates/seed'),
+  metaSubmit: (id: string, data?: { metaTemplateName?: string; metaTemplateLanguage?: string; metaTemplateCategory?: string }) =>
+    api.post(`/message-templates/${id}/meta/submit`, data ?? {}),
+  metaSync: (id: string) => api.post(`/message-templates/${id}/meta/sync`),
+  metaStatus: (id: string) => api.get(`/message-templates/${id}/meta/status`),
 };
 
 export const messageService = {

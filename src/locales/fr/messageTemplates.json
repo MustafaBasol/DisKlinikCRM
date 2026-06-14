@@ -30,5 +30,23 @@
     "button": "Créer les modèles par défaut",
     "confirm": "Créer les modèles par défaut ?",
     "success": "Les modèles par défaut ont été créés avec succès"
+  },
+  "whatsappApproval": {
+    "infoTitle": "Approbation des messages automatiques WhatsApp",
+    "infoBody": "Certains modèles doivent être approuvés par WhatsApp avant d'être utilisés pour les messages automatiques.",
+    "infoHint": "Préparez votre modèle, envoyez-le pour approbation WhatsApp et suivez son statut ici.",
+    "columnHeader": "Approbation WhatsApp",
+    "channelHint": "Les modèles utilisés dans les messages automatiques WhatsApp doivent être approuvés par Meta/WhatsApp.",
+    "submitAction": "Envoyer pour approbation",
+    "syncAction": "Vérifier le statut",
+    "rejectionAction": "Voir le motif de refus",
+    "rejectedTitle": "Refusé par WhatsApp",
+    "rejectedMessage": "WhatsApp n'a pas approuvé ce modèle. Veuillez modifier le message et le renvoyer.",
+    "statusNotSent": "Non envoyé",
+    "statusPending": "En attente d'approbation",
+    "statusApproved": "Prêt à l'emploi",
+    "statusRejected": "Refusé",
+    "statusNeedsAttention": "Attention requise",
+    "statusUnknown": "Inconnu"
   }
 }

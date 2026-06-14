@@ -30,5 +30,23 @@
     "button": "Seed Default Templates",
     "confirm": "Seed default templates?",
     "success": "Default templates created successfully"
+  },
+  "whatsappApproval": {
+    "infoTitle": "WhatsApp Automated Message Approval",
+    "infoBody": "Some templates must be approved by WhatsApp before they can be used for automated messages such as appointment reminders, no-show follow-ups, or post-treatment messages.",
+    "infoHint": "Prepare your template, send it for WhatsApp approval, and track its status here. Approved templates can be used in automated messages.",
+    "columnHeader": "WhatsApp Approval",
+    "channelHint": "Templates used in WhatsApp automated messages must be approved by Meta/WhatsApp.",
+    "submitAction": "Send for Approval",
+    "syncAction": "Check Status",
+    "rejectionAction": "View Rejection Reason",
+    "rejectedTitle": "Rejected by WhatsApp",
+    "rejectedMessage": "WhatsApp did not approve this template. Please edit the message and send it again.",
+    "statusNotSent": "Not Sent",
+    "statusPending": "Waiting for Approval",
+    "statusApproved": "Ready to Use",
+    "statusRejected": "Rejected",
+    "statusNeedsAttention": "Needs Attention",
+    "statusUnknown": "Unknown"
   }
 }
