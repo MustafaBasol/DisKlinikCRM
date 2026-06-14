@@ -16,7 +16,11 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { getAccessibleClinicIds } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
-import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
+import {
+  sendNoShowRecoveryWhatsApp,
+  OUTBOUND_ERRORS,
+  NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR,
+} from '../services/whatsapp/whatsappOutboundMessaging.js';
 import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
@@ -448,16 +452,46 @@ router.post(
       const appointmentDate = formatDateForClinic(appointment.startTime, operatingPreferences);
       const appointmentTime = formatTimeForClinic(appointment.startTime, operatingPreferences);
 
-      const body = customMessage
+      // Evolution plain-text fallback (also used when customMessage is provided for any provider).
+      // For Meta Cloud the template drives the content — customMessage is ignored.
+      const evolutionPlainText = customMessage
         ?? `Merhaba ${patientName}, ${appointmentDate} ${appointmentTime} tarihindeki randevunuza katılamadığınızı gördük. Yeni bir randevu oluşturmak isterseniz size yardımcı olabiliriz.`;
 
-      const result = await sendWhatsAppMessage(appointment.clinicId, { phone: patient.phone, text: body });
-
-      if (!result.success) {
-        return res.status(400).json({ error: result.error ?? 'WhatsApp message failed to send' });
+      const variables: Record<string, string> = {
+        patient_name: patientName,
+        clinic_name: appointment.clinic.name,
+        appointment_date: appointmentDate,
+        appointment_time: appointmentTime,
+      };
+      if (appointment.practitioner) {
+        variables.practitioner_name =
+          `${appointment.practitioner.firstName} ${appointment.practitioner.lastName}`.trim();
+      }
+      if (appointment.appointmentType?.name) {
+        variables.service_name = appointment.appointmentType.name;
       }
 
-      // Log sent message
+      const result = await sendNoShowRecoveryWhatsApp({
+        clinicId: appointment.clinicId,
+        phone: patient.phone,
+        evolutionPlainText,
+        variables,
+      });
+
+      if (!result.success) {
+        if (result.code === OUTBOUND_ERRORS.META_APPROVED_TEMPLATE_REQUIRED) {
+          return res.status(400).json({ error: NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR, code: result.code });
+        }
+        if (result.code === OUTBOUND_ERRORS.META_TEMPLATE_VARIABLE_MISSING) {
+          return res.status(400).json({
+            error: 'Şablon değişkeni eksik. Lütfen şablonunuzu kontrol edin.',
+            code: result.code,
+          });
+        }
+        return res.status(400).json({ error: result.error ?? 'WhatsApp mesajı gönderilemedi.' });
+      }
+
+      // Log sent message — do not store full phone in description
       await prisma.sentMessage.create({
         data: {
           clinicId: appointment.clinicId,
@@ -465,7 +499,7 @@ router.post(
           appointmentId: id,
           channel: 'whatsapp',
           recipient: patient.phone,
-          body,
+          body: evolutionPlainText,
           status: 'sent',
           sentAt: new Date(),
           createdById: userId,
@@ -485,7 +519,7 @@ router.post(
         entityType: 'appointment',
         entityId: id,
         action: 'no_show_recovery_message_sent',
-        description: `No-show recovery WhatsApp mesajı gönderildi: ${patientName}`,
+        description: `No-show recovery WhatsApp mesajı gönderildi: ${patient.firstName} ${patient.lastName[0]}.`,
       });
 
       writeAuditLog({
@@ -496,7 +530,7 @@ router.post(
         action: 'no_show_recovery_message_sent',
         entityType: 'appointment',
         entityId: id,
-        description: `WhatsApp recovery message sent to ${patientName}`,
+        description: `WhatsApp recovery message sent (patient: ${patient.firstName} ${patient.lastName[0]}.)`,
         ...extractRequestMeta(req),
       });
 

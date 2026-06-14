@@ -13,6 +13,10 @@
  *   - Manual staff inbox replies
  *   - Internal staff notifications (task assignment, practitioner schedule)
  *   - Post-treatment queue (PostTreatmentMessageTemplate has no Meta fields)
+ *
+ * sendNoShowRecoveryWhatsApp — purpose-based no-show recovery send:
+ *   Selects the first active, approved MessageTemplate with purpose = no_show_recovery
+ *   for the clinic.  For Evolution it falls back to plain sendMessage.
  */
 
 import prisma from '../../db.js';
@@ -37,7 +41,7 @@ export type ProactiveMessageResult = {
   code?: string;
 };
 
-type MetaTemplateSnapshot = {
+export type MetaTemplateSnapshot = {
   metaTemplateName: string | null;
   metaTemplateStatus: string | null;
   metaTemplateLanguage: string | null;
@@ -205,4 +209,123 @@ export async function sendProactiveWhatsAppMessage(args: {
   }
 
   return sendProactiveWhatsAppMessageWithConnection(connection, template, { phone, text, variables });
+}
+
+// ─── No-show recovery: purpose-based template selection ───────────────────────
+
+export const NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR =
+  "Gelmeyen hasta takibi için onaylı WhatsApp şablonu bulunamadı. " +
+  "Lütfen Mesaj Şablonları sayfasından 'Gelmeyen Hasta Takibi' kullanım amaçlı " +
+  "bir WhatsApp şablonu oluşturup onaya gönderin.";
+
+/**
+ * Core no-show recovery dispatcher given a pre-resolved connection and template.
+ * Exported for unit testing without Prisma dependency.
+ *
+ * For Meta Cloud: requires an approved template; rejects with META_APPROVED_TEMPLATE_REQUIRED
+ * if template is null or not approved. Never falls back to plain sendMessage.
+ *
+ * For Evolution / legacy: sends plain text via sendMessage; template is ignored.
+ */
+export async function sendNoShowRecoveryWhatsAppWithConnection(
+  connection: WhatsAppConnectionRecord,
+  template: MetaTemplateSnapshot | null,
+  args: {
+    phone: string;
+    evolutionPlainText: string;
+    variables: Record<string, string>;
+  },
+): Promise<ProactiveMessageResult> {
+  if (connection.provider !== 'meta_cloud_api') {
+    const provider = getWhatsAppProvider(connection.provider);
+    const result = await provider.sendMessage(connection, {
+      phone: args.phone,
+      text: args.evolutionPlainText,
+    });
+    return {
+      success: result.success,
+      externalMessageId: result.externalMessageId,
+      error: result.error,
+    };
+  }
+
+  if (!template || template.metaTemplateStatus !== 'approved' || !template.metaTemplateName) {
+    return {
+      success: false,
+      code: OUTBOUND_ERRORS.META_APPROVED_TEMPLATE_REQUIRED,
+      error: NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR,
+    };
+  }
+
+  return sendProactiveWhatsAppMessageWithConnection(connection, template, {
+    phone: args.phone,
+    text: args.evolutionPlainText,
+    variables: args.variables,
+  });
+}
+
+/**
+ * Send a no-show recovery WhatsApp message for a clinic.
+ *
+ * For Meta Cloud API clinics:
+ *   - Selects the first active MessageTemplate where purpose = 'no_show_recovery',
+ *     channel = 'whatsapp', clinicId matches, isActive = true.
+ *   - Ordered by createdAt ASC for deterministic selection when multiple exist.
+ *   - Requires metaTemplateStatus = 'approved'.
+ *   - Uses sendTemplateMessage; never falls back to plain sendMessage.
+ *   - Returns META_APPROVED_TEMPLATE_REQUIRED if no approved template exists.
+ *
+ * For Evolution / legacy clinics: sends plain text via sendMessage.
+ *
+ * Privacy: phone is not logged; variables contain scheduling context only.
+ */
+export async function sendNoShowRecoveryWhatsApp(args: {
+  clinicId: string;
+  phone: string;
+  evolutionPlainText: string;
+  variables: Record<string, string>;
+}): Promise<ProactiveMessageResult> {
+  const { clinicId, phone, evolutionPlainText, variables } = args;
+
+  if (!clinicId || clinicId === 'all') {
+    return {
+      success: false,
+      error: 'Mesaj göndermek için bir klinik seçilmelidir.',
+      code: OUTBOUND_ERRORS.NO_CONNECTION,
+    };
+  }
+
+  const connection = await resolveConnectionForClinic(clinicId);
+  if (!connection) {
+    return {
+      success: false,
+      error: 'Bu klinik için aktif bir WhatsApp bağlantısı bulunamadı.',
+      code: OUTBOUND_ERRORS.NO_CONNECTION,
+    };
+  }
+
+  let template: MetaTemplateSnapshot | null = null;
+  if (connection.provider === 'meta_cloud_api') {
+    template = await prisma.messageTemplate.findFirst({
+      where: {
+        clinicId,
+        channel: 'whatsapp',
+        purpose: 'no_show_recovery',
+        isActive: true,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        metaTemplateName: true,
+        metaTemplateStatus: true,
+        metaTemplateLanguage: true,
+        metaTemplateVariableMap: true,
+      },
+    });
+  }
+
+  return sendNoShowRecoveryWhatsAppWithConnection(connection, template, {
+    phone,
+    evolutionPlainText,
+    variables,
+  });
 }

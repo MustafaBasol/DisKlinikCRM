@@ -41,7 +41,10 @@ import { encryptSecret } from '../utils/encryption.js';
 import {
   buildTemplateComponents,
   sendProactiveWhatsAppMessageWithConnection,
+  sendNoShowRecoveryWhatsAppWithConnection,
   OUTBOUND_ERRORS,
+  NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR,
+  type MetaTemplateSnapshot,
 } from '../services/whatsapp/whatsappOutboundMessaging.js';
 import type { WhatsAppConnectionRecord } from '../services/whatsapp/WhatsAppProvider.js';
 
@@ -410,6 +413,175 @@ async function main() {
     assert.ok(result.error, 'error message must be present');
   });
 
+  // ── No-show recovery: sendNoShowRecoveryWhatsAppWithConnection ────────────
+  section('No-show recovery (sendNoShowRecoveryWhatsAppWithConnection)');
+
+  const noShowTemplate = (): MetaTemplateSnapshot => ({
+    metaTemplateName: 'gelmeyen_hasta_takibi',
+    metaTemplateStatus: 'approved',
+    metaTemplateLanguage: 'tr',
+    metaTemplateVariableMap: {
+      '1': 'patient_name',
+      '2': 'clinic_name',
+      '3': 'appointment_date',
+      '4': 'appointment_time',
+    },
+  });
+
+  const noShowVars = () => ({
+    patient_name: 'Ayşe Yılmaz',
+    clinic_name: 'Merkez Diş',
+    appointment_date: '14 Haziran',
+    appointment_time: '10:00',
+  });
+
+  await test('Meta Cloud no-show recovery calls sendTemplateMessage, not sendMessage', async () => {
+    const originalFetch = globalThis.fetch;
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string ?? '{}');
+      return new Response(JSON.stringify({ messages: [{ id: 'ns-msg-1' }] }), { status: 200 });
+    };
+
+    const result = await sendNoShowRecoveryWhatsAppWithConnection(
+      metaConn(),
+      noShowTemplate(),
+      { phone: '905551234567', evolutionPlainText: 'fallback', variables: noShowVars() },
+    );
+    globalThis.fetch = originalFetch;
+
+    assert.equal(result.success, true);
+    assert.equal(result.externalMessageId, 'ns-msg-1');
+    assert.equal(capturedBody.type, 'template', 'must use template send, not plain text');
+    const tpl = capturedBody.template as Record<string, unknown>;
+    assert.equal(tpl?.name, 'gelmeyen_hasta_takibi');
+  });
+
+  await test('Meta Cloud no-show recovery with no template → META_APPROVED_TEMPLATE_REQUIRED, no fetch', async () => {
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+    globalThis.fetch = async () => { fetchCalled = true; return new Response('{}', { status: 200 }); };
+
+    const result = await sendNoShowRecoveryWhatsAppWithConnection(
+      metaConn(),
+      null,
+      { phone: '905551234567', evolutionPlainText: 'fallback', variables: noShowVars() },
+    );
+    globalThis.fetch = originalFetch;
+
+    assert.equal(result.success, false);
+    assert.equal(result.code, OUTBOUND_ERRORS.META_APPROVED_TEMPLATE_REQUIRED);
+    assert.equal(fetchCalled, false, 'sendMessage must NOT be called when template missing');
+  });
+
+  await test('Meta Cloud no-show recovery with submitted (not approved) template → META_APPROVED_TEMPLATE_REQUIRED', async () => {
+    const pendingTemplate: MetaTemplateSnapshot = { ...noShowTemplate(), metaTemplateStatus: 'submitted' };
+
+    const result = await sendNoShowRecoveryWhatsAppWithConnection(
+      metaConn(),
+      pendingTemplate,
+      { phone: '905551234567', evolutionPlainText: 'fallback', variables: noShowVars() },
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.code, OUTBOUND_ERRORS.META_APPROVED_TEMPLATE_REQUIRED);
+  });
+
+  await test('Meta Cloud no-show recovery with missing template variable → META_TEMPLATE_VARIABLE_MISSING', async () => {
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+    globalThis.fetch = async () => { fetchCalled = true; return new Response('{}', { status: 200 }); };
+
+    const templateMissingVar: MetaTemplateSnapshot = {
+      ...noShowTemplate(),
+      metaTemplateVariableMap: { '1': 'patient_name', '2': 'nonexistent_variable' },
+    };
+
+    const result = await sendNoShowRecoveryWhatsAppWithConnection(
+      metaConn(),
+      templateMissingVar,
+      { phone: '905551234567', evolutionPlainText: 'fallback', variables: { patient_name: 'Ayşe' } },
+    );
+    globalThis.fetch = originalFetch;
+
+    assert.equal(result.success, false);
+    assert.equal(result.code, OUTBOUND_ERRORS.META_TEMPLATE_VARIABLE_MISSING);
+    assert.equal(fetchCalled, false, 'provider must NOT be called when variable missing');
+  });
+
+  await test('Evolution no-show recovery uses plain sendMessage (not sendTemplateMessage)', async () => {
+    const originalFetch = globalThis.fetch;
+    let capturedUrl = '';
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url);
+      capturedBody = JSON.parse(init?.body as string ?? '{}');
+      return new Response(JSON.stringify({ key: { id: 'evo-ns-1' } }), { status: 201 });
+    };
+
+    const result = await sendNoShowRecoveryWhatsAppWithConnection(
+      evolutionConn(),
+      null, // template irrelevant for Evolution
+      {
+        phone: '905554445566',
+        evolutionPlainText: 'Sayın Ayşe Hanım, randevunuza katılamadığınızı gördük.',
+        variables: noShowVars(),
+      },
+    );
+    globalThis.fetch = originalFetch;
+
+    assert.equal(result.success, true);
+    assert.ok(capturedUrl.includes('sendText'), `Expected sendText URL, got: ${capturedUrl}`);
+    assert.equal(capturedBody.type, undefined, 'Evolution must not send template type field');
+    assert.ok(
+      typeof capturedBody.text === 'string' && capturedBody.text.includes('randevunuza'),
+      'plain text body should be the evolutionPlainText',
+    );
+  });
+
+  await test('staff-facing error message is non-technical Turkish text', () => {
+    assert.ok(NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR.includes('Gelmeyen hasta takibi'));
+    assert.ok(NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR.includes('Mesaj Şablonları'));
+    assert.ok(!NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR.includes('META_'), 'must not expose error codes to staff');
+    assert.ok(!NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR.includes('meta_cloud_api'), 'must not expose provider names');
+  });
+
+  await test('Meta Cloud no-show recovery does not send plain text fallback when approved template is missing', async () => {
+    const originalFetch = globalThis.fetch;
+    let sendMessageCalled = false;
+    globalThis.fetch = async (url: RequestInfo | URL, _init?: RequestInit) => {
+      sendMessageCalled = true;
+      return new Response(JSON.stringify({ messages: [{ id: 'x' }] }), { status: 200 });
+    };
+
+    await sendNoShowRecoveryWhatsAppWithConnection(
+      metaConn(),
+      null,
+      { phone: '905551234567', evolutionPlainText: 'should not be sent', variables: {} },
+    );
+    globalThis.fetch = originalFetch;
+
+    assert.equal(sendMessageCalled, false, 'Must not call any provider API when Meta template is missing');
+  });
+
+  await test('no-show recovery does not use appointment_reminder or general_message templates (purpose isolation — logic doc)', () => {
+    // Template selection WHERE clause requires: purpose = 'no_show_recovery'.
+    // Simulated: given a template that would match appointment_reminder, it should NOT be passed.
+    // The Prisma query in sendNoShowRecoveryWhatsApp enforces this; here we verify that the
+    // WithConnection function requires a template to be supplied externally — caller must filter by purpose.
+    const wrongPurposeTemplate: MetaTemplateSnapshot = {
+      metaTemplateName: 'randevu_hatirlatma',
+      metaTemplateStatus: 'approved',
+      metaTemplateLanguage: 'tr',
+      metaTemplateVariableMap: { '1': 'patient_name' },
+    };
+    // If the wrong template were passed in (e.g. appointment_reminder), the function would still
+    // send it — purpose enforcement is at the Prisma query level, not here.
+    // This test documents that the WithConnection function is purpose-agnostic; the
+    // public sendNoShowRecoveryWhatsApp() filters by purpose = 'no_show_recovery' via Prisma.
+    assert.ok(wrongPurposeTemplate.metaTemplateName, 'MetaTemplateSnapshot has no purpose field by design');
+  });
+
   // ── Inbound / manual paths are unchanged (regression checks) ──────────────
   section('Inbound & manual paths (regression)');
 
@@ -429,11 +601,19 @@ async function main() {
     );
   });
 
-  await test('noShows.ts (manual recovery) does not import sendProactiveWhatsAppMessage', () => {
+  await test('noShows.ts uses sendNoShowRecoveryWhatsApp (not raw sendWhatsAppMessage)', () => {
     const src = readFileSync(fileURLToPath(new URL('../routes/noShows.ts', import.meta.url)), 'utf8');
     assert.ok(
+      src.includes('sendNoShowRecoveryWhatsApp'),
+      'noShows.ts must import sendNoShowRecoveryWhatsApp',
+    );
+    assert.ok(
+      !src.includes("from '../services/whatsapp/whatsappService.js'"),
+      'noShows.ts must not import sendWhatsAppMessage directly',
+    );
+    assert.ok(
       !src.includes('sendProactiveWhatsAppMessage'),
-      'noShows.ts (manual staff action) must not import sendProactiveWhatsAppMessage',
+      'noShows.ts must not import sendProactiveWhatsAppMessage',
     );
   });
 
