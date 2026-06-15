@@ -685,4 +685,20 @@ router.get('/system', async (_req, res: Response) => {
   }
 });
 
+// ─── Privacy / Data Retention ─────────────────────────────────────────────────
+
+// POST /api/platform/privacy/data-retention/run
+// Trigger or dry-run the data retention cleanup. Platform-admin only (auth applied above).
+router.post('/privacy/data-retention/run', async (req, res: Response) => {
+  const dryRun = req.body?.dryRun !== false; // default to dry-run for safety
+  try {
+    const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
+    const summary = await runDataRetentionCleanup({ dryRun });
+    res.json({ success: true, summary });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: `Data retention run failed: ${msg}` });
+  }
+});
+
 export default router;
