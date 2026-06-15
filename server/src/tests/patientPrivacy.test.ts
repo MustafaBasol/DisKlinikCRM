@@ -108,6 +108,7 @@ type AnonDeps = {
   updateWhatsAppMessages: (patientId: string, clinicId: string) => Promise<void>;
   updateWhatsAppInboxEntries: (patientId: string, clinicId: string) => Promise<void>;
   updateInstagramInboxEntries: (patientId: string, clinicId: string) => Promise<void>;
+  redactActivityLogs: (patientId: string, clinicId: string, firstName: string, lastName: string, phone: string | null, email: string | null) => Promise<void>;
   createPrivacyRequest: (data: object) => Promise<{ id: string }>;
   writeAuditLog: (data: object) => Promise<void>;
 };
@@ -144,6 +145,7 @@ async function runAnonymization(args: AnonArgs, deps: AnonDeps) {
   await deps.updateWhatsAppMessages(args.patientId, args.clinicId);
   await deps.updateWhatsAppInboxEntries(args.patientId, args.clinicId);
   await deps.updateInstagramInboxEntries(args.patientId, args.clinicId);
+  await deps.redactActivityLogs(args.patientId, args.clinicId, patient.firstName, patient.lastName, patient.phone, patient.email);
 
   const req = await deps.createPrivacyRequest({
     clinicId: args.clinicId,
@@ -193,9 +195,41 @@ function makeNoop(): AnonDeps {
     updateWhatsAppMessages: async () => {},
     updateWhatsAppInboxEntries: async () => {},
     updateInstagramInboxEntries: async () => {},
+    redactActivityLogs: async () => {},
     createPrivacyRequest: async () => ({ id: 'pr1' }),
     writeAuditLog: async () => {},
   };
+}
+
+// ── ActivityLog redaction helper (mirrors patientAnonymization.ts for pure-logic tests) ──
+
+const ACT_PHONE_RE = /(\+?\d[\d\s\-()]{8,}\d)/g;
+const ACT_EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+
+function escRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function redactDescription(
+  desc: string,
+  firstName: string,
+  lastName: string,
+  phone: string | null,
+  email: string | null,
+): string {
+  const ANON = '[ANONYMIZED]';
+  let out = desc;
+  out = out.replace(new RegExp(escRe(`${firstName} ${lastName}`), 'gi'), ANON);
+  if (firstName) out = out.replace(new RegExp(escRe(firstName), 'gi'), ANON);
+  if (lastName)  out = out.replace(new RegExp(escRe(lastName),  'gi'), ANON);
+  if (phone) {
+    out = out.replace(new RegExp(escRe(phone), 'g'), ANON);
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 7) out = out.replace(new RegExp(escRe(digits), 'g'), ANON);
+  }
+  if (email) out = out.replace(new RegExp(escRe(email), 'gi'), ANON);
+  out = out.replace(ACT_PHONE_RE, ANON).replace(ACT_EMAIL_RE, ANON);
+  return out;
 }
 
 // ── 1-6: Model / validation ───────────────────────────────────────────────────
@@ -431,6 +465,132 @@ await test('VALID_REQUEST_TYPES has exactly 7 entries', () => {
 
 await test('VALID_STATUSES has exactly 5 entries', () => {
   assert.equal(VALID_STATUSES.size, 5);
+});
+
+// ── 27-38: ActivityLog redaction ──────────────────────────────────────────────
+
+section('27-38. ActivityLog description redaction');
+
+await test('redacts first name in description', () => {
+  const result = redactDescription('Payment plan created for Ahmet', 'Ahmet', 'Yılmaz', null, null);
+  assert.ok(!result.includes('Ahmet'), 'firstName must be replaced');
+  assert.ok(result.includes('[ANONYMIZED]'), 'must contain [ANONYMIZED]');
+});
+
+await test('redacts full name in description', () => {
+  const result = redactDescription('Randevu: Ahmet Yılmaz için oluşturuldu', 'Ahmet', 'Yılmaz', null, null);
+  assert.ok(!result.includes('Ahmet'), 'firstName must be removed');
+  assert.ok(!result.includes('Yılmaz'), 'lastName must be removed');
+  assert.ok(result.includes('[ANONYMIZED]'));
+});
+
+await test('redacts phone number (exact) in description', () => {
+  const phone = '+905551234567';
+  const result = redactDescription('Patient created from WhatsApp contact (+905551234567)', 'Ahmet', 'Yılmaz', phone, null);
+  assert.ok(!result.includes(phone));
+  assert.ok(result.includes('[ANONYMIZED]'));
+});
+
+await test('redacts digits-only phone in description', () => {
+  const result = redactDescription('Patient created from first WhatsApp contact (905551234567)', 'Ahmet', 'Yılmaz', '+905551234567', null);
+  assert.ok(!result.includes('905551234567'));
+  assert.ok(result.includes('[ANONYMIZED]'));
+});
+
+await test('redacts email in description', () => {
+  const email = 'ahmet@example.com';
+  const result = redactDescription('Contact synced for ahmet@example.com', 'Ahmet', 'Yılmaz', null, email);
+  assert.ok(!result.includes(email));
+  assert.ok(result.includes('[ANONYMIZED]'));
+});
+
+await test('redacts phone pattern not matching exact phone', () => {
+  const result = redactDescription('Otomatik hatırlatma gönderildi (0533 111 22 33)', 'Bilinmiyor', 'Bilinmiyor', null, null);
+  assert.ok(!result.includes('0533'), 'phone pattern must be redacted');
+  assert.ok(result.includes('[ANONYMIZED]'));
+});
+
+await test('description without PII is unchanged', () => {
+  const desc = 'Randevu oluşturuldu: 22.05.2026 14:30';
+  const result = redactDescription(desc, 'Ahmet', 'Yılmaz', '+905551234567', 'ahmet@example.com');
+  assert.equal(result, desc, 'unrelated description must not be modified');
+});
+
+await test('[ANONYMIZED] already in description is left as-is (idempotent pattern)', () => {
+  const desc = 'Payment plan created: 20000 TRY for [ANONYMIZED]';
+  const result = redactDescription(desc, 'Anonim', 'Hasta', null, null);
+  assert.equal(result, desc, 'already-redacted description must not change');
+});
+
+await test('redactActivityLogs is called during anonymization', async () => {
+  let called = false;
+  const deps: AnonDeps = {
+    ...makeNoop(),
+    redactActivityLogs: async () => { called = true; },
+  };
+  await runAnonymization({ clinicId: 'c1', patientId: 'p1', actorUserId: 'u1', organizationId: 'o1', reason: 'test' }, deps);
+  assert.ok(called, 'redactActivityLogs must be called during anonymization');
+});
+
+await test('redactActivityLogs is called with correct patient PII args', async () => {
+  let capturedArgs: any = null;
+  const deps: AnonDeps = {
+    ...makeNoop(),
+    redactActivityLogs: async (patientId, clinicId, firstName, lastName, phone, email) => {
+      capturedArgs = { patientId, clinicId, firstName, lastName, phone, email };
+    },
+  };
+  await runAnonymization({ clinicId: 'c1', patientId: 'p1', actorUserId: 'u1', organizationId: 'o1', reason: 'test' }, deps);
+  assert.equal(capturedArgs.patientId, 'p1');
+  assert.equal(capturedArgs.clinicId, 'c1');
+  assert.equal(capturedArgs.firstName, 'Ahmet', 'must pass pre-anonymization firstName');
+  assert.equal(capturedArgs.lastName, 'Yılmaz', 'must pass pre-anonymization lastName');
+  assert.equal(capturedArgs.phone, '+905551234567');
+  assert.equal(capturedArgs.email, 'ahmet@example.com');
+});
+
+await test('redactActivityLogs is NOT called for already-anonymized patient', async () => {
+  let called = false;
+  const deps: AnonDeps = {
+    ...makeNoop(),
+    findPatient: async () => makePatient({ isAnonymized: true }),
+    redactActivityLogs: async () => { called = true; },
+  };
+  const result = await runAnonymization({ clinicId: 'c1', patientId: 'p1', actorUserId: 'u1', organizationId: 'o1', reason: 'test' }, deps);
+  assert.equal(result.alreadyAnonymized, true);
+  assert.ok(!called, 'redactActivityLogs must not be called for already-anonymized patient');
+});
+
+await test('writeAuditLog is not affected by ActivityLog redaction step', async () => {
+  let auditWritten = false;
+  let redactCalled = false;
+  const deps: AnonDeps = {
+    ...makeNoop(),
+    writeAuditLog: async () => { auditWritten = true; },
+    redactActivityLogs: async () => { redactCalled = true; },
+  };
+  await runAnonymization({ clinicId: 'c1', patientId: 'p1', actorUserId: 'u1', organizationId: 'o1', reason: 'test' }, deps);
+  assert.ok(auditWritten, 'audit log must still be written');
+  assert.ok(redactCalled, 'activity log redaction must also run');
+});
+
+await test('export activityHistory after anonymization must not contain original PII', () => {
+  const originalName = 'Ahmet';
+  const originalPhone = '+905551234567';
+  const redactedDesc = redactDescription(
+    `Sistem tarafından otomatik hatırlatma gönderildi — ${originalName} (${originalPhone})`,
+    originalName,
+    'Yılmaz',
+    originalPhone,
+    null,
+  );
+  const exportResult = {
+    activityHistory: [{ description: redactedDesc }],
+  };
+  const json = JSON.stringify(exportResult);
+  assert.ok(!json.includes(originalName), 'export must not contain original first name in activity history');
+  assert.ok(!json.includes(originalPhone), 'export must not contain original phone in activity history');
+  assert.ok(json.includes('[ANONYMIZED]'), 'export must contain [ANONYMIZED] placeholder');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────
