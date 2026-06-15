@@ -9,6 +9,7 @@ import {
 import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { loadDataRetentionConfig } from '../services/privacy/dataRetentionPolicy.js';
+import { getPlatformSetting, setPlatformSetting } from '../services/platformSettings.js';
 
 const router = express.Router();
 
@@ -688,12 +689,22 @@ router.get('/system', async (_req, res: Response) => {
 
 // ─── Privacy / Data Retention ─────────────────────────────────────────────────
 
-// GET /api/platform/privacy/data-retention/policy
-// Returns current retention policy config. No secrets exposed. Platform-admin only (auth applied above).
-router.get('/privacy/data-retention/policy', (_req, res: Response) => {
-  const config = loadDataRetentionConfig();
-  res.json({
-    cleanupEnabled: config.enabled,
+function buildPolicyResponse(
+  config: ReturnType<typeof loadDataRetentionConfig>,
+  runtimeCleanupEnabled: boolean,
+) {
+  const envCleanupEnabled = config.enabled;
+  const effectiveCleanupEnabled = envCleanupEnabled && runtimeCleanupEnabled;
+  const cleanupEnabledSource: 'env_disabled' | 'runtime_disabled' | 'enabled' =
+    !envCleanupEnabled ? 'env_disabled'
+    : !runtimeCleanupEnabled ? 'runtime_disabled'
+    : 'enabled';
+
+  return {
+    envCleanupEnabled,
+    runtimeCleanupEnabled,
+    effectiveCleanupEnabled,
+    cleanupEnabledSource,
     cron: config.cronSchedule,
     conversationMessagesDays: config.conversationMessagesDays,
     conversationStateDays: config.conversationStateDays,
@@ -701,13 +712,43 @@ router.get('/privacy/data-retention/policy', (_req, res: Response) => {
     inboundEventDays: config.inboundEventDays,
     resolvedContactRequestDays: config.resolvedContactRequestDays,
     batchSize: config.batchSize,
-  });
+  };
+}
+
+// GET /api/platform/privacy/data-retention/policy
+// Returns current retention policy config including runtime toggle. No secrets. Platform-admin only.
+router.get('/privacy/data-retention/policy', async (_req, res: Response) => {
+  const config = loadDataRetentionConfig();
+  const runtimeVal = await getPlatformSetting('privacy.dataRetention.runtimeEnabled');
+  const runtimeCleanupEnabled = runtimeVal === 'true';
+  res.json(buildPolicyResponse(config, runtimeCleanupEnabled));
+});
+
+// PATCH /api/platform/privacy/data-retention/settings
+// Update runtime toggle for automatic cleanup. Platform-admin only.
+router.patch('/privacy/data-retention/settings', async (req, res: Response) => {
+  const { runtimeCleanupEnabled } = req.body ?? {};
+  if (typeof runtimeCleanupEnabled !== 'boolean') {
+    res.status(400).json({ error: 'runtimeCleanupEnabled must be a boolean' });
+    return;
+  }
+  await setPlatformSetting('privacy.dataRetention.runtimeEnabled', String(runtimeCleanupEnabled));
+  const config = loadDataRetentionConfig();
+  res.json(buildPolicyResponse(config, runtimeCleanupEnabled));
 });
 
 // POST /api/platform/privacy/data-retention/run
-// Trigger or dry-run the data retention cleanup. Platform-admin only (auth applied above).
+// Trigger or dry-run the data retention cleanup. Platform-admin only.
+// Live run is blocked if DATA_RETENTION_CLEANUP_ENABLED=false (env hard-switch).
 router.post('/privacy/data-retention/run', async (req, res: Response) => {
   const dryRun = req.body?.dryRun !== false; // default to dry-run for safety
+  if (!dryRun) {
+    const config = loadDataRetentionConfig();
+    if (!config.enabled) {
+      res.status(403).json({ error: 'Live cleanup is disabled at the environment level (DATA_RETENTION_CLEANUP_ENABLED=false).' });
+      return;
+    }
+  }
   try {
     const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
     const summary = await runDataRetentionCleanup({ dryRun });

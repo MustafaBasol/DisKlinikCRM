@@ -1663,3 +1663,12 @@ model PostTreatmentMessageQueue {
   @@index([clinicId, patientId])
   @@index([templateId])
 }
+
+/// Global platform-level key-value settings (e.g. runtime feature toggles).
+model PlatformSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

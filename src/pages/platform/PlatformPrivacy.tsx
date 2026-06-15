@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Loader2, AlertCircle, Shield, Play, Trash2, RefreshCw, CheckCircle2,
+  Loader2, AlertCircle, Shield, Play, Trash2, RefreshCw, CheckCircle2, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
 
 interface DataRetentionPolicy {
-  cleanupEnabled: boolean;
+  envCleanupEnabled: boolean;
+  runtimeCleanupEnabled: boolean;
+  effectiveCleanupEnabled: boolean;
+  cleanupEnabledSource: 'env_disabled' | 'runtime_disabled' | 'enabled';
   cron: string;
   conversationMessagesDays: number;
   conversationStateDays: number;
@@ -36,6 +39,10 @@ const PlatformPrivacy: React.FC = () => {
   const [policyLoading, setPolicyLoading] = useState(true);
   const [policyError, setPolicyError] = useState('');
 
+  const [toggleLoading, setToggleLoading] = useState(false);
+  const [toggleSuccess, setToggleSuccess] = useState(false);
+  const [toggleError, setToggleError] = useState('');
+
   const [runLoading, setRunLoading] = useState(false);
   const [runResult, setRunResult] = useState<CleanupSummary | null>(null);
   const [runError, setRunError] = useState('');
@@ -53,6 +60,26 @@ const PlatformPrivacy: React.FC = () => {
   };
 
   useEffect(() => { fetchPolicy(); }, []);
+
+  const handleToggle = async () => {
+    if (!policy) return;
+    const next = !policy.runtimeCleanupEnabled;
+    setToggleLoading(true);
+    setToggleSuccess(false);
+    setToggleError('');
+    try {
+      const res = await api.patch('/platform/privacy/data-retention/settings', {
+        runtimeCleanupEnabled: next,
+      });
+      setPolicy(res.data);
+      setToggleSuccess(true);
+      setTimeout(() => setToggleSuccess(false), 3000);
+    } catch {
+      setToggleError(t('platform:privacy.autoCleanup.saveFailed'));
+    } finally {
+      setToggleLoading(false);
+    }
+  };
 
   const runCleanup = async (dryRun: boolean) => {
     setRunLoading(true);
@@ -96,7 +123,7 @@ const PlatformPrivacy: React.FC = () => {
         </div>
       </div>
 
-      {/* Policy card */}
+      {/* Policy loading / error */}
       {policyLoading ? (
         <div className="flex items-center justify-center h-32">
           <Loader2 size={28} className="animate-spin text-blue-500" />
@@ -108,29 +135,102 @@ const PlatformPrivacy: React.FC = () => {
         </div>
       ) : policy ? (
         <>
-          {/* Disabled warning */}
-          {!policy.cleanupEnabled && (
-            <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
-              <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-800 dark:text-amber-300">
-                {t('platform:privacy.disabledWarning')}
-              </p>
-            </div>
-          )}
+          {/* ── Automatic Cleanup Control ─────────────────────────────── */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5">
+            <h2 className="font-semibold text-gray-900 dark:text-white mb-4">
+              {t('platform:privacy.autoCleanup.title')}
+            </h2>
 
-          {/* Policy values */}
+            <div className="space-y-3">
+              {/* System-level (env) */}
+              <div className="flex items-center justify-between py-2.5 border-b border-gray-50 dark:border-gray-800">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('platform:privacy.autoCleanup.systemLevel')}
+                </span>
+                <span className={`text-sm font-medium ${policy.envCleanupEnabled ? 'text-green-600' : 'text-red-500'}`}>
+                  {policy.envCleanupEnabled
+                    ? t('platform:privacy.autoCleanup.on')
+                    : t('platform:privacy.autoCleanup.off')}
+                </span>
+              </div>
+
+              {/* Runtime toggle */}
+              <div className="flex items-center justify-between py-2.5 border-b border-gray-50 dark:border-gray-800">
+                <div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {t('platform:privacy.autoCleanup.runtimeSetting')}
+                  </span>
+                  {toggleError && (
+                    <p className="text-xs text-red-500 mt-0.5">{toggleError}</p>
+                  )}
+                  {toggleSuccess && (
+                    <p className="text-xs text-green-600 mt-0.5">{t('platform:privacy.autoCleanup.saveSuccess')}</p>
+                  )}
+                </div>
+                <button
+                  onClick={handleToggle}
+                  disabled={!policy.envCleanupEnabled || toggleLoading}
+                  title={!policy.envCleanupEnabled ? t('platform:privacy.autoCleanup.envDisabledWarning') : undefined}
+                  className="flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {toggleLoading ? (
+                    <Loader2 size={22} className="animate-spin text-blue-500" />
+                  ) : policy.runtimeCleanupEnabled ? (
+                    <ToggleRight size={28} className="text-green-500" />
+                  ) : (
+                    <ToggleLeft size={28} className="text-gray-400" />
+                  )}
+                  <span className={`text-sm font-medium ${policy.runtimeCleanupEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+                    {policy.runtimeCleanupEnabled
+                      ? t('platform:privacy.autoCleanup.on')
+                      : t('platform:privacy.autoCleanup.off')}
+                  </span>
+                </button>
+              </div>
+
+              {/* Effective status */}
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('platform:privacy.autoCleanup.effectiveStatus')}
+                </span>
+                <span className={`inline-flex items-center gap-1.5 text-sm font-semibold px-2.5 py-0.5 rounded-full ${
+                  policy.effectiveCleanupEnabled
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                }`}>
+                  {policy.effectiveCleanupEnabled
+                    ? t('platform:privacy.autoCleanup.active')
+                    : t('platform:privacy.autoCleanup.passive')}
+                </span>
+              </div>
+            </div>
+
+            {/* Source-specific warnings */}
+            {policy.cleanupEnabledSource === 'env_disabled' && (
+              <div className="flex items-start gap-3 mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  {t('platform:privacy.autoCleanup.envDisabledWarning')}
+                </p>
+              </div>
+            )}
+            {policy.cleanupEnabledSource === 'runtime_disabled' && (
+              <div className="flex items-start gap-3 mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  {t('platform:privacy.autoCleanup.runtimeDisabledWarning')}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Policy values ─────────────────────────────────────────── */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-4">
               {t('platform:privacy.policyTitle')}
             </h2>
             <div className="grid sm:grid-cols-2 gap-x-8 divide-y divide-gray-50 dark:divide-gray-800 sm:divide-y-0">
               {([
-                {
-                  label: t('platform:privacy.fields.enabled'),
-                  value: policy.cleanupEnabled
-                    ? t('platform:statuses.active')
-                    : t('platform:statuses.inactive'),
-                },
                 { label: t('platform:privacy.fields.cron'), value: policy.cron },
                 {
                   label: t('platform:privacy.fields.conversationMessages'),
@@ -167,7 +267,7 @@ const PlatformPrivacy: React.FC = () => {
         </>
       ) : null}
 
-      {/* Actions */}
+      {/* ── Actions ───────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5">
         <h2 className="font-semibold text-gray-900 dark:text-white mb-4">
           {t('platform:privacy.actionsTitle')}
@@ -186,7 +286,13 @@ const PlatformPrivacy: React.FC = () => {
             {t('platform:privacy.dryRunBtn')}
           </button>
           <button
-            onClick={() => setConfirmOpen(true)}
+            onClick={() => {
+              if (policy && !policy.envCleanupEnabled) {
+                setRunError(t('platform:privacy.liveRunBlockedEnvDisabled'));
+                return;
+              }
+              setConfirmOpen(true);
+            }}
             disabled={runLoading}
             className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
           >

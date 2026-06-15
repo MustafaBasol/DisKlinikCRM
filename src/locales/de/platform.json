@@ -185,12 +185,25 @@
   "privacy": {
     "title": "Datenschutz / Datenaufbewahrung",
     "explanation": "Diese Seite steuert die Bereinigung alter Nachrichten, Konversationszustände und operativer Aufzeichnungen gemäß der Aufbewahrungsrichtlinie. Patienten-, Termin-, Behandlungs-, Zahlungs- und gesetzliche Prüfdatensätze werden durch diesen Prozess nicht gelöscht.",
-    "disabledWarning": "Die automatische Bereinigung ist derzeit deaktiviert. Sie können manuell einen Dry-run durchführen; Live-Ausführungen sollten nur als autorisierte Operation verwendet werden.",
+    "autoCleanup": {
+      "title": "Steuerung der automatischen Bereinigung",
+      "systemLevel": "Systemebene (.env)",
+      "runtimeSetting": "UI-Einstellung",
+      "effectiveStatus": "Effektiver Status",
+      "on": "Ein",
+      "off": "Aus",
+      "active": "Aktiv",
+      "passive": "Inaktiv",
+      "saveSuccess": "Einstellung gespeichert",
+      "saveFailed": "Speichern fehlgeschlagen",
+      "envDisabledWarning": "Die automatische Bereinigung ist auf Umgebungsebene deaktiviert (DATA_RETENTION_CLEANUP_ENABLED=false). Sie kann nicht über die UI aktiviert werden.",
+      "runtimeDisabledWarning": "Die automatische Bereinigung ist über die UI-Einstellung deaktiviert. Verwenden Sie den Schalter oben, um sie zu aktivieren."
+    },
+    "liveRunBlockedEnvDisabled": "Die Live-Bereinigung kann nicht ausgeführt werden, da sie auf Systemebene deaktiviert ist (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Aktuelle Aufbewahrungsrichtlinie",
     "policyLoadFailed": "Richtlinie konnte nicht geladen werden",
     "days": "Tage",
     "fields": {
-      "enabled": "Auto-Bereinigung",
       "cron": "Cron-Zeitplan",
       "conversationMessages": "Konversationsnachrichten",
       "conversationState": "Konversationszustand",
