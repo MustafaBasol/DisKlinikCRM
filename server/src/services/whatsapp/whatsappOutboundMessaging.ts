@@ -12,11 +12,15 @@
  *   - Inbound AI replies (whatsapp.ts, whatsappService.sendWhatsAppMessage)
  *   - Manual staff inbox replies
  *   - Internal staff notifications (task assignment, practitioner schedule)
- *   - Post-treatment queue (PostTreatmentMessageTemplate has no Meta fields)
  *
  * sendNoShowRecoveryWhatsApp — purpose-based no-show recovery send:
  *   Selects the first active, approved MessageTemplate with purpose = no_show_recovery
  *   for the clinic.  For Evolution it falls back to plain sendMessage.
+ *
+ * sendPostTreatmentWhatsApp — purpose-based post-treatment follow-up send:
+ *   For Meta Cloud: selects the first active, approved MessageTemplate with
+ *   purpose = post_treatment_followup. Rejects without fallback if none found.
+ *   For Evolution: sends plain text via sendMessage (existing behavior).
  */
 
 import prisma from '../../db.js';
@@ -324,6 +328,120 @@ export async function sendNoShowRecoveryWhatsApp(args: {
   }
 
   return sendNoShowRecoveryWhatsAppWithConnection(connection, template, {
+    phone,
+    evolutionPlainText,
+    variables,
+  });
+}
+
+// ─── Post-treatment follow-up: purpose-based template selection ───────────────
+
+export const POST_TREATMENT_MISSING_TEMPLATE_ERROR =
+  "Tedavi sonrası takip için onaylı WhatsApp şablonu bulunamadı. " +
+  "Lütfen Mesaj Şablonları sayfasından 'Tedavi Sonrası Takip' kullanım amaçlı " +
+  "bir WhatsApp şablonu oluşturup onaya gönderin.";
+
+/**
+ * Core post-treatment follow-up dispatcher given a pre-resolved connection and template.
+ * Exported for unit testing without Prisma dependency.
+ *
+ * For Meta Cloud: requires an approved MessageTemplate (purpose = post_treatment_followup);
+ * rejects with META_APPROVED_TEMPLATE_REQUIRED if template is null or not approved.
+ * Never falls back to plain sendMessage for Meta Cloud.
+ *
+ * For Evolution / legacy: sends plain text via sendMessage; template is ignored.
+ */
+export async function sendPostTreatmentWhatsAppWithConnection(
+  connection: WhatsAppConnectionRecord,
+  template: MetaTemplateSnapshot | null,
+  args: {
+    phone: string;
+    evolutionPlainText: string;
+    variables: Record<string, string>;
+  },
+): Promise<ProactiveMessageResult> {
+  if (connection.provider !== 'meta_cloud_api') {
+    const provider = getWhatsAppProvider(connection.provider);
+    const result = await provider.sendMessage(connection, {
+      phone: args.phone,
+      text: args.evolutionPlainText,
+    });
+    return {
+      success: result.success,
+      externalMessageId: result.externalMessageId,
+      error: result.error,
+    };
+  }
+
+  if (!template || template.metaTemplateStatus !== 'approved' || !template.metaTemplateName) {
+    return {
+      success: false,
+      code: OUTBOUND_ERRORS.META_APPROVED_TEMPLATE_REQUIRED,
+      error: POST_TREATMENT_MISSING_TEMPLATE_ERROR,
+    };
+  }
+
+  return sendProactiveWhatsAppMessageWithConnection(connection, template, {
+    phone: args.phone,
+    text: args.evolutionPlainText,
+    variables: args.variables,
+  });
+}
+
+/**
+ * Send a post-treatment follow-up WhatsApp message for a clinic.
+ *
+ * For Meta Cloud clinics: selects the first active approved MessageTemplate
+ * with purpose = post_treatment_followup (ordered by createdAt asc for determinism).
+ * Fails with META_APPROVED_TEMPLATE_REQUIRED if none found.
+ *
+ * For Evolution / legacy clinics: sends plain text via sendMessage.
+ */
+export async function sendPostTreatmentWhatsApp(args: {
+  clinicId: string;
+  phone: string;
+  evolutionPlainText: string;
+  variables: Record<string, string>;
+}): Promise<ProactiveMessageResult> {
+  const { clinicId, phone, evolutionPlainText, variables } = args;
+
+  if (!clinicId || clinicId === 'all') {
+    return {
+      success: false,
+      error: 'Mesaj göndermek için bir klinik seçilmelidir.',
+      code: OUTBOUND_ERRORS.NO_CONNECTION,
+    };
+  }
+
+  const connection = await resolveConnectionForClinic(clinicId);
+  if (!connection) {
+    return {
+      success: false,
+      error: 'Bu klinik için aktif bir WhatsApp bağlantısı bulunamadı.',
+      code: OUTBOUND_ERRORS.NO_CONNECTION,
+    };
+  }
+
+  let template: MetaTemplateSnapshot | null = null;
+  if (connection.provider === 'meta_cloud_api') {
+    template = await prisma.messageTemplate.findFirst({
+      where: {
+        clinicId,
+        channel: 'whatsapp',
+        purpose: 'post_treatment_followup',
+        isActive: true,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        metaTemplateName: true,
+        metaTemplateStatus: true,
+        metaTemplateLanguage: true,
+        metaTemplateVariableMap: true,
+      },
+    });
+  }
+
+  return sendPostTreatmentWhatsAppWithConnection(connection, template, {
     phone,
     evolutionPlainText,
     variables,
