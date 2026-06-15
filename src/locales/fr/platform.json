@@ -67,7 +67,8 @@
       "clinics": "Cliniques",
       "users": "Utilisateurs",
       "plans": "Plans",
-      "system": "Système"
+      "system": "Système",
+      "privacy": "Confidentialité / Données"
     }
   },
   "dashboard": {
@@ -180,5 +181,44 @@
     "clinics": "Cliniques",
     "totalAppointments": "Total rendez-vous",
     "usersPatients": "Utilisateurs / Patients"
+  },
+  "privacy": {
+    "title": "Confidentialité / Conservation des données",
+    "explanation": "Cette page contrôle le nettoyage des anciens messages, états de conversation et enregistrements opérationnels selon la politique de conservation. Les dossiers patients, rendez-vous, traitements, paiements et audits légaux ne sont pas supprimés par ce processus.",
+    "disabledWarning": "Le nettoyage automatique est actuellement désactivé. Vous pouvez exécuter un dry-run manuellement ; les exécutions en direct ne doivent être utilisées qu'en tant qu'opération autorisée.",
+    "policyTitle": "Politique de conservation actuelle",
+    "policyLoadFailed": "La politique n'a pas pu être chargée",
+    "days": "jours",
+    "fields": {
+      "enabled": "Nettoyage auto",
+      "cron": "Planification cron",
+      "conversationMessages": "Messages de conversation",
+      "conversationState": "État de conversation",
+      "operationalEvents": "Événements opérationnels",
+      "inboundEvents": "Événements entrants",
+      "contactRequests": "Demandes de contact",
+      "batchSize": "Taille de lot"
+    },
+    "actionsTitle": "Actions de nettoyage",
+    "actionsNote": "Le dry-run affiche le nombre d'enregistrements qui seraient affectés sans supprimer de données.",
+    "dryRunBtn": "Exécuter un dry-run",
+    "liveRunBtn": "Exécuter le nettoyage réel",
+    "dryRunResult": "Résultat du dry-run",
+    "liveRunResult": "Résultat du nettoyage réel",
+    "runFailed": "Le nettoyage n'a pas pu être exécuté. Veuillez réessayer.",
+    "unauthorizedError": "Vous n'êtes pas autorisé à effectuer cette action.",
+    "confirmTitle": "Confirmation du nettoyage réel",
+    "confirmWarning": "Cette opération supprimera ou anonymisera définitivement les anciennes données de communication. Assurez-vous d'avoir d'abord exécuté un dry-run.",
+    "confirmBtn": "Oui, exécuter",
+    "summary": {
+      "conversationMessages": "Messages de conversation",
+      "conversationStates": "États de conversation",
+      "operationalEvents": "Événements opérationnels",
+      "inboundEvents": "Événements entrants",
+      "contactRequests": "Demandes anonymisées",
+      "inboxEntries": "Entrées de boîte masquées",
+      "errorsLabel": "Erreurs",
+      "errorsNote": "Certaines catégories n'ont pas pu être traitées. Consultez les journaux du serveur pour les détails."
+    }
   }
 }

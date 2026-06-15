@@ -67,7 +67,8 @@
       "clinics": "Klinikler",
       "users": "Kullanıcılar",
       "plans": "Planlar",
-      "system": "Sistem"
+      "system": "Sistem",
+      "privacy": "Gizlilik / Veri"
     }
   },
   "dashboard": {
@@ -180,5 +181,44 @@
     "clinics": "Klinikler",
     "totalAppointments": "Toplam Randevu",
     "usersPatients": "Kullanıcı / Hasta"
+  },
+  "privacy": {
+    "title": "Gizlilik / Veri Saklama",
+    "explanation": "Bu sayfa eski iletişim, konuşma durumu ve operasyonel kayıtların saklama politikasına göre temizlenmesini kontrol etmek için kullanılır. Hasta, randevu, tedavi, ödeme ve yasal audit kayıtları bu işlemde silinmez.",
+    "disabledWarning": "Otomatik temizlik şu anda kapalı. Manuel dry-run çalıştırabilirsiniz; canlı çalışma yalnızca yetkili işlem olarak kullanılmalıdır.",
+    "policyTitle": "Mevcut Saklama Politikası",
+    "policyLoadFailed": "Politika yüklenemedi",
+    "days": "gün",
+    "fields": {
+      "enabled": "Otomatik Temizlik",
+      "cron": "Cron Zamanı",
+      "conversationMessages": "Konuşma Mesajları",
+      "conversationState": "Konuşma Durumu",
+      "operationalEvents": "Operasyonel Olaylar",
+      "inboundEvents": "Gelen Olaylar",
+      "contactRequests": "İletişim Talepleri",
+      "batchSize": "Batch Boyutu"
+    },
+    "actionsTitle": "Temizlik İşlemleri",
+    "actionsNote": "Dry-run işlemi gerçek veri silmeden etkilenecek kayıt sayısını gösterir.",
+    "dryRunBtn": "Dry-run çalıştır",
+    "liveRunBtn": "Canlı cleanup çalıştır",
+    "dryRunResult": "Dry-run Sonucu",
+    "liveRunResult": "Canlı Cleanup Sonucu",
+    "runFailed": "Cleanup çalıştırılamadı. Lütfen tekrar deneyin.",
+    "unauthorizedError": "Bu işlem için yetkiniz yok.",
+    "confirmTitle": "Canlı Cleanup Onayı",
+    "confirmWarning": "Bu işlem eski iletişim verilerini kalıcı olarak silecek veya anonimleştirecek. Önce dry-run çalıştırdığınızdan emin olun.",
+    "confirmBtn": "Evet, Çalıştır",
+    "summary": {
+      "conversationMessages": "Konuşma Mesajları",
+      "conversationStates": "Konuşma Durumları",
+      "operationalEvents": "Operasyonel Olaylar",
+      "inboundEvents": "Gelen Olaylar",
+      "contactRequests": "Anonimleştirilen Talepler",
+      "inboxEntries": "Maskelenen Inbox Kayıtları",
+      "errorsLabel": "Hata",
+      "errorsNote": "Bazı kategoriler işlenemedi. Detaylar için sunucu günlüklerini kontrol edin."
+    }
   }
 }

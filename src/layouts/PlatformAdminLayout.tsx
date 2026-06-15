@@ -7,6 +7,7 @@ import {
   Users,
   Package,
   Activity,
+  Lock,
   LogOut,
   Menu,
   X,
@@ -25,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/platform/users', icon: <Users size={18} />, labelKey: 'users' },
   { path: '/platform/plans', icon: <Package size={18} />, labelKey: 'plans' },
   { path: '/platform/system', icon: <Activity size={18} />, labelKey: 'system' },
+  { path: '/platform/privacy', icon: <Lock size={18} />, labelKey: 'privacy' },
 ];
 
 const PlatformAdminLayout: React.FC = () => {

@@ -67,7 +67,8 @@
       "clinics": "Clinics",
       "users": "Users",
       "plans": "Plans",
-      "system": "System"
+      "system": "System",
+      "privacy": "Privacy / Data"
     }
   },
   "dashboard": {
@@ -180,5 +181,44 @@
     "clinics": "Clinics",
     "totalAppointments": "Total Appointments",
     "usersPatients": "Users / Patients"
+  },
+  "privacy": {
+    "title": "Privacy / Data Retention",
+    "explanation": "This page controls the cleanup of old messaging, conversation state, and operational records according to the retention policy. Patient, appointment, treatment, payment, and legal audit records are not deleted by this process.",
+    "disabledWarning": "Automatic cleanup is currently disabled. You may run a dry-run manually; live runs should only be used as an authorized operation.",
+    "policyTitle": "Current Retention Policy",
+    "policyLoadFailed": "Policy could not be loaded",
+    "days": "days",
+    "fields": {
+      "enabled": "Auto Cleanup",
+      "cron": "Cron Schedule",
+      "conversationMessages": "Conversation Messages",
+      "conversationState": "Conversation State",
+      "operationalEvents": "Operational Events",
+      "inboundEvents": "Inbound Events",
+      "contactRequests": "Contact Requests",
+      "batchSize": "Batch Size"
+    },
+    "actionsTitle": "Cleanup Actions",
+    "actionsNote": "Dry-run shows the number of records that would be affected without deleting any data.",
+    "dryRunBtn": "Run dry-run",
+    "liveRunBtn": "Run live cleanup",
+    "dryRunResult": "Dry-run Result",
+    "liveRunResult": "Live Cleanup Result",
+    "runFailed": "Cleanup could not be run. Please try again.",
+    "unauthorizedError": "You are not authorized to perform this action.",
+    "confirmTitle": "Live Cleanup Confirmation",
+    "confirmWarning": "This will permanently delete or anonymize old communication data. Make sure you have run a dry-run first.",
+    "confirmBtn": "Yes, Run",
+    "summary": {
+      "conversationMessages": "Conversation Messages",
+      "conversationStates": "Conversation States",
+      "operationalEvents": "Operational Events",
+      "inboundEvents": "Inbound Events",
+      "contactRequests": "Anonymized Requests",
+      "inboxEntries": "Redacted Inbox Entries",
+      "errorsLabel": "Errors",
+      "errorsNote": "Some categories could not be processed. Check server logs for details."
+    }
   }
 }
