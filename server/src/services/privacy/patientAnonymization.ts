@@ -35,6 +35,43 @@ const ANON_FIRST = 'Anonim';
 const ANON_LAST  = 'Hasta';
 const ANON_TEXT  = '[ANONYMIZED]';
 
+// Phone pattern: digits/spaces/dashes/parens only (no dot — avoids matching dates like 22.05.2026).
+// Requires 10+ digit-bearing chars total, covering Turkish formats (+90xx, 05xx, etc.).
+const ACTIVITY_PHONE_RE = /(\+?\d[\d\s\-()]{8,}\d)/g;
+const ACTIVITY_EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Replaces all occurrences of the patient's identifiers in a single
+ * ActivityLog description string with [ANONYMIZED].
+ * Full name is replaced first to avoid double-substitution of parts.
+ */
+function redactActivityDescription(
+  desc: string,
+  firstName: string,
+  lastName: string,
+  phone: string | null,
+  email: string | null,
+): string {
+  let out = desc;
+  const fullName = `${firstName} ${lastName}`;
+  out = out.replace(new RegExp(escapeRegExp(fullName), 'gi'), ANON_TEXT);
+  if (firstName) out = out.replace(new RegExp(escapeRegExp(firstName), 'gi'), ANON_TEXT);
+  if (lastName)  out = out.replace(new RegExp(escapeRegExp(lastName),  'gi'), ANON_TEXT);
+  if (phone) {
+    out = out.replace(new RegExp(escapeRegExp(phone), 'g'), ANON_TEXT);
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 7) out = out.replace(new RegExp(escapeRegExp(digits), 'g'), ANON_TEXT);
+  }
+  if (email) out = out.replace(new RegExp(escapeRegExp(email), 'gi'), ANON_TEXT);
+  // Pattern-based catch-all for any remaining phone/email patterns
+  out = out.replace(ACTIVITY_PHONE_RE, ANON_TEXT).replace(ACTIVITY_EMAIL_RE, ANON_TEXT);
+  return out;
+}
+
 export async function anonymizePatientData(
   args: AnonymizePatientArgs,
 ): Promise<AnonymizePatientResult> {
@@ -43,7 +80,7 @@ export async function anonymizePatientData(
   // Fetch patient within clinic + org scope
   const patient = await prisma.patient.findFirst({
     where: { id: patientId, clinicId, organizationId, deletedAt: null },
-    select: { id: true, isAnonymized: true },
+    select: { id: true, isAnonymized: true, firstName: true, lastName: true, phone: true, email: true },
   });
 
   if (!patient) {
@@ -177,7 +214,29 @@ export async function anonymizePatientData(
     WHERE "clinicId" = ${clinicId} AND "patientId" = ${patientId}
   `;
 
-  // ── 8. Create PatientPrivacyRequest record ────────────────────────────────
+  // ── 8. Redact ActivityLog descriptions for this patient ──────────────────────
+  const activityRows = await prisma.activityLog.findMany({
+    where: { clinicId, patientId, description: { not: null } },
+    select: { id: true, description: true },
+  });
+
+  await Promise.all(
+    activityRows
+      .filter((r): r is { id: string; description: string } => r.description !== null)
+      .map(({ id, description }) => {
+        const redacted = redactActivityDescription(
+          description,
+          patient.firstName,
+          patient.lastName,
+          patient.phone,
+          patient.email,
+        );
+        if (redacted === description) return Promise.resolve();
+        return prisma.activityLog.update({ where: { id }, data: { description: redacted } });
+      }),
+  );
+
+  // ── 9. Create PatientPrivacyRequest record ────────────────────────────────
   const privacyRequest = await prisma.patientPrivacyRequest.create({
     data: {
       clinicId,
@@ -193,7 +252,7 @@ export async function anonymizePatientData(
     select: { id: true },
   });
 
-  // ── 9. Write audit log (no full PII) ──────────────────────────────────────
+  // ── 10. Write audit log (no full PII) ─────────────────────────────────────
   await writeAuditLog({
     organizationId,
     clinicId,
@@ -209,7 +268,7 @@ export async function anonymizePatientData(
     },
   });
 
-  // ── 10. Write activity log ────────────────────────────────────────────────
+  // ── 11. Write activity log ────────────────────────────────────────────────
   await logActivity({
     clinicId,
     userId: actorUserId,
