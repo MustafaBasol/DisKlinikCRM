@@ -6,7 +6,7 @@
  */
 
 import prisma from '../db.js';
-import { sendWhatsAppMessage } from './whatsapp/whatsappService.js';
+import { sendPostTreatmentWhatsApp } from './whatsapp/whatsappOutboundMessaging.js';
 import { sendMessage as sendInstagramMessage } from './instagram/InstagramMessagingProvider.js';
 import type { InstagramConnectionRecord } from './instagram/InstagramMessagingProvider.js';
 import { logActivity } from '../utils/activity.js';
@@ -321,6 +321,7 @@ export async function processScheduledPostTreatmentMessages(): Promise<void> {
     include: {
       template: { select: { channel: true } },
       patient: { select: { phone: true, firstName: true, lastName: true } },
+      service: { select: { name: true } },
     },
     take: 50,
     orderBy: { scheduledAt: 'asc' },
@@ -340,7 +341,9 @@ async function sendQueueEntry(entry: {
   recipient: string | null;
   messageBodyRendered: string;
   templateId: string;
+  appointmentId: string | null;
   patient: { phone: string | null; firstName: string; lastName: string };
+  service: { name: string } | null;
 }): Promise<void> {
   let success = false;
   let errorMsg: string | null = null;
@@ -350,8 +353,63 @@ async function sendQueueEntry(entry: {
       const phone = entry.recipient ?? entry.patient.phone ?? null;
       if (!phone) throw new Error('NO_PHONE');
 
-      const sendResult = await sendWhatsAppMessage(entry.clinicId, { phone, text: entry.messageBodyRendered });
-      if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
+      // Build variable dict for Meta Cloud template substitution.
+      // Evolution ignores variables and uses messageBodyRendered (plain text).
+      const patientName = `${entry.patient.firstName} ${entry.patient.lastName}`.trim();
+
+      const [clinic, appointment] = await Promise.all([
+        prisma.clinic.findUnique({
+          where: { id: entry.clinicId },
+          select: { name: true, phone: true },
+        }),
+        entry.appointmentId
+          ? prisma.appointment.findUnique({
+              where: { id: entry.appointmentId },
+              select: {
+                startTime: true,
+                practitioner: { select: { firstName: true, lastName: true } },
+              },
+            })
+          : null,
+      ]);
+
+      const variables: Record<string, string> = {
+        patient_name: patientName,
+        clinic_name: clinic?.name ?? '',
+        clinic_phone: clinic?.phone ?? '',
+        service_name: entry.service?.name ?? '',
+      };
+
+      if (appointment) {
+        const dt = appointment.startTime;
+        variables.appointment_date = dt.toLocaleDateString('tr-TR', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        });
+        variables.appointment_time = dt.toLocaleTimeString('tr-TR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        if (appointment.practitioner) {
+          variables.practitioner_name =
+            `${appointment.practitioner.firstName} ${appointment.practitioner.lastName}`.trim();
+        }
+      }
+
+      const sendResult = await sendPostTreatmentWhatsApp({
+        clinicId: entry.clinicId,
+        phone,
+        evolutionPlainText: entry.messageBodyRendered,
+        variables,
+      });
+
+      if (!sendResult.success) {
+        const msg = sendResult.code
+          ? `${sendResult.code}: ${sendResult.error ?? 'WhatsApp send failed'}`
+          : (sendResult.error ?? 'WhatsApp send failed');
+        throw new Error(msg);
+      }
       success = true;
     } else if (entry.channel === 'instagram') {
       if (!entry.recipient) throw new Error('NO_INSTAGRAM_RECIPIENT');
@@ -422,7 +480,11 @@ async function sendQueueEntry(entry: {
 export async function approveAndSendQueueEntry(queueId: string, clinicId: string): Promise<void> {
   const entry = await prisma.postTreatmentMessageQueue.findFirst({
     where: { id: queueId, clinicId, status: 'waiting_approval' },
-    include: { patient: { select: { phone: true, firstName: true, lastName: true } }, template: { select: { channel: true } } },
+    include: {
+      patient: { select: { phone: true, firstName: true, lastName: true } },
+      template: { select: { channel: true } },
+      service: { select: { name: true } },
+    },
   });
   if (!entry) throw new Error('QUEUE_ENTRY_NOT_FOUND');
 
