@@ -26,6 +26,15 @@ model Clinic {
   planId          String? // Staged migration: kept until Organization.planId is validated
   plan            Plan?        @relation(fields: [planId], references: [id])
   organizationId  String // Phase 1b: NOT NULL after backfill
+  // ── Stripe SaaS billing fields ────────────────────────────────────────────────
+  stripeCustomerId           String?
+  stripeSubscriptionId       String?
+  stripeSubscriptionStatus   String? // active | trialing | past_due | canceled | unpaid | incomplete | incomplete_expired | paused | unknown
+  stripeCurrentPeriodEnd     DateTime?
+  stripeCancelAtPeriodEnd    Boolean   @default(false)
+  stripePriceId              String?
+  stripeProductId            String?
+  subscriptionSyncedAt       DateTime?
   organization    Organization @relation(fields: [organizationId], references: [id])
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -1179,9 +1188,24 @@ model Plan {
   monthlyPrice Decimal  @default(0) @db.Decimal(10, 2)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
+  // ── Stripe price mapping ───────────────────────────────────────────────────────
+  stripeMonthlyPriceId String?
+  stripeYearlyPriceId  String?
+  stripeProductId      String?
 
   clinics       Clinic[]
   organizations Organization[]
+}
+
+model StripeWebhookEvent {
+  id             String    @id @default(uuid())
+  stripeEventId  String    @unique
+  eventType      String
+  status         String    // received | processed | failed | ignored
+  errorMessage   String?
+  processedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model PlatformAdmin {

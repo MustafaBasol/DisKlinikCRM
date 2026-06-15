@@ -8,7 +8,8 @@
     "dev": "tsx watch src/index.ts",
     "start": "npx prisma generate && tsx src/index.ts",
     "typecheck": "npx prisma generate && tsc --noEmit",
-    "test": "npm run test:fixtures && npm run test:agent && npm run test:safety && npm run test:msg-safety && npm run test:auth && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:instagram && npm run test:meta-wa && npm run test:overlap-safety && npm run test:availability-service && npm run test:public-booking && npm run test:purpose && npm run test:contact-requests && npm run test:post-treatment && npm run test:meta-template-sync && npm run test:data-retention && npm run test:patient-privacy",
+    "test": "npm run test:fixtures && npm run test:agent && npm run test:safety && npm run test:msg-safety && npm run test:auth && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:instagram && npm run test:meta-wa && npm run test:overlap-safety && npm run test:availability-service && npm run test:public-booking && npm run test:purpose && npm run test:contact-requests && npm run test:post-treatment && npm run test:meta-template-sync && npm run test:data-retention && npm run test:patient-privacy && npm run test:billing",
+    "test:billing": "tsx src/tests/billing.test.ts",
     "test:patient-privacy": "tsx src/tests/patientPrivacy.test.ts",
     "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts",
     "test:agent": "tsx src/tests/whatsappAgentEvaluation.test.ts",
@@ -56,6 +57,7 @@
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
     "prisma": "^6.19.3",
+    "stripe": "^22.2.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

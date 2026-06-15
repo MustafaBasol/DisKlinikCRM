@@ -50,6 +50,8 @@ import patientsImportRoutes from './routes/patientsImport.js';
 import usersImportRoutes from './routes/usersImport.js';
 import postTreatmentRoutes from './routes/postTreatment.js';
 import patientPrivacyRoutes from './routes/patientPrivacy.js';
+import billingRoutes from './routes/billing.js';
+import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { startMetaTemplateSyncJob } from './jobs/metaTemplateSyncJob.js';
 import { startDataRetentionCleanupJob } from './jobs/dataRetentionCleanupJob.js';
@@ -120,6 +122,8 @@ app.use('/api/public/whatsapp', whatsappRoutes);
 app.use('/api/public', metaWhatsAppWebhookRoutes);
 app.use('/api/public', instagramWebhookRoutes);
 app.use('/api/public', publicBookingRoutes);
+// Stripe webhook: no user auth, Stripe signature verification is the security layer
+app.use('/api', stripeWebhookRoutes);
 
 // Platform admin routes (kendi JWT'si var, global auth dışında)
 app.use('/api/platform', platformAdminRoutes);
@@ -173,6 +177,7 @@ app.use('/api', recallRoutes);
 app.use('/api', usersImportRoutes);
 app.use('/api', postTreatmentRoutes);
 app.use('/api', patientPrivacyRoutes);
+app.use('/api', billingRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
