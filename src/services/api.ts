@@ -87,6 +87,19 @@ export const patientService = {
   },
 };
 
+export const patientPrivacyService = {
+  exportData: (patientId: string) =>
+    api.post(`/patients/${patientId}/privacy/export`),
+  anonymize: (patientId: string, reason: string) =>
+    api.post(`/patients/${patientId}/privacy/anonymize`, { confirm: true, reason }),
+  listRequests: (patientId: string) =>
+    api.get(`/patients/${patientId}/privacy/requests`),
+  createRequest: (patientId: string, data: { requestType: string; requestNote?: string }) =>
+    api.post(`/patients/${patientId}/privacy/requests`, data),
+  updateRequestStatus: (requestId: string, status: string, decisionNote?: string) =>
+    api.patch(`/privacy-requests/${requestId}/status`, { status, decisionNote }),
+};
+
 export const appointmentTypeService = {
   getAll: (onlyActive = false) => api.get('/appointment-types', { params: { onlyActive } }),
   create: (data: any) => api.post('/appointment-types', data),
