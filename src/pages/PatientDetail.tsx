@@ -34,6 +34,7 @@ import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { patientService, taskService, treatmentCaseService, paymentService, paymentPlanService, insuranceProvisionService, attachmentService } from '../services/api';
 import api from '../services/api';
 import DentalChart from '../components/DentalChart';
+import PatientPrivacyPanel from '../components/PatientPrivacyPanel';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
@@ -57,7 +58,7 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'dental'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'dental' | 'privacy'>('overview');
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -292,14 +293,14 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="flex gap-1 sm:gap-4 border-b border-gray-200 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'dental', 'activity'] as const).map(tab => (
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'dental', 'activity', 'privacy'] as const).map(tab => (
           <button 
             key={tab}
             data-tab={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'dental' ? t('patients:dentalChart.title') : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'dental' ? t('patients:dentalChart.title') : tab === 'privacy' ? 'Gizlilik' : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -1258,6 +1259,16 @@ const PatientDetail: React.FC = () => {
                 <div className="text-center text-gray-400 italic">{t('common:noData')}</div>
               )}
             </div>
+          </div>
+        )}
+        {activeTab === 'privacy' && (
+          <div className="card p-6">
+            <PatientPrivacyPanel
+              patientId={id!}
+              isAnonymized={!!patient.isAnonymized}
+              canManage={userCanonicalRole === 'OWNER' || userCanonicalRole === 'ORG_ADMIN' || userCanonicalRole === 'CLINIC_MANAGER'}
+              onAnonymized={() => fetchPatient()}
+            />
           </div>
         )}
         </div>

@@ -80,6 +80,7 @@ model Clinic {
   instagramConversationMessages     InstagramConversationMessage[]
   postTreatmentTemplates            PostTreatmentMessageTemplate[]
   postTreatmentQueue                PostTreatmentMessageQueue[]
+  patientPrivacyRequests            PatientPrivacyRequest[]
 
   @@unique([organizationId, slug])
 }
@@ -193,6 +194,11 @@ model Patient {
   organization         Organization @relation(fields: [organizationId], references: [id])
   primaryClinicId      String? // Default/preferred branch (not exclusive)
   primaryClinic        Clinic?      @relation("PatientPrimaryClinic", fields: [primaryClinicId], references: [id])
+  // KVKK/GDPR anonymization tracking
+  isAnonymized         Boolean      @default(false)
+  anonymizedAt         DateTime?
+  anonymizedById       String?
+  anonymizationReason  String?
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
   deletedAt            DateTime?
@@ -219,7 +225,8 @@ model Patient {
   instagramConversationMessages     InstagramConversationMessage[]
   postTreatmentQueue                PostTreatmentMessageQueue[]
   recallCandidates                  RecallCandidate[]
-  recallActions                RecallAction[]
+  recallActions                     RecallAction[]
+  privacyRequests                   PatientPrivacyRequest[]
 }
 
 model AppointmentType {
@@ -1671,4 +1678,29 @@ model PlatformSetting {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// KVKK/GDPR patient privacy rights requests (access, rectification, anonymization, etc.)
+model PatientPrivacyRequest {
+  id                 String    @id @default(uuid())
+  clinicId           String
+  clinic             Clinic    @relation(fields: [clinicId], references: [id])
+  patientId          String?
+  patient            Patient?  @relation(fields: [patientId], references: [id])
+  /// access_export | rectification | anonymization | deletion_review | restriction | objection | other
+  requestType        String
+  /// pending | in_review | completed | rejected | cancelled
+  status             String    @default("pending")
+  requestedByUserId  String?
+  handledByUserId    String?
+  requestNote        String?
+  decisionNote       String?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([clinicId, status])
+  @@index([clinicId, patientId])
+  @@index([clinicId, requestType])
+  @@index([createdAt])
 }
