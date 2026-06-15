@@ -67,7 +67,8 @@
       "clinics": "Kliniken",
       "users": "Benutzer",
       "plans": "Pläne",
-      "system": "System"
+      "system": "System",
+      "privacy": "Datenschutz / Daten"
     }
   },
   "dashboard": {
@@ -180,5 +181,44 @@
     "clinics": "Kliniken",
     "totalAppointments": "Termine gesamt",
     "usersPatients": "Benutzer / Patienten"
+  },
+  "privacy": {
+    "title": "Datenschutz / Datenaufbewahrung",
+    "explanation": "Diese Seite steuert die Bereinigung alter Nachrichten, Konversationszustände und operativer Aufzeichnungen gemäß der Aufbewahrungsrichtlinie. Patienten-, Termin-, Behandlungs-, Zahlungs- und gesetzliche Prüfdatensätze werden durch diesen Prozess nicht gelöscht.",
+    "disabledWarning": "Die automatische Bereinigung ist derzeit deaktiviert. Sie können manuell einen Dry-run durchführen; Live-Ausführungen sollten nur als autorisierte Operation verwendet werden.",
+    "policyTitle": "Aktuelle Aufbewahrungsrichtlinie",
+    "policyLoadFailed": "Richtlinie konnte nicht geladen werden",
+    "days": "Tage",
+    "fields": {
+      "enabled": "Auto-Bereinigung",
+      "cron": "Cron-Zeitplan",
+      "conversationMessages": "Konversationsnachrichten",
+      "conversationState": "Konversationszustand",
+      "operationalEvents": "Operative Ereignisse",
+      "inboundEvents": "Eingehende Ereignisse",
+      "contactRequests": "Kontaktanfragen",
+      "batchSize": "Batch-Größe"
+    },
+    "actionsTitle": "Bereinigungsaktionen",
+    "actionsNote": "Dry-run zeigt die Anzahl der betroffenen Datensätze an, ohne Daten zu löschen.",
+    "dryRunBtn": "Dry-run ausführen",
+    "liveRunBtn": "Live-Bereinigung ausführen",
+    "dryRunResult": "Dry-run-Ergebnis",
+    "liveRunResult": "Live-Bereinigungsergebnis",
+    "runFailed": "Bereinigung konnte nicht ausgeführt werden. Bitte erneut versuchen.",
+    "unauthorizedError": "Sie sind nicht berechtigt, diese Aktion durchzuführen.",
+    "confirmTitle": "Bestätigung der Live-Bereinigung",
+    "confirmWarning": "Dieser Vorgang löscht oder anonymisiert alte Kommunikationsdaten dauerhaft. Stellen Sie sicher, dass Sie zuerst einen Dry-run durchgeführt haben.",
+    "confirmBtn": "Ja, ausführen",
+    "summary": {
+      "conversationMessages": "Konversationsnachrichten",
+      "conversationStates": "Konversationszustände",
+      "operationalEvents": "Operative Ereignisse",
+      "inboundEvents": "Eingehende Ereignisse",
+      "contactRequests": "Anonymisierte Anfragen",
+      "inboxEntries": "Geschwärzte Posteingangseinträge",
+      "errorsLabel": "Fehler",
+      "errorsNote": "Einige Kategorien konnten nicht verarbeitet werden. Weitere Details finden Sie in den Serverprotokollen."
+    }
   }
 }

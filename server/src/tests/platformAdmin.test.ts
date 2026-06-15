@@ -30,6 +30,11 @@ import {
   generatePlatformToken,
   authenticatePlatformAdmin,
 } from '../middleware/platformAuth.js';
+import {
+  loadDataRetentionConfig,
+  DATA_RETENTION_DEFAULTS,
+  DATA_RETENTION_MIN_DAYS,
+} from '../services/privacy/dataRetentionPolicy.js';
 
 // ── Test yardımcısı ───────────────────────────────────────────────────────────
 
@@ -298,6 +303,84 @@ await test('Klinik tokenı platform JWT gizliğiyle doğrulanamaz', () => {
 
   const clinicToken = jwt.sign({ id: 'user-1', type: 'clinic_user' }, clinicSecret, { expiresIn: '1h' });
   assert.throws(() => jwt.verify(clinicToken, platformSecret), 'Klinik tokenı platform gizliğiyle doğrulanmamalı');
+});
+
+section('Privacy / Data Retention — Policy endpoint mantığı');
+
+await test('loadDataRetentionConfig varsayılan değerleri döner (env set değilken)', async () => {
+  await withEnv({
+    DATA_RETENTION_CLEANUP_ENABLED: undefined,
+    DATA_RETENTION_CLEANUP_CRON: undefined,
+    DATA_RETENTION_CONVERSATION_MESSAGES_DAYS: undefined,
+    DATA_RETENTION_CONVERSATION_STATE_DAYS: undefined,
+    DATA_RETENTION_OPERATIONAL_EVENTS_DAYS: undefined,
+    DATA_RETENTION_INBOUND_EVENT_DAYS: undefined,
+    DATA_RETENTION_RESOLVED_CONTACT_REQUEST_DAYS: undefined,
+    DATA_RETENTION_BATCH_SIZE: undefined,
+  }, () => {
+    const config = loadDataRetentionConfig();
+    assert.equal(config.enabled, true, 'Varsayılan: enabled=true');
+    assert.equal(config.cronSchedule, '0 3 * * *', 'Varsayılan cron');
+    assert.equal(config.conversationMessagesDays, DATA_RETENTION_DEFAULTS.conversationMessagesDays);
+    assert.equal(config.conversationStateDays, DATA_RETENTION_DEFAULTS.conversationStateDays);
+    assert.equal(config.operationalEventsDays, DATA_RETENTION_DEFAULTS.operationalEventsDays);
+    assert.equal(config.inboundEventDays, DATA_RETENTION_DEFAULTS.inboundEventDays);
+    assert.equal(config.resolvedContactRequestDays, DATA_RETENTION_DEFAULTS.resolvedContactRequestDays);
+    assert.equal(config.batchSize, DATA_RETENTION_DEFAULTS.batchSize);
+  });
+});
+
+await test('loadDataRetentionConfig DATA_RETENTION_CLEANUP_ENABLED=false ile disabled döner', async () => {
+  await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: 'false' }, () => {
+    const config = loadDataRetentionConfig();
+    assert.equal(config.enabled, false);
+  });
+});
+
+await test('loadDataRetentionConfig geçerli env override değerlerini kullanır', async () => {
+  await withEnv({
+    DATA_RETENTION_CONVERSATION_MESSAGES_DAYS: '500',
+    DATA_RETENTION_BATCH_SIZE: '200',
+  }, () => {
+    const config = loadDataRetentionConfig();
+    assert.equal(config.conversationMessagesDays, 500);
+    assert.equal(config.batchSize, 200);
+  });
+});
+
+await test(`loadDataRetentionConfig minimum gün (${DATA_RETENTION_MIN_DAYS}) altındaki değerleri reddeder`, async () => {
+  await withEnv({ DATA_RETENTION_CONVERSATION_MESSAGES_DAYS: '10' }, () => {
+    const config = loadDataRetentionConfig();
+    assert.equal(
+      config.conversationMessagesDays,
+      DATA_RETENTION_DEFAULTS.conversationMessagesDays,
+      'Minimum altı değer varsayılana dönmeli',
+    );
+  });
+});
+
+await test('loadDataRetentionConfig batch size 1000 ile sınırlanır', async () => {
+  await withEnv({ DATA_RETENTION_BATCH_SIZE: '9999' }, () => {
+    const config = loadDataRetentionConfig();
+    assert.equal(config.batchSize, 1000, 'Batch size DATA_RETENTION_MAX_BATCH_SIZE ile sınırlanmalı');
+  });
+});
+
+await test('Klinik kullanıcısı platform rotalarına (policy, run) erişemez — middleware engeller', async () => {
+  const clinicSecret = process.env.JWT_SECRET || 'defaultsecret';
+  const clinicToken = jwt.sign(
+    { id: 'user-1', clinicId: 'clinic-1', type: 'clinic_user' },
+    clinicSecret,
+    { expiresIn: '1h' },
+  );
+  const req = makeReq(`Bearer ${clinicToken}`);
+  const res = makeRes();
+  let nextCalled = false;
+
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, false, 'Klinik token platform privacy rotasına erişememeli');
+  assert.ok(res._status === 401 || res._status === 403);
 });
 
 // ── Sonuç ─────────────────────────────────────────────────────────────────────

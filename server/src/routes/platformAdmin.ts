@@ -8,6 +8,7 @@ import {
 } from '../middleware/platformAuth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
+import { loadDataRetentionConfig } from '../services/privacy/dataRetentionPolicy.js';
 
 const router = express.Router();
 
@@ -686,6 +687,22 @@ router.get('/system', async (_req, res: Response) => {
 });
 
 // ─── Privacy / Data Retention ─────────────────────────────────────────────────
+
+// GET /api/platform/privacy/data-retention/policy
+// Returns current retention policy config. No secrets exposed. Platform-admin only (auth applied above).
+router.get('/privacy/data-retention/policy', (_req, res: Response) => {
+  const config = loadDataRetentionConfig();
+  res.json({
+    cleanupEnabled: config.enabled,
+    cron: config.cronSchedule,
+    conversationMessagesDays: config.conversationMessagesDays,
+    conversationStateDays: config.conversationStateDays,
+    operationalEventsDays: config.operationalEventsDays,
+    inboundEventDays: config.inboundEventDays,
+    resolvedContactRequestDays: config.resolvedContactRequestDays,
+    batchSize: config.batchSize,
+  });
+});
 
 // POST /api/platform/privacy/data-retention/run
 // Trigger or dry-run the data retention cleanup. Platform-admin only (auth applied above).
