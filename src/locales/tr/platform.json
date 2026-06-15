@@ -185,12 +185,25 @@
   "privacy": {
     "title": "Gizlilik / Veri Saklama",
     "explanation": "Bu sayfa eski iletişim, konuşma durumu ve operasyonel kayıtların saklama politikasına göre temizlenmesini kontrol etmek için kullanılır. Hasta, randevu, tedavi, ödeme ve yasal audit kayıtları bu işlemde silinmez.",
-    "disabledWarning": "Otomatik temizlik şu anda kapalı. Manuel dry-run çalıştırabilirsiniz; canlı çalışma yalnızca yetkili işlem olarak kullanılmalıdır.",
+    "autoCleanup": {
+      "title": "Otomatik Temizlik Kontrolü",
+      "systemLevel": "Sistem seviyesi (.env)",
+      "runtimeSetting": "Arayüz ayarı",
+      "effectiveStatus": "Etkin durum",
+      "on": "Açık",
+      "off": "Kapalı",
+      "active": "Aktif",
+      "passive": "Pasif",
+      "saveSuccess": "Ayar kaydedildi",
+      "saveFailed": "Ayar kaydedilemedi",
+      "envDisabledWarning": "Otomatik temizlik .env seviyesinde kapalı (DATA_RETENTION_CLEANUP_ENABLED=false). Arayüzden etkinleştirilemez.",
+      "runtimeDisabledWarning": "Otomatik temizlik arayüz ayarından kapalı. Açmak için yukarıdaki açma/kapama düğmesini kullanın."
+    },
+    "liveRunBlockedEnvDisabled": "Canlı temizlik sistem seviyesinde kapalı olduğu için çalıştırılamaz (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Mevcut Saklama Politikası",
     "policyLoadFailed": "Politika yüklenemedi",
     "days": "gün",
     "fields": {
-      "enabled": "Otomatik Temizlik",
       "cron": "Cron Zamanı",
       "conversationMessages": "Konuşma Mesajları",
       "conversationState": "Konuşma Durumu",

@@ -185,12 +185,25 @@
   "privacy": {
     "title": "Confidentialité / Conservation des données",
     "explanation": "Cette page contrôle le nettoyage des anciens messages, états de conversation et enregistrements opérationnels selon la politique de conservation. Les dossiers patients, rendez-vous, traitements, paiements et audits légaux ne sont pas supprimés par ce processus.",
-    "disabledWarning": "Le nettoyage automatique est actuellement désactivé. Vous pouvez exécuter un dry-run manuellement ; les exécutions en direct ne doivent être utilisées qu'en tant qu'opération autorisée.",
+    "autoCleanup": {
+      "title": "Contrôle du nettoyage automatique",
+      "systemLevel": "Niveau système (.env)",
+      "runtimeSetting": "Paramètre UI",
+      "effectiveStatus": "Statut effectif",
+      "on": "Activé",
+      "off": "Désactivé",
+      "active": "Actif",
+      "passive": "Inactif",
+      "saveSuccess": "Paramètre enregistré",
+      "saveFailed": "Échec de l'enregistrement",
+      "envDisabledWarning": "Le nettoyage automatique est désactivé au niveau environnement (DATA_RETENTION_CLEANUP_ENABLED=false). Il ne peut pas être activé depuis l'UI.",
+      "runtimeDisabledWarning": "Le nettoyage automatique est désactivé via le paramètre UI. Utilisez le bouton ci-dessus pour l'activer."
+    },
+    "liveRunBlockedEnvDisabled": "Le nettoyage réel ne peut pas s'exécuter car il est désactivé au niveau système (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Politique de conservation actuelle",
     "policyLoadFailed": "La politique n'a pas pu être chargée",
     "days": "jours",
     "fields": {
-      "enabled": "Nettoyage auto",
       "cron": "Planification cron",
       "conversationMessages": "Messages de conversation",
       "conversationState": "État de conversation",

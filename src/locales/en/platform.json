@@ -185,12 +185,25 @@
   "privacy": {
     "title": "Privacy / Data Retention",
     "explanation": "This page controls the cleanup of old messaging, conversation state, and operational records according to the retention policy. Patient, appointment, treatment, payment, and legal audit records are not deleted by this process.",
-    "disabledWarning": "Automatic cleanup is currently disabled. You may run a dry-run manually; live runs should only be used as an authorized operation.",
+    "autoCleanup": {
+      "title": "Automatic Cleanup Control",
+      "systemLevel": "System level (.env)",
+      "runtimeSetting": "UI setting",
+      "effectiveStatus": "Effective status",
+      "on": "On",
+      "off": "Off",
+      "active": "Active",
+      "passive": "Inactive",
+      "saveSuccess": "Setting saved",
+      "saveFailed": "Failed to save setting",
+      "envDisabledWarning": "Automatic cleanup is disabled at the environment level (DATA_RETENTION_CLEANUP_ENABLED=false). It cannot be enabled from the UI.",
+      "runtimeDisabledWarning": "Automatic cleanup is disabled via the UI setting. Use the toggle above to enable it."
+    },
+    "liveRunBlockedEnvDisabled": "Live cleanup cannot run because it is disabled at the system level (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Current Retention Policy",
     "policyLoadFailed": "Policy could not be loaded",
     "days": "days",
     "fields": {
-      "enabled": "Auto Cleanup",
       "cron": "Cron Schedule",
       "conversationMessages": "Conversation Messages",
       "conversationState": "Conversation State",

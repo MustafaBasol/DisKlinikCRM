@@ -24,6 +24,7 @@ import {
   loadDataRetentionConfig,
   type DataRetentionConfig,
 } from '../services/privacy/dataRetentionPolicy.js';
+import { getPlatformSetting } from '../services/platformSettings.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -354,7 +355,11 @@ export async function runDataRetentionCleanup(
 
 // ── Cron scheduler ────────────────────────────────────────────────────────────
 
-export function startDataRetentionCleanupJob(): void {
+export type DataRetentionJobOverrides = {
+  getRuntimeEnabled?: () => Promise<boolean>;
+};
+
+export function startDataRetentionCleanupJob(overrides?: DataRetentionJobOverrides): void {
   const config = loadDataRetentionConfig();
 
   if (!config.enabled) {
@@ -362,11 +367,23 @@ export function startDataRetentionCleanupJob(): void {
     return;
   }
 
-  cron.schedule(config.cronSchedule, () => {
-    runDataRetentionCleanup({ config }).catch((err: unknown) => {
+  const getRuntimeEnabled = overrides?.getRuntimeEnabled ?? (async () => {
+    const val = await getPlatformSetting('privacy.dataRetention.runtimeEnabled');
+    return val === 'true';
+  });
+
+  cron.schedule(config.cronSchedule, async () => {
+    try {
+      const runtimeEnabled = await getRuntimeEnabled();
+      if (!runtimeEnabled) {
+        console.log('[data-retention] Skipping scheduled cleanup: runtime toggle is disabled.');
+        return;
+      }
+      await runDataRetentionCleanup({ config });
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[data-retention] Unhandled error in cleanup job: ${msg}`);
-    });
+    }
   });
 
   console.log(`[data-retention] Scheduled cleanup job cron="${config.cronSchedule}".`);
