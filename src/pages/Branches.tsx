@@ -481,12 +481,12 @@ export default function Branches() {
 
   const handleOpenDashboard = (clinicId: string) => {
     setSelectedClinicId(clinicId);
-    window.location.href = '/';
+    navigate('/');
   };
 
   const handleViewAppointments = (clinicId: string) => {
     setSelectedClinicId(clinicId);
-    window.location.href = '/appointments';
+    navigate('/appointments');
   };
 
   const statusCfg = (status: string) =>

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { appointmentRequestService, appointmentService, appointmentTypeService, userService } from '../services/api';
+import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 type EditForm = {
@@ -39,6 +40,7 @@ const isoToDateStr = (iso?: string | null): string => {
 const AppointmentRequests: React.FC = () => {
   const { t } = useTranslation(['appointmentRequests', 'common']);
   const { formatDateTime, formatTime } = useClinicPreferences();
+  const { selectedClinicId } = useClinic();
   const [allRequests, setAllRequests] = useState<any[]>([]);
   const [status, setStatus] = useState('');
   const [channel, setChannel] = useState('');
@@ -70,8 +72,9 @@ const AppointmentRequests: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const params: { source?: string } = {};
+      const params: { source?: string; clinicId?: string } = {};
       if (channel) params.source = channel;
+      if (selectedClinicId && selectedClinicId !== 'all') params.clinicId = selectedClinicId;
       const res = await appointmentRequestService.getAll(params);
       setAllRequests(res.data);
     } catch {
@@ -81,7 +84,7 @@ const AppointmentRequests: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchRequests(); }, [channel]);
+  useEffect(() => { fetchRequests(); }, [channel, selectedClinicId]);
 
   const updateStatus = async (request: any, nextStatus: string) => {
     const rejectionReason = nextStatus === 'rejected'
