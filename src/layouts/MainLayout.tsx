@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
 import NotificationBell from '../components/NotificationBell';
@@ -253,6 +254,7 @@ const ChangePasswordModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 const MainLayoutInner: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
+  const { selectedClinicId } = useClinic();
   const location = useLocation();
   const { isDark, toggle: toggleDark } = useDarkMode();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -316,7 +318,7 @@ const MainLayoutInner: React.FC = () => {
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [location.pathname]);
+  }, [location.pathname, selectedClinicId]);
 
   // Close sidebar when navigating on mobile
   const handleNavClick = () => {

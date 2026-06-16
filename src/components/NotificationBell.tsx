@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, Calendar, CheckSquare, CalendarPlus, AlertTriangle, X, CheckCheck, Circle, CheckCircle2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
+import { useClinic } from '../context/ClinicContext';
 
 interface NotificationItem {
   id: string;
@@ -24,6 +25,7 @@ const TYPE_CONFIG = {
 const NotificationBell: React.FC = () => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
+  const { selectedClinicId } = useClinic();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -39,9 +41,9 @@ const NotificationBell: React.FC = () => {
     } catch {
       // silently fail
     }
-  }, []);
+  }, [selectedClinicId]);
 
-  // Initial fetch + poll every 60s
+  // Initial fetch + refetch on clinic switch + poll every 60s
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60_000);
