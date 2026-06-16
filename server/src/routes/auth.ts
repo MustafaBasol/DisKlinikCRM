@@ -222,7 +222,21 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
     });
     if (!user) return res.status(401).json({ error: 'User not found' });
 
-    const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);
+    // canAccessAllClinics=true kullanıcılar (OWNER/ORG_ADMIN) tüm org kliniklerini görmeli;
+    // aksi hâlde yeni oluşturulan şubeler UserClinic kaydı olmadığından header'da çıkmaz.
+    let clinicsPayload: { id: string; name: string; slug: string | null; status: string; timezone: string | null; currency: string | null; memberRole: string }[];
+    if (user.canAccessAllClinics && user.organizationId) {
+      const orgClinics = await prisma.clinic.findMany({
+        where: { organizationId: user.organizationId, status: { not: 'cancelled' } },
+        select: { id: true, name: true, slug: true, status: true, timezone: true, currency: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      clinicsPayload = orgClinics.map(c => ({ ...c, memberRole: user.role.toUpperCase() }));
+    } else {
+      clinicsPayload = user.userClinics.map(uc => ({ ...uc.clinic, memberRole: uc.role }));
+    }
+
+    const allowedClinicIds = clinicsPayload.map(c => c.id);
 
     const roleObj = { role: user.role, canAccessAllClinics: user.canAccessAllClinics };
 
@@ -237,10 +251,7 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
       canAccessAllClinics: user.canAccessAllClinics,
       allowedClinicIds,
       organization: user.organization,
-      clinics: user.userClinics.map(uc => ({
-        ...uc.clinic,
-        memberRole: uc.role,
-      })),
+      clinics: clinicsPayload,
       // Geriye dönük uyumluluk
       clinic: {
         id: user.clinic.id,

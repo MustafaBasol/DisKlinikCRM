@@ -205,6 +205,23 @@ router.post(
         },
       });
 
+      // Org genelinde erişimi olan kullanıcıları (OWNER/ORG_ADMIN) yeni şubeye otomatik ata
+      const orgWideUsers = await prisma.user.findMany({
+        where: { organizationId: orgId, isActive: true, canAccessAllClinics: true },
+        select: { id: true, role: true },
+      });
+      if (orgWideUsers.length > 0) {
+        await prisma.userClinic.createMany({
+          data: orgWideUsers.map(u => ({
+            userId: u.id,
+            clinicId: clinic.id,
+            role: u.role.toUpperCase(),
+            isActive: true,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       await logActivity({
         clinicId: clinic.id,
         userId: req.user!.id,
