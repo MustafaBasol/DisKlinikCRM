@@ -344,12 +344,14 @@ router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
 
 // GET /api/messages
 router.get('/messages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { normalizedRole, id: userId } = req.user!;
-  const { patientId, appointmentId, treatmentCaseId, channel, status } = req.query;
+  const { patientId, appointmentId, treatmentCaseId, channel, status, clinicId: selectedClinicId } = req.query;
+
+  const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+  if (scope === false) return;
 
   try {
-    const where: any = { clinicId };
+    const where: any = { ...scope };
     if (patientId) where.patientId = String(patientId);
     if (appointmentId) where.appointmentId = String(appointmentId);
     if (treatmentCaseId) where.treatmentCaseId = String(treatmentCaseId);
