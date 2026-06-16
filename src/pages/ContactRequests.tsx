@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { contactRequestService } from '../services/api';
+import { useClinic } from '../context/ClinicContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ function formatDate(iso: string) {
 
 const ContactRequests: React.FC = () => {
   const { t } = useTranslation(['contactRequests', 'common']);
+  const { selectedClinicId } = useClinic();
 
   const [items, setItems] = useState<ContactRequest[]>([]);
   const [total, setTotal] = useState(0);
@@ -112,6 +114,7 @@ const ContactRequests: React.FC = () => {
       if (statusFilter) params.status = statusFilter;
       if (channelFilter) params.channel = channelFilter;
       if (typeFilter) params.type = typeFilter;
+      if (selectedClinicId && selectedClinicId !== 'all') params.clinicId = selectedClinicId;
       const res = await contactRequestService.getAll(params);
       setItems(res.data.items ?? []);
       setTotal(res.data.total ?? 0);
@@ -120,7 +123,7 @@ const ContactRequests: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, channelFilter, typeFilter, t]);
+  }, [statusFilter, channelFilter, typeFilter, selectedClinicId, t]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
