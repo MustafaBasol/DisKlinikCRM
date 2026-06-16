@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { getParam } from '../utils/helpers.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -75,8 +76,10 @@ export async function upsertContactRequest(args: {
 // ── GET /api/contact-requests ─────────────────────────────────────────────────
 
 router.get('/contact-requests', authorize([...CONTACT_REQUEST_ROLES]), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { status, channel, type, search, page, limit } = req.query;
+  const { status, channel, type, search, page, limit, clinicId: selectedClinicId } = req.query;
+
+  const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+  if (scope === false) return;
 
   const pageNum = Math.max(1, Number(page) || 1);
   const limitNum = Math.min(100, Math.max(1, Number(limit) || 50));
@@ -84,7 +87,7 @@ router.get('/contact-requests', authorize([...CONTACT_REQUEST_ROLES]), async (re
 
   try {
     const where = {
-      clinicId,
+      ...scope,
       ...(status ? { status: String(status) } : {}),
       ...(channel ? { channel: String(channel) } : {}),
       ...(type ? { type: String(type) } : {}),
@@ -127,10 +130,11 @@ router.get('/contact-requests', authorize([...CONTACT_REQUEST_ROLES]), async (re
 // ── GET /api/contact-requests/counts ─────────────────────────────────────────
 
 router.get('/contact-requests/counts', authorize([...CONTACT_REQUEST_ROLES]), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+  if (scope === false) return;
   try {
     const unresolved = await prisma.contactRequest.count({
-      where: { clinicId, status: { in: [...OPEN_STATUSES] } },
+      where: { ...scope, status: { in: [...OPEN_STATUSES] } },
     });
     res.json({ unresolved });
   } catch (err) {
@@ -142,11 +146,12 @@ router.get('/contact-requests/counts', authorize([...CONTACT_REQUEST_ROLES]), as
 // ── GET /api/contact-requests/:id ────────────────────────────────────────────
 
 router.get('/contact-requests/:id', authorize([...CONTACT_REQUEST_ROLES]), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+  if (scope === false) return;
   const id = getParam(req, 'id');
   try {
     const item = await prisma.contactRequest.findFirst({
-      where: { id, clinicId },
+      where: { id, ...scope },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
         assignedTo: { select: { id: true, firstName: true, lastName: true } },
@@ -164,7 +169,8 @@ router.get('/contact-requests/:id', authorize([...CONTACT_REQUEST_ROLES]), async
 // ── PATCH /api/contact-requests/:id/status ───────────────────────────────────
 
 router.patch('/contact-requests/:id/status', authorize([...CONTACT_REQUEST_ROLES]), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+  if (scope === false) return;
   const id = getParam(req, 'id');
   const validation = contactRequestStatusSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -172,7 +178,7 @@ router.patch('/contact-requests/:id/status', authorize([...CONTACT_REQUEST_ROLES
   const { status } = validation.data;
 
   try {
-    const existing = await prisma.contactRequest.findFirst({ where: { id, clinicId } });
+    const existing = await prisma.contactRequest.findFirst({ where: { id, ...scope } });
     if (!existing) return res.status(404).json({ error: 'Not found' });
 
     const resolvedFields =
@@ -197,12 +203,13 @@ router.patch('/contact-requests/:id/status', authorize([...CONTACT_REQUEST_ROLES
 // ── PATCH /api/contact-requests/:id/assign ───────────────────────────────────
 
 router.patch('/contact-requests/:id/assign', authorize([...CONTACT_REQUEST_ROLES]), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+  if (scope === false) return;
   const id = getParam(req, 'id');
   const assignedToId = req.body?.assignedToId ?? null;
 
   try {
-    const existing = await prisma.contactRequest.findFirst({ where: { id, clinicId } });
+    const existing = await prisma.contactRequest.findFirst({ where: { id, ...scope } });
     if (!existing) return res.status(404).json({ error: 'Not found' });
 
     const updated = await prisma.contactRequest.update({
