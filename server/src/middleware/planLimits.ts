@@ -2,36 +2,68 @@ import { Response, NextFunction } from 'express';
 import prisma from '../db.js';
 import { AuthRequest } from './auth.js';
 
-// Cache: clinicId → { maxUsers, maxPatients, userCount, patientCount, expiresAt }
-const limitsCache = new Map<string, { maxUsers: number; maxPatients: number; userCount: number; patientCount: number; expiresAt: number }>();
-const CACHE_TTL_MS = 30_000; // 30 saniye
+type LimitEntry = { maxUsers: number; maxPatients: number; userCount: number; patientCount: number; expiresAt: number };
 
-async function getClinicLimits(clinicId: string) {
-  const cached = limitsCache.get(clinicId);
+// Cache keyed by organizationId or clinicId
+const limitsCache = new Map<string, LimitEntry>();
+const CACHE_TTL_MS = 30_000;
+
+async function getOrgLimits(organizationId: string): Promise<LimitEntry | null> {
+  const cached = limitsCache.get(`org:${organizationId}`);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+
+  const [org, userCount, patientCount] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      include: { plan: { select: { maxUsers: true, maxPatients: true } } },
+    }),
+    prisma.user.count({ where: { organizationId } }),
+    prisma.patient.count({ where: { organizationId, deletedAt: null } }),
+  ]);
+
+  if (!org?.plan) return null;
+
+  const entry: LimitEntry = {
+    maxUsers: org.plan.maxUsers,
+    maxPatients: org.plan.maxPatients,
+    userCount,
+    patientCount,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  };
+  limitsCache.set(`org:${organizationId}`, entry);
+  return entry;
+}
+
+async function getClinicLimits(clinicId: string): Promise<LimitEntry | null> {
+  const cached = limitsCache.get(`clinic:${clinicId}`);
   if (cached && cached.expiresAt > Date.now()) return cached;
 
   const [clinic, userCount, patientCount] = await Promise.all([
     prisma.clinic.findUnique({ where: { id: clinicId }, select: { maxUsers: true, maxPatients: true } }),
-    prisma.user.count({ where: { clinicId } }),
+    prisma.userClinic.count({ where: { clinicId, isActive: true } }),
     prisma.patient.count({ where: { clinicId, deletedAt: null } }),
   ]);
 
   if (!clinic) return null;
 
-  const entry = {
+  const entry: LimitEntry = {
     maxUsers: clinic.maxUsers,
     maxPatients: clinic.maxPatients,
     userCount,
     patientCount,
     expiresAt: Date.now() + CACHE_TTL_MS,
   };
-  limitsCache.set(clinicId, entry);
+  limitsCache.set(`clinic:${clinicId}`, entry);
   return entry;
 }
 
 export const checkUserLimit = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const limits = await getClinicLimits(req.user!.clinicId);
+    const organizationId = req.user!.organizationId;
+    const limits = organizationId
+      ? (await getOrgLimits(organizationId)) ?? (await getClinicLimits(req.user!.clinicId))
+      : await getClinicLimits(req.user!.clinicId);
+
     if (!limits) return res.status(404).json({ error: 'Clinic not found' });
 
     if (limits.userCount >= limits.maxUsers) {
@@ -49,7 +81,11 @@ export const checkUserLimit = async (req: AuthRequest, res: Response, next: Next
 
 export const checkPatientLimit = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const limits = await getClinicLimits(req.user!.clinicId);
+    const organizationId = req.user!.organizationId;
+    const limits = organizationId
+      ? (await getOrgLimits(organizationId)) ?? (await getClinicLimits(req.user!.clinicId))
+      : await getClinicLimits(req.user!.clinicId);
+
     if (!limits) return res.status(404).json({ error: 'Clinic not found' });
 
     if (limits.patientCount >= limits.maxPatients) {
@@ -68,14 +104,24 @@ export const checkPatientLimit = async (req: AuthRequest, res: Response, next: N
 export const requireFeature = (feature: string) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const clinic = await prisma.clinic.findUnique({
-        where: { id: req.user!.clinicId },
-        include: { plan: true },
-      });
+      const organizationId = req.user!.organizationId;
 
-      if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+      let features: Record<string, boolean> = {};
 
-      const features = (clinic.plan?.features as Record<string, boolean>) ?? {};
+      if (organizationId) {
+        const org = await prisma.organization.findUnique({
+          where: { id: organizationId },
+          include: { plan: true },
+        });
+        features = (org?.plan?.features as Record<string, boolean>) ?? {};
+      } else {
+        const clinic = await prisma.clinic.findUnique({
+          where: { id: req.user!.clinicId },
+          include: { plan: true },
+        });
+        features = (clinic?.plan?.features as Record<string, boolean>) ?? {};
+      }
+
       if (features[feature] === false) {
         return res.status(402).json({
           error: `Feature '${feature}' is not available in your current plan`,

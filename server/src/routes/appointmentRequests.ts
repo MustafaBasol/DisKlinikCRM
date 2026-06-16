@@ -10,6 +10,7 @@ import {
 import { appointmentRequestStatusSchema, appointmentRequestConvertSchema, appointmentRequestUpdateSchema } from '../schemas/index.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { findUserAssignedToClinic } from '../utils/relationGuards.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -39,14 +40,16 @@ export function shouldIncludeLegacyWhatsappAppointmentRows(query: {
 
 // GET /api/appointment-requests
 router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { status, requestType, source, channel } = req.query;
+  const { status, requestType, source, channel, clinicId: selectedClinicId } = req.query;
   const sourceFilter = resolveAppointmentRequestSourceFilter({ source, channel });
+
+  const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+  if (scope === false) return;
 
   try {
     const requests = await prisma.appointmentRequest.findMany({
       where: {
-        clinicId,
+        ...scope,
         ...(status ? { status: String(status) } : {}),
         // When no explicit requestType filter is set, exclude staff-handoff-only records
         // (requestType 'info') — those now live in ContactRequest.
@@ -76,7 +79,7 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
 
     const legacyAppointments = await prisma.appointment.findMany({
       where: {
-        clinicId,
+        ...scope,
         deletedAt: null,
         notes: { contains: 'WhatsApp assistant üzerinden oluşturuldu.' },
         sourceRequests: { none: {} },
@@ -91,7 +94,7 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
 
     const legacyRequestRows = legacyAppointments.map(appointment => ({
       id: `legacy-${appointment.id}`,
-      clinicId,
+      clinicId: appointment.clinicId,
       clinic: null,
       patientId: appointment.patientId,
       patient: appointment.patient,

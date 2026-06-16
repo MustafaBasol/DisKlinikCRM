@@ -44,7 +44,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const url = String(error.config?.url ?? '');
-    const isAuthProbe = url === '/auth/me' || url === '/auth/login' || url === '/auth/logout';
+    const isAuthProbe = url === '/auth/me' || url === '/auth/login' || url === '/auth/logout' || url === '/auth/csrf';
     if (error.response && error.response.status === 401 && !isAuthProbe) {
       window.dispatchEvent(new CustomEvent('auth:expired'));
     }

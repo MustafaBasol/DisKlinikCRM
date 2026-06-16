@@ -42,7 +42,9 @@ router.post('/login', async (req, res) => {
         clinic: true,
         userClinics: {
           where: { isActive: true },
-          select: { clinicId: true, role: true },
+          include: {
+            clinic: { select: { id: true, name: true, slug: true, status: true, timezone: true, currency: true } },
+          },
         },
       },
     });
@@ -62,6 +64,19 @@ router.post('/login', async (req, res) => {
     // Gerçek klinik erişim listesini UserClinic tablosundan al
     const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);
     const canAccessAllClinics = user.canAccessAllClinics;
+
+    // canAccessAllClinics=true kullanıcılar (OWNER/ORG_ADMIN) tüm org kliniklerini görmeli
+    let clinicsPayload: { id: string; name: string; slug: string | null; status: string; timezone: string | null; currency: string | null; memberRole: string }[];
+    if (canAccessAllClinics && user.organizationId) {
+      const orgClinics = await prisma.clinic.findMany({
+        where: { organizationId: user.organizationId, status: { not: 'cancelled' } },
+        select: { id: true, name: true, slug: true, status: true, timezone: true, currency: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      clinicsPayload = orgClinics.map(c => ({ ...c, memberRole: user.role.toUpperCase() }));
+    } else {
+      clinicsPayload = user.userClinics.map(uc => ({ ...uc.clinic, memberRole: uc.role }));
+    }
 
     const sessionId = createSessionId();
     const token = generateToken({
@@ -95,6 +110,7 @@ router.post('/login', async (req, res) => {
         organizationId: user.organizationId,
         canAccessAllClinics: user.canAccessAllClinics,
         allowedClinicIds,
+        clinics: clinicsPayload,
         clinic: {
           id: user.clinic.id,
           name: user.clinic.name,
