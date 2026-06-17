@@ -54,6 +54,10 @@
   },
   "form": {
     "selectPatient": "Select Patient",
+    "patientSearchPlaceholder": "Search by typing the patient's name...",
+    "searchingPatients": "Searching patients...",
+    "noPatientsFound": "No patients found.",
+    "clearSelection": "Clear selection",
     "selectPractitioner": "Select Practitioner",
     "selectType": "Service",
     "basePrice": "Base price",

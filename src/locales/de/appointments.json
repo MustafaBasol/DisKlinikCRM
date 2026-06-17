@@ -54,6 +54,10 @@
   },
   "form": {
     "selectPatient": "Patient auswählen",
+    "patientSearchPlaceholder": "Patientennamen eingeben, um zu suchen...",
+    "searchingPatients": "Patienten werden gesucht...",
+    "noPatientsFound": "Keine Patienten gefunden.",
+    "clearSelection": "Auswahl aufheben",
     "selectPractitioner": "Behandler auswählen",
     "selectType": "Leistung",
     "basePrice": "Grundpreis",
