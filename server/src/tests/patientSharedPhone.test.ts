@@ -407,6 +407,162 @@ test('Klinik izolasyonu: farklı klinikteki paylaşımlı telefon seçim listesi
   assert.ok(!c1Options.some(p => p.firstName === 'C2Hasta'), 'Klinik-2 hastası klinik-1 listesinde olmamalı');
 });
 
+// ── Üretim şekilli telefon format eşleştirmesi ────────────────────────────────
+
+console.log('\n=== Üretim Şekilli Telefon Formatı (findPatientsByPhone) ===');
+
+test('Biçimli saklanan telefon (+90 532 111 11 11) gelen WA numarasıyla (905321111111) eşleşir', () => {
+  resetStore();
+  // Stored in DB with formatting (common for UI-entered phones)
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Ahmet', lastName: 'Demir', phone: '+90 532 111 11 11', email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Ayşe', lastName: 'Demir', phone: '+90 532 111 11 11', email: null });
+  // WhatsApp sender arrives as digit-only (production format from Meta/Evolution)
+  const matches = findPatientsByPhone('clinic-1', '905321111111');
+  assert.equal(matches.length, 2, 'İki paylaşımlı hasta biçimsiz numara ile de bulunmalı');
+  const ids = matches.map(p => p.id);
+  assert.ok(ids.includes(p1.id), 'Ahmet Demir eşleşmeli');
+  assert.ok(ids.includes(p2.id), 'Ayşe Demir eşleşmeli');
+});
+
+test('findExistingPatientByPhone: biçimli saklanan tek hasta dijital formatla bulunur', () => {
+  resetStore();
+  const p = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Tek', lastName: 'Hasta', phone: '+90 532 111 11 11', email: null });
+  const result = findExistingPatientByPhone('clinic-1', '905321111111');
+  assert.ok(result, 'Biçimli saklanan tek hasta bulunmalı');
+  assert.equal(result!.id, p.id);
+});
+
+test('05 formatlı saklanan telefon 90 ile gelen numara ile eşleşir', () => {
+  resetStore();
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone: '05321111111', email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'C', lastName: 'D', phone: '05321111111', email: null });
+  const matches = findPatientsByPhone('clinic-1', '905321111111');
+  assert.equal(matches.length, 2, '05 formatında saklanan iki paylaşımlı hasta 90 ile gelen sayıda eşleşmeli');
+  assert.ok(matches.some(p => p.id === p1.id));
+  assert.ok(matches.some(p => p.id === p2.id));
+});
+
+// ── Onay adımı paylaşımlı telefon koruyucusu ─────────────────────────────────
+
+console.log('\n=== Onay Adımı Paylaşımlı Telefon Koruyucusu ===');
+
+// Mirrors the confirmation guard logic in whatsapp.ts and metaWhatsAppAiProcessor.ts
+function simulateConfirmationGuard(
+  matchingPatients: Patient[],
+  selectedPatientId: string | null,
+  customerName: string | null,
+): { branch: 'proceed_selected_patient' | 'proceed_name_match' | 'ask_selection'; patientId?: string } {
+  if (matchingPatients.length <= 1) {
+    const single = matchingPatients[0] ?? null;
+    return { branch: 'proceed_selected_patient', patientId: single?.id };
+  }
+  const confirmedId = selectedPatientId ?? null;
+  const idValid = !!confirmedId && matchingPatients.some(p => p.id === confirmedId);
+  if (idValid) {
+    return { branch: 'proceed_selected_patient', patientId: confirmedId };
+  }
+  const storedName = customerName?.toLocaleLowerCase('tr-TR').trim() ?? '';
+  const nameMatch = storedName
+    ? matchingPatients.find(p =>
+        `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName)
+    : null;
+  if (nameMatch) {
+    return { branch: 'proceed_name_match', patientId: nameMatch.id };
+  }
+  return { branch: 'ask_selection' };
+}
+
+test('Onay adımı: selectedPatientId yok, isim eşleşmesi yok → hasta seçimi istenir', () => {
+  resetStore();
+  const phone = '05321111111';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mehmet', lastName: 'Yılmaz', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Zeynep', lastName: 'Yılmaz', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  // No selectedPatientId, no customerName → guard must ask for selection
+  const result = simulateConfirmationGuard(matching, null, null);
+  assert.equal(result.branch, 'ask_selection', 'Belirlenemeyen durumda hasta seçimi istenmeli (randevu oluşturulmamalı)');
+  assert.equal(result.patientId, undefined);
+});
+
+test('Onay adımı: selectedPatientId yok ama customerName tek hastayı tanımlar → isim eşleşmesiyle devam edilir', () => {
+  resetStore();
+  const phone = '05321111111';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mehmet', lastName: 'Yılmaz', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Zeynep', lastName: 'Yılmaz', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  // selectedPatientId missing (stale pre-hotfix state) but customerName is unambiguous
+  const result = simulateConfirmationGuard(matching, null, 'Mehmet Yılmaz');
+  assert.equal(result.branch, 'proceed_name_match', 'Açık isim eşleşmesinde devam edilmeli');
+  assert.equal(result.patientId, p1.id, 'Doğru hasta seçilmeli');
+});
+
+test('Onay adımı: geçerli selectedPatientId → doğrudan devam edilir', () => {
+  resetStore();
+  const phone = '05321111111';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mehmet', lastName: 'Yılmaz', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Zeynep', lastName: 'Yılmaz', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  // selectedPatientId from prior explicit patient selection step
+  const result = simulateConfirmationGuard(matching, p1.id, null);
+  assert.equal(result.branch, 'proceed_selected_patient', 'selectedPatientId ile doğrudan devam edilmeli');
+  assert.equal(result.patientId, p1.id, 'Seçilen hasta ID\'si kullanılmalı');
+});
+
+test('Onay adımı: selectedPatientId var ama farklı kliniğin hastasına ait → geçersiz, seçim istenir', () => {
+  resetStore();
+  const phone = '05321111111';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mehmet', lastName: 'Yılmaz', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Zeynep', lastName: 'Yılmaz', phone, email: null });
+  const otherClinicPatient = createPatient({ clinicId: 'clinic-2', organizationId: 'org-1', firstName: 'Ali', lastName: 'Kaya', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  // selectedPatientId belongs to clinic-2's patient — not in matching list
+  const result = simulateConfirmationGuard(matching, otherClinicPatient.id, null);
+  assert.equal(result.branch, 'ask_selection', 'Yanlış kliniğin ID\'si geçersiz sayılmalı, seçim istenmeli');
+});
+
+test('Onay adımı: tek hasta eşleşmesinde koruyucu devreye girmez', () => {
+  resetStore();
+  const phone = '05321111111';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Tek', lastName: 'Hasta', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  assert.equal(matching.length, 1, 'Tek eşleşme olmalı');
+  const result = simulateConfirmationGuard(matching, null, null);
+  assert.equal(result.branch, 'proceed_selected_patient', 'Tek hastada koruyucu devreye girmemeli');
+  assert.equal(result.patientId, p1.id);
+});
+
+// ── E-posta boş string normalleştirmesi ──────────────────────────────────────
+
+console.log('\n=== E-posta Boş String Normalleştirmesi ===');
+
+// Simulates the schema preprocess: z.preprocess(v => v === '' ? null : v, z.string().email()...)
+function preprocessEmail(value: unknown): unknown {
+  return value === '' ? null : value;
+}
+
+test('Boş e-posta string "" null\'a dönüştürülür (validasyon hatası vermez)', () => {
+  assert.equal(preprocessEmail(''), null, '"" null olmalı');
+});
+
+test('Geçerli e-posta değişmeden geçer', () => {
+  assert.equal(preprocessEmail('test@example.com'), 'test@example.com');
+});
+
+test('null e-posta değişmeden geçer', () => {
+  assert.equal(preprocessEmail(null), null);
+});
+
+test('undefined e-posta değişmeden geçer', () => {
+  assert.equal(preprocessEmail(undefined), undefined);
+});
+
+test('E-postasız hasta oluşturulabilir (null e-posta kabul edilir)', () => {
+  resetStore();
+  const p = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Ali', lastName: 'Veli', phone: '05321111111', email: null });
+  assert.equal(p.email, null, 'null e-posta kabul edilmeli');
+  assert.ok(p.id, 'Hasta oluşturulmalı');
+});
+
 // ─── Sonuç ───────────────────────────────────────────────────────────────────
 
 console.log(`\nSonuç: ${passed} geçti, ${failed} başarısız\n`);

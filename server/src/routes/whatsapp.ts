@@ -2795,6 +2795,56 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     });
   }
 
+  // ── Shared-phone confirmation safety guard ──────────────────────────────────
+  // Intercepts awaiting_confirmation when multiple patients share this phone and
+  // no explicit selection is recorded (e.g. stale pre-hotfix conversation state).
+  // Runs once — covers both the deterministic and AI-fallback confirmation paths below.
+  if (currentStep === 'awaiting_confirmation' && matchingPatients.length > 1) {
+    const confirmedId = stateJson.selectedPatientId ?? null;
+    const idValid = !!confirmedId && matchingPatients.some(p => p.id === confirmedId);
+    if (!idValid) {
+      const storedName = state?.customerName?.toLocaleLowerCase('tr-TR').trim() ?? '';
+      const nameMatch = storedName
+        ? matchingPatients.find(p =>
+            `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName)
+        : null;
+      if (nameMatch) {
+        // Unambiguous name match from stored greeting — carry it forward without another prompt.
+        stateJson.selectedPatientId = nameMatch.id;
+        console.log('[whatsapp-confirmation] shared-phone-guard', {
+          clinicId: clinic.id, phoneSuffix: inputPhone.slice(-4), currentStep,
+          matchedPatientCount: matchingPatients.length, branch: 'proceed_name_match',
+        });
+      } else {
+        // Cannot determine which patient — redirect to explicit selection.
+        const patientList = matchingPatients.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+        await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+          customerName: state?.customerName ?? null,
+          step: 'awaiting_patient_selection',
+          currentIntent: null,
+          lastMessage: input.text,
+          stateJson: {
+            availableSlots: stateJson.availableSlots,
+            lastShownSlots: stateJson.lastShownSlots,
+            pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
+            matchedServices: stateJson.matchedServices,
+            pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+          },
+        });
+        console.log('[whatsapp-confirmation] shared-phone-guard', {
+          clinicId: clinic.id, phoneSuffix: inputPhone.slice(-4), currentStep,
+          matchedPatientCount: matchingPatients.length, branch: 'ask_selection',
+        });
+        return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
+      }
+    } else {
+      console.log('[whatsapp-confirmation] shared-phone-guard', {
+        clinicId: clinic.id, phoneSuffix: inputPhone.slice(-4), currentStep,
+        matchedPatientCount: matchingPatients.length, branch: 'proceed_selected_patient',
+      });
+    }
+  }
+
   if (currentStep === 'awaiting_confirmation' && isDeterministicConfirmationReply(input.text)) {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_confirmation-deterministic', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
     return handleAwaitingConfirmationStep({

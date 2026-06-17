@@ -130,8 +130,9 @@ export async function acquireAppointmentSlotLock(
   },
 ): Promise<void> {
   const [key1, key2] = computeSlotLockKey(args.clinicId, args.practitionerId, args.startTime);
-  // pg_advisory_xact_lock blocks until acquired; released when tx ends.
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}, ${key2})`;
+  // pg_advisory_xact_lock(int4,int4): explicit casts required — Prisma binds JS
+  // numbers as int8 by default, but PostgreSQL has no (bigint,bigint) overload.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`;
 }
 
 // ── Core assertion ─────────────────────────────────────────────────────────────
