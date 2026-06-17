@@ -133,6 +133,20 @@ router.get('/appointment-requests', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
   }
 });
 
+// GET /api/appointment-requests/counts
+router.get('/appointment-requests/counts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+  const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+  if (scope === false) return;
+  try {
+    const pending = await prisma.appointmentRequest.count({
+      where: { ...scope, status: 'pending', requestType: { not: 'info' } },
+    });
+    res.json({ pending });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch appointment request counts' });
+  }
+});
+
 // PUT /api/appointment-requests/:id/status
 router.put('/appointment-requests/:id/status', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const clinicId = req.user!.clinicId;

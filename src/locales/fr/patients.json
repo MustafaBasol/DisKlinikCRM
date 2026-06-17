@@ -127,7 +127,13 @@
     "status": "Statut du patient",
     "source": "Source",
     "communicationConsent": "Le patient consent aux communications",
-    "marketingConsent": "Le patient consent aux messages marketing"
+    "marketingConsent": "Le patient consent aux messages marketing",
+    "noContactInfoWarning": "Aucun e-mail ni numéro de téléphone renseigné. Il pourrait être difficile de contacter ce patient.",
+    "firstNameRequired": "Le prénom est obligatoire",
+    "lastNameRequired": "Le nom est obligatoire",
+    "emailInvalid": "Veuillez saisir une adresse e-mail valide",
+    "phoneDuplicateTitle": "Ce numéro de téléphone est déjà enregistré pour d'autres patients :",
+    "phoneDuplicateBody": "C'est normal pour des enfants ou des membres de la famille. Vous pouvez tout de même enregistrer."
   },
   "dentalChart": {
     "title": "Schéma dentaire",

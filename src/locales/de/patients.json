@@ -127,7 +127,13 @@
     "status": "Patientenstatus",
     "source": "Quelle",
     "communicationConsent": "Patient stimmt Kommunikation zu",
-    "marketingConsent": "Patient stimmt Marketingnachrichten zu"
+    "marketingConsent": "Patient stimmt Marketingnachrichten zu",
+    "noContactInfoWarning": "Keine E-Mail oder Telefonnummer angegeben. Die Kontaktaufnahme mit diesem Patienten könnte schwierig sein.",
+    "firstNameRequired": "Vorname ist erforderlich",
+    "lastNameRequired": "Nachname ist erforderlich",
+    "emailInvalid": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
+    "phoneDuplicateTitle": "Diese Telefonnummer ist bereits bei anderen Patienten registriert:",
+    "phoneDuplicateBody": "Das ist normal bei Kindern oder Familienmitgliedern. Sie können trotzdem speichern."
   },
   "dentalChart": {
     "title": "Zahnstatus",

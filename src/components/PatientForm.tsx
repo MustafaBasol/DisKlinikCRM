@@ -79,6 +79,22 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
       setErrors({ dateOfBirth: { _errors: [t('patients:form.dobFutureError')] } });
       return;
     }
+
+    const clientErrors: any = {};
+    if (!formData.firstName.trim()) {
+      clientErrors.firstName = { _errors: [t('patients:form.firstNameRequired')] };
+    }
+    if (!formData.lastName.trim()) {
+      clientErrors.lastName = { _errors: [t('patients:form.lastNameRequired')] };
+    }
+    if (formData.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      clientErrors.email = { _errors: [t('patients:form.emailInvalid')] };
+    }
+    if (Object.keys(clientErrors).length > 0) {
+      setErrors(clientErrors);
+      return;
+    }
+
     setLoading(true);
     setErrors({});
 
@@ -169,17 +185,24 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
               />
               {phoneDuplicates.length > 0 && (
                 <div className="mt-1.5 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                  <p className="font-medium mb-1">⚠️ Bu telefon numarası başka hastalarda da kayıtlı:</p>
+                  <p className="font-medium mb-1">⚠️ {t('patients:form.phoneDuplicateTitle')}</p>
                   <ul className="space-y-0.5 mb-1">
                     {phoneDuplicates.map(d => (
                       <li key={d.id}>• {d.firstName} {d.lastName}</li>
                     ))}
                   </ul>
-                  <p className="text-amber-700">Bu durum çocuklar veya aile üyeleri için normaldir. Yine de kaydedebilirsiniz.</p>
+                  <p className="text-amber-700">{t('patients:form.phoneDuplicateBody')}</p>
                 </div>
               )}
             </div>
           </div>
+
+          {!formData.email?.trim() && !formData.phone?.trim() && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-800 text-sm">
+              <AlertCircle size={16} className="shrink-0" />
+              {t('patients:form.noContactInfoWarning')}
+            </div>
+          )}
 
           {/* Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

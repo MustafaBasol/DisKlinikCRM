@@ -127,7 +127,13 @@
     "status": "Hasta Durumu",
     "source": "Kaynak",
     "communicationConsent": "Hasta iletişim izni veriyor",
-    "marketingConsent": "Hasta pazarlama mesajları izni veriyor"
+    "marketingConsent": "Hasta pazarlama mesajları izni veriyor",
+    "noContactInfoWarning": "E-posta veya telefon numarası girilmedi. Hastayla iletişim kurmak zorlaşabilir.",
+    "firstNameRequired": "Ad alanı zorunludur",
+    "lastNameRequired": "Soyad alanı zorunludur",
+    "emailInvalid": "Geçerli bir e-posta adresi girin",
+    "phoneDuplicateTitle": "Bu telefon numarası başka hastalarda da kayıtlı:",
+    "phoneDuplicateBody": "Bu durum çocuklar veya aile üyeleri için normaldir. Yine de kaydedebilirsiniz."
   },
   "dentalChart": {
     "title": "Diş Haritası",

@@ -42,7 +42,7 @@ import { useClinic } from '../context/ClinicContext';
 import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
 import NotificationBell from '../components/NotificationBell';
-import { authService, contactRequestService } from '../services/api';
+import { authService, contactRequestService, appointmentRequestService } from '../services/api';
 import { useDarkMode } from '../utils/darkMode';
 import {
   canViewOrganizationDashboard,
@@ -62,6 +62,13 @@ import {
   canViewRecallDashboard,
   canViewInstagramInbox,
 } from '../utils/permissions';
+
+const LANGUAGE_FLAGS: Record<string, string> = {
+  en: '🇬🇧',
+  tr: '🇹🇷',
+  fr: '🇫🇷',
+  de: '🇩🇪',
+};
 
 type NavItem = { path: string; icon: React.ReactNode; label: string; badge?: number };
 type NavGroup = { id: string; label: string; collapsible: boolean; items: NavItem[] };
@@ -261,6 +268,7 @@ const MainLayoutInner: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [contactRequestCount, setContactRequestCount] = useState(0);
+  const [pendingAppointmentRequestCount, setPendingAppointmentRequestCount] = useState(0);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
@@ -311,6 +319,22 @@ const MainLayoutInner: React.FC = () => {
       try {
         const res = await contactRequestService.getCounts();
         if (!cancelled) setContactRequestCount(res.data.unresolved ?? 0);
+      } catch {
+        // Non-critical; badge just shows 0
+      }
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [location.pathname, selectedClinicId]);
+
+  // Fetch pending appointment request count for sidebar badge
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCount = async () => {
+      try {
+        const res = await appointmentRequestService.getCounts();
+        if (!cancelled) setPendingAppointmentRequestCount(res.data.pending ?? 0);
       } catch {
         // Non-critical; badge just shows 0
       }
@@ -395,7 +419,12 @@ const MainLayoutInner: React.FC = () => {
       items.push({ path: '/whatsapp-inbox', icon: <Inbox size={18} />, label: t('common:whatsappInbox') });
     }
     if (canSeeAppointmentRequests) {
-      items.push({ path: '/appointment-requests', icon: <CalendarPlus size={18} />, label: t('common:whatsappRequests') });
+      items.push({
+        path: '/appointment-requests',
+        icon: <CalendarPlus size={18} />,
+        label: t('common:whatsappRequests'),
+        badge: pendingAppointmentRequestCount > 0 ? pendingAppointmentRequestCount : undefined,
+      });
       items.push({
         path: '/contact-requests',
         icon: <Inbox size={18} />,
@@ -666,18 +695,20 @@ const MainLayoutInner: React.FC = () => {
             <div className="relative group">
               <button className="flex items-center gap-1 sm:gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300">
                 <Globe size={18} />
+                <span className="hidden sm:inline text-base leading-none">{LANGUAGE_FLAGS[i18n.language.split('-')[0]] ?? ''}</span>
                 <span className="hidden sm:inline text-xs font-bold uppercase">{t(`common:languages.${i18n.language.split('-')[0]}`)}</span>
                 <ChevronDown size={12} className="hidden sm:block" />
               </button>
-              <div className="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                 {['en', 'tr', 'fr', 'de'].map((lng) => (
                   <button
                     key={lng}
                     onClick={() => i18n.changeLanguage(lng)}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/30 hover:text-primary-600 transition-colors ${
+                    className={`w-full flex items-center gap-2 text-left px-4 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/30 hover:text-primary-600 transition-colors ${
                       i18n.language.startsWith(lng) ? 'text-primary-600 font-bold' : 'text-gray-600 dark:text-gray-300'
                     }`}
                   >
+                    <span className="text-base leading-none">{LANGUAGE_FLAGS[lng]}</span>
                     {t(`common:languages.${lng}`)}
                   </button>
                 ))}

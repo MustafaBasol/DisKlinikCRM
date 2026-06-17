@@ -18,7 +18,7 @@ async function getOrgLimits(organizationId: string): Promise<LimitEntry | null> 
       include: { plan: { select: { maxUsers: true, maxPatients: true } } },
     }),
     prisma.user.count({ where: { organizationId } }),
-    prisma.patient.count({ where: { organizationId, deletedAt: null } }),
+    prisma.patient.count({ where: { organizationId, deletedAt: null, patientStatus: { not: 'archived' } } }),
   ]);
 
   if (!org?.plan) return null;
@@ -41,7 +41,7 @@ async function getClinicLimits(clinicId: string): Promise<LimitEntry | null> {
   const [clinic, userCount, patientCount] = await Promise.all([
     prisma.clinic.findUnique({ where: { id: clinicId }, select: { maxUsers: true, maxPatients: true } }),
     prisma.userClinic.count({ where: { clinicId, isActive: true } }),
-    prisma.patient.count({ where: { clinicId, deletedAt: null } }),
+    prisma.patient.count({ where: { clinicId, deletedAt: null, patientStatus: { not: 'archived' } } }),
   ]);
 
   if (!clinic) return null;
