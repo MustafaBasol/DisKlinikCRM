@@ -127,7 +127,13 @@
     "status": "Patient Status",
     "source": "Source",
     "communicationConsent": "Patient consents to communication",
-    "marketingConsent": "Patient consents to marketing messages"
+    "marketingConsent": "Patient consents to marketing messages",
+    "noContactInfoWarning": "No email or phone number entered. It may be difficult to contact this patient.",
+    "firstNameRequired": "First name is required",
+    "lastNameRequired": "Last name is required",
+    "emailInvalid": "Please enter a valid email address",
+    "phoneDuplicateTitle": "This phone number is already registered to other patients:",
+    "phoneDuplicateBody": "This is normal for children or family members. You can still save."
   },
   "dentalChart": {
     "title": "Dental Chart",

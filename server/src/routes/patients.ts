@@ -293,7 +293,7 @@ router.delete('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
 
     await prisma.patient.update({
       where: { id },
-      data: { patientStatus: 'archived', deletedAt: new Date() },
+      data: { patientStatus: 'archived' },
     });
 
     await logActivity({

@@ -141,6 +141,7 @@ export const appointmentService = {
 
 export const appointmentRequestService = {
   getAll: (params?: any) => api.get('/appointment-requests', { params }),
+  getCounts: (params?: { clinicId?: string }) => api.get('/appointment-requests/counts', { params }),
   update: (id: string, data: any) => api.put(`/appointment-requests/${id}`, data),
   updateStatus: (id: string, data: any) => api.put(`/appointment-requests/${id}/status`, data),
   convert: (id: string, data?: any) => api.post(`/appointment-requests/${id}/convert`, data || {}),
