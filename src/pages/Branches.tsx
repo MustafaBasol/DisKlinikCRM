@@ -481,7 +481,7 @@ export default function Branches() {
 
   const handleOpenDashboard = (clinicId: string) => {
     setSelectedClinicId(clinicId);
-    navigate('/');
+    navigate('/dashboard');
   };
 
   const handleViewAppointments = (clinicId: string) => {

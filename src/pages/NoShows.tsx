@@ -175,7 +175,7 @@ export default function NoShows() {
 
   useEffect(() => {
     if (!canViewNoShowDashboard(user)) {
-      navigate('/');
+      navigate('/dashboard');
       return;
     }
     fetchData();

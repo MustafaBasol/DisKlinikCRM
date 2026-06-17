@@ -134,7 +134,7 @@ export default function InstagramInbox() {
 
   useEffect(() => {
     if (!canViewInstagramInbox(user)) {
-      navigate('/');
+      navigate('/dashboard');
     }
   }, [user, navigate]);
 
