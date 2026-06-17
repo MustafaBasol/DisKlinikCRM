@@ -65,7 +65,7 @@ export default function WhatsAppInbox() {
 
   useEffect(() => {
     if (!canViewWhatsAppInbox(user)) {
-      navigate('/');
+      navigate('/dashboard');
     }
   }, [user, navigate]);
 

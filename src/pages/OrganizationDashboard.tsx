@@ -461,7 +461,7 @@ const OrganizationDashboard: React.FC = () => {
                         <div className="flex items-center justify-center gap-1">
                           {/* Şube Panosu */}
                           <button
-                            onClick={() => goTo(c.clinicId, '/')}
+                            onClick={() => goTo(c.clinicId, '/dashboard')}
                             title={t('organization:table.branchDashboard')}
                             className="p-1.5 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 text-primary-600 transition-colors"
                           >

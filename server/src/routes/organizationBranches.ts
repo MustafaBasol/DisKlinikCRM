@@ -132,7 +132,6 @@ router.get(
           updatedAt: true,
           _count: {
             select: {
-              userClinics: { where: { isActive: true } },
               appointments: {
                 where: {
                   startTime: {
@@ -147,7 +146,33 @@ router.get(
         orderBy: { name: 'asc' },
       });
 
-      res.json(clinics);
+      // Şube personeli: ana kliniği bu şube olan kullanıcılar + UserClinic ile
+      // bu şubeye ek olarak atanmış kullanıcılar (aynı kullanıcı iki kez sayılmaz).
+      const branchIds = clinics.map(c => c.id);
+      const [primaryStaff, extraAssignments] = await Promise.all([
+        prisma.user.findMany({
+          where: { clinicId: { in: branchIds }, isActive: true },
+          select: { id: true, clinicId: true },
+        }),
+        prisma.userClinic.findMany({
+          where: { clinicId: { in: branchIds }, isActive: true },
+          select: { userId: true, clinicId: true },
+        }),
+      ]);
+
+      const staffByClinic = new Map<string, Set<string>>(branchIds.map(id => [id, new Set<string>()]));
+      for (const u of primaryStaff) staffByClinic.get(u.clinicId)?.add(u.id);
+      for (const uc of extraAssignments) staffByClinic.get(uc.clinicId)?.add(uc.userId);
+
+      const clinicsWithStaffCount = clinics.map(c => ({
+        ...c,
+        _count: {
+          ...c._count,
+          userClinics: staffByClinic.get(c.id)?.size ?? 0,
+        },
+      }));
+
+      res.json(clinicsWithStaffCount);
     } catch {
       res.status(500).json({ error: 'Failed to fetch clinic branches' });
     }
