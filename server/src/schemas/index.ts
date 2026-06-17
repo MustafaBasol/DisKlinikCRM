@@ -24,7 +24,7 @@ export const optionalUuid = z.preprocess(
 const patientBaseSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email().optional().nullable(),
+  email: z.preprocess(value => value === '' ? null : value, z.string().email().optional().nullable()),
   phone: z.string().optional().nullable(),
   dateOfBirth: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   address: z.string().optional().nullable(),
