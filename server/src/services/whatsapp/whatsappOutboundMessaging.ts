@@ -334,6 +334,123 @@ export async function sendNoShowRecoveryWhatsApp(args: {
   });
 }
 
+// ─── Appointment confirmation: purpose-based template selection ───────────────
+
+export const APPOINTMENT_CONFIRMATION_MISSING_TEMPLATE_ERROR =
+  "Randevu onayı bildirimi için onaylı WhatsApp şablonu bulunamadı. " +
+  "Lütfen Mesaj Şablonları sayfasından 'Randevu Onayı' kullanım amaçlı " +
+  "bir WhatsApp şablonu oluşturup onaya gönderin.";
+
+/**
+ * Core appointment confirmation dispatcher given a pre-resolved connection and template.
+ *
+ * For Meta Cloud: requires an approved MessageTemplate (purpose = appointment_confirmation);
+ * rejects with META_APPROVED_TEMPLATE_REQUIRED if template is null or not approved.
+ *
+ * For Evolution / legacy: sends plain text via sendMessage.
+ */
+export async function sendAppointmentConfirmationWhatsAppWithConnection(
+  connection: WhatsAppConnectionRecord,
+  template: MetaTemplateSnapshot | null,
+  args: {
+    phone: string;
+    evolutionPlainText: string;
+    variables: Record<string, string>;
+  },
+): Promise<ProactiveMessageResult> {
+  if (connection.provider !== 'meta_cloud_api') {
+    const provider = getWhatsAppProvider(connection.provider);
+    const result = await provider.sendMessage(connection, {
+      phone: args.phone,
+      text: args.evolutionPlainText,
+    });
+    return {
+      success: result.success,
+      externalMessageId: result.externalMessageId,
+      error: result.error,
+    };
+  }
+
+  if (!template || template.metaTemplateStatus !== 'approved' || !template.metaTemplateName) {
+    return {
+      success: false,
+      code: OUTBOUND_ERRORS.META_APPROVED_TEMPLATE_REQUIRED,
+      error: APPOINTMENT_CONFIRMATION_MISSING_TEMPLATE_ERROR,
+    };
+  }
+
+  return sendProactiveWhatsAppMessageWithConnection(connection, template, {
+    phone: args.phone,
+    text: args.evolutionPlainText,
+    variables: args.variables,
+  });
+}
+
+/**
+ * Send an appointment confirmation WhatsApp message for a clinic.
+ *
+ * For Meta Cloud clinics: selects the first active approved MessageTemplate
+ * with purpose = appointment_confirmation. Fails if none found.
+ *
+ * For Evolution / legacy clinics: sends plain text via sendMessage.
+ *
+ * connectionId: if provided, uses that specific WhatsApp connection (the original
+ * source connection); otherwise resolves the clinic's default connection.
+ */
+export async function sendAppointmentConfirmationWhatsApp(args: {
+  clinicId: string;
+  phone: string;
+  evolutionPlainText: string;
+  variables: Record<string, string>;
+  connectionId?: string | null;
+}): Promise<ProactiveMessageResult> {
+  const { clinicId, phone, evolutionPlainText, variables, connectionId } = args;
+
+  if (!clinicId || clinicId === 'all') {
+    return {
+      success: false,
+      error: 'Mesaj göndermek için bir klinik seçilmelidir.',
+      code: OUTBOUND_ERRORS.NO_CONNECTION,
+    };
+  }
+
+  let connection: WhatsAppConnectionRecord | null = null;
+  if (connectionId) {
+    const raw = await prisma.whatsAppConnection.findFirst({ where: { id: connectionId, isActive: true } });
+    connection = raw as WhatsAppConnectionRecord | null;
+  }
+  if (!connection) {
+    connection = await resolveConnectionForClinic(clinicId);
+  }
+  if (!connection) {
+    return {
+      success: false,
+      error: 'Bu klinik için aktif bir WhatsApp bağlantısı bulunamadı.',
+      code: OUTBOUND_ERRORS.NO_CONNECTION,
+    };
+  }
+
+  let template: MetaTemplateSnapshot | null = null;
+  if (connection.provider === 'meta_cloud_api') {
+    template = await prisma.messageTemplate.findFirst({
+      where: { clinicId, channel: 'whatsapp', purpose: 'appointment_confirmation', isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        metaTemplateName: true,
+        metaTemplateStatus: true,
+        metaTemplateLanguage: true,
+        metaTemplateVariableMap: true,
+      },
+    });
+  }
+
+  return sendAppointmentConfirmationWhatsAppWithConnection(connection, template, {
+    phone,
+    evolutionPlainText,
+    variables,
+  });
+}
+
 // ─── Post-treatment follow-up: purpose-based template selection ───────────────
 
 export const POST_TREATMENT_MISSING_TEMPLATE_ERROR =

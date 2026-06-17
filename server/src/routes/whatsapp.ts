@@ -161,6 +161,7 @@ type ConversationStateJson = {
   pendingPastDateClarification?: string | null;
   pendingPatientOptions?: Array<{ id: string; firstName: string; lastName: string }> | null;
   selectedPatientId?: string | null;
+  resumeAfterPatientSelection?: string | null;
 };
 
 // ---- Helper Middlewares ----
@@ -334,6 +335,8 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
     pendingPatientOptions: Array.isArray(stateValue.pendingPatientOptions)
       ? (stateValue.pendingPatientOptions as Array<{ id: string; firstName: string; lastName: string }>)
       : undefined,
+    selectedPatientId: typeof stateValue.selectedPatientId === 'string' ? stateValue.selectedPatientId : undefined,
+    resumeAfterPatientSelection: typeof stateValue.resumeAfterPatientSelection === 'string' ? stateValue.resumeAfterPatientSelection : undefined,
   };
 };
 
@@ -2432,8 +2435,11 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   }
   if (!existingPatient && matchingPatients.length > 1 && state?.customerName) {
     const storedName = state.customerName.toLocaleLowerCase('tr-TR').trim();
-    existingPatient =
-      matchingPatients.find(p => `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName) ?? null;
+    const nameMatches = matchingPatients.filter(p =>
+      `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR').trim() === storedName
+    );
+    // Only accept if exactly one patient matches — ambiguous name-match is unsafe with shared phones
+    existingPatient = nameMatches.length === 1 ? nameMatches[0] : null;
   }
 
   if (existingPatient) {
@@ -2569,8 +2575,17 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
 
   // ── PATIENT SELECTION (shared-phone scenario) ─────────────────────────────
   // When the user previously received a numbered patient list, handle their reply.
+  // This block runs BEFORE any AI/intent detection or main-menu fallback.
   if (currentStep === 'awaiting_patient_selection') {
     const pendingOptions = stateJson.pendingPatientOptions;
+    console.log('[whatsapp-patient-selection] received', {
+      clinicId: clinic.id,
+      phoneSuffix: inputPhone.slice(-4),
+      currentStep,
+      pendingPatientOptionsCount: (pendingOptions ?? []).length,
+      hasSelectedPatientId: Boolean(stateJson.selectedPatientId),
+      resumeAfterPatientSelection: stateJson.resumeAfterPatientSelection ?? null,
+    });
     if (pendingOptions && pendingOptions.length > 0) {
       let selectedPatient: typeof pendingOptions[0] | undefined;
       if (standaloneNumericSelection !== null && standaloneNumericSelection >= 1 && standaloneNumericSelection <= pendingOptions.length) {
@@ -2584,16 +2599,84 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         });
       }
       if (selectedPatient) {
-        await upsertWhatsAppConversationState(clinic.id, inputPhone, {
-          customerName: `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim(),
-          step: null,
-          currentIntent: null,
-          lastMessage: input.text,
-          stateJson: { selectedPatientId: selectedPatient.id },
+        const resume = stateJson.resumeAfterPatientSelection ?? 'start_booking';
+        const selectedName = `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim();
+        const firstName = selectedPatient.firstName;
+
+        console.log('[whatsapp-patient-selection] selected', {
+          clinicId: clinic.id,
+          phoneSuffix: inputPhone.slice(-4),
+          currentStep,
+          pendingPatientOptionsCount: pendingOptions.length,
+          selectedPatientIdSuffix: selectedPatient.id.slice(-4),
+          selectedIndex: pendingOptions.indexOf(selectedPatient) + 1,
+          resumeAfterPatientSelection: resume,
         });
-        return formatMainMenuOptions(`Merhaba ${selectedPatient.firstName}! Size nasıl yardımcı olabilirim?`);
+
+        if (resume === 'awaiting_time') {
+          const slots = stateJson.lastShownSlots ?? stateJson.availableSlots ?? [];
+          await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+            customerName: selectedName,
+            step: 'awaiting_time',
+            currentIntent: 'book_appointment',
+            lastMessage: input.text,
+            stateJson: {
+              selectedPatientId: selectedPatient.id,
+              availableSlots: stateJson.availableSlots,
+              lastShownSlots: stateJson.lastShownSlots,
+            },
+          });
+          if (selectedDate && slots.length > 0) {
+            return `${formatAvailabilityMessage(selectedDate, slots)}`;
+          }
+          return formatWarmPrompt('Hangi saatte randevu almak istersiniz? Lütfen tercih ettiğiniz saati yazın.', firstName);
+        }
+
+        if (resume === 'awaiting_confirmation') {
+          await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+            customerName: selectedName,
+            step: 'awaiting_confirmation',
+            currentIntent: 'book_appointment',
+            lastMessage: input.text,
+            stateJson: {
+              selectedPatientId: selectedPatient.id,
+              availableSlots: stateJson.availableSlots,
+              lastShownSlots: stateJson.lastShownSlots,
+              pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
+            },
+          });
+          return formatWarmPrompt('Randevunuzu onaylamak istiyor musunuz? Evet veya Hayır yazabilirsiniz.', firstName);
+        }
+
+        if (resume === 'awaiting_date') {
+          await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+            customerName: selectedName,
+            step: 'awaiting_date',
+            currentIntent: 'book_appointment',
+            lastMessage: input.text,
+            stateJson: { selectedPatientId: selectedPatient.id },
+          });
+          return formatWarmPrompt('Hangi gün için randevu almak istersiniz? Örneğin yarın, 22 Mayıs veya cuma yazabilirsiniz.', firstName);
+        }
+
+        // Default: start_booking or awaiting_service — proceed to service selection
+        await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+          customerName: selectedName,
+          step: 'awaiting_service',
+          currentIntent: 'book_appointment',
+          lastMessage: input.text,
+          stateJson: { selectedPatientId: selectedPatient.id, matchedServices: stateJson.matchedServices },
+        });
+        return formatServiceList(services);
       }
       const patientList = pendingOptions.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+      console.log('[whatsapp-patient-selection] invalid', {
+        clinicId: clinic.id,
+        phoneSuffix: inputPhone.slice(-4),
+        currentStep,
+        pendingPatientOptionsCount: pendingOptions.length,
+        input: summarizeTextForLog(input.text),
+      });
       return `Geçerli bir seçim yapılamadı. Lütfen listedeki numarayı girin:\n\n${patientList}`;
     }
   }
@@ -2601,23 +2684,30 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   // When multiple patients share this phone and none is resolved yet, ask the user to select.
   if (matchingPatients.length > 1 && !existingPatient) {
     const patientList = matchingPatients.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+    const resumeStep = hasActiveBookingFlow ? (currentStep as string) : 'start_booking';
     await upsertWhatsAppConversationState(clinic.id, inputPhone, {
       customerName: state?.customerName ?? null,
       step: 'awaiting_patient_selection',
       currentIntent: null,
       lastMessage: input.text,
       stateJson: {
+        ...(hasActiveBookingFlow ? {
+          availableSlots: stateJson.availableSlots,
+          lastShownSlots: stateJson.lastShownSlots,
+          pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
+          matchedServices: stateJson.matchedServices,
+        } : {}),
         pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+        resumeAfterPatientSelection: resumeStep,
       },
     });
-    console.log('[whatsapp-shared-phone] general-guard', {
+    console.log('[whatsapp-patient-selection] prompt-stored', {
       clinicId: clinic.id,
       phoneSuffix: inputPhone.slice(-4),
       currentStep,
-      matchedPatientCount: matchingPatients.length,
-      hasSelectedPatientId: Boolean(stateJson.selectedPatientId),
       pendingPatientOptionsCount: matchingPatients.length,
-      branch: 'shared_phone_ask_selection',
+      resumeAfterPatientSelection: resumeStep,
+      branch: 'general_guard',
     });
     return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
   }
@@ -2667,16 +2757,16 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
           pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
           matchedServices: stateJson.matchedServices,
           pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+          resumeAfterPatientSelection: currentStep as string,
         },
       });
-      console.log('[whatsapp-shared-phone] booking-guard', {
+      console.log('[whatsapp-patient-selection] prompt-stored', {
         clinicId: clinic.id,
         phoneSuffix: inputPhone.slice(-4),
         currentStep,
-        matchedPatientCount: matchingPatients.length,
-        hasSelectedPatientId: Boolean(stateJson.selectedPatientId),
         pendingPatientOptionsCount: matchingPatients.length,
-        branch: 'shared_phone_ask_selection',
+        resumeAfterPatientSelection: currentStep,
+        branch: 'booking_guard',
       });
       return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
     }
@@ -2817,7 +2907,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         });
         return { exactTime: extracted.exactTime, afterTime: extracted.afterTime, timePreference: extracted.timePreference };
       },
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
     });
   }
 
@@ -2889,10 +2982,12 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     const idValid = !!confirmedId && matchingPatients.some(p => p.id === confirmedId);
     if (!idValid) {
       const storedName = state?.customerName?.toLocaleLowerCase('tr-TR').trim() ?? '';
-      const nameMatch = storedName
-        ? matchingPatients.find(p =>
-            `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName)
-        : null;
+      const confirmNameMatches = storedName
+        ? matchingPatients.filter(p =>
+            `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR').trim() === storedName)
+        : [];
+      // Only accept unambiguous match — if two patients share the same name, require explicit selection
+      const nameMatch = confirmNameMatches.length === 1 ? confirmNameMatches[0] : null;
       if (nameMatch) {
         // Unambiguous name match from stored greeting — carry it forward without another prompt.
         stateJson.selectedPatientId = nameMatch.id;
@@ -2914,11 +3009,14 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
             pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
             matchedServices: stateJson.matchedServices,
             pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+            resumeAfterPatientSelection: 'awaiting_confirmation',
           },
         });
-        console.log('[whatsapp-confirmation] shared-phone-guard', {
+        console.log('[whatsapp-patient-selection] prompt-stored', {
           clinicId: clinic.id, phoneSuffix: inputPhone.slice(-4), currentStep,
-          matchedPatientCount: matchingPatients.length, branch: 'ask_selection',
+          pendingPatientOptionsCount: matchingPatients.length,
+          resumeAfterPatientSelection: 'awaiting_confirmation',
+          branch: 'confirmation_guard',
         });
         return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
       }
