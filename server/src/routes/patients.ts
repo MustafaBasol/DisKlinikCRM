@@ -309,4 +309,38 @@ router.delete('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
   }
 });
 
+// POST /api/patients/:id/unarchive
+// Yalnızca OWNER, ORG_ADMIN, CLINIC_MANAGER arşivden çıkarabilir.
+router.post('/patients/:id/unarchive', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const orgId = req.user!.organizationId;
+
+  try {
+    const patient = await prisma.patient.findFirst({ where: { id, organizationId: orgId, deletedAt: null } });
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(patient.clinicId)) {
+      return res.status(403).json({ error: 'Access denied to this patient' });
+    }
+
+    const clinicId = patient.clinicId;
+
+    await prisma.patient.update({
+      where: { id },
+      data: { patientStatus: 'active' },
+    });
+
+    await logActivity({
+      clinicId, userId: req.user!.id, entityType: 'patient', entityId: id,
+      action: 'unarchived',
+      description: `${patient.firstName} ${patient.lastName} adlı hasta arşivden çıkarıldı`,
+    });
+
+    res.json({ message: 'Patient unarchived successfully' });
+  } catch (err: any) {
+    console.error('[patients] unarchive error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to unarchive patient' });
+  }
+});
+
 export default router;
