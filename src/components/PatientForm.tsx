@@ -69,14 +69,14 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
     if (errors[name]) setErrors((prev: any) => ({ ...prev, [name]: null }));
     if (name === 'phone') checkPhoneDuplicate(value as string);
     if (name === 'dateOfBirth' && value && new Date(value) > new Date()) {
-      setErrors((prev: any) => ({ ...prev, dateOfBirth: { _errors: ['t('patients:form.dobFutureError')'] } }));
+      setErrors((prev: any) => ({ ...prev, dateOfBirth: { _errors: [t('patients:form.dobFutureError')] } }));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.dateOfBirth && new Date(formData.dateOfBirth) > new Date()) {
-      setErrors({ dateOfBirth: { _errors: ['t('patients:form.dobFutureError')'] } });
+      setErrors({ dateOfBirth: { _errors: [t('patients:form.dobFutureError')] } });
       return;
     }
     setLoading(true);
