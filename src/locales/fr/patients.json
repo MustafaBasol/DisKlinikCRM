@@ -123,6 +123,7 @@
     "email": "Adresse e-mail",
     "phone": "Numéro de téléphone",
     "dob": "Date de naissance",
+    "dobFutureError": "La date de naissance ne peut pas être dans le futur",
     "status": "Statut du patient",
     "source": "Source",
     "communicationConsent": "Le patient consent aux communications",

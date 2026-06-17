@@ -26,7 +26,7 @@ const patientBaseSchema = z.object({
   lastName: z.string().min(1, 'Last name is required'),
   email: z.preprocess(value => value === '' ? null : value, z.string().email().optional().nullable()),
   phone: z.string().optional().nullable(),
-  dateOfBirth: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+  dateOfBirth: z.string().optional().nullable().refine(val => !val || new Date(val) <= new Date(), { message: 'Date of birth cannot be in the future' }).transform(val => val ? new Date(val) : null),
   address: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   postalCode: z.string().optional().nullable(),

@@ -68,10 +68,17 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
     setFormData(prev => ({ ...prev, [name]: val }));
     if (errors[name]) setErrors((prev: any) => ({ ...prev, [name]: null }));
     if (name === 'phone') checkPhoneDuplicate(value as string);
+    if (name === 'dateOfBirth' && value && new Date(value) > new Date()) {
+      setErrors((prev: any) => ({ ...prev, dateOfBirth: { _errors: ['t('patients:form.dobFutureError')'] } }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.dateOfBirth && new Date(formData.dateOfBirth) > new Date()) {
+      setErrors({ dateOfBirth: { _errors: ['t('patients:form.dobFutureError')'] } });
+      return;
+    }
     setLoading(true);
     setErrors({});
 
@@ -183,8 +190,10 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={handleChange}
-                className="input-field"
+                max={new Date().toISOString().split('T')[0]}
+                className={`input-field ${errors.dateOfBirth ? 'border-red-500' : ''}`}
               />
+              {errors.dateOfBirth && <p className="text-xs text-red-500 mt-1">{errors.dateOfBirth._errors[0]}</p>}
             </div>
             <div>
               <label className="label">{t('patients:form.status')}</label>
