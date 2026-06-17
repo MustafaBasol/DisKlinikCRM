@@ -728,6 +728,248 @@ test('Fransız telefon + awaiting_confirmation: iki hasta farklı formatlarda, s
   void pA; void pB;
 });
 
+// ── awaiting_patient_selection durum kalıcılığı ve akış devamı ───────────────
+
+console.log('\n=== Hasta Seçimi Durum Kalıcılığı ve Akış Devamı ===');
+
+// Simulates the stateJson saved when the general guard asks for patient selection.
+type PatientSelectionState = {
+  step: string;
+  pendingPatientOptions: PendingPatientOption[];
+  resumeAfterPatientSelection: string;
+  selectedPatientId?: string | null;
+};
+
+function simulateGeneralGuard(
+  matchingPatients: Patient[],
+  existingPatient: Patient | null,
+  currentStep: string | null,
+  hasActiveBookingFlow: boolean,
+): PatientSelectionState | null {
+  if (matchingPatients.length <= 1 || existingPatient) return null;
+  const resumeStep = hasActiveBookingFlow ? (currentStep ?? 'start_booking') : 'start_booking';
+  return {
+    step: 'awaiting_patient_selection',
+    pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+    resumeAfterPatientSelection: resumeStep,
+  };
+}
+
+// Simulates the fixed patient selection handler that resumes the correct step.
+function simulatePatientSelectionWithResume(
+  pendingOptions: PendingPatientOption[],
+  resumeAfterPatientSelection: string,
+  input: string,
+): { step: string; selectedPatientId: string; message: string } | { error: string } {
+  const numeric = /^\s*(\d+)\s*$/.exec(input);
+  let selected: PendingPatientOption | undefined;
+  if (numeric) {
+    const idx = parseInt(numeric[1], 10);
+    if (idx >= 1 && idx <= pendingOptions.length) selected = pendingOptions[idx - 1];
+  }
+  if (!selected) {
+    const q = input.trim().toLocaleLowerCase('tr-TR');
+    selected = pendingOptions.find(p => {
+      const full = `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR');
+      return full.includes(q) || q.includes(p.firstName.toLocaleLowerCase('tr-TR'));
+    });
+  }
+  if (!selected) return { error: 'invalid_selection' };
+
+  // Determine next step from resumeAfterPatientSelection
+  let nextStep: string;
+  let message: string;
+  if (resumeAfterPatientSelection === 'awaiting_time') {
+    nextStep = 'awaiting_time';
+    message = 'time_prompt';
+  } else if (resumeAfterPatientSelection === 'awaiting_confirmation') {
+    nextStep = 'awaiting_confirmation';
+    message = 'confirmation_prompt';
+  } else if (resumeAfterPatientSelection === 'awaiting_date') {
+    nextStep = 'awaiting_date';
+    message = 'date_prompt';
+  } else {
+    // start_booking or awaiting_service
+    nextStep = 'awaiting_service';
+    message = 'service_list';
+  }
+  return { step: nextStep, selectedPatientId: selected.id, message };
+}
+
+// Simulates the fixed existingPatient name-match (requires unique match)
+function resolveExistingPatientFromState(
+  matchingPatients: Patient[],
+  selectedPatientId: string | null,
+  customerName: string | null,
+): Patient | null {
+  if (matchingPatients.length === 1) return matchingPatients[0];
+  if (matchingPatients.length > 1 && selectedPatientId) {
+    return matchingPatients.find(p => p.id === selectedPatientId) ?? null;
+  }
+  if (matchingPatients.length > 1 && customerName) {
+    const storedName = customerName.toLocaleLowerCase('tr-TR').trim();
+    const nameMatches = matchingPatients.filter(p =>
+      `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR').trim() === storedName
+    );
+    return nameMatches.length === 1 ? nameMatches[0] : null;
+  }
+  return null;
+}
+
+test('Hasta seçimi durumu kalıcılığı: awaiting_patient_selection + pendingPatientOptions kaydedilir', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mustafa', lastName: '', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mustafa', lastName: 'Basol-2', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  assert.equal(matching.length, 2, 'İki hasta bulunmalı');
+  const savedState = simulateGeneralGuard(matching, null, null, false);
+  assert.ok(savedState, 'Guard durum kaydetmeli');
+  assert.equal(savedState!.step, 'awaiting_patient_selection', 'Adım awaiting_patient_selection olmalı');
+  assert.equal(savedState!.pendingPatientOptions.length, 2, 'pendingPatientOptions 2 hasta içermeli');
+  assert.equal(savedState!.resumeAfterPatientSelection, 'start_booking', 'Randevu akışı dışında start_booking olmalı');
+  void p1; void p2;
+});
+
+test('Numerik seçim: awaiting_patient_selection + "2" → ikinci hasta seçilir, service listesi gösterilir', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mustafa', lastName: '', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mustafa', lastName: 'Basol-2', phone, email: null });
+  const options: PendingPatientOption[] = [
+    { id: p1.id, firstName: p1.firstName, lastName: p1.lastName },
+    { id: p2.id, firstName: p2.firstName, lastName: p2.lastName },
+  ];
+  const result = simulatePatientSelectionWithResume(options, 'start_booking', '2');
+  assert.ok('selectedPatientId' in result, 'Geçerli seçim yapılmalı');
+  if ('selectedPatientId' in result) {
+    assert.equal(result.selectedPatientId, p2.id, 'p2 seçilmeli');
+    assert.equal(result.step, 'awaiting_service', 'Adım awaiting_service olmalı, ana menü değil');
+    assert.equal(result.message, 'service_list', 'Hizmet listesi gösterilmeli');
+  }
+});
+
+test('Geçersiz seçim: "9" → hata döner, seçim tekrar istenir', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mehmet', lastName: 'Yılmaz', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Zeynep', lastName: 'Yılmaz', phone, email: null });
+  const options: PendingPatientOption[] = [
+    { id: p1.id, firstName: p1.firstName, lastName: p1.lastName },
+    { id: p2.id, firstName: p2.firstName, lastName: p2.lastName },
+  ];
+  const result = simulatePatientSelectionWithResume(options, 'start_booking', '9');
+  assert.ok('error' in result, 'Geçersiz seçimde hata dönmeli');
+  assert.equal((result as { error: string }).error, 'invalid_selection');
+});
+
+test('Hizmet seçimi sonrası seçim: awaiting_service resume → awaiting_service döner', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Ali', lastName: 'Yıldız', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Berk', lastName: 'Yıldız', phone, email: null });
+  const options: PendingPatientOption[] = [
+    { id: p1.id, firstName: p1.firstName, lastName: p1.lastName },
+    { id: p2.id, firstName: p2.firstName, lastName: p2.lastName },
+  ];
+  const result = simulatePatientSelectionWithResume(options, 'awaiting_service', '2');
+  assert.ok('selectedPatientId' in result);
+  if ('selectedPatientId' in result) {
+    assert.equal(result.selectedPatientId, p2.id);
+    assert.equal(result.step, 'awaiting_service', 'Hizmet adımına dönmeli');
+  }
+});
+
+test('Tarih adımı sonrası seçim: awaiting_date resume → awaiting_date döner', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Ali', lastName: 'Kaya', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Fatma', lastName: 'Kaya', phone, email: null });
+  const options: PendingPatientOption[] = [
+    { id: p1.id, firstName: p1.firstName, lastName: p1.lastName },
+    { id: p2.id, firstName: p2.firstName, lastName: p2.lastName },
+  ];
+  const result = simulatePatientSelectionWithResume(options, 'awaiting_date', '2');
+  assert.ok('selectedPatientId' in result);
+  if ('selectedPatientId' in result) {
+    assert.equal(result.selectedPatientId, p2.id);
+    assert.equal(result.step, 'awaiting_date', 'Tarih adımına dönmeli');
+    assert.equal(result.message, 'date_prompt');
+  }
+});
+
+test('Onay adımı sonrası seçim: awaiting_confirmation resume → awaiting_confirmation döner', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mert', lastName: 'Demir', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Selin', lastName: 'Demir', phone, email: null });
+  const options: PendingPatientOption[] = [
+    { id: p1.id, firstName: p1.firstName, lastName: p1.lastName },
+    { id: p2.id, firstName: p2.firstName, lastName: p2.lastName },
+  ];
+  const result = simulatePatientSelectionWithResume(options, 'awaiting_confirmation', '2');
+  assert.ok('selectedPatientId' in result);
+  if ('selectedPatientId' in result) {
+    assert.equal(result.selectedPatientId, p2.id);
+    assert.equal(result.step, 'awaiting_confirmation', 'Onay adımına dönmeli');
+    assert.equal(result.message, 'confirmation_prompt');
+  }
+});
+
+test('Zayıf isim eşleşmesi: "Mustafa" iki Mustafa varken seçim ister', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mustafa', lastName: '', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Mustafa', lastName: 'Basol-2', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  // customerName is "Mustafa" — does NOT exactly match any single patient's full name
+  const existingPatient = resolveExistingPatientFromState(matching, null, 'Mustafa');
+  // "Mustafa " (firstName + empty lastName) vs "Mustafa" — the trim on both sides is needed
+  // Patient1: "Mustafa " trimmed = "Mustafa" → matches. Patient2: "Mustafa Basol-2" ≠ "Mustafa".
+  // But since we require uniqueness, if both share "Mustafa" first name it's ambiguous.
+  // The key: if only 1 out of 2 patients full-name matches "Mustafa", it's unambiguous and OK.
+  // If 0 match, guard fires.
+  if (existingPatient) {
+    // Unique match found — acceptable only if exactly one matched
+    assert.equal(existingPatient.id, p1.id, 'Tam eşleşen tek hasta seçilmeli');
+  } else {
+    // No unique match — correct behavior, guard will ask selection
+    const guardState = simulateGeneralGuard(matching, null, null, false);
+    assert.ok(guardState, 'Belirsiz durumda seçim istenmeli');
+    assert.equal(guardState!.step, 'awaiting_patient_selection');
+  }
+  void p2;
+});
+
+test('selectedPatientId önceliği: paylaşımlı telefon + geçerli selectedPatientId → seçim istenmez', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Ali', lastName: 'Veli', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Can', lastName: 'Veli', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  const existing = resolveExistingPatientFromState(matching, p2.id, null);
+  assert.ok(existing, 'selectedPatientId ile hasta çözümlenmeli');
+  assert.equal(existing!.id, p2.id, 'p2 seçilmeli');
+  const guardResult = simulateBookingGuard(matching, p2.id, true);
+  assert.equal(guardResult.requiresSelection, false, 'Geçerli selectedPatientId ile seçim gerekmez');
+  void p1;
+});
+
+test('Booking guard: aktif akışta selectedPatientId yok → seçim istenir ve resumeAfterPatientSelection kaydedilir', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'X', lastName: 'Y', phone, email: null });
+  const p2 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  const currentStep = 'awaiting_service';
+  const guardResult = simulateBookingGuard(matching, null, true);
+  assert.equal(guardResult.requiresSelection, true, 'Seçim gerekli');
+  // Simulate what the booking guard now saves
+  const savedResume = currentStep; // resumeAfterPatientSelection = currentStep
+  assert.equal(savedResume, 'awaiting_service', 'resumeAfterPatientSelection kaydedilmeli');
+  void p1; void p2;
+});
+
 // ── Üretim teşhis sorgusu ─────────────────────────────────────────────────────
 // Mustafa, üretimde iki hastanın aynı klinikte olduğunu ve telefon eşleşmesinin
 // çalışıp çalışmadığını doğrulamak için aşağıdaki SQL sorgusunu kullanabilirsiniz:

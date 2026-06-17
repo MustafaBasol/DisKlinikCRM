@@ -11,6 +11,7 @@ import { appointmentRequestStatusSchema, appointmentRequestConvertSchema, appoin
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { findUserAssignedToClinic } from '../utils/relationGuards.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { sendAppointmentRequestConfirmationNotification } from '../services/appointmentRequestNotification.js';
 
 const router = express.Router();
 
@@ -302,6 +303,23 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
     });
 
     res.status(201).json({ appointment, request: updatedRequest });
+
+    sendAppointmentRequestConfirmationNotification({
+      clinicId,
+      source: request.source,
+      phone: request.phone,
+      externalSenderId: request.externalSenderId,
+      sourceConnectionId: request.sourceConnectionId,
+      patientName: request.patientName,
+      appointment: {
+        startTime: appointment.startTime,
+        appointmentType: { name: appointment.appointmentType.name },
+        practitioner: {
+          firstName: appointment.practitioner.firstName,
+          lastName: appointment.practitioner.lastName,
+        },
+      },
+    }).catch(err => console.error('[appointment-confirmation] notification failed', err));
   } catch {
     res.status(500).json({ error: 'Failed to convert appointment request' });
   }
