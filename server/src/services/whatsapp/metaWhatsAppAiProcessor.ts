@@ -73,6 +73,7 @@ type MetaWaStep =
 type MetaWaStateJson = BookingStateJson & {
   pendingHandoffRequestId?: string;
   pendingPatientOptions?: Array<{ id: string; firstName: string; lastName: string }> | null;
+  selectedPatientId?: string | null;
 };
 
 type MetaWaClinic = {
@@ -528,9 +529,25 @@ const findPatientsByPhone = async (
   const digits = normalizePhoneDigits(phone);
   const variants = getPhoneVariants(digits);
   if (variants.length === 0) return [];
-  return prisma.patient.findMany({
+
+  // Fast path: exact digit-variant match (patients stored as digit-only strings)
+  const exactMatches = await prisma.patient.findMany({
     where: { clinicId, phone: { in: variants }, deletedAt: null },
     select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+  if (exactMatches.length > 0) return exactMatches;
+
+  // Slow path: patients stored with formatting (+90 532 111 11 11) won't appear in `in` query.
+  // Load all and compare via variant overlap so both storage formats match.
+  const variantSet = new Set(variants);
+  const candidates = await prisma.patient.findMany({
+    where: { clinicId, phone: { not: null }, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+  return candidates.filter(c => {
+    if (!c.phone) return false;
+    const cDigits = normalizePhoneDigits(c.phone);
+    return getPhoneVariants(cDigits).some(v => variantSet.has(v));
   });
 };
 
@@ -926,6 +943,16 @@ const buildReplyText = async (args: {
   if (!resolvedPatient) {
     if (metaMatchingPatients.length === 1) {
       resolvedPatient = metaMatchingPatients[0];
+    } else if (stateJson.selectedPatientId) {
+      // Use the patient the user explicitly selected in a prior message.
+      // Also handles phone-format mismatches where findPatientsByPhone returned empty.
+      resolvedPatient = metaMatchingPatients.find(p => p.id === stateJson.selectedPatientId) ?? null;
+      if (!resolvedPatient) {
+        resolvedPatient = await prisma.patient.findFirst({
+          where: { id: stateJson.selectedPatientId, clinicId: args.clinic.id, deletedAt: null },
+          select: { id: true, firstName: true, lastName: true, phone: true },
+        });
+      }
     } else if (metaMatchingPatients.length > 1 && customerName) {
       const storedName = customerName.toLocaleLowerCase('tr-TR').trim();
       resolvedPatient =
@@ -955,7 +982,7 @@ const buildReplyText = async (args: {
           currentIntent: null,
           lastMessage: args.text,
           lastProviderMessageId: args.messageId ?? null,
-          stateJson: null,
+          stateJson: { selectedPatientId: selectedPatient.id },
         });
         return formatMainMenu(args.clinic.name, `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim());
       }
@@ -1065,6 +1092,7 @@ const buildReplyText = async (args: {
       args.inboxEntry?.patientId ??
       args.patientId ??
       resolvedPatient?.id ??
+      stateJson.selectedPatientId ??
       null;
 
     const request = await createMetaWaAppointmentRequest({

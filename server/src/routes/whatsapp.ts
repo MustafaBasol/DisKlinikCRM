@@ -160,6 +160,7 @@ type ConversationStateJson = {
   practitionerOptions?: { id: string; name: string }[];
   pendingPastDateClarification?: string | null;
   pendingPatientOptions?: Array<{ id: string; firstName: string; lastName: string }> | null;
+  selectedPatientId?: string | null;
 };
 
 // ---- Helper Middlewares ----
@@ -1393,9 +1394,15 @@ const getAppointmentsForPhone = async (clinicId: string, phone: string) => {
 
 const createAppointmentRequestFromAssistant = async (
   clinicId: string, phone: string, customerName: string,
-  appointmentTypeId: string, selectedSlot: SavedAvailableSlot, rawMessage?: string | null
+  appointmentTypeId: string, selectedSlot: SavedAvailableSlot, rawMessage?: string | null,
+  resolvedPatientId?: string | null,
 ) => {
-  const patient = await ensurePatientForWhatsApp(clinicId, phone, customerName);
+  const patient = resolvedPatientId
+    ? await prisma.patient.findFirstOrThrow({
+        where: { id: resolvedPatientId, clinicId, deletedAt: null },
+        select: { id: true, firstName: true, lastName: true, phone: true },
+      })
+    : await ensurePatientForWhatsApp(clinicId, phone, customerName);
   const startTime = new Date(selectedSlot.startTime);
   const endTime = new Date(selectedSlot.endTime);
 
@@ -2400,11 +2407,13 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   const currentStep = (state?.step ?? null) as AssistantStep | 'main_menu' | null;
 
   // Resolve existing patient: single match → use directly.
-  // Multiple matches → try to identify via customerName stored after patient selection.
-  // customerName is cleared at booking completion (resetWhatsAppConversationState with null) so it
-  // does not persist across independent booking sessions for shared family phones.
+  // Multiple matches → prefer explicitly selected patient ID (set after awaiting_patient_selection),
+  // then fall back to customerName name-match for mid-booking continuity.
   let existingPatient: (typeof matchingPatients)[0] | null =
     matchingPatients.length === 1 ? matchingPatients[0] : null;
+  if (!existingPatient && matchingPatients.length > 1 && stateJson.selectedPatientId) {
+    existingPatient = matchingPatients.find(p => p.id === stateJson.selectedPatientId) ?? null;
+  }
   if (!existingPatient && matchingPatients.length > 1 && state?.customerName) {
     const storedName = state.customerName.toLocaleLowerCase('tr-TR').trim();
     existingPatient =
@@ -2564,7 +2573,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
           step: null,
           currentIntent: null,
           lastMessage: input.text,
-          stateJson: null,
+          stateJson: { selectedPatientId: selectedPatient.id },
         });
         return formatMainMenuOptions(`Merhaba ${selectedPatient.firstName}! Size nasıl yardımcı olabilirim?`);
       }
@@ -2763,7 +2772,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate, selectedTime: state?.selectedTime },
       stateJson: { matchedServices: stateJson.matchedServices },
       extractNumericSelection, findServiceMatches, formatServiceList,
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
     });
   }
 
@@ -2774,9 +2786,12 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
       stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots },
       extractNumericSelection, findSlotMatches, formatAvailabilityMessage, minutesToTime, logAvailabilitySave,
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
       resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
-      createAppointment: createAppointmentRequestFromAssistant,
+      createAppointment: (c, p, name, typeId, slot, raw) => createAppointmentRequestFromAssistant(c, p, name, typeId, slot, raw, stateJson.selectedPatientId),
     });
   }
 
@@ -2786,9 +2801,12 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       clinicId: clinic.id, phone: input.phone, text: input.text, customerName,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
       stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots, pendingConfirmationSlot: stateJson.pendingConfirmationSlot },
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
       resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
-      createAppointment: createAppointmentRequestFromAssistant,
+      createAppointment: (c, p, name, typeId, slot, raw) => createAppointmentRequestFromAssistant(c, p, name, typeId, slot, raw, stateJson.selectedPatientId),
     });
   }
 
@@ -3044,7 +3062,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate, selectedTime: state?.selectedTime },
       stateJson: { matchedServices: stateJson.matchedServices },
       extractNumericSelection, findServiceMatches, formatServiceList,
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
     });
   }
 
@@ -3063,7 +3084,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         });
         return { exactTime: extracted.exactTime, afterTime: extracted.afterTime, timePreference: extracted.timePreference };
       },
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
     });
   }
 
@@ -3081,9 +3105,12 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         });
         return { exactTime: extracted.exactTime, afterTime: extracted.afterTime, timePreference: extracted.timePreference };
       },
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
       resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
-      createAppointment: createAppointmentRequestFromAssistant,
+      createAppointment: (c, p, name, typeId, slot, raw) => createAppointmentRequestFromAssistant(c, p, name, typeId, slot, raw, stateJson.selectedPatientId),
     });
   }
 
@@ -3093,9 +3120,12 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       clinicId: clinic.id, phone: input.phone, text: input.text, customerName,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
       stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots, pendingConfirmationSlot: stateJson.pendingConfirmationSlot },
-      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
+      upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone,
+        stateJson.selectedPatientId
+          ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+          : data),
       resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
-      createAppointment: createAppointmentRequestFromAssistant,
+      createAppointment: (c, p, name, typeId, slot, raw) => createAppointmentRequestFromAssistant(c, p, name, typeId, slot, raw, stateJson.selectedPatientId),
     });
   }
 
