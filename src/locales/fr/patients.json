@@ -79,6 +79,7 @@
     "whatsappNoMessages": "Aucun message WhatsApp pour ce filtre.",
     "systemActor": "Système",
     "archiveFailed": "Impossible d'archiver le patient.",
+    "unarchiveFailed": "Impossible de désarchiver le patient.",
     "appointmentWith": "avec {{practitioner}}",
     "activityByUser": "par {{user}} • {{date}}",
     "whatsappMessagesCount": "{{count}} messages enregistrés",

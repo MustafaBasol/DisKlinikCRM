@@ -54,6 +54,7 @@
   "close": "Close",
   "delete": "Delete",
   "archive": "Archive",
+  "unarchive": "Unarchive",
   "edit": "Edit",
   "add": "Add",
   "remove": "Remove",

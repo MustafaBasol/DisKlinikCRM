@@ -79,6 +79,7 @@
     "whatsappNoMessages": "Bu filtre için WhatsApp mesajı bulunamadı.",
     "systemActor": "Sistem",
     "archiveFailed": "Hasta arşivlenemedi.",
+    "unarchiveFailed": "Hasta arşivden çıkarılamadı.",
     "appointmentWith": "{{practitioner}} ile",
     "activityByUser": "{{user}} tarafından • {{date}}",
     "whatsappMessagesCount": "{{count}} mesaj kaydı",

@@ -5,9 +5,10 @@ import {
   Mail, 
   Phone, 
   Calendar, 
-  Edit2, 
-  Archive, 
-  Clock, 
+  Edit2,
+  Archive,
+  ArchiveRestore,
+  Clock,
   MapPin, 
   User as UserIcon,
   CheckCircle2,
@@ -141,6 +142,16 @@ const PatientDetail: React.FC = () => {
     }
   };
 
+  const handleUnarchive = async () => {
+    if (!window.confirm(t('common:confirmAction'))) return;
+    try {
+      await patientService.unarchive(id!);
+      fetchPatient();
+    } catch (error) {
+      alert(t('patients:detail.unarchiveFailed'));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -261,10 +272,17 @@ const PatientDetail: React.FC = () => {
           <span className="hidden sm:inline">{t('patients:detail.backToList')}</span>
         </button>
         <div className="flex gap-2">
-          <button onClick={handleArchive} className="btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200 !px-2 sm:!px-4">
-            <Archive size={18} />
-            <span className="hidden sm:inline">{t('common:archive')}</span>
-          </button>
+          {patient.patientStatus === 'archived' ? (
+            <button onClick={handleUnarchive} className="btn-secondary text-green-600 hover:bg-green-50 hover:border-green-200 !px-2 sm:!px-4">
+              <ArchiveRestore size={18} />
+              <span className="hidden sm:inline">{t('common:unarchive')}</span>
+            </button>
+          ) : (
+            <button onClick={handleArchive} className="btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200 !px-2 sm:!px-4">
+              <Archive size={18} />
+              <span className="hidden sm:inline">{t('common:archive')}</span>
+            </button>
+          )}
           <button 
             onClick={() => setIsMessageModalOpen(true)}
             className="btn-secondary !px-2 sm:!px-4"

@@ -79,6 +79,7 @@
     "whatsappNoMessages": "Keine WhatsApp-Nachrichten für diesen Filter.",
     "systemActor": "System",
     "archiveFailed": "Patient konnte nicht archiviert werden.",
+    "unarchiveFailed": "Patient konnte nicht aus dem Archiv geholt werden.",
     "appointmentWith": "mit {{practitioner}}",
     "activityByUser": "von {{user}} • {{date}}",
     "whatsappMessagesCount": "{{count}} Nachrichteneinträge",
