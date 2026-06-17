@@ -10,6 +10,40 @@ import { patientListSelect, userNameRoleSelect, userNameSelect } from '../utils/
 
 const router = express.Router();
 
+// GET /api/patients/check-phone-duplicate
+// Returns patients in the same clinic sharing the given phone. Non-blocking — callers decide what to do.
+router.get('/patients/check-phone-duplicate', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+  const { phone, clinicId: selectedClinicId, excludePatientId } = req.query;
+  if (!phone || typeof phone !== 'string' || !phone.trim()) {
+    return res.json({ duplicates: [] });
+  }
+
+  try {
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const where: any = {
+      ...scope,
+      phone: phone.trim(),
+      deletedAt: null,
+    };
+    if (excludePatientId && typeof excludePatientId === 'string') {
+      where.id = { not: excludePatientId };
+    }
+
+    const duplicates = await prisma.patient.findMany({
+      where,
+      select: { id: true, firstName: true, lastName: true, phone: true },
+      take: 10,
+    });
+
+    res.json({ duplicates });
+  } catch (err: any) {
+    console.error('[patients] check-phone-duplicate error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to check phone duplicate' });
+  }
+});
+
 // GET /api/patients
 router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { search, status, source, includeArchived, clinicId: selectedClinicId } = req.query;
@@ -23,10 +57,10 @@ router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
 
     if (search) {
       where.OR = [
-        { firstName: { contains: String(search) } },
-        { lastName: { contains: String(search) } },
-        { email: { contains: String(search) } },
-        { phone: { contains: String(search) } },
+        { firstName: { contains: String(search), mode: 'insensitive' } },
+        { lastName: { contains: String(search), mode: 'insensitive' } },
+        { email: { contains: String(search), mode: 'insensitive' } },
+        { phone: { contains: String(search), mode: 'insensitive' } },
       ];
     }
 

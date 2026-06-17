@@ -7,7 +7,7 @@ interface Clinic {
   id: string;
   name: string;
   slug: string;
-  isActive: boolean;
+  status: string;
 }
 
 interface Assignment {
@@ -49,7 +49,7 @@ export default function UserClinicAssignmentModal({ userId, userName, userEmail,
           userClinicAssignmentService.getUserClinics(userId),
         ]);
         const allClinics: Clinic[] = clinicsRes.data?.clinics ?? clinicsRes.data ?? [];
-        setClinics(allClinics.filter((c) => c.isActive));
+        setClinics(allClinics.filter((c) => c.status === 'active'));
 
         const current: CurrentAssignment[] = userClinicsRes.data?.clinics ?? [];
         setAssignments(current.map((a) => ({ clinicId: a.clinicId, role: a.role })));

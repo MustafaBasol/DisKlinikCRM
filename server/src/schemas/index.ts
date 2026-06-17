@@ -38,20 +38,9 @@ const patientBaseSchema = z.object({
   marketingConsent: z.boolean().default(false),
 });
 
-export const patientSchema = patientBaseSchema.refine(data => data.email || data.phone, {
-  message: 'Either email or phone must be provided',
-  path: ['email'],
-});
+export const patientSchema = patientBaseSchema;
 
-export const patientUpdateSchema = patientBaseSchema.partial().refine(data => {
-  if ('email' in data || 'phone' in data) {
-    return Boolean(data.email || data.phone);
-  }
-  return true;
-}, {
-  message: 'Either email or phone must be provided',
-  path: ['email'],
-});
+export const patientUpdateSchema = patientBaseSchema.partial();
 
 // --- Appointment Type / Service ---
 

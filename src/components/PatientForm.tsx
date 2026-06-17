@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { patientService } from '../services/api';
 import { useTranslation } from 'react-i18next';
+import { useClinic } from '../context/ClinicContext';
 
 interface PatientFormProps {
   patient?: any;
@@ -11,6 +12,9 @@ interface PatientFormProps {
 
 const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }) => {
   const { t } = useTranslation(['patients', 'common']);
+  const { selectedClinicId } = useClinic();
+  const [phoneDuplicates, setPhoneDuplicates] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
+  const phoneCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -40,11 +44,30 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
     }
   }, [patient]);
 
+  const checkPhoneDuplicate = (phone: string) => {
+    if (phoneCheckTimer.current) clearTimeout(phoneCheckTimer.current);
+    if (!phone.trim()) { setPhoneDuplicates([]); return; }
+    phoneCheckTimer.current = setTimeout(async () => {
+      try {
+        const clinicId = selectedClinicId && selectedClinicId !== 'all' ? selectedClinicId : undefined;
+        const res = await patientService.checkPhoneDuplicate({
+          phone: phone.trim(),
+          clinicId,
+          excludePatientId: patient?.id,
+        });
+        setPhoneDuplicates(res.data?.duplicates ?? []);
+      } catch {
+        setPhoneDuplicates([]);
+      }
+    }, 500);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
     setFormData(prev => ({ ...prev, [name]: val }));
     if (errors[name]) setErrors((prev: any) => ({ ...prev, [name]: null }));
+    if (name === 'phone') checkPhoneDuplicate(value as string);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -137,6 +160,17 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
                 className="input-field"
                 placeholder="+90 532 000 00 00"
               />
+              {phoneDuplicates.length > 0 && (
+                <div className="mt-1.5 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                  <p className="font-medium mb-1">⚠️ Bu telefon numarası başka hastalarda da kayıtlı:</p>
+                  <ul className="space-y-0.5 mb-1">
+                    {phoneDuplicates.map(d => (
+                      <li key={d.id}>• {d.firstName} {d.lastName}</li>
+                    ))}
+                  </ul>
+                  <p className="text-amber-700">Bu durum çocuklar veya aile üyeleri için normaldir. Yine de kaydedebilirsiniz.</p>
+                </div>
+              )}
             </div>
           </div>
 

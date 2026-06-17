@@ -67,10 +67,12 @@ type MetaWaStep =
   | 'awaiting_time'
   | 'awaiting_confirmation'
   | 'awaiting_handoff_note'
+  | 'awaiting_patient_selection'
   | null;
 
 type MetaWaStateJson = BookingStateJson & {
   pendingHandoffRequestId?: string;
+  pendingPatientOptions?: Array<{ id: string; firstName: string; lastName: string }> | null;
 };
 
 type MetaWaClinic = {
@@ -448,6 +450,9 @@ const readStateJson = (value: unknown): MetaWaStateJson => {
         : undefined,
     pendingHandoffRequestId:
       typeof r.pendingHandoffRequestId === 'string' ? r.pendingHandoffRequestId : undefined,
+    pendingPatientOptions: Array.isArray(r.pendingPatientOptions)
+      ? (r.pendingPatientOptions as Array<{ id: string; firstName: string; lastName: string }>)
+      : undefined,
   };
 };
 
@@ -516,17 +521,27 @@ const getPhoneVariants = (digits: string): string[] => {
   return [...vs];
 };
 
+const findPatientsByPhone = async (
+  clinicId: string,
+  phone: string,
+): Promise<Array<{ id: string; firstName: string; lastName: string; phone: string | null }>> => {
+  const digits = normalizePhoneDigits(phone);
+  const variants = getPhoneVariants(digits);
+  if (variants.length === 0) return [];
+  return prisma.patient.findMany({
+    where: { clinicId, phone: { in: variants }, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
+};
+
 const findExistingPatientByPhone = async (
   clinicId: string,
   phone: string,
 ): Promise<{ id: string; firstName: string; lastName: string; phone: string | null } | null> => {
-  const digits = normalizePhoneDigits(phone);
-  const variants = getPhoneVariants(digits);
-  if (variants.length === 0) return null;
-  return prisma.patient.findFirst({
-    where: { clinicId, phone: { in: variants }, deletedAt: null },
-    select: { id: true, firstName: true, lastName: true, phone: true },
-  });
+  const matches = await findPatientsByPhone(clinicId, phone);
+  // Multiple patients can share the same phone (e.g. family/guardian). Return null when
+  // ambiguous so we never auto-link a message to the wrong patient.
+  return matches.length === 1 ? matches[0] : null;
 };
 
 // ── AppointmentRequest source metadata ───────────────────────────────────────
@@ -901,6 +916,70 @@ const buildReplyText = async (args: {
       : null) ??
     (state?.customerName ?? null);
 
+  // Resolve patient for shared-phone scenarios.
+  // If staff already linked a patient via inbox, use that. Otherwise look up by phone and
+  // try to identify the correct patient via a previously stored customerName.
+  const metaMatchingPatients = args.inboxEntry?.patient
+    ? [args.inboxEntry.patient]
+    : await findPatientsByPhone(args.clinic.id, args.phone);
+  let resolvedPatient: typeof metaMatchingPatients[0] | null = args.inboxEntry?.patient ?? null;
+  if (!resolvedPatient) {
+    if (metaMatchingPatients.length === 1) {
+      resolvedPatient = metaMatchingPatients[0];
+    } else if (metaMatchingPatients.length > 1 && customerName) {
+      const storedName = customerName.toLocaleLowerCase('tr-TR').trim();
+      resolvedPatient =
+        metaMatchingPatients.find(p => `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName) ?? null;
+    }
+  }
+
+  // ── Patient selection step ────────────────────────────────────────────────
+  if (currentStep === 'awaiting_patient_selection') {
+    const pendingOptions = stateJson.pendingPatientOptions;
+    if (pendingOptions && pendingOptions.length > 0) {
+      let selectedPatient: typeof pendingOptions[0] | undefined;
+      if (standaloneNumericSelection !== null && standaloneNumericSelection >= 1 && standaloneNumericSelection <= pendingOptions.length) {
+        selectedPatient = pendingOptions[standaloneNumericSelection - 1];
+      }
+      if (!selectedPatient) {
+        const q = args.text.trim().toLocaleLowerCase('tr-TR');
+        selectedPatient = pendingOptions.find(p => {
+          const full = `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR');
+          return full.includes(q) || q.includes(p.firstName.toLocaleLowerCase('tr-TR'));
+        });
+      }
+      if (selectedPatient) {
+        await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          customerName: `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim(),
+          step: null,
+          currentIntent: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.messageId ?? null,
+          stateJson: null,
+        });
+        return formatMainMenu(args.clinic.name, `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim());
+      }
+      const patientList = pendingOptions.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+      return `Geçerli bir seçim yapılamadı. Lütfen listedeki numarayı girin:\n\n${patientList}`;
+    }
+  }
+
+  // When multiple patients share this phone and none is identified, ask user to select.
+  if (metaMatchingPatients.length > 1 && !resolvedPatient && currentStep !== 'awaiting_patient_selection') {
+    const patientList = metaMatchingPatients.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+    await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+      customerName,
+      step: 'awaiting_patient_selection',
+      currentIntent: null,
+      lastMessage: args.text,
+      lastProviderMessageId: args.messageId ?? null,
+      stateJson: {
+        pendingPatientOptions: metaMatchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+      },
+    });
+    return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
+  }
+
   // ── Main menu command ──────────────────────────────────────────────────────
   if (isMainMenuCommand(args.text)) {
     await upsertMetaWaState(args.clinic.id, args.conversationKey, {
@@ -985,7 +1064,8 @@ const buildReplyText = async (args: {
     const patientId =
       args.inboxEntry?.patientId ??
       args.patientId ??
-      (await findExistingPatientByPhone(args.clinic.id, args.phone).then(p => p?.id ?? null));
+      resolvedPatient?.id ??
+      null;
 
     const request = await createMetaWaAppointmentRequest({
       clinic: args.clinic,

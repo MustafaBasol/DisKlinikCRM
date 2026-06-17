@@ -72,7 +72,7 @@ const Patients: React.FC = () => {
 
       <div className="flex flex-col md:flex-row gap-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Search className="pointer-events-none absolute left-3 inset-y-0 my-auto h-[18px] w-[18px] text-gray-400" size={18} />
           <input 
             type="text" 
             placeholder={t('patients:searchPlaceholder')} 
