@@ -82,6 +82,8 @@
   "toggleTheme": "Toggle theme",
   "noData": "No data found.",
   "selectPlaceholder": "Select...",
+  "typeToSearch": "Type to search...",
+  "noResultsFound": "No results found.",
   "errorGeneric": "Something went wrong. Please try again.",
   "unassigned": "Unassigned",
   "files": "Files",
