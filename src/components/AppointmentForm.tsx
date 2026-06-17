@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Calendar, Clock, User, Stethoscope, Loader2, AlertCircle, Briefcase, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -74,7 +74,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
   const [error, setError] = useState<string | null>(null);
   const [availabilityWarning, setAvailabilityWarning] = useState(false);
 
-  const [patients, setPatients] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
@@ -111,10 +110,13 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     treatmentCaseId: initialData?.treatmentCaseId || '',
   });
 
-  const selectedPatient = useMemo(
-    () => patients.find(patient => patient.id === formData.patientId),
-    [patients, formData.patientId],
-  );
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [patientQuery, setPatientQuery] = useState('');
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [isPatientSearching, setIsPatientSearching] = useState(false);
+  const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
+  const patientSearchRef = useRef<HTMLDivElement>(null);
+
   const selectedDoctor = useMemo(
     () => doctors.find(doctor => doctor.id === formData.practitionerId),
     [doctors, formData.practitionerId],
@@ -130,14 +132,12 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     const fetchData = async () => {
       try {
         const clinicId = localStorage.getItem('hcrm_clinic_id');
-        const [patientsRes, doctorsRes, typesRes] = await Promise.all([
-          patientService.getAll(),
+        const [doctorsRes, typesRes] = await Promise.all([
           clinicId && clinicId !== 'all'
             ? scheduleService.getClinicDoctors(clinicId)
             : userService.getDoctors(),
           serviceService.getAll({ onlyActive: true }),
         ]);
-        setPatients(patientsRes.data);
         setDoctors(doctorsRes.data);
         setTypes(typesRes.data);
 
@@ -156,6 +156,60 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!formData.patientId) return;
+    patientService.getById(formData.patientId)
+      .then(res => {
+        setSelectedPatient(res.data);
+        setPatientQuery(`${res.data.firstName} ${res.data.lastName}`);
+      })
+      .catch(() => { /* Patient may be inaccessible; leave field empty for re-selection. */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const query = patientQuery.trim();
+    if (!isPatientDropdownOpen || query.length < 2) {
+      setPatientResults([]);
+      setIsPatientSearching(false);
+      return;
+    }
+
+    setIsPatientSearching(true);
+    const timeoutId = setTimeout(() => {
+      patientService.getAll({ search: query })
+        .then(res => setPatientResults(res.data))
+        .catch(() => setPatientResults([]))
+        .finally(() => setIsPatientSearching(false));
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [patientQuery, isPatientDropdownOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (patientSearchRef.current && !patientSearchRef.current.contains(event.target as Node)) {
+        setIsPatientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectPatient = (patient: any) => {
+    setSelectedPatient(patient);
+    setFormData(prev => ({ ...prev, patientId: patient.id }));
+    setPatientQuery(`${patient.firstName} ${patient.lastName}`);
+    setIsPatientDropdownOpen(false);
+  };
+
+  const handleClearPatientSelection = () => {
+    setSelectedPatient(null);
+    setFormData(prev => ({ ...prev, patientId: '' }));
+    setPatientQuery('');
+    setPatientResults([]);
+  };
 
   useEffect(() => {
     if (!isNoShowReschedule || !prefill?.previousAppointmentId) return;
@@ -374,19 +428,63 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
                 <User size={16} className="text-gray-400" />
                 {t('appointments:form.selectPatient')}
               </label>
-              <select
-                required
-                className="input-field"
-                value={formData.patientId}
-                onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
-              >
-                <option value="">{t('common:selectPlaceholder')}</option>
-                {patients.map(patient => (
-                  <option key={patient.id} value={patient.id}>
-                    {patient.firstName} {patient.lastName}
-                  </option>
-                ))}
-              </select>
+              <div className="relative" ref={patientSearchRef}>
+                <input
+                  type="text"
+                  required
+                  className="input-field"
+                  placeholder={t('appointments:form.patientSearchPlaceholder')}
+                  value={patientQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setPatientQuery(value);
+                    setIsPatientDropdownOpen(true);
+                    if (formData.patientId) {
+                      setSelectedPatient(null);
+                      setFormData(prev => ({ ...prev, patientId: '' }));
+                    }
+                  }}
+                  onFocus={() => setIsPatientDropdownOpen(true)}
+                />
+                {formData.patientId && (
+                  <button
+                    type="button"
+                    onClick={handleClearPatientSelection}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    aria-label={t('appointments:form.clearSelection')}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+                {isPatientDropdownOpen && patientQuery.trim().length >= 2 && (
+                  <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    {isPatientSearching ? (
+                      <div className="px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                        <Loader2 className="animate-spin" size={14} />
+                        {t('appointments:form.searchingPatients')}
+                      </div>
+                    ) : patientResults.length === 0 ? (
+                      <div className="px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400">
+                        {t('appointments:form.noPatientsFound')}
+                      </div>
+                    ) : (
+                      patientResults.map(patient => (
+                        <button
+                          key={patient.id}
+                          type="button"
+                          onClick={() => handleSelectPatient(patient)}
+                          className="w-full text-left px-3 py-2.5 text-sm text-gray-700 dark:text-gray-100 hover:bg-primary-50 dark:hover:bg-gray-700"
+                        >
+                          {patient.firstName} {patient.lastName}
+                          {patient.phone && (
+                            <span className="ml-2 text-xs text-gray-400">{patient.phone}</span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {treatmentCases.length > 0 && (

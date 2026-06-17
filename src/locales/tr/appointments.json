@@ -54,6 +54,10 @@
   },
   "form": {
     "selectPatient": "Hasta Seçin",
+    "patientSearchPlaceholder": "Hasta adı yazarak arayın...",
+    "searchingPatients": "Hastalar aranıyor...",
+    "noPatientsFound": "Hasta bulunamadı.",
+    "clearSelection": "Seçimi kaldır",
     "selectPractitioner": "Hekim Seçin",
     "selectType": "Hizmet",
     "startTime": "Başlangıç Saati",
