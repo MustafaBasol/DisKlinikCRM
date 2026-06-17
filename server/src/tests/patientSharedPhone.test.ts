@@ -55,14 +55,23 @@ function getPhoneVariants(digits: string): string[] {
   if (!digits) return [];
   vs.add(digits);
   if (digits.startsWith('90') && digits.length === 12) {
+    // Turkish international: 905XXXXXXXXX → 5XXXXXXXXX, 05XXXXXXXXX
     vs.add(digits.slice(2));
     vs.add(`0${digits.slice(2)}`);
   } else if (digits.startsWith('0') && digits.length === 11) {
+    // Turkish local with leading 0: 05XXXXXXXXX → 5XXXXXXXXX, 905XXXXXXXXX
     vs.add(digits.slice(1));
     vs.add(`90${digits.slice(1)}`);
-  } else if (digits.length === 10) {
+  } else if (digits.length === 10 && !digits.startsWith('0')) {
+    // Turkish 10-digit without prefix: 5XXXXXXXXX → 05XXXXXXXXX, 905XXXXXXXXX
     vs.add(`0${digits}`);
     vs.add(`90${digits}`);
+  } else if (digits.length === 11 && !digits.startsWith('90') && !digits.startsWith('0')) {
+    // International non-Turkish 11-digit (CC-2 + local-9), e.g. 33753849141 (France +33)
+    vs.add(`0${digits.slice(2)}`);
+  } else if (digits.length === 12 && !digits.startsWith('90') && !digits.startsWith('0')) {
+    // International non-Turkish 12-digit (CC-2 + local-10), e.g. 447XXXXXXXXX (UK +44)
+    vs.add(`0${digits.slice(2)}`);
   }
   return [...vs];
 }
@@ -79,9 +88,16 @@ function phonesMatch(a: string | null, b: string): boolean {
 // ─── Sahte findPatientsByPhone ────────────────────────────────────────────────
 
 function findPatientsByPhone(clinicId: string, phone: string): Patient[] {
-  const exact = patientStore.filter(p => p.clinicId === clinicId && p.phone === phone && !p.deletedAt);
-  if (exact.length > 0) return exact;
-  return patientStore.filter(p => p.clinicId === clinicId && !p.deletedAt && phonesMatch(p.phone, phone));
+  const normalizedPhone = normalizePhoneDigits(phone);
+  return patientStore.filter(p =>
+    p.clinicId === clinicId &&
+    !p.deletedAt &&
+    (
+      p.phone === phone ||
+      p.phone === normalizedPhone ||
+      phonesMatch(p.phone, normalizedPhone)
+    ),
+  );
 }
 
 /** Returns single patient if exactly 1 match, null if 0 or multiple. */
@@ -562,6 +578,173 @@ test('E-postasız hasta oluşturulabilir (null e-posta kabul edilir)', () => {
   assert.equal(p.email, null, 'null e-posta kabul edilmeli');
   assert.ok(p.id, 'Hasta oluşturulmalı');
 });
+
+// ── Fransız/Uluslararası telefon normalleştirmesi ─────────────────────────────
+
+console.log('\n=== Fransız/Uluslararası Telefon Formatı ===');
+
+test('Fransız uluslararası numara (33753849141) yerel formatla (0753849141) eşleşir', () => {
+  const incoming = '33753849141';
+  const storedLocal = '0753849141';
+  assert.ok(phonesMatch(storedLocal, incoming), 'Fransız yerel format uluslararasıyla eşleşmeli');
+  assert.ok(phonesMatch(incoming, storedLocal), 'Ters yönde de eşleşmeli');
+});
+
+test('Fransız biçimli numara (+33 7 53 84 91 41) uluslararası formatla (33753849141) eşleşir', () => {
+  const stored = '+33 7 53 84 91 41';
+  const incoming = '33753849141';
+  assert.ok(phonesMatch(stored, incoming), 'Biçimli +33 formatı uluslararasıyla eşleşmeli');
+});
+
+test('getPhoneVariants: 33753849141 (Fransız) → 0753849141 içerir', () => {
+  const variants = getPhoneVariants('33753849141');
+  assert.ok(variants.includes('0753849141'), '33753849141 → yerel format 0753849141 içermeli');
+});
+
+test('findPatientsByPhone: iki hasta farklı Fransız formatlarında saklandığında her ikisi de bulunur', () => {
+  resetStore();
+  // Patient A stored as international digits (common when created via WhatsApp)
+  const pA = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Alain', lastName: 'Dupont', phone: '33753849141', email: null });
+  // Patient B stored as French local format (common when entered via UI)
+  const pB = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Marie', lastName: 'Dupont', phone: '07 53 84 91 41', email: null });
+  // Incoming WhatsApp sender in international format
+  const matches = findPatientsByPhone('clinic-1', '33753849141');
+  assert.equal(matches.length, 2, 'Her iki hasta da bulunmalı (farklı format saklanmış olsa bile)');
+  assert.ok(matches.some(p => p.id === pA.id), 'Alain Dupont eşleşmeli');
+  assert.ok(matches.some(p => p.id === pB.id), 'Marie Dupont eşleşmeli');
+});
+
+test('findPatientsByPhone erken dönüş yok: digit eşleşmesi diğer biçimli hastaları atlamaz', () => {
+  resetStore();
+  // Old fast-path bug: pA was found by exact string match and function returned early,
+  // causing pB (stored with formatting) to be silently skipped.
+  const pA = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Alain', lastName: 'Dupont', phone: '33753849141', email: null });
+  const pB = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Marie', lastName: 'Dupont', phone: '07 53 84 91 41', email: null });
+  const matches = findPatientsByPhone('clinic-1', '33753849141');
+  assert.equal(matches.length, 2, 'Erken dönüş yok: her iki hasta da bulunmalı');
+  void pA; void pB;
+});
+
+// ── Randevu akışı paylaşımlı telefon koruyucusu ───────────────────────────────
+
+console.log('\n=== Randevu Akışı Paylaşımlı Telefon Koruyucusu (Booking Guard) ===');
+
+// Mirrors the new booking guard in handleIncomingWhatsAppMessage.
+// hasActiveBookingFlow = step in ['awaiting_service','awaiting_date','awaiting_time',
+//   'awaiting_confirmation','awaiting_general_date','awaiting_general_time','awaiting_general_practitioner']
+function simulateBookingGuard(
+  matchingPatients: Patient[],
+  selectedPatientId: string | null,
+  hasActiveBookingFlow: boolean,
+): { requiresSelection: boolean } {
+  if (!hasActiveBookingFlow || matchingPatients.length <= 1) {
+    return { requiresSelection: false };
+  }
+  const validSelectedId = selectedPatientId !== null &&
+    matchingPatients.some(p => p.id === selectedPatientId);
+  return { requiresSelection: !validSelectedId };
+}
+
+test('Booking guard: null adım → guard devreye girmez (genel guard yönetir)', () => {
+  resetStore();
+  const phone = '05321234567';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'C', lastName: 'D', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  const result = simulateBookingGuard(matching, null, false); // currentStep null
+  assert.equal(result.requiresSelection, false, 'Null adımda booking guard devreye girmemeli');
+});
+
+test('Booking guard: awaiting_service + 2 hasta + selectedPatientId yok → seçim gerekli', () => {
+  resetStore();
+  const phone = '05321234567';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'C', lastName: 'D', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  assert.equal(simulateBookingGuard(matching, null, true).requiresSelection, true,
+    'awaiting_service: paylaşımlı telefonda seçim istenmeli');
+});
+
+test('Booking guard: awaiting_date + 2 hasta + selectedPatientId yok → seçim gerekli', () => {
+  resetStore();
+  const phone = '05321234567';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'C', lastName: 'D', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  assert.equal(simulateBookingGuard(matching, null, true).requiresSelection, true,
+    'awaiting_date: paylaşımlı telefonda seçim istenmeli');
+});
+
+test('Booking guard: awaiting_time + 2 hasta + selectedPatientId yok → seçim gerekli', () => {
+  resetStore();
+  const phone = '05321234567';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'C', lastName: 'D', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  assert.equal(simulateBookingGuard(matching, null, true).requiresSelection, true,
+    'awaiting_time: paylaşımlı telefonda seçim istenmeli');
+});
+
+test('Booking guard: awaiting_confirmation + 2 hasta + selectedPatientId yok → seçim gerekli (randevu oluşturulmamalı)', () => {
+  resetStore();
+  const phone = '05321234567';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'C', lastName: 'D', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  // This is the production failure: "evet" at awaiting_confirmation bypassed guard
+  assert.equal(simulateBookingGuard(matching, null, true).requiresSelection, true,
+    'awaiting_confirmation deterministic: randevu oluşturulmadan önce seçim istenmeli');
+});
+
+test('Booking guard: geçerli selectedPatientId ile devam edilir', () => {
+  resetStore();
+  const phone = '05321234567';
+  const p1 = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'A', lastName: 'B', phone, email: null });
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'C', lastName: 'D', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  assert.equal(simulateBookingGuard(matching, p1.id, true).requiresSelection, false,
+    'Geçerli selectedPatientId ile seçim gerekmez, randevu devam edebilir');
+});
+
+test('Booking guard: tek hasta → guard devreye girmez', () => {
+  resetStore();
+  const phone = '05321234567';
+  createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Tek', lastName: 'Hasta', phone, email: null });
+  const matching = findPatientsByPhone('clinic-1', phone);
+  assert.equal(simulateBookingGuard(matching, null, true).requiresSelection, false,
+    'Tek hasta için guard devreye girmemeli');
+});
+
+test('Fransız telefon + awaiting_confirmation: iki hasta farklı formatlarda, seçim gerekli', () => {
+  resetStore();
+  // Production scenario: incoming 33753849141, pA stored as int, pB as local French
+  const pA = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Alain', lastName: 'Dupont', phone: '33753849141', email: null });
+  const pB = createPatient({ clinicId: 'clinic-1', organizationId: 'org-1', firstName: 'Marie', lastName: 'Dupont', phone: '07 53 84 91 41', email: null });
+  const matches = findPatientsByPhone('clinic-1', '33753849141');
+  assert.equal(matches.length, 2, 'Her iki Fransız hasta bulunmalı');
+  const guardResult = simulateBookingGuard(matches, null, true); // awaiting_confirmation
+  assert.equal(guardResult.requiresSelection, true,
+    'Fransız telefon senaryosunda randevu oluşturulmadan önce hasta seçimi istenmeli');
+  void pA; void pB;
+});
+
+// ── Üretim teşhis sorgusu ─────────────────────────────────────────────────────
+// Mustafa, üretimde iki hastanın aynı klinikte olduğunu ve telefon eşleşmesinin
+// çalışıp çalışmadığını doğrulamak için aşağıdaki SQL sorgusunu kullanabilirsiniz:
+//
+// SELECT id, "firstName", "lastName", phone, "deletedAt", "clinicId"
+// FROM "Patient"
+// WHERE "clinicId" = '<klinik-id>'
+//   AND "deletedAt" IS NULL
+//   AND (
+//     regexp_replace(phone, '[^0-9]', '', 'g') = '33753849141'
+//     OR regexp_replace(phone, '[^0-9]', '', 'g') = '753849141'
+//     OR regexp_replace(phone, '[^0-9]', '', 'g') = '0753849141'
+//   )
+// ORDER BY "createdAt";
+//
+// Beklenen: 2 satır (Patient A +33 formatında, Patient B 07 formatında).
+// 0 veya 1 satır dönüyorsa: hastalar farklı klinikte VEYA deletedAt set edilmiş olabilir.
 
 // ─── Sonuç ───────────────────────────────────────────────────────────────────
 

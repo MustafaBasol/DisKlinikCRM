@@ -230,14 +230,25 @@ const getPhoneVariants = (value?: string | null) => {
   if (!digits) return variants;
   variants.add(digits);
   if (digits.startsWith('90') && digits.length === 12) {
+    // Turkish international: 905XXXXXXXXX → 5XXXXXXXXX, 05XXXXXXXXX
     variants.add(digits.slice(2));
     variants.add(`0${digits.slice(2)}`);
   } else if (digits.startsWith('0') && digits.length === 11) {
+    // Turkish local with leading 0: 05XXXXXXXXX → 5XXXXXXXXX, 905XXXXXXXXX
     variants.add(digits.slice(1));
     variants.add(`90${digits.slice(1)}`);
-  } else if (digits.length === 10) {
+  } else if (digits.length === 10 && !digits.startsWith('0')) {
+    // Turkish 10-digit without prefix: 5XXXXXXXXX → 05XXXXXXXXX, 905XXXXXXXXX
     variants.add(`0${digits}`);
     variants.add(`90${digits}`);
+  } else if (digits.length === 11 && !digits.startsWith('90') && !digits.startsWith('0')) {
+    // International non-Turkish 11-digit (CC-2 + local-9), e.g. 33753849141 (France +33)
+    // Add local format: 0 + last 9 digits → 0753849141
+    variants.add(`0${digits.slice(2)}`);
+  } else if (digits.length === 12 && !digits.startsWith('90') && !digits.startsWith('0')) {
+    // International non-Turkish 12-digit (CC-2 + local-10), e.g. 447XXXXXXXXX (UK +44)
+    // Add local format: 0 + last 10 digits → 07XXXXXXXXX
+    variants.add(`0${digits.slice(2)}`);
   }
   return variants;
 };
@@ -1102,19 +1113,24 @@ const getAssistantServices = async (clinicId: string): Promise<AssistantService[
 /**
  * Returns all patients in the clinic that match the given phone number (exact or normalized).
  * Multiple patients can share the same phone (e.g. a parent/guardian number for children).
+ *
+ * Always scans all non-deleted patients via phonesMatch so that patients stored in
+ * different formats (e.g. "+33 7 53 84 91 41" vs "07 53 84 91 41") are both found.
+ * The old early-return fast path caused the guard to miss shared-phone siblings when
+ * one sibling had a digit-exact match and the other was stored with formatting.
  */
 const findPatientsByPhone = async (clinicId: string, phone: string) => {
-  const exactMatches = await prisma.patient.findMany({
-    where: { clinicId, phone, deletedAt: null },
-    select: { id: true, firstName: true, lastName: true, phone: true },
-  });
-  if (exactMatches.length > 0) return exactMatches;
-
+  const normalizedPhone = normalizePhone(phone);
   const candidates = await prisma.patient.findMany({
     where: { clinicId, phone: { not: null }, deletedAt: null },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
-  return candidates.filter(candidate => phonesMatch(candidate.phone, phone));
+  return candidates.filter(
+    candidate =>
+      candidate.phone === phone ||
+      candidate.phone === normalizedPhone ||
+      phonesMatch(candidate.phone, normalizedPhone),
+  );
 };
 
 /**
@@ -2594,9 +2610,78 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
       },
     });
+    console.log('[whatsapp-shared-phone] general-guard', {
+      clinicId: clinic.id,
+      phoneSuffix: inputPhone.slice(-4),
+      currentStep,
+      matchedPatientCount: matchingPatients.length,
+      hasSelectedPatientId: Boolean(stateJson.selectedPatientId),
+      pendingPatientOptionsCount: matchingPatients.length,
+      branch: 'shared_phone_ask_selection',
+    });
     return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
   }
   // ── END PATIENT SELECTION ─────────────────────────────────────────────────
+
+  // ── Always log shared-phone status during booking for production diagnostics ──
+  // Logs matchedPatientCount so we can confirm whether 0, 1, or 2+ patients matched.
+  if (hasActiveBookingFlow || matchingPatients.length > 1) {
+    const validSelectedId = Boolean(stateJson.selectedPatientId) &&
+      matchingPatients.some(p => p.id === stateJson.selectedPatientId);
+    const logBranch =
+      matchingPatients.length === 0 ? 'no_match'
+      : matchingPatients.length === 1 ? 'single_patient'
+      : validSelectedId ? 'shared_phone_selected_patient'
+      : existingPatient ? 'shared_phone_name_match'
+      : 'shared_phone_unresolved';
+    console.log('[whatsapp-shared-phone] status', {
+      clinicId: clinic.id,
+      phoneSuffix: inputPhone.slice(-4),
+      currentStep,
+      matchedPatientCount: matchingPatients.length,
+      hasSelectedPatientId: Boolean(stateJson.selectedPatientId),
+      validSelectedId,
+      pendingPatientOptionsCount: (stateJson.pendingPatientOptions ?? []).length,
+      branch: logBranch,
+    });
+  }
+
+  // ── BOOKING FLOW SHARED-PHONE GUARD ─────────────────────────────────────────
+  // When a booking step is active and multiple patients share this phone, require
+  // an explicit stateJson.selectedPatientId. customerName name-match is NOT
+  // sufficient — it silently resolves to the wrong patient when both have records.
+  // This guard must run BEFORE any booking handler below.
+  if (hasActiveBookingFlow && matchingPatients.length > 1) {
+    const validSelectedId = Boolean(stateJson.selectedPatientId) &&
+      matchingPatients.some(p => p.id === stateJson.selectedPatientId);
+    if (!validSelectedId) {
+      const patientList = matchingPatients.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+      await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+        customerName: state?.customerName ?? null,
+        step: 'awaiting_patient_selection',
+        currentIntent: null,
+        lastMessage: input.text,
+        stateJson: {
+          availableSlots: stateJson.availableSlots,
+          lastShownSlots: stateJson.lastShownSlots,
+          pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
+          matchedServices: stateJson.matchedServices,
+          pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+        },
+      });
+      console.log('[whatsapp-shared-phone] booking-guard', {
+        clinicId: clinic.id,
+        phoneSuffix: inputPhone.slice(-4),
+        currentStep,
+        matchedPatientCount: matchingPatients.length,
+        hasSelectedPatientId: Boolean(stateJson.selectedPatientId),
+        pendingPatientOptionsCount: matchingPatients.length,
+        branch: 'shared_phone_ask_selection',
+      });
+      return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
+    }
+  }
+  // ── END BOOKING SHARED-PHONE GUARD ──────────────────────────────────────────
 
   console.log('[whatsapp-assistant] route-start', { phone: redactPhone(input.phone), text: summarizeTextForLog(input.text), previousStep: state?.step ?? null });
   console.info('[whatsapp-assistant] incoming', { phone: redactPhone(input.phone), text: summarizeTextForLog(input.text) });
