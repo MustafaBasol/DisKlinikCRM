@@ -1128,7 +1128,9 @@ const buildReplyText = async (args: {
       formatServiceList,
       upsertState: data =>
         upsertMetaWaState(args.clinic.id, args.conversationKey, {
-          ...data,
+          ...(stateJson.selectedPatientId
+            ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+            : data),
           lastProviderMessageId: args.messageId ?? null,
         }),
     });
@@ -1169,7 +1171,7 @@ const buildReplyText = async (args: {
           selectedTime: null,
           lastMessage: args.text,
           lastProviderMessageId: args.messageId ?? null,
-          stateJson: { availableSlots: savedSlots, lastShownSlots: shownSlots },
+          stateJson: { availableSlots: savedSlots, lastShownSlots: shownSlots, ...(stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : {}) },
         });
         return formatAvailabilityMessage(nextSelectedDate, shownSlots);
       }
@@ -1220,7 +1222,9 @@ const buildReplyText = async (args: {
       },
       upsertState: data =>
         upsertMetaWaState(args.clinic.id, args.conversationKey, {
-          ...data,
+          ...(stateJson.selectedPatientId
+            ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+            : data),
           lastProviderMessageId: args.messageId ?? null,
         }),
     });
@@ -1263,13 +1267,62 @@ const buildReplyText = async (args: {
       },
       upsertState: data =>
         upsertMetaWaState(args.clinic.id, args.conversationKey, {
-          ...data,
+          ...(stateJson.selectedPatientId
+            ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+            : data),
           lastProviderMessageId: args.messageId ?? null,
         }),
       resetState: nextCustomerName =>
         resetMetaWaState(args.clinic.id, args.conversationKey, nextCustomerName),
       createAppointment: sharedCreateAppointment,
     });
+  }
+
+  // ── Shared-phone confirmation safety guard ──────────────────────────────────
+  // Catches stale awaiting_confirmation state (pre-hotfix) where selectedPatientId
+  // was never stored but multiple patients share the sender phone.
+  if (currentStep === 'awaiting_confirmation' && metaMatchingPatients.length > 1) {
+    const confirmedId = stateJson.selectedPatientId ?? null;
+    const idValid = !!confirmedId && metaMatchingPatients.some(p => p.id === confirmedId);
+    if (!idValid) {
+      const storedName = customerName?.toLocaleLowerCase('tr-TR').trim() ?? '';
+      const nameMatch = storedName
+        ? metaMatchingPatients.find(p =>
+            `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName)
+        : null;
+      if (nameMatch) {
+        stateJson.selectedPatientId = nameMatch.id;
+        console.log('[meta-wa-confirmation] shared-phone-guard', {
+          clinicId: args.clinic.id, phoneSuffix: args.conversationKey.slice(-4), currentStep,
+          matchedPatientCount: metaMatchingPatients.length, branch: 'proceed_name_match',
+        });
+      } else {
+        const patientList = metaMatchingPatients.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+        await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          customerName: customerName ?? null,
+          step: 'awaiting_patient_selection',
+          currentIntent: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.messageId ?? null,
+          stateJson: {
+            availableSlots: stateJson.availableSlots,
+            lastShownSlots: stateJson.lastShownSlots,
+            pendingConfirmationSlot: stateJson.pendingConfirmationSlot,
+            pendingPatientOptions: metaMatchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+          },
+        });
+        console.log('[meta-wa-confirmation] shared-phone-guard', {
+          clinicId: args.clinic.id, phoneSuffix: args.conversationKey.slice(-4), currentStep,
+          matchedPatientCount: metaMatchingPatients.length, branch: 'ask_selection',
+        });
+        return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
+      }
+    } else {
+      console.log('[meta-wa-confirmation] shared-phone-guard', {
+        clinicId: args.clinic.id, phoneSuffix: args.conversationKey.slice(-4), currentStep,
+        matchedPatientCount: metaMatchingPatients.length, branch: 'proceed_selected_patient',
+      });
+    }
   }
 
   // ── Booking step: awaiting_confirmation ───────────────────────────────────
@@ -1290,7 +1343,9 @@ const buildReplyText = async (args: {
         resetMetaWaState(args.clinic.id, args.conversationKey, nextCustomerName),
       upsertState: data =>
         upsertMetaWaState(args.clinic.id, args.conversationKey, {
-          ...data,
+          ...(stateJson.selectedPatientId
+            ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+            : data),
           lastProviderMessageId: args.messageId ?? null,
         }),
       createAppointment: sharedCreateAppointment,

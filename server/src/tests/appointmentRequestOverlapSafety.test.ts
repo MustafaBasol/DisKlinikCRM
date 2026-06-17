@@ -332,6 +332,44 @@ async function main() {
     assert.equal(calls[0][2], calls[1][2], 'key2 is same on both calls');
   });
 
+  await test('advisory lock SQL uses ::int4 casts — not raw bigint (production regression)', async () => {
+    // Production error: pg_advisory_xact_lock(bigint, bigint) does not exist in PostgreSQL.
+    // The fix: explicit ::int4 casts in the SQL template so PostgreSQL resolves the correct overload.
+    const capturedArgs: unknown[] = [];
+    const mockTx = {
+      $executeRaw: (...args: unknown[]) => {
+        capturedArgs.push(...args);
+        return Promise.resolve(0);
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    await acquireAppointmentSlotLock(mockTx, {
+      clinicId: 'clinic-cast-test',
+      practitionerId: 'prac-cast-test',
+      startTime: new Date('2026-06-17T09:00:00Z'),
+    });
+
+    // capturedArgs[0] is the TemplateStringsArray from the tagged template literal.
+    // For `SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`:
+    //   template[0] = 'SELECT pg_advisory_xact_lock('
+    //   template[1] = '::int4, '    ← after first param
+    //   template[2] = '::int4)'     ← after second param
+    const template = capturedArgs[0] as readonly string[];
+    assert.ok(Array.isArray(template), 'First argument must be a template strings array');
+    assert.ok(
+      template.join('').includes('::int4'),
+      `SQL template must include ::int4 cast to call pg_advisory_xact_lock(integer,integer). Got: ${template.join('<param>')}`,
+    );
+    assert.ok(
+      (template[1] ?? '').includes('::int4'),
+      'Cast must appear immediately after the first parameter placeholder',
+    );
+    assert.ok(
+      (template[2] ?? '').includes('::int4'),
+      'Cast must appear immediately after the second parameter placeholder',
+    );
+  });
+
   await test('different slots produce different $executeRaw arguments', async () => {
     const clinicId = 'clinic-lock-3';
     const calls: unknown[][] = [];
