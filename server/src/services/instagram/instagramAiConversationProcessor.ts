@@ -512,17 +512,19 @@ const phonesMatch = (left?: string | null, right?: string | null) => {
 };
 
 const findExistingPatientByPhone = async (clinicId: string, phone: string) => {
-  const exactMatch = await prisma.patient.findFirst({
+  const exactMatches = await prisma.patient.findMany({
     where: { clinicId, phone, deletedAt: null },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
-  if (exactMatch) return exactMatch;
+  if (exactMatches.length === 1) return exactMatches[0];
+  if (exactMatches.length > 1) return null; // multiple patients share this phone — avoid wrong assignment
 
   const candidates = await prisma.patient.findMany({
     where: { clinicId, phone: { not: null }, deletedAt: null },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
-  return candidates.find(candidate => phonesMatch(candidate.phone, phone)) ?? null;
+  const matches = candidates.filter(candidate => phonesMatch(candidate.phone, phone));
+  return matches.length === 1 ? matches[0] : null;
 };
 
 const logInstagramReplyFailure = async (args: {

@@ -85,7 +85,8 @@ type AssistantStep =
   | 'awaiting_handoff_note'
   | 'awaiting_general_date'
   | 'awaiting_general_time'
-  | 'awaiting_general_practitioner';
+  | 'awaiting_general_practitioner'
+  | 'awaiting_patient_selection';
 
 type AssistantExtraction = {
   intent: AssistantIntent;
@@ -158,6 +159,7 @@ type ConversationStateJson = {
   };
   practitionerOptions?: { id: string; name: string }[];
   pendingPastDateClarification?: string | null;
+  pendingPatientOptions?: Array<{ id: string; firstName: string; lastName: string }> | null;
 };
 
 // ---- Helper Middlewares ----
@@ -317,6 +319,9 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
     generalRequestReason: typeof stateValue.generalRequestReason === 'string' ? stateValue.generalRequestReason : undefined,
     preferredTimeRange,
     pendingPastDateClarification: typeof stateValue.pendingPastDateClarification === 'string' ? stateValue.pendingPastDateClarification : undefined,
+    pendingPatientOptions: Array.isArray(stateValue.pendingPatientOptions)
+      ? (stateValue.pendingPatientOptions as Array<{ id: string; firstName: string; lastName: string }>)
+      : undefined,
   };
 };
 
@@ -1093,18 +1098,49 @@ const getAssistantServices = async (clinicId: string): Promise<AssistantService[
   return services.length > 0 ? services : WHATSAPP_FALLBACK_SERVICES;
 };
 
-const findExistingPatientByPhone = async (clinicId: string, phone: string) => {
-  const exactMatch = await prisma.patient.findFirst({
+/**
+ * Returns all patients in the clinic that match the given phone number (exact or normalized).
+ * Multiple patients can share the same phone (e.g. a parent/guardian number for children).
+ */
+const findPatientsByPhone = async (clinicId: string, phone: string) => {
+  const exactMatches = await prisma.patient.findMany({
     where: { clinicId, phone, deletedAt: null },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
-  if (exactMatch) return exactMatch;
+  if (exactMatches.length > 0) return exactMatches;
 
   const candidates = await prisma.patient.findMany({
     where: { clinicId, phone: { not: null }, deletedAt: null },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
-  return candidates.find(candidate => phonesMatch(candidate.phone, phone)) ?? null;
+  return candidates.filter(candidate => phonesMatch(candidate.phone, phone));
+};
+
+/**
+ * Returns the single matching patient by phone, or null if none or multiple match.
+ * When multiple patients share the same phone, returns null so callers do not
+ * silently assign a message/request to the wrong patient.
+ */
+const findExistingPatientByPhone = async (clinicId: string, phone: string) => {
+  const matches = await findPatientsByPhone(clinicId, phone);
+  return matches.length === 1 ? matches[0] : null;
+};
+
+/**
+ * Like findExistingPatientByPhone but also accepts a customerName to resolve the correct
+ * patient when multiple patients share the same phone (shared family number).
+ * Never creates a new patient — returns null when identity cannot be determined.
+ */
+const resolvePatientByPhoneAndName = async (clinicId: string, phone: string, customerName?: string | null) => {
+  const matches = await findPatientsByPhone(clinicId, phone);
+  if (matches.length === 1) return matches[0];
+  if (matches.length === 0 || !customerName?.trim()) return null;
+  const parsed = splitNameForPatient(customerName.trim());
+  const first = parsed.firstName.toLocaleLowerCase('tr-TR');
+  const last = parsed.lastName.toLocaleLowerCase('tr-TR');
+  return matches.find(
+    p => p.firstName.toLocaleLowerCase('tr-TR') === first && p.lastName.toLocaleLowerCase('tr-TR') === last,
+  ) ?? null;
 };
 
 const getClinicSystemUserId = async (clinicId: string) => {
@@ -1145,7 +1181,8 @@ const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fu
 };
 
 const ensureWhatsAppContactPatient = async (clinicId: string, phone: string, providedName?: string | null) => {
-  const existingPatient = await findExistingPatientByPhone(clinicId, phone);
+  const allMatches = await findPatientsByPhone(clinicId, phone);
+  const existingPatient = allMatches.length === 1 ? allMatches[0] : null;
   const parsedProvidedName = providedName?.trim() ? splitNameForPatient(providedName) : null;
   if (existingPatient) {
     if (parsedProvidedName && hasValidLastName(parsedProvidedName.lastName) && (!existingPatient.firstName.trim() || isPlaceholderPatientName(existingPatient))) {
@@ -1156,6 +1193,17 @@ const ensureWhatsAppContactPatient = async (clinicId: string, phone: string, pro
       });
     }
     return existingPatient;
+  }
+  // Multiple patients share this phone — try to match by name before creating a new patient.
+  // This prevents duplicates when the selected patient's name is already known from conversation state.
+  if (allMatches.length > 1 && parsedProvidedName) {
+    const first = parsedProvidedName.firstName.toLocaleLowerCase('tr-TR');
+    const last = parsedProvidedName.lastName.toLocaleLowerCase('tr-TR');
+    const nameMatch = allMatches.find(
+      p => p.firstName.toLocaleLowerCase('tr-TR') === first && p.lastName.toLocaleLowerCase('tr-TR') === last,
+    );
+    if (nameMatch) return nameMatch;
+    return null; // phone is shared and name doesn't match any — don't create a duplicate
   }
   if (!parsedProvidedName || !hasValidLastName(parsedProvidedName.lastName)) return null;
   return createPatientFromWhatsAppName(clinicId, phone, providedName!.trim());
@@ -1601,7 +1649,7 @@ const handleHumanHandoffIntent = async (
   input: NormalizedWhatsAppMessage,
   customerName: string | null | undefined,
 ) => {
-  const existingPatient = await findExistingPatientByPhone(clinicId, input.phone);
+  const existingPatient = await resolvePatientByPhoneAndName(clinicId, input.phone, customerName);
   const contactRequest = await upsertContactRequest({
     clinicId,
     channel: 'whatsapp',
@@ -1649,7 +1697,7 @@ const handleHandoffNote = async (
       },
     });
   } else {
-    const existingPatient = await findExistingPatientByPhone(clinicId, input.phone);
+    const existingPatient = await resolvePatientByPhoneAndName(clinicId, input.phone, customerName);
     await upsertContactRequest({
       clinicId,
       channel: 'whatsapp',
@@ -1664,7 +1712,7 @@ const handleHandoffNote = async (
     });
   }
 
-  await resetWhatsAppConversationState(clinicId, input.phone, customerName);
+  await resetWhatsAppConversationState(clinicId, input.phone, null);
   return 'Notunuzu ekledim. Yetkili ekip en kısa sürede size dönüş yapacak.';
 };
 
@@ -1870,7 +1918,7 @@ const createGeneralAppointmentRequest = async (args: {
   reason?: string | null;
   selectedPractitionerId?: string | null;
 }) => {
-  const existingPatient = await findExistingPatientByPhone(args.clinic.id, args.input.phone);
+  const existingPatient = await resolvePatientByPhoneAndName(args.clinic.id, args.input.phone, args.customerName);
   const patientName = getRequestPatientName(args.customerName, args.input);
   const timeZone = args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE;
   const startTime = args.preferredTimeRange?.startTime
@@ -1914,7 +1962,7 @@ const createGeneralAppointmentRequest = async (args: {
     });
   }
 
-  await resetWhatsAppConversationState(args.clinic.id, args.input.phone, args.customerName ?? patientName);
+  await resetWhatsAppConversationState(args.clinic.id, args.input.phone, null);
   const dateText = formatTurkishDateLong(args.selectedDate, timeZone);
   return `Talebinizi klinik onay ekranına aldım. Genel muayene / acil değerlendirme için ${dateText}${rangeText ? `, ${rangeText}` : ''} tercihiniz personel tarafından kontrol edilecek. Klinik ekibi size uygunluk bilgisini iletecek.`;
 };
@@ -2337,10 +2385,31 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   // Security: cap text length before any AI processing.
   input.text = sanitizeInboundMessageText(input.text);
 
-  const existingPatient = await findExistingPatientByPhone(clinic.id, inputPhone);
-  const state = await prisma.whatsAppConversationState.findUnique({
-    where: { clinicId_phone: { clinicId: clinic.id, phone: inputPhone } },
-  });
+  // Fetch all matching patients and conversation state in parallel so we can resolve the patient
+  // before saving the message and before checking patient-selection state.
+  const [matchingPatients, state] = await Promise.all([
+    findPatientsByPhone(clinic.id, inputPhone),
+    prisma.whatsAppConversationState.findUnique({
+      where: { clinicId_phone: { clinicId: clinic.id, phone: inputPhone } },
+    }),
+  ]);
+
+  const stateJson = readConversationStateJson(state?.stateJson);
+
+  // Compute currentStep early (before existingPatient so guards below can use it).
+  const currentStep = (state?.step ?? null) as AssistantStep | 'main_menu' | null;
+
+  // Resolve existing patient: single match → use directly.
+  // Multiple matches → try to identify via customerName stored after patient selection.
+  // customerName is cleared at booking completion (resetWhatsAppConversationState with null) so it
+  // does not persist across independent booking sessions for shared family phones.
+  let existingPatient: (typeof matchingPatients)[0] | null =
+    matchingPatients.length === 1 ? matchingPatients[0] : null;
+  if (!existingPatient && matchingPatients.length > 1 && state?.customerName) {
+    const storedName = state.customerName.toLocaleLowerCase('tr-TR').trim();
+    existingPatient =
+      matchingPatients.find(p => `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName) ?? null;
+  }
 
   if (existingPatient) {
     await saveWhatsAppConversationMessage({
@@ -2349,14 +2418,11 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       direction: 'incoming', text: input.text, rawPayload: input.rawPayload,
     });
   }
-
-  const stateJson = readConversationStateJson(state?.stateJson);
   const services = await getAssistantServices(clinic.id);
   const normalizedText = normalizeIntentText(input.text);
   const standaloneNumericSelection = extractStandaloneNumericSelection(input.text);
   const persistedCustomerName = existingPatient ? getPatientFullName(existingPatient) : null;
   const customerName = state?.customerName || persistedCustomerName;
-  const currentStep = (state?.step ?? null) as AssistantStep | 'main_menu' | null;
   const selectedAppointmentTypeId = state?.selectedAppointmentTypeId ?? null;
   const selectedAppointmentTypeName = state?.selectedAppointmentTypeName ?? null;
   const selectedPractitionerId = state?.selectedPractitionerId ?? null;
@@ -2475,6 +2541,53 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     }
   }
   // ── END REMINDER CONFIRMATION ──
+
+  // ── PATIENT SELECTION (shared-phone scenario) ─────────────────────────────
+  // When the user previously received a numbered patient list, handle their reply.
+  if (currentStep === 'awaiting_patient_selection') {
+    const pendingOptions = stateJson.pendingPatientOptions;
+    if (pendingOptions && pendingOptions.length > 0) {
+      let selectedPatient: typeof pendingOptions[0] | undefined;
+      if (standaloneNumericSelection !== null && standaloneNumericSelection >= 1 && standaloneNumericSelection <= pendingOptions.length) {
+        selectedPatient = pendingOptions[standaloneNumericSelection - 1];
+      }
+      if (!selectedPatient) {
+        const q = input.text.trim().toLocaleLowerCase('tr-TR');
+        selectedPatient = pendingOptions.find(p => {
+          const full = `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR');
+          return full.includes(q) || q.includes(p.firstName.toLocaleLowerCase('tr-TR'));
+        });
+      }
+      if (selectedPatient) {
+        await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+          customerName: `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim(),
+          step: null,
+          currentIntent: null,
+          lastMessage: input.text,
+          stateJson: null,
+        });
+        return formatMainMenuOptions(`Merhaba ${selectedPatient.firstName}! Size nasıl yardımcı olabilirim?`);
+      }
+      const patientList = pendingOptions.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+      return `Geçerli bir seçim yapılamadı. Lütfen listedeki numarayı girin:\n\n${patientList}`;
+    }
+  }
+
+  // When multiple patients share this phone and none is resolved yet, ask the user to select.
+  if (matchingPatients.length > 1 && !existingPatient) {
+    const patientList = matchingPatients.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+    await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+      customerName: state?.customerName ?? null,
+      step: 'awaiting_patient_selection',
+      currentIntent: null,
+      lastMessage: input.text,
+      stateJson: {
+        pendingPatientOptions: matchingPatients.map(p => ({ id: p.id, firstName: p.firstName, lastName: p.lastName })),
+      },
+    });
+    return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
+  }
+  // ── END PATIENT SELECTION ─────────────────────────────────────────────────
 
   console.log('[whatsapp-assistant] route-start', { phone: redactPhone(input.phone), text: summarizeTextForLog(input.text), previousStep: state?.step ?? null });
   console.info('[whatsapp-assistant] incoming', { phone: redactPhone(input.phone), text: summarizeTextForLog(input.text) });
@@ -2662,7 +2775,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots },
       extractNumericSelection, findSlotMatches, formatAvailabilityMessage, minutesToTime, logAvailabilitySave,
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
-      resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
+      resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
       createAppointment: createAppointmentRequestFromAssistant,
     });
   }
@@ -2674,7 +2787,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
       stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots, pendingConfirmationSlot: stateJson.pendingConfirmationSlot },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
-      resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
+      resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
       createAppointment: createAppointmentRequestFromAssistant,
     });
   }
@@ -2969,7 +3082,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         return { exactTime: extracted.exactTime, afterTime: extracted.afterTime, timePreference: extracted.timePreference };
       },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
-      resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
+      resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
       createAppointment: createAppointmentRequestFromAssistant,
     });
   }
@@ -2981,7 +3094,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedPractitionerId: state?.selectedPractitionerId, selectedDate: state?.selectedDate },
       stateJson: { availableSlots: stateJson.availableSlots, lastShownSlots: stateJson.lastShownSlots, pendingConfirmationSlot: stateJson.pendingConfirmationSlot },
       upsertState: data => upsertWhatsAppConversationState(clinic.id, input.phone, data),
-      resetState: nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, nextCustomerName),
+      resetState: _nextCustomerName => resetWhatsAppConversationState(clinic.id, input.phone, null),
       createAppointment: createAppointmentRequestFromAssistant,
     });
   }

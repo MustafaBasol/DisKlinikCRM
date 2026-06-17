@@ -227,6 +227,9 @@ model Patient {
   recallCandidates                  RecallCandidate[]
   recallActions                     RecallAction[]
   privacyRequests                   PatientPrivacyRequest[]
+
+  @@index([clinicId, phone])
+  @@index([clinicId, email])
 }
 
 model AppointmentType {

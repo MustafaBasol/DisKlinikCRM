@@ -67,6 +67,8 @@ export const patientService = {
   create: (data: any) => api.post('/patients', data),
   update: (id: string, data: any) => api.put(`/patients/${id}`, data),
   archive: (id: string) => api.delete(`/patients/${id}`),
+  checkPhoneDuplicate: (params: { phone: string; clinicId?: string; excludePatientId?: string }) =>
+    api.get('/patients/check-phone-duplicate', { params }),
   downloadImportTemplate: () =>
     api.get('/patients/import-template', { responseType: 'blob' }),
   importPreview: (file: File, clinicId?: string) => {
