@@ -123,6 +123,7 @@
     "email": "Email Address",
     "phone": "Phone Number",
     "dob": "Date of Birth",
+    "dobFutureError": "Date of birth cannot be in the future",
     "status": "Patient Status",
     "source": "Source",
     "communicationConsent": "Patient consents to communication",

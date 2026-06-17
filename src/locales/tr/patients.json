@@ -123,6 +123,7 @@
     "email": "E-posta Adresi",
     "phone": "Telefon Numarası",
     "dob": "Doğum Tarihi",
+    "dobFutureError": "Doğum tarihi bugünden ileri bir tarih olamaz",
     "status": "Hasta Durumu",
     "source": "Kaynak",
     "communicationConsent": "Hasta iletişim izni veriyor",
