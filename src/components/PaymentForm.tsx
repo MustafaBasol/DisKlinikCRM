@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, User, Briefcase, DollarSign, Calendar, CreditCard, AlertCircle, Loader2, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, User, Briefcase, DollarSign, Calendar, CreditCard, AlertCircle, Loader2, FileText, Search, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { patientService, treatmentCaseService, paymentService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
@@ -17,10 +17,17 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
   const { defaultCurrency } = useClinicPreferences();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const [patients, setPatients] = useState<any[]>([]);
+
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [patientDropdownOpen, setPatientDropdownOpen] = useState(false);
+  const [patientSearchLoading, setPatientSearchLoading] = useState(false);
+  const [selectedPatientLabel, setSelectedPatientLabel] = useState('');
+  const patientSearchRef = useRef<HTMLDivElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
-  
+
   const [formData, setFormData] = useState({
     patientId: patientId || initialData?.patientId || '',
     treatmentCaseId: treatmentCaseId || initialData?.treatmentCaseId || '',
@@ -32,21 +39,58 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
     notes: initialData?.notes || '',
   });
 
+  // Load initial patient name when editing or when patientId is pre-set
   useEffect(() => {
-    const fetchData = async () => {
+    const presetId = patientId || initialData?.patientId;
+    if (!presetId) return;
+    patientService.getById(presetId)
+      .then(r => {
+        const p = r.data;
+        setSelectedPatientLabel(`${p.firstName} ${p.lastName}`);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Debounced patient search
+  const searchPatients = useCallback((q: string) => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!q.trim()) {
+      setPatientResults([]);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setPatientSearchLoading(true);
       try {
-        const patientsRes = await patientService.getAll();
-        setPatients(patientsRes.data);
-        
-        if (formData.patientId) {
-          const tcRes = await treatmentCaseService.getAll({ patientId: formData.patientId });
-          setTreatmentCases(tcRes.data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch form data:', err);
+        const res = await patientService.getAll({ search: q, limit: 20 });
+        setPatientResults(res.data || []);
+      } catch {
+        setPatientResults([]);
+      } finally {
+        setPatientSearchLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (patientSearchRef.current && !patientSearchRef.current.contains(e.target as Node)) {
+        setPatientDropdownOpen(false);
       }
     };
-    fetchData();
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Fetch treatment cases when patient changes
+  useEffect(() => {
+    if (!formData.patientId) {
+      setTreatmentCases([]);
+      return;
+    }
+    treatmentCaseService.getAll({ patientId: formData.patientId })
+      .then(r => setTreatmentCases(r.data || []))
+      .catch(() => {});
   }, [formData.patientId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,23 +137,71 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
 
           <div className="space-y-4">
             {/* Patient Selector */}
-            <div className="space-y-1">
+            <div className="space-y-1" ref={patientSearchRef}>
               <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <User size={16} className="text-gray-400" />
                 {t('payments:form.patient')}
               </label>
-              <select
-                required
-                className="input-field"
-                value={formData.patientId}
-                onChange={(e) => setFormData({ ...formData, patientId: e.target.value, treatmentCaseId: '' })}
-                disabled={!!patientId}
-              >
-                <option value="">{t('common:selectPlaceholder')}</option>
-                {patients.map(p => (
-                  <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
-                ))}
-              </select>
+              {patientId ? (
+                <div className="input-field text-gray-700">{selectedPatientLabel}</div>
+              ) : (
+                <div className="relative">
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      required={!formData.patientId}
+                      className="input-field pl-9 pr-8"
+                      placeholder={t('common:selectPlaceholder')}
+                      value={patientDropdownOpen ? patientSearch : selectedPatientLabel}
+                      onFocus={() => {
+                        setPatientDropdownOpen(true);
+                        setPatientSearch('');
+                        setPatientResults([]);
+                      }}
+                      onChange={(e) => {
+                        setPatientSearch(e.target.value);
+                        searchPatients(e.target.value);
+                      }}
+                    />
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    {/* Hidden input to satisfy form required validation */}
+                    <input type="text" required value={formData.patientId} onChange={() => {}} className="sr-only" tabIndex={-1} />
+                  </div>
+                  {patientDropdownOpen && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                      {patientSearchLoading && (
+                        <div className="flex items-center justify-center py-3 text-gray-400">
+                          <Loader2 size={16} className="animate-spin" />
+                        </div>
+                      )}
+                      {!patientSearchLoading && patientSearch && patientResults.length === 0 && (
+                        <div className="px-4 py-3 text-sm text-gray-400">{t('common:noResultsFound')}</div>
+                      )}
+                      {!patientSearchLoading && !patientSearch && (
+                        <div className="px-4 py-3 text-sm text-gray-400">{t('common:typeToSearch')}</div>
+                      )}
+                      {patientResults.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 hover:text-primary-700 transition-colors"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setFormData({ ...formData, patientId: p.id, treatmentCaseId: '' });
+                            setSelectedPatientLabel(`${p.firstName} ${p.lastName}`);
+                            setPatientDropdownOpen(false);
+                            setPatientSearch('');
+                          }}
+                        >
+                          <span className="font-medium">{p.firstName} {p.lastName}</span>
+                          {p.phone && <span className="ml-2 text-gray-400">{p.phone}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Treatment Case Selector */}

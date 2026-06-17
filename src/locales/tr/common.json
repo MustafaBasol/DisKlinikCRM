@@ -82,6 +82,8 @@
   "toggleTheme": "Tema değiştir",
   "noData": "Veri bulunamadı.",
   "selectPlaceholder": "Seçiniz",
+  "typeToSearch": "Aramak için yazın...",
+  "noResultsFound": "Sonuç bulunamadı.",
   "errorGeneric": "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
   "unassigned": "Atanmamış",
   "files": "Dosyalar",
