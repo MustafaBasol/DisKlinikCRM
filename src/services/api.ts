@@ -469,6 +469,21 @@ export const whatsappInboxService = {
     api.post(`/whatsapp/inbox/${id}/resolve`, data),
   linkPatient: (id: string, patientId: string) =>
     api.post(`/whatsapp/inbox/${id}/link-patient`, { patientId }),
+  getMessages: (id: string) => api.get(`/whatsapp/inbox/${id}/messages`),
+  reply: (id: string, message: string) =>
+    api.post(`/whatsapp/inbox/${id}/reply`, { message }),
+  createAppointmentRequest: (id: string) =>
+    api.post(`/whatsapp/inbox/${id}/create-appointment-request`),
+  createAppointment: (id: string, data: {
+    patientId: string;
+    clinicId: string;
+    practitionerId: string;
+    appointmentTypeId: string;
+    date: string;
+    time: string;
+    endTime?: string;
+    notes?: string;
+  }) => api.post(`/whatsapp/inbox/${id}/create-appointment`, data),
 };
 
 export const financeDashboardService = {
@@ -556,6 +571,7 @@ export const instagramInboxService = {
     api.post(`/instagram/inbox/${id}/assign-clinic`, { clinicId }),
   reply: (id: string, message: string) =>
     api.post(`/instagram/conversations/${id}/reply`, { message }),
+  getMessages: (id: string) => api.get(`/instagram/inbox/${id}/messages`),
   createAppointmentRequest: (id: string) =>
     api.post(`/instagram/inbox/${id}/create-appointment-request`),
   createAppointment: (id: string, data: {

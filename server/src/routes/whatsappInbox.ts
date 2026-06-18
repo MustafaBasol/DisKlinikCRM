@@ -22,9 +22,12 @@ import type { AuthRequest } from '../middleware/auth.js';
 import { getParam } from '../utils/helpers.js';
 import { normalizeRole } from '../utils/roles.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
-import { findPatientInClinic } from '../utils/relationGuards.js';
+import { findPatientInClinic, findUserAssignedToClinic } from '../utils/relationGuards.js';
+import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 
 const router = express.Router();
+
+const normalizePhone = (value: string) => value.replace(/@.+$/, '').replace(/\D/g, '');
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -423,6 +426,351 @@ router.post(
     } catch (error) {
       console.error('[whatsapp-inbox] link-patient error', error);
       res.status(500).json({ error: 'Failed to link patient' });
+    }
+  },
+);
+
+// ─── GET /api/whatsapp/inbox/:id/messages ─────────────────────────────────────
+
+router.get(
+  '/whatsapp/inbox/:id/messages',
+  authenticate,
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST']),
+  async (req: AuthRequest, res) => {
+    const user = req.user!;
+    const entryId = getParam(req, 'id');
+
+    try {
+      const entry = await prisma.whatsAppInboxEntry.findFirst({
+        where: { id: entryId, organizationId: user.organizationId },
+      });
+      if (!entry) {
+        return res.status(404).json({ error: 'Inbox entry not found' });
+      }
+
+      if (entry.clinicId) {
+        const allowedClinicIds = await getAllowedClinicIds(user);
+        if (allowedClinicIds !== null && !allowedClinicIds.includes(entry.clinicId)) {
+          return res.status(403).json({ error: 'Forbidden: No access to this conversation' });
+        }
+      }
+
+      // Full message history is only stored once a conversation is linked to a
+      // patient (WhatsAppConversationMessage.patientId is required). Unlinked
+      // conversations only have the single lastMessageText snapshot.
+      if (!entry.clinicId || !entry.patientId) {
+        const messages = entry.lastMessageText
+          ? [
+              {
+                id: entry.id,
+                direction: 'incoming',
+                text: entry.lastMessageText,
+                createdAt: entry.updatedAt,
+              },
+            ]
+          : [];
+        return res.json({ messages, partial: true });
+      }
+
+      const messages = await prisma.whatsAppConversationMessage.findMany({
+        where: { clinicId: entry.clinicId, patientId: entry.patientId },
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+      });
+
+      res.json({ messages, partial: false });
+    } catch (error) {
+      console.error('[whatsapp-inbox] get-messages error', error);
+      res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+  },
+);
+
+// ─── POST /api/whatsapp/inbox/:id/reply ───────────────────────────────────────
+
+router.post(
+  '/whatsapp/inbox/:id/reply',
+  authenticate,
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
+  async (req: AuthRequest, res) => {
+    const user = req.user!;
+    const entryId = getParam(req, 'id');
+    const { message } = req.body as { message?: string };
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+    if (message.length > 1000) {
+      return res.status(400).json({ error: 'Message too long (max 1000 characters)' });
+    }
+
+    try {
+      const entry = await prisma.whatsAppInboxEntry.findFirst({
+        where: { id: entryId, organizationId: user.organizationId },
+      });
+      if (!entry) {
+        return res.status(404).json({ error: 'Inbox entry not found' });
+      }
+      if (!entry.clinicId) {
+        return res.status(400).json({ error: 'Please assign a clinic before replying.' });
+      }
+
+      const allowedClinicIds = await getAllowedClinicIds(user);
+      if (allowedClinicIds !== null && !allowedClinicIds.includes(entry.clinicId)) {
+        return res.status(403).json({ error: 'Forbidden: No access to this conversation' });
+      }
+
+      const result = await sendWhatsAppMessage(
+        entry.clinicId,
+        { phone: entry.phone, text: message.trim() },
+        entry.whatsappConnectionId ?? undefined,
+      );
+
+      if (!result.success) {
+        return res.status(502).json({ error: result.error ?? 'Failed to send WhatsApp message' });
+      }
+
+      if (entry.patientId) {
+        await prisma.whatsAppConversationMessage.create({
+          data: {
+            clinicId: entry.clinicId,
+            patientId: entry.patientId,
+            phone: normalizePhone(entry.phone),
+            providerMessageId: result.externalMessageId ?? null,
+            direction: 'outgoing',
+            text: message.trim(),
+          },
+        });
+      }
+
+      await prisma.whatsAppInboxEntry.update({
+        where: { id: entryId },
+        data: { updatedAt: new Date() },
+      });
+
+      await writeAuditLog({
+        organizationId: user.organizationId,
+        clinicId: entry.clinicId,
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: 'whatsapp_reply_sent',
+        entityType: 'whatsapp_inbox_entry',
+        entityId: entryId,
+        description: 'Staff replied to WhatsApp conversation',
+        ...extractRequestMeta(req),
+      });
+
+      res.json({ success: true, externalMessageId: result.externalMessageId });
+    } catch (error) {
+      console.error('[whatsapp-inbox] reply error', error);
+      res.status(500).json({ error: 'Failed to send reply' });
+    }
+  },
+);
+
+// ─── POST /api/whatsapp/inbox/:id/create-appointment-request ─────────────────
+
+router.post(
+  '/whatsapp/inbox/:id/create-appointment-request',
+  authenticate,
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
+  async (req: AuthRequest, res) => {
+    const user = req.user!;
+    const entryId = getParam(req, 'id');
+
+    try {
+      const entry = await prisma.whatsAppInboxEntry.findFirst({
+        where: { id: entryId, organizationId: user.organizationId },
+        include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+      });
+      if (!entry) {
+        return res.status(404).json({ error: 'Inbox entry not found' });
+      }
+      if (!entry.clinicId) {
+        return res.status(400).json({ error: 'Please assign a clinic before creating an appointment request.' });
+      }
+
+      const allowedClinicIds = await getAllowedClinicIds(user);
+      if (allowedClinicIds !== null && !allowedClinicIds.includes(entry.clinicId)) {
+        return res.status(403).json({ error: 'Forbidden: No access to this conversation' });
+      }
+
+      const patientName = entry.patient
+        ? `${entry.patient.firstName} ${entry.patient.lastName}`.trim()
+        : entry.displayName?.trim() || entry.phone;
+
+      const appointmentRequest = await prisma.appointmentRequest.create({
+        data: {
+          clinicId: entry.clinicId,
+          patientId: entry.patientId ?? undefined,
+          patientName,
+          phone: entry.phone,
+          source: 'whatsapp',
+          sourceConnectionId: entry.whatsappConnectionId,
+          sourceInboxEntryId: entry.id,
+          status: 'pending',
+          requestType: 'appointment',
+          rawMessage: entry.lastMessageText ?? undefined,
+          notes: `WhatsApp'tan oluşturuldu. Gönderen: ${patientName}`,
+        },
+        include: {
+          patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        },
+      });
+
+      await prisma.whatsAppInboxEntry.update({
+        where: { id: entryId },
+        data: { status: 'resolved' },
+      });
+
+      await writeAuditLog({
+        organizationId: user.organizationId,
+        clinicId: entry.clinicId,
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: 'whatsapp_inbox_converted_to_request',
+        entityType: 'whatsapp_inbox_entry',
+        entityId: entryId,
+        description: `WhatsApp conversation converted to appointment request ${appointmentRequest.id}`,
+        metadata: { appointmentRequestId: appointmentRequest.id },
+        ...extractRequestMeta(req),
+      });
+
+      res.status(201).json({ appointmentRequest });
+    } catch (error) {
+      console.error('[whatsapp-inbox] create-appointment-request error', error);
+      res.status(500).json({ error: 'Failed to create appointment request' });
+    }
+  },
+);
+
+// ─── POST /api/whatsapp/inbox/:id/create-appointment ──────────────────────────
+
+router.post(
+  '/whatsapp/inbox/:id/create-appointment',
+  authenticate,
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
+  async (req: AuthRequest, res) => {
+    const user = req.user!;
+    const entryId = getParam(req, 'id');
+    const { patientId, clinicId, practitionerId, appointmentTypeId, date, time, endTime, notes } = req.body as {
+      patientId?: string;
+      clinicId?: string;
+      practitionerId?: string;
+      appointmentTypeId?: string;
+      date?: string;
+      time?: string;
+      endTime?: string;
+      notes?: string;
+    };
+
+    if (!patientId) return res.status(400).json({ error: 'patientId is required' });
+    if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+    if (!practitionerId) return res.status(400).json({ error: 'practitionerId is required' });
+    if (!appointmentTypeId) return res.status(400).json({ error: 'appointmentTypeId is required' });
+    if (!date || !time) return res.status(400).json({ error: 'date and time are required' });
+
+    try {
+      const entry = await prisma.whatsAppInboxEntry.findFirst({
+        where: { id: entryId, organizationId: user.organizationId },
+      });
+      if (!entry) return res.status(404).json({ error: 'Inbox entry not found' });
+
+      const allowedClinicIds = await getAllowedClinicIds(user);
+      if (allowedClinicIds !== null && !allowedClinicIds.includes(clinicId)) {
+        return res.status(403).json({ error: 'Forbidden: No access to this clinic' });
+      }
+
+      const clinic = await prisma.clinic.findFirst({
+        where: { id: clinicId, organizationId: user.organizationId },
+        select: { id: true },
+      });
+      if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+      const patient = await findPatientInClinic(patientId, clinicId);
+      if (!patient) return res.status(404).json({ error: 'Patient not found in this clinic' });
+
+      const practitioner = await findUserAssignedToClinic(practitionerId, clinicId, { roles: ['DENTIST'] });
+      if (!practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
+
+      const apptType = await prisma.appointmentType.findFirst({
+        where: { id: appointmentTypeId, clinicId, isActive: true },
+        select: { id: true, durationMinutes: true },
+      });
+      if (!apptType) return res.status(400).json({ error: 'Invalid appointment type' });
+
+      const startTime = new Date(`${date}T${time}`);
+      const endDateTime = endTime
+        ? new Date(`${date}T${endTime}`)
+        : new Date(startTime.getTime() + apptType.durationMinutes * 60_000);
+
+      if (isNaN(startTime.getTime()) || isNaN(endDateTime.getTime())) {
+        return res.status(400).json({ error: 'Invalid date or time format' });
+      }
+
+      const overlap = await prisma.appointment.findFirst({
+        where: {
+          clinicId,
+          practitionerId,
+          deletedAt: null,
+          status: { notIn: ['cancelled'] },
+          OR: [{ startTime: { lt: endDateTime }, endTime: { gt: startTime } }],
+        },
+        select: { id: true },
+      });
+      if (overlap) {
+        return res.status(409).json({
+          error: 'Practitioner already has an appointment during this time',
+          code: 'APPOINTMENT_OVERLAP',
+        });
+      }
+
+      const appointment = await prisma.appointment.create({
+        data: {
+          clinicId,
+          patientId,
+          practitionerId,
+          appointmentTypeId,
+          startTime,
+          endTime: endDateTime,
+          status: 'confirmed',
+          notes: notes ?? `WhatsApp'tan oluşturuldu. Telefon: ${entry.phone}`,
+          createdById: user.id,
+        },
+        include: {
+          patient: { select: { id: true, firstName: true, lastName: true } },
+          practitioner: { select: { id: true, firstName: true, lastName: true } },
+          appointmentType: true,
+        },
+      });
+
+      await prisma.whatsAppInboxEntry.update({
+        where: { id: entryId },
+        data: {
+          status: 'resolved',
+          patientId,
+          clinicId,
+          needsClinicResolution: false,
+        },
+      });
+
+      await writeAuditLog({
+        organizationId: user.organizationId,
+        clinicId,
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: 'whatsapp_inbox_converted_to_appointment',
+        entityType: 'whatsapp_inbox_entry',
+        entityId: entryId,
+        description: `WhatsApp conversation converted to appointment ${appointment.id}`,
+        metadata: { appointmentId: appointment.id },
+        ...extractRequestMeta(req),
+      });
+
+      res.status(201).json({ appointment });
+    } catch (error) {
+      console.error('[whatsapp-inbox] create-appointment error', error);
+      res.status(500).json({ error: 'Failed to create appointment' });
     }
   },
 );

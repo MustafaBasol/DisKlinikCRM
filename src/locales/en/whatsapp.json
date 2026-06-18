@@ -23,12 +23,46 @@
       "loadUnassigned": "Unassigned conversations could not be loaded.",
       "loadConversations": "Conversations could not be loaded.",
       "resolveFailed": "Resolution failed.",
-      "linkPatientFailed": "Patient linking failed."
+      "linkPatientFailed": "Patient linking failed.",
+      "assignClinicFirst": "Assign a clinic first.",
+      "assignClinicAndPatientFirst": "Assign a clinic and patient before creating an appointment.",
+      "messageSendFailed": "Message could not be sent.",
+      "requestCreateFailed": "Appointment request could not be created.",
+      "appointmentRequiredFields": "Practitioner, service, date and time are required.",
+      "appointmentCreateFailed": "Appointment could not be created."
+    },
+    "confirm": {
+      "convertToRequest": "Do you want to convert this WhatsApp conversation to an appointment request?"
+    },
+    "success": {
+      "requestCreated": "Appointment request created.",
+      "appointmentCreated": "Appointment created."
     },
     "messageCount": "{{count}} messages",
     "possiblePatients": "Possible patients",
     "actions": {
-      "assignClinic": "Assign to Clinic"
+      "assignClinic": "Assign to Clinic",
+      "createRequest": "Create Request",
+      "createAppointment": "Create Appointment",
+      "appointment": "Appointment",
+      "appointmentDisabledHint": "Available after clinic and patient are assigned"
+    },
+    "detail": {
+      "noMessages": "No messages yet.",
+      "partialHistory": "Only the last message is shown for this conversation.",
+      "replyPlaceholder": "Write your message...",
+      "send": "Send"
+    },
+    "appointment": {
+      "title": "Create Appointment",
+      "defaultNotes": "Created from WhatsApp. Phone: {{phone}}",
+      "sourceNotice": "This appointment is being created from a WhatsApp conversation.",
+      "sender": "Phone: {{phone}}",
+      "practitioner": "Practitioner",
+      "selectPractitioner": "Select practitioner...",
+      "service": "Service",
+      "selectService": "Select service...",
+      "notes": "Notes"
     },
     "resolveModal": {
       "title": "Assign to Clinic",

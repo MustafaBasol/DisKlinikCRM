@@ -23,12 +23,46 @@
       "loadUnassigned": "Les conversations non assignées n'ont pas pu être chargées.",
       "loadConversations": "Les conversations n'ont pas pu être chargées.",
       "resolveFailed": "La résolution a échoué.",
-      "linkPatientFailed": "La liaison du patient a échoué."
+      "linkPatientFailed": "La liaison du patient a échoué.",
+      "assignClinicFirst": "Assignez d'abord une clinique.",
+      "assignClinicAndPatientFirst": "Assignez une clinique et un patient avant de créer un rendez-vous.",
+      "messageSendFailed": "Le message n'a pas pu être envoyé.",
+      "requestCreateFailed": "La demande de rendez-vous n'a pas pu être créée.",
+      "appointmentRequiredFields": "Praticien, service, date et heure sont obligatoires.",
+      "appointmentCreateFailed": "Le rendez-vous n'a pas pu être créé."
+    },
+    "confirm": {
+      "convertToRequest": "Voulez-vous convertir cette conversation WhatsApp en demande de rendez-vous ?"
+    },
+    "success": {
+      "requestCreated": "Demande de rendez-vous créée.",
+      "appointmentCreated": "Rendez-vous créé."
     },
     "messageCount": "{{count}} messages",
     "possiblePatients": "Patients possibles",
     "actions": {
-      "assignClinic": "Assigner à la clinique"
+      "assignClinic": "Assigner à la clinique",
+      "createRequest": "Créer une demande",
+      "createAppointment": "Créer un rendez-vous",
+      "appointment": "Rendez-vous",
+      "appointmentDisabledHint": "Disponible après assignation de la clinique et du patient"
+    },
+    "detail": {
+      "noMessages": "Pas encore de messages.",
+      "partialHistory": "Seul le dernier message est affiché pour cette conversation.",
+      "replyPlaceholder": "Écrivez votre message...",
+      "send": "Envoyer"
+    },
+    "appointment": {
+      "title": "Créer un rendez-vous",
+      "defaultNotes": "Créé depuis WhatsApp. Téléphone : {{phone}}",
+      "sourceNotice": "Ce rendez-vous est créé depuis une conversation WhatsApp.",
+      "sender": "Téléphone : {{phone}}",
+      "practitioner": "Praticien",
+      "selectPractitioner": "Sélectionner un praticien...",
+      "service": "Service",
+      "selectService": "Sélectionner un service...",
+      "notes": "Notes"
     },
     "resolveModal": {
       "title": "Assigner à la clinique",

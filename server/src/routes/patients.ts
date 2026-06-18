@@ -45,7 +45,8 @@ router.get('/patients/check-phone-duplicate', authorize(['OWNER', 'ORG_ADMIN', '
 });
 
 // GET /api/patients
-router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+// BILLING dahil — yalnızca patientListSelect (kimlik + iletişim) alanları döner, klinik veri içermez.
+router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { search, status, source, includeArchived, clinicId: selectedClinicId } = req.query;
   const { normalizedRole, id: userId } = req.user!;
 
@@ -93,7 +94,9 @@ router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
 });
 
 // GET /api/patients/:id
-router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+// BILLING dahil — bu role için klinik veri (tedavi, randevu, dental, ek dosya, mesaj) DÖNDÜRÜLMEZ;
+// yalnızca kimlik/iletişim alanları + ödemeler (finansal işlemler için gerekli minimum veri).
+router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const orgId = req.user!.organizationId;
   const { normalizedRole, id: userId } = req.user!;
@@ -105,6 +108,24 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
         { appointments: { some: { practitionerId: userId, deletedAt: null } } },
         { treatmentCases: { some: { practitionerId: userId, deletedAt: null } } },
       ];
+    }
+
+    if (normalizedRole === 'BILLING') {
+      const billingPatient = await prisma.patient.findFirst({
+        where: patientWhere,
+        select: {
+          ...patientListSelect,
+          payments: {
+            where: { paymentStatus: { not: 'cancelled' } },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      });
+      if (!billingPatient) return res.status(404).json({ error: 'Patient not found' });
+      if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(billingPatient.clinicId)) {
+        return res.status(403).json({ error: 'Access denied to this patient' });
+      }
+      return res.json(billingPatient);
     }
 
     const patient = await prisma.patient.findFirst({

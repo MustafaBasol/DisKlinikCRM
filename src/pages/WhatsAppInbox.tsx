@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Inbox, AlertCircle, CheckCircle2, RefreshCw, User, Building2 } from 'lucide-react';
+import {
+  Inbox,
+  AlertCircle,
+  CheckCircle2,
+  RefreshCw,
+  User,
+  Building2,
+  Send,
+  Loader2,
+  XCircle,
+  CalendarPlus,
+  Calendar,
+  MessageSquare,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
-import { whatsappInboxService, patientService } from '../services/api';
+import { whatsappInboxService, patientService, userService, serviceService } from '../services/api';
 import {
   canViewWhatsAppInbox,
   canResolveWhatsAppConversation,
@@ -46,11 +59,32 @@ interface ResolveModal {
   patients: PossiblePatient[];
 }
 
+interface ConversationMessage {
+  id: string;
+  direction: string;
+  text: string;
+  createdAt: string;
+}
+
+interface AppointmentModal {
+  entry: InboxEntry;
+  patientId: string;
+  clinicId: string;
+  practitionerId: string;
+  appointmentTypeId: string;
+  date: string;
+  time: string;
+  notes: string;
+  doctors: Array<{ id: string; firstName: string; lastName: string }>;
+  services: Array<{ id: string; name: string; durationMinutes: number }>;
+  loadingData: boolean;
+}
+
 export default function WhatsAppInbox() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation(['whatsapp', 'common']);
-  const { formatDate } = useClinicPreferences();
+  const { formatDate, formatDateTime } = useClinicPreferences();
   const [activeTab, setActiveTab] = useState<'unassigned' | 'all'>('unassigned');
   const [unassigned, setUnassigned] = useState<InboxEntry[]>([]);
   const [conversations, setConversations] = useState<InboxEntry[]>([]);
@@ -60,8 +94,20 @@ export default function WhatsAppInbox() {
   const [filterClinic, setFilterClinic] = useState('');
   const [resolveModal, setResolveModal] = useState<ResolveModal | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [detailEntry, setDetailEntry] = useState<InboxEntry | null>(null);
+  const [detailMessages, setDetailMessages] = useState<ConversationMessage[]>([]);
+  const [detailPartial, setDetailPartial] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replying, setReplying] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [apptModal, setApptModal] = useState<AppointmentModal | null>(null);
+  const [savingAppt, setSavingAppt] = useState(false);
+  const [toast, setToast] = useState<{ success: boolean; message: string } | null>(null);
   const role = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
   const canSeeUnassigned = role === 'OWNER' || role === 'ORG_ADMIN';
+  const canReply = canViewWhatsAppInbox(user);
 
   useEffect(() => {
     if (!canViewWhatsAppInbox(user)) {
@@ -162,6 +208,139 @@ export default function WhatsAppInbox() {
   }
 
   const canResolve = canResolveWhatsAppConversation(user);
+
+  function reload() {
+    if (activeTab === 'unassigned') loadUnassigned();
+    else loadConversations();
+  }
+
+  // ── Conversation detail ──────────────────────────────────────────────────
+
+  async function openDetail(entry: InboxEntry) {
+    setDetailEntry(entry);
+    setDetailError('');
+    setReplyText('');
+    setLoadingMessages(true);
+    try {
+      const res = await whatsappInboxService.getMessages(entry.id);
+      setDetailMessages(res.data.messages || []);
+      setDetailPartial(Boolean(res.data.partial));
+    } catch {
+      setDetailMessages([]);
+      setDetailPartial(true);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }
+
+  function closeDetail() {
+    setDetailEntry(null);
+    setDetailMessages([]);
+    setReplyText('');
+    setDetailError('');
+  }
+
+  async function handleReply() {
+    if (!detailEntry || !replyText.trim()) return;
+    setReplying(true);
+    setDetailError('');
+    try {
+      await whatsappInboxService.reply(detailEntry.id, replyText.trim());
+      setReplyText('');
+      const res = await whatsappInboxService.getMessages(detailEntry.id);
+      setDetailMessages(res.data.messages || []);
+      setDetailPartial(Boolean(res.data.partial));
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setDetailError(msg ?? t('whatsapp:inbox.errors.messageSendFailed'));
+    } finally {
+      setReplying(false);
+    }
+  }
+
+  async function handleConvertToRequest(entry: InboxEntry) {
+    if (!entry.clinicId) {
+      setDetailError(t('whatsapp:inbox.errors.assignClinicFirst'));
+      return;
+    }
+    if (!window.confirm(t('whatsapp:inbox.confirm.convertToRequest'))) return;
+    setConvertingId(entry.id);
+    try {
+      await whatsappInboxService.createAppointmentRequest(entry.id);
+      setToast({ success: true, message: t('whatsapp:inbox.success.requestCreated') });
+      closeDetail();
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setDetailError(msg ?? t('whatsapp:inbox.errors.requestCreateFailed'));
+    } finally {
+      setConvertingId(null);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }
+
+  async function openAppointmentModal(entry: InboxEntry) {
+    if (!entry.clinicId || !entry.patientId) {
+      setDetailError(t('whatsapp:inbox.errors.assignClinicAndPatientFirst'));
+      return;
+    }
+    const modal: AppointmentModal = {
+      entry,
+      patientId: entry.patientId,
+      clinicId: entry.clinicId,
+      practitionerId: '',
+      appointmentTypeId: '',
+      date: new Date().toISOString().split('T')[0],
+      time: '09:00',
+      notes: t('whatsapp:inbox.appointment.defaultNotes', { phone: entry.phone }),
+      doctors: [],
+      services: [],
+      loadingData: true,
+    };
+    setApptModal(modal);
+    try {
+      const [docRes, svcRes] = await Promise.all([
+        userService.getDoctors(),
+        serviceService.getAll({ onlyActive: true }),
+      ]);
+      setApptModal(prev => prev ? { ...prev, doctors: docRes.data ?? [], services: svcRes.data ?? [], loadingData: false } : null);
+    } catch {
+      setApptModal(prev => prev ? { ...prev, loadingData: false } : null);
+    }
+  }
+
+  async function handleCreateAppointment() {
+    if (!apptModal) return;
+    const { entry, patientId, clinicId, practitionerId, appointmentTypeId, date, time, notes } = apptModal;
+    if (!practitionerId || !appointmentTypeId || !date || !time) {
+      setError(t('whatsapp:inbox.errors.appointmentRequiredFields'));
+      return;
+    }
+    setSavingAppt(true);
+    try {
+      await whatsappInboxService.createAppointment(entry.id, {
+        patientId, clinicId, practitionerId, appointmentTypeId, date, time, notes,
+      });
+      setApptModal(null);
+      setToast({ success: true, message: t('whatsapp:inbox.success.appointmentCreated') });
+      closeDetail();
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? t('whatsapp:inbox.errors.appointmentCreateFailed'));
+    } finally {
+      setSavingAppt(false);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }
+
+  function goToAppointmentForm(entry: InboxEntry) {
+    const params = new URLSearchParams({ source: 'whatsapp', whatsappInboxEntryId: entry.id });
+    if (entry.patientId) params.set('patientId', entry.patientId);
+    if (entry.clinicId) params.set('clinicId', entry.clinicId);
+    navigate(`/appointments?${params.toString()}`);
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -265,7 +444,7 @@ export default function WhatsAppInbox() {
               {unassigned.map(entry => (
                 <div key={entry.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openDetail(entry)}>
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold text-gray-800">{entry.phone}</span>
                         {entry.displayName && (
@@ -284,7 +463,7 @@ export default function WhatsAppInbox() {
                           {entry.possiblePatients.map(p => (
                             <button
                               key={p.id}
-                              onClick={() => canLinkWhatsAppPatient(user) && handleLinkPatient(entry.id, p.id)}
+                              onClick={(e) => { e.stopPropagation(); canLinkWhatsAppPatient(user) && handleLinkPatient(entry.id, p.id); }}
                               disabled={!canLinkWhatsAppPatient(user)}
                               className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 rounded-full px-2 py-0.5 hover:bg-blue-100 disabled:opacity-50"
                             >
@@ -301,7 +480,7 @@ export default function WhatsAppInbox() {
                       </span>
                       {canResolve && (
                         <button
-                          onClick={() => openResolveModal(entry)}
+                          onClick={(e) => { e.stopPropagation(); openResolveModal(entry); }}
                           className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
                         >
                           <Building2 size={14} />
@@ -324,7 +503,11 @@ export default function WhatsAppInbox() {
           ) : (
             <div className="space-y-3">
               {conversations.map(entry => (
-                <div key={entry.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div
+                  key={entry.id}
+                  className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm cursor-pointer hover:border-green-300 transition-colors"
+                  onClick={() => openDetail(entry)}
+                >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -451,6 +634,235 @@ export default function WhatsAppInbox() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Conversation Detail Modal */}
+      {detailEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="font-semibold text-gray-900">{detailEntry.phone}</h2>
+                {detailEntry.displayName && (
+                  <p className="text-xs text-gray-500">{detailEntry.displayName}</p>
+                )}
+              </div>
+              <button onClick={closeDetail} className="text-gray-400 hover:text-gray-600">
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {detailError && (
+              <div className="mx-6 mt-3 p-2.5 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2 shrink-0">
+                <AlertCircle size={14} />
+                {detailError}
+              </div>
+            )}
+
+            {!detailEntry.clinicId && (
+              <div className="mx-6 mt-3 p-2.5 bg-yellow-50 text-yellow-700 rounded-lg text-sm flex items-center gap-2 shrink-0">
+                <AlertCircle size={14} />
+                {t('whatsapp:inbox.errors.assignClinicFirst')}
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+              {loadingMessages ? (
+                <div className="flex justify-center py-8"><Loader2 className="animate-spin text-green-600" size={24} /></div>
+              ) : detailMessages.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-8">{t('whatsapp:inbox.detail.noMessages')}</p>
+              ) : (
+                <>
+                  {detailPartial && (
+                    <p className="text-xs text-gray-400 text-center mb-2">{t('whatsapp:inbox.detail.partialHistory')}</p>
+                  )}
+                  {detailMessages.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.direction === 'outgoing' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                        msg.direction === 'outgoing'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                        <p className={`text-[10px] mt-1 ${msg.direction === 'outgoing' ? 'text-green-100' : 'text-gray-400'}`}>
+                          {formatDateTime(msg.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t border-gray-200 flex flex-wrap gap-2 shrink-0">
+              {canViewWhatsAppInbox(user) && detailEntry.status !== 'resolved' && (
+                <button
+                  onClick={() => handleConvertToRequest(detailEntry)}
+                  disabled={convertingId === detailEntry.id || !detailEntry.clinicId}
+                  title={!detailEntry.clinicId ? t('whatsapp:inbox.errors.assignClinicFirst') : t('whatsapp:inbox.actions.createRequest')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {convertingId === detailEntry.id ? <Loader2 size={12} className="animate-spin" /> : <CalendarPlus size={12} />}
+                  {t('whatsapp:inbox.actions.createRequest')}
+                </button>
+              )}
+              {canViewWhatsAppInbox(user) && (
+                <button
+                  onClick={() => detailEntry.clinicId && detailEntry.patientId ? openAppointmentModal(detailEntry) : goToAppointmentForm(detailEntry)}
+                  title={!detailEntry.clinicId || !detailEntry.patientId ? t('whatsapp:inbox.actions.appointmentDisabledHint') : t('whatsapp:inbox.actions.createAppointment')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors"
+                >
+                  <Calendar size={12} />
+                  {t('whatsapp:inbox.actions.appointment')}
+                </button>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 shrink-0">
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder={t('whatsapp:inbox.detail.replyPlaceholder')}
+                  rows={2}
+                  maxLength={1000}
+                  disabled={!canReply || !detailEntry.clinicId}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                <button
+                  onClick={handleReply}
+                  disabled={!canReply || !detailEntry.clinicId || replying || !replyText.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 shrink-0"
+                >
+                  {replying ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  {t('whatsapp:inbox.detail.send')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Appointment Modal */}
+      {apptModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Calendar size={18} className="text-green-600" />
+                {t('whatsapp:inbox.appointment.title')}
+              </h2>
+              <button onClick={() => setApptModal(null)} className="text-gray-400 hover:text-gray-600">
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-4 flex-1 space-y-4">
+              <div className="p-3 bg-green-50 rounded-lg text-xs text-green-700 flex items-start gap-2">
+                <MessageSquare size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  {t('whatsapp:inbox.appointment.sourceNotice')}
+                  {' '}
+                  {t('whatsapp:inbox.appointment.sender', { phone: apptModal.entry.phone })}
+                </span>
+              </div>
+
+              {apptModal.loadingData ? (
+                <div className="flex justify-center py-8"><Loader2 className="animate-spin text-green-600" size={24} /></div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('whatsapp:inbox.appointment.practitioner')} <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={apptModal.practitionerId}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, practitionerId: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="">{t('whatsapp:inbox.appointment.selectPractitioner')}</option>
+                      {apptModal.doctors.map(d => (
+                        <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('whatsapp:inbox.appointment.service')} <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={apptModal.appointmentTypeId}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, appointmentTypeId: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="">{t('whatsapp:inbox.appointment.selectService')}</option>
+                      {apptModal.services.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('common:date')} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={apptModal.date}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, date: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('common:time')} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={apptModal.time}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, time: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('whatsapp:inbox.appointment.notes')}</label>
+                    <textarea
+                      rows={2}
+                      value={apptModal.notes}
+                      onChange={e => setApptModal(prev => prev ? { ...prev, notes: e.target.value } : null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3 shrink-0">
+              <button onClick={() => setApptModal(null)} className="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm">
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={handleCreateAppointment}
+                disabled={savingAppt || apptModal.loadingData || !apptModal.practitionerId || !apptModal.appointmentTypeId}
+                className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                {savingAppt ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
+                {t('whatsapp:inbox.actions.createAppointment')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[70] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${toast.success ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+          {toast.success ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+          {toast.message}
         </div>
       )}
     </div>

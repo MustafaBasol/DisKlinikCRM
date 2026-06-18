@@ -23,12 +23,46 @@
       "loadUnassigned": "Nicht zugewiesene Konversationen konnten nicht geladen werden.",
       "loadConversations": "Konversationen konnten nicht geladen werden.",
       "resolveFailed": "Auflösung fehlgeschlagen.",
-      "linkPatientFailed": "Patientenverknüpfung fehlgeschlagen."
+      "linkPatientFailed": "Patientenverknüpfung fehlgeschlagen.",
+      "assignClinicFirst": "Weisen Sie zuerst eine Klinik zu.",
+      "assignClinicAndPatientFirst": "Weisen Sie vor dem Erstellen eines Termins Klinik und Patient zu.",
+      "messageSendFailed": "Nachricht konnte nicht gesendet werden.",
+      "requestCreateFailed": "Terminanfrage konnte nicht erstellt werden.",
+      "appointmentRequiredFields": "Behandler, Leistung, Datum und Uhrzeit sind erforderlich.",
+      "appointmentCreateFailed": "Termin konnte nicht erstellt werden."
+    },
+    "confirm": {
+      "convertToRequest": "Moechten Sie diese WhatsApp-Konversation in eine Terminanfrage umwandeln?"
+    },
+    "success": {
+      "requestCreated": "Terminanfrage erstellt.",
+      "appointmentCreated": "Termin erstellt."
     },
     "messageCount": "{{count}} Nachrichten",
     "possiblePatients": "Mögliche Patienten",
     "actions": {
-      "assignClinic": "Klinik zuweisen"
+      "assignClinic": "Klinik zuweisen",
+      "createRequest": "Anfrage erstellen",
+      "createAppointment": "Termin erstellen",
+      "appointment": "Termin",
+      "appointmentDisabledHint": "Verfuegbar, nachdem Klinik und Patient zugewiesen wurden"
+    },
+    "detail": {
+      "noMessages": "Noch keine Nachrichten.",
+      "partialHistory": "Fuer diese Konversation wird nur die letzte Nachricht angezeigt.",
+      "replyPlaceholder": "Nachricht schreiben...",
+      "send": "Senden"
+    },
+    "appointment": {
+      "title": "Termin erstellen",
+      "defaultNotes": "Aus WhatsApp erstellt. Telefon: {{phone}}",
+      "sourceNotice": "Dieser Termin wird aus einer WhatsApp-Konversation erstellt.",
+      "sender": "Telefon: {{phone}}",
+      "practitioner": "Behandler",
+      "selectPractitioner": "Behandler auswaehlen...",
+      "service": "Leistung",
+      "selectService": "Leistung auswaehlen...",
+      "notes": "Notizen"
     },
     "resolveModal": {
       "title": "Klinik zuweisen",

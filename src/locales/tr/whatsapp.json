@@ -23,12 +23,46 @@
       "loadUnassigned": "Atanmamış konuşmalar yüklenemedi.",
       "loadConversations": "Konuşmalar yüklenemedi.",
       "resolveFailed": "Çözümleme başarısız oldu.",
-      "linkPatientFailed": "Hasta bağlama başarısız oldu."
+      "linkPatientFailed": "Hasta bağlama başarısız oldu.",
+      "assignClinicFirst": "Önce bir klinik atayın.",
+      "assignClinicAndPatientFirst": "Randevu oluşturmak için önce klinik ve hasta atayın.",
+      "messageSendFailed": "Mesaj gönderilemedi.",
+      "requestCreateFailed": "Randevu talebi oluşturulamadı.",
+      "appointmentRequiredFields": "Hekim, hizmet, tarih ve saat zorunludur.",
+      "appointmentCreateFailed": "Randevu oluşturulamadı."
+    },
+    "confirm": {
+      "convertToRequest": "Bu WhatsApp konuşmasını randevu talebine dönüştürmek istiyor musunuz?"
+    },
+    "success": {
+      "requestCreated": "Randevu talebi oluşturuldu.",
+      "appointmentCreated": "Randevu oluşturuldu."
     },
     "messageCount": "{{count}} mesaj",
     "possiblePatients": "Olası hastalar",
     "actions": {
-      "assignClinic": "Kliniğe Ata"
+      "assignClinic": "Kliniğe Ata",
+      "createRequest": "Talep Oluştur",
+      "createAppointment": "Randevu Oluştur",
+      "appointment": "Randevu",
+      "appointmentDisabledHint": "Klinik ve hasta atandıktan sonra kullanılabilir"
+    },
+    "detail": {
+      "noMessages": "Henüz mesaj yok.",
+      "partialHistory": "Bu konuşma için yalnızca son mesaj gösteriliyor.",
+      "replyPlaceholder": "Mesajınızı yazın...",
+      "send": "Gönder"
+    },
+    "appointment": {
+      "title": "Randevu Oluştur",
+      "defaultNotes": "WhatsApp'tan oluşturuldu. Telefon: {{phone}}",
+      "sourceNotice": "Bu randevu WhatsApp konuşmasından oluşturuluyor.",
+      "sender": "Telefon: {{phone}}",
+      "practitioner": "Hekim",
+      "selectPractitioner": "Hekim seçin...",
+      "service": "Hizmet",
+      "selectService": "Hizmet seçin...",
+      "notes": "Not"
     },
     "resolveModal": {
       "title": "Kliniğe Ata",

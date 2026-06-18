@@ -135,6 +135,50 @@ router.get(
   },
 );
 
+// ── GET /api/instagram/inbox/:id/messages ──────────────────────────────────────
+
+router.get(
+  '/instagram/inbox/:id/messages',
+  authenticate,
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
+  async (req: AuthRequest, res) => {
+    const user = req.user!;
+    if (!canViewInstagramInbox(user)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const id = getParam(req, 'id');
+
+    try {
+      const entry = await prisma.instagramInboxEntry.findFirst({
+        where: { id, organizationId: user.organizationId },
+      });
+      if (!entry) return res.status(404).json({ error: 'Inbox entry not found' });
+
+      if (entry.clinicId) {
+        const allowedClinicIds = await getAllowedClinicIds(user);
+        if (allowedClinicIds && !allowedClinicIds.includes(entry.clinicId)) {
+          return res.status(403).json({ error: 'You do not have access to this conversation.' });
+        }
+      }
+
+      const messages = await prisma.instagramConversationMessage.findMany({
+        where: {
+          organizationId: user.organizationId,
+          externalSenderId: entry.externalSenderId,
+          ...(entry.instagramConnectionId ? { instagramConnectionId: entry.instagramConnectionId } : {}),
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+      });
+
+      return res.json({ messages });
+    } catch {
+      return res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+  },
+);
+
 // ── GET /api/instagram/inbox/conversations ─────────────────────────────────────
 
 router.get(
