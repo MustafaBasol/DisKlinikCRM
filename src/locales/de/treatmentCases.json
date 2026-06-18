@@ -70,7 +70,8 @@
     "noDescription": "Keine Beschreibung angegeben.",
     "errors": {
       "loadFailed": "Details der Behandlungsakte konnten nicht geladen werden.",
-      "notFound": "Behandlungsakte nicht gefunden."
+      "notFound": "Behandlungsakte nicht gefunden.",
+      "proceduresLoadFailed": "Behandlungsprozeduren konnten nicht geladen werden."
     }
   },
   "progress": {

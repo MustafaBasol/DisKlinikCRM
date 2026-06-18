@@ -70,7 +70,8 @@
     "noDescription": "Aucune description fournie.",
     "errors": {
       "loadFailed": "Impossible de récupérer les détails du dossier de traitement.",
-      "notFound": "Dossier de traitement introuvable."
+      "notFound": "Dossier de traitement introuvable.",
+      "proceduresLoadFailed": "Impossible de charger les procédures de traitement."
     }
   },
   "progress": {
