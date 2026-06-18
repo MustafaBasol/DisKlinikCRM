@@ -662,7 +662,7 @@ const MainLayoutInner: React.FC = () => {
               className="hidden md:flex items-center gap-2 max-w-md w-full pl-3 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-xl text-sm text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <Search size={18} className="text-gray-400" />
-              <span className="flex-1 text-left">{t('common:search')}…</span>
+              <span className="flex-1 text-left">{t('common:search')}</span>
               <span className="hidden lg:flex items-center gap-0.5 text-[11px] font-mono bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-400">
                 <span>Ctrl</span><span>+K</span>
               </span>

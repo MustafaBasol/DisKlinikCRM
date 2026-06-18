@@ -3,11 +3,11 @@ import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Loader2, User, Build
 import { patientService } from '../services/api';
 import PatientForm from '../components/PatientForm';
 import PatientImportModal from '../components/PatientImportModal';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
 import { useAuth } from '../context/AuthContext';
-import { canImportPatients } from '../utils/permissions';
+import { canImportPatients, canViewPatients } from '../utils/permissions';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 const Patients: React.FC = () => {
@@ -46,6 +46,12 @@ const Patients: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [search, status, includeArchived, selectedClinicId]);
 
+  // BILLING bu sayfanın klinik içeriğini göremez — hasta arama/seçimi Payments
+  // sayfasındaki ödeme formu üzerinden yapılır.
+  if (!canViewPatients(currentUser)) {
+    return <Navigate to="/payments" replace />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -72,7 +78,7 @@ const Patients: React.FC = () => {
 
       <div className="flex flex-col md:flex-row gap-4">
         <div className="flex-1 relative">
-          <Search className="pointer-events-none absolute left-3 inset-y-0 my-auto h-[18px] w-[18px] text-gray-400" size={18} />
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-gray-400" size={18} />
           <input 
             type="text" 
             placeholder={t('patients:searchPlaceholder')} 

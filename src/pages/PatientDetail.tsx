@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, Navigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Mail, 
@@ -42,7 +42,7 @@ import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PaymentForm from '../components/PaymentForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
-import { normalizeRole } from '../utils/permissions';
+import { normalizeRole, canViewPatients } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -161,6 +161,12 @@ const PatientDetail: React.FC = () => {
   }
 
   if (!patient) return null;
+
+  // BILLING klinik hasta detayını göremez (tedavi, randevu, dental, dosya, mesaj) —
+  // ödeme işlemleri için hasta arama/seçimi Payments sayfasındaki form üzerinden yapılır.
+  if (!canViewPatients(user)) {
+    return <Navigate to="/payments" replace />;
+  }
 
   // Group WhatsApp messages into conversation sessions (>60 min gap = new session)
   const whatsappSessions: Array<{ startTime: string; endTime: string; count: number; incomingCount: number; outgoingCount: number }> = [];
