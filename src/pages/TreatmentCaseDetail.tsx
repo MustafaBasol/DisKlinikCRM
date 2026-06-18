@@ -57,6 +57,7 @@ const TreatmentCaseDetail: React.FC = () => {
   const [pendingStage, setPendingStage] = useState<string | null>(null);
   const [stageSaving, setStageSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [proceduresError, setProceduresError] = useState<string | null>(null);
 
   // Treatment procedures
   const [procedures, setProcedures] = useState<any[]>([]);
@@ -92,29 +93,39 @@ const TreatmentCaseDetail: React.FC = () => {
   const fetchDetail = async () => {
     if (!id) return;
     setLoading(true);
+    setError(null);
+    setProceduresError(null);
     try {
       const res = await treatmentCaseService.getById(id);
       setTCase(res.data);
-      
-      const payRes = await paymentService.getAll({ treatmentCaseId: id });
-      setPayments(payRes.data);
-
-      const insuranceRes = await insuranceProvisionService.getAll({ treatment_case_id: id });
-      setInsuranceProvisions(insuranceRes.data);
-
-      const procRes = await treatmentPlanProceduresService.getByCaseId(id);
-      setProcedures(procRes.data);
-
-      const svcRes = await serviceService.getAll({ onlyActive: true });
-      setServices(svcRes.data);
-
-      const matRes = await treatmentCaseService.getMaterials(id);
-      setMaterials(matRes.data);
-
-      const invRes = await inventoryService.getAll({ isActive: 'true' });
-      setInventoryItems(invRes.data);
     } catch (err: any) {
       setError(err.response?.data?.error || t('treatmentCases:detail.errors.loadFailed'));
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const procRes = await treatmentPlanProceduresService.getByCaseId(id);
+      setProcedures(procRes.data);
+    } catch (err: any) {
+      setProceduresError(err.response?.data?.error || t('treatmentCases:detail.errors.proceduresLoadFailed'));
+    }
+
+    try {
+      const [payRes, insuranceRes, svcRes, matRes, invRes] = await Promise.all([
+        paymentService.getAll({ treatmentCaseId: id }),
+        insuranceProvisionService.getAll({ treatment_case_id: id }),
+        serviceService.getAll({ onlyActive: true }),
+        treatmentCaseService.getMaterials(id),
+        inventoryService.getAll({ isActive: 'true' }),
+      ]);
+      setPayments(payRes.data);
+      setInsuranceProvisions(insuranceRes.data);
+      setServices(svcRes.data);
+      setMaterials(matRes.data);
+      setInventoryItems(invRes.data);
+    } catch (err: any) {
+      console.error('Failed to load treatment case secondary data:', err);
     } finally {
       setLoading(false);
     }
@@ -784,7 +795,12 @@ const TreatmentCaseDetail: React.FC = () => {
                   </button>
                 </div>
               </div>
-              {procedures.length === 0 ? (
+              {proceduresError ? (
+                <div className="p-6 text-center text-red-500 text-xs">
+                  <AlertCircle className="mx-auto mb-2" size={20} />
+                  {proceduresError}
+                </div>
+              ) : procedures.length === 0 ? (
                 <div className="p-6 text-center text-gray-400 text-xs italic">
                   {t('treatmentCases:procedures.empty')}{' '}
                   <button onClick={() => openProcForm()} className="text-primary-600 font-semibold hover:underline">

@@ -71,7 +71,8 @@
     "noDescription": "Açıklama girilmemiş.",
     "errors": {
       "loadFailed": "Tedavi dosyası detayları alınamadı.",
-      "notFound": "Tedavi dosyası bulunamadı."
+      "notFound": "Tedavi dosyası bulunamadı.",
+      "proceduresLoadFailed": "Tedavi prosedürleri yüklenemedi."
     }
   },
   "progress": {

@@ -70,7 +70,8 @@
     "noDescription": "No description provided.",
     "errors": {
       "loadFailed": "Failed to fetch treatment case details.",
-      "notFound": "Treatment case not found."
+      "notFound": "Treatment case not found.",
+      "proceduresLoadFailed": "Failed to load treatment procedures."
     }
   },
   "progress": {
