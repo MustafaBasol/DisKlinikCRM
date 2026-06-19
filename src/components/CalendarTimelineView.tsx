@@ -4,6 +4,9 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventClickArg, EventDropArg, EventContentArg } from '@fullcalendar/core';
+import trLocale from '@fullcalendar/core/locales/tr';
+import deLocale from '@fullcalendar/core/locales/de';
+import frLocale from '@fullcalendar/core/locales/fr';
 import { appointmentService } from '../services/api';
 
 interface CalendarAppointment {
@@ -129,6 +132,7 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
         plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin]}
         initialView="timeGridDay"
         initialDate={selectedDate}
+        locales={[trLocale, deLocale, frLocale]}
         locale={locale.startsWith('tr') ? 'tr' : locale.startsWith('de') ? 'de' : locale.startsWith('fr') ? 'fr' : 'en'}
         headerToolbar={{
           left: 'prev,next today',
