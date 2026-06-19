@@ -539,3 +539,35 @@ export function canResolveInstagramConversation(user: UserForPermission | null |
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
+
+// ── WhatsApp/Contact Request Inbox (sidebar group) ────────────────────────────
+
+/**
+ * Randevu talepleri (WhatsApp/Instagram) görüntüleme.
+ * server/src/routes/appointmentRequests.ts authorize listesiyle senkron:
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ */
+export function canViewAppointmentRequests(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * İletişim talepleri (contact requests) görüntüleme.
+ * server/src/routes/contactRequests.ts CONTACT_REQUEST_ROLES ile senkron:
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ */
+export function canViewContactRequests(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'RECEPTIONIST'
+  );
+}
