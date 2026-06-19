@@ -56,7 +56,14 @@
     "paidAt": "Payment Date",
     "notes": "Notes",
     "noTreatmentCases": "No treatment cases found for this patient.",
-    "treatmentLoadError": "Failed to load treatment cases."
+    "treatmentLoadError": "Failed to load treatment cases.",
+    "errors": {
+      "patientRequired": "Please select a patient.",
+      "amountInvalid": "Please enter a payment amount greater than 0.",
+      "methodRequired": "Please select a payment method.",
+      "paidAtRequired": "Please select a payment date.",
+      "saveFailed": "The payment could not be saved."
+    }
   },
   "confirmCancel": "Cancel this payment?",
   "empty": "No payment records found.",

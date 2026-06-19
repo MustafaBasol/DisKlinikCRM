@@ -56,7 +56,14 @@
     "paidAt": "Date de Paiement",
     "notes": "Notes",
     "noTreatmentCases": "Aucun dossier de traitement trouvé pour ce patient.",
-    "treatmentLoadError": "Impossible de charger les dossiers de traitement."
+    "treatmentLoadError": "Impossible de charger les dossiers de traitement.",
+    "errors": {
+      "patientRequired": "Veuillez sélectionner un patient.",
+      "amountInvalid": "Veuillez saisir un montant de paiement supérieur à 0.",
+      "methodRequired": "Veuillez sélectionner un mode de paiement.",
+      "paidAtRequired": "Veuillez sélectionner une date de paiement.",
+      "saveFailed": "Le paiement n'a pas pu être enregistré."
+    }
   },
   "confirmCancel": "Annuler ce paiement ?",
   "empty": "Aucun paiement trouvé.",

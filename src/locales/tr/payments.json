@@ -56,7 +56,14 @@
     "paidAt": "Ödeme Tarihi",
     "notes": "Notlar",
     "noTreatmentCases": "Bu hasta için tedavi dosyası bulunamadı.",
-    "treatmentLoadError": "Tedavi dosyaları yüklenemedi."
+    "treatmentLoadError": "Tedavi dosyaları yüklenemedi.",
+    "errors": {
+      "patientRequired": "Lütfen hasta seçin.",
+      "amountInvalid": "Lütfen 0'dan büyük bir ödeme tutarı girin.",
+      "methodRequired": "Lütfen ödeme yöntemi seçin.",
+      "paidAtRequired": "Lütfen ödeme tarihi seçin.",
+      "saveFailed": "Ödeme kaydedilemedi."
+    }
   },
   "confirmCancel": "Bu ödeme iptal edilsin mi?",
   "empty": "Ödeme kaydı bulunmuyor.",
