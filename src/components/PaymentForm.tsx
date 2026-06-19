@@ -27,6 +27,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
+  const [treatmentCasesLoading, setTreatmentCasesLoading] = useState(false);
+  const [treatmentCasesError, setTreatmentCasesError] = useState(false);
 
   const [formData, setFormData] = useState({
     patientId: patientId || initialData?.patientId || '',
@@ -82,15 +84,22 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Fetch treatment cases when patient changes
+  // Fetch treatment cases when patient changes (restricted financial selector — safe for BILLING)
   useEffect(() => {
     if (!formData.patientId) {
       setTreatmentCases([]);
+      setTreatmentCasesError(false);
       return;
     }
-    treatmentCaseService.getAll({ patientId: formData.patientId })
+    setTreatmentCasesLoading(true);
+    setTreatmentCasesError(false);
+    treatmentCaseService.getFinancialSelect({ patientId: formData.patientId })
       .then(r => setTreatmentCases(r.data || []))
-      .catch(() => {});
+      .catch(() => {
+        setTreatmentCases([]);
+        setTreatmentCasesError(true);
+      })
+      .finally(() => setTreatmentCasesLoading(false));
   }, [formData.patientId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -214,13 +223,22 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
                 className="input-field"
                 value={formData.treatmentCaseId}
                 onChange={(e) => setFormData({ ...formData, treatmentCaseId: e.target.value })}
-                disabled={!formData.patientId || !!treatmentCaseId}
+                disabled={!formData.patientId || !!treatmentCaseId || treatmentCasesLoading}
               >
                 <option value="">{t('common:selectPlaceholder')}</option>
                 {treatmentCases.map(tc => (
                   <option key={tc.id} value={tc.id}>{tc.title}</option>
                 ))}
               </select>
+              {treatmentCasesLoading && (
+                <p className="text-xs text-gray-400">{t('common:loading')}</p>
+              )}
+              {!treatmentCasesLoading && treatmentCasesError && (
+                <p className="text-xs text-red-500">{t('payments:form.treatmentLoadError')}</p>
+              )}
+              {!treatmentCasesLoading && !treatmentCasesError && formData.patientId && treatmentCases.length === 0 && (
+                <p className="text-xs text-gray-400">{t('payments:form.noTreatmentCases')}</p>
+              )}
             </div>
 
             {/* Amount & Currency */}

@@ -55,6 +55,48 @@ router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
   }
 });
 
+// GET /api/treatment-cases/financial-select
+// Restricted selector for payment workflows: BILLING (and other finance-capable roles) can
+// resolve a patient's treatment cases without exposing clinical data (procedures, notes,
+// dental chart, attachments, activity logs).
+router.get('/treatment-cases/financial-select', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+  const { patientId, clinicId: selectedClinicId } = req.query;
+  if (!patientId) return res.status(400).json({ error: 'patientId is required' });
+
+  try {
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const cases = await prisma.treatmentCase.findMany({
+      where: { ...scope, patientId: String(patientId), deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        patientId: true,
+        clinicId: true,
+        stage: true,
+        estimatedAmount: true,
+        acceptedAmount: true,
+        currency: true,
+        createdAt: true,
+        updatedAt: true,
+        payments: { where: { paymentStatus: 'paid' }, select: { amount: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const result = cases.map(({ payments, ...tc }) => {
+      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+      const remainingBalance = (tc.acceptedAmount ?? tc.estimatedAmount ?? 0) - totalPaid;
+      return { ...tc, totalPaid, remainingBalance };
+    });
+
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch treatment cases' });
+  }
+});
+
 // GET /api/treatment-cases/:id
 router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');

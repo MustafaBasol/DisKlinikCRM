@@ -54,7 +54,9 @@
     "method": "Méthode de Paiement",
     "status": "Statut",
     "paidAt": "Date de Paiement",
-    "notes": "Notes"
+    "notes": "Notes",
+    "noTreatmentCases": "Aucun dossier de traitement trouvé pour ce patient.",
+    "treatmentLoadError": "Impossible de charger les dossiers de traitement."
   },
   "confirmCancel": "Annuler ce paiement ?",
   "empty": "Aucun paiement trouvé.",

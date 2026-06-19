@@ -44,7 +44,8 @@ const PAYMENTS_CREATE = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'REC
 const PAYMENT_PLANS_LIST = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']; // GET /payment-plans
 
 const TASKS_LIST = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']; // GET /tasks — BILLING hariç
-const TREATMENT_CASES_LIST = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']; // GET /treatment-cases — BILLING hariç
+const TREATMENT_CASES_LIST = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']; // GET /treatment-cases (full, klinik veriler dahil) — BILLING hariç
+const TREATMENT_CASES_FINANCIAL_SELECT = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']; // GET /treatment-cases/financial-select — ödeme akışı için kısıtlı seçici
 const ATTACHMENTS_DELETE = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']; // DELETE attachments — BILLING hariç
 
 // Restricted select for BILLING on GET /patients/:id (server/src/routes/patients.ts) —
@@ -111,8 +112,12 @@ test('BILLING görev (task) listesine erişemez', () => {
   assert.equal(authorize(TASKS_LIST, billing), false);
 });
 
-test('BILLING tedavi vakalarına (treatment cases) erişemez', () => {
+test('BILLING tam tedavi vakası listesine (klinik veriler dahil) erişemez', () => {
   assert.equal(authorize(TREATMENT_CASES_LIST, billing), false);
+});
+
+test('BILLING ödeme formu için kısıtlı tedavi vakası seçicisine (financial-select) erişebilir', () => {
+  assert.equal(authorize(TREATMENT_CASES_FINANCIAL_SELECT, billing), true);
 });
 
 test('BILLING hasta eklerini (attachments) silemez', () => {

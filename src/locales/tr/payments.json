@@ -54,7 +54,9 @@
     "method": "Ödeme Yöntemi",
     "status": "Durum",
     "paidAt": "Ödeme Tarihi",
-    "notes": "Notlar"
+    "notes": "Notlar",
+    "noTreatmentCases": "Bu hasta için tedavi dosyası bulunamadı.",
+    "treatmentLoadError": "Tedavi dosyaları yüklenemedi."
   },
   "confirmCancel": "Bu ödeme iptal edilsin mi?",
   "empty": "Ödeme kaydı bulunmuyor.",

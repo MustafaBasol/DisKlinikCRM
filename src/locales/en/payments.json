@@ -54,7 +54,9 @@
     "method": "Payment Method",
     "status": "Status",
     "paidAt": "Payment Date",
-    "notes": "Notes"
+    "notes": "Notes",
+    "noTreatmentCases": "No treatment cases found for this patient.",
+    "treatmentLoadError": "Failed to load treatment cases."
   },
   "confirmCancel": "Cancel this payment?",
   "empty": "No payment records found.",
