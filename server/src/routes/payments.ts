@@ -71,7 +71,12 @@ router.post('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BIL
       ...req.body,
       currency: req.body.currency || operatingPreferences.currency,
     });
-    if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        issues: validation.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })),
+      });
+    }
 
     const patient = await findPatientInClinic(validation.data.patientId, clinicId);
     if (!patient) return res.status(400).json({ error: 'Invalid patient' });
@@ -125,7 +130,12 @@ router.put('/payments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
   const id = getParam(req, 'id');
 
   const validation = paymentSchema.partial().safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+  if (!validation.success) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      issues: validation.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })),
+    });
+  }
 
   try {
     const accessibleIds = await getAccessibleClinicIds(req.user!);

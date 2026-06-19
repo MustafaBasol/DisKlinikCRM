@@ -3,6 +3,7 @@ import { X, User, Briefcase, DollarSign, Calendar, CreditCard, AlertCircle, Load
 import { useTranslation } from 'react-i18next';
 import { patientService, treatmentCaseService, paymentService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import { getErrorMessage } from '../utils/errors';
 
 interface PaymentFormProps {
   onClose: () => void;
@@ -102,8 +103,23 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
       .finally(() => setTreatmentCasesLoading(false));
   }, [formData.patientId]);
 
+  const validate = (): string | null => {
+    if (!formData.patientId) return t('payments:form.errors.patientRequired');
+    if (!formData.amount || formData.amount <= 0) return t('payments:form.errors.amountInvalid');
+    if (!formData.paymentMethod) return t('payments:form.errors.methodRequired');
+    if (!formData.paidAt) return t('payments:form.errors.paidAtRequired');
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -114,8 +130,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
         await paymentService.create(formData);
       }
       onSuccess();
-    } catch (err: any) {
-      setError(err.response?.data?.error || t('common:errorGeneric'));
+    } catch (err) {
+      setError(getErrorMessage(err, t('payments:form.errors.saveFailed')));
     } finally {
       setLoading(false);
     }
@@ -251,7 +267,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
                 <input
                   type="number"
                   required
-                  min="0"
+                  min="0.01"
                   step="0.01"
                   className="input-field"
                   value={formData.amount}

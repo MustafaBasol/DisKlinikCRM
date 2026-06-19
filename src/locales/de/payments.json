@@ -56,7 +56,14 @@
     "paidAt": "Zahlungsdatum",
     "notes": "Notizen",
     "noTreatmentCases": "Für diesen Patienten wurden keine Behandlungsfälle gefunden.",
-    "treatmentLoadError": "Behandlungsfälle konnten nicht geladen werden."
+    "treatmentLoadError": "Behandlungsfälle konnten nicht geladen werden.",
+    "errors": {
+      "patientRequired": "Bitte wählen Sie einen Patienten aus.",
+      "amountInvalid": "Bitte geben Sie einen Zahlungsbetrag größer als 0 ein.",
+      "methodRequired": "Bitte wählen Sie eine Zahlungsmethode aus.",
+      "paidAtRequired": "Bitte wählen Sie ein Zahlungsdatum aus.",
+      "saveFailed": "Die Zahlung konnte nicht gespeichert werden."
+    }
   },
   "confirmCancel": "Diese Zahlung stornieren?",
   "empty": "Keine Zahlungsdatensätze gefunden.",

@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "npx prisma generate && tsx src/index.ts",
     "typecheck": "npx prisma generate && tsc --noEmit",
-    "test": "npm run test:fixtures && npm run test:agent && npm run test:safety && npm run test:msg-safety && npm run test:auth && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:instagram && npm run test:meta-wa && npm run test:overlap-safety && npm run test:availability-service && npm run test:public-booking && npm run test:purpose && npm run test:contact-requests && npm run test:post-treatment && npm run test:meta-template-sync && npm run test:data-retention && npm run test:patient-privacy && npm run test:billing-patient-access && npm run test:treatment-case-scope && npm run test:billing-financial-select",
+    "test": "npm run test:fixtures && npm run test:agent && npm run test:safety && npm run test:msg-safety && npm run test:auth && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:instagram && npm run test:meta-wa && npm run test:overlap-safety && npm run test:availability-service && npm run test:public-booking && npm run test:purpose && npm run test:contact-requests && npm run test:post-treatment && npm run test:meta-template-sync && npm run test:data-retention && npm run test:patient-privacy && npm run test:billing-patient-access && npm run test:treatment-case-scope && npm run test:billing-financial-select && npm run test:payment-validation",
     "test:patient-privacy": "tsx src/tests/patientPrivacy.test.ts",
     "test:billing-patient-access": "tsx src/tests/billingPatientAccess.test.ts",
     "test:fixtures": "tsx src/tests/whatsappConversationFixtures.ts",
@@ -42,6 +42,7 @@
     "test:overlap-safety": "tsx src/tests/appointmentRequestOverlapSafety.test.ts",
     "test:treatment-case-scope": "tsx src/tests/treatmentCaseClinicScope.test.ts",
     "test:billing-financial-select": "tsx src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+    "test:payment-validation": "tsx src/tests/paymentValidation.test.ts",
     "validate:instagram-token": "tsx src/scripts/validate-instagram-login-token.ts"
   },
   "keywords": [],
