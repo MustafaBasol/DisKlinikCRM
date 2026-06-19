@@ -54,7 +54,9 @@
     "method": "Zahlungsmethode",
     "status": "Status",
     "paidAt": "Zahlungsdatum",
-    "notes": "Notizen"
+    "notes": "Notizen",
+    "noTreatmentCases": "Für diesen Patienten wurden keine Behandlungsfälle gefunden.",
+    "treatmentLoadError": "Behandlungsfälle konnten nicht geladen werden."
   },
   "confirmCancel": "Diese Zahlung stornieren?",
   "empty": "Keine Zahlungsdatensätze gefunden.",

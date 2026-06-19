@@ -168,6 +168,7 @@ export const taskService = {
 export const treatmentCaseService = {
   getAll: (params?: any) => api.get('/treatment-cases', { params }),
   getById: (id: string) => api.get(`/treatment-cases/${id}`),
+  getFinancialSelect: (params: { patientId: string; clinicId?: string }) => api.get('/treatment-cases/financial-select', { params }),
   create: (data: any) => api.post('/treatment-cases', data),
   update: (id: string, data: any) => api.put(`/treatment-cases/${id}`, data),
   updateStage: (id: string, stage: string, lostReason?: string) => api.put(`/treatment-cases/${id}`, { stage, lostReason }),
