@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { contactRequestService } from '../services/api';
 import { useClinic } from '../context/ClinicContext';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,15 +80,12 @@ function typeBadgeClass(type: string) {
   }
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const ContactRequests: React.FC = () => {
   const { t } = useTranslation(['contactRequests', 'common']);
   const { selectedClinicId } = useClinic();
+  const { formatDateTime } = useClinicPreferences();
 
   const [items, setItems] = useState<ContactRequest[]>([]);
   const [total, setTotal] = useState(0);
@@ -282,9 +280,9 @@ const ContactRequests: React.FC = () => {
 
                   {/* Dates */}
                   <div className="flex flex-wrap gap-x-4 text-xs text-gray-400">
-                    <span>{t('contactRequests:fields.createdAt')}: {formatDate(item.createdAt)}</span>
+                    <span>{t('contactRequests:fields.createdAt')}: {formatDateTime(item.createdAt)}</span>
                     {item.resolvedAt && (
-                      <span>{t('common:resolved')}: {formatDate(item.resolvedAt)}</span>
+                      <span>{t('common:resolved')}: {formatDateTime(item.resolvedAt)}</span>
                     )}
                   </div>
                 </div>

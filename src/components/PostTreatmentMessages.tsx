@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Pencil, Trash2, Check, X, Send, History } from 'lucide-react';
 import api from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 interface PostTreatmentTemplate {
   id: string;
@@ -71,6 +72,7 @@ const TEMPLATE_VARIABLES = [
 
 export default function PostTreatmentMessages({ clinicId, canEdit }: Props) {
   const { t } = useTranslation('postTreatment');
+  const { formatDateTime } = useClinicPreferences();
   const [activeSubTab, setActiveSubTab] = useState<'templates' | 'queue'>('templates');
 
   // ── Template state ─────────────────────────────────────────────────────────
@@ -590,10 +592,10 @@ export default function PostTreatmentMessages({ clinicId, canEdit }: Props) {
                       {statusBadge(entry.status)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">
-                      {new Date(entry.scheduledAt).toLocaleString('tr-TR')}
+                      {formatDateTime(entry.scheduledAt)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">
-                      {entry.sentAt ? new Date(entry.sentAt).toLocaleString('tr-TR') : '-'}
+                      {entry.sentAt ? formatDateTime(entry.sentAt) : '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {entry.status === 'waiting_approval' && (
