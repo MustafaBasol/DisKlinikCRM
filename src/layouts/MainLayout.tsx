@@ -61,6 +61,8 @@ import {
   canViewNoShowDashboard,
   canViewRecallDashboard,
   canViewInstagramInbox,
+  canViewAppointmentRequests,
+  canViewContactRequests,
 } from '../utils/permissions';
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -313,7 +315,12 @@ const MainLayoutInner: React.FC = () => {
   }, [location.pathname]);
 
   // Fetch unresolved contact request count for sidebar badge
+  // (only when the role can actually see the Contact Requests module — avoids 403s)
   useEffect(() => {
+    if (!canViewContactRequests(user)) {
+      setContactRequestCount(0);
+      return undefined;
+    }
     let cancelled = false;
     const fetchCount = async () => {
       try {
@@ -326,10 +333,15 @@ const MainLayoutInner: React.FC = () => {
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [location.pathname, selectedClinicId]);
+  }, [location.pathname, selectedClinicId, user]);
 
   // Fetch pending appointment request count for sidebar badge
+  // (only when the role can actually see the Appointment Requests module — avoids 403s)
   useEffect(() => {
+    if (!canViewAppointmentRequests(user)) {
+      setPendingAppointmentRequestCount(0);
+      return undefined;
+    }
     let cancelled = false;
     const fetchCount = async () => {
       try {
@@ -342,7 +354,7 @@ const MainLayoutInner: React.FC = () => {
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [location.pathname, selectedClinicId]);
+  }, [location.pathname, selectedClinicId, user]);
 
   // Close sidebar when navigating on mobile
   const handleNavClick = () => {
@@ -373,7 +385,8 @@ const MainLayoutInner: React.FC = () => {
 
   // Pre-compute derived permissions
   const userRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
-  const canSeeAppointmentRequests = canViewAppointments(user) && userRole !== 'DENTIST' && userRole !== 'BILLING';
+  const canSeeAppointmentRequests = canViewAppointmentRequests(user);
+  const canSeeContactRequests = canViewContactRequests(user);
   const canSeeTemplates = canManageUsers(user) || userRole === 'RECEPTIONIST';
 
   // ── Build navGroups ──────────────────────────────────────────────────────────
@@ -425,6 +438,8 @@ const MainLayoutInner: React.FC = () => {
         label: t('common:whatsappRequests'),
         badge: pendingAppointmentRequestCount > 0 ? pendingAppointmentRequestCount : undefined,
       });
+    }
+    if (canSeeContactRequests) {
       items.push({
         path: '/contact-requests',
         icon: <Inbox size={18} />,
