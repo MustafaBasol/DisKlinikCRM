@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Shield, Download, AlertTriangle, CheckCircle2, Loader2, Plus, X, ChevronDown } from 'lucide-react';
 import { patientPrivacyService } from '../services/api';
+import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
   canManage,
   onAnonymized,
 }) => {
+  const { formatDate } = useClinicPreferences();
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -254,8 +256,8 @@ const PatientPrivacyPanel: React.FC<Props> = ({
                   <p className="text-xs text-gray-600 bg-gray-50 rounded p-1.5 line-clamp-3">{r.decisionNote}</p>
                 )}
                 <p className="text-xs text-gray-400">
-                  {new Date(r.createdAt).toLocaleDateString('tr-TR')}
-                  {r.completedAt && ` → Tamamlandı: ${new Date(r.completedAt).toLocaleDateString('tr-TR')}`}
+                  {formatDate(r.createdAt)}
+                  {r.completedAt && ` → Tamamlandı: ${formatDate(r.completedAt)}`}
                 </p>
               </div>
             ))}
