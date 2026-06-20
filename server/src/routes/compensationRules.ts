@@ -7,6 +7,7 @@ import {
   practitionerCompensationRuleSchema,
   serviceCompensationRuleSchema,
 } from '../schemas/index.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -14,13 +15,15 @@ const router = express.Router();
 
 // GET /api/compensation-rules?practitionerId=
 router.get('/compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { practitionerId } = req.query;
+  const { practitionerId, clinicId: selectedClinicId } = req.query;
 
   try {
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+    if (clinicScope === false) return;
+
     const rules = await prisma.practitionerCompensationRule.findMany({
       where: {
-        clinicId,
+        ...clinicScope,
         ...(practitionerId ? { practitionerId: String(practitionerId) } : {}),
       },
       include: { practitioner: { select: { id: true, firstName: true, lastName: true } } },
@@ -34,11 +37,13 @@ router.get('/compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
 
 // POST /api/compensation-rules
 router.post('/compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const validation = practitionerCompensationRuleSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
     const practitioner = await prisma.user.findFirst({
       where: { id: validation.data.practitionerId, clinicId, role: 'doctor' },
     });
@@ -65,13 +70,16 @@ router.post('/compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
 // PUT /api/compensation-rules/:id
 router.put('/compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const validation = practitionerCompensationRuleSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.practitionerCompensationRule.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.practitionerCompensationRule.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Compensation rule not found' });
+    const clinicId = existing.clinicId;
 
     const updated = await prisma.practitionerCompensationRule.update({
       where: { id },
@@ -94,11 +102,14 @@ router.put('/compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_M
 // DELETE /api/compensation-rules/:id
 router.delete('/compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const existing = await prisma.practitionerCompensationRule.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.practitionerCompensationRule.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Compensation rule not found' });
+    const clinicId = existing.clinicId;
 
     await prisma.practitionerCompensationRule.delete({ where: { id } });
 
@@ -118,13 +129,15 @@ router.delete('/compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINI
 
 // GET /api/service-compensation-rules?practitionerId=
 router.get('/service-compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { practitionerId } = req.query;
+  const { practitionerId, clinicId: selectedClinicId } = req.query;
 
   try {
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+    if (clinicScope === false) return;
+
     const rules = await prisma.serviceCompensationRule.findMany({
       where: {
-        clinicId,
+        ...clinicScope,
         ...(practitionerId ? { practitionerId: String(practitionerId) } : {}),
       },
       include: {
@@ -141,11 +154,13 @@ router.get('/service-compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLIN
 
 // POST /api/service-compensation-rules
 router.post('/service-compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const validation = serviceCompensationRuleSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
     const [practitioner, service] = await Promise.all([
       prisma.user.findFirst({ where: { id: validation.data.practitionerId, clinicId, role: 'doctor' } }),
       prisma.appointmentType.findFirst({ where: { id: validation.data.serviceId, clinicId } }),
@@ -179,11 +194,14 @@ router.post('/service-compensation-rules', authorize(['OWNER', 'ORG_ADMIN', 'CLI
 // DELETE /api/service-compensation-rules/:id
 router.delete('/service-compensation-rules/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const existing = await prisma.serviceCompensationRule.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.serviceCompensationRule.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Service compensation rule not found' });
+    const clinicId = existing.clinicId;
 
     await prisma.serviceCompensationRule.delete({ where: { id } });
 
