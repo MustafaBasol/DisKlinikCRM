@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { practitionerPayoutSchema } from '../schemas/index.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -22,11 +23,13 @@ const payoutInclude = {
 
 // GET /api/practitioner-payouts
 router.get('/practitioner-payouts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { practitionerId, periodMonth, periodYear } = req.query;
+  const { practitionerId, periodMonth, periodYear, clinicId: selectedClinicId } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+    if (clinicScope === false) return;
+
+    const where: any = { ...clinicScope };
     if (practitionerId) where.practitionerId = String(practitionerId);
     if (periodMonth) where.periodMonth = Number(periodMonth);
     if (periodYear) where.periodYear = Number(periodYear);
@@ -44,11 +47,13 @@ router.get('/practitioner-payouts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
 
 // POST /api/practitioner-payouts
 router.post('/practitioner-payouts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const validation = practitionerPayoutSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
     const practitioner = await prisma.user.findFirst({
       where: { id: validation.data.practitionerId, clinicId, role: 'doctor' },
     });
@@ -90,10 +95,12 @@ router.post('/practitioner-payouts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
 // GET /api/practitioner-payouts/:id
 router.get('/practitioner-payouts/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const payout = await prisma.practitionerPayout.findFirst({ where: { id, clinicId }, include: payoutInclude });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const payout = await prisma.practitionerPayout.findFirst({ where: { id, clinicId: { in: accessibleIds } }, include: payoutInclude });
     if (!payout) return res.status(404).json({ error: 'Payout not found' });
     res.json(payout);
   } catch {
@@ -104,11 +111,14 @@ router.get('/practitioner-payouts/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
 // DELETE /api/practitioner-payouts/:id
 router.delete('/practitioner-payouts/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const payout = await prisma.practitionerPayout.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const payout = await prisma.practitionerPayout.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!payout) return res.status(404).json({ error: 'Payout not found' });
+    const clinicId = payout.clinicId;
 
     // Un-link earnings from this payout (revert to approved)
     await prisma.practitionerEarning.updateMany({

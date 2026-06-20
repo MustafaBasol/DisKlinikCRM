@@ -4,6 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { earningAdjustSchema } from '../schemas/index.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -18,15 +19,17 @@ const earningInclude = {
 // GET /api/practitioner-earnings
 // Admin/billing: all earnings; doctor: own only
 router.get('/practitioner-earnings', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { normalizedRole, id: userId } = req.user!;
-  const { practitionerId, status, periodMonth, periodYear, page, limit } = req.query;
+  const { practitionerId, status, periodMonth, periodYear, page, limit, clinicId: selectedClinicId } = req.query;
 
   const take = Math.min(Number(limit) || 50, 200);
   const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
 
   try {
-    const where: any = { clinicId };
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+    if (clinicScope === false) return;
+
+    const where: any = { ...clinicScope };
 
     if (normalizedRole === 'DENTIST') {
       where.practitionerId = userId;
@@ -55,11 +58,13 @@ router.get('/practitioner-earnings', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
 
 // GET /api/practitioner-earnings/summary — period-based summary per practitioner
 router.get('/practitioner-earnings/summary', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { periodMonth, periodYear, practitionerId } = req.query;
+  const { periodMonth, periodYear, practitionerId, clinicId: selectedClinicId } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+    if (clinicScope === false) return;
+
+    const where: any = { ...clinicScope };
     if (periodMonth) where.periodMonth = Number(periodMonth);
     if (periodYear) where.periodYear = Number(periodYear);
     if (practitionerId) where.practitionerId = String(practitionerId);
@@ -102,12 +107,14 @@ router.get('/practitioner-earnings/summary', authorize(['OWNER', 'ORG_ADMIN', 'C
 // GET /api/practitioner-earnings/:id
 router.get('/practitioner-earnings/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { normalizedRole, id: userId } = req.user!;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const earning = await prisma.practitionerEarning.findFirst({
-      where: { id, clinicId },
+      where: { id, clinicId: { in: accessibleIds } },
       include: earningInclude,
     });
     if (!earning) return res.status(404).json({ error: 'Earning not found' });
@@ -125,12 +132,15 @@ router.get('/practitioner-earnings/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINI
 // PATCH /api/practitioner-earnings/:id/approve
 router.patch('/practitioner-earnings/:id/approve', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const earning = await prisma.practitionerEarning.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const earning = await prisma.practitionerEarning.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!earning) return res.status(404).json({ error: 'Earning not found' });
     if (earning.status !== 'pending') return res.status(400).json({ error: 'Only pending earnings can be approved' });
+    const clinicId = earning.clinicId;
 
     const updated = await prisma.practitionerEarning.update({
       where: { id },
@@ -153,20 +163,23 @@ router.patch('/practitioner-earnings/:id/approve', authorize(['OWNER', 'ORG_ADMI
 // PATCH /api/practitioner-earnings/:id/adjust
 router.patch('/practitioner-earnings/:id/adjust', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   const validation = earningAdjustSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const earning = await prisma.practitionerEarning.findFirst({
-      where: { id, clinicId },
+      where: { id, clinicId: { in: accessibleIds } },
       include: { practitioner: { select: { firstName: true, lastName: true } } },
     });
     if (!earning) return res.status(404).json({ error: 'Earning not found' });
     if (earning.status === 'paid' || earning.status === 'cancelled') {
       return res.status(400).json({ error: 'Cannot adjust a paid or cancelled earning' });
     }
+    const clinicId = earning.clinicId;
 
     const { adminAdjustmentAmount, adminAdjustmentReason } = validation.data;
 
@@ -191,12 +204,15 @@ router.patch('/practitioner-earnings/:id/adjust', authorize(['OWNER', 'ORG_ADMIN
 // PATCH /api/practitioner-earnings/:id/cancel
 router.patch('/practitioner-earnings/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const earning = await prisma.practitionerEarning.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const earning = await prisma.practitionerEarning.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!earning) return res.status(404).json({ error: 'Earning not found' });
     if (earning.status === 'paid') return res.status(400).json({ error: 'Cannot cancel a paid earning' });
+    const clinicId = earning.clinicId;
 
     const updated = await prisma.practitionerEarning.update({
       where: { id },
@@ -218,12 +234,15 @@ router.patch('/practitioner-earnings/:id/cancel', authorize(['OWNER', 'ORG_ADMIN
 // PATCH /api/practitioner-earnings/:id/mark-paid
 router.patch('/practitioner-earnings/:id/mark-paid', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const earning = await prisma.practitionerEarning.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const earning = await prisma.practitionerEarning.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!earning) return res.status(404).json({ error: 'Earning not found' });
     if (earning.status !== 'approved') return res.status(400).json({ error: 'Only approved earnings can be marked as paid' });
+    const clinicId = earning.clinicId;
 
     const updated = await prisma.practitionerEarning.update({
       where: { id },
