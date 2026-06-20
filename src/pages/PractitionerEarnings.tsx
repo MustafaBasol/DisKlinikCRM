@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import {
   compensationRuleService,
@@ -36,8 +37,8 @@ function currentPeriod() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practitioners: any[] }> = ({
-  periodMonth, periodYear, practitioners,
+const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practitioners: any[]; selectedClinicId: string }> = ({
+  periodMonth, periodYear, practitioners, selectedClinicId,
 }) => {
   const { t } = useTranslation(['earnings', 'common']);
   const { formatCurrency } = useClinicPreferences();
@@ -58,7 +59,7 @@ const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practition
     } finally {
       setLoading(false);
     }
-  }, [periodMonth, periodYear, filterPractitioner]);
+  }, [periodMonth, periodYear, filterPractitioner, selectedClinicId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -119,7 +120,7 @@ const SummaryTab: React.FC<{ periodMonth: number; periodYear: number; practition
   );
 };
 
-const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
+const EarningsTab: React.FC<{ practitioners: any[]; selectedClinicId: string }> = ({ practitioners, selectedClinicId }) => {
   const { t } = useTranslation(['earnings', 'common']);
   const { formatCurrency } = useClinicPreferences();
   const [earnings, setEarnings] = useState<any[]>([]);
@@ -148,7 +149,7 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
     } finally {
       setLoading(false);
     }
-  }, [filterPractitioner, filterStatus, filterMonth, filterYear, t]);
+  }, [filterPractitioner, filterStatus, filterMonth, filterYear, t, selectedClinicId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -331,7 +332,7 @@ const EarningsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
   );
 };
 
-const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
+const PayoutsTab: React.FC<{ practitioners: any[]; selectedClinicId: string }> = ({ practitioners, selectedClinicId }) => {
   const { t } = useTranslation(['earnings', 'common', 'payments']);
   const { formatCurrency, formatDate } = useClinicPreferences();
   const [payouts, setPayouts] = useState<any[]>([]);
@@ -366,7 +367,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
     } catch { /* ignore */ }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [selectedClinicId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePractitionerChange = (pid: string) => {
     setForm(f => ({ ...f, practitionerId: pid }));
@@ -546,7 +547,7 @@ const PayoutsTab: React.FC<{ practitioners: any[] }> = ({ practitioners }) => {
   );
 };
 
-const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ practitioners, services }) => {
+const SettingsTab: React.FC<{ practitioners: any[]; services: any[]; selectedClinicId: string }> = ({ practitioners, services, selectedClinicId }) => {
   const { t } = useTranslation(['earnings', 'common']);
   const { formatCurrency } = useClinicPreferences();
   const [rules, setRules] = useState<any[]>([]);
@@ -579,7 +580,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
     } catch { /* ignore */ }
   };
 
-  useEffect(() => { load(); }, [filterPractitioner]); // eslint-disable-line
+  useEffect(() => { load(); }, [filterPractitioner, selectedClinicId]); // eslint-disable-line
 
   const handleSaveRule = async () => {
     setError('');
@@ -874,6 +875,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[] }> = ({ prac
 const PractitionerEarnings: React.FC = () => {
   const { t } = useTranslation(['earnings']);
   const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
   const [tab, setTab] = useState<Tab>('summary');
   const [practitioners, setPractitioners] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -883,7 +885,7 @@ const PractitionerEarnings: React.FC = () => {
   useEffect(() => {
     userService.getDoctors().then(r => setPractitioners(r.data)).catch(() => {});
     serviceService.getAll({ onlyActive: true }).then(r => setServices(r.data)).catch(() => {});
-  }, []);
+  }, [selectedClinicId]);
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'summary',  label: t('earnings:tabs.summary'), icon: <DollarSign size={16} /> },
@@ -935,10 +937,10 @@ const PractitionerEarnings: React.FC = () => {
 
       {/* Tab Content */}
       <div className="card p-4 sm:p-6">
-        {tab === 'summary' && <SummaryTab periodMonth={periodMonth} periodYear={periodYear} practitioners={practitioners} />}
-        {tab === 'earnings' && <EarningsTab practitioners={practitioners} />}
-        {tab === 'payouts' && <PayoutsTab practitioners={practitioners} />}
-        {tab === 'settings' && <SettingsTab practitioners={practitioners} services={services} />}
+        {tab === 'summary' && <SummaryTab periodMonth={periodMonth} periodYear={periodYear} practitioners={practitioners} selectedClinicId={selectedClinicId} />}
+        {tab === 'earnings' && <EarningsTab practitioners={practitioners} selectedClinicId={selectedClinicId} />}
+        {tab === 'payouts' && <PayoutsTab practitioners={practitioners} selectedClinicId={selectedClinicId} />}
+        {tab === 'settings' && <SettingsTab practitioners={practitioners} services={services} selectedClinicId={selectedClinicId} />}
       </div>
     </div>
   );
