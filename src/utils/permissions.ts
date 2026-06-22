@@ -258,6 +258,15 @@ export function canManageClinicSchedule(user: UserForPermission | null | undefin
 }
 
 /**
+ * Klinik hizmetleri yönetimi (oluştur / düzenle / durum değiştir):
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER. RECEPTIONIST yalnızca görüntüleyebilir.
+ */
+export function canManageServices(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
  * Doktor müsaitlik yönetimi:
  * Yönetim rolleri tüm doktorlar için; DENTIST yalnızca kendi programı.
  * doctorId sağlanmazsa yönetim rolü kontrolü yapılır.

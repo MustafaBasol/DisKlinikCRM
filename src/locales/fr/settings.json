@@ -241,6 +241,7 @@
       "practitioner": "Praticien",
       "isAvailable": "Disponible"
     },
+    "saveSuccess": "Planning de disponibilité enregistré",
     "errors": {
       "loadFailed": "Impossible de charger les disponibilités",
       "saveFailed": "Impossible d'enregistrer la disponibilité",

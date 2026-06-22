@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarClock, CalendarOff, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertCircle, CalendarClock, CalendarOff, CheckCircle2, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { doctorAvailabilityService, doctorOffDayService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { canManageUsers, normalizeRole } from '../utils/permissions';
+import { getErrorMessage } from '../utils/errors';
 
 const weekdays = [1, 2, 3, 4, 5, 6, 0];
 
@@ -25,6 +26,7 @@ const DoctorAvailabilityManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // Off-day state
   const [offDays, setOffDays] = useState<any[]>([]);
@@ -63,7 +65,7 @@ const DoctorAvailabilityManager: React.FC = () => {
       });
     }
 
-    return data?.error || fallback;
+    return getErrorMessage(err, fallback);
   };
 
   useEffect(() => {
@@ -94,6 +96,7 @@ const DoctorAvailabilityManager: React.FC = () => {
       if (!selectedDoctorId) return;
       setLoading(true);
       setError('');
+      setSuccess('');
       try {
         const res = await doctorAvailabilityService.getAll({ practitionerId: selectedDoctorId });
         const nextRows = defaultRows();
@@ -140,12 +143,14 @@ const DoctorAvailabilityManager: React.FC = () => {
     if (!selectedDoctorId) return;
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       await doctorAvailabilityService.updateForPractitioner(
         selectedDoctorId,
         rows.filter(row => row.isActive)
       );
+      setSuccess(t('settings:availability.saveSuccess'));
     } catch (err: any) {
       setError(getConflictErrorMessage(err, t('settings:availability.errors.saveFailed')));
     } finally {
@@ -238,6 +243,13 @@ const DoctorAvailabilityManager: React.FC = () => {
         <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2">
           <AlertCircle size={16} />
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm flex items-center gap-2 border border-green-100">
+          <CheckCircle2 size={16} />
+          {success}
         </div>
       )}
 
