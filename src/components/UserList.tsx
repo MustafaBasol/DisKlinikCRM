@@ -6,6 +6,7 @@ import UserClinicAssignmentModal from './UserClinicAssignmentModal';
 import UserImportModal from './UserImportModal';
 import { useAuth } from '../context/AuthContext';
 import { canAssignUserClinics, canImportUsers } from '../utils/permissions';
+import { getErrorMessage } from '../utils/errors';
 
 const roles = ['admin', 'doctor', 'receptionist', 'billing'];
 
@@ -214,10 +215,10 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
       }
       onSuccess();
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || t('settings:users.errors.saveFailed');
+      const errorMsg = getErrorMessage(err, t('settings:users.errors.saveFailed'));
       const details = err.response?.data?.details;
       setError(errorMsg);
-      if (details && Array.isArray(details)) {
+      if (details && Array.isArray(details) && details.every((d: unknown) => typeof d === 'string')) {
         setPasswordErrors(details);
       }
     } finally {

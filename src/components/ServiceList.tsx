@@ -3,11 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Edit2, CheckCircle2, XCircle, Tag, Loader2, AlertCircle, Package, Trash2 } from 'lucide-react';
 import { inventoryService, serviceService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import { useAuth } from '../context/AuthContext';
+import { canManageServices } from '../utils/permissions';
 import TreatmentPackageList from './TreatmentPackageList';
 
 const ServiceList: React.FC = () => {
   const { t } = useTranslation(['services', 'settings', 'common', 'treatmentCases']);
   const { formatNumber } = useClinicPreferences();
+  const { user } = useAuth();
+  const canManage = canManageServices(user);
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +48,7 @@ const ServiceList: React.FC = () => {
 
   const handlePrimaryCreate = () => {
     if (activeView === 'services') {
+      if (!canManage) return;
       handleOpenModal();
       return;
     }
@@ -65,12 +70,14 @@ const ServiceList: React.FC = () => {
           <h2 className="text-lg font-bold">{t('settings:services.title')}</h2>
           <p className="text-sm text-gray-500">{t('settings:services.subtitle')}</p>
         </div>
-        <button onClick={handlePrimaryCreate} className="btn-primary w-full sm:w-auto justify-center">
-          <Plus size={18} />
-          {activeView === 'services'
-            ? t('settings:services.newService')
-            : t('services:packages.newPackage')}
-        </button>
+        {(activeView !== 'services' || canManage) && (
+          <button onClick={handlePrimaryCreate} className="btn-primary w-full sm:w-auto justify-center">
+            <Plus size={18} />
+            {activeView === 'services'
+              ? t('settings:services.newService')
+              : t('services:packages.newPackage')}
+          </button>
+        )}
       </div>
 
       <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
@@ -110,7 +117,11 @@ const ServiceList: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {services.map((service) => (
-                <tr key={service.id} onClick={() => handleOpenModal(service)} className={`hover:bg-gray-50/50 transition-colors cursor-pointer ${!service.isActive ? 'opacity-50' : ''}`}>
+                <tr
+                  key={service.id}
+                  onClick={canManage ? () => handleOpenModal(service) : undefined}
+                  className={`hover:bg-gray-50/50 transition-colors ${canManage ? 'cursor-pointer' : ''} ${!service.isActive ? 'opacity-50' : ''}`}
+                >
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: service.color || '#e5e7eb' }} />
@@ -129,18 +140,22 @@ const ServiceList: React.FC = () => {
                     </span>
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={(e) => { e.stopPropagation(); handleOpenModal(service); }} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('services:actions.edit')}>
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleActive(service.id, service.isActive); }}
-                        className={`p-1.5 transition-colors ${service.isActive ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
-                        title={service.isActive ? t('services:actions.deactivate') : t('services:actions.reactivate')}
-                      >
-                        {service.isActive ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
-                      </button>
-                    </div>
+                    {canManage ? (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); handleOpenModal(service); }} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('services:actions.edit')}>
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleToggleActive(service.id, service.isActive); }}
+                          className={`p-1.5 transition-colors ${service.isActive ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
+                          title={service.isActive ? t('services:actions.deactivate') : t('services:actions.reactivate')}
+                        >
+                          {service.isActive ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

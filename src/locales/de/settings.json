@@ -241,6 +241,7 @@
       "practitioner": "Behandler",
       "isAvailable": "Verfügbar"
     },
+    "saveSuccess": "Verfügbarkeitsplan gespeichert",
     "errors": {
       "loadFailed": "Verfügbarkeit konnte nicht geladen werden",
       "saveFailed": "Verfügbarkeit konnte nicht gespeichert werden",

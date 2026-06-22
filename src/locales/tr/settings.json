@@ -241,6 +241,7 @@
       "practitioner": "Hekim",
       "isAvailable": "Müsait"
     },
+    "saveSuccess": "Müsaitlik planı kaydedildi",
     "errors": {
       "loadFailed": "Müsaitlik bilgileri yüklenemedi",
       "saveFailed": "Müsaitlik kaydedilemedi",

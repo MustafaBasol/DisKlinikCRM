@@ -276,23 +276,31 @@ const RecallSettingsSection: React.FC<RecallSettingsSectionProps> = ({ clinicId,
     setLoading(true);
     setMessage(null);
 
-    Promise.all([
-      recallService.getSettings(clinicId),
-      messageTemplateService.getAll({ clinicId, channel: 'whatsapp', isActive: true }),
-    ])
-      .then(([settingsRes, templatesRes]) => {
+    recallService.getSettings(clinicId)
+      .then((settingsRes) => {
         if (!alive) return;
         setSettings({ ...DEFAULT_RECALL_SETTINGS, ...(settingsRes.data.settings || {}) });
-        setTemplates(templatesRes.data || []);
       })
       .catch(() => {
         if (!alive) return;
         setSettings(DEFAULT_RECALL_SETTINGS);
-        setTemplates([]);
         setMessage({ type: 'error', text: t('settings.loadError') });
       })
       .finally(() => {
         if (alive) setLoading(false);
+      });
+
+    // Bazı roller (örn. BILLING) mesaj şablonlarını listeleyemez; bu durumda
+    // şablon seçimi salt-okunur şekilde boş kalır, recall ayarlarının
+    // yüklenmesini etkilemez ve hata bandı gösterilmez.
+    messageTemplateService.getAll({ clinicId, channel: 'whatsapp', isActive: true })
+      .then((templatesRes) => {
+        if (!alive) return;
+        setTemplates(templatesRes.data || []);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setTemplates([]);
       });
 
     return () => {

@@ -241,6 +241,7 @@
       "practitioner": "Practitioner",
       "isAvailable": "Available"
     },
+    "saveSuccess": "Availability schedule saved",
     "errors": {
       "loadFailed": "Failed to load availability",
       "saveFailed": "Failed to save availability",
