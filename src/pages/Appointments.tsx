@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, 
@@ -72,6 +72,8 @@ const Appointments: React.FC = () => {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [status, setStatus] = useState('');
   const [practitionerId, setPractitionerId] = useState('');
+  const normalizedRole = user?.role?.toLowerCase();
+  const isDoctor = normalizedRole === 'doctor' || normalizedRole === 'dentist';
   const appointmentStatusLabel = (value: string) => t(`appointments:status.${value}`, { defaultValue: humanizeEnum(value) });
 
   // Auto-open form with prefill when URL search params are present (e.g., from no-show reschedule)
@@ -154,6 +156,11 @@ const Appointments: React.FC = () => {
   }, [search]);
 
   useEffect(() => {
+    if (isDoctor) {
+      setDoctors([]);
+      return;
+    }
+
     const fetchDoctors = async () => {
       try {
         const res = await userService.getDoctors();
@@ -163,7 +170,7 @@ const Appointments: React.FC = () => {
       }
     };
     fetchDoctors();
-  }, []);
+  }, [isDoctor]);
 
   const changeDate = (days: number) => {
     const d = new Date(selectedDate);
@@ -205,7 +212,13 @@ const Appointments: React.FC = () => {
   };
 
   const canEdit = canCreateAppointment(user); // OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST
-  const isDoctor = user?.role === 'doctor';
+  const handleTimelineDateChange = useCallback((date: string) => {
+    setSelectedDate((current) => (current === date ? current : date));
+    setCalendarMonth((current) => {
+      const next = startOfMonth(new Date(`${date}T00:00:00`));
+      return isSameMonth(current, next) ? current : next;
+    });
+  }, []);
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth, preferences.firstDayOfWeek), [calendarMonth, preferences.firstDayOfWeek]);
   const appointmentCounts = useMemo(() => {
     return monthAppointments
@@ -537,10 +550,7 @@ const Appointments: React.FC = () => {
           selectedDate={selectedDate}
           locale={locale}
           canEdit={canEdit}
-          onDateChange={(date) => {
-            setSelectedDate(date);
-            setCalendarMonth(startOfMonth(new Date(date)));
-          }}
+          onDateChange={handleTimelineDateChange}
           onAppointmentClick={handleAppointmentClickInCalendar}
           onRefresh={fetchAppointments}
         />
@@ -597,6 +607,10 @@ function endOfDay(date: Date) {
 
 function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function isSameMonth(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
 }
 
 function endOfMonth(date: Date) {
