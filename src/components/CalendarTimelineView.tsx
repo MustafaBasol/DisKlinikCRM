@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -63,8 +63,9 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
   onRefresh,
 }) => {
   const calendarRef = useRef<FullCalendar>(null);
+  const lastReportedDateRef = useRef<string | null>(null);
 
-  const events = appointments.map((appt) => ({
+  const events = useMemo(() => appointments.map((appt) => ({
     id: appt.id,
     title: `${appt.patient.firstName} ${appt.patient.lastName}`,
     start: appt.startTime,
@@ -73,7 +74,15 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
     borderColor: STATUS_BORDER_COLORS[appt.status] || '#6366f1',
     extendedProps: { appointment: appt },
     editable: canEdit && ['scheduled', 'confirmed'].includes(appt.status),
-  }));
+  })), [appointments, canEdit]);
+
+  const handleDatesSet = useCallback((info: { view: { type: string }; startStr: string }) => {
+    if (info.view.type !== 'timeGridDay') return;
+    const nextDate = info.startStr.slice(0, 10);
+    if (lastReportedDateRef.current === nextDate) return;
+    lastReportedDateRef.current = nextDate;
+    onDateChange(nextDate);
+  }, [onDateChange]);
 
   const handleEventDrop = useCallback(async (info: EventDropArg) => {
     const appt: CalendarAppointment = info.event.extendedProps.appointment;
@@ -154,11 +163,7 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
         height="auto"
         allDaySlot={false}
         nowIndicator
-        datesSet={(info) => {
-          if (info.view.type === 'timeGridDay') {
-            onDateChange(info.startStr.slice(0, 10));
-          }
-        }}
+        datesSet={handleDatesSet}
       />
     </div>
   );
