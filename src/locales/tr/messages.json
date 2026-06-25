@@ -51,6 +51,9 @@
     "title": "Mesaj Hazırla",
     "selectTemplate": "Şablon Seç",
     "selectTemplatePrompt": "Önizleme için lütfen bir şablon seçin",
+    "noTemplates": "Bu klinik için aktif mesaj şablonu bulunamadı.",
+    "loadFailed": "Mesaj şablonları yüklenemedi.",
+    "prepareFailed": "Mesaj hazırlanamadı.",
     "customMessage": "Özel Mesaj",
     "preview": "Önizleme",
     "send": "Hazır Olarak Kaydet"

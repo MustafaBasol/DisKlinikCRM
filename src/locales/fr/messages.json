@@ -51,6 +51,9 @@
     "title": "Préparer un message",
     "selectTemplate": "Sélectionner un modèle",
     "selectTemplatePrompt": "Veuillez sélectionner un modèle pour voir l'aperçu",
+    "noTemplates": "Aucun modèle de message actif n'a été trouvé pour cette clinique.",
+    "loadFailed": "Les modèles de message n'ont pas pu être chargés.",
+    "prepareFailed": "Le message n'a pas pu être préparé.",
     "customMessage": "Message personnalisé",
     "preview": "Aperçu",
     "send": "Enregistrer comme préparé"

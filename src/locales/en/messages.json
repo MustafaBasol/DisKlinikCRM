@@ -51,6 +51,9 @@
     "title": "Prepare Message",
     "selectTemplate": "Select Template",
     "selectTemplatePrompt": "Please select a template to see preview",
+    "noTemplates": "No active message templates were found for this clinic.",
+    "loadFailed": "Message templates could not be loaded.",
+    "prepareFailed": "Message could not be prepared.",
     "customMessage": "Custom Message",
     "preview": "Preview",
     "send": "Save as Prepared"

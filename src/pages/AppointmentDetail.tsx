@@ -361,6 +361,7 @@ const AppointmentDetail: React.FC = () => {
       {isMessageModalOpen && (
         <PrepareMessageModal 
           patientId={appointment.patientId}
+          clinicId={appointment.clinicId}
           appointmentId={appointment.id}
           onClose={() => setIsMessageModalOpen(false)}
           onSuccess={() => {

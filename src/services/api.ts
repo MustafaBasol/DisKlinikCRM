@@ -33,7 +33,7 @@ api.interceptors.request.use((config) => {
   // Tüm isteklere seçili klinik filtresi ekle (GET listesi + mutation'lar)
   // Backend bu değeri doğrular; "all" gönderilmez — backend varsayılanı kullanır
   const selectedClinicId = localStorage.getItem('hcrm_clinic_id');
-  if (selectedClinicId && selectedClinicId !== 'all') {
+  if (selectedClinicId && selectedClinicId !== 'all' && !config.params?.clinicId) {
     config.params = { ...config.params, clinicId: selectedClinicId };
   }
 

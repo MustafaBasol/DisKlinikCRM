@@ -43,6 +43,14 @@
     "confirm": "Créer les modèles par défaut ?",
     "success": "Les modèles par défaut ont été créés avec succès"
   },
+  "notifications": {
+    "createSuccess": "Le mod\u00e8le de message a \u00e9t\u00e9 cr\u00e9\u00e9 avec succ\u00e8s.",
+    "updateSuccess": "Le mod\u00e8le de message a \u00e9t\u00e9 mis \u00e0 jour avec succ\u00e8s.",
+    "saveFailed": "Le mod\u00e8le de message n'a pas pu \u00eatre enregistr\u00e9.",
+    "notFound": "Le mod\u00e8le de message est introuvable dans la clinique s\u00e9lectionn\u00e9e, ou vous n'y avez pas acc\u00e8s.",
+    "loadFailed": "Les mod\u00e8les de message n'ont pas pu \u00eatre charg\u00e9s.",
+    "reason": "Raison : {{reason}}"
+  },
   "whatsappApproval": {
     "infoTitle": "Approbation des messages automatiques WhatsApp",
     "infoBody": "Certains modèles doivent être approuvés par WhatsApp avant d'être utilisés pour les messages automatiques.",

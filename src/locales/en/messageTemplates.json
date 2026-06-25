@@ -43,6 +43,14 @@
     "confirm": "Seed default templates?",
     "success": "Default templates created successfully"
   },
+  "notifications": {
+    "createSuccess": "Message template was created successfully.",
+    "updateSuccess": "Message template was updated successfully.",
+    "saveFailed": "Message template could not be saved.",
+    "notFound": "Message template was not found in the selected clinic, or you do not have access to it.",
+    "loadFailed": "Message templates could not be loaded.",
+    "reason": "Reason: {{reason}}"
+  },
   "whatsappApproval": {
     "infoTitle": "WhatsApp Automated Message Approval",
     "infoBody": "Some templates must be approved by WhatsApp before they can be used for automated messages such as appointment reminders, no-show follow-ups, or post-treatment messages.",

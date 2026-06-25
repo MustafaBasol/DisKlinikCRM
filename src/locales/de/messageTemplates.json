@@ -43,6 +43,14 @@
     "confirm": "Standardvorlagen erstellen?",
     "success": "Standardvorlagen wurden erfolgreich erstellt"
   },
+  "notifications": {
+    "createSuccess": "Die Nachrichtenvorlage wurde erfolgreich erstellt.",
+    "updateSuccess": "Die Nachrichtenvorlage wurde erfolgreich aktualisiert.",
+    "saveFailed": "Die Nachrichtenvorlage konnte nicht gespeichert werden.",
+    "notFound": "Die Nachrichtenvorlage wurde in der ausgew\u00e4hlten Klinik nicht gefunden oder Sie haben keinen Zugriff darauf.",
+    "loadFailed": "Die Nachrichtenvorlagen konnten nicht geladen werden.",
+    "reason": "Grund: {{reason}}"
+  },
   "whatsappApproval": {
     "infoTitle": "WhatsApp-Freigabe für automatische Nachrichten",
     "infoBody": "Einige Vorlagen müssen von WhatsApp genehmigt werden, bevor sie für automatische Nachrichten verwendet werden können.",

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save, Loader2, Info } from 'lucide-react';
+import { X, Save, Loader2, Info, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { messageTemplateService } from '../services/api';
 
@@ -18,9 +18,19 @@ const PURPOSES = [
   'general_message',
 ] as const;
 
+const getApiErrorDetail = (error: any): string | null => {
+  const data = error?.response?.data;
+  if (!data) return error?.message ?? null;
+  if (typeof data.error === 'string') return data.error;
+  if (typeof data.message === 'string') return data.message;
+  if (data.error) return JSON.stringify(data.error);
+  return error?.message ?? null;
+};
+
 const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onClose, onSuccess }) => {
   const { t } = useTranslation(['messageTemplates', 'common']);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: template?.name || '',
     channel: template?.channel || 'sms',
@@ -34,6 +44,7 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage(null);
     try {
       if (template) {
         await messageTemplateService.update(template.id, formData);
@@ -43,6 +54,11 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
       onSuccess();
     } catch (error) {
       console.error(error);
+      const status = (error as any)?.response?.status;
+      const detail = getApiErrorDetail(error);
+      const fallbackKey = status === 404 ? 'messageTemplates:notifications.notFound' : 'messageTemplates:notifications.saveFailed';
+      const fallback = t(fallbackKey);
+      setErrorMessage(detail ? `${fallback} ${t('messageTemplates:notifications.reason', { reason: detail })}` : fallback);
     } finally {
       setLoading(false);
     }
@@ -193,8 +209,15 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
             </div>
           </div>
 
+          {errorMessage && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-            <button type="button" onClick={onClose} className="btn-secondary">
+            <button type="button" onClick={onClose} disabled={loading} className="btn-secondary">
               {t('common:cancel')}
             </button>
             <button type="submit" disabled={loading} className="btn-primary">
