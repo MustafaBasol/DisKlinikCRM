@@ -53,6 +53,7 @@ import { isLegacyFallbackEnabled } from '../utils/legacyWhatsApp.js';
 import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
+import { splitNameForPatient, titleCaseName } from '../utils/patientName.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../services/appointmentRequestSafety.js';
 import { checkPractitionerAvailabilityForSlot } from '../services/appointments/appointmentAvailabilityService.js';
 import { sanitizeAiMessageHistory } from '../services/privacy/redaction.js';
@@ -343,16 +344,6 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
 const hasValidLastName = (lastName?: string | null) => {
   const normalized = (lastName ?? '').trim().toLocaleLowerCase('tr-TR');
   return Boolean(normalized) && !['-', 'unknown', 'bilinmiyor'].includes(normalized);
-};
-
-const titleCaseName = (value: string) => value.trim().split(/\s+/)
-  .map(part => part.charAt(0).toLocaleUpperCase('tr-TR') + part.slice(1).toLocaleLowerCase('tr-TR'))
-  .join(' ');
-
-const splitNameForPatient = (value: string) => {
-  const normalized = titleCaseName(value);
-  const [firstName, ...lastNameParts] = normalized.split(/\s+/);
-  return { firstName: firstName || '', lastName: lastNameParts.join(' ') };
 };
 
 const getPatientFullName = (patient: Pick<WhatsAppContactPatient, 'firstName' | 'lastName'>) => {
