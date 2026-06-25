@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { X, Send, Loader2, MessageSquare, Smartphone, Mail, Copy, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { X, Loader2, MessageSquare, Smartphone, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { messageTemplateService, messageService } from '../services/api';
 
 interface PrepareMessageModalProps {
   patientId: string;
+  clinicId?: string;
   appointmentId?: string;
   treatmentCaseId?: string;
   paymentId?: string;
@@ -13,7 +14,7 @@ interface PrepareMessageModalProps {
 }
 
 const PrepareMessageModal: React.FC<PrepareMessageModalProps> = ({ 
-  patientId, appointmentId, treatmentCaseId, paymentId, onClose, onSuccess 
+  patientId, clinicId, appointmentId, treatmentCaseId, paymentId, onClose, onSuccess 
 }) => {
   const { t, i18n } = useTranslation(['messages', 'messageTemplates', 'common']);
   
@@ -23,26 +24,34 @@ const PrepareMessageModal: React.FC<PrepareMessageModalProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [preview, setPreview] = useState<any>(null);
   const [customBody, setCustomBody] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
         const res = await messageTemplateService.getAll({ 
-          language: i18n.language.split('-')[0], // Use current UI language
+          clinicId,
           isActive: true 
         });
-        setTemplates(res.data);
+        const currentLanguage = i18n.language.split('-')[0];
+        setTemplates([...res.data].sort((a, b) => {
+          if (a.language === currentLanguage && b.language !== currentLanguage) return -1;
+          if (a.language !== currentLanguage && b.language === currentLanguage) return 1;
+          return String(a.name).localeCompare(String(b.name));
+        }));
       } catch (err) {
         console.error(err);
+        setErrorMessage(t('messages:prepareModal.loadFailed'));
       } finally {
         setLoading(false);
       }
     };
     fetchTemplates();
-  }, [i18n.language]);
+  }, [clinicId, i18n.language, t]);
 
   const handlePreview = async (templateId: string) => {
     setSelectedTemplateId(templateId);
+    setErrorMessage(null);
     if (!templateId) {
       setPreview(null);
       return;
@@ -53,6 +62,7 @@ const PrepareMessageModal: React.FC<PrepareMessageModalProps> = ({
       const res = await messageService.prepare({
         templateId,
         patientId,
+        clinicId,
         appointmentId,
         treatmentCaseId,
         paymentId
@@ -61,6 +71,8 @@ const PrepareMessageModal: React.FC<PrepareMessageModalProps> = ({
       setCustomBody(res.data.body);
     } catch (err) {
       console.error(err);
+      const detail = (err as any)?.response?.data?.error ?? (err as any)?.response?.data?.message;
+      setErrorMessage(detail ? `${t('messages:prepareModal.prepareFailed')} ${detail}` : t('messages:prepareModal.prepareFailed'));
     } finally {
       setPreparing(false);
     }
@@ -108,10 +120,24 @@ const PrepareMessageModal: React.FC<PrepareMessageModalProps> = ({
             >
               <option value="">{t('common:select')}</option>
               {templates.map(t => (
-                <option key={t.id} value={t.id}>{t.name} ({t.channel.toUpperCase()})</option>
+                <option key={t.id} value={t.id}>{t.name} ({t.channel.toUpperCase()} · {String(t.language).toUpperCase()})</option>
               ))}
             </select>
           </div>
+
+          {!loading && templates.length === 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+              <span>{t('messages:prepareModal.noTemplates')}</span>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
           {preparing ? (
             <div className="py-12 text-center">

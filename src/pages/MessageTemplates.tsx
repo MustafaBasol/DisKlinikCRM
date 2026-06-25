@@ -81,6 +81,7 @@ const MessageTemplates: React.FC = () => {
   const [seeding, setSeeding] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [rejectionModal, setRejectionModal] = useState<{ name: string; reason: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -89,6 +90,7 @@ const MessageTemplates: React.FC = () => {
       setTemplates(response.data);
     } catch (error) {
       console.error('Failed to fetch templates:', error);
+      setNotice({ type: 'error', message: t('messageTemplates:notifications.loadFailed') });
     } finally {
       setLoading(false);
     }
@@ -179,6 +181,32 @@ const MessageTemplates: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {notice && (
+        <div
+          className={`flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${
+            notice.type === 'success'
+              ? 'border-green-100 bg-green-50 text-green-700'
+              : 'border-red-100 bg-red-50 text-red-700'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            {notice.type === 'success' ? (
+              <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" />
+            ) : (
+              <XCircle size={16} className="mt-0.5 flex-shrink-0" />
+            )}
+            <span>{notice.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="text-current opacity-60 transition-opacity hover:opacity-100"
+          >
+            <XCircle size={16} />
+          </button>
+        </div>
+      )}
 
       {/* WhatsApp approval info card */}
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 flex gap-3">
@@ -332,6 +360,10 @@ const MessageTemplates: React.FC = () => {
           onClose={() => setIsFormOpen(false)}
           onSuccess={() => {
             setIsFormOpen(false);
+            setNotice({
+              type: 'success',
+              message: t(editingTemplate ? 'messageTemplates:notifications.updateSuccess' : 'messageTemplates:notifications.createSuccess'),
+            });
             fetchTemplates();
           }}
         />

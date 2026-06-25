@@ -51,6 +51,9 @@
     "title": "Nachricht vorbereiten",
     "selectTemplate": "Vorlage auswählen",
     "selectTemplatePrompt": "Bitte wählen Sie eine Vorlage aus, um die Vorschau zu sehen",
+    "noTemplates": "Für diese Klinik wurden keine aktiven Nachrichtenvorlagen gefunden.",
+    "loadFailed": "Die Nachrichtenvorlagen konnten nicht geladen werden.",
+    "prepareFailed": "Die Nachricht konnte nicht vorbereitet werden.",
     "customMessage": "Eigene Nachricht",
     "preview": "Vorschau",
     "send": "Als vorbereitet speichern"

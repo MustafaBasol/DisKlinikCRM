@@ -43,6 +43,14 @@
     "confirm": "Varsayılan şablonlar yüklensin mi?",
     "success": "Varsayılan şablonlar başarıyla oluşturuldu"
   },
+  "notifications": {
+    "createSuccess": "Mesaj \u015fablonu ba\u015far\u0131yla olu\u015fturuldu.",
+    "updateSuccess": "Mesaj \u015fablonu ba\u015far\u0131yla g\u00fcncellendi.",
+    "saveFailed": "Mesaj \u015fablonu kaydedilemedi.",
+    "notFound": "Mesaj \u015fablonu se\u00e7ili klinikte bulunamad\u0131 veya bu \u015fablona eri\u015fiminiz yok.",
+    "loadFailed": "Mesaj \u015fablonlar\u0131 y\u00fcklenemedi.",
+    "reason": "Sebep: {{reason}}"
+  },
   "whatsappApproval": {
     "infoTitle": "WhatsApp Otomatik Mesaj Onayı",
     "infoBody": "WhatsApp otomatik mesajları için bazı şablonların WhatsApp tarafından onaylanması gerekir. Randevu hatırlatma, gelmeyen hasta mesajı veya tedavi sonrası takip gibi otomatik mesajlar, onaylanan şablonlarla gönderilir.",

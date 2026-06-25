@@ -5,7 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';
 import { sendWhatsAppMessage, resolveConnectionForClinic } from '../services/whatsapp/whatsappService.js';
-import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { resolveEffectiveClinicId, validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { recordOperationalEvent } from '../services/operationalEventService.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
@@ -157,12 +157,15 @@ router.post('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
 // Same rationale as POST: template management restricted to management roles.
 router.put('/message-templates/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
   const validation = messageTemplateSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.messageTemplate.findFirst({ where: { id, clinicId } });
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId, res);
+    if (clinicScope === false) return;
+
+    const existing = await prisma.messageTemplate.findFirst({ where: { id, ...clinicScope } });
     if (!existing) return res.status(404).json({ error: 'Template not found' });
 
     const nextChannel = validation.data.channel ?? existing.channel;
@@ -181,7 +184,7 @@ router.put('/message-templates/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
     });
 
     await logActivity({
-      clinicId, userId: req.user!.id, entityType: 'message_template', entityId: id,
+      clinicId: existing.clinicId, userId: req.user!.id, entityType: 'message_template', entityId: id,
       action: 'updated', description: `"${template.name}" mesaj şablonu güncellendi`,
     });
 
@@ -265,14 +268,17 @@ router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_
 
 // POST /api/messages/prepare
 router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { normalizedRole, id: userId } = req.user!;
   const validation = prepareMessageSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
-  const { templateId, patientId, appointmentId, treatmentCaseId, paymentId, channelOverride, customSubject, customBody } = validation.data;
+  const { templateId, patientId, clinicId: bodyClinicId, appointmentId, treatmentCaseId, paymentId, channelOverride, customSubject, customBody } = validation.data;
 
   try {
+    const selectedClinicId = bodyClinicId ?? (req.query.clinicId as string | undefined);
+    const clinicId = await resolveEffectiveClinicId(req.user!, selectedClinicId);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
     const patientWhere: any = { id: patientId, clinicId };
     if (normalizedRole === 'DENTIST') {
       Object.assign(patientWhere, dentistPatientAccessWhere(userId));

@@ -324,6 +324,7 @@ export const messageTemplateSchema = z.object({
 export const prepareMessageSchema = z.object({
   templateId: z.string().uuid('Invalid template ID').optional().nullable(),
   patientId: z.string().uuid('Invalid patient ID'),
+  clinicId: z.string().uuid('Invalid clinic ID').optional().nullable(),
   appointmentId: z.string().uuid().optional().nullable(),
   treatmentCaseId: z.string().uuid().optional().nullable(),
   paymentId: z.string().uuid().optional().nullable(),

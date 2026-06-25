@@ -1352,6 +1352,7 @@ const PatientDetail: React.FC = () => {
       {isMessageModalOpen && (
         <PrepareMessageModal 
           patientId={id!}
+          clinicId={patient.clinicId}
           onClose={() => setIsMessageModalOpen(false)}
           onSuccess={() => {
             setIsMessageModalOpen(false);
