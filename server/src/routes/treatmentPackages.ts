@@ -154,7 +154,7 @@ router.get('/treatment-packages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_M
   }
 });
 
-router.post('/treatment-packages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+router.post('/treatment-packages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.body.clinicId ?? req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
@@ -215,7 +215,7 @@ router.post('/treatment-packages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
   }
 });
 
-router.put('/treatment-packages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+router.put('/treatment-packages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const validation = treatmentPackageUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
@@ -272,7 +272,7 @@ router.put('/treatment-packages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_M
   }
 });
 
-router.delete('/treatment-packages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+router.delete('/treatment-packages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
   try {

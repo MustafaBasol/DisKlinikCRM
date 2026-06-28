@@ -267,6 +267,16 @@ export function canManageServices(user: UserForPermission | null | undefined): b
 }
 
 /**
+ * Tedavi paketi yönetimi (oluştur / düzenle / sil / aktif-pasif):
+ * Yalnızca OWNER, ORG_ADMIN, CLINIC_MANAGER.
+ * RECEPTIONIST, BILLING, DENTIST yalnızca görüntüleyebilir.
+ */
+export function canManageTreatmentPackages(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
  * Doktor müsaitlik yönetimi:
  * Yönetim rolleri tüm doktorlar için; DENTIST yalnızca kendi programı.
  * doctorId sağlanmazsa yönetim rolü kontrolü yapılır.

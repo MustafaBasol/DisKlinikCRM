@@ -3,6 +3,8 @@ import { AlertCircle, CheckCircle2, Edit2, Loader2, Package, Plus, Trash2, XCirc
 import { useTranslation } from 'react-i18next';
 import { inventoryService, serviceService, treatmentPackageService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import { useAuth } from '../context/AuthContext';
+import { canManageTreatmentPackages } from '../utils/permissions';
 
 type PackageItemForm = {
   serviceId: string;
@@ -43,6 +45,8 @@ type TreatmentPackageListProps = {
 const TreatmentPackageList: React.FC<TreatmentPackageListProps> = ({ createRequest = 0 }) => {
   const { t } = useTranslation(['services', 'settings', 'common', 'treatmentCases']);
   const { formatCurrency, defaultCurrency } = useClinicPreferences();
+  const { user } = useAuth();
+  const canManage = canManageTreatmentPackages(user);
   const [packages, setPackages] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
@@ -122,7 +126,7 @@ const TreatmentPackageList: React.FC<TreatmentPackageListProps> = ({ createReque
             </thead>
             <tbody className="divide-y divide-gray-50">
               {packages.map((pkg) => (
-                <tr key={pkg.id} onClick={() => openModal(pkg)} className={`hover:bg-gray-50/50 transition-colors cursor-pointer ${!pkg.isActive ? 'opacity-50' : ''}`}>
+                <tr key={pkg.id} onClick={canManage ? () => openModal(pkg) : undefined} className={`hover:bg-gray-50/50 transition-colors ${canManage ? 'cursor-pointer' : ''} ${!pkg.isActive ? 'opacity-50' : ''}`}>
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center">
@@ -149,18 +153,22 @@ const TreatmentPackageList: React.FC<TreatmentPackageListProps> = ({ createReque
                     </span>
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={(e) => { e.stopPropagation(); openModal(pkg); }} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('common:edit')}>
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleActive(pkg); }}
-                        className={`p-1.5 transition-colors ${pkg.isActive ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
-                        title={pkg.isActive ? t('services:actions.deactivate') : t('services:actions.reactivate')}
-                      >
-                        {pkg.isActive ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
-                      </button>
-                    </div>
+                    {canManage ? (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); openModal(pkg); }} className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title={t('common:edit')}>
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleActive(pkg); }}
+                          className={`p-1.5 transition-colors ${pkg.isActive ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
+                          title={pkg.isActive ? t('services:actions.deactivate') : t('services:actions.reactivate')}
+                        >
+                          {pkg.isActive ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
