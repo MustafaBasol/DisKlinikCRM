@@ -1,7 +1,7 @@
 {
-  "appName": "CRM Santé",
-  "startingApp": "Démarrage du CRM Santé...",
-  "loadingApp": "Chargement du CRM Santé...",
+  "appName": "NoraMedi CRM",
+  "startingApp": "Démarrage de NoraMedi CRM...",
+  "loadingApp": "Chargement de NoraMedi CRM...",
   "dashboard": "Tableau de bord",
   "patients": "Patients",
   "appointments": "Rendez-vous",

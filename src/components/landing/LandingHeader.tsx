@@ -1,4 +1,3 @@
-import { Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import PublicLanguageSelector from './PublicLanguageSelector';
@@ -10,13 +9,17 @@ const LandingHeader = () => {
   return (
     <header className="landing-header sticky top-0 z-30 border-b border-[var(--landing-border)] backdrop-blur-xl">
       <div className="landing-container flex h-[4.75rem] items-center justify-between gap-4">
-        <a href="#top" className="flex shrink-0 items-center gap-2.5" aria-label={t('brand.name')}>
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--landing-primary)] text-white">
-            <Activity size={21} strokeWidth={2.4} />
-          </span>
-          <span className="hidden text-[1.05rem] font-bold tracking-[-0.03em] text-[var(--landing-heading)] sm:inline">
-            {t('brand.name')}
-          </span>
+        <a href="#top" className="flex shrink-0 items-center" aria-label={t('brand.name')}>
+          <img
+            src="/assets/brand/noramedi/logo-horizontal-light.svg"
+            alt={t('brand.name')}
+            className="h-9 w-auto dark:hidden"
+          />
+          <img
+            src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+            alt={t('brand.name')}
+            className="h-9 w-auto hidden dark:block"
+          />
         </a>
 
         <nav className="hidden items-center gap-6 lg:flex" aria-label="Landing page">

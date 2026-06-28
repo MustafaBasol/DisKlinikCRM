@@ -39,7 +39,7 @@ export const parseLocalObject = <T extends Record<string, unknown>>(raw: string 
   return null;
 };
 
-// Aile Dis CRM scoped cache keys (clinic-scoped, not tenant-scoped)
+// NoraMedi CRM scoped cache keys (clinic-scoped, not tenant-scoped)
 const AUTH_TOKEN_KEY    = 'hcrm_auth_token';
 const CLINIC_ID_KEY    = 'hcrm_clinic_id';
 const USER_CACHE_KEY   = 'hcrm_user';

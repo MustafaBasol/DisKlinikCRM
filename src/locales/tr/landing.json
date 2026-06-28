@@ -1,9 +1,9 @@
 {
   "meta": {
-    "title": "Aile Diş CRM | WhatsApp ve Instagram dahil klinik operasyonları"
+    "title": "NoraMedi Dental CRM | Diş Klinikleri İçin Klinik Yönetim Sistemi"
   },
   "brand": {
-    "name": "Aile Diş CRM",
+    "name": "NoraMedi CRM",
     "description": "Diş klinikleri için operasyon, şube ve iletişim kontrol paneli."
   },
   "nav": {
@@ -21,9 +21,9 @@
     "reviewFeatures": "Özellikleri İncele"
   },
   "hero": {
-    "eyebrow": "Diş Klinik CRM",
-    "title": "Kliniğinizi tek panelden yönetin",
-    "description": "Randevularınızı, hasta kayıtlarınızı, tedavi süreçlerinizi, ödemelerinizi, ekip görevlerinizi, şube performansınızı ve WhatsApp / Instagram iletişim akışınızı modern bir CRM ekranında toplayın.",
+    "eyebrow": "NoraMedi Dental CRM",
+    "title": "Diş kliniğinizi tek panelden yönetin",
+    "description": "NoraMedi CRM ile randevuları, hasta kayıtlarını, WhatsApp ve Instagram görüşmelerini, ödemeleri ve çoklu klinik operasyonlarını tek merkezden yönetin.",
     "highlights": {
       "roles": "Rol bazlı erişim",
       "branches": "Çoklu klinik görünümü",
@@ -78,7 +78,7 @@
   "features": {
     "label": "Çözüm",
     "title": "Diş klinikleri için operasyon merkezi",
-    "description": "Aile Diş CRM, günlük operasyon, iletişim ve performans görünürlüğü için gereken temel araçları bir araya getirir.",
+    "description": "NoraMedi CRM, günlük operasyon, iletişim ve performans görünürlüğü için gereken temel araçları bir araya getirir.",
     "items": {
       "appointments": {
         "title": "Akıllı randevu yönetimi",
@@ -134,7 +134,7 @@
   "integrations": {
     "label": "Hazır entegrasyonlar",
     "title": "WhatsApp ve Instagram görüşmelerini operasyon akışınıza bağlayın",
-    "description": "Aile Diş CRM, iki önemli iletişim kanalını mevcut klinik iş akışınızla bir araya getirmek için hazır bağlantı ve gelen kutusu yüzeyleri sunar.",
+    "description": "NoraMedi CRM, iki önemli iletişim kanalını mevcut klinik iş akışınızla bir araya getirmek için hazır bağlantı ve gelen kutusu yüzeyleri sunar.",
     "ready": "Hazır",
     "points": {
       "connection": "Kanal bağlantılarını yönetme görünümü",
@@ -274,6 +274,6 @@
       "communications": "İletişim Kanalları"
     },
     "privacyNote": "Hatırlatma iletişimlerinde hassas sağlık verisi paylaşılmaması ilkesiyle tasarlanır.",
-    "copyright": "Aile Diş CRM. Klinik operasyon yönetimi için MVP ürün deneyimi."
+    "copyright": "NoraMedi CRM. Diş klinikleri için modern klinik yönetim sistemi."
   }
 }

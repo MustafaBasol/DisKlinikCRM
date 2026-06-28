@@ -1,9 +1,9 @@
 {
   "meta": {
-    "title": "Aile Diş CRM | Clinic operations with WhatsApp and Instagram"
+    "title": "NoraMedi Dental CRM | Clinic Management System for Dental Clinics"
   },
   "brand": {
-    "name": "Aile Diş CRM",
+    "name": "NoraMedi CRM",
     "description": "Operations, branch and communications dashboard for dental clinics."
   },
   "nav": {
@@ -78,7 +78,7 @@
   "features": {
     "label": "Solution",
     "title": "An operations centre for dental clinics",
-    "description": "Aile Diş CRM brings together the essential tools for daily operations, communications and performance visibility.",
+    "description": "NoraMedi CRM brings together the essential tools for daily operations, communications and performance visibility.",
     "items": {
       "appointments": {
         "title": "Smart appointment management",
@@ -134,7 +134,7 @@
   "integrations": {
     "label": "Ready integrations",
     "title": "Connect WhatsApp and Instagram conversations to your workflow",
-    "description": "Aile Diş CRM provides ready connection and inbox surfaces to bring two key communication channels into your existing clinic workflow.",
+    "description": "NoraMedi CRM provides ready connection and inbox surfaces to bring two key communication channels into your existing clinic workflow.",
     "ready": "Ready",
     "points": {
       "connection": "View for managing channel connections",
@@ -274,6 +274,6 @@
       "communications": "Communication Channels"
     },
     "privacyNote": "Designed on the principle that sensitive health data must not be shared in reminder communications.",
-    "copyright": "Aile Diş CRM. MVP product experience for clinic operations management."
+    "copyright": "NoraMedi CRM. Modern clinic management system for dental clinics."
   }
 }

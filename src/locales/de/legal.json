@@ -1,13 +1,13 @@
 {
   "brand": {
-    "name": "Aile Diş CRM",
+    "name": "NoraMedi CRM",
     "legal": "Rechtliche Informationen"
   },
   "meta": {
-    "center": "Rechtliche Informationen | Aile Diş CRM",
-    "privacy": "Datenschutzhinweise | Aile Diş CRM",
-    "cookies": "Cookie- und lokale Speicherrichtlinie | Aile Diş CRM",
-    "communications": "Elektronische Kommunikation und Integrationen | Aile Diş CRM"
+    "center": "Rechtliche Informationen | NoraMedi CRM",
+    "privacy": "Datenschutzhinweise | NoraMedi CRM",
+    "cookies": "Cookie- und lokale Speicherrichtlinie | NoraMedi CRM",
+    "communications": "Elektronische Kommunikation und Integrationen | NoraMedi CRM"
   },
   "nav": {
     "label": "Rechtliche Seiten",
@@ -52,7 +52,7 @@
     ],
     "scope": {
       "title": "Umfang und Grenze",
-      "body": "Aile Diş CRM ist ein CRM-Produkt zur Verwaltung von Klinikabläufen; es ist nicht als Plattform für Diagnose, Verschreibung oder vollständige elektronische Patientenakte positioniert. Da Patienten-, Termin- und Kommunikationsabläufe jedoch personenbezogene Daten und in bestimmten Nutzungen sensible Gesundheitsdaten enthalten können, sind Datenminimierung und autorisierter Zugriff erforderlich."
+      "body": "NoraMedi CRM ist ein CRM-Produkt zur Verwaltung von Klinikabläufen; es ist nicht als Plattform für Diagnose, Verschreibung oder vollständige elektronische Patientenakte positioniert. Da Patienten-, Termin- und Kommunikationsabläufe jedoch personenbezogene Daten und in bestimmten Nutzungen sensible Gesundheitsdaten enthalten können, sind Datenminimierung und autorisierter Zugriff erforderlich."
     },
     "checklist": {
       "title": "Vor Veröffentlichung zu erledigen",
@@ -274,7 +274,7 @@
     },
     "roles": {
       "title": "2. Verantwortlichkeit und Anbieter",
-      "body": "Die Klinik handelt als Verantwortlicher, soweit sie Zwecke für ihre Patienten und Kommunikationsanfragen bestimmt. Ob der Anbieter von Aile Diş CRM Auftragsverarbeiter oder unabhängiger/gemeinsamer Verantwortlicher ist, muss im Dienstleistungsvertrag bestimmt werden. Rollen, Datenstandorte und Übermittlungsbedingungen von Meta, WhatsApp, Instagram und Hosting-Anbietern sind vor Aktivierung einer Funktion zu dokumentieren."
+      "body": "Die Klinik handelt als Verantwortlicher, soweit sie Zwecke für ihre Patienten und Kommunikationsanfragen bestimmt. Ob der Anbieter von NoraMedi CRM Auftragsverarbeiter oder unabhängiger/gemeinsamer Verantwortlicher ist, muss im Dienstleistungsvertrag bestimmt werden. Rollen, Datenstandorte und Übermittlungsbedingungen von Meta, WhatsApp, Instagram und Hosting-Anbietern sind vor Aktivierung einer Funktion zu dokumentieren."
     },
     "messages": {
       "title": "3. Betriebsnachrichten von Marketingkommunikation trennen",
