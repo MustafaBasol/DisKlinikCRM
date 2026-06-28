@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import { Activity, ArrowLeft, ExternalLink, Info } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Info } from 'lucide-react';
 import { NavLink, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../landing/landing.css';
@@ -46,16 +46,18 @@ const LegalLayout = ({ title, description, metaTitle, children }: LegalLayoutPro
     <div className="landing-page legal-page min-h-screen">
       <header className="border-b border-[var(--landing-border)] bg-[var(--landing-surface)]">
         <div className="landing-container flex min-h-[4.75rem] flex-wrap items-center justify-between gap-4 py-3">
-          <Link to="/landing" className="flex items-center gap-2.5" aria-label={t('brand.name')}>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--landing-primary)] text-white">
-              <Activity size={21} strokeWidth={2.4} />
-            </span>
-            <span>
-              <span className="block text-[1.05rem] font-bold tracking-[-0.03em] text-[var(--landing-heading)]">
-                {t('brand.name')}
-              </span>
-              <span className="block text-xs text-[var(--landing-muted)]">{t('brand.legal')}</span>
-            </span>
+          <Link to="/landing" className="flex flex-col items-start gap-0.5" aria-label={t('brand.name')}>
+            <img
+              src="/assets/brand/noramedi/logo-horizontal-light.svg"
+              alt={t('brand.name')}
+              className="h-9 w-auto dark:hidden"
+            />
+            <img
+              src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+              alt={t('brand.name')}
+              className="h-9 w-auto hidden dark:block"
+            />
+            <span className="block text-xs text-[var(--landing-muted)]">{t('brand.legal')}</span>
           </Link>
           <div className="flex items-center gap-2">
             <PublicLanguageSelector label={t('shared.languageSelector')} />
