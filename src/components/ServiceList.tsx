@@ -4,7 +4,7 @@ import { Plus, Edit2, CheckCircle2, XCircle, Tag, Loader2, AlertCircle, Package,
 import { inventoryService, serviceService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { useAuth } from '../context/AuthContext';
-import { canManageServices } from '../utils/permissions';
+import { canManageServices, canManageTreatmentPackages } from '../utils/permissions';
 import TreatmentPackageList from './TreatmentPackageList';
 
 const ServiceList: React.FC = () => {
@@ -12,6 +12,7 @@ const ServiceList: React.FC = () => {
   const { formatNumber } = useClinicPreferences();
   const { user } = useAuth();
   const canManage = canManageServices(user);
+  const canManagePackages = canManageTreatmentPackages(user);
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ const ServiceList: React.FC = () => {
       handleOpenModal();
       return;
     }
+    if (!canManagePackages) return;
     setPackageCreateRequest((value) => value + 1);
   };
 
@@ -70,7 +72,7 @@ const ServiceList: React.FC = () => {
           <h2 className="text-lg font-bold">{t('settings:services.title')}</h2>
           <p className="text-sm text-gray-500">{t('settings:services.subtitle')}</p>
         </div>
-        {(activeView !== 'services' || canManage) && (
+        {((activeView === 'services' && canManage) || (activeView === 'packages' && canManagePackages)) && (
           <button onClick={handlePrimaryCreate} className="btn-primary w-full sm:w-auto justify-center">
             <Plus size={18} />
             {activeView === 'services'
