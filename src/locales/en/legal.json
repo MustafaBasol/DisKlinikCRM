@@ -1,13 +1,13 @@
 {
   "brand": {
-    "name": "Aile Diş CRM",
+    "name": "NoraMedi CRM",
     "legal": "Legal information"
   },
   "meta": {
-    "center": "Legal Information | Aile Diş CRM",
-    "privacy": "Privacy Notice | Aile Diş CRM",
-    "cookies": "Cookies and Local Storage Policy | Aile Diş CRM",
-    "communications": "Electronic Communications and Integrations | Aile Diş CRM"
+    "center": "Legal Information | NoraMedi CRM",
+    "privacy": "Privacy Notice | NoraMedi CRM",
+    "cookies": "Cookies and Local Storage Policy | NoraMedi CRM",
+    "communications": "Electronic Communications and Integrations | NoraMedi CRM"
   },
   "nav": {
     "label": "Legal pages",
@@ -52,7 +52,7 @@
     ],
     "scope": {
       "title": "Scope and limitation",
-      "body": "Aile Diş CRM is a CRM product for managing clinic operations; it is not positioned as a diagnosis, prescription or full electronic health record platform. However, because patient, appointment and communication flows may contain personal data and, in some uses, special category health-related data, data minimisation and authorised access are required."
+      "body": "NoraMedi CRM is a CRM product for managing clinic operations; it is not positioned as a diagnosis, prescription or full electronic health record platform. However, because patient, appointment and communication flows may contain personal data and, in some uses, special category health-related data, data minimisation and authorised access are required."
     },
     "checklist": {
       "title": "Items to complete before publication",
@@ -274,7 +274,7 @@
     },
     "roles": {
       "title": "2. Controller responsibility and providers",
-      "body": "The clinic acts as controller to the extent it determines purposes for its patients and communications requests. Whether the Aile Diş CRM provider is a processor or independent/joint controller must be determined in the service contract. Roles, data locations and transfer conditions of Meta, WhatsApp, Instagram and hosting providers must be documented before a feature is enabled."
+      "body": "The clinic acts as controller to the extent it determines purposes for its patients and communications requests. Whether the NoraMedi CRM provider is a processor or independent/joint controller must be determined in the service contract. Roles, data locations and transfer conditions of Meta, WhatsApp, Instagram and hosting providers must be documented before a feature is enabled."
     },
     "messages": {
       "title": "3. Separate operational messages from marketing communications",

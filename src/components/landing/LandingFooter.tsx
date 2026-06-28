@@ -1,4 +1,3 @@
-import { Activity } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -10,11 +9,17 @@ const LandingFooter = () => {
     <footer className="border-t border-[var(--landing-border)] bg-[var(--landing-surface)]">
       <div className="landing-container grid gap-10 py-10 md:grid-cols-[1.4fr_0.72fr_0.72fr]">
         <div className="max-w-sm">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--landing-primary)] text-white">
-              <Activity size={19} />
-            </span>
-            <span className="font-bold tracking-[-0.025em] text-[var(--landing-heading)]">{t('brand.name')}</span>
+          <div className="flex items-center">
+            <img
+              src="/assets/brand/noramedi/logo-horizontal-light.svg"
+              alt={t('brand.name')}
+              className="h-8 w-auto dark:hidden"
+            />
+            <img
+              src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+              alt={t('brand.name')}
+              className="h-8 w-auto hidden dark:block"
+            />
           </div>
           <p className="mt-4 text-sm leading-7 text-[var(--landing-muted)]">{t('brand.description')}</p>
           <p className="mt-4 text-xs leading-6 text-[var(--landing-muted)]">{t('footer.privacyNote')}</p>

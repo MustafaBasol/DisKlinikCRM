@@ -34,8 +34,17 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-gray-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold mx-auto shadow-xl shadow-primary-200 mb-6">
-            A
+          <div className="flex justify-center mb-6">
+            <img
+              src="/assets/brand/noramedi/logo-horizontal-light.svg"
+              alt="NoraMedi CRM"
+              className="h-12 w-auto dark:hidden"
+            />
+            <img
+              src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+              alt="NoraMedi CRM"
+              className="h-12 w-auto hidden dark:block"
+            />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">{t('auth:welcomeBack')}</h1>
           <p className="text-gray-500 mt-2">{t('auth:signInSubtitle')}</p>

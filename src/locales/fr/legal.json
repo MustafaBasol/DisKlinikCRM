@@ -1,13 +1,13 @@
 {
   "brand": {
-    "name": "Aile Diş CRM",
+    "name": "NoraMedi CRM",
     "legal": "Informations juridiques"
   },
   "meta": {
-    "center": "Informations juridiques | Aile Diş CRM",
-    "privacy": "Avis de confidentialité | Aile Diş CRM",
-    "cookies": "Politique des cookies et du stockage local | Aile Diş CRM",
-    "communications": "Communications électroniques et intégrations | Aile Diş CRM"
+    "center": "Informations juridiques | NoraMedi CRM",
+    "privacy": "Avis de confidentialité | NoraMedi CRM",
+    "cookies": "Politique des cookies et du stockage local | NoraMedi CRM",
+    "communications": "Communications électroniques et intégrations | NoraMedi CRM"
   },
   "nav": {
     "label": "Pages juridiques",
@@ -52,7 +52,7 @@
     ],
     "scope": {
       "title": "Périmètre et limite",
-      "body": "Aile Diş CRM est un produit CRM destiné à gérer les opérations cliniques ; il n'est pas présenté comme une plateforme de diagnostic, de prescription ou de dossier médical électronique complet. Toutefois, les flux de patients, rendez-vous et communications pouvant contenir des données personnelles et, dans certains usages, des données de santé sensibles, la minimisation des données et l'accès autorisé sont indispensables."
+      "body": "NoraMedi CRM est un produit CRM destiné à gérer les opérations cliniques ; il n'est pas présenté comme une plateforme de diagnostic, de prescription ou de dossier médical électronique complet. Toutefois, les flux de patients, rendez-vous et communications pouvant contenir des données personnelles et, dans certains usages, des données de santé sensibles, la minimisation des données et l'accès autorisé sont indispensables."
     },
     "checklist": {
       "title": "Éléments à finaliser avant publication",
@@ -274,7 +274,7 @@
     },
     "roles": {
       "title": "2. Responsabilité du traitement et prestataires",
-      "body": "La clinique agit comme responsable du traitement dans la mesure où elle détermine les finalités concernant ses patients et demandes de communication. Le statut du fournisseur Aile Diş CRM, sous-traitant ou responsable indépendant/conjoint, doit être établi dans le contrat de service. Les rôles, emplacements des données et conditions de transfert de Meta, WhatsApp, Instagram et des prestataires d'hébergement doivent être documentés avant activation."
+      "body": "La clinique agit comme responsable du traitement dans la mesure où elle détermine les finalités concernant ses patients et demandes de communication. Le statut du fournisseur NoraMedi CRM, sous-traitant ou responsable indépendant/conjoint, doit être établi dans le contrat de service. Les rôles, emplacements des données et conditions de transfert de Meta, WhatsApp, Instagram et des prestataires d'hébergement doivent être documentés avant activation."
     },
     "messages": {
       "title": "3. Distinguer les messages opérationnels des communications marketing",

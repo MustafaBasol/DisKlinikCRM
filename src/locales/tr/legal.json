@@ -1,13 +1,13 @@
 {
   "brand": {
-    "name": "Aile Diş CRM",
+    "name": "NoraMedi CRM",
     "legal": "Yasal bilgilendirme"
   },
   "meta": {
-    "center": "Yasal Bilgilendirme | Aile Diş CRM",
-    "privacy": "Gizlilik ve Aydınlatma Metni | Aile Diş CRM",
-    "cookies": "Çerez ve Yerel Depolama Politikası | Aile Diş CRM",
-    "communications": "Elektronik İletişim ve Entegrasyonlar | Aile Diş CRM"
+    "center": "Yasal Bilgilendirme | NoraMedi CRM",
+    "privacy": "Gizlilik ve Aydınlatma Metni | NoraMedi CRM",
+    "cookies": "Çerez ve Yerel Depolama Politikası | NoraMedi CRM",
+    "communications": "Elektronik İletişim ve Entegrasyonlar | NoraMedi CRM"
   },
   "nav": {
     "label": "Yasal sayfalar",
@@ -52,7 +52,7 @@
     ],
     "scope": {
       "title": "Kapsam ve sınır",
-      "body": "Aile Diş CRM, klinik operasyonlarını yönetmeye yönelik bir CRM ürünüdür; tanı, reçete veya tam elektronik sağlık kaydı platformu olarak konumlandırılmaz. Bununla birlikte hasta, randevu ve iletişim akışları kişisel veri, bazı kullanımlarda ise sağlıkla ilişkili özel nitelikli veri içerebileceğinden veri minimizasyonu ve yetkili erişim yaklaşımı zorunludur."
+      "body": "NoraMedi CRM, klinik operasyonlarını yönetmeye yönelik bir CRM ürünüdür; tanı, reçete veya tam elektronik sağlık kaydı platformu olarak konumlandırılmaz. Bununla birlikte hasta, randevu ve iletişim akışları kişisel veri, bazı kullanımlarda ise sağlıkla ilişkili özel nitelikli veri içerebileceğinden veri minimizasyonu ve yetkili erişim yaklaşımı zorunludur."
     },
     "checklist": {
       "title": "Yayına almadan önce tamamlanacaklar",
@@ -274,7 +274,7 @@
     },
     "roles": {
       "title": "2. Veri sorumluluğu ve sağlayıcılar",
-      "body": "Klinik, kendi hastaları ve iletişim talepleri için amaçları belirlediği ölçüde veri sorumlusu olarak hareket eder. Aile Diş CRM sağlayıcısının veri işleyen veya bağımsız/ortak veri sorumlusu olup olmadığı hizmet sözleşmesinde belirlenmelidir. Meta, WhatsApp, Instagram ve barındırma sağlayıcılarının rolleri, veri lokasyonları ve aktarım koşulları özellik etkinleştirilmeden önce kayıt altına alınmalıdır."
+      "body": "Klinik, kendi hastaları ve iletişim talepleri için amaçları belirlediği ölçüde veri sorumlusu olarak hareket eder. NoraMedi CRM sağlayıcısının veri işleyen veya bağımsız/ortak veri sorumlusu olup olmadığı hizmet sözleşmesinde belirlenmelidir. Meta, WhatsApp, Instagram ve barındırma sağlayıcılarının rolleri, veri lokasyonları ve aktarım koşulları özellik etkinleştirilmeden önce kayıt altına alınmalıdır."
     },
     "messages": {
       "title": "3. Operasyon mesajı ile pazarlama iletişimini ayırın",

@@ -1,0 +1,21 @@
+{
+  "name": "NoraMedi Dental CRM",
+  "short_name": "NoraMedi",
+  "description": "Diş klinikleri için modern klinik yönetim sistemi",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#061B31",
+  "background_color": "#F6F9FB",
+  "icons": [
+    {
+      "src": "/assets/brand/noramedi/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/brand/noramedi/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
