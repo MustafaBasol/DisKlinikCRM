@@ -57,7 +57,6 @@ const LegalLayout = ({ title, description, metaTitle, children }: LegalLayoutPro
               alt={t('brand.name')}
               className="h-9 w-auto hidden dark:block"
             />
-            <span className="block text-xs text-[var(--landing-muted)]">{t('brand.legal')}</span>
           </Link>
           <div className="flex items-center gap-2">
             <PublicLanguageSelector label={t('shared.languageSelector')} />
