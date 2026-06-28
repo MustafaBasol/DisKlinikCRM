@@ -145,6 +145,17 @@ router.put('/payments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
     if (!existing) return res.status(404).json({ error: 'Payment not found' });
     const clinicId = existing.clinicId;
 
+    if (req.user!.normalizedRole === 'BILLING') {
+      const bodyPatientId = validation.data.patientId;
+      const bodyTCId = validation.data.treatmentCaseId;
+      if (
+        (bodyPatientId !== undefined && bodyPatientId !== existing.patientId) ||
+        (bodyTCId !== undefined && bodyTCId !== existing.treatmentCaseId)
+      ) {
+        return res.status(403).json({ error: 'Billing users cannot change the patient or treatment case of an existing payment.' });
+      }
+    }
+
     const nextPatientId = validation.data.patientId ?? existing.patientId;
     const nextTreatmentCaseId = validation.data.treatmentCaseId === undefined
       ? existing.treatmentCaseId
