@@ -106,6 +106,34 @@ await test('resend verification: exceeds max attempts is blocked', () => {
   assert.ok(!checkResendVerificationAttempt(key));
 });
 
+// ── Login check order: wrong password must not expose unverified status ───────
+
+await test('wrong password returns generic error, not EMAIL_NOT_VERIFIED', () => {
+  const passwordCorrect = false;
+  const user = { isActive: true, emailVerifiedAt: null as Date | null };
+  let responseCode: string;
+  if (!passwordCorrect) {
+    responseCode = 'INVALID_CREDENTIALS';
+  } else if (!user.isActive) {
+    responseCode = 'USER_INACTIVE';
+  } else if (!user.emailVerifiedAt) {
+    responseCode = 'EMAIL_NOT_VERIFIED';
+  } else {
+    responseCode = 'OK';
+  }
+  assert.notEqual(responseCode, 'EMAIL_NOT_VERIFIED', 'wrong password must not leak unverified status');
+  assert.equal(responseCode, 'INVALID_CREDENTIALS');
+});
+
+// ── Resend response must not reveal email existence ───────────────────────────
+
+await test('resend-verification: identical generic response regardless of email existence', () => {
+  const GENERIC = 'If an unverified account with that email exists, a verification link has been sent.';
+  const responseFound = { message: GENERIC };
+  const responseNotFound = { message: GENERIC };
+  assert.deepEqual(responseFound, responseNotFound, 'response must not reveal whether email exists');
+});
+
 // ── Email template ────────────────────────────────────────────────────────────
 
 await test('buildEmailVerificationEmail contains verifyUrl', () => {

@@ -53,6 +53,17 @@ router.post('/clinic', async (req: Request, res: Response) => {
       return res.status(409).json({ error: 'This slug is already taken. Please choose another.' });
     }
 
+    const existingEmail = await prisma.user.findFirst({
+      where: { email: { equals: adminEmail, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existingEmail) {
+      return res.status(409).json({
+        error: 'Bu e-posta adresi zaten kullanımda. Lütfen farklı bir e-posta adresi kullanın.',
+        code: 'EMAIL_ALREADY_EXISTS',
+      });
+    }
+
     // Starter plan bul (yoksa plansız oluştur)
     const starterPlan = await prisma.plan.findUnique({ where: { name: 'starter' } });
 
