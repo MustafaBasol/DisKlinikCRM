@@ -68,7 +68,8 @@
       "users": "Benutzer",
       "plans": "Pläne",
       "system": "System",
-      "privacy": "Datenschutz / Daten"
+      "privacy": "Datenschutz / Daten",
+      "backups": "Sicherungen"
     }
   },
   "dashboard": {
@@ -233,5 +234,51 @@
       "errorsLabel": "Fehler",
       "errorsNote": "Einige Kategorien konnten nicht verarbeitet werden. Weitere Details finden Sie in den Serverprotokollen."
     }
+  },
+  "backups": {
+    "title": "Datenbank-Sicherungen",
+    "infraTitle": "Infrastrukturstatus",
+    "summaryTitle": "Sicherungsübersicht",
+    "recentTitle": "Letzte Sicherungen (bis 10)",
+    "actionsTitle": "Sicherungsaktionen",
+    "actionsNote": "Verwenden Sie die Schaltflächen unten, um eine manuelle Sicherung auszulösen oder einen Wiederherstellungstest durchzuführen. Die Produktionsdatenbank wird nicht berührt.",
+    "backupDir": "Sicherungsverzeichnis",
+    "backupScript": "Sicherungsskript",
+    "cronFile": "Cron-Datei",
+    "logFile": "Protokolldatei",
+    "retentionDays": "Aufbewahrungsdauer",
+    "totalCount": "Sicherungen gesamt",
+    "totalSize": "Gesamtgröße",
+    "latestFile": "Neueste Sicherungsdatei",
+    "latestCreated": "Neuestes Sicherungsdatum",
+    "latestSize": "Größe der neuesten Sicherung",
+    "noBackups": "Noch keine Sicherungsdateien",
+    "colFilename": "Dateiname",
+    "colCreated": "Erstellt",
+    "colSize": "Größe",
+    "accessible": "Erreichbar",
+    "inaccessible": "Nicht erreichbar",
+    "ready": "Bereit",
+    "missing": "Fehlt",
+    "exists": "Vorhanden",
+    "runNowBtn": "Jetzt sichern",
+    "restoreTestBtn": "Wiederherstellungstest",
+    "showLogsBtn": "Protokolle anzeigen",
+    "hideLogsBtn": "Protokolle ausblenden",
+    "runSuccess": "Sicherung erfolgreich",
+    "runFailed": "Sicherung fehlgeschlagen",
+    "restoreTestSuccess": "Wiederherstellungstest erfolgreich",
+    "restoreTestFailed": "Wiederherstellungstest fehlgeschlagen",
+    "alreadyRunning": "Ein Vorgang läuft bereits, bitte warten",
+    "statusLoadFailed": "Sicherungsstatus konnte nicht geladen werden",
+    "logsLoadFailed": "Protokolldatei konnte nicht geladen werden",
+    "logsTitle": "Sicherungsprotokolle",
+    "logsEmpty": "Keine Protokolleinträge gefunden",
+    "lines": "Zeilen",
+    "restoreFile": "Wiederhergestellte Datei",
+    "tableCount": "Tabellenanzahl",
+    "platformAdminCount": "Platform-Admin-Anzahl",
+    "planCount": "Plananzahl",
+    "migrationsCount": "Migrationsanzahl"
   }
 }

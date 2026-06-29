@@ -759,4 +759,66 @@ router.post('/privacy/data-retention/run', async (req, res: Response) => {
   }
 });
 
+// ─── Backups ──────────────────────────────────────────────────────────────────
+
+// GET /api/platform/backups/status
+router.get('/backups/status', async (_req, res: Response) => {
+  try {
+    const { getBackupStatus } = await import('../services/backupService.js');
+    const status = await getBackupStatus();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to get backup status: ${err?.message ?? 'Unknown error'}` });
+  }
+});
+
+// GET /api/platform/backups/logs?lines=100
+router.get('/backups/logs', async (req, res: Response) => {
+  const rawLines = parseInt(String(req.query.lines ?? '100'), 10);
+  const lines = Math.min(300, Math.max(1, isNaN(rawLines) ? 100 : rawLines));
+  try {
+    const { getBackupLogs } = await import('../services/backupService.js');
+    const logLines = await getBackupLogs(lines);
+    res.json({ lines: logLines, count: logLines.length, requestedLines: lines });
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to get backup logs: ${err?.message ?? 'Unknown error'}` });
+  }
+});
+
+// POST /api/platform/backups/run
+router.post('/backups/run', async (req: PlatformAdminRequest, res: Response) => {
+  try {
+    const { runBackup, isBackupRunning } = await import('../services/backupService.js');
+    if (isBackupRunning()) {
+      return res.status(409).json({ error: 'A backup is already running' });
+    }
+    console.log(`[platform-backup] Manual backup triggered by admin ${req.platformAdmin?.email}`);
+    const result = await runBackup();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: `Backup run failed: ${err?.message ?? 'Unknown error'}` });
+  }
+});
+
+// POST /api/platform/backups/restore-test
+router.post('/backups/restore-test', async (req: PlatformAdminRequest, res: Response) => {
+  const { filename } = req.body ?? {};
+  if (filename !== undefined && typeof filename !== 'string') {
+    return res.status(400).json({ error: 'filename must be a string' });
+  }
+  try {
+    const { runRestoreTest, isRestoreTestRunning } = await import('../services/backupService.js');
+    if (isRestoreTestRunning()) {
+      return res.status(409).json({ error: 'A restore test is already running' });
+    }
+    console.log(`[platform-backup] Restore test triggered by admin ${req.platformAdmin?.email}, file: ${filename ?? 'latest'}`);
+    const result = await runRestoreTest(filename);
+    res.json(result);
+  } catch (err: any) {
+    const status = err?.message?.includes('Invalid') || err?.message?.includes('not found') ? 400 : 500;
+    res.status(status).json({ error: err?.message ?? 'Restore test failed' });
+  }
+});
+
 export default router;
+

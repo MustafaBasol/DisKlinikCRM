@@ -8,6 +8,7 @@ import {
   Package,
   Activity,
   Lock,
+  HardDrive,
   LogOut,
   Menu,
   X,
@@ -27,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/platform/plans', icon: <Package size={18} />, labelKey: 'plans' },
   { path: '/platform/system', icon: <Activity size={18} />, labelKey: 'system' },
   { path: '/platform/privacy', icon: <Lock size={18} />, labelKey: 'privacy' },
+  { path: '/platform/backups', icon: <HardDrive size={18} />, labelKey: 'backups' },
 ];
 
 const PlatformAdminLayout: React.FC = () => {
