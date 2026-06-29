@@ -46,7 +46,8 @@
     "test:billing-financial-select": "tsx src/tests/billingFinancialTreatmentCaseSelect.test.ts",
     "test:payment-validation": "tsx src/tests/paymentValidation.test.ts",
     "test:payment-billing-edit": "tsx src/tests/paymentBillingEdit.test.ts",
-    "validate:instagram-token": "tsx src/scripts/validate-instagram-login-token.ts"
+    "validate:instagram-token": "tsx src/scripts/validate-instagram-login-token.ts",
+    "test:email-verification": "tsx src/tests/emailVerification.test.ts"
   },
   "keywords": [],
   "author": "",
