@@ -820,5 +820,52 @@ router.post('/backups/restore-test', async (req: PlatformAdminRequest, res: Resp
   }
 });
 
+// ─── Mail Test ────────────────────────────────────────────────────────────────
+
+// POST /api/platform/mail/test
+router.post(
+  '/mail/test',
+  authenticatePlatformAdmin as express.RequestHandler,
+  csrfProtection('platform'),
+  async (req: PlatformAdminRequest, res) => {
+    const { to } = req.body ?? {};
+
+    if (!to || typeof to !== 'string' || !to.includes('@')) {
+      return res.status(400).json({ error: 'A valid recipient email address is required' });
+    }
+
+    const recipient = to.trim().toLowerCase();
+
+    try {
+      const { sendMail } = await import('../services/emailService.js');
+      const { buildTestEmail } = await import('../services/emailTemplates.js');
+
+      const payload = buildTestEmail({ to: recipient });
+      const result = await sendMail({ to: recipient, ...payload });
+
+      if (!result.sent) {
+        return res.status(503).json({
+          success: false,
+          reason: result.reason ?? 'Email not sent',
+          smtpConfigured: process.env.MAIL_ENABLED === 'true',
+        });
+      }
+
+      console.log(`[platform-mail-test] Test email sent to ${recipient} by admin ${req.platformAdmin?.email}`);
+
+      return res.json({
+        success: true,
+        to: recipient,
+        smtpHost: process.env.SMTP_HOST ?? '(not set)',
+        smtpPort: process.env.SMTP_PORT ?? '(not set)',
+        smtpFrom: process.env.SMTP_FROM ?? '(not set)',
+      });
+    } catch (err: any) {
+      console.error('[platform-mail-test] Error:', err?.message);
+      return res.status(500).json({ success: false, error: 'Failed to send test email' });
+    }
+  },
+);
+
 export default router;
 
