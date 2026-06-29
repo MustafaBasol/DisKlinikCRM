@@ -77,7 +77,8 @@ for (const warning of getBearerFallbackWarnings()) {
 }
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = parseInt(process.env.PORT || '5000', 10);
+const host = process.env.LISTEN_HOST || '0.0.0.0';
 const configuredCorsOrigins = (process.env.CORS_ORIGIN || process.env.CORS_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
@@ -174,8 +175,8 @@ app.use('/api', usersImportRoutes);
 app.use('/api', postTreatmentRoutes);
 app.use('/api', patientPrivacyRoutes);
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+app.listen(port, host, () => {
+  console.log(`Server is running on ${host}:${port}`);
   startReminderJobs();
   startMetaTemplateSyncJob();
   startDataRetentionCleanupJob();
