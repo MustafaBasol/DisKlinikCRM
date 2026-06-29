@@ -574,6 +574,54 @@ await test('bilinmeyen rol → ASSISTANT', () => {
   assert.equal(normalizeRole('sunucu'), 'ASSISTANT');
 });
 
+// ─── Önizleme geçerli → import hatası senaryosu (regresyon) ──────────────────
+section('Önizleme geçerli ancak import başarısız — Prisma hata kodu çözme');
+
+function decodePrismaImportError(rowErr: { code?: string; meta?: { target?: string[] } }, rowData: { phone?: string; email?: string }): string {
+  if (rowErr?.code === 'P2002') {
+    const fields = rowErr?.meta?.target ?? [];
+    if (fields.includes('phone')) return `Bu telefon numarası zaten kayıtlı: ${rowData.phone}`;
+    if (fields.includes('email')) return `Bu e-posta adresi zaten kayıtlı: ${rowData.email}`;
+    return 'Bu kayıt zaten mevcut (tekil alan çakışması)';
+  }
+  if (rowErr?.code === 'P2003') return 'Geçersiz klinik veya organizasyon referansı';
+  if (rowErr?.code === 'P2025') return 'İlgili kayıt bulunamadı';
+  return 'Beklenmeyen bir hata oluştu';
+}
+
+await test('P2002 telefon çakışması → spesifik hata mesajı', () => {
+  const err = { code: 'P2002', meta: { target: ['phone'] } };
+  const msg = decodePrismaImportError(err, { phone: '+905551234567' });
+  assert.ok(msg.includes('+905551234567'), `Beklenilen telefonu içermeli, alınan: ${msg}`);
+  assert.ok(!msg.includes('Veritabanı'), `Genel DB hatası mesajı içermemeli`);
+});
+
+await test('P2002 e-posta çakışması → spesifik hata mesajı', () => {
+  const err = { code: 'P2002', meta: { target: ['email'] } };
+  const msg = decodePrismaImportError(err, { email: 'test@ornek.com' });
+  assert.ok(msg.includes('test@ornek.com'), `Beklenilen e-postayı içermeli, alınan: ${msg}`);
+  assert.ok(!msg.includes('Veritabanı'), `Genel DB hatası mesajı içermemeli`);
+});
+
+await test('P2002 bilinmeyen alan → genel çakışma mesajı', () => {
+  const err = { code: 'P2002', meta: { target: ['someOtherField'] } };
+  const msg = decodePrismaImportError(err, {});
+  assert.ok(msg.includes('tekil alan'), `Tekil alan mesajı bekleniyor, alınan: ${msg}`);
+});
+
+await test('P2003 yabancı anahtar hatası → güvenli mesaj', () => {
+  const err = { code: 'P2003', meta: {} };
+  const msg = decodePrismaImportError(err, {});
+  assert.ok(msg.includes('klinik') || msg.includes('organizasyon'), `Klinik/org mesajı bekleniyor, alınan: ${msg}`);
+});
+
+await test('Bilinmeyen Prisma kodu → genel güvenli mesaj', () => {
+  const err = { code: 'P9999', meta: {} };
+  const msg = decodePrismaImportError(err, {});
+  assert.ok(!msg.includes('Veritabanı'), `Genel DB hatası mesajı içermemeli, alınan: ${msg}`);
+  assert.equal(msg, 'Beklenmeyen bir hata oluştu');
+});
+
 // ─── Sonuç ────────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`Toplam: ${passed + failed}  ✓ ${passed}  ✗ ${failed}`);

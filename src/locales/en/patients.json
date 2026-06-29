@@ -7,6 +7,42 @@
   "searchPlaceholder": "Search patients by name, email or phone...",
   "includeArchived": "Include Archived",
   "noPatientsFound": "No patients found matching your criteria.",
+  "importModal": {
+    "title": "Import Patients with Excel",
+    "downloadTemplate": "Download Template (.xlsx)",
+    "selectFile": "Select Excel File",
+    "dropzonePlaceholder": "Click to choose a file or drag it here",
+    "fileRules": "Only .xlsx, max. 5 MB, max. 500 rows",
+    "previewButton": "Preview",
+    "importButton": "Import {{count}} Patients",
+    "rowLabel": "Row {{row}}",
+    "howItWorks": {
+      "title": "How does it work?",
+      "downloadTemplate": "Download the template below.",
+      "fillData": "Fill in patient data (required: first name, last name, phone).",
+      "previewFile": "Upload the file and preview it.",
+      "importValidRows": "Import valid rows."
+    },
+    "preview": {
+      "totalRows": "Total Rows",
+      "validRows": "Valid",
+      "invalidRows": "Invalid",
+      "invalidRowsTitle": "Invalid Rows:",
+      "noValidRows": "There are no valid rows to import."
+    },
+    "result": {
+      "success": "{{count}} patients imported successfully.",
+      "skipped": "{{count}} rows skipped.",
+      "skippedRowsTitle": "Skipped Rows:"
+    },
+    "errors": {
+      "fileType": "Only .xlsx files are accepted.",
+      "fileSize": "File exceeds the 5 MB limit.",
+      "templateDownload": "Template could not be downloaded.",
+      "previewFailed": "Preview failed.",
+      "importFailed": "Import failed."
+    }
+  },
   "list": {
     "name": "Patient Name",
     "contact": "Contact Info",
@@ -32,42 +68,6 @@
       "uploadFailed": "File could not be uploaded",
       "download": "Download",
       "deleteConfirm": "Are you sure you want to delete this file?"
-    },
-    "importModal": {
-      "title": "Import Patients with Excel",
-      "downloadTemplate": "Download Template (.xlsx)",
-      "selectFile": "Select Excel File",
-      "dropzonePlaceholder": "Click to choose a file or drag it here",
-      "fileRules": "Only .xlsx, max. 5 MB, max. 500 rows",
-      "previewButton": "Preview",
-      "importButton": "Import {{count}} Patients",
-      "rowLabel": "Row {{row}}",
-      "howItWorks": {
-        "title": "How does it work?",
-        "downloadTemplate": "Download the template below.",
-        "fillData": "Fill in patient data (required: first name, last name, phone).",
-        "previewFile": "Upload the file and preview it.",
-        "importValidRows": "Import valid rows."
-      },
-      "preview": {
-        "totalRows": "Total Rows",
-        "validRows": "Valid",
-        "invalidRows": "Invalid",
-        "invalidRowsTitle": "Invalid Rows:",
-        "noValidRows": "There are no valid rows to import."
-      },
-      "result": {
-        "success": "{{count}} patients imported successfully.",
-        "skipped": "{{count}} rows skipped.",
-        "skippedRowsTitle": "Skipped Rows:"
-      },
-      "errors": {
-        "fileType": "Only .xlsx files are accepted.",
-        "fileSize": "File exceeds the 5 MB limit.",
-        "templateDownload": "Template could not be downloaded.",
-        "previewFailed": "Preview failed.",
-        "importFailed": "Import failed."
-      }
     },
     "whatsappTab": "WhatsApp",
     "whatsappIncoming": "WhatsApp Incoming",
