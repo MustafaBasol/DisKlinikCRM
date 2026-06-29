@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Calendar, User, ClipboardList, AlertCircle, Loader2, Tag } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Calendar, User, ClipboardList, AlertCircle, Loader2, Tag, Search, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { patientService, userService, appointmentService, taskService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
@@ -17,11 +17,19 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
   const { formatDate } = useClinicPreferences();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const [patients, setPatients] = useState<any[]>([]);
+
   const [users, setUsers] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
-  
+
+  // Patient autocomplete state
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [patientDropdownOpen, setPatientDropdownOpen] = useState(false);
+  const [patientSearchLoading, setPatientSearchLoading] = useState(false);
+  const [selectedPatientLabel, setSelectedPatientLabel] = useState('');
+  const patientSearchRef = useRef<HTMLDivElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
@@ -33,26 +41,65 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
     status: initialData?.status || 'open',
   });
 
+  // Load initial patient name when editing or patientId is pre-set
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [patientsRes, usersRes] = await Promise.all([
-          patientService.getAll(),
-          userService.getAll()
-        ]);
-        setPatients(patientsRes.data);
-        setUsers(usersRes.data);
-        
-        if (formData.patientId) {
-          const apptsRes = await appointmentService.getAll({ patientId: formData.patientId });
-          setAppointments(apptsRes.data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch form data:', err);
+    const presetId = patientId || initialData?.patientId;
+    if (!presetId) return;
+    patientService.getById(presetId)
+      .then(r => {
+        const p = r.data;
+        setSelectedPatientLabel(`${p.firstName} ${p.lastName}`);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load users once
+  useEffect(() => {
+    userService.getAll()
+      .then(res => setUsers(res.data))
+      .catch(err => console.error(err));
+  }, []);
+
+  // Load appointments when patient changes
+  useEffect(() => {
+    if (formData.patientId) {
+      appointmentService.getAll({ patientId: formData.patientId })
+        .then(res => setAppointments(res.data))
+        .catch(() => setAppointments([]));
+    } else {
+      setAppointments([]);
+    }
+  }, [formData.patientId]);
+
+  // Close patient dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (patientSearchRef.current && !patientSearchRef.current.contains(e.target as Node)) {
+        setPatientDropdownOpen(false);
       }
     };
-    fetchData();
-  }, [formData.patientId]);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const searchPatients = useCallback((q: string) => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!q.trim()) {
+      setPatientResults([]);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setPatientSearchLoading(true);
+      try {
+        const res = await patientService.getAll({ search: q, limit: 20 });
+        setPatientResults(res.data || []);
+      } catch {
+        setPatientResults([]);
+      } finally {
+        setPatientSearchLoading(false);
+      }
+    }, 300);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +132,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm">
               <AlertCircle size={18} />
@@ -186,40 +233,103 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              {/* Patient Selector */}
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-gray-700">{t('tasks:form.patient')}</label>
-                <select
-                  className="input-field"
-                  value={formData.patientId}
-                  onChange={(e) => setFormData({ ...formData, patientId: e.target.value, appointmentId: '' })}
-                  disabled={!!patientId}
-                >
-                  <option value="">{t('common:selectPlaceholder')}</option>
-                  {patients.map(p => (
-                    <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
-                  ))}
-                </select>
-              </div>
+            {/* Patient Autocomplete */}
+            <div className="space-y-1" ref={patientSearchRef}>
+              <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <User size={16} className="text-gray-400" />
+                {t('tasks:form.patient')}
+              </label>
+              {patientId ? (
+                <div className="input-field text-gray-700">{selectedPatientLabel}</div>
+              ) : (
+                <div className="relative">
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      className="input-field pl-9 pr-16"
+                      placeholder={t('common:typeToSearch')}
+                      value={patientDropdownOpen ? patientSearch : selectedPatientLabel}
+                      onFocus={() => {
+                        setPatientDropdownOpen(true);
+                        setPatientSearch('');
+                        setPatientResults([]);
+                      }}
+                      onChange={(e) => {
+                        setPatientSearch(e.target.value);
+                        searchPatients(e.target.value);
+                      }}
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {formData.patientId && !patientDropdownOpen && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, patientId: '', appointmentId: '' });
+                            setSelectedPatientLabel('');
+                          }}
+                          className="text-gray-400 hover:text-gray-600 p-0.5"
+                          title={t('common:clear')}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                      <ChevronDown size={16} className="text-gray-400" />
+                    </div>
+                  </div>
+                  {patientDropdownOpen && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                      {patientSearchLoading && (
+                        <div className="flex items-center justify-center py-3 text-gray-400">
+                          <Loader2 size={16} className="animate-spin" />
+                        </div>
+                      )}
+                      {!patientSearchLoading && patientSearch && patientResults.length === 0 && (
+                        <div className="px-4 py-3 text-sm text-gray-400">{t('common:noResultsFound')}</div>
+                      )}
+                      {!patientSearchLoading && !patientSearch && (
+                        <div className="px-4 py-3 text-sm text-gray-400">{t('common:typeToSearch')}</div>
+                      )}
+                      {patientResults.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 hover:text-primary-700 transition-colors"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setFormData({ ...formData, patientId: p.id, appointmentId: '' });
+                            setSelectedPatientLabel(`${p.firstName} ${p.lastName}`);
+                            setPatientDropdownOpen(false);
+                            setPatientSearch('');
+                          }}
+                        >
+                          <span className="font-medium">{p.firstName} {p.lastName}</span>
+                          {p.phone && <span className="ml-2 text-gray-400">{p.phone}</span>}
+                          {p.email && <span className="ml-2 text-gray-400 text-xs">{p.email}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-              {/* Appointment Selector */}
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-gray-700">{t('tasks:form.appointment')}</label>
-                <select
-                  className="input-field"
-                  value={formData.appointmentId}
-                  onChange={(e) => setFormData({ ...formData, appointmentId: e.target.value })}
-                  disabled={!formData.patientId || !!appointmentId}
-                >
-                  <option value="">{t('common:selectPlaceholder')}</option>
-                  {appointments.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {formatDate(a.startTime)} - {a.appointmentType.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Appointment Selector */}
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-gray-700">{t('tasks:form.appointment')}</label>
+              <select
+                className="input-field"
+                value={formData.appointmentId}
+                onChange={(e) => setFormData({ ...formData, appointmentId: e.target.value })}
+                disabled={!formData.patientId || !!appointmentId}
+              >
+                <option value="">{t('common:selectPlaceholder')}</option>
+                {appointments.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {formatDate(a.startTime)} - {a.appointmentType.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

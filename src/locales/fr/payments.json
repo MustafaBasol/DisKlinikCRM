@@ -62,7 +62,8 @@
       "amountInvalid": "Veuillez saisir un montant de paiement supérieur à 0.",
       "methodRequired": "Veuillez sélectionner un mode de paiement.",
       "paidAtRequired": "Veuillez sélectionner une date de paiement.",
-      "saveFailed": "Le paiement n'a pas pu être enregistré."
+      "saveFailed": "Le paiement n'a pas pu être enregistré.",
+      "treatmentCaseInvalid": "Sélection de dossier de traitement invalide. Veuillez choisir un dossier valide ou laisser ce champ vide."
     }
   },
   "confirmCancel": "Annuler ce paiement ?",

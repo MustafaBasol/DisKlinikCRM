@@ -1,17 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  ClipboardList, 
-  Plus, 
-  Search, 
-  Filter, 
-  CheckCircle2, 
-  Clock, 
-  User, 
-  MoreVertical, 
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ClipboardList,
+  Plus,
+  Search,
+  CheckCircle2,
+  Clock,
+  User,
+  Pencil,
   Loader2,
-  AlertCircle,
   Calendar,
-  XCircle
+  XCircle,
+  X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { taskService, userService } from '../services/api';
@@ -25,13 +24,16 @@ const Tasks: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { selectedClinicId } = useClinic();
   const { formatDate } = useClinicPreferences();
-  
+
   const [tasks, setTasks] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null);
-  
+
+  const [completionToast, setCompletionToast] = useState<{ taskId: string; taskTitle: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Filters
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('open');
@@ -83,13 +85,37 @@ const Tasks: React.FC = () => {
     fetchUsers();
   }, []);
 
-  const handleComplete = async (id: string) => {
+  const showCompletionToast = (taskId: string, taskTitle: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setCompletionToast({ taskId, taskTitle });
+    toastTimerRef.current = setTimeout(() => setCompletionToast(null), 6000);
+  };
+
+  const handleComplete = async (task: any) => {
     try {
-      await taskService.complete(id);
+      await taskService.complete(task.id);
       fetchTasks();
+      showCompletionToast(task.id, task.title);
     } catch (err) {
       console.error('Failed to complete task:', err);
     }
+  };
+
+  const handleReopen = async (id: string) => {
+    try {
+      await taskService.reopen(id);
+      fetchTasks();
+    } catch (err) {
+      console.error('Failed to reopen task:', err);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!completionToast) return;
+    const { taskId } = completionToast;
+    setCompletionToast(null);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    await handleReopen(taskId);
   };
 
   const handleCancel = async (id: string) => {
@@ -123,11 +149,11 @@ const Tasks: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">{t('tasks:title')}</h1>
           <p className="text-gray-500 mt-1">{t('tasks:subtitle')}</p>
         </div>
-        <button 
+        <button
           onClick={() => {
             setEditingTask(null);
             setIsFormOpen(true);
-          }} 
+          }}
           className="btn-primary"
         >
           <Plus size={20} />
@@ -139,8 +165,8 @@ const Tasks: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder={t('common:search')}
             className="input-field pl-10"
             value={search}
@@ -170,13 +196,13 @@ const Tasks: React.FC = () => {
         </select>
 
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={() => { setDueToday(!dueToday); setOverdue(false); }}
             className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${dueToday ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             {t('tasks:filters.dueToday')}
           </button>
-          <button 
+          <button
             onClick={() => { setOverdue(!overdue); setDueToday(false); }}
             className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${overdue ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
@@ -193,22 +219,28 @@ const Tasks: React.FC = () => {
           </div>
         ) : tasks.length > 0 ? (
           tasks.map((task) => (
-            <div 
-              key={task.id} 
+            <div
+              key={task.id}
               className={`card p-4 flex items-center gap-4 transition-all hover:shadow-md group border-l-4 ${
-                task.status === 'completed' ? 'opacity-75 border-green-400' : 
-                task.status === 'cancelled' ? 'opacity-50 border-gray-300' : 
+                task.status === 'completed' ? 'opacity-75 border-green-400' :
+                task.status === 'cancelled' ? 'opacity-50 border-gray-300' :
                 isOverdue(task.dueDate, task.status) ? 'border-red-500 bg-red-50/30' : 'border-transparent'
               }`}
             >
-              <button 
-                onClick={() => handleComplete(task.id)}
-                disabled={task.status === 'completed' || task.status === 'cancelled'}
-                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                  task.status === 'completed' ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-primary-500 text-transparent hover:text-primary-500'
+              {/* Completion checkbox — square, reversible */}
+              <button
+                onClick={() => task.status === 'completed' ? handleReopen(task.id) : handleComplete(task)}
+                disabled={task.status === 'cancelled'}
+                title={task.status === 'completed' ? t('tasks:actions.reopen') : t('tasks:actions.markComplete')}
+                className={`w-6 h-6 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                  task.status === 'completed'
+                    ? 'bg-green-500 border-green-500 text-white hover:bg-green-600 hover:border-green-600'
+                    : task.status === 'cancelled'
+                    ? 'border-gray-200 text-transparent cursor-not-allowed'
+                    : 'border-gray-300 hover:border-primary-500 text-transparent hover:text-primary-500'
                 }`}
               >
-                <CheckCircle2 size={16} />
+                <CheckCircle2 size={14} />
               </button>
 
               <div className="flex-1 min-w-0">
@@ -241,23 +273,22 @@ const Tasks: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Edit button visible for all statuses */}
+                <button
+                  onClick={() => { setEditingTask(task); setIsFormOpen(true); }}
+                  className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"
+                  title={t('tasks:actions.edit')}
+                >
+                  <Pencil size={16} />
+                </button>
                 {task.status !== 'completed' && task.status !== 'cancelled' && (
-                  <>
-                    <button 
-                      onClick={() => { setEditingTask(task); setIsFormOpen(true); }}
-                      className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"
-                      title={t('tasks:actions.edit')}
-                    >
-                      <MoreVertical size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleCancel(task.id)}
-                      className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
-                      title={t('tasks:actions.cancel')}
-                    >
-                      <XCircle size={18} />
-                    </button>
-                  </>
+                  <button
+                    onClick={() => handleCancel(task.id)}
+                    className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
+                    title={t('tasks:actions.cancel')}
+                  >
+                    <XCircle size={18} />
+                  </button>
                 )}
               </div>
             </div>
@@ -266,20 +297,37 @@ const Tasks: React.FC = () => {
           <div className="card p-20 text-center text-gray-500 bg-gray-50/50 border-dashed border-2">
             <ClipboardList size={48} className="mx-auto mb-3 text-gray-300" />
             <p className="text-lg font-medium">{t('common:noData')}</p>
-            <p className="text-sm">No tasks match your filters.</p>
+            <p className="text-sm">{t('tasks:noResultsHint')}</p>
           </div>
         )}
       </div>
 
       {isFormOpen && (
-        <TaskForm 
-          onClose={() => setIsFormOpen(false)} 
+        <TaskForm
+          onClose={() => setIsFormOpen(false)}
           onSuccess={() => {
             setIsFormOpen(false);
             fetchTasks();
           }}
           initialData={editingTask}
         />
+      )}
+
+      {/* Completion toast with undo */}
+      {completionToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-800 text-white px-4 py-3 rounded-xl shadow-2xl animate-in slide-in-from-bottom duration-300 max-w-sm">
+          <CheckCircle2 size={18} className="text-green-400 flex-shrink-0" />
+          <span className="text-sm flex-1">{t('tasks:actions.completedMessage', { title: completionToast.taskTitle })}</span>
+          <button
+            onClick={handleUndo}
+            className="text-sm font-semibold text-primary-300 hover:text-primary-200 whitespace-nowrap"
+          >
+            {t('tasks:actions.undoComplete')}
+          </button>
+          <button onClick={() => setCompletionToast(null)} className="p-1 hover:text-gray-300 flex-shrink-0">
+            <X size={14} />
+          </button>
+        </div>
       )}
     </div>
   );

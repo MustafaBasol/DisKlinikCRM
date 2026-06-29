@@ -62,7 +62,8 @@
       "amountInvalid": "Bitte geben Sie einen Zahlungsbetrag größer als 0 ein.",
       "methodRequired": "Bitte wählen Sie eine Zahlungsmethode aus.",
       "paidAtRequired": "Bitte wählen Sie ein Zahlungsdatum aus.",
-      "saveFailed": "Die Zahlung konnte nicht gespeichert werden."
+      "saveFailed": "Die Zahlung konnte nicht gespeichert werden.",
+      "treatmentCaseInvalid": "Ungültige Behandlungsfall-Auswahl. Bitte wählen Sie einen gültigen Fall aus der Liste oder lassen Sie das Feld leer."
     }
   },
   "confirmCancel": "Diese Zahlung stornieren?",

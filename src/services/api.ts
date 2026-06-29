@@ -170,6 +170,7 @@ export const taskService = {
   create: (data: any) => api.post('/tasks', data),
   update: (id: string, data: any) => api.put(`/tasks/${id}`, data),
   complete: (id: string) => api.patch(`/tasks/${id}/complete`),
+  reopen: (id: string) => api.put(`/tasks/${id}`, { status: 'open' }),
   cancel: (id: string) => api.put(`/tasks/${id}`, { status: 'cancelled' }),
 };
 

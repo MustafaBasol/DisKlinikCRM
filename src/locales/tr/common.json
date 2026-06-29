@@ -85,6 +85,7 @@
   "selectPlaceholder": "Seçiniz",
   "typeToSearch": "Aramak için yazın...",
   "noResultsFound": "Sonuç bulunamadı.",
+  "clear": "Temizle",
   "errorGeneric": "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
   "unassigned": "Atanmamış",
   "files": "Dosyalar",

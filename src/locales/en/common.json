@@ -85,6 +85,7 @@
   "selectPlaceholder": "Select...",
   "typeToSearch": "Type to search...",
   "noResultsFound": "No results found.",
+  "clear": "Clear",
   "errorGeneric": "Something went wrong. Please try again.",
   "unassigned": "Unassigned",
   "files": "Files",

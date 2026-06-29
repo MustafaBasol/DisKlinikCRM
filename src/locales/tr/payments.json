@@ -62,7 +62,8 @@
       "amountInvalid": "Lütfen 0'dan büyük bir ödeme tutarı girin.",
       "methodRequired": "Lütfen ödeme yöntemi seçin.",
       "paidAtRequired": "Lütfen ödeme tarihi seçin.",
-      "saveFailed": "Ödeme kaydedilemedi."
+      "saveFailed": "Ödeme kaydedilemedi.",
+      "treatmentCaseInvalid": "Tedavi dosyası seçimi geçersiz. Lütfen listeden geçerli bir dosya seçin veya boş bırakın."
     }
   },
   "confirmCancel": "Bu ödeme iptal edilsin mi?",

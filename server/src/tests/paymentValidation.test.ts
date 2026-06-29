@@ -91,6 +91,19 @@ test('treatmentCaseId opsiyoneldir — boşken kabul edilir', () => {
   assert.equal(result.success, true);
 });
 
+test('treatmentCaseId boş string ("") null olarak normalize edilir ve kabul edilir', () => {
+  const result = paymentSchema.safeParse({
+    patientId: validPatientId,
+    treatmentCaseId: '',
+    amount: 100,
+    paymentMethod: 'cash',
+  });
+  assert.equal(result.success, true, 'Boş string treatmentCaseId kabul edilmeli (null\'a normalize edilir)');
+  if (result.success) {
+    assert.equal(result.data.treatmentCaseId, null, 'Boş string null\'a dönüştürülmeli');
+  }
+});
+
 test('treatmentCaseId verilirse geçerli bir UUID olmalı', () => {
   const result = paymentSchema.safeParse({
     patientId: validPatientId,
