@@ -37,11 +37,14 @@
 
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { writeFileSync } from 'node:fs';
 import { buildFallbackWhatsAppAgentDecision } from '../services/whatsappConversationAgent.js';
 import type { WhatsAppAgentAction, WhatsAppAgentIntent } from '../services/whatsappAgentSchema.js';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(process.env.DATABASE_URL!),
+});
 
 // ── Argüman ayrıştırma ────────────────────────────────────────────────────────
 

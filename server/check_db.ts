@@ -1,5 +1,9 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { PrismaPg } from '@prisma/adapter-pg';
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(process.env.DATABASE_URL!),
+});
 async function main() {
   const patients = await prisma.patient.count();
   const users = await prisma.user.count();

@@ -21,10 +21,14 @@
  *   - API key is encrypted with AES-256-GCM before being stored.
  */
 
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { createCipheriv, randomBytes } from 'crypto';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(process.env.DATABASE_URL!),
+});
 
 // ── Inline AES-256-GCM encryption (same logic as encryption.ts) ───────────────
 

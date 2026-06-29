@@ -49,12 +49,13 @@
  *     );
  */
 
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-import dotenv from 'dotenv';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-dotenv.config();
-
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(process.env.DATABASE_URL!),
+});
 
 async function main() {
   const targetEmail = process.argv[2];
