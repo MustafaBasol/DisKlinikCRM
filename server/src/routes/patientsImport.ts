@@ -71,7 +71,8 @@ router.get(
         orderBy: { name: 'asc' },
       });
 
-      const buf = await buildPatientTemplate(clinics);
+      const templateClinicId = req.query.clinicId as string | undefined;
+      const buf = await buildPatientTemplate(clinics, templateClinicId);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename="hasta-import-sablonu.xlsx"');
       res.send(buf);

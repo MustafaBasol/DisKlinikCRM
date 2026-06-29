@@ -35,6 +35,10 @@
       "skipped": "{{count}} satır atlandı.",
       "skippedRowsTitle": "Atlanan Satırlar:"
     },
+    "targetClinicLabel": "Hedef Şube",
+    "selectTargetClinic": "Hedef şubeyi seçin...",
+    "allClinicsHint": "Tüm şubeler görünümündesiniz. İçe aktarılacak şubeyi seçin:",
+    "clinicContext": "Hasta kayıtları seçili kliniğe aktarılacak.",
     "errors": {
       "fileType": "Yalnızca .xlsx dosyaları kabul edilir.",
       "fileSize": "Dosya 5 MB sınırını aşıyor.",
