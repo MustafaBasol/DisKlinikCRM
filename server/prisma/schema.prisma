@@ -97,6 +97,7 @@ model User {
   isActive            Boolean      @default(true)
   lastLoginAt         DateTime?
   commissionRate      Float        @default(0)
+  emailVerifiedAt     DateTime?
   organizationId      String // Phase 1b: NOT NULL after backfill
   organization        Organization @relation(fields: [organizationId], references: [id])
   defaultClinicId     String? // UI default only — NOT used for authorization
@@ -136,6 +137,7 @@ model User {
   assignedRecallCandidates   RecallCandidate[]              @relation("RecallCandidateAssignee")
   performedRecallActions     RecallAction[]                 @relation("RecallActionPerformer")
   passwordResetTokens        PasswordResetToken[]
+  emailVerificationTokens    EmailVerificationToken[]
 
   // Phase 1b: changed to organizationId scope for multi-branch
   @@unique([organizationId, email])
@@ -1709,6 +1711,19 @@ model PatientPrivacyRequest {
 }
 
 model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
