@@ -68,7 +68,8 @@
       "users": "Users",
       "plans": "Plans",
       "system": "System",
-      "privacy": "Privacy / Data"
+      "privacy": "Privacy / Data",
+      "backups": "Backups"
     }
   },
   "dashboard": {
@@ -233,5 +234,51 @@
       "errorsLabel": "Errors",
       "errorsNote": "Some categories could not be processed. Check server logs for details."
     }
+  },
+  "backups": {
+    "title": "Database Backups",
+    "infraTitle": "Infrastructure Status",
+    "summaryTitle": "Backup Summary",
+    "recentTitle": "Recent Backups (last 10)",
+    "actionsTitle": "Backup Actions",
+    "actionsNote": "Use the buttons below to trigger a manual backup or run a restore test. The production database is never touched.",
+    "backupDir": "Backup Directory",
+    "backupScript": "Backup Script",
+    "cronFile": "Cron File",
+    "logFile": "Log File",
+    "retentionDays": "Retention Period",
+    "totalCount": "Total Backups",
+    "totalSize": "Total Size",
+    "latestFile": "Latest Backup File",
+    "latestCreated": "Latest Backup Date",
+    "latestSize": "Latest Backup Size",
+    "noBackups": "No backup files yet",
+    "colFilename": "Filename",
+    "colCreated": "Created",
+    "colSize": "Size",
+    "accessible": "Accessible",
+    "inaccessible": "Inaccessible",
+    "ready": "Ready",
+    "missing": "Missing",
+    "exists": "Exists",
+    "runNowBtn": "Run Backup Now",
+    "restoreTestBtn": "Run Restore Test",
+    "showLogsBtn": "Show Logs",
+    "hideLogsBtn": "Hide Logs",
+    "runSuccess": "Backup Successful",
+    "runFailed": "Backup Failed",
+    "restoreTestSuccess": "Restore Test Passed",
+    "restoreTestFailed": "Restore Test Failed",
+    "alreadyRunning": "An operation is already running, please wait",
+    "statusLoadFailed": "Failed to load backup status",
+    "logsLoadFailed": "Failed to load log file",
+    "logsTitle": "Backup Logs",
+    "logsEmpty": "No log entries found",
+    "lines": "lines",
+    "restoreFile": "Restored File",
+    "tableCount": "Table Count",
+    "platformAdminCount": "Platform Admin Count",
+    "planCount": "Plan Count",
+    "migrationsCount": "Migrations Count"
   }
 }

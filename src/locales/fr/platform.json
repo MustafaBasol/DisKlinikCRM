@@ -68,7 +68,8 @@
       "users": "Utilisateurs",
       "plans": "Plans",
       "system": "Système",
-      "privacy": "Confidentialité / Données"
+      "privacy": "Confidentialité / Données",
+      "backups": "Sauvegardes"
     }
   },
   "dashboard": {
@@ -233,5 +234,51 @@
       "errorsLabel": "Erreurs",
       "errorsNote": "Certaines catégories n'ont pas pu être traitées. Consultez les journaux du serveur pour les détails."
     }
+  },
+  "backups": {
+    "title": "Sauvegardes de la base de données",
+    "infraTitle": "État de l'infrastructure",
+    "summaryTitle": "Résumé des sauvegardes",
+    "recentTitle": "Sauvegardes récentes (10 dernières)",
+    "actionsTitle": "Actions de sauvegarde",
+    "actionsNote": "Utilisez les boutons ci-dessous pour déclencher une sauvegarde manuelle ou exécuter un test de restauration. La base de données de production n'est jamais modifiée.",
+    "backupDir": "Répertoire de sauvegarde",
+    "backupScript": "Script de sauvegarde",
+    "cronFile": "Fichier cron",
+    "logFile": "Fichier journal",
+    "retentionDays": "Durée de conservation",
+    "totalCount": "Total des sauvegardes",
+    "totalSize": "Taille totale",
+    "latestFile": "Dernière sauvegarde",
+    "latestCreated": "Date de la dernière sauvegarde",
+    "latestSize": "Taille de la dernière sauvegarde",
+    "noBackups": "Aucun fichier de sauvegarde",
+    "colFilename": "Nom de fichier",
+    "colCreated": "Créé",
+    "colSize": "Taille",
+    "accessible": "Accessible",
+    "inaccessible": "Inaccessible",
+    "ready": "Prêt",
+    "missing": "Manquant",
+    "exists": "Présent",
+    "runNowBtn": "Sauvegarder maintenant",
+    "restoreTestBtn": "Test de restauration",
+    "showLogsBtn": "Afficher les journaux",
+    "hideLogsBtn": "Masquer les journaux",
+    "runSuccess": "Sauvegarde réussie",
+    "runFailed": "Sauvegarde échouée",
+    "restoreTestSuccess": "Test de restauration réussi",
+    "restoreTestFailed": "Test de restauration échoué",
+    "alreadyRunning": "Une opération est déjà en cours, veuillez patienter",
+    "statusLoadFailed": "Impossible de charger l'état des sauvegardes",
+    "logsLoadFailed": "Impossible de charger le fichier journal",
+    "logsTitle": "Journaux de sauvegarde",
+    "logsEmpty": "Aucune entrée de journal trouvée",
+    "lines": "lignes",
+    "restoreFile": "Fichier restauré",
+    "tableCount": "Nombre de tables",
+    "platformAdminCount": "Nombre d'admins plateforme",
+    "planCount": "Nombre de plans",
+    "migrationsCount": "Nombre de migrations"
   }
 }

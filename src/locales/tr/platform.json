@@ -68,7 +68,8 @@
       "users": "Kullanıcılar",
       "plans": "Planlar",
       "system": "Sistem",
-      "privacy": "Gizlilik / Veri"
+      "privacy": "Gizlilik / Veri",
+      "backups": "Yedekler"
     }
   },
   "dashboard": {
@@ -233,5 +234,51 @@
       "errorsLabel": "Hata",
       "errorsNote": "Bazı kategoriler işlenemedi. Detaylar için sunucu günlüklerini kontrol edin."
     }
+  },
+  "backups": {
+    "title": "Veritabanı Yedekleri",
+    "infraTitle": "Altyapı Durumu",
+    "summaryTitle": "Yedek Özeti",
+    "recentTitle": "Son Yedekler (son 10)",
+    "actionsTitle": "Yedek İşlemleri",
+    "actionsNote": "Manuel yedek almak veya geri yükleme testi çalıştırmak için aşağıdaki düğmeleri kullanın. Üretim veritabanına dokunulmaz.",
+    "backupDir": "Yedek Dizini",
+    "backupScript": "Yedek Scripti",
+    "cronFile": "Cron Dosyası",
+    "logFile": "Log Dosyası",
+    "retentionDays": "Saklama Süresi",
+    "totalCount": "Toplam Yedek",
+    "totalSize": "Toplam Boyut",
+    "latestFile": "Son Yedek Dosyası",
+    "latestCreated": "Son Yedek Tarihi",
+    "latestSize": "Son Yedek Boyutu",
+    "noBackups": "Henüz yedek dosyası yok",
+    "colFilename": "Dosya Adı",
+    "colCreated": "Oluşturulma",
+    "colSize": "Boyut",
+    "accessible": "Erişilebilir",
+    "inaccessible": "Erişilemiyor",
+    "ready": "Hazır",
+    "missing": "Eksik",
+    "exists": "Mevcut",
+    "runNowBtn": "Şimdi Yedekle",
+    "restoreTestBtn": "Geri Yükleme Testi",
+    "showLogsBtn": "Logları Göster",
+    "hideLogsBtn": "Logları Gizle",
+    "runSuccess": "Yedekleme Başarılı",
+    "runFailed": "Yedekleme Başarısız",
+    "restoreTestSuccess": "Geri Yükleme Testi Başarılı",
+    "restoreTestFailed": "Geri Yükleme Testi Başarısız",
+    "alreadyRunning": "Bir işlem zaten çalışıyor, lütfen bekleyin",
+    "statusLoadFailed": "Yedek durumu yüklenemedi",
+    "logsLoadFailed": "Log dosyası yüklenemedi",
+    "logsTitle": "Yedek Logları",
+    "logsEmpty": "Log bulunamadı",
+    "lines": "satır",
+    "restoreFile": "Geri Yüklenen Dosya",
+    "tableCount": "Tablo Sayısı",
+    "platformAdminCount": "Platform Admin Sayısı",
+    "planCount": "Plan Sayısı",
+    "migrationsCount": "Migration Sayısı"
   }
 }
