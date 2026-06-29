@@ -11,6 +11,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -18,13 +19,18 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setEmailNotVerified(false);
 
     try {
       const response = await authService.login({ email, password });
       login(response.data.user);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || t('auth:loginFailed'));
+      if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        setEmailNotVerified(true);
+      } else {
+        setError(err.response?.data?.error || t('auth:loginFailed'));
+      }
     } finally {
       setLoading(false);
     }
@@ -55,6 +61,19 @@ const Login: React.FC = () => {
             <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm">
               <AlertCircle size={18} />
               {error}
+            </div>
+          )}
+
+          {emailNotVerified && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+              <p className="font-semibold mb-1">{t('auth:emailNotVerified.title')}</p>
+              <p className="mb-2">{t('auth:emailNotVerified.message')}</p>
+              <Link
+                to="/resend-verification"
+                className="font-semibold text-primary-600 hover:underline"
+              >
+                {t('auth:emailNotVerified.resendLink')}
+              </Link>
             </div>
           )}
 

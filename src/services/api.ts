@@ -63,6 +63,10 @@ export const authService = {
     api.post('/auth/forgot-password', data),
   resetPassword: (data: { token: string; newPassword: string }) =>
     api.post('/auth/reset-password', data),
+  verifyEmail: (data: { token: string }) =>
+    api.post('/auth/verify-email', data),
+  resendVerification: (data: { email: string }) =>
+    api.post('/auth/resend-verification', data),
 };
 
 export const patientService = {

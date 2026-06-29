@@ -30,6 +30,8 @@ const Login = React.lazy(() => import('./pages/Login'));
 const Register = React.lazy(() => import('./pages/Register'));
 const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = React.lazy(() => import('./pages/ResetPassword'));
+const VerifyEmail = React.lazy(() => import('./pages/VerifyEmail'));
+const ResendVerification = React.lazy(() => import('./pages/ResendVerification'));
 const PlatformLogin = React.lazy(() => import('./pages/platform/PlatformLogin'));
 const PlatformDashboard = React.lazy(() => import('./pages/platform/PlatformDashboard'));
 const PlatformOrganizations = React.lazy(() => import('./pages/platform/PlatformOrganizations'));
@@ -144,6 +146,8 @@ const ProductApplication: React.FC = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/resend-verification" element={<ResendVerification />} />
             <Route path="/platform/login" element={<PlatformLogin />} />
             <Route path="/book/:clinicId" element={<BookingWidget />} />
             {/* Public Meta OAuth redirect handler — must be outside ProtectedRoute */}

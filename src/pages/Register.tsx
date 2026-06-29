@@ -100,7 +100,6 @@ const Register: React.FC = () => {
         timezone: 'Europe/Istanbul',
       });
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 4000);
     } catch (err: any) {
       setError(err.response?.data?.error ?? t('register.errors.registerFailed'));
     } finally {
@@ -115,6 +114,9 @@ const Register: React.FC = () => {
           <CheckCircle2 size={56} className="text-green-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('register.successTitle')}</h2>
           <p className="text-gray-500">{t('register.successSubtitle')}</p>
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 mt-4">
+            {t('register.verifyEmailNotice')}
+          </p>
         </div>
       </div>
     );

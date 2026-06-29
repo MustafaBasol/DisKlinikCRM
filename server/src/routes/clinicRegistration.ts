@@ -1,7 +1,10 @@
+import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
 import { validatePassword } from '../utils/helpers.js';
+import { sendMail } from '../services/emailService.js';
+import { buildEmailVerificationEmail } from '../services/emailTemplates.js';
 
 const router = express.Router();
 
@@ -87,7 +90,7 @@ router.post('/clinic', async (req: Request, res: Response) => {
         },
       });
 
-      // 3. Admin kullanıcı oluştur
+      // 3. Admin kullanıcı oluştur (emailVerifiedAt = null — doğrulama e-postası bekleniyor)
       const adminUser = await tx.user.create({
         data: {
           clinicId: clinic.id,
@@ -100,6 +103,7 @@ router.post('/clinic', async (req: Request, res: Response) => {
           isActive: true,
           defaultClinicId: clinic.id,
           canAccessAllClinics: true,
+          emailVerifiedAt: null,
         },
       });
 
@@ -114,8 +118,30 @@ router.post('/clinic', async (req: Request, res: Response) => {
       return { clinic, adminUser };
     });
 
+    // Send verification email (non-blocking — registration succeeds even if SMTP fails)
+    try {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await prisma.emailVerificationToken.create({
+        data: { userId: result.adminUser.id, tokenHash, expiresAt },
+      });
+
+      const appBaseUrl = (process.env.APP_BASE_URL || 'https://app.noramedi.com').replace(/\/$/, '');
+      const verifyUrl = `${appBaseUrl}/verify-email?token=${rawToken}`;
+
+      const emailPayload = buildEmailVerificationEmail({ firstName: adminFirstName, verifyUrl });
+      const mailResult = await sendMail({ to: adminEmail, ...emailPayload });
+      if (!mailResult.sent) {
+        console.warn(`[clinic-register] Verification email not sent for user ${result.adminUser.id}: ${mailResult.reason}`);
+      }
+    } catch (emailErr) {
+      console.warn('[clinic-register] Failed to send verification email:', (emailErr as Error).message);
+    }
+
     res.status(201).json({
-      message: 'Clinic registered successfully. Trial period starts now.',
+      message: 'Clinic registered successfully. Please check your email to verify your account before logging in.',
       clinic: {
         id: result.clinic.id,
         name: result.clinic.name,
@@ -123,6 +149,7 @@ router.post('/clinic', async (req: Request, res: Response) => {
         status: result.clinic.status,
         trialEndsAt: result.clinic.trialEndsAt,
       },
+      emailVerificationRequired: true,
     });
   } catch {
     res.status(500).json({ error: 'Registration failed. Please try again.' });

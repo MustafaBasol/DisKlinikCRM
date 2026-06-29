@@ -178,6 +178,36 @@ export const recordForgotPasswordAttempt = (key: string): void => {
   }
 };
 
+// --- Security: Rate Limiting (Resend Email Verification) ---
+// Max 3 attempts per email/IP per 60 minutes
+
+const resendVerificationAttempts = new Map<string, { count: number; timestamp: number }>();
+const RESEND_VERIFICATION_MAX = 3;
+const RESEND_VERIFICATION_WINDOW_MS = 60 * 60 * 1000;
+
+export const checkResendVerificationAttempt = (key: string): boolean => {
+  const now = Date.now();
+  const attempt = resendVerificationAttempts.get(key);
+  if (!attempt) return true;
+  if (now - attempt.timestamp > RESEND_VERIFICATION_WINDOW_MS) {
+    resendVerificationAttempts.delete(key);
+    return true;
+  }
+  return attempt.count < RESEND_VERIFICATION_MAX;
+};
+
+export const recordResendVerificationAttempt = (key: string): void => {
+  const now = Date.now();
+  const attempt = resendVerificationAttempts.get(key);
+  if (!attempt) {
+    resendVerificationAttempts.set(key, { count: 1, timestamp: now });
+  } else if (now - attempt.timestamp > RESEND_VERIFICATION_WINDOW_MS) {
+    resendVerificationAttempts.set(key, { count: 1, timestamp: now });
+  } else {
+    attempt.count++;
+  }
+};
+
 // --- Practitioner Availability Check ---
 
 export const checkPractitionerAvailability = async (

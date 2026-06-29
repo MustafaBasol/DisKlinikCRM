@@ -8,10 +8,11 @@ import { logActivity } from '../utils/activity.js';
 import {
   checkLoginAttempt, recordLoginAttempt, resetLoginAttempts, validatePassword,
   checkForgotPasswordAttempt, recordForgotPasswordAttempt,
+  checkResendVerificationAttempt, recordResendVerificationAttempt,
 } from '../utils/helpers.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { sendMail } from '../services/emailService.js';
-import { buildPasswordResetEmail } from '../services/emailTemplates.js';
+import { buildPasswordResetEmail, buildEmailVerificationEmail } from '../services/emailTemplates.js';
 import {
   normalizeRole,
   canAccessOrganizationDashboard,
@@ -63,6 +64,13 @@ router.post('/login', async (req, res) => {
     if (!user.isActive) {
       recordLoginAttempt(email);
       return res.status(403).json({ error: 'User account is inactive' });
+    }
+
+    if (!user.emailVerifiedAt) {
+      return res.status(403).json({
+        error: 'Please verify your email before logging in.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
     }
 
     resetLoginAttempts(email);
@@ -442,6 +450,120 @@ router.post('/reset-password', async (req, res) => {
     console.error('[reset-password] Error:', (err as Error).message);
     return res.status(500).json({ error: 'Failed to reset password', code: 'RESET_FAILED' });
   }
+});
+
+const VERIFY_TOKEN_EXPIRY_HOURS = 24;
+const GENERIC_RESEND_RESPONSE = { message: 'If an unverified account with that email exists, a verification link has been sent.' };
+
+// POST /api/auth/verify-email
+router.post('/verify-email', async (req, res) => {
+  const { token } = req.body ?? {};
+
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Token is required', code: 'VERIFY_TOKEN_REQUIRED' });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+
+  try {
+    const verifyToken = await prisma.emailVerificationToken.findUnique({
+      where: { tokenHash },
+      include: { user: { select: { id: true, clinicId: true, email: true, isActive: true, emailVerifiedAt: true } } },
+    });
+
+    if (!verifyToken) {
+      return res.status(400).json({ error: 'Invalid or expired verification token', code: 'VERIFY_TOKEN_INVALID' });
+    }
+
+    if (verifyToken.usedAt) {
+      return res.status(400).json({ error: 'Verification token has already been used', code: 'VERIFY_TOKEN_USED' });
+    }
+
+    if (verifyToken.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'Verification token has expired', code: 'VERIFY_TOKEN_EXPIRED' });
+    }
+
+    if (!verifyToken.user.isActive) {
+      return res.status(400).json({ error: 'Invalid or expired verification token', code: 'VERIFY_TOKEN_INVALID' });
+    }
+
+    const now = new Date();
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: verifyToken.userId },
+        data: { emailVerifiedAt: now },
+      }),
+      prisma.emailVerificationToken.update({
+        where: { id: verifyToken.id },
+        data: { usedAt: now },
+      }),
+    ]);
+
+    return res.json({ success: true, message: 'Email verified successfully. You can now log in.' });
+  } catch (err) {
+    console.error('[verify-email] Error:', (err as Error).message);
+    return res.status(500).json({ error: 'Failed to verify email', code: 'VERIFY_FAILED' });
+  }
+});
+
+// POST /api/auth/resend-verification
+router.post('/resend-verification', async (req, res) => {
+  const { email } = req.body ?? {};
+
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.json(GENERIC_RESEND_RESPONSE);
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const ip = String(req.ip ?? req.socket?.remoteAddress ?? 'unknown');
+  const emailKey = `email:${normalizedEmail}`;
+  const ipKey = `ip:${ip}`;
+
+  if (!checkResendVerificationAttempt(emailKey) || !checkResendVerificationAttempt(ipKey)) {
+    return res.json(GENERIC_RESEND_RESPONSE);
+  }
+
+  recordResendVerificationAttempt(emailKey);
+  recordResendVerificationAttempt(ipKey);
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: { email: normalizedEmail, isActive: true, emailVerifiedAt: null },
+      select: { id: true, firstName: true, email: true },
+    });
+
+    if (!user) {
+      return res.json(GENERIC_RESEND_RESPONSE);
+    }
+
+    // Invalidate unused old verification tokens
+    await prisma.emailVerificationToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + VERIFY_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
+
+    await prisma.emailVerificationToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
+
+    const appBaseUrl = (process.env.APP_BASE_URL || 'https://app.noramedi.com').replace(/\/$/, '');
+    const verifyUrl = `${appBaseUrl}/verify-email?token=${rawToken}`;
+
+    const emailPayload = buildEmailVerificationEmail({ firstName: user.firstName, verifyUrl });
+
+    const result = await sendMail({ to: user.email, ...emailPayload });
+    if (!result.sent) {
+      console.warn(`[resend-verification] Email not sent for user ${user.id}: ${result.reason}`);
+    }
+  } catch (err) {
+    console.error('[resend-verification] Error:', (err as Error).message);
+  }
+
+  return res.json(GENERIC_RESEND_RESPONSE);
 });
 
 export default router;
