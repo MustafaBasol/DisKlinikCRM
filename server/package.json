@@ -47,7 +47,8 @@
     "test:payment-validation": "tsx src/tests/paymentValidation.test.ts",
     "test:payment-billing-edit": "tsx src/tests/paymentBillingEdit.test.ts",
     "validate:instagram-token": "tsx src/scripts/validate-instagram-login-token.ts",
-    "test:email-verification": "tsx src/tests/emailVerification.test.ts"
+    "test:email-verification": "tsx src/tests/emailVerification.test.ts",
+    "test:staff-onboarding": "tsx src/tests/staffOnboarding.test.ts"
   },
   "keywords": [],
   "author": "",

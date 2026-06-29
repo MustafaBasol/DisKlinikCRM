@@ -210,7 +210,12 @@
     },
     "errors": {
       "loadFailed": "Kullanıcılar yüklenemedi",
-      "saveFailed": "Kullanıcı kaydedilemedi"
+      "saveFailed": "Kullanıcı kaydedilemedi",
+      "emailAlreadyExists": "Bu e-posta adresi başka bir kullanıcı hesabında kullanılıyor. Lütfen farklı bir e-posta adresi kullanın."
+    },
+    "success": {
+      "createdWithEmail": "Kullanıcı oluşturuldu. Doğrulama bağlantısı e-posta ile gönderildi.",
+      "createdNoEmail": "Kullanıcı oluşturuldu ancak doğrulama e-postası gönderilemedi. Lütfen e-posta ayarlarını kontrol edin."
     }
   },
   "clinicAssignments": {

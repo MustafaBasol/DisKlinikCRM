@@ -139,8 +139,7 @@ model User {
   passwordResetTokens        PasswordResetToken[]
   emailVerificationTokens    EmailVerificationToken[]
 
-  // Phase 1b: changed to organizationId scope for multi-branch
-  @@unique([organizationId, email])
+  // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
 
 model DoctorAvailability {

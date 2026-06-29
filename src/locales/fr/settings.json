@@ -210,7 +210,12 @@
     },
     "errors": {
       "loadFailed": "Impossible de charger les utilisateurs",
-      "saveFailed": "Impossible d'enregistrer l'utilisateur"
+      "saveFailed": "Impossible d'enregistrer l'utilisateur",
+      "emailAlreadyExists": "Cette adresse e-mail est déjà associée à un autre compte. Veuillez utiliser une adresse différente."
+    },
+    "success": {
+      "createdWithEmail": "Utilisateur créé. Un lien de vérification a été envoyé par e-mail.",
+      "createdNoEmail": "Utilisateur créé mais l'e-mail de vérification n'a pas pu être envoyé. Veuillez vérifier la configuration e-mail."
     }
   },
   "clinicAssignments": {

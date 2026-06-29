@@ -180,6 +180,7 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
 
   const validatePassword = (pwd: string) => {
@@ -210,16 +211,27 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
 
       if (user) {
         await userService.update(user.id, payload);
+        onSuccess();
       } else {
-        await userService.create(payload);
+        const res = await userService.create(payload);
+        const emailSent = res.data?._emailSent;
+        const msg = emailSent
+          ? t('settings:users.success.createdWithEmail')
+          : t('settings:users.success.createdNoEmail');
+        setSuccessMsg(msg);
+        setTimeout(() => onSuccess(), 3000);
       }
-      onSuccess();
     } catch (err: any) {
-      const errorMsg = getErrorMessage(err, t('settings:users.errors.saveFailed'));
-      const details = err.response?.data?.details;
-      setError(errorMsg);
-      if (details && Array.isArray(details) && details.every((d: unknown) => typeof d === 'string')) {
-        setPasswordErrors(details);
+      const code = err.response?.data?.code;
+      if (code === 'EMAIL_ALREADY_EXISTS') {
+        setError(t('settings:users.errors.emailAlreadyExists'));
+      } else {
+        const errorMsg = getErrorMessage(err, t('settings:users.errors.saveFailed'));
+        const details = err.response?.data?.details;
+        setError(errorMsg);
+        if (details && Array.isArray(details) && details.every((d: unknown) => typeof d === 'string')) {
+          setPasswordErrors(details);
+        }
       }
     } finally {
       setLoading(false);
@@ -243,6 +255,7 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} />{error}</div>}
+          {successMsg && <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm flex items-center gap-2"><CheckCircle2 size={16} />{successMsg}</div>}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

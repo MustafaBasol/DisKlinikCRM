@@ -39,12 +39,23 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    if (!checkLoginAttempt(email)) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!checkLoginAttempt(normalizedEmail)) {
       return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
     }
 
+    const matchCount = await prisma.user.count({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
+    if (matchCount > 1) {
+      console.warn(`[login] Duplicate email detected (${matchCount} accounts). Blocking login for safety.`);
+      recordLoginAttempt(normalizedEmail);
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
     const user = await prisma.user.findFirst({
-      where: { email },
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
       include: {
         clinic: true,
         userClinics: {
@@ -57,12 +68,12 @@ router.post('/login', async (req, res) => {
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      recordLoginAttempt(email);
+      recordLoginAttempt(normalizedEmail);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     if (!user.isActive) {
-      recordLoginAttempt(email);
+      recordLoginAttempt(normalizedEmail);
       return res.status(403).json({ error: 'User account is inactive' });
     }
 
@@ -73,7 +84,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    resetLoginAttempts(email);
+    resetLoginAttempts(normalizedEmail);
 
     // Gerçek klinik erişim listesini UserClinic tablosundan al
     const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);

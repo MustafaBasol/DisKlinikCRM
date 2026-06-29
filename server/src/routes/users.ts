@@ -1,8 +1,11 @@
+import crypto from 'crypto';
 import express, { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
+import { sendMail } from '../services/emailService.js';
+import { buildStaffWelcomeEmail } from '../services/emailTemplates.js';
 import {
   formatClinicDateTime,
   getParam,
@@ -153,8 +156,16 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
   }
 
   try {
-    const existing = await prisma.user.findFirst({ where: { email: validation.data.email, clinicId } });
-    if (existing) return res.status(409).json({ error: 'Email is already in use in this clinic' });
+    const existingGlobal = await prisma.user.findFirst({
+      where: { email: { equals: validation.data.email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existingGlobal) {
+      return res.status(409).json({
+        error: 'Bu e-posta adresi başka bir kullanıcı hesabında kullanılıyor. Lütfen farklı bir e-posta adresi kullanın.',
+        code: 'EMAIL_ALREADY_EXISTS',
+      });
+    }
 
     const passwordHash = await bcrypt.hash(validation.data.password, 12);
     const user = await prisma.user.create({
@@ -163,11 +174,12 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
         organizationId: req.user!.organizationId,
         firstName: validation.data.firstName,
         lastName: validation.data.lastName,
-        email: validation.data.email,
+        email: validation.data.email.toLowerCase().trim(),
         phone: validation.data.phone,
         role: validation.data.role,
         passwordHash,
         isActive: validation.data.isActive,
+        emailVerifiedAt: null,
       },
       select: {
         id: true, firstName: true, lastName: true, email: true,
@@ -180,7 +192,29 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
       action: 'created', description: `${user.email} kullanıcısı oluşturuldu`,
     });
 
-    res.status(201).json(user);
+    let emailSent = false;
+    try {
+      const appBaseUrl = process.env.APP_BASE_URL ?? 'https://app.noramedi.com';
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await prisma.emailVerificationToken.create({
+        data: { userId: user.id, tokenHash, expiresAt },
+      });
+      const verifyUrl = `${appBaseUrl}/verify-email?token=${rawToken}`;
+      const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true } });
+      const { subject, html, text } = buildStaffWelcomeEmail({
+        firstName: user.firstName,
+        clinicName: clinic?.name ?? 'NoraMedi',
+        verifyUrl,
+      });
+      const mailResult = await sendMail({ to: user.email, subject, html, text });
+      emailSent = mailResult.sent;
+    } catch {
+      // non-blocking — user is created regardless
+    }
+
+    res.status(201).json({ ...user, _emailSent: emailSent });
   } catch {
     res.status(500).json({ error: 'Failed to create user' });
   }
@@ -217,9 +251,17 @@ router.put('/users/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), as
     if (!existing) return res.status(404).json({ error: 'User not found' });
     const clinicId = existing.clinicId;
 
-    if (validation.data.email && validation.data.email !== existing.email) {
-      const emailOwner = await prisma.user.findFirst({ where: { email: validation.data.email, clinicId } });
-      if (emailOwner) return res.status(409).json({ error: 'Email is already in use in this clinic' });
+    if (validation.data.email && validation.data.email.toLowerCase().trim() !== existing.email.toLowerCase()) {
+      const emailOwner = await prisma.user.findFirst({
+        where: { email: { equals: validation.data.email, mode: 'insensitive' }, id: { not: id } },
+        select: { id: true },
+      });
+      if (emailOwner) {
+        return res.status(409).json({
+          error: 'Bu e-posta adresi başka bir kullanıcı hesabında kullanılıyor. Lütfen farklı bir e-posta adresi kullanın.',
+          code: 'EMAIL_ALREADY_EXISTS',
+        });
+      }
     }
 
     if (id === req.user!.id && validation.data.isActive === false) {

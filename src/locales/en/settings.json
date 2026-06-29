@@ -210,7 +210,12 @@
     },
     "errors": {
       "loadFailed": "Failed to load users",
-      "saveFailed": "Failed to save user"
+      "saveFailed": "Failed to save user",
+      "emailAlreadyExists": "This email address is already associated with another user account. Please use a different email address."
+    },
+    "success": {
+      "createdWithEmail": "User created. A verification link has been sent to their email.",
+      "createdNoEmail": "User created but the verification email could not be sent. Please check email settings."
     }
   },
   "clinicAssignments": {
