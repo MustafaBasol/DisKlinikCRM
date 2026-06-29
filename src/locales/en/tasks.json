@@ -43,7 +43,12 @@
   },
   "actions": {
     "complete": "Complete",
+    "markComplete": "Mark as completed",
+    "reopen": "Reopen task",
     "cancel": "Cancel",
-    "edit": "Edit"
-  }
+    "edit": "Edit",
+    "completedMessage": "\"{{title}}\" completed — find it under \"Completed\" or \"All Statuses\".",
+    "undoComplete": "Undo"
+  },
+  "noResultsHint": "No tasks match your current filters."
 }

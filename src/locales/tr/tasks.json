@@ -43,7 +43,12 @@
   },
   "actions": {
     "complete": "Tamamla",
+    "markComplete": "Tamamlandı olarak işaretle",
+    "reopen": "Yeniden Aç",
     "cancel": "İptal Et",
-    "edit": "Düzenle"
-  }
+    "edit": "Düzenle",
+    "completedMessage": "\"{{title}}\" tamamlandı — \"Tamamlandı\" veya \"Tüm Durumlar\" filtresinde görünür.",
+    "undoComplete": "Geri Al"
+  },
+  "noResultsHint": "Seçili filtrelere uyan görev bulunmuyor."
 }

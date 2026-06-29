@@ -204,11 +204,13 @@ export const appointmentUpdateSchema = appointmentBaseSchema.partial().refine(da
 
 // --- Task ---
 
+const normalizeEmptyUuid = (val: unknown) => (!val || val === '' ? null : val);
+
 export const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional().nullable(),
-  patientId: z.string().uuid().optional().nullable(),
-  appointmentId: z.string().uuid().optional().nullable(),
+  patientId: z.preprocess(normalizeEmptyUuid, z.string().uuid().optional().nullable()),
+  appointmentId: z.preprocess(normalizeEmptyUuid, z.string().uuid().optional().nullable()),
   assignedToId: z.string().uuid('Invalid assignee ID'),
   dueDate: z.string().transform(val => new Date(val)),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
@@ -289,7 +291,7 @@ export const insuranceStatusSchema = z.object({
 
 export const paymentSchema = z.object({
   patientId: z.string().uuid('Invalid patient ID'),
-  treatmentCaseId: z.string().uuid().optional().nullable(),
+  treatmentCaseId: z.preprocess(normalizeEmptyUuid, z.string().uuid().optional().nullable()),
   amount: z.number().positive('Amount must be positive'),
   currency: z.enum(validCurrencies).optional(),
   paymentMethod: z.enum(['cash', 'card', 'bank_transfer', 'cheque', 'other']),

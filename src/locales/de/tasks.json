@@ -43,7 +43,12 @@
   },
   "actions": {
     "complete": "Abschließen",
+    "markComplete": "Als abgeschlossen markieren",
+    "reopen": "Aufgabe wieder öffnen",
     "cancel": "Stornieren",
-    "edit": "Bearbeiten"
-  }
+    "edit": "Bearbeiten",
+    "completedMessage": "\"{{title}}\" abgeschlossen — unter \"Abgeschlossen\" oder \"Alle Status\" auffindbar.",
+    "undoComplete": "Rückgängig"
+  },
+  "noResultsHint": "Keine Aufgaben entsprechen den ausgewählten Filtern."
 }

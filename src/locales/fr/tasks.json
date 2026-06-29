@@ -43,7 +43,12 @@
   },
   "actions": {
     "complete": "Terminer",
+    "markComplete": "Marquer comme terminée",
+    "reopen": "Rouvrir la tâche",
     "cancel": "Annuler",
-    "edit": "Modifier"
-  }
+    "edit": "Modifier",
+    "completedMessage": "\"{{title}}\" terminée — retrouvez-la dans \"Terminée\" ou \"Tous les statuts\".",
+    "undoComplete": "Annuler"
+  },
+  "noResultsHint": "Aucune tâche ne correspond aux filtres sélectionnés."
 }

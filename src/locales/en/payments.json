@@ -62,7 +62,8 @@
       "amountInvalid": "Please enter a payment amount greater than 0.",
       "methodRequired": "Please select a payment method.",
       "paidAtRequired": "Please select a payment date.",
-      "saveFailed": "The payment could not be saved."
+      "saveFailed": "The payment could not be saved.",
+      "treatmentCaseInvalid": "Invalid treatment case selection. Please choose a valid case from the list or leave it empty."
     }
   },
   "confirmCancel": "Cancel this payment?",

@@ -127,17 +127,25 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
     setError(null);
 
     try {
+      const normalizedTreatmentCaseId = formData.treatmentCaseId || undefined;
+      const basePayload = { ...formData, treatmentCaseId: normalizedTreatmentCaseId };
       if (initialData?.id) {
         const updatePayload = isBillingEdit
           ? { amount: formData.amount, currency: formData.currency, paymentMethod: formData.paymentMethod, paymentStatus: formData.paymentStatus, paidAt: formData.paidAt, notes: formData.notes }
-          : formData;
+          : basePayload;
         await paymentService.update(initialData.id, updatePayload);
       } else {
-        await paymentService.create(formData);
+        await paymentService.create(basePayload);
       }
       onSuccess();
     } catch (err) {
-      setError(getErrorMessage(err, t('payments:form.errors.saveFailed')));
+      const msg = getErrorMessage(err, t('payments:form.errors.saveFailed'));
+      const lowerMsg = msg.toLowerCase();
+      if (lowerMsg.includes('uuid') || lowerMsg.includes('treatment case') || lowerMsg.includes('invalid treatment')) {
+        setError(t('payments:form.errors.treatmentCaseInvalid'));
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
