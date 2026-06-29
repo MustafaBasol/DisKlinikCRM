@@ -7,6 +7,42 @@
   "searchPlaceholder": "İsim, e-posta veya telefon ile ara...",
   "includeArchived": "Arşivlenmişleri Dahil Et",
   "noPatientsFound": "Arama kriterlerine uygun hasta bulunamadı.",
+  "importModal": {
+    "title": "Excel ile Hasta İçe Aktar",
+    "downloadTemplate": "Şablonu İndir (.xlsx)",
+    "selectFile": "Excel Dosyası Seç",
+    "dropzonePlaceholder": "Tıklayarak dosya seçin veya sürükleyin",
+    "fileRules": "Yalnızca .xlsx, maks. 5 MB, maks. 500 satır",
+    "previewButton": "Önizle",
+    "importButton": "{{count}} Hastayı İçe Aktar",
+    "rowLabel": "Satır {{row}}",
+    "howItWorks": {
+      "title": "Nasıl çalışır?",
+      "downloadTemplate": "Aşağıdaki şablonu indirin.",
+      "fillData": "Hasta verilerini doldurun (zorunlu: Ad, Soyad, Telefon).",
+      "previewFile": "Dosyayı yükleyip önizleyin.",
+      "importValidRows": "Geçerli satırları içe aktarın."
+    },
+    "preview": {
+      "totalRows": "Toplam Satır",
+      "validRows": "Geçerli",
+      "invalidRows": "Hatalı",
+      "invalidRowsTitle": "Hatalı Satırlar:",
+      "noValidRows": "İçe aktarılacak geçerli satır yok."
+    },
+    "result": {
+      "success": "{{count}} hasta başarıyla içe aktarıldı.",
+      "skipped": "{{count}} satır atlandı.",
+      "skippedRowsTitle": "Atlanan Satırlar:"
+    },
+    "errors": {
+      "fileType": "Yalnızca .xlsx dosyaları kabul edilir.",
+      "fileSize": "Dosya 5 MB sınırını aşıyor.",
+      "templateDownload": "Şablon indirilemedi.",
+      "previewFailed": "Önizleme başarısız.",
+      "importFailed": "İçe aktarma başarısız."
+    }
+  },
   "list": {
     "name": "Hasta Adı",
     "contact": "İletişim Bilgisi",
@@ -32,42 +68,6 @@
       "uploadFailed": "Dosya yüklenemedi",
       "download": "İndir",
       "deleteConfirm": "Bu dosyayı silmek istediğinizden emin misiniz?"
-    },
-    "importModal": {
-      "title": "Excel ile Hasta İçe Aktar",
-      "downloadTemplate": "Şablonu İndir (.xlsx)",
-      "selectFile": "Excel Dosyası Seç",
-      "dropzonePlaceholder": "Tıklayarak dosya seçin veya sürükleyin",
-      "fileRules": "Yalnızca .xlsx, maks. 5 MB, maks. 500 satır",
-      "previewButton": "Önizle",
-      "importButton": "{{count}} Hastayı İçe Aktar",
-      "rowLabel": "Satır {{row}}",
-      "howItWorks": {
-        "title": "Nasıl çalışır?",
-        "downloadTemplate": "Aşağıdaki şablonu indirin.",
-        "fillData": "Hasta verilerini doldurun (zorunlu: Ad, Soyad, Telefon).",
-        "previewFile": "Dosyayı yükleyip önizleyin.",
-        "importValidRows": "Geçerli satırları içe aktarın."
-      },
-      "preview": {
-        "totalRows": "Toplam Satır",
-        "validRows": "Geçerli",
-        "invalidRows": "Hatalı",
-        "invalidRowsTitle": "Hatalı Satırlar:",
-        "noValidRows": "İçe aktarılacak geçerli satır yok."
-      },
-      "result": {
-        "success": "{{count}} hasta başarıyla içe aktarıldı.",
-        "skipped": "{{count}} satır atlandı.",
-        "skippedRowsTitle": "Atlanan Satırlar:"
-      },
-      "errors": {
-        "fileType": "Yalnızca .xlsx dosyaları kabul edilir.",
-        "fileSize": "Dosya 5 MB sınırını aşıyor.",
-        "templateDownload": "Şablon indirilemedi.",
-        "previewFailed": "Önizleme başarısız.",
-        "importFailed": "İçe aktarma başarısız."
-      }
     },
     "whatsappTab": "WhatsApp",
     "whatsappIncoming": "WhatsApp Gelen",

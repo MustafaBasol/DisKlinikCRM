@@ -342,10 +342,26 @@ router.post(
 
           created.push({ rowNumber: row.rowNumber, id: patient.id, name: `${patient.firstName} ${patient.lastName}` });
         } catch (rowErr: any) {
+          console.error(`[patients/import-confirm] row ${row.rowNumber} org=${orgId}:`, rowErr?.code, rowErr?.meta);
+          let errMsg = 'Beklenmeyen bir hata oluştu';
+          if (rowErr?.code === 'P2002') {
+            const fields = (rowErr?.meta?.target as string[] | undefined) ?? [];
+            if (fields.includes('phone')) {
+              errMsg = `Bu telefon numarası zaten kayıtlı: ${row.data.phone}`;
+            } else if (fields.includes('email')) {
+              errMsg = `Bu e-posta adresi zaten kayıtlı: ${row.data.email}`;
+            } else {
+              errMsg = 'Bu kayıt zaten mevcut (tekil alan çakışması)';
+            }
+          } else if (rowErr?.code === 'P2003') {
+            errMsg = 'Geçersiz klinik veya organizasyon referansı';
+          } else if (rowErr?.code === 'P2025') {
+            errMsg = 'İlgili kayıt bulunamadı';
+          }
           skipped.push({
             rowNumber: row.rowNumber,
             status: 'invalid',
-            errors: ['Veritabanı hatası'],
+            errors: [errMsg],
           });
         }
       }

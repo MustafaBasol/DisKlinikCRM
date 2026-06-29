@@ -7,6 +7,42 @@
   "searchPlaceholder": "Nach Name, E-Mail oder Telefon suchen...",
   "includeArchived": "Archivierte einschließen",
   "noPatientsFound": "Keine Patienten gefunden, die den Kriterien entsprechen.",
+  "importModal": {
+    "title": "Patienten mit Excel importieren",
+    "downloadTemplate": "Vorlage herunterladen (.xlsx)",
+    "selectFile": "Excel-Datei auswählen",
+    "dropzonePlaceholder": "Klicken Sie, um eine Datei auszuwählen, oder ziehen Sie sie hierher",
+    "fileRules": "Nur .xlsx, max. 5 MB, max. 500 Zeilen",
+    "previewButton": "Vorschau",
+    "importButton": "{{count}} Patienten importieren",
+    "rowLabel": "Zeile {{row}}",
+    "howItWorks": {
+      "title": "Wie funktioniert es?",
+      "downloadTemplate": "Laden Sie die Vorlage unten herunter.",
+      "fillData": "Füllen Sie die Patientendaten aus (Pflicht: Vorname, Nachname, Telefon).",
+      "previewFile": "Laden Sie die Datei hoch und prüfen Sie die Vorschau.",
+      "importValidRows": "Importieren Sie gültige Zeilen."
+    },
+    "preview": {
+      "totalRows": "Zeilen gesamt",
+      "validRows": "Gültig",
+      "invalidRows": "Fehlerhaft",
+      "invalidRowsTitle": "Fehlerhafte Zeilen:",
+      "noValidRows": "Es gibt keine gültigen Zeilen zum Importieren."
+    },
+    "result": {
+      "success": "{{count}} Patienten erfolgreich importiert.",
+      "skipped": "{{count}} Zeilen übersprungen.",
+      "skippedRowsTitle": "Übersprungene Zeilen:"
+    },
+    "errors": {
+      "fileType": "Nur .xlsx-Dateien werden akzeptiert.",
+      "fileSize": "Die Datei überschreitet die Grenze von 5 MB.",
+      "templateDownload": "Vorlage konnte nicht heruntergeladen werden.",
+      "previewFailed": "Vorschau fehlgeschlagen.",
+      "importFailed": "Import fehlgeschlagen."
+    }
+  },
   "list": {
     "name": "Patientenname",
     "contact": "Kontaktinfo",
@@ -32,42 +68,6 @@
       "uploadFailed": "Datei konnte nicht hochgeladen werden",
       "download": "Herunterladen",
       "deleteConfirm": "Möchten Sie diese Datei wirklich löschen?"
-    },
-    "importModal": {
-      "title": "Patienten mit Excel importieren",
-      "downloadTemplate": "Vorlage herunterladen (.xlsx)",
-      "selectFile": "Excel-Datei auswählen",
-      "dropzonePlaceholder": "Klicken Sie, um eine Datei auszuwählen, oder ziehen Sie sie hierher",
-      "fileRules": "Nur .xlsx, max. 5 MB, max. 500 Zeilen",
-      "previewButton": "Vorschau",
-      "importButton": "{{count}} Patienten importieren",
-      "rowLabel": "Zeile {{row}}",
-      "howItWorks": {
-        "title": "Wie funktioniert es?",
-        "downloadTemplate": "Laden Sie die Vorlage unten herunter.",
-        "fillData": "Füllen Sie die Patientendaten aus (Pflicht: Vorname, Nachname, Telefon).",
-        "previewFile": "Laden Sie die Datei hoch und prüfen Sie die Vorschau.",
-        "importValidRows": "Importieren Sie gültige Zeilen."
-      },
-      "preview": {
-        "totalRows": "Zeilen gesamt",
-        "validRows": "Gültig",
-        "invalidRows": "Fehlerhaft",
-        "invalidRowsTitle": "Fehlerhafte Zeilen:",
-        "noValidRows": "Es gibt keine gültigen Zeilen zum Importieren."
-      },
-      "result": {
-        "success": "{{count}} Patienten erfolgreich importiert.",
-        "skipped": "{{count}} Zeilen übersprungen.",
-        "skippedRowsTitle": "Übersprungene Zeilen:"
-      },
-      "errors": {
-        "fileType": "Nur .xlsx-Dateien werden akzeptiert.",
-        "fileSize": "Die Datei überschreitet die Grenze von 5 MB.",
-        "templateDownload": "Vorlage konnte nicht heruntergeladen werden.",
-        "previewFailed": "Vorschau fehlgeschlagen.",
-        "importFailed": "Import fehlgeschlagen."
-      }
     },
     "whatsappTab": "WhatsApp",
     "whatsappIncoming": "WhatsApp eingehend",
