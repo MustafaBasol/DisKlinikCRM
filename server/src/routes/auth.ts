@@ -1,11 +1,17 @@
+import crypto from 'crypto';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
 import { authenticate, generateToken, AuthRequest } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { logActivity } from '../utils/activity.js';
-import { checkLoginAttempt, recordLoginAttempt, resetLoginAttempts, validatePassword } from '../utils/helpers.js';
+import {
+  checkLoginAttempt, recordLoginAttempt, resetLoginAttempts, validatePassword,
+  checkForgotPasswordAttempt, recordForgotPasswordAttempt,
+} from '../utils/helpers.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
+import { sendMail } from '../services/emailService.js';
+import { buildPasswordResetEmail } from '../services/emailTemplates.js';
 import {
   normalizeRole,
   canAccessOrganizationDashboard,
@@ -294,6 +300,147 @@ router.get('/me', authenticate as express.RequestHandler, async (req: AuthReques
     });
   } catch {
     res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+const RESET_TOKEN_EXPIRY_MINUTES = 60;
+const GENERIC_RESET_RESPONSE = { message: 'If an account with that email exists, a password reset link has been sent.' };
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body ?? {};
+
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.json(GENERIC_RESET_RESPONSE);
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const ip = String(req.ip ?? req.socket?.remoteAddress ?? 'unknown');
+  const emailKey = `email:${normalizedEmail}`;
+  const ipKey = `ip:${ip}`;
+
+  if (!checkForgotPasswordAttempt(emailKey) || !checkForgotPasswordAttempt(ipKey)) {
+    return res.json(GENERIC_RESET_RESPONSE);
+  }
+
+  recordForgotPasswordAttempt(emailKey);
+  recordForgotPasswordAttempt(ipKey);
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: { email: normalizedEmail, isActive: true },
+      select: { id: true, firstName: true, email: true, clinicId: true },
+    });
+
+    if (!user) {
+      return res.json(GENERIC_RESET_RESPONSE);
+    }
+
+    // Invalidate all existing unused tokens for this user
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+
+    // Generate a cryptographically secure random token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000);
+
+    await prisma.passwordResetToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
+
+    const appBaseUrl = (process.env.APP_BASE_URL || 'https://app.noramedi.com').replace(/\/$/, '');
+    const resetUrl = `${appBaseUrl}/reset-password?token=${rawToken}`;
+
+    const emailPayload = buildPasswordResetEmail({
+      firstName: user.firstName,
+      resetUrl,
+      expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
+    });
+
+    const result = await sendMail({ to: user.email, ...emailPayload });
+    if (!result.sent) {
+      console.warn(`[forgot-password] Email not sent for user ${user.id}: ${result.reason}`);
+    }
+  } catch (err) {
+    console.error('[forgot-password] Error:', (err as Error).message);
+  }
+
+  return res.json(GENERIC_RESET_RESPONSE);
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body ?? {};
+
+  if (!token || typeof token !== 'string' || !newPassword || typeof newPassword !== 'string') {
+    return res.status(400).json({ error: 'Token and new password are required', code: 'RESET_FIELDS_REQUIRED' });
+  }
+
+  const passwordValidation = validatePassword(newPassword);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({
+      error: 'Password does not meet security requirements',
+      code: 'PASSWORD_WEAK',
+      details: passwordValidation.errors,
+    });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+
+  try {
+    const resetToken = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: { user: { select: { id: true, clinicId: true, email: true, isActive: true } } },
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({ error: 'Invalid or expired reset token', code: 'RESET_TOKEN_INVALID' });
+    }
+
+    if (resetToken.usedAt) {
+      return res.status(400).json({ error: 'Reset token has already been used', code: 'RESET_TOKEN_USED' });
+    }
+
+    if (resetToken.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'Reset token has expired', code: 'RESET_TOKEN_EXPIRED' });
+    }
+
+    if (!resetToken.user.isActive) {
+      return res.status(400).json({ error: 'Invalid or expired reset token', code: 'RESET_TOKEN_INVALID' });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash: newPasswordHash },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    try {
+      await logActivity({
+        clinicId: resetToken.user.clinicId,
+        userId: resetToken.userId,
+        entityType: 'user',
+        entityId: resetToken.userId,
+        action: 'password_reset',
+        description: `${resetToken.user.email} şifresini e-posta doğrulamasıyla sıfırladı`,
+      });
+    } catch {
+      // activity log failure must not block the response
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[reset-password] Error:', (err as Error).message);
+    return res.status(500).json({ error: 'Failed to reset password', code: 'RESET_FAILED' });
   }
 });
 

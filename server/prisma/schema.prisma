@@ -135,6 +135,7 @@ model User {
   resolvedInstagramEntries   InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
   assignedRecallCandidates   RecallCandidate[]              @relation("RecallCandidateAssignee")
   performedRecallActions     RecallAction[]                 @relation("RecallActionPerformer")
+  passwordResetTokens        PasswordResetToken[]
 
   // Phase 1b: changed to organizationId scope for multi-branch
   @@unique([organizationId, email])
@@ -1705,4 +1706,17 @@ model PatientPrivacyRequest {
   @@index([clinicId, patientId])
   @@index([clinicId, requestType])
   @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

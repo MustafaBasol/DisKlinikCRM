@@ -148,6 +148,36 @@ export const resetLoginAttempts = (email: string): void => {
   loginAttempts.delete(email);
 };
 
+// --- Security: Rate Limiting (Forgot Password) ---
+// Max 3 attempts per email per 60 minutes
+
+const forgotPasswordAttempts = new Map<string, { count: number; timestamp: number }>();
+const FORGOT_PASSWORD_MAX = 3;
+const FORGOT_PASSWORD_WINDOW_MS = 60 * 60 * 1000;
+
+export const checkForgotPasswordAttempt = (key: string): boolean => {
+  const now = Date.now();
+  const attempt = forgotPasswordAttempts.get(key);
+  if (!attempt) return true;
+  if (now - attempt.timestamp > FORGOT_PASSWORD_WINDOW_MS) {
+    forgotPasswordAttempts.delete(key);
+    return true;
+  }
+  return attempt.count < FORGOT_PASSWORD_MAX;
+};
+
+export const recordForgotPasswordAttempt = (key: string): void => {
+  const now = Date.now();
+  const attempt = forgotPasswordAttempts.get(key);
+  if (!attempt) {
+    forgotPasswordAttempts.set(key, { count: 1, timestamp: now });
+  } else if (now - attempt.timestamp > FORGOT_PASSWORD_WINDOW_MS) {
+    forgotPasswordAttempts.set(key, { count: 1, timestamp: now });
+  } else {
+    attempt.count++;
+  }
+};
+
 // --- Practitioner Availability Check ---
 
 export const checkPractitionerAvailability = async (
