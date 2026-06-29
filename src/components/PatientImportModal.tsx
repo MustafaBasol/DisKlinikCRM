@@ -41,9 +41,10 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
   selectedClinicId?: string;
+  availableClinics?: { id: string; name: string }[];
 }
 
-const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClinicId }) => {
+const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClinicId, availableClinics = [] }) => {
   const { t } = useTranslation(['patients', 'common']);
   const [step, setStep] = useState<Step>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -52,7 +53,11 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [targetClinicId, setTargetClinicId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isAllClinics = !selectedClinicId || selectedClinicId === 'all';
+  const effectiveClinicId = isAllClinics ? targetClinicId : selectedClinicId;
 
   const selectFile = (f: File) => {
     if (!f.name.endsWith('.xlsx')) {
@@ -69,7 +74,7 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
 
   const handleDownloadTemplate = async () => {
     try {
-      const res = await patientService.downloadImportTemplate();
+      const res = await patientService.downloadImportTemplate(effectiveClinicId || undefined);
       const url = URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
@@ -91,7 +96,7 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
     setLoading(true);
     setError('');
     try {
-      const res = await patientService.importPreview(file, selectedClinicId);
+      const res = await patientService.importPreview(file, effectiveClinicId || undefined);
       setPreview(res.data);
       setStep('preview');
     } catch (err: any) {
@@ -106,7 +111,7 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
     setLoading(true);
     setError('');
     try {
-      const res = await patientService.importConfirm(file, selectedClinicId);
+      const res = await patientService.importConfirm(file, effectiveClinicId || undefined);
       setResult(res.data);
       setStep('result');
     } catch (err: any) {
@@ -140,6 +145,28 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
           {/* ─── Adım: Yükleme ─────────────────────────────────────────────── */}
           {step === 'upload' && (
             <div className="space-y-4">
+              {/* Klinik bağlamı */}
+              {isAllClinics ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">{t('patients:importModal.allClinicsHint')}</p>
+                  <select
+                    value={targetClinicId}
+                    onChange={(e) => setTargetClinicId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">{t('patients:importModal.selectTargetClinic')}</option>
+                    {availableClinics.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-sm text-blue-700">
+                  <CheckCircle2 size={14} className="shrink-0" />
+                  {t('patients:importModal.clinicContext')}
+                </div>
+              )}
+
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-blue-800 space-y-1">
                 <p className="font-semibold">{t('patients:importModal.howItWorks.title')}</p>
                 <ol className="list-decimal list-inside space-y-1 text-blue-700">
@@ -286,7 +313,7 @@ const PatientImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClini
               </button>
               <button
                 onClick={handlePreview}
-                disabled={!file || loading}
+                disabled={!file || loading || (isAllClinics && !targetClinicId)}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}

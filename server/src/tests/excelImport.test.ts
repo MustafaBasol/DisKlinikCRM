@@ -622,6 +622,75 @@ await test('Bilinmeyen Prisma kodu → genel güvenli mesaj', () => {
   assert.equal(msg, 'Beklenmeyen bir hata oluştu');
 });
 
+// ─── Klinik çözümleme senaryoları ────────────────────────────────────────────
+section('Klinik çözümleme — selectedClinicId senaryoları');
+
+await test('Konkret selectedClinicId + satırda clinicId yok → geçerli (selectedClinicId kullanılır)', () => {
+  const errors = validatePatientRow(
+    { firstName: 'Ali', lastName: 'Veli', phone: '+905551234567' },
+    ['clinic-A', 'clinic-B'],
+    'clinic-A'
+  );
+  assert.equal(errors.length, 0, `Hata beklenmiyordu, alınan: ${errors.join(', ')}`);
+});
+
+await test('selectedClinicId=all + satırda clinicId yok → clinicId hatası', () => {
+  const errors = validatePatientRow(
+    { firstName: 'Ali', lastName: 'Veli', phone: '+905551234567' },
+    ['clinic-A'],
+    'all'
+  );
+  assert.ok(errors.some(e => e.includes('clinicId')), `clinicId hatası bekleniyor, alınan: ${errors.join(', ')}`);
+});
+
+await test('selectedClinicId yok + satırda clinicId yok → clinicId hatası', () => {
+  const errors = validatePatientRow(
+    { firstName: 'Ali', lastName: 'Veli', phone: '+905551234567' },
+    ['clinic-A'],
+    undefined
+  );
+  assert.ok(errors.some(e => e.includes('clinicId')), `clinicId hatası bekleniyor, alınan: ${errors.join(', ')}`);
+});
+
+await test('Satırda clinicId başka organizasyona ait (accessibleIds dışı) → hata', () => {
+  const errors = validatePatientRow(
+    { firstName: 'Ali', lastName: 'Veli', phone: '+905551234567', clinicId: 'clinic-BASKA-ORG' },
+    ['clinic-A', 'clinic-B'],
+    'all'
+  );
+  assert.ok(errors.some(e => e.includes('clinicId')), `clinicId erişim hatası bekleniyor, alınan: ${errors.join(', ')}`);
+});
+
+await test('Satırda geçerli clinicId var + selectedClinicId=all → geçerli (satır kliniği kullanılır)', () => {
+  const errors = validatePatientRow(
+    { firstName: 'Ali', lastName: 'Veli', phone: '+905551234567', clinicId: 'clinic-B' },
+    ['clinic-A', 'clinic-B'],
+    'all'
+  );
+  assert.equal(errors.length, 0, `Hata beklenmiyordu, alınan: ${errors.join(', ')}`);
+});
+
+await test('buildPatientTemplate selectedClinicId ile örnek satırı doldurur', async () => {
+  const clinics = [{ id: 'c-first', name: 'İlk Klinik' }, { id: 'c-second', name: 'İkinci Klinik' }];
+  const buf = await buildPatientTemplate(clinics, 'c-second');
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as any);
+  const ws = wb.worksheets[0];
+  const exampleRow = ws.getRow(2);
+  const clinicIdValue = String(exampleRow.getCell(10).value ?? '');
+  assert.equal(clinicIdValue, 'c-second', `Örnek satır c-second içermeli, alınan: ${clinicIdValue}`);
+});
+
+await test('buildPatientTemplate selectedClinicId=all ise ilk kliniği kullanır', async () => {
+  const clinics = [{ id: 'c-first', name: 'İlk Klinik' }, { id: 'c-second', name: 'İkinci Klinik' }];
+  const buf = await buildPatientTemplate(clinics, 'all');
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as any);
+  const ws = wb.worksheets[0];
+  const clinicIdValue = String(ws.getRow(2).getCell(10).value ?? '');
+  assert.equal(clinicIdValue, 'c-first', `all modunda ilk klinik kullanılmalı, alınan: ${clinicIdValue}`);
+});
+
 // ─── Sonuç ────────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`Toplam: ${passed + failed}  ✓ ${passed}  ✗ ${failed}`);

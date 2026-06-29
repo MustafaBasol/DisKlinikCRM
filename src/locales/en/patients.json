@@ -35,6 +35,10 @@
       "skipped": "{{count}} rows skipped.",
       "skippedRowsTitle": "Skipped Rows:"
     },
+    "targetClinicLabel": "Target Branch",
+    "selectTargetClinic": "Select target branch...",
+    "allClinicsHint": "You are in all-branches view. Select the target branch for import:",
+    "clinicContext": "Patients will be imported to the selected branch.",
     "errors": {
       "fileType": "Only .xlsx files are accepted.",
       "fileSize": "File exceeds the 5 MB limit.",

@@ -213,6 +213,7 @@ const Patients: React.FC = () => {
             fetchPatients();
           }}
           selectedClinicId={selectedClinicId}
+          availableClinics={availableClinics}
         />
       )}
     </div>

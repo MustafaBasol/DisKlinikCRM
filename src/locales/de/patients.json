@@ -35,6 +35,10 @@
       "skipped": "{{count}} Zeilen übersprungen.",
       "skippedRowsTitle": "Übersprungene Zeilen:"
     },
+    "targetClinicLabel": "Zielstandort",
+    "selectTargetClinic": "Zielstandort auswählen...",
+    "allClinicsHint": "Sie befinden sich in der Gesamtansicht. Wählen Sie den Zielstandort für den Import:",
+    "clinicContext": "Patienten werden in den ausgewählten Standort importiert.",
     "errors": {
       "fileType": "Nur .xlsx-Dateien werden akzeptiert.",
       "fileSize": "Die Datei überschreitet die Grenze von 5 MB.",

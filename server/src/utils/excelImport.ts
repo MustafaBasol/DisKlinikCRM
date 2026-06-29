@@ -39,7 +39,7 @@ export function cellToString(value: ExcelJS.CellValue): string {
 }
 
 // ─── Hasta şablon oluşturucu ──────────────────────────────────────────────────
-export async function buildPatientTemplate(clinics: { id: string; name: string }[]): Promise<Buffer> {
+export async function buildPatientTemplate(clinics: { id: string; name: string }[], selectedClinicId?: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Aile Diş CRM';
   wb.created = new Date();
@@ -56,7 +56,7 @@ export async function buildPatientTemplate(clinics: { id: string; name: string }
     { header: 'address', key: 'address', width: 30 },
     { header: 'city', key: 'city', width: 16 },
     { header: 'notes', key: 'notes', width: 30 },
-    { header: 'clinicId', key: 'clinicId', width: 36 },
+    { header: 'clinicId (isteğe bağlı)', key: 'clinicId', width: 36 },
     { header: 'source', key: 'source', width: 18 },
   ];
 
@@ -79,7 +79,7 @@ export async function buildPatientTemplate(clinics: { id: string; name: string }
     address: 'Atatürk Cad. No:1',
     city: 'İstanbul',
     notes: '',
-    clinicId: clinics[0]?.id ?? '',
+    clinicId: (selectedClinicId && selectedClinicId !== 'all') ? selectedClinicId : (clinics[0]?.id ?? ''),
     source: 'walk_in',
   });
 
@@ -101,7 +101,7 @@ export async function buildPatientTemplate(clinics: { id: string; name: string }
     ['  • address    — Açık adres'],
     ['  • city       — Şehir'],
     ['  • notes      — Notlar'],
-    ['  • clinicId   — Şube UUID\'si (Şubeler sayfasına bakın)'],
+    ['  • clinicId   — İsteğe bağlı: Şube UUID\'si. Seçili klinik varsa otomatik kullanılır. Tüm şubeler görünümündeyken zorunludur.'],
     ['  • source     — walk_in / referral / online / social_media / other'],
     [''],
     ['Kurallar'],

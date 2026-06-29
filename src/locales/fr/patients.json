@@ -35,6 +35,10 @@
       "skipped": "{{count}} lignes ignorées.",
       "skippedRowsTitle": "Lignes ignorées :"
     },
+    "targetClinicLabel": "Agence cible",
+    "selectTargetClinic": "Sélectionner l'agence cible...",
+    "allClinicsHint": "Vous êtes en vue toutes les agences. Sélectionnez l'agence cible pour l'import :",
+    "clinicContext": "Les patients seront importés dans l'agence sélectionnée.",
     "errors": {
       "fileType": "Seuls les fichiers .xlsx sont acceptés.",
       "fileSize": "Le fichier dépasse la limite de 5 Mo.",

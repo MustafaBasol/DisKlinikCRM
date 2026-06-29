@@ -78,8 +78,11 @@ export const patientService = {
   unarchive: (id: string) => api.post(`/patients/${id}/unarchive`),
   checkPhoneDuplicate: (params: { phone: string; clinicId?: string; excludePatientId?: string }) =>
     api.get('/patients/check-phone-duplicate', { params }),
-  downloadImportTemplate: () =>
-    api.get('/patients/import-template', { responseType: 'blob' }),
+  downloadImportTemplate: (clinicId?: string) =>
+    api.get('/patients/import-template', {
+      responseType: 'blob',
+      params: clinicId && clinicId !== 'all' ? { clinicId } : {},
+    }),
   importPreview: (file: File, clinicId?: string) => {
     const fd = new FormData();
     fd.append('file', file);
