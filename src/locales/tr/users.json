@@ -12,7 +12,7 @@
     "howItWorks": {
       "title": "Nasıl çalışır?",
       "downloadTemplate": "Şablonu indirin ve Şubeler sayfasındaki UUID'leri referans alın.",
-      "fillData": "Personel verilerini doldurun (zorunlu: Ad, Soyad, E-posta, Rol, Şube ID).",
+      "fillData": "Personel verilerini doldurun (zorunlu: Ad, Soyad, E-posta, Rol). Şube ID boş bırakılırsa seçili şube kullanılır.",
       "temporaryPassword": "Şifre boşsa sistem geçici şifre üretir ve yalnızca bir kez gösterir.",
       "skipExisting": "Mevcut e-postalar atlanır, üzerine yazılmaz."
     },
@@ -32,6 +32,10 @@
       "skippedRowsTitle": "Atlanan Satırlar:",
       "invitationFailedWarning": "Bazı kullanıcılar oluşturuldu ancak davet e-postası gönderilemedi. Bu kullanıcılar 'Şifremi unuttum' bağlantısıyla şifre belirleyebilir."
     },
+    "targetClinicLabel": "Hedef Şube",
+    "selectTargetClinic": "Hedef şubeyi seçin...",
+    "allClinicsHint": "Tüm şubeler görünümündesiniz. İçe aktarılacak şubeyi seçin:",
+    "clinicContext": "Kullanıcılar seçili kliniğe aktarılacak.",
     "errors": {
       "fileType": "Yalnızca .xlsx dosyaları kabul edilir.",
       "fileSize": "Dosya 5 MB sınırını aşıyor.",

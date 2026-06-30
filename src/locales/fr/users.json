@@ -12,7 +12,7 @@
     "howItWorks": {
       "title": "Comment ça marche ?",
       "downloadTemplate": "Téléchargez le modèle et utilisez les UUID de la page Branches comme référence.",
-      "fillData": "Renseignez les données du personnel (obligatoire : prénom, nom, e-mail, rôle, ID de branche).",
+      "fillData": "Renseignez les données du personnel (obligatoire : prénom, nom, e-mail, rôle). Si l'ID de branche est laissé vide, l'agence sélectionnée est utilisée.",
       "temporaryPassword": "Si le mot de passe est vide, le système génère un mot de passe temporaire et l'affiche une seule fois.",
       "skipExisting": "Les e-mails existants sont ignorés et ne sont pas écrasés."
     },
@@ -32,6 +32,10 @@
       "skippedRowsTitle": "Lignes ignorées :",
       "invitationFailedWarning": "Certains utilisateurs ont été créés mais l'e-mail d'invitation n'a pas pu être envoyé. Ils peuvent définir un mot de passe via « Mot de passe oublié »."
     },
+    "targetClinicLabel": "Agence cible",
+    "selectTargetClinic": "Sélectionner l'agence cible...",
+    "allClinicsHint": "Vous êtes en vue toutes les agences. Sélectionnez l'agence cible pour l'import :",
+    "clinicContext": "Les utilisateurs seront importés dans l'agence sélectionnée.",
     "errors": {
       "fileType": "Seuls les fichiers .xlsx sont acceptés.",
       "fileSize": "Le fichier dépasse la limite de 5 Mo.",

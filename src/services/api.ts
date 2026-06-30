@@ -232,19 +232,24 @@ export const userService = {
   getAll: () => api.get('/users'),
   create: (data: any) => api.post('/users', data),
   update: (id: string, data: any) => api.put(`/users/${id}`, data),
-  downloadImportTemplate: () =>
-    api.get('/users/import-template', { responseType: 'blob' }),
-  importPreview: (file: File) => {
+  downloadImportTemplate: (clinicId?: string) =>
+    api.get('/users/import-template', {
+      responseType: 'blob',
+      params: clinicId && clinicId !== 'all' ? { clinicId } : {},
+    }),
+  importPreview: (file: File, clinicId?: string) => {
     const fd = new FormData();
     fd.append('file', file);
     return api.post('/users/import-preview', fd, {
+      params: clinicId && clinicId !== 'all' ? { clinicId } : {},
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  importConfirm: (file: File) => {
+  importConfirm: (file: File, clinicId?: string) => {
     const fd = new FormData();
     fd.append('file', file);
     return api.post('/users/import-confirm', fd, {
+      params: clinicId && clinicId !== 'all' ? { clinicId } : {},
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },

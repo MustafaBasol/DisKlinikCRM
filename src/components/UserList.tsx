@@ -5,6 +5,7 @@ import { userService } from '../services/api';
 import UserClinicAssignmentModal from './UserClinicAssignmentModal';
 import UserImportModal from './UserImportModal';
 import { useAuth } from '../context/AuthContext';
+import { useClinic } from '../context/ClinicContext';
 import { canAssignUserClinics, canImportUsers } from '../utils/permissions';
 import { getErrorMessage } from '../utils/errors';
 
@@ -13,6 +14,7 @@ const roles = ['admin', 'doctor', 'receptionist', 'billing'];
 const UserList: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { user: currentUser } = useAuth();
+  const { selectedClinicId, availableClinics } = useClinic();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -161,6 +163,8 @@ const UserList: React.FC = () => {
             setIsImportOpen(false);
             fetchUsers();
           }}
+          selectedClinicId={selectedClinicId}
+          availableClinics={availableClinics}
         />
       )}
     </div>

@@ -80,7 +80,8 @@ router.get(
         orderBy: { name: 'asc' },
       });
 
-      const buf = await buildUserTemplate(clinics);
+      const templateClinicId = req.query.clinicId as string | undefined;
+      const buf = await buildUserTemplate(clinics, templateClinicId);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename="kullanici-import-sablonu.xlsx"');
       res.send(buf);
@@ -116,6 +117,7 @@ async function validateUserRows(
   orgId: string,
   accessibleIds: string[],
   callerRole: string,
+  selectedClinicId?: string,
 ): Promise<{ results: ImportRowResult[]; tempPasswords: Map<number, string> }> {
   // Organizasyon içindeki mevcut e-postalar
   const existingUsers = await prisma.user.findMany({
@@ -168,17 +170,21 @@ async function validateUserRows(
 
     // clinicIds
     const clinicIdsRaw = row.clinicIds?.trim() ?? '';
-    const clinicIdList = clinicIdsRaw
+    let clinicIdList = clinicIdsRaw
       ? clinicIdsRaw.split(',').map((s) => s.trim()).filter(Boolean)
       : [];
 
     if (!canAccessAll && clinicIdList.length === 0) {
-      errors.push('clinicIds zorunludur (canAccessAllClinics=true değilse)');
-    } else {
-      for (const cId of clinicIdList) {
-        if (!accessibleIds.includes(cId)) {
-          errors.push(`clinicId erişilemez veya bu organizasyona ait değil: ${cId}`);
-        }
+      if (selectedClinicId && selectedClinicId !== 'all') {
+        clinicIdList = [selectedClinicId];
+      } else {
+        errors.push('clinicIds zorunludur (canAccessAllClinics=true değilse ve tüm şubeler görünümündeyken)');
+      }
+    }
+
+    for (const cId of clinicIdList) {
+      if (!accessibleIds.includes(cId)) {
+        errors.push(`clinicId erişilemez veya bu organizasyona ait değil: ${cId}`);
       }
     }
 
@@ -229,6 +235,7 @@ router.post(
 
     const user = req.user!;
     const orgId = user.organizationId;
+    const selectedClinicId = req.query.clinicId as string | undefined;
 
     try {
       const accessibleIds = await getAccessibleClinicIds(user);
@@ -239,7 +246,7 @@ router.post(
         return res.status(400).json({ error: `En fazla ${MAX_IMPORT_ROWS} satır içe aktarılabilir` });
       }
 
-      const { results } = await validateUserRows(rows, orgId, accessibleIds, user.normalizedRole);
+      const { results } = await validateUserRows(rows, orgId, accessibleIds, user.normalizedRole, selectedClinicId);
 
       const validCount = results.filter((r) => r.status === 'valid').length;
       const invalidCount = results.filter((r) => r.status === 'invalid').length;
@@ -270,6 +277,7 @@ router.post(
 
     const user = req.user!;
     const orgId = user.organizationId;
+    const selectedClinicId = req.query.clinicId as string | undefined;
 
     try {
       const accessibleIds = await getAccessibleClinicIds(user);
@@ -280,7 +288,7 @@ router.post(
         return res.status(400).json({ error: `En fazla ${MAX_IMPORT_ROWS} satır içe aktarılabilir` });
       }
 
-      const { results, tempPasswords } = await validateUserRows(rows, orgId, accessibleIds, user.normalizedRole);
+      const { results, tempPasswords } = await validateUserRows(rows, orgId, accessibleIds, user.normalizedRole, selectedClinicId);
 
       const validRows = results.filter(
         (r): r is Extract<ImportRowResult, { status: 'valid' }> => r.status === 'valid'

@@ -12,7 +12,7 @@
     "howItWorks": {
       "title": "How does it work?",
       "downloadTemplate": "Download the template and use the UUIDs from the Branches page as reference.",
-      "fillData": "Fill in staff data (required: first name, last name, email, role, branch ID).",
+      "fillData": "Fill in staff data (required: first name, last name, email, role). If branch ID is left empty, the selected branch is used.",
       "temporaryPassword": "If the password is empty, the system generates a temporary password and shows it only once.",
       "skipExisting": "Existing emails are skipped and not overwritten."
     },
@@ -32,6 +32,10 @@
       "skippedRowsTitle": "Skipped Rows:",
       "invitationFailedWarning": "Some users were created but the invitation email could not be sent. They can set a password via 'Forgot password'."
     },
+    "targetClinicLabel": "Target Branch",
+    "selectTargetClinic": "Select target branch...",
+    "allClinicsHint": "You are in all-branches view. Select the target branch for import:",
+    "clinicContext": "Users will be imported to the selected branch.",
     "errors": {
       "fileType": "Only .xlsx files are accepted.",
       "fileSize": "File exceeds the 5 MB limit.",

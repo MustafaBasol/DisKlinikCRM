@@ -134,8 +134,11 @@ export async function buildPatientTemplate(clinics: { id: string; name: string }
   return Buffer.from(buf);
 }
 
+// Excel'de açılır liste olarak sunulan roller (en yüksek yetkili roller hariç)
+export const USER_TEMPLATE_ROLE_OPTIONS = ['admin', 'doctor', 'receptionist', 'billing', 'assistant'];
+
 // ─── Kullanıcı şablon oluşturucu ──────────────────────────────────────────────
-export async function buildUserTemplate(clinics: { id: string; name: string }[]): Promise<Buffer> {
+export async function buildUserTemplate(clinics: { id: string; name: string }[], selectedClinicId?: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Aile Diş CRM';
   wb.created = new Date();
@@ -146,7 +149,7 @@ export async function buildUserTemplate(clinics: { id: string; name: string }[])
     { header: 'lastName *', key: 'lastName', width: 18 },
     { header: 'email *', key: 'email', width: 28 },
     { header: 'role *', key: 'role', width: 18 },
-    { header: 'clinicIds * (virgülle ayrılmış UUID)', key: 'clinicIds', width: 40 },
+    { header: 'clinicIds (isteğe bağlı, virgülle ayrılmış UUID)', key: 'clinicIds', width: 40 },
     { header: 'phone', key: 'phone', width: 18 },
     { header: 'password (boşsa geçici üretilir)', key: 'password', width: 32 },
     { header: 'canAccessAllClinics (true/false)', key: 'canAccessAllClinics', width: 34 },
@@ -159,16 +162,31 @@ export async function buildUserTemplate(clinics: { id: string; name: string }[])
   });
   ws.getRow(1).height = 22;
 
+  const exampleClinicId = (selectedClinicId && selectedClinicId !== 'all') ? selectedClinicId : (clinics[0]?.id ?? '');
+
   ws.addRow({
     firstName: 'Mehmet',
     lastName: 'Yılmaz',
     email: 'mehmet@klinik.com',
     role: 'doctor',
-    clinicIds: clinics[0]?.id ?? '',
+    clinicIds: exampleClinicId,
     phone: '+905559876543',
     password: '',
     canAccessAllClinics: 'false',
   });
+
+  // role sütunu için açılır liste (data validation)
+  const roleListFormula = `"${USER_TEMPLATE_ROLE_OPTIONS.join(',')}"`;
+  for (let rowNum = 2; rowNum <= 200; rowNum++) {
+    ws.getCell(`D${rowNum}`).dataValidation = {
+      type: 'list',
+      allowBlank: false,
+      formulae: [roleListFormula],
+      showErrorMessage: true,
+      errorTitle: 'Geçersiz rol',
+      error: `Lütfen listeden bir rol seçin: ${USER_TEMPLATE_ROLE_OPTIONS.join(', ')}`,
+    };
+  }
 
   // Açıklamalar
   const wsInfo = wb.addWorksheet('Talimatlar');
@@ -180,10 +198,10 @@ export async function buildUserTemplate(clinics: { id: string; name: string }[])
     ['  • firstName  — Ad'],
     ['  • lastName   — Soyad'],
     ['  • email      — Geçerli ve benzersiz e-posta'],
-    ['  • role       — admin / doctor / receptionist / billing / assistant'],
-    ['  • clinicIds  — Virgülle ayrılmış Şube UUID\'leri (canAccessAllClinics=true ise boş bırakılabilir)'],
+    ['  • role       — admin / doctor / receptionist / billing / assistant (hücredeki açılır listeden seçilebilir)'],
     [''],
     ['İsteğe Bağlı Alanlar'],
+    ['  • clinicIds            — Virgülle ayrılmış Şube UUID\'leri. Boşsa ve seçili şube varsa o şube kullanılır.'],
     ['  • phone                — Telefon numarası'],
     ['  • password             — Boşsa geçici şifre üretilir (yalnızca bir kez gösterilir)'],
     ['  • canAccessAllClinics  — true ise tüm şubelere erişim (yalnızca OWNER/ORG_ADMIN atayabilir)'],
@@ -193,13 +211,14 @@ export async function buildUserTemplate(clinics: { id: string; name: string }[])
     ['  • Geçici şifreler yalnızca içe aktarma sonuç ekranında gösterilir'],
     ['  • CLINIC_MANAGER rolü OWNER/ORG_ADMIN düzeyinde kullanıcı ekleyemez'],
     ['  • Mevcut e-postalar atlanır (üzerine yazılmaz)'],
+    ['  • clinicIds boşsa, canAccessAllClinics=true değilse ve "tüm şubeler" görünümündeyse zorunludur'],
     ['  • Maksimum 500 satır içe aktarılabilir'],
   ];
   lines.forEach(([text], i) => {
     const row = wsInfo.getRow(i + 1);
     row.getCell(1).value = text;
     if (i === 0) row.getCell(1).font = { bold: true, size: 13 };
-    if (i === 2 || i === 9 || i === 14) row.getCell(1).font = { bold: true };
+    if (i === 2 || i === 8 || i === 13) row.getCell(1).font = { bold: true };
   });
 
   // Şube referans listesi
