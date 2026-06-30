@@ -6,6 +6,16 @@ import { useTranslation } from 'react-i18next';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+const getPasswordRuleErrors = (password: string, t: (key: string) => string) => {
+  const errors: string[] = [];
+  if (password.length < 8) errors.push(t('passwordRequirements.minLength'));
+  if (!/[A-Z]/.test(password)) errors.push(t('passwordRequirements.uppercase'));
+  if (!/[a-z]/.test(password)) errors.push(t('passwordRequirements.lowercase'));
+  if (!/\d/.test(password)) errors.push(t('passwordRequirements.number'));
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push(t('passwordRequirements.special'));
+  return errors;
+};
+
 interface FormData {
   clinicName: string;
   slug: string;
@@ -74,10 +84,16 @@ const Register: React.FC = () => {
     setForm((f) => ({ ...f, slug: val }));
   };
 
+  const passwordErrors = getPasswordRuleErrors(form.adminPassword, t);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    if (passwordErrors.length > 0) {
+      setError(t('register.errors.weakPassword'));
+      return;
+    }
     if (form.adminPassword !== form.confirmPassword) {
       setError(t('register.errors.passwordMismatch'));
       return;
@@ -101,7 +117,12 @@ const Register: React.FC = () => {
       });
       setSuccess(true);
     } catch (err: any) {
-      setError(err.response?.data?.error ?? t('register.errors.registerFailed'));
+      const details = err.response?.data?.details;
+      if (Array.isArray(details) && details.length > 0) {
+        setError(t('register.errors.weakPassword'));
+      } else {
+        setError(err.response?.data?.error ?? t('register.errors.registerFailed'));
+      }
     } finally {
       setLoading(false);
     }
@@ -242,6 +263,17 @@ const Register: React.FC = () => {
                     className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                   />
                 </div>
+
+                {form.adminPassword && passwordErrors.length > 0 && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                    <p className="font-semibold mb-1">{t('passwordRequirements.title')}</p>
+                    <ul className="space-y-0.5 pl-2">
+                      {passwordErrors.map((rule) => (
+                        <li key={rule}>• {rule}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
