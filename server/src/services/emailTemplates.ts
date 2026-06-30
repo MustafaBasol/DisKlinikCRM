@@ -128,52 +128,49 @@ export function buildEmailVerificationEmail(opts: {
   return { subject, html, text };
 }
 
-export function buildStaffWelcomeEmail(opts: {
+export function buildStaffOnboardingEmail(opts: {
   firstName: string;
   clinicName: string;
-  verifyUrl: string;
+  resetUrl: string;
+  expiryMinutes: number;
 }): { subject: string; html: string; text: string } {
-  const subject = `${BRAND_NAME} — Hesabınız Oluşturuldu / Your Account is Ready`;
+  const subject = `${BRAND_NAME} hesabınız oluşturuldu`;
 
   const html = baseLayout(
-    'Welcome to NoraMedi',
-    `<h2 style="margin:0 0 16px;font-size:22px;color:#1e293b;">Hesabınıza Hoş Geldiniz / Welcome to Your Account</h2>
-    <p style="margin:0 0 12px;font-size:15px;color:#475569;">Merhaba / Hi ${opts.firstName},</p>
+    'NoraMedi hesabınız oluşturuldu',
+    `<h2 style="margin:0 0 16px;font-size:22px;color:#1e293b;">Hesabınız Oluşturuldu</h2>
+    <p style="margin:0 0 12px;font-size:15px;color:#475569;">Merhaba ${opts.firstName},</p>
     <p style="margin:0 0 24px;font-size:15px;color:#475569;">
-      <strong>${opts.clinicName}</strong> kliniğinde hesabınız oluşturuldu.
-      Giriş yapabilmek için e-posta adresinizi doğrulamanız gerekmektedir.
-      Bu bağlantı <strong>24 saat</strong> geçerlidir.<br/><br/>
-      Your account has been created at <strong>${opts.clinicName}</strong>.
-      Please verify your email address to activate your login.
-      This link is valid for <strong>24 hours</strong>.
+      <strong>${opts.clinicName}</strong> kliniğinde ${BRAND_NAME} hesabınız oluşturuldu.
+      Sisteme giriş yapmadan önce aşağıdaki bağlantıdan şifrenizi belirleyebilirsiniz.
+      Bu bağlantı güvenlik nedeniyle <strong>${opts.expiryMinutes} dakika</strong> geçerlidir.
     </p>
     <p style="margin:0 0 28px;">
-      <a href="${opts.verifyUrl}"
+      <a href="${opts.resetUrl}"
          style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;text-decoration:none;
                 padding:13px 28px;border-radius:8px;font-size:15px;font-weight:bold;">
-        E-postayı Doğrula / Verify Email
+        Şifremi Belirle
       </a>
     </p>
     <p style="margin:0 0 8px;font-size:13px;color:#64748b;">
-      Veya bu bağlantıyı tarayıcınıza yapıştırın / Or copy and paste this link into your browser:
+      Veya bu bağlantıyı tarayıcınıza yapıştırın:
     </p>
-    <p style="margin:0;font-size:13px;color:#2563eb;word-break:break-all;">${opts.verifyUrl}</p>`,
+    <p style="margin:0;font-size:13px;color:#2563eb;word-break:break-all;">${opts.resetUrl}</p>`,
   );
 
   const text = [
-    `Hesabınız Oluşturuldu — ${BRAND_NAME}`,
+    `${BRAND_NAME} hesabınız oluşturuldu`,
     '',
-    `Merhaba / Hi ${opts.firstName},`,
+    `Merhaba ${opts.firstName},`,
     '',
-    `${opts.clinicName} kliniğinde hesabınız oluşturuldu. E-postanızı doğrulamak için:`,
-    `Your account at ${opts.clinicName} has been created. To verify your email:`,
+    `${opts.clinicName} kliniğinde hesabınız oluşturuldu.`,
+    'Sisteme giriş yapmadan önce aşağıdaki bağlantıdan şifrenizi belirleyebilirsiniz:',
     '',
-    opts.verifyUrl,
+    opts.resetUrl,
     '',
-    'Bu bağlantı 24 saat geçerlidir. / This link is valid for 24 hours.',
+    `Bu bağlantı güvenlik nedeniyle ${opts.expiryMinutes} dakika geçerlidir.`,
     '',
-    'Bu e-postayı siz istemediyseniz, güvenle görmezden gelebilirsiniz.',
-    'If you did not expect this, you can safely ignore this email.',
+    'Eğer bu hesabı siz beklemiyorsanız bu e-postayı yok sayabilirsiniz.',
   ].join('\n');
 
   return { subject, html, text };

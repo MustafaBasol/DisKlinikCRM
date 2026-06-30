@@ -29,7 +29,8 @@
       "temporaryPasswordWarning": "Les mots de passe temporaires ne sont affichés qu'une seule fois. Veuillez les enregistrer en sécurité.",
       "copy": "Copier",
       "copied": "Copié !",
-      "skippedRowsTitle": "Lignes ignorées :"
+      "skippedRowsTitle": "Lignes ignorées :",
+      "invitationFailedWarning": "Certains utilisateurs ont été créés mais l'e-mail d'invitation n'a pas pu être envoyé. Ils peuvent définir un mot de passe via « Mot de passe oublié »."
     },
     "errors": {
       "fileType": "Seuls les fichiers .xlsx sont acceptés.",

@@ -214,8 +214,8 @@
       "emailAlreadyExists": "This email address is already associated with another user account. Please use a different email address."
     },
     "success": {
-      "createdWithEmail": "User created. A verification link has been sent to their email.",
-      "createdNoEmail": "User created but the verification email could not be sent. Please check email settings."
+      "createdWithEmail": "User created and an invitation email has been sent.",
+      "createdNoEmail": "User created but the invitation email could not be sent. The user can set a password via 'Forgot password'."
     }
   },
   "clinicAssignments": {

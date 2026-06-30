@@ -214,8 +214,8 @@
       "emailAlreadyExists": "Bu e-posta adresi başka bir kullanıcı hesabında kullanılıyor. Lütfen farklı bir e-posta adresi kullanın."
     },
     "success": {
-      "createdWithEmail": "Kullanıcı oluşturuldu. Doğrulama bağlantısı e-posta ile gönderildi.",
-      "createdNoEmail": "Kullanıcı oluşturuldu ancak doğrulama e-postası gönderilemedi. Lütfen e-posta ayarlarını kontrol edin."
+      "createdWithEmail": "Kullanıcı oluşturuldu ve davet e-postası gönderildi.",
+      "createdNoEmail": "Kullanıcı oluşturuldu ancak davet e-postası gönderilemedi. Kullanıcı 'Şifremi unuttum' bağlantısıyla şifre belirleyebilir."
     }
   },
   "clinicAssignments": {

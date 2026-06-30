@@ -29,7 +29,8 @@
       "temporaryPasswordWarning": "Temporäre Passwörter werden nur einmal angezeigt. Bitte speichern Sie sie sicher.",
       "copy": "Kopieren",
       "copied": "Kopiert!",
-      "skippedRowsTitle": "Übersprungene Zeilen:"
+      "skippedRowsTitle": "Übersprungene Zeilen:",
+      "invitationFailedWarning": "Einige Benutzer wurden erstellt, aber die Einladungs-E-Mail konnte nicht gesendet werden. Sie können über 'Passwort vergessen' ein Passwort festlegen."
     },
     "errors": {
       "fileType": "Nur .xlsx-Dateien werden akzeptiert.",

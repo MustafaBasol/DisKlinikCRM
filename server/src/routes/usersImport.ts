@@ -23,6 +23,9 @@ import {
   MAX_IMPORT_ROWS,
   MAX_FILE_SIZE_BYTES,
 } from '../utils/excelImport.js';
+import { sendMail } from '../services/emailService.js';
+import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';
+import { createPasswordResetToken, RESET_TOKEN_EXPIRY_MINUTES } from '../utils/passwordResetToken.js';
 
 const router = express.Router();
 
@@ -306,6 +309,7 @@ router.post(
               role: data.role as string,
               passwordHash,
               isActive: true,
+              emailVerifiedAt: new Date(),
               canAccessAllClinics: (data.canAccessAllClinics as boolean) ?? false,
               defaultClinicId: primaryClinicId,
             },
@@ -348,6 +352,28 @@ router.post(
             resultEntry.temporaryPassword = tempPasswords.get(row.rowNumber);
           }
 
+          // Davet e-postası gönderimi başarısız olsa bile satır "created" sayılmalı
+          resultEntry.invitationEmailSent = false;
+          try {
+            const appBaseUrl = (process.env.APP_BASE_URL ?? 'https://app.noramedi.com').replace(/\/$/, '');
+            const { rawToken } = await createPasswordResetToken(newUser.id);
+            const resetUrl = `${appBaseUrl}/reset-password?token=${rawToken}`;
+            const clinic = await prisma.clinic.findUnique({ where: { id: primaryClinicId }, select: { name: true } });
+            const { subject, html, text } = buildStaffOnboardingEmail({
+              firstName: newUser.firstName,
+              clinicName: clinic?.name ?? 'NoraMedi',
+              resetUrl,
+              expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
+            });
+            const mailResult = await sendMail({ to: newUser.email, subject, html, text });
+            resultEntry.invitationEmailSent = mailResult.sent;
+            if (!mailResult.sent) {
+              console.warn(`[users/import-confirm] invitation email not sent for user ${newUser.id}: ${mailResult.reason}`);
+            }
+          } catch (mailErr: any) {
+            console.warn(`[users/import-confirm] invitation email failed for user ${newUser.id}: ${mailErr?.message}`);
+          }
+
           created.push(resultEntry);
         } catch (rowErr: any) {
           skipped.push({
@@ -359,6 +385,7 @@ router.post(
       }
 
       const hasTemporaryPasswords = created.some((c) => c.temporaryPassword);
+      const hasFailedInvitations = created.some((c) => !c.invitationEmailSent);
 
       res.json({
         imported: created.length,
@@ -366,6 +393,7 @@ router.post(
         createdUsers: created,
         skippedRows: skipped,
         hasTemporaryPasswords,
+        hasFailedInvitations,
         warning: hasTemporaryPasswords
           ? 'Geçici şifreler yalnızca bir kez gösterilir. Lütfen kaydedin.'
           : undefined,

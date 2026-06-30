@@ -29,6 +29,7 @@ interface CreatedUser {
   email: string;
   name: string;
   temporaryPassword?: string;
+  invitationEmailSent?: boolean;
 }
 
 interface ConfirmResult {
@@ -37,6 +38,7 @@ interface ConfirmResult {
   createdUsers: CreatedUser[];
   skippedRows: { rowNumber: number; status: string; errors: string[] }[];
   hasTemporaryPasswords: boolean;
+  hasFailedInvitations?: boolean;
   warning?: string;
 }
 
@@ -276,6 +278,13 @@ const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                   {result.skipped > 0 && ` ${t('users:importModal.result.skipped', { count: result.skipped })}`}
                 </p>
               </div>
+
+              {result.hasFailedInvitations && (
+                <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-2 rounded-lg text-sm">
+                  <AlertCircle size={16} className="shrink-0" />
+                  {t('users:importModal.result.invitationFailedWarning')}
+                </div>
+              )}
 
               {result.hasTemporaryPasswords && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">

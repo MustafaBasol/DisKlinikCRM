@@ -29,7 +29,8 @@
       "temporaryPasswordWarning": "Temporary passwords are shown only once. Please store them securely.",
       "copy": "Copy",
       "copied": "Copied!",
-      "skippedRowsTitle": "Skipped Rows:"
+      "skippedRowsTitle": "Skipped Rows:",
+      "invitationFailedWarning": "Some users were created but the invitation email could not be sent. They can set a password via 'Forgot password'."
     },
     "errors": {
       "fileType": "Only .xlsx files are accepted.",
