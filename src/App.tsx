@@ -66,6 +66,8 @@ const LegalCenterPage = React.lazy(() => import('./pages/legal/LegalCenterPage')
 const PrivacyNoticePage = React.lazy(() => import('./pages/legal/PrivacyNoticePage'));
 const CookiePolicyPage = React.lazy(() => import('./pages/legal/CookiePolicyPage'));
 const CommunicationsNoticePage = React.lazy(() => import('./pages/legal/CommunicationsNoticePage'));
+const DataSubjectRequestPage = React.lazy(() => import('./pages/legal/DataSubjectRequestPage'));
+const ConsentTemplatePage = React.lazy(() => import('./pages/legal/ConsentTemplatePage'));
 
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
@@ -225,6 +227,8 @@ const App: React.FC = () => (
       <Route path="/legal/privacy" element={<PrivacyNoticePage />} />
       <Route path="/legal/cookies" element={<CookiePolicyPage />} />
       <Route path="/legal/communications" element={<CommunicationsNoticePage />} />
+      <Route path="/legal/data-subject-request" element={<DataSubjectRequestPage />} />
+      <Route path="/legal/consent" element={<ConsentTemplatePage />} />
       <Route path="*" element={<ProductApplication />} />
     </Routes>
     </React.Suspense>

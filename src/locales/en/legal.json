@@ -7,62 +7,76 @@
     "center": "Legal Information | NoraMedi CRM",
     "privacy": "Privacy Notice | NoraMedi CRM",
     "cookies": "Cookies and Local Storage Policy | NoraMedi CRM",
-    "communications": "Electronic Communications and Integrations | NoraMedi CRM"
+    "communications": "Communication Channels Notice | NoraMedi CRM",
+    "dataRequest": "Data Subject Request | NoraMedi CRM",
+    "consent": "Channel Consent Templates | NoraMedi CRM"
   },
   "nav": {
     "label": "Legal pages",
     "center": "Legal Information",
     "privacy": "Privacy Notice",
     "cookies": "Cookie Policy",
-    "communications": "Communication Channels"
+    "communications": "Communication Channels",
+    "dataRequest": "Data Subject Request",
+    "consent": "Consent Templates"
   },
   "shared": {
-    "label": "Legal information draft",
+    "label": "Legal information",
     "back": "Back to marketing page",
     "themeToggle": "Change theme",
     "languageSelector": "Select language",
-    "draftTitle": "Must be completed before publication",
-    "draftBody": "These pages are implementation drafts prepared according to the core information headings in Turkish and European Union regulations; they are not legal advice or a guarantee of compliance. After controller details, actual service providers, retention periods, transfer mechanisms and communications consent processes are determined, they must be reviewed by legal counsel.",
-    "reviewDate": "Regulatory sources last reviewed: 25 May 2026",
+    "draftTitle": "Legal note",
+    "draftBody": "These pages are prepared for general information purposes about NoraMedi's data processing practices. They do not constitute legal advice. Clinics and other data controllers should consult a legal adviser for their own obligations.",
+    "reviewDate": "Last updated: June 2026",
     "sources": "Primary official sources",
-    "sourcesDescription": "The following official legislation and authority publications were considered when defining the scope of this draft text."
+    "sourcesDescription": "The following official legislation and authority publications were considered when defining the scope of this page."
   },
   "center": {
     "title": "Legal Information Centre",
-    "description": "Publication preparation area for data protection and electronic communications texts for the public marketing page and the WhatsApp- and Instagram-enabled clinic operations product.",
+    "description": "General information pages on privacy, cookies, communication channels and data subject rights applicable to the NoraMedi platform.",
     "pagesTitle": "Information pages",
-    "pagesDescription": "Each text separately explains the product's current public-facing behaviour and the obligations to be completed before production activation.",
+    "pagesDescription": "Each page explains NoraMedi's relevant data processing practices and the applicable regulatory framework.",
     "open": "Review page",
     "cards": [
       {
         "path": "/legal/privacy",
         "title": "Privacy Notice",
-        "description": "Data processing, transfer, retention and data subject rights under KVKK and, where applicable, GDPR."
+        "description": "Platform data processing, transfers, retention and data subject rights under KVKK and, where applicable, GDPR."
       },
       {
         "path": "/legal/cookies",
         "title": "Cookies and Local Storage Policy",
-        "description": "Current functional browser storage behaviour and future cookie consent rules."
+        "description": "Current functional browser storage behaviour and information on cookie use."
       },
       {
         "path": "/legal/communications",
         "title": "Communication Channels Notice",
-        "description": "WhatsApp and Instagram flows, commercial communication permissions and the principle of not sharing sensitive data."
+        "description": "WhatsApp and Instagram channel features, AI assistant use and message-content principles."
+      },
+      {
+        "path": "/legal/data-subject-request",
+        "title": "Data Subject Request",
+        "description": "How to submit an access, correction, deletion or objection request regarding your personal data."
+      },
+      {
+        "path": "/legal/consent",
+        "title": "Channel Consent Templates",
+        "description": "Sample notice and explicit consent wording for WhatsApp/Instagram appointment channels."
       }
     ],
     "scope": {
       "title": "Scope and limitation",
-      "body": "NoraMedi CRM is a CRM product for managing clinic operations; it is not positioned as a diagnosis, prescription or full electronic health record platform. However, because patient, appointment and communication flows may contain personal data and, in some uses, special category health-related data, data minimisation and authorised access are required."
+      "body": "NoraMedi is a SaaS/CRM platform for managing clinic operations, provided by Mustafa Basol - Peaknova. Patient, appointment and communications flows may contain personal data and, in some uses, special category health-related data, so data minimisation and authorised access are required. NoraMedi is not positioned as a diagnosis, prescription or full electronic health record platform."
     },
     "checklist": {
-      "title": "Items to complete before publication",
-      "description": "For these texts to be used for a real service, your organisation must finalise the following information and controls.",
+      "title": "Data protection guidance for clinics",
+      "description": "Clinics using the platform for their own patient and communications data should assess the following obligations in their capacity as data controllers.",
       "items": [
-        "The controller's business name, MERSIS/tax details, postal address and data protection contact channel must be entered.",
-        "Actual data categories, purposes, legal bases and retention/deletion periods must be matched to the data inventory.",
-        "Processor roles, contracts and any international transfer mechanisms for hosting, messaging and Meta/WhatsApp/Instagram providers must be documented.",
-        "For marketing electronic communications in Turkey, approval/opt-out and, where applicable, IYS processes must be applied; for EU audiences, ePrivacy/GDPR and relevant member state rules must be applied.",
-        "The exclusion of special category health data from communications messages, access controls, logging and breach response processes must be operationally verified."
+        "The clinic must prepare its own patient-facing notice and, where required, explicit consent documentation.",
+        "Actual data categories, purposes and retention periods must be matched to the clinic-level data inventory.",
+        "Before WhatsApp/Instagram channel features are enabled, clinic-level processor roles and transfer conditions must be documented.",
+        "Approval/opt-out mechanisms and, where required, IYS processes for commercial electronic communications are the clinic's responsibility.",
+        "The exclusion of special category health data from message channels and access controls must be operationally verified."
       ]
     },
     "sources": {
@@ -73,52 +87,82 @@
   },
   "privacy": {
     "title": "Privacy and Personal Data Processing Notice",
-    "description": "Draft text for notification obligations under KVKK in Turkey and GDPR where services are offered to people in the European Union or their behaviour is monitored.",
+    "description": "General information on personal data processing, transfers, retention and data subject rights under KVKK and, where applicable, GDPR, within the NoraMedi platform.",
     "controller": {
-      "title": "1. Controller and contact",
-      "body": "The clinic or business that determines the purposes and methods of personal data processing will be the controller in the relevant context of use. The platform provider's role as controller or processor must be determined separately according to the supplied service and contract.",
-      "requiredTitle": "Mandatory publication information missing",
-      "requiredBody": "[Controller business name], [postal address], [MERSIS/tax details], [email or registered electronic mail application address] and, where applicable, [EU representative / data protection officer contact] must be inserted here before the service is launched."
+      "title": "1. Platform provider and contact",
+      "body": "NoraMedi is a SaaS clinic operations management platform provided by Mustafa Basol - Peaknova. Clinics act as the primary data controller under KVKK and, where applicable, GDPR for processing arising from their own patient, appointment and communications data. NoraMedi may act as a data processor or service provider within the platform and infrastructure services framework; this role is determined separately according to the service agreement and usage context.",
+      "contactRows": [
+        { "label": "Platform / Product", "value": "NoraMedi" },
+        { "label": "Provider", "value": "Mustafa Basol - Peaknova" },
+        { "label": "General contact", "value": "contact@noramedi.com" },
+        { "label": "Support", "value": "support@noramedi.com" },
+        { "label": "Privacy / KVKK / GDPR requests", "value": "privacy@noramedi.com" },
+        { "label": "Security reports", "value": "security@noramedi.com" },
+        { "label": "Legal / contractual notices", "value": "legal@noramedi.com" }
+      ]
     },
     "data": {
       "title": "2. Data categories that may be processed",
-      "body": "The following scope is based on the current marketing page and the described operational features of the product. It must be narrowed or updated against the actual data inventory before contracted use begins.",
+      "body": "The following scope is based on the platform's current features and clinic usage scenarios. Clinics should determine their specific processing scope against their own data inventory.",
       "rows": [
         {
-          "label": "Public web use",
-          "value": "Functional browser storage data such as language and theme preferences; no analytics or advertising tracking tool has been identified in this version."
+          "label": "Public web use and functional preferences",
+          "value": "Functional browser storage data such as language and theme preferences; no analytics or advertising tracking tool is used in this version."
         },
         {
-          "label": "Demo request area",
-          "value": "Information typed into the current preview form is not sent or stored. If an actual application feature is enabled, a separate notice for contact data must be supplied."
+          "label": "Demo / contact requests",
+          "value": "If a demo or contact form is enabled, submitted contact information may be processed."
         },
         {
-          "label": "Clinic operations account",
-          "value": "When service is activated, user/role, clinic and branch, patient contact, appointment, treatment opportunity, task, payment tracking and activity log data may be processed."
+          "label": "Platform account and user data",
+          "value": "Username, email, encrypted authentication credentials, role and permission data, sign-in/sign-out records."
         },
         {
-          "label": "WhatsApp and Instagram flows",
-          "value": "When a channel is enabled, connection details, message metadata and conversation content may enter operational flows. Sensitive health information must not be shared in messages."
+          "label": "Clinic / organisation / branch configuration data",
+          "value": "Clinic name, branch details, working hours, service definitions and organisational structure."
         },
         {
-          "label": "Security and audit logs",
-          "value": "Authorisation, activity/audit and security records may be processed for access control and incident investigation."
+          "label": "Staff roles and permission data",
+          "value": "Roles assigned to clinic staff, access permissions and operational task information."
+        },
+        {
+          "label": "Patient contact and appointment data",
+          "value": "Patient name, contact details, appointment and follow-up data processed in the CRM. Health-related data is classified as special category data."
+        },
+        {
+          "label": "WhatsApp / Instagram connection metadata and message content",
+          "value": "When a channel is enabled, connection details, sender identifiers, message date, content and conversation status may be processed."
+        },
+        {
+          "label": "AI assistant processing data",
+          "value": "When AI-assisted features are enabled, conversation context and appointment-matching data may be sent to the AI provider."
+        },
+        {
+          "label": "Security / audit / operational logs",
+          "value": "Authorisation, activity and audit records kept for access control and incident investigation."
+        },
+        {
+          "label": "Billing / payment tracking data",
+          "value": "Invoice and transaction data related to platform subscriptions and CRM payment tracking."
         }
       ]
     },
     "purposes": {
       "title": "3. Purposes of processing",
       "items": [
-        "Provide operations management by clinic, branch, team and role.",
-        "Manage visibility of appointments, follow-up tasks, treatment/service workflows and payments.",
-        "Where enabled, allow authorised teams to route WhatsApp and Instagram conversations into operational flows.",
-        "Protect account and service security, prevent unauthorised access and maintain audit records.",
-        "Fulfil data subject requests, regulatory obligations and contractual processes."
+        "Operating the CRM platform and providing clinic, branch, team and role-based operations management.",
+        "Account creation, authentication, security and access management.",
+        "Managing appointments, follow-up tasks, treatment/service workflows and payment visibility.",
+        "WhatsApp and Instagram communications channel routing and inbox management (when a channel is enabled).",
+        "AI-assisted appointment matching and communications assistant function (when the feature is enabled).",
+        "Support, troubleshooting, audit and abuse prevention.",
+        "Fulfilling legal and contractual obligations.",
+        "Responding to data subject requests."
       ]
     },
     "basis": {
       "title": "4. Legal bases and sensitive data",
-      "body": "The legal basis for each data category must be determined separately in the data inventory according to actual use, the controller's role and targeted country. Consent must not be treated as a general assumed basis where another legal basis would be required.",
+      "body": "The legal basis for each data category must be determined separately according to actual usage, the controller's role and the targeted country. Consent must not be treated as a general assumed basis where another legal basis would be required.",
       "rows": [
         {
           "label": "Service and account operations",
@@ -130,63 +174,75 @@
         },
         {
           "label": "Marketing communications",
-          "value": "No message is sent before the required permission/objection mechanism is established under Turkish commercial electronic communications rules and IYS where required, or ePrivacy, GDPR and relevant member state rules for the EU."
+          "value": "No message is sent before the required permission/objection mechanism is established under Turkish commercial electronic communications rules and IYS where required, or ePrivacy, GDPR and relevant member state rules for EU audiences."
         }
       ],
       "special": "Health data is special category personal data under KVKK and special category data under GDPR. It may be processed only where genuinely necessary, with an applicable special processing condition determined and suitable technical and organisational controls and restricted access; it must not be used in marketing messages."
     },
     "transfers": {
       "title": "5. Recipients and international transfers",
-      "body": "Hosting, support or WhatsApp/Instagram connections may result in sharing personal data with providers abroad. This draft does not state that any provider has been selected for production or that a transfer is ready.",
-      "actions": [
-        "The name, role, country and processed data scope of recipients or processor providers must be finalised.",
-        "For transfers from Turkey, no transfer must begin before applying a current transfer method under KVKK Article 9, such as standard contracts where appropriate conditions are met.",
-        "Where GDPR applies, adequacy decisions or appropriate safeguards and additional assessments under Chapter V must be documented for third-country transfers.",
-        "Before Meta, WhatsApp or Instagram features are enabled, transfer information specific to clinics and data subjects must be shown."
-      ]
+      "body": "NoraMedi may transfer personal data to recipients in the following categories in order to provide its services. Specific recipients may vary according to the service agreement and clinic configuration.",
+      "recipients": [
+        "Hosting and infrastructure providers (servers, databases, file storage).",
+        "Email service provider (for notification, invitation and password-reset messages).",
+        "Meta Platforms / WhatsApp / Instagram (when channel features are enabled by the clinic).",
+        "Google / Gemini or the relevant AI provider (when AI-assisted features are enabled).",
+        "Legal and administrative authorities (when required by law or upon authorised request).",
+        "Clinic staff and authorised organisation users (within role-based access controls)."
+      ],
+      "international": "Some infrastructure and service providers may process personal data outside Turkey or the EU. Such transfers are assessed under KVKK Article 9 and, where applicable, GDPR Chapter V. International transfer conditions may vary according to clinic configuration and enabled features."
     },
     "retention": {
       "title": "6. Retention and deletion",
-      "body": "Data must be kept only as long as needed for its purpose; deletion, destruction or anonymisation procedures must be documented according to actual legal and contractual obligations. The periods below have not yet been defined.",
+      "body": "Data is kept only as long as required for its purpose. The following retention periods apply at platform level; clinics may define additional policies in line with their own data obligations.",
       "rows": [
         {
           "label": "Public site preferences",
-          "value": "Stored in the browser as functional preferences and removable by the user. The exact lifecycle must be confirmed before publication."
+          "value": "Stored in the browser as functional preferences and removable by the user."
         },
         {
-          "label": "Demo form",
-          "value": "Because this preview version does not submit or record data, it retains no request data."
+          "label": "Conversation messages",
+          "value": "365 days (subject to the automated clean-up policy)."
         },
         {
-          "label": "Account and clinic operations data",
-          "value": "[Retention period and deletion cycle will be entered after completion of the data inventory.]"
+          "label": "Conversation state",
+          "value": "90 days."
         },
         {
-          "label": "Messaging and audit records",
-          "value": "[A period aligned with necessity, legislation, dispute and security purposes will be defined and entered.]"
+          "label": "Inbound channel events",
+          "value": "90 days."
+        },
+        {
+          "label": "Operational events",
+          "value": "180 days."
+        },
+        {
+          "label": "Contact / demo requests",
+          "value": "365 days."
+        },
+        {
+          "label": "Old resolved inbox entries",
+          "value": "May be subject to redaction or masking under the retention policy."
+        },
+        {
+          "label": "Legal, audit, financial, clinical and core patient records",
+          "value": "Not deleted automatically by the support-data clean-up job; subject to applicable legal and contractual retention periods."
         }
       ]
     },
     "rights": {
-      "title": "7. Data subject rights and applications",
-      "body": "Depending on scope, data subjects may exercise rights under KVKK Article 11 and GDPR Articles 15-22. In particular, these include requests to:",
+      "title": "7. Data subject rights and requests",
+      "body": "Depending on scope, data subjects may exercise rights under KVKK Article 11 and GDPR Articles 15-22. These rights include:",
       "items": [
         "Learn whether their data is processed and request information and access.",
         "Request correction of incomplete or inaccurate data.",
-        "Request deletion, destruction, restriction of processing or object where applicable conditions are met.",
+        "Request deletion, destruction or anonymisation where applicable conditions are met.",
+        "Request restriction of processing or object to processing.",
         "Learn the third parties to which data has been transferred and request data portability where appropriate.",
-        "Withdraw consent for consent-based processing and lodge a complaint with the competent supervisory authority."
+        "Withdraw consent for consent-based processing.",
+        "Lodge a complaint with the competent supervisory authority."
       ],
-      "contact": "Applications will be accepted through the [controller application address / registered electronic mail / email] to be specified before publication. Complaint avenues in Turkey are subject to KVKK procedures; GDPR-scope requests are subject to the processes of the competent EU supervisory authority."
-    },
-    "publish": {
-      "title": "8. Before publishing this text",
-      "items": [
-        "The data inventory, VERBIS obligation assessment and retention/deletion policy must be checked against the actual business.",
-        "Roles accessing special category data and message content rules must be tested.",
-        "Supplier contracts, transfer documents and security measures must align with the statements in the text.",
-        "The text must be updated as new features or providers are added and display a current effective date."
-      ]
+      "contact": "Privacy requests relating to the NoraMedi platform and account data should be sent to privacy@noramedi.com; security reports to security@noramedi.com; support and account access queries to support@noramedi.com; and legal or contractual notices to legal@noramedi.com. Requests relating to clinic patient data should be directed primarily to the relevant clinic (the data controller); NoraMedi may assist the clinic where contractually applicable."
     },
     "sources": {
       "notice": "KVKK - Guide on Fulfilling the Information Obligation",
@@ -196,7 +252,7 @@
   },
   "cookies": {
     "title": "Cookies and Local Storage Policy",
-    "description": "Draft information on the current position and future use rules for browser storage methods used in the marketing page and signed-in product area.",
+    "description": "Information on the current position and use rules for browser storage methods used in the public marketing page and signed-in product area.",
     "current": {
       "title": "Current public page position",
       "body": "Based on a code review, the `/landing` page contains no advertising, analytics pixel or marketing cookie. The application includes local storage behaviour for interface preferences; the signed-in product area may additionally use functional data such as session and clinic selection."
@@ -238,7 +294,7 @@
       "items": [
         "Users can clear existing local storage data through browser settings; this may reset language, theme or session behaviour.",
         "If non-essential cookies are introduced, this page will provide a link to access the preference panel.",
-        "A controller contact address must be added before publication for questions on data processing or browser storage."
+        "For questions on data processing or browser storage, please contact contact@noramedi.com."
       ]
     },
     "sources": {
@@ -248,45 +304,58 @@
     }
   },
   "communications": {
-    "title": "Electronic Communications and Channel Integrations Notice",
-    "description": "Draft text for data protection, commercial communications permissions and secure message-content principles when WhatsApp and Instagram features are used in clinic operations.",
-    "status": {
-      "title": "Integration surfaces exist; production readiness must be completed separately",
-      "body": "WhatsApp connection/inbox and Instagram connection/DM inbox flows are ready in the product. However, before real clinic use, channel account setup, controller roles, data transfer conditions, provider contracts and communications permissions where required must be verified."
+    "title": "Communication Channels and Integrations Notice",
+    "description": "Data protection, content principles and security information relating to the use of WhatsApp, Instagram and AI assistant features in NoraMedi clinic operations.",
+    "scope": {
+      "title": "1. About channel features",
+      "body": "WhatsApp and Instagram connection features and the AI-assisted appointment assistant are optional features in NoraMedi that must be configured by the clinic. When these features are enabled, the relevant clinic must complete its own patient/contact notice and, where required, its explicit consent process before collecting patient and communications data."
     },
     "channels": {
-      "title": "1. Supported channel flows",
-      "body": "The intended flows for authorised users to manage communications requests within operations are set out below.",
+      "title": "2. Supported channel flows",
+      "body": "When a channel is enabled, authorised clinic users can manage communications requests through the following flows.",
       "rows": [
         {
           "label": "WhatsApp",
-          "value": "Ability to associate conversations with clinic/branch operations through connection management and an inbox."
+          "value": "Association of conversations with clinic operations through connection management and an inbox."
         },
         {
           "label": "Instagram DM",
-          "value": "Ability to route relevant requests from connection management and the DM inbox into appointment flows."
+          "value": "Routing of requests from the DM inbox into appointment flows."
         },
         {
-          "label": "Potential information processed",
-          "value": "Channel account information, sender communications identifiers, message date and content, assigned branch or processing status; the notice must be updated according to actual configuration."
+          "label": "Meta and platform roles",
+          "value": "Meta Platforms, WhatsApp and Instagram are independent data controllers/service providers for their own platforms. User data on those platforms is subject to Meta's privacy terms."
+        },
+        {
+          "label": "Personal data in message content",
+          "value": "If users choose to share personal information in channel messages, that information becomes part of the message content. Sensitive health information must not be shared in messages."
         }
       ]
     },
     "roles": {
-      "title": "2. Controller responsibility and providers",
-      "body": "The clinic acts as controller to the extent it determines purposes for its patients and communications requests. Whether the NoraMedi CRM provider is a processor or independent/joint controller must be determined in the service contract. Roles, data locations and transfer conditions of Meta, WhatsApp, Instagram and hosting providers must be documented before a feature is enabled."
+      "title": "3. Controller responsibility",
+      "body": "The clinic acts as the primary data controller to the extent it determines purposes for its patients and communications requests. Whether NoraMedi acts as a data processor or independent controller is determined in the service agreement. Meta, WhatsApp and Instagram are independent data controllers/service providers for their own platforms."
+    },
+    "ai": {
+      "title": "4. AI assistant feature",
+      "body": "When the AI-assisted appointment assistant is enabled, conversation context may be processed by the relevant AI provider. Key limitations of this feature:",
+      "items": [
+        "The AI assistant does not provide diagnosis, treatment recommendations, emergency health assessments or medical advice of any kind.",
+        "The AI assistant operates solely for appointment matching and communications routing purposes.",
+        "The AI assistant feature must be enabled by the clinic and appropriate patient information must be provided."
+      ]
     },
     "messages": {
-      "title": "3. Separate operational messages from marketing communications",
+      "title": "5. Separate operational messages from marketing communications",
       "body": "A channel being technically ready does not mean every type of message can be sent without permission.",
       "rows": [
         {
-          "label": "Appointment/operational information",
-          "value": "Assessed separately as necessary and proportionate service communication. A message should carry minimum content, such as an appointment reminder only, and must not contain diagnosis, treatment detail or sensitive health information."
+          "label": "Appointment / operational information",
+          "value": "Assessed as necessary and proportionate service communication. A message should carry minimum content, such as an appointment reminder only, and must not contain diagnosis, treatment detail or sensitive health information."
         },
         {
           "label": "Campaign or promotion",
-          "value": "In Turkey, no message is sent before completing the processes required by Law No. 6563, Commercial Electronic Communication rules and IYS where applicable; approval and opt-out preferences must be managed."
+          "value": "In Turkey, no message is sent before completing the processes required by Law No. 6563, Commercial Electronic Communication rules and IYS where applicable."
         },
         {
           "label": "Direct marketing to EU recipients",
@@ -295,29 +364,94 @@
       ]
     },
     "protection": {
-      "title": "4. Data minimisation in clinical communications",
+      "title": "6. Data minimisation and security",
       "items": [
         "No diagnosis, treatment plan, image, prescription or other sensitive health content should be sent in a WhatsApp or Instagram message body.",
-        "Incoming messages should only be viewed by roles that need access for their duties, and access/activity logs should be kept.",
+        "Incoming messages should only be viewed by roles that need access for their duties, and access logs should be kept.",
         "When an appointment request is converted to an operational record, only necessary information should be transferred; unnecessary conversation content should not be duplicated.",
-        "An incident response and personal data breach assessment process should exist for messages sent to the wrong recipient, account takeover or unauthorised access."
+        "An incident response process must exist for messages sent to the wrong recipient, account takeover or unauthorised access."
       ]
     },
-    "activation": {
-      "title": "5. Before activating a channel for live use",
-      "body": "For each clinic and enabled channel, this page must not be presented as a definitive use commitment until the following controls are documented.",
-      "items": [
-        "The channel account owner, authorised users, purpose of use and data categories must be identified.",
-        "The notice, processing condition, required approval/opt-out management and retention period must be completed for channel use.",
-        "Where international sharing of data occurs, KVKK and, where applicable, GDPR transfer mechanisms must be applied.",
-        "Message templates must be reviewed under the principle of not sharing sensitive data, and marketing messages must be separated from service messages."
-      ]
+    "emergency": {
+      "title": "Emergency health situations",
+      "body": "NoraMedi and its channel features are not designed for emergency health services. In an urgent or life-threatening health situation, please contact emergency services (112 in Turkey) or the relevant emergency healthcare provider directly. Do not wait for a response through clinic appointment channels."
     },
     "sources": {
       "commercial": "Republic of Türkiye Ministry of Trade - Electronic commerce legislation and Commercial Electronic Communications rules",
       "transfer": "KVKK - Official documents on international transfers of personal data",
       "eprivacy": "EUR-Lex - ePrivacy Directive 2002/58/EC (Article 13 for direct marketing)",
       "gdpr": "EUR-Lex - GDPR"
+    }
+  },
+  "dataRequest": {
+    "title": "Data Subject Request",
+    "description": "Find out how to submit an access, correction, deletion, objection or complaint request regarding your personal data.",
+    "platform": {
+      "title": "1. NoraMedi platform requests",
+      "body": "For requests relating to your NoraMedi platform account, privacy preferences or data processed by the platform, please use the following contact addresses.",
+      "rows": [
+        { "label": "Privacy / KVKK / GDPR requests", "value": "privacy@noramedi.com" },
+        { "label": "Security reports and suspected breaches", "value": "security@noramedi.com" },
+        { "label": "Account access and support queries", "value": "support@noramedi.com" },
+        { "label": "Legal and contractual notices", "value": "legal@noramedi.com" }
+      ]
+    },
+    "types": {
+      "title": "2. Request categories",
+      "body": "You may exercise the following rights under KVKK Article 11 and, where applicable, GDPR Articles 15-22:",
+      "items": [
+        "Access and information: Learn whether your data is processed and obtain a copy.",
+        "Correction: Request correction of incomplete or inaccurate data.",
+        "Deletion or anonymisation: Request deletion or anonymisation of your data where applicable conditions are met.",
+        "Objection or restriction: Object to processing or request its restriction.",
+        "Withdrawal of consent: Withdraw consent for consent-based processing.",
+        "Transfer information: Learn the third parties to which your data has been transferred.",
+        "Security and privacy complaint: Report a suspected data breach or security vulnerability.",
+        "Formal complaint: Lodge a complaint with the KVKK or the competent EU supervisory authority."
+      ]
+    },
+    "clinic": {
+      "title": "3. Clinic patient data requests",
+      "body": "Patient records, appointment data and clinical communications data processed by a clinic on the NoraMedi platform are primarily controlled by that clinic. You should direct requests relating to such data to the clinic from which you received services. NoraMedi may assist the clinic where the contractual framework allows; however, NoraMedi does not make primary controller decisions on behalf of clinics."
+    },
+    "response": {
+      "title": "4. Response timelines",
+      "body": "Requests are aimed to be answered within thirty days under KVKK and within one month under GDPR. This period may be extended depending on the nature or scope of the request; you will be informed in such cases. Submitting your request in writing to privacy@noramedi.com will help to speed up the process."
+    },
+    "sources": {
+      "kvkk": "Personal Data Protection Authority - Data subject rights and application procedures",
+      "gdpr": "EUR-Lex - GDPR Articles 15-22 (data subject rights)"
+    }
+  },
+  "consent": {
+    "title": "Channel Consent Templates",
+    "description": "Sample notice and explicit consent wording for WhatsApp and Instagram appointment channels. The texts on this page are general templates for clinics to adapt to their own conditions.",
+    "disclaimer": {
+      "title": "About the template nature of this page",
+      "body": "The texts on this page are general templates and do not constitute a guarantee of legal compliance. Each clinic should review these texts with a legal adviser in light of its own services, processed data categories and applicable law."
+    },
+    "distinction": {
+      "title": "1. Distinguishing notice from explicit consent",
+      "body": "Under KVKK and GDPR, the obligation to provide a notice (aydınlatma) and explicit consent are distinct concepts and must be fulfilled separately.",
+      "items": [
+        "Notice: Covers the identity of the controller, processing purposes, legal bases, retention periods, transfer recipients and data subject rights. Must be provided independently of whether consent is obtained.",
+        "Explicit consent: Required only for processing operations where explicit consent is the identified legal basis. Must be obtained separately, freely, specifically and in an informed manner for each processing operation.",
+        "For appointment operations, a different legal basis such as performance of a contract or legitimate interests may also be considered; in such cases, a notice alone may be sufficient without explicit consent."
+      ]
+    },
+    "template": {
+      "title": "2. Sample wording for appointment channels",
+      "body": "The following texts are sample templates for channels receiving appointment requests via WhatsApp or Instagram. They should be adapted by the clinic to include the clinic name, controller details and notice link.",
+      "notice": "Sample notice link: \"To learn how your personal data is processed, you may read the [Clinic Name] Privacy Notice: [link]\"",
+      "explicit": "Sample explicit consent: \"I consent to the processing of my personal data for the purpose of receiving my appointment request and being contacted in response.\""
+    },
+    "clinicNote": {
+      "title": "3. Clinic adaptation requirement",
+      "body": "These templates provide only a general starting point. Each clinic is responsible for preparing its own notice including the controller's business name, data categories processed, retention periods and transfer conditions, and where required its explicit consent documentation, for its patient communications channel. Using these templates without modification does not guarantee legal compliance."
+    },
+    "sources": {
+      "kvkk": "KVKK - Guide on Fulfilling the Information Obligation",
+      "gdpr": "EUR-Lex - GDPR Article 7 and Recital 32 (conditions for consent)"
     }
   }
 }
