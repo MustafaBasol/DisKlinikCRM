@@ -81,6 +81,7 @@ model Clinic {
   postTreatmentQueue                PostTreatmentMessageQueue[]
   patientPrivacyRequests            PatientPrivacyRequest[]
   clinicLegalProfile                ClinicLegalProfile?
+  channelConsentLogs                ChannelConsentLog[]
 
   @@unique([organizationId, slug])
 }
@@ -1764,4 +1765,27 @@ model ClinicLegalProfile {
 
   @@index([organizationId])
   @@index([clinicId])
+}
+
+model ChannelConsentLog {
+  id                   String    @id @default(uuid())
+  organizationId       String
+  clinicId             String
+  clinic               Clinic    @relation(fields: [clinicId], references: [id])
+  channel              String    // whatsapp | instagram
+  contactIdentifier    String    // normalized phone (WA) or externalSenderId (Instagram)
+  conversationId       String?   // conversation key or inbox entry id
+  sourceMessageId      String?   // provider message id of the consent reply
+  consentStatus        String    // accepted | declined
+  consentTextVersion   String
+  consentTextSnapshot  String
+  privacyUrl           String
+  locale               String    @default("tr")
+  acceptedAt           DateTime?
+  declinedAt           DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([clinicId, channel, contactIdentifier])
+  @@index([clinicId, consentTextVersion])
+  @@index([organizationId])
 }

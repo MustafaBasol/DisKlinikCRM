@@ -58,6 +58,16 @@ import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } fr
 import { checkPractitionerAvailabilityForSlot } from '../services/appointments/appointmentAvailabilityService.js';
 import { sanitizeAiMessageHistory } from '../services/privacy/redaction.js';
 import { upsertContactRequest } from './contactRequests.js';
+import {
+  checkChannelConsent,
+  parseConsentReply,
+  logChannelConsent,
+  loadConsentMetadata,
+  MISSING_LEGAL_PROFILE_BLOCK_TEXT,
+  CONSENT_DECLINED_TEXT,
+  CONSENT_ACCEPTED_TEXT,
+  CONSENT_REPROMPT_TEXT,
+} from '../services/channelConsentGate.js';
 
 const router = express.Router();
 
@@ -87,7 +97,8 @@ type AssistantStep =
   | 'awaiting_general_date'
   | 'awaiting_general_time'
   | 'awaiting_general_practitioner'
-  | 'awaiting_patient_selection';
+  | 'awaiting_patient_selection'
+  | 'awaiting_channel_consent';
 
 type AssistantExtraction = {
   intent: AssistantIntent;
@@ -2452,6 +2463,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   const hasActiveBookingFlow = ['awaiting_service', 'awaiting_date', 'awaiting_time', 'awaiting_confirmation', 'awaiting_general_date', 'awaiting_general_time', 'awaiting_general_practitioner'].includes(currentStep ?? '');
 
   // ── REMINDER CONFIRMATION: Patient replies EVET/HAYIR to an automated reminder ──
+  // This runs BEFORE the consent gate because it operates on existing records only.
   const isReminderConfirm = /^(evet|e|yes)\s*[!.]*$/i.test(input.text.trim());
   const isReminderCancel  = /^(hayır|hayir|h|iptal|vazgeç|vazgec|no)\s*[!.]*$/i.test(input.text.trim());
 
@@ -2563,6 +2575,96 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     }
   }
   // ── END REMINDER CONFIRMATION ──
+
+  // ── CHANNEL CONSENT GATE ──────────────────────────────────────────────────
+  if (currentStep === 'awaiting_channel_consent') {
+    const reply = parseConsentReply(input.text);
+    const meta = await loadConsentMetadata(clinic.id);
+    if (reply === 'accepted' && meta) {
+      await logChannelConsent({
+        organizationId: clinic.organizationId,
+        clinicId: clinic.id,
+        channel: 'whatsapp',
+        contactIdentifier: inputPhone,
+        status: 'accepted',
+        consentTextVersion: meta.version,
+        consentTextSnapshot: meta.consentSnapshot,
+        privacyUrl: meta.privacyUrl,
+        conversationId: inputPhone,
+        sourceMessageId: input.messageId ?? null,
+      });
+      await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+        customerName,
+        step: null,
+        currentIntent: null,
+        lastMessage: input.text,
+      });
+      return CONSENT_ACCEPTED_TEXT;
+    }
+    if (reply === 'declined' && meta) {
+      await logChannelConsent({
+        organizationId: clinic.organizationId,
+        clinicId: clinic.id,
+        channel: 'whatsapp',
+        contactIdentifier: inputPhone,
+        status: 'declined',
+        consentTextVersion: meta.version,
+        consentTextSnapshot: meta.consentSnapshot,
+        privacyUrl: meta.privacyUrl,
+        conversationId: inputPhone,
+        sourceMessageId: input.messageId ?? null,
+      });
+      await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+        customerName,
+        step: null,
+        currentIntent: null,
+        lastMessage: input.text,
+      });
+      return CONSENT_DECLINED_TEXT;
+    }
+    // Ambiguous reply — re-show prompt
+    const consentResult = await checkChannelConsent({
+      organizationId: clinic.organizationId,
+      clinicId: clinic.id,
+      channel: 'whatsapp',
+      contactIdentifier: inputPhone,
+    });
+    if (consentResult.status === 'needs_consent' || consentResult.status === 'declined') {
+      return consentResult.promptText ?? CONSENT_REPROMPT_TEXT;
+    }
+    if (consentResult.status === 'blocked_missing_legal_profile') {
+      return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
+    }
+    // Somehow accepted now (e.g. staff accepted on behalf) — clear step and continue
+    await upsertWhatsAppConversationState(clinic.id, inputPhone, { customerName, step: null, currentIntent: null, lastMessage: input.text });
+    return CONSENT_ACCEPTED_TEXT;
+  }
+
+  // Consent gate for all other steps: check before any booking/contact/patient record creation.
+  const consentGateResult = await checkChannelConsent({
+    organizationId: clinic.organizationId,
+    clinicId: clinic.id,
+    channel: 'whatsapp',
+    contactIdentifier: inputPhone,
+  });
+  if (consentGateResult.status === 'blocked_missing_legal_profile') {
+    console.warn('[whatsapp-assistant] consent-gate blocked: missing legal profile', {
+      clinicId: clinic.id,
+      organizationId: clinic.organizationId,
+    });
+    return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
+  }
+  if (consentGateResult.status === 'needs_consent' || consentGateResult.status === 'declined') {
+    await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+      customerName,
+      step: 'awaiting_channel_consent',
+      currentIntent: null,
+      lastMessage: input.text,
+    });
+    return consentGateResult.promptText;
+  }
+  // status === 'accepted' — proceed to booking/handoff flow
+  // ── END CHANNEL CONSENT GATE ──
 
   // ── PATIENT SELECTION (shared-phone scenario) ─────────────────────────────
   // When the user previously received a numbered patient list, handle their reply.

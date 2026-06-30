@@ -32,6 +32,16 @@ import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
 import { upsertContactRequest } from '../../routes/contactRequests.js';
+import {
+  checkChannelConsent,
+  parseConsentReply,
+  logChannelConsent,
+  loadConsentMetadata,
+  MISSING_LEGAL_PROFILE_BLOCK_TEXT,
+  CONSENT_DECLINED_TEXT,
+  CONSENT_ACCEPTED_TEXT,
+  CONSENT_REPROMPT_TEXT,
+} from '../channelConsentGate.js';
 
 type InstagramAssistantStep =
   | 'main_menu'
@@ -42,6 +52,7 @@ type InstagramAssistantStep =
   | 'awaiting_name'
   | 'awaiting_phone'
   | 'awaiting_handoff_note'
+  | 'awaiting_channel_consent'
   | null;
 
 type InstagramAssistantStateJson = BookingStateJson & {
@@ -1027,6 +1038,84 @@ const buildReplyText = async (args: {
 
   const nextSelectedDate = selectedDate ?? extractedDateFromInput;
   const nextSelectedTime = selectedTime ?? extractedTimeFromInput ?? extractedThresholdTime;
+
+  // ── Channel consent gate ─────────────────────────────────────────────────
+  if (currentStep === 'awaiting_channel_consent') {
+    const reply = parseConsentReply(args.text);
+    const meta = await loadConsentMetadata(args.clinic.id);
+    if (reply === 'accepted' && meta) {
+      await logChannelConsent({
+        organizationId: args.clinic.organizationId,
+        clinicId: args.clinic.id,
+        channel: 'instagram',
+        contactIdentifier: args.externalSenderId,
+        status: 'accepted',
+        consentTextVersion: meta.version,
+        consentTextSnapshot: meta.consentSnapshot,
+        privacyUrl: meta.privacyUrl,
+        conversationId: args.externalConversationId ?? args.conversationKey,
+        sourceMessageId: args.externalMessageId ?? null,
+      });
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+        customerName,
+        step: null,
+        currentIntent: null,
+        lastMessage: args.text,
+        lastProviderMessageId: args.externalMessageId ?? null,
+        stateJson: null,
+      });
+      return CONSENT_ACCEPTED_TEXT;
+    }
+    if (reply === 'declined' && meta) {
+      await logChannelConsent({
+        organizationId: args.clinic.organizationId,
+        clinicId: args.clinic.id,
+        channel: 'instagram',
+        contactIdentifier: args.externalSenderId,
+        status: 'declined',
+        consentTextVersion: meta.version,
+        consentTextSnapshot: meta.consentSnapshot,
+        privacyUrl: meta.privacyUrl,
+        conversationId: args.externalConversationId ?? args.conversationKey,
+        sourceMessageId: args.externalMessageId ?? null,
+      });
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, { customerName, step: null, currentIntent: null, lastMessage: args.text, lastProviderMessageId: args.externalMessageId ?? null, stateJson: null });
+      return CONSENT_DECLINED_TEXT;
+    }
+    const consentRecheck = await checkChannelConsent({ organizationId: args.clinic.organizationId, clinicId: args.clinic.id, channel: 'instagram', contactIdentifier: args.externalSenderId });
+    if (consentRecheck.status === 'accepted') {
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, { customerName, step: null, currentIntent: null, lastMessage: args.text, lastProviderMessageId: args.externalMessageId ?? null, stateJson: null });
+      return CONSENT_ACCEPTED_TEXT;
+    }
+    if (consentRecheck.status === 'blocked_missing_legal_profile') return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
+    return consentRecheck.promptText ?? CONSENT_REPROMPT_TEXT;
+  }
+
+  const consentGateResult = await checkChannelConsent({
+    organizationId: args.clinic.organizationId,
+    clinicId: args.clinic.id,
+    channel: 'instagram',
+    contactIdentifier: args.externalSenderId,
+  });
+  if (consentGateResult.status === 'blocked_missing_legal_profile') {
+    console.warn('[instagram-assistant] consent-gate blocked: missing legal profile', {
+      clinicId: summarizeIdentifier(args.clinic.id),
+      organizationId: args.clinic.organizationId,
+    });
+    return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
+  }
+  if (consentGateResult.status === 'needs_consent' || consentGateResult.status === 'declined') {
+    await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+      customerName,
+      step: 'awaiting_channel_consent',
+      currentIntent: null,
+      lastMessage: args.text,
+      lastProviderMessageId: args.externalMessageId ?? null,
+      stateJson: null,
+    });
+    return consentGateResult.promptText;
+  }
+  // ── End consent gate ────────────────────────────────────────────────────
 
   if (isMainMenuCommand(args.text)) {
     await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
