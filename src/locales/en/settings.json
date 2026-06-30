@@ -272,5 +272,49 @@
         "appointmentsConflict": "{{count}} active appointment(s) exist on {{date}}. A day with appointments cannot be marked as an off day or holiday."
       }
     }
+  },
+  "kvkk": {
+    "nav": "Privacy / KVKK",
+    "title": "Clinic Privacy Notice Management",
+    "loading": "Loading...",
+    "statusPublished": "Published",
+    "statusDraft": "Draft",
+    "saveDraft": "Save Draft",
+    "publish": "Publish",
+    "updatePublished": "Update & Publish",
+    "publishedEditNote": "Profile is published. Changes are saved and go live immediately when you click Update & Publish.",
+    "viewPublic": "View Public Page",
+    "savedDraft": "Draft saved.",
+    "publishedSuccess": "Privacy notice published.",
+    "saveError": "Could not save.",
+    "publishError": "Could not publish.",
+    "publishValidationError": "Please fill in the required fields.",
+    "fieldRequired": "This field is required.",
+    "channelWarning": "WhatsApp and Instagram channels should not be used for patient appointment collection until the clinic privacy notice is published.",
+    "sectionIdentity": "Data Controller Information",
+    "sectionNotice": "Privacy Notice",
+    "loadDefaultTr": "Load Turkish Template",
+    "privacyNoticeTextHelp": "We recommend having this text reviewed by a legal advisor before publishing. The template is for guidance only.",
+    "channelDisclosureHelp": "Disclosure text specific to WhatsApp and Instagram communications. Can be left empty.",
+    "channelConsentHelp": "Channel consent form text. Will be used in a future release.",
+    "fields": {
+      "dataControllerTitle": "Data Controller Title",
+      "taxNumber": "Tax Number",
+      "mersisNumber": "MERSIS Number",
+      "address": "Address",
+      "city": "City",
+      "country": "Country",
+      "phone": "Phone",
+      "email": "Email",
+      "privacyRequestEmail": "Privacy Request Email",
+      "kepEmail": "KEP Email",
+      "website": "Website",
+      "dataProtectionContact": "Data Protection Contact",
+      "privacyNoticeText": "Privacy Notice Text",
+      "channelDisclosureText": "Channel Disclosure Text",
+      "channelConsentText": "Channel Consent Text",
+      "privacyNoticeVersion": "Version",
+      "effectiveDate": "Effective Date"
+    }
   }
 }

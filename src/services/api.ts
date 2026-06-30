@@ -606,4 +606,17 @@ export const instagramInboxService = {
     api.patch(`/instagram/inbox/${id}/status`, { status: 'converted' }),
 };
 
+export const clinicLegalProfileService = {
+  get: (clinicId: string) => api.get(`/clinics/${clinicId}/legal-profile`),
+  save: (clinicId: string, data: Record<string, unknown>) =>
+    api.put(`/clinics/${clinicId}/legal-profile`, data),
+  publish: (clinicId: string, data?: Record<string, unknown>) =>
+    api.post(`/clinics/${clinicId}/legal-profile/publish`, data ?? {}),
+};
+
+export const publicClinicKvkkService = {
+  get: (clinicSlug: string) =>
+    api.get(`/public/clinics/${clinicSlug}/kvkk`),
+};
+
 export default api;

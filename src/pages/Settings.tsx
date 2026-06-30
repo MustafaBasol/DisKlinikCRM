@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw, Send } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw, Send, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import { CLINIC_OPERATING_PREFERENCES_UPDATED_EVENT } from '../context/ClinicPreferencesContext';
-import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole } from '../utils/permissions';
+import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole, canManageClinicLegalProfile } from '../utils/permissions';
 import { clinicOperatingPreferencesService, notificationPreferencesService } from '../services/api';
+import ClinicKvkkSection from '../components/settings/ClinicKvkkSection';
 import {
   ClinicOperatingPreferences,
   DateFormatPreference,
@@ -54,7 +55,7 @@ type NotificationPreferences = {
   };
 };
 
-type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations';
+type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations' | 'kvkk';
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   whatsapp: {
@@ -252,6 +253,7 @@ const Settings: React.FC = () => {
   const canSeeUsers = !isDentist && canManageUsers(user);
   const canSeeIntegrationsTab = !isDentist && canSeeIntegrations;
   const canSeeAvailability = canManageUsers(user) || isDentist;
+  const canSeeKvkk = canManageClinicLegalProfile(user);
   const firstAllowedTab: SettingsTab = canSeeGeneral
     ? 'general'
     : canSeeAvailability
@@ -262,7 +264,9 @@ const Settings: React.FC = () => {
           ? 'users'
           : canSeeIntegrationsTab
             ? 'integrations'
-            : 'general';
+            : canSeeKvkk
+              ? 'kvkk'
+              : 'general';
   const [activeTab, setActiveTab] = useState<SettingsTab>(firstAllowedTab);
   const [copied, setCopied] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => cloneNotificationPreferences());
@@ -293,7 +297,8 @@ const Settings: React.FC = () => {
       (activeTab === 'services' && canSeeServices) ||
       (activeTab === 'users' && canSeeUsers) ||
       (activeTab === 'integrations' && canSeeIntegrationsTab) ||
-      (activeTab === 'availability' && canSeeAvailability);
+      (activeTab === 'availability' && canSeeAvailability) ||
+      (activeTab === 'kvkk' && canSeeKvkk);
 
     if (!activeTabAllowed) {
       setActiveTab(firstAllowedTab);
@@ -304,6 +309,7 @@ const Settings: React.FC = () => {
     canSeeGeneral,
     canSeeRecall,
     canSeeIntegrationsTab,
+    canSeeKvkk,
     canSeeServices,
     canSeeUsers,
     firstAllowedTab,
@@ -560,6 +566,17 @@ const Settings: React.FC = () => {
               >
                 <CalendarClock size={18} />
                 {t('settings:availability.title')}
+              </button>
+            )}
+            {canSeeKvkk && (
+              <button
+                onClick={() => setActiveTab('kvkk')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'kvkk' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <ShieldCheck size={18} />
+                {t('settings:kvkk.nav')}
               </button>
             )}
           </div>
@@ -1144,6 +1161,15 @@ const Settings: React.FC = () => {
 
           {canSeeAvailability && activeTab === 'availability' && (
             <DoctorAvailabilityManager />
+          )}
+
+          {canSeeKvkk && activeTab === 'kvkk' && (
+            <ClinicKvkkSection
+              clinicId={selectedClinic?.id}
+              clinicSlug={('slug' in (selectedClinic ?? {})) ? (selectedClinic as any).slug as string : undefined}
+              clinicName={selectedClinic?.name}
+              canEdit={canManageClinicLegalProfile(user)}
+            />
           )}
         </div>
       </div>

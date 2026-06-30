@@ -272,5 +272,49 @@
         "appointmentsConflict": "{{count}} aktive(r) Termin(e) am {{date}} vorhanden. Ein Tag mit Terminen kann nicht als freier Tag oder Feiertag markiert werden."
       }
     }
+  },
+  "kvkk": {
+    "nav": "Datenschutz / KVKK",
+    "title": "Datenschutzhinweis-Verwaltung der Klinik",
+    "loading": "Wird geladen...",
+    "statusPublished": "Veröffentlicht",
+    "statusDraft": "Entwurf",
+    "saveDraft": "Entwurf speichern",
+    "publish": "Veröffentlichen",
+    "updatePublished": "Aktualisieren und veröffentlichen",
+    "publishedEditNote": "Profil ist veröffentlicht. Änderungen werden gespeichert und sofort live geschaltet, wenn Sie auf Aktualisieren und veröffentlichen klicken.",
+    "viewPublic": "Öffentliche Seite anzeigen",
+    "savedDraft": "Entwurf gespeichert.",
+    "publishedSuccess": "Datenschutzhinweis veröffentlicht.",
+    "saveError": "Speichern fehlgeschlagen.",
+    "publishError": "Veröffentlichung fehlgeschlagen.",
+    "publishValidationError": "Bitte füllen Sie die Pflichtfelder aus.",
+    "fieldRequired": "Dieses Feld ist erforderlich.",
+    "channelWarning": "WhatsApp- und Instagram-Kanäle dürfen erst dann für die Terminvereinbarung mit Patienten genutzt werden, wenn der Datenschutzhinweis der Klinik veröffentlicht wurde.",
+    "sectionIdentity": "Informationen zum Verantwortlichen",
+    "sectionNotice": "Datenschutzhinweis",
+    "loadDefaultTr": "Türkische Vorlage laden",
+    "privacyNoticeTextHelp": "Wir empfehlen, diesen Text vor der Veröffentlichung von einem Rechtsberater prüfen zu lassen. Die Vorlage dient nur als Orientierungshilfe.",
+    "channelDisclosureHelp": "Offenlegungstext speziell für WhatsApp- und Instagram-Kommunikation. Kann leer gelassen werden.",
+    "channelConsentHelp": "Einwilligungsformulartext für den Kanal. Wird in einer zukünftigen Version verwendet.",
+    "fields": {
+      "dataControllerTitle": "Titel des Verantwortlichen",
+      "taxNumber": "Steuernummer",
+      "mersisNumber": "MERSIS-Nummer",
+      "address": "Adresse",
+      "city": "Stadt",
+      "country": "Land",
+      "phone": "Telefon",
+      "email": "E-Mail",
+      "privacyRequestEmail": "Datenschutzanfrage-E-Mail",
+      "kepEmail": "KEP-E-Mail",
+      "website": "Webseite",
+      "dataProtectionContact": "Datenschutzkontakt",
+      "privacyNoticeText": "Datenschutzhinweistext",
+      "channelDisclosureText": "Kanal-Offenlegungstext",
+      "channelConsentText": "Kanal-Einwilligungstext",
+      "privacyNoticeVersion": "Version",
+      "effectiveDate": "Datum des Inkrafttretens"
+    }
   }
 }

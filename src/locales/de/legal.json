@@ -1,457 +1,516 @@
-{
-  "brand": {
-    "name": "NoraMedi CRM",
-    "legal": "Rechtliche Informationen"
-  },
-  "meta": {
-    "center": "Rechtliche Informationen | NoraMedi CRM",
-    "privacy": "Datenschutzhinweise | NoraMedi CRM",
-    "cookies": "Cookie- und lokale Speicherrichtlinie | NoraMedi CRM",
-    "communications": "Hinweise zu Kommunikationskanälen | NoraMedi CRM",
-    "dataRequest": "Antrag auf Ausübung von Betroffenenrechten | NoraMedi CRM",
-    "consent": "Einwilligungsvorlagen | NoraMedi CRM"
-  },
-  "nav": {
-    "label": "Rechtliche Seiten",
-    "center": "Rechtliche Informationen",
-    "privacy": "Datenschutzhinweise",
-    "cookies": "Cookie-Richtlinie",
-    "communications": "Kommunikationskanäle",
-    "dataRequest": "Betroffenenantrag",
-    "consent": "Einwilligungsvorlagen"
-  },
-  "shared": {
-    "label": "Rechtliche Informationen",
-    "back": "Zurück zur Präsentationsseite",
-    "themeToggle": "Design wechseln",
-    "languageSelector": "Sprache auswählen",
-    "draftTitle": "Rechtlicher Hinweis",
-    "draftBody": "Diese Seiten dienen der allgemeinen Information über die Datenverarbeitungspraktiken von NoraMedi. Sie stellen keine Rechtsberatung dar. Kliniken und andere Verantwortliche sollten für ihre eigenen Pflichten einen Rechtsberater konsultieren.",
-    "reviewDate": "Letzte Aktualisierung: Juni 2026",
-    "sources": "Maßgebliche amtliche Quellen",
-    "sourcesDescription": "Die folgenden amtlichen Rechtsvorschriften und Veröffentlichungen von Behörden wurden bei der Festlegung des Umfangs dieser Seite berücksichtigt."
-  },
-  "center": {
-    "title": "Rechtliche Informationsstelle",
-    "description": "Allgemeine Informationsseiten zu Datenschutz, Cookies, Kommunikationskanälen und Betroffenenrechten, die für die NoraMedi-Plattform gelten.",
-    "pagesTitle": "Informationsseiten",
-    "pagesDescription": "Jede Seite erläutert die relevanten Datenverarbeitungspraktiken von NoraMedi und den anwendbaren regulatorischen Rahmen.",
-    "open": "Seite ansehen",
-    "cards": [
-      {
-        "path": "/legal/privacy",
-        "title": "Datenschutzhinweise",
-        "description": "Datenverarbeitung der Plattform, Übermittlungen, Aufbewahrung und Betroffenenrechte nach KVKK und, soweit anwendbar, DSGVO."
-      },
-      {
-        "path": "/legal/cookies",
-        "title": "Cookie- und lokale Speicherrichtlinie",
-        "description": "Aktuelles funktionales Browserspeicherverhalten und Informationen zur Cookie-Nutzung."
-      },
-      {
-        "path": "/legal/communications",
-        "title": "Hinweise zu Kommunikationskanälen",
-        "description": "WhatsApp- und Instagram-Kanalfunktionen, KI-Assistenten-Nutzung und Grundsätze für Nachrichteninhalte."
-      },
-      {
-        "path": "/legal/data-subject-request",
-        "title": "Betroffenenantrag",
-        "description": "So stellen Sie einen Antrag auf Auskunft, Berichtigung, Löschung oder Widerspruch zu Ihren personenbezogenen Daten."
-      },
-      {
-        "path": "/legal/consent",
-        "title": "Einwilligungsvorlagen",
-        "description": "Muster für Datenschutzinformationen und ausdrückliche Einwilligung für WhatsApp-/Instagram-Terminkanäle."
-      }
-    ],
-    "scope": {
-      "title": "Umfang und Grenze",
-      "body": "NoraMedi ist eine SaaS-/CRM-Plattform zur Verwaltung von Klinikabläufen, bereitgestellt von Mustafa Basol - Peaknova. Patienten-, Termin- und Kommunikationsabläufe können personenbezogene Daten und in bestimmten Nutzungen sensible Gesundheitsdaten enthalten; Datenminimierung und autorisierter Zugriff sind daher erforderlich. NoraMedi ist nicht als Plattform für Diagnose, Verschreibung oder vollständige elektronische Patientenakte positioniert."
-    },
-    "checklist": {
-      "title": "Datenschutzleitfaden für Kliniken",
-      "description": "Kliniken, die die Plattform für ihre eigenen Patienten- und Kommunikationsdaten nutzen, sollten die folgenden Pflichten in ihrer Eigenschaft als Verantwortliche prüfen.",
-      "items": [
-        "Die Klinik muss ihre eigene Datenschutzinformation für Patienten und, falls erforderlich, ihre Dokumentation zur ausdrücklichen Einwilligung vorbereiten.",
-        "Tatsächliche Datenkategorien, Zwecke und Aufbewahrungsfristen müssen mit dem klinikseitigen Datenverzeichnis abgeglichen werden.",
-        "Vor Aktivierung der WhatsApp-/Instagram-Kanalfunktionen müssen Auftragsverarbeiterrollen und Übermittlungsbedingungen auf Klinikebene dokumentiert werden.",
-        "Genehmigungs-/Widerspruchsmechanismen und, falls erforderlich, IYS-Verfahren für kommerzielle elektronische Kommunikation liegen in der Verantwortung der Klinik.",
-        "Der Ausschluss sensibler Gesundheitsdaten aus Nachrichtenkanälen und Zugriffskontrollen müssen betrieblich geprüft werden."
-      ]
-    },
-    "sources": {
-      "kvkk": "Türkische Datenschutzbehörde - KVKK-Informationen",
-      "gdpr": "EUR-Lex - Datenschutz-Grundverordnung (DSGVO/GDPR)",
-      "commercial": "Handelsministerium der Republik Türkiye - Vorschriften zum elektronischen Handel"
-    }
-  },
-  "privacy": {
-    "title": "Datenschutz- und Informationshinweise zur Verarbeitung personenbezogener Daten",
-    "description": "Allgemeine Informationen zur Verarbeitung personenbezogener Daten, Übermittlungen, Aufbewahrung und Betroffenenrechten nach KVKK und, soweit anwendbar, DSGVO im Rahmen der NoraMedi-Plattform.",
-    "controller": {
-      "title": "1. Plattformanbieter und Kontakt",
-      "body": "NoraMedi ist eine SaaS-Plattform für das Management von Klinikabläufen, bereitgestellt von Mustafa Basol - Peaknova. Kliniken handeln als primär Verantwortliche nach KVKK und, soweit anwendbar, DSGVO für die Verarbeitung, die aus ihren eigenen Patienten-, Termin- und Kommunikationsdaten entsteht. NoraMedi kann im Rahmen der Plattform- und Infrastrukturdienstleistungen als Auftragsverarbeiter oder Dienstleister handeln; diese Rolle wird nach Dienstleistungsvertrag und Nutzungskontext gesondert bestimmt.",
-      "contactRows": [
-        { "label": "Plattform / Produkt", "value": "NoraMedi" },
-        { "label": "Anbieter", "value": "Mustafa Basol - Peaknova" },
-        { "label": "Allgemeiner Kontakt", "value": "contact@noramedi.com" },
-        { "label": "Support", "value": "support@noramedi.com" },
-        { "label": "Datenschutz / KVKK / DSGVO-Anträge", "value": "privacy@noramedi.com" },
-        { "label": "Sicherheitsmeldungen", "value": "security@noramedi.com" },
-        { "label": "Rechtliche / vertragliche Mitteilungen", "value": "legal@noramedi.com" }
-      ]
-    },
-    "data": {
-      "title": "2. Möglicherweise verarbeitete Datenkategorien",
-      "body": "Der folgende Umfang beruht auf den aktuellen Funktionen der Plattform und klinischen Nutzungsszenarien. Kliniken sollten ihren spezifischen Verarbeitungsumfang anhand ihres eigenen Datenverzeichnisses bestimmen.",
-      "rows": [
-        {
-          "label": "Öffentliche Website-Nutzung und Funktionseinstellungen",
-          "value": "Funktionale Browserspeicherdaten wie Sprach- und Designeinstellungen; in dieser Version wird kein Analyse- oder Werbetracking-Tool verwendet."
-        },
-        {
-          "label": "Demo- / Kontaktanfragen",
-          "value": "Falls ein Demo- oder Kontaktformular aktiviert ist, können übermittelte Kontaktdaten verarbeitet werden."
-        },
-        {
-          "label": "Plattformkonto und Nutzerdaten",
-          "value": "Benutzername, E-Mail, verschlüsselte Authentifizierungsdaten, Rollen- und Berechtigungsdaten, Anmelde-/Abmeldeprotokolle."
-        },
-        {
-          "label": "Klinik- / Organisations- / Standortkonfigurationsdaten",
-          "value": "Klinikname, Standortdetails, Arbeitszeiten, Dienstleistungsdefinitionen und Organisationsstruktur."
-        },
-        {
-          "label": "Personalrollen und Berechtigungsdaten",
-          "value": "Dem Klinikpersonal zugewiesene Rollen, Zugriffsberechtigungen und operative Aufgabeninformationen."
-        },
-        {
-          "label": "Patientenkontakt- und Termindaten",
-          "value": "Im CRM verarbeitete Patientennamen, Kontaktdaten, Termin- und Nachverfolgungsdaten. Gesundheitsbezogene Daten werden als besondere Datenkategorie eingestuft."
-        },
-        {
-          "label": "WhatsApp- / Instagram-Verbindungsmetadaten und Nachrichteninhalte",
-          "value": "Bei aktiviertem Kanal können Verbindungsdaten, Absenderkennungen, Nachrichtendatum, -inhalt und Gesprächsstatus verarbeitet werden."
-        },
-        {
-          "label": "KI-Assistenten-Verarbeitungsdaten",
-          "value": "Bei aktivierten KI-gestützten Funktionen können Gesprächskontext und Terminzuordnungsdaten an den KI-Anbieter übertragen werden."
-        },
-        {
-          "label": "Sicherheits- / Prüf- / Betriebsprotokolle",
-          "value": "Berechtigungs-, Aktivitäts- und Prüfprotokolle, die für Zugangskontrolle und Vorfallanalyse aufbewahrt werden."
-        },
-        {
-          "label": "Abrechnungs- / Zahlungsnachverfolgungsdaten",
-          "value": "Rechnungs- und Transaktionsdaten im Zusammenhang mit Plattformabonnements und CRM-Zahlungsnachverfolgung."
-        }
-      ]
-    },
-    "purposes": {
-      "title": "3. Zwecke der Verarbeitung",
-      "items": [
-        "Betrieb der CRM-Plattform und Bereitstellung der Betriebsverwaltung nach Klinik, Standort, Team und Rolle.",
-        "Kontoerstellung, Authentifizierung, Sicherheit und Zugriffsverwaltung.",
-        "Verwaltung von Terminen, Nachverfolgungsaufgaben, Behandlungs-/Dienstleistungsabläufen und Zahlungsübersicht.",
-        "Routing und Posteingangsverwaltung für WhatsApp- und Instagram-Kommunikationskanäle (wenn ein Kanal aktiviert ist).",
-        "KI-gestützte Terminzuordnung und Kommunikationsassistentenfunktion (wenn die Funktion aktiviert ist).",
-        "Support, Fehlerbehebung, Prüfung und Missbrauchsprävention.",
-        "Erfüllung rechtlicher und vertraglicher Pflichten.",
-        "Bearbeitung von Betroffenenanträgen."
-      ]
-    },
-    "basis": {
-      "title": "4. Rechtsgrundlagen und sensible Daten",
-      "body": "Die Rechtsgrundlage jeder Datenkategorie muss nach tatsächlicher Nutzung, Rolle des Verantwortlichen und Zielstaat gesondert bestimmt werden. Eine Einwilligung darf nicht als allgemein angenommene Grundlage behandelt werden, wenn eine andere Rechtsgrundlage erforderlich ist.",
-      "rows": [
-        {
-          "label": "Dienst- und Kontovorgänge",
-          "value": "Geeignete Grundlagen wie Vertragserfüllung, rechtliche Verpflichtung oder bei erfüllten Bedingungen berechtigte Interessen werden nach Artikel 5 KVKK und Artikel 6 DSGVO bewertet."
-        },
-        {
-          "label": "Sicherheit und Prüfung",
-          "value": "Die Grundlage rechtlicher Verpflichtung oder verhältnismäßiger berechtigter Interessen für autorisierten Zugriff und Vorfallmanagement wird durch eine konkrete Risikobewertung dokumentiert."
-        },
-        {
-          "label": "Marketingkommunikation",
-          "value": "Vor Einrichtung des erforderlichen Einwilligungs-/Widerspruchsmechanismus nach türkischen Vorschriften zur kommerziellen elektronischen Kommunikation und gegebenenfalls IYS oder für die EU nach ePrivacy, DSGVO und einschlägigem mitgliedstaatlichem Recht werden keine Nachrichten gesendet."
-        }
-      ],
-      "special": "Gesundheitsdaten sind nach KVKK besondere personenbezogene Daten und nach DSGVO besondere Kategorien personenbezogener Daten. Sie dürfen nur bei tatsächlicher Notwendigkeit, mit festgelegter anwendbarer Verarbeitungsbedingung, geeigneten technischen und organisatorischen Maßnahmen und beschränktem Zugriff verarbeitet werden; für Marketingnachrichten dürfen sie nicht verwendet werden."
-    },
-    "transfers": {
-      "title": "5. Empfänger und internationale Übermittlungen",
-      "body": "NoraMedi kann personenbezogene Daten an Empfänger der folgenden Kategorien übermitteln, um seine Dienste zu erbringen. Die konkreten Empfänger können je nach Dienstleistungsvertrag und Klinikkonfiguration variieren.",
-      "recipients": [
-        "Hosting- und Infrastrukturanbieter (Server, Datenbanken, Dateispeicherung).",
-        "E-Mail-Dienstleister (für Benachrichtigungs-, Einladungs- und Passwortzurücksetzungs-Nachrichten).",
-        "Meta Platforms / WhatsApp / Instagram (wenn Kanalfunktionen durch die Klinik aktiviert werden).",
-        "Google / Gemini oder der relevante KI-Anbieter (wenn KI-gestützte Funktionen aktiviert werden).",
-        "Rechtliche und Verwaltungsbehörden (bei gesetzlicher Verpflichtung oder autorisierter Anfrage).",
-        "Klinikpersonal und autorisierte Organisationsnutzer (im Rahmen rollenbasierter Zugriffskontrollen)."
-      ],
-      "international": "Einige Infrastruktur- und Dienstleister können personenbezogene Daten außerhalb der Türkei oder der EU verarbeiten. Solche Übermittlungen werden nach Artikel 9 KVKK und, soweit anwendbar, Kapitel V DSGVO bewertet. Internationale Übermittlungsbedingungen können je nach Klinikkonfiguration und aktivierten Funktionen variieren."
-    },
-    "retention": {
-      "title": "6. Aufbewahrung und Löschung",
-      "body": "Daten werden nur so lange aufbewahrt, wie es für ihren Zweck erforderlich ist. Die folgenden Aufbewahrungsfristen gelten auf Plattformebene; Kliniken können zusätzliche Richtlinien gemäß ihren eigenen Datenpflichten festlegen.",
-      "rows": [
-        {
-          "label": "Einstellungen der öffentlichen Website",
-          "value": "Als funktionale Einstellungen im Browser gespeichert und durch Nutzer löschbar."
-        },
-        {
-          "label": "Gesprächsnachrichten",
-          "value": "365 Tage (gemäß der automatischen Bereinigungsrichtlinie)."
-        },
-        {
-          "label": "Gesprächsstatus",
-          "value": "90 Tage."
-        },
-        {
-          "label": "Eingehende Kanalereignisse",
-          "value": "90 Tage."
-        },
-        {
-          "label": "Betriebsereignisse",
-          "value": "180 Tage."
-        },
-        {
-          "label": "Kontakt- / Demoanfragen",
-          "value": "365 Tage."
-        },
-        {
-          "label": "Alte abgeschlossene Posteingangseinträge",
-          "value": "Können gemäß der Aufbewahrungsrichtlinie einer Schwärzung oder Maskierung unterzogen werden."
-        },
-        {
-          "label": "Rechtliche, Prüf-, Finanz-, klinische und wesentliche Patientendaten",
-          "value": "Werden nicht automatisch durch den Support-Daten-Bereinigungsprozess gelöscht; unterliegen den anwendbaren gesetzlichen und vertraglichen Aufbewahrungsfristen."
-        }
-      ]
-    },
-    "rights": {
-      "title": "7. Rechte betroffener Personen und Anträge",
-      "body": "Je nach Umfang können betroffene Personen Rechte nach Artikel 11 KVKK und Artikel 15-22 DSGVO ausüben. Diese Rechte umfassen:",
-      "items": [
-        "Auskunft, ob ihre Daten verarbeitet werden, sowie Information und Zugang.",
-        "Berichtigung unvollständiger oder unrichtiger Daten.",
-        "Löschung, Vernichtung oder Anonymisierung, soweit die anwendbaren Bedingungen erfüllt sind.",
-        "Einschränkung der Verarbeitung oder Widerspruch dagegen.",
-        "Information über Dritte, an die Daten übermittelt wurden, und gegebenenfalls Datenübertragbarkeit.",
-        "Widerruf der Einwilligung bei einwilligungsbasierten Verarbeitungen.",
-        "Beschwerde bei der zuständigen Aufsichtsbehörde."
-      ],
-      "contact": "Datenschutzanfragen zu NoraMedi-Plattform- und Kontodaten sind an privacy@noramedi.com zu richten; Sicherheitsmeldungen an security@noramedi.com; Support- und Kontozugriffsfragen an support@noramedi.com; rechtliche oder vertragliche Mitteilungen an legal@noramedi.com. Anfragen zu Patientendaten von Kliniken sind vorrangig an die betreffende Klinik (den Verantwortlichen) zu richten; NoraMedi kann die Klinik im anwendbaren vertraglichen Rahmen unterstützen."
-    },
-    "sources": {
-      "notice": "KVKK - Leitfaden zur Erfüllung der Informationspflicht",
-      "transfer": "KVKK - Bekanntmachung zu Standardverträgen für internationale Übermittlungen (10.07.2024)",
-      "gdpr": "EUR-Lex - DSGVO/GDPR (insbesondere Artikel 9, 13-14 und Kapitel V)"
-    }
-  },
-  "cookies": {
-    "title": "Cookie- und lokale Speicherrichtlinie",
-    "description": "Informationen zum aktuellen Stand und den Nutzungsregeln für Browserspeichermethoden auf der öffentlichen Präsentationsseite und im angemeldeten Produktbereich.",
-    "current": {
-      "title": "Aktueller Stand der öffentlichen Seite",
-      "body": "Nach Prüfung des Codes enthält die Seite `/landing` keine Werbe-, Analysepixel- oder Marketing-Cookies. Die Anwendung nutzt lokalen Speicher für Oberflächeneinstellungen; im angemeldeten Produktbereich können zusätzlich funktionale Daten wie Sitzung und Klinikauswahl verwendet werden."
-    },
-    "scope": {
-      "title": "1. Was erläutert diese Richtlinie?",
-      "body": "Cookies und ähnliche Browserspeichermethoden können Informationen auf einem Gerät speichern oder auf gespeicherte Informationen zugreifen. Soweit dies eine Verarbeitung personenbezogener Daten darstellt, gelten Datenschutzpflichten nach KVKK; bei EU-Nutzern sind außerdem ePrivacy-Regeln und bei personenbezogenen Daten DSGVO-Vorschriften zu bewerten."
-    },
-    "storage": {
-      "title": "2. Derzeitige funktionale Speichernutzung",
-      "body": "Die folgende Tabelle beschreibt funktionale Speicherbereiche, die im aktuellen Code der Anwendung beobachtet wurden. Sie muss vor dem Produktivbetrieb und vor der Ergänzung von Drittanbieterwerkzeugen erneut geprüft werden.",
-      "rows": [
-        {
-          "label": "Designeinstellung",
-          "value": "Wird aus dem lokalen Speicher gelesen, um die helle/dunkle Erscheinungsform der Oberfläche anzuwenden. Sie kann bestehen bleiben, bis sie in den Browsereinstellungen gelöscht wird."
-        },
-        {
-          "label": "Spracheinstellung",
-          "value": "Die i18next-Konfiguration zur Spracherkennung nutzt lokalen Speicher, um die Oberflächensprache zu merken. Dies ist funktionale Nutzung."
-        },
-        {
-          "label": "Angemeldeter Produktbereich",
-          "value": "Nach der Anmeldung können funktionale lokale Speicherwerte genutzt werden, um die Sitzung zu betreiben, autorisierte Ansichten bereitzustellen und die gewählte Klinikeinstellung zu erhalten; sie sind für die öffentliche Präsentationsnavigation nicht erforderlich."
-        }
-      ]
-    },
-    "future": {
-      "title": "3. Wenn optionale Werkzeuge hinzugefügt werden",
-      "body": "Werden künftig Analyse-, Werbe-, Retargeting- oder ähnliche nicht notwendige Werkzeuge ergänzt, reicht diese aktuelle Richtlinie allein nicht aus.",
-      "items": [
-        "Vor Aktivierung eines Werkzeugs müssen Name, Anbieter, Zweck, Dauer, Empfänger und jede internationale Übermittlung in das Verzeichnis und auf diese Seite aufgenommen werden.",
-        "Soweit erforderlich, darf nicht notwendige Speicherung oder Zugriff nicht vor einer Nutzerentscheidung beginnen; Ablehnen muss ebenso einfach sein wie Annehmen.",
-        "Eine Oberfläche zur späteren Änderung von Einstellungen und zur Führung von Einwilligungsnachweisen muss vorbereitet werden.",
-        "Verarbeiten Drittanbieterwerkzeuge personenbezogene Daten, müssen gleichzeitig die Datenschutzhinweise aktualisiert werden."
-      ]
-    },
-    "controls": {
-      "title": "4. Einstellungen und Fragen",
-      "items": [
-        "Nutzer können bestehende lokale Speicherdaten in den Browsereinstellungen löschen; dies kann Sprach-, Design- oder Sitzungsverhalten zurücksetzen.",
-        "Werden nicht notwendige Cookies eingeführt, stellt diese Seite einen Link zum Einstellungsbereich bereit.",
-        "Bei Fragen zur Datenverarbeitung oder zum Browserspeicher wenden Sie sich bitte an contact@noramedi.com."
-      ]
-    },
-    "sources": {
-      "guide": "KVKK - Leitfaden zu Cookie-Praktiken",
-      "eprivacy": "EUR-Lex - ePrivacy-Richtlinie 2002/58/EG (Artikel 5(3))",
-      "edpb": "EDPB - Leitlinien 2/2023 zum technischen Anwendungsbereich von Artikel 5(3), endgültige Fassung (16.10.2024)"
-    }
-  },
-  "communications": {
-    "title": "Hinweise zu Kommunikationskanälen und Integrationen",
-    "description": "Datenschutz-, Inhaltsgrundsätze und Sicherheitsinformationen zur Nutzung der WhatsApp-, Instagram- und KI-Assistenten-Funktionen im NoraMedi-Klinikbetrieb.",
-    "scope": {
-      "title": "1. Zu den Kanalfunktionen",
-      "body": "WhatsApp- und Instagram-Verbindungsfunktionen sowie der KI-gestützte Terminassistent sind optionale Funktionen in NoraMedi, die von der Klinik konfiguriert werden müssen. Bei Aktivierung dieser Funktionen muss die betreffende Klinik ihre eigene Datenschutzinformation für Patienten/Kontakte und, falls erforderlich, ihren Prozess zur ausdrücklichen Einwilligung abschließen, bevor Patienten- und Kommunikationsdaten erhoben werden."
-    },
-    "channels": {
-      "title": "2. Unterstützte Kanalabläufe",
-      "body": "Bei aktiviertem Kanal können autorisierte Kliniknutzer Kommunikationsanfragen über die folgenden Abläufe verwalten.",
-      "rows": [
-        {
-          "label": "WhatsApp",
-          "value": "Verknüpfung von Gesprächen mit dem Klinikbetrieb über Verbindungsverwaltung und Posteingang."
-        },
-        {
-          "label": "Instagram DM",
-          "value": "Weiterleitung von Anfragen aus dem DM-Posteingang in Terminabläufe."
-        },
-        {
-          "label": "Meta und Plattformrollen",
-          "value": "Meta Platforms, WhatsApp und Instagram sind unabhängige Verantwortliche/Dienstleister für ihre eigenen Plattformen. Nutzerdaten auf diesen Plattformen unterliegen den Datenschutzbedingungen von Meta."
-        },
-        {
-          "label": "Personenbezogene Daten im Nachrichteninhalt",
-          "value": "Wenn Nutzer personenbezogene Informationen in Kanalnachrichten teilen, werden diese Teil des Nachrichteninhalts. Sensible Gesundheitsinformationen dürfen nicht in Nachrichten geteilt werden."
-        }
-      ]
-    },
-    "roles": {
-      "title": "3. Verantwortlichkeit",
-      "body": "Die Klinik handelt als primär Verantwortliche, soweit sie Zwecke für ihre Patienten und Kommunikationsanfragen bestimmt. Ob NoraMedi als Auftragsverarbeiter oder unabhängiger Verantwortlicher handelt, wird im Dienstleistungsvertrag bestimmt. Meta, WhatsApp und Instagram sind unabhängige Verantwortliche/Dienstleister für ihre eigenen Plattformen."
-    },
-    "ai": {
-      "title": "4. KI-Assistenten-Funktion",
-      "body": "Bei aktiviertem KI-gestützten Terminassistenten kann der Gesprächskontext durch den relevanten KI-Anbieter verarbeitet werden. Wichtige Einschränkungen dieser Funktion:",
-      "items": [
-        "Der KI-Assistent stellt keinerlei Diagnosen, Behandlungsempfehlungen, Notfallgesundheitsbewertungen oder medizinische Ratschläge bereit.",
-        "Der KI-Assistent operiert ausschließlich für Terminzuordnung und Kommunikationsweiterleitung.",
-        "Die KI-Assistenten-Funktion muss von der Klinik aktiviert werden und eine angemessene Patienteninformation muss bereitgestellt werden."
-      ]
-    },
-    "messages": {
-      "title": "5. Betriebsnachrichten von Marketingkommunikation trennen",
-      "body": "Die technische Bereitschaft eines Kanals bedeutet nicht, dass jede Nachrichtenart ohne Genehmigung gesendet werden darf.",
-      "rows": [
-        {
-          "label": "Termin- / Betriebsinformation",
-          "value": "Wird als erforderliche und verhältnismäßige Dienstkommunikation bewertet. Eine Nachricht sollte nur Mindestinhalt, beispielsweise eine Terminerinnerung, enthalten und keine Diagnose, Behandlungsdetails oder sensiblen Gesundheitsinformationen umfassen."
-        },
-        {
-          "label": "Kampagne oder Werbung",
-          "value": "In der Türkei werden vor Abschluss der nach Gesetz Nr. 6563, den Regeln für kommerzielle elektronische Kommunikation und gegebenenfalls IYS erforderlichen Verfahren keine Nachrichten gesendet."
-        },
-        {
-          "label": "Direktmarketing an EU-Empfänger",
-          "value": "Vor Einrichtung des erforderlichen Genehmigungs- oder Widerspruchsmechanismus nach Bewertung der ePrivacy-Regeln, der DSGVO und der Umsetzungsregeln des Zielmitgliedstaates werden keine Nachrichten gesendet."
-        }
-      ]
-    },
-    "protection": {
-      "title": "6. Datenminimierung und Sicherheit",
-      "items": [
-        "In WhatsApp- oder Instagram-Nachrichtentexten dürfen keine Diagnose, Behandlungspläne, Bilder, Rezepte oder andere sensiblen Gesundheitsinhalte versendet werden.",
-        "Eingehende Nachrichten dürfen nur von Rollen eingesehen werden, die sie für ihre Aufgaben benötigen; Zugriffsprotokolle sind zu führen.",
-        "Wird eine Terminanfrage in einen Betriebsdatensatz überführt, dürfen nur notwendige Informationen übertragen werden; unnötige Gesprächsinhalte dürfen nicht vervielfältigt werden.",
-        "Für Sendungen an falsche Empfänger, Kontoübernahmen oder unberechtigte Zugriffe muss ein Verfahren zur Vorfallreaktion bestehen."
-      ]
-    },
-    "emergency": {
-      "title": "Gesundheitliche Notfallsituationen",
-      "body": "NoraMedi und seine Kanalfunktionen sind nicht für Notfallgesundheitsdienste konzipiert. In einer dringenden oder lebensbedrohlichen Gesundheitssituation wenden Sie sich bitte direkt an den Notruf (112) oder den zuständigen Notfallgesundheitsdienstleister. Warten Sie nicht auf eine Antwort über klinische Terminkanäle."
-    },
-    "sources": {
-      "commercial": "Handelsministerium der Republik Türkiye - Vorschriften zum elektronischen Handel und zur kommerziellen elektronischen Kommunikation",
-      "transfer": "KVKK - Amtliche Dokumente zur internationalen Übermittlung personenbezogener Daten",
-      "eprivacy": "EUR-Lex - ePrivacy-Richtlinie 2002/58/EG (Artikel 13 für Direktmarketing)",
-      "gdpr": "EUR-Lex - DSGVO/GDPR"
-    }
-  },
-  "dataRequest": {
-    "title": "Antrag auf Ausübung von Betroffenenrechten",
-    "description": "Erfahren Sie, wie Sie einen Antrag auf Auskunft, Berichtigung, Löschung, Widerspruch oder Beschwerde zu Ihren personenbezogenen Daten stellen können.",
-    "platform": {
-      "title": "1. Anträge zur NoraMedi-Plattform",
-      "body": "Für Anträge zu Ihrem NoraMedi-Plattformkonto, Ihren Datenschutzpräferenzen oder von der Plattform verarbeiteten Daten verwenden Sie bitte die folgenden Kontaktadressen.",
-      "rows": [
-        { "label": "Datenschutz / KVKK / DSGVO-Anträge", "value": "privacy@noramedi.com" },
-        { "label": "Sicherheitsmeldungen und vermutete Verletzungen", "value": "security@noramedi.com" },
-        { "label": "Kontozugriff und Supportfragen", "value": "support@noramedi.com" },
-        { "label": "Rechtliche und vertragliche Mitteilungen", "value": "legal@noramedi.com" }
-      ]
-    },
-    "types": {
-      "title": "2. Antragskategorien",
-      "body": "Sie können die folgenden Rechte nach Artikel 11 KVKK und, soweit anwendbar, Artikel 15-22 DSGVO ausüben:",
-      "items": [
-        "Auskunft und Information: Erfahren, ob Ihre Daten verarbeitet werden, und eine Kopie erhalten.",
-        "Berichtigung: Berichtigung unvollständiger oder unrichtiger Daten beantragen.",
-        "Löschung oder Anonymisierung: Löschung oder Anonymisierung Ihrer Daten beantragen, soweit die anwendbaren Bedingungen erfüllt sind.",
-        "Widerspruch oder Einschränkung: Der Verarbeitung widersprechen oder deren Einschränkung beantragen.",
-        "Widerruf der Einwilligung: Einwilligung für einwilligungsbasierte Verarbeitungen widerrufen.",
-        "Übermittlungsinformation: Die Dritten erfahren, an die Ihre Daten übermittelt wurden.",
-        "Sicherheits- und Datenschutzbeschwerde: Einen vermuteten Datenschutzverstoß oder eine Sicherheitslücke melden.",
-        "Formelle Beschwerde: Beschwerde bei der KVKK oder der zuständigen EU-Aufsichtsbehörde einreichen."
-      ]
-    },
-    "clinic": {
-      "title": "3. Anträge zu Patientendaten von Kliniken",
-      "body": "Patientendaten, Termindaten und klinische Kommunikationsdaten, die von einer Klinik auf der NoraMedi-Plattform verarbeitet werden, werden primär von dieser Klinik kontrolliert. Anträge zu solchen Daten sollten Sie direkt an die Klinik richten, bei der Sie Leistungen erhalten haben. NoraMedi kann die Klinik im anwendbaren vertraglichen Rahmen unterstützen; NoraMedi trifft jedoch keine primären Verantwortlichenentscheidungen im Namen von Kliniken."
-    },
-    "response": {
-      "title": "4. Antwortfristen",
-      "body": "Anträge werden innerhalb von dreißig Tagen nach KVKK und innerhalb eines Monats nach DSGVO beantwortet. Diese Frist kann je nach Art oder Umfang des Antrags verlängert werden; Sie werden in diesem Fall informiert. Die Einreichung Ihres Antrags in schriftlicher Form an privacy@noramedi.com trägt zur Beschleunigung des Verfahrens bei."
-    },
-    "sources": {
-      "kvkk": "Türkische Datenschutzbehörde - Betroffenenrechte und Antragsverfahren",
-      "gdpr": "EUR-Lex - DSGVO Artikel 15-22 (Betroffenenrechte)"
-    }
-  },
-  "consent": {
-    "title": "Einwilligungsvorlagen",
-    "description": "Muster für Datenschutzinformationen und ausdrückliche Einwilligung für WhatsApp- und Instagram-Terminkanäle. Die Texte auf dieser Seite sind allgemeine Vorlagen, die Kliniken an ihre eigenen Bedingungen anpassen können.",
-    "disclaimer": {
-      "title": "Zum Vorlagencharakter dieser Seite",
-      "body": "Die Texte auf dieser Seite sind allgemeine Vorlagen und stellen keine Garantie für rechtliche Konformität dar. Jede Klinik sollte diese Texte im Licht ihrer eigenen Dienstleistungen, verarbeiteten Datenkategorien und des anwendbaren Rechts mit einem Rechtsberater prüfen."
-    },
-    "distinction": {
-      "title": "1. Datenschutzinformation und ausdrückliche Einwilligung unterscheiden",
-      "body": "Nach KVKK und DSGVO sind die Informationspflicht und die ausdrückliche Einwilligung unterschiedliche Konzepte, die getrennt erfüllt werden müssen.",
-      "items": [
-        "Datenschutzinformation: Umfasst die Identität des Verantwortlichen, Verarbeitungszwecke, Rechtsgrundlagen, Aufbewahrungsfristen, Übermittlungsempfänger und Betroffenenrechte. Muss unabhängig von einer Einwilligungseinholung bereitgestellt werden.",
-        "Ausdrückliche Einwilligung: Nur für Verarbeitungsvorgänge erforderlich, bei denen die ausdrückliche Einwilligung die identifizierte Rechtsgrundlage ist. Muss für jeden Verarbeitungsvorgang gesondert, freiwillig, spezifisch und informiert eingeholt werden.",
-        "Für Terminvorgänge kann auch eine andere Rechtsgrundlage wie Vertragserfüllung oder berechtigte Interessen in Betracht kommen; in solchen Fällen kann eine Information allein ausreichen."
-      ]
-    },
-    "template": {
-      "title": "2. Mustertexte für Terminkanäle",
-      "body": "Die folgenden Texte sind Mustervorlagen für Kanäle, die Terminanfragen über WhatsApp oder Instagram erhalten. Sie müssen von der Klinik angepasst werden, um den Klinikname, die Kontaktdaten des Verantwortlichen und den Link zur Datenschutzinformation einzufügen.",
-      "notice": "Beispiel für Datenschutzinformation-Link: 'Um zu erfahren, wie Ihre personenbezogenen Daten verarbeitet werden, können Sie die Datenschutzerklärung von [Klinikname] lesen: [Link]'",
-      "explicit": "Beispiel für ausdrückliche Einwilligung: 'Ich willige in die Verarbeitung meiner personenbezogenen Daten zum Zweck der Entgegennahme meiner Terminanfrage und der Kontaktaufnahme mit mir ein.'"
-    },
-    "clinicNote": {
-      "title": "3. Anpassungspflicht der Kliniken",
-      "body": "Diese Vorlagen bieten nur einen allgemeinen Ausgangspunkt. Jede Klinik ist verantwortlich für die Erstellung ihrer eigenen Datenschutzinformation, die die Firma des Verantwortlichen, verarbeitete Datenkategorien, Aufbewahrungsfristen und Übermittlungsbedingungen enthält, sowie ggf. ihrer Einwilligungsdokumentation für ihren Patientenkommunikationskanal. Die unveränderte Verwendung dieser Vorlagen garantiert keine rechtliche Konformität."
-    },
-    "sources": {
-      "kvkk": "KVKK - Leitfaden zur Erfüllung der Informationspflicht",
-      "gdpr": "EUR-Lex - DSGVO Artikel 7 und Erwägungsgrund 32 (Bedingungen für die Einwilligung)"
-    }
-  }
+﻿{
+    "brand":  {
+                  "name":  "NoraMedi CRM",
+                  "legal":  "Rechtliche Informationen"
+              },
+    "meta":  {
+                 "center":  "Rechtliche Informationen | NoraMedi CRM",
+                 "privacy":  "Datenschutzhinweise | NoraMedi CRM",
+                 "cookies":  "Cookie- und lokale Speicherrichtlinie | NoraMedi CRM",
+                 "communications":  "Hinweise zu Kommunikationskanälen | NoraMedi CRM",
+                 "dataRequest":  "Antrag auf Ausübung von Betroffenenrechten | NoraMedi CRM",
+                 "consent":  "Einwilligungsvorlagen | NoraMedi CRM"
+             },
+    "nav":  {
+                "label":  "Rechtliche Seiten",
+                "center":  "Rechtliche Informationen",
+                "privacy":  "Datenschutzhinweise",
+                "cookies":  "Cookie-Richtlinie",
+                "communications":  "Kommunikationskanäle",
+                "dataRequest":  "Betroffenenantrag",
+                "consent":  "Einwilligungsvorlagen"
+            },
+    "shared":  {
+                   "label":  "Rechtliche Informationen",
+                   "back":  "Zurück zur Präsentationsseite",
+                   "themeToggle":  "Design wechseln",
+                   "languageSelector":  "Sprache auswählen",
+                   "draftTitle":  "Rechtlicher Hinweis",
+                   "draftBody":  "Diese Seiten dienen der allgemeinen Information über die Datenverarbeitungspraktiken von NoraMedi. Sie stellen keine Rechtsberatung dar. Kliniken und andere Verantwortliche sollten für ihre eigenen Pflichten einen Rechtsberater konsultieren.",
+                   "reviewDate":  "Letzte Aktualisierung: Juni 2026",
+                   "sources":  "Maßgebliche amtliche Quellen",
+                   "sourcesDescription":  "Die folgenden amtlichen Rechtsvorschriften und Veröffentlichungen von Behörden wurden bei der Festlegung des Umfangs dieser Seite berücksichtigt."
+               },
+    "center":  {
+                   "title":  "Rechtliche Informationsstelle",
+                   "description":  "Allgemeine Informationsseiten zu Datenschutz, Cookies, Kommunikationskanälen und Betroffenenrechten, die für die NoraMedi-Plattform gelten.",
+                   "pagesTitle":  "Informationsseiten",
+                   "pagesDescription":  "Jede Seite erläutert die relevanten Datenverarbeitungspraktiken von NoraMedi und den anwendbaren regulatorischen Rahmen.",
+                   "open":  "Seite ansehen",
+                   "cards":  [
+                                 {
+                                     "path":  "/legal/privacy",
+                                     "title":  "Datenschutzhinweise",
+                                     "description":  "Datenverarbeitung der Plattform, Übermittlungen, Aufbewahrung und Betroffenenrechte nach KVKK und, soweit anwendbar, DSGVO."
+                                 },
+                                 {
+                                     "path":  "/legal/cookies",
+                                     "title":  "Cookie- und lokale Speicherrichtlinie",
+                                     "description":  "Aktuelles funktionales Browserspeicherverhalten und Informationen zur Cookie-Nutzung."
+                                 },
+                                 {
+                                     "path":  "/legal/communications",
+                                     "title":  "Hinweise zu Kommunikationskanälen",
+                                     "description":  "WhatsApp- und Instagram-Kanalfunktionen, KI-Assistenten-Nutzung und Grundsätze für Nachrichteninhalte."
+                                 },
+                                 {
+                                     "path":  "/legal/data-subject-request",
+                                     "title":  "Betroffenenantrag",
+                                     "description":  "So stellen Sie einen Antrag auf Auskunft, Berichtigung, Löschung oder Widerspruch zu Ihren personenbezogenen Daten."
+                                 },
+                                 {
+                                     "path":  "/legal/consent",
+                                     "title":  "Einwilligungsvorlagen",
+                                     "description":  "Muster für Datenschutzinformationen und ausdrückliche Einwilligung für WhatsApp-/Instagram-Terminkanäle."
+                                 }
+                             ],
+                   "scope":  {
+                                 "title":  "Umfang und Grenze",
+                                 "body":  "NoraMedi ist eine SaaS-/CRM-Plattform zur Verwaltung von Klinikabläufen, bereitgestellt von Mustafa Basol - Peaknova. Patienten-, Termin- und Kommunikationsabläufe können personenbezogene Daten und in bestimmten Nutzungen sensible Gesundheitsdaten enthalten; Datenminimierung und autorisierter Zugriff sind daher erforderlich. NoraMedi ist nicht als Plattform für Diagnose, Verschreibung oder vollständige elektronische Patientenakte positioniert."
+                             },
+                   "checklist":  {
+                                     "title":  "Datenschutzleitfaden für Kliniken",
+                                     "description":  "Kliniken, die die Plattform für ihre eigenen Patienten- und Kommunikationsdaten nutzen, sollten die folgenden Pflichten in ihrer Eigenschaft als Verantwortliche prüfen.",
+                                     "items":  [
+                                                   "Die Klinik muss ihre eigene Datenschutzinformation für Patienten und, falls erforderlich, ihre Dokumentation zur ausdrücklichen Einwilligung vorbereiten.",
+                                                   "Tatsächliche Datenkategorien, Zwecke und Aufbewahrungsfristen müssen mit dem klinikseitigen Datenverzeichnis abgeglichen werden.",
+                                                   "Vor Aktivierung der WhatsApp-/Instagram-Kanalfunktionen müssen Auftragsverarbeiterrollen und Übermittlungsbedingungen auf Klinikebene dokumentiert werden.",
+                                                   "Genehmigungs-/Widerspruchsmechanismen und, falls erforderlich, IYS-Verfahren für kommerzielle elektronische Kommunikation liegen in der Verantwortung der Klinik.",
+                                                   "Der Ausschluss sensibler Gesundheitsdaten aus Nachrichtenkanälen und Zugriffskontrollen müssen betrieblich geprüft werden."
+                                               ]
+                                 },
+                   "sources":  {
+                                   "kvkk":  "Türkische Datenschutzbehörde - KVKK-Informationen",
+                                   "gdpr":  "EUR-Lex - Datenschutz-Grundverordnung (DSGVO/GDPR)",
+                                   "commercial":  "Handelsministerium der Republik Türkiye - Vorschriften zum elektronischen Handel"
+                               }
+               },
+    "privacy":  {
+                    "title":  "Datenschutz- und Informationshinweise zur Verarbeitung personenbezogener Daten",
+                    "description":  "Allgemeine Informationen zur Verarbeitung personenbezogener Daten, Übermittlungen, Aufbewahrung und Betroffenenrechten nach KVKK und, soweit anwendbar, DSGVO im Rahmen der NoraMedi-Plattform.",
+                    "controller":  {
+                                       "title":  "1. Plattformanbieter und Kontakt",
+                                       "body":  "NoraMedi ist eine SaaS-Plattform für das Management von Klinikabläufen, bereitgestellt von Mustafa Basol - Peaknova. Kliniken handeln als primär Verantwortliche nach KVKK und, soweit anwendbar, DSGVO für die Verarbeitung, die aus ihren eigenen Patienten-, Termin- und Kommunikationsdaten entsteht. NoraMedi kann im Rahmen der Plattform- und Infrastrukturdienstleistungen als Auftragsverarbeiter oder Dienstleister handeln; diese Rolle wird nach Dienstleistungsvertrag und Nutzungskontext gesondert bestimmt.",
+                                       "contactRows":  [
+                                                           {
+                                                               "label":  "Plattform / Produkt",
+                                                               "value":  "NoraMedi"
+                                                           },
+                                                           {
+                                                               "label":  "Anbieter",
+                                                               "value":  "Mustafa Basol - Peaknova"
+                                                           },
+                                                           {
+                                                               "label":  "Allgemeiner Kontakt",
+                                                               "value":  "contact@noramedi.com"
+                                                           },
+                                                           {
+                                                               "label":  "Support",
+                                                               "value":  "support@noramedi.com"
+                                                           },
+                                                           {
+                                                               "label":  "Datenschutz / KVKK / DSGVO-Anträge",
+                                                               "value":  "privacy@noramedi.com"
+                                                           },
+                                                           {
+                                                               "label":  "Sicherheitsmeldungen",
+                                                               "value":  "security@noramedi.com"
+                                                           },
+                                                           {
+                                                               "label":  "Rechtliche / vertragliche Mitteilungen",
+                                                               "value":  "legal@noramedi.com"
+                                                           }
+                                                       ]
+                                   },
+                    "data":  {
+                                 "title":  "2. Möglicherweise verarbeitete Datenkategorien",
+                                 "body":  "Der folgende Umfang beruht auf den aktuellen Funktionen der Plattform und klinischen Nutzungsszenarien. Kliniken sollten ihren spezifischen Verarbeitungsumfang anhand ihres eigenen Datenverzeichnisses bestimmen.",
+                                 "rows":  [
+                                              {
+                                                  "label":  "Öffentliche Website-Nutzung und Funktionseinstellungen",
+                                                  "value":  "Funktionale Browserspeicherdaten wie Sprach- und Designeinstellungen; in dieser Version wird kein Analyse- oder Werbetracking-Tool verwendet."
+                                              },
+                                              {
+                                                  "label":  "Demo- / Kontaktanfragen",
+                                                  "value":  "Falls ein Demo- oder Kontaktformular aktiviert ist, können übermittelte Kontaktdaten verarbeitet werden."
+                                              },
+                                              {
+                                                  "label":  "Plattformkonto und Nutzerdaten",
+                                                  "value":  "Benutzername, E-Mail, verschlüsselte Authentifizierungsdaten, Rollen- und Berechtigungsdaten, Anmelde-/Abmeldeprotokolle."
+                                              },
+                                              {
+                                                  "label":  "Klinik- / Organisations- / Standortkonfigurationsdaten",
+                                                  "value":  "Klinikname, Standortdetails, Arbeitszeiten, Dienstleistungsdefinitionen und Organisationsstruktur."
+                                              },
+                                              {
+                                                  "label":  "Personalrollen und Berechtigungsdaten",
+                                                  "value":  "Dem Klinikpersonal zugewiesene Rollen, Zugriffsberechtigungen und operative Aufgabeninformationen."
+                                              },
+                                              {
+                                                  "label":  "Patientenkontakt- und Termindaten",
+                                                  "value":  "Im CRM verarbeitete Patientennamen, Kontaktdaten, Termin- und Nachverfolgungsdaten. Gesundheitsbezogene Daten werden als besondere Datenkategorie eingestuft."
+                                              },
+                                              {
+                                                  "label":  "WhatsApp- / Instagram-Verbindungsmetadaten und Nachrichteninhalte",
+                                                  "value":  "Bei aktiviertem Kanal können Verbindungsdaten, Absenderkennungen, Nachrichtendatum, -inhalt und Gesprächsstatus verarbeitet werden."
+                                              },
+                                              {
+                                                  "label":  "KI-Assistenten-Verarbeitungsdaten",
+                                                  "value":  "Bei aktivierten KI-gestützten Funktionen können Gesprächskontext und Terminzuordnungsdaten an den KI-Anbieter übertragen werden."
+                                              },
+                                              {
+                                                  "label":  "Sicherheits- / Prüf- / Betriebsprotokolle",
+                                                  "value":  "Berechtigungs-, Aktivitäts- und Prüfprotokolle, die für Zugangskontrolle und Vorfallanalyse aufbewahrt werden."
+                                              },
+                                              {
+                                                  "label":  "Abrechnungs- / Zahlungsnachverfolgungsdaten",
+                                                  "value":  "Rechnungs- und Transaktionsdaten im Zusammenhang mit Plattformabonnements und CRM-Zahlungsnachverfolgung."
+                                              }
+                                          ]
+                             },
+                    "purposes":  {
+                                     "title":  "3. Zwecke der Verarbeitung",
+                                     "items":  [
+                                                   "Betrieb der CRM-Plattform und Bereitstellung der Betriebsverwaltung nach Klinik, Standort, Team und Rolle.",
+                                                   "Kontoerstellung, Authentifizierung, Sicherheit und Zugriffsverwaltung.",
+                                                   "Verwaltung von Terminen, Nachverfolgungsaufgaben, Behandlungs-/Dienstleistungsabläufen und Zahlungsübersicht.",
+                                                   "Routing und Posteingangsverwaltung für WhatsApp- und Instagram-Kommunikationskanäle (wenn ein Kanal aktiviert ist).",
+                                                   "KI-gestützte Terminzuordnung und Kommunikationsassistentenfunktion (wenn die Funktion aktiviert ist).",
+                                                   "Support, Fehlerbehebung, Prüfung und Missbrauchsprävention.",
+                                                   "Erfüllung rechtlicher und vertraglicher Pflichten.",
+                                                   "Bearbeitung von Betroffenenanträgen."
+                                               ]
+                                 },
+                    "basis":  {
+                                  "title":  "4. Rechtsgrundlagen und sensible Daten",
+                                  "body":  "Die Rechtsgrundlage jeder Datenkategorie muss nach tatsächlicher Nutzung, Rolle des Verantwortlichen und Zielstaat gesondert bestimmt werden. Eine Einwilligung darf nicht als allgemein angenommene Grundlage behandelt werden, wenn eine andere Rechtsgrundlage erforderlich ist.",
+                                  "rows":  [
+                                               {
+                                                   "label":  "Dienst- und Kontovorgänge",
+                                                   "value":  "Geeignete Grundlagen wie Vertragserfüllung, rechtliche Verpflichtung oder bei erfüllten Bedingungen berechtigte Interessen werden nach Artikel 5 KVKK und Artikel 6 DSGVO bewertet."
+                                               },
+                                               {
+                                                   "label":  "Sicherheit und Prüfung",
+                                                   "value":  "Die Grundlage rechtlicher Verpflichtung oder verhältnismäßiger berechtigter Interessen für autorisierten Zugriff und Vorfallmanagement wird durch eine konkrete Risikobewertung dokumentiert."
+                                               },
+                                               {
+                                                   "label":  "Marketingkommunikation",
+                                                   "value":  "Vor Einrichtung des erforderlichen Einwilligungs-/Widerspruchsmechanismus nach türkischen Vorschriften zur kommerziellen elektronischen Kommunikation und gegebenenfalls IYS oder für die EU nach ePrivacy, DSGVO und einschlägigem mitgliedstaatlichem Recht werden keine Nachrichten gesendet."
+                                               }
+                                           ],
+                                  "special":  "Gesundheitsdaten sind nach KVKK besondere personenbezogene Daten und nach DSGVO besondere Kategorien personenbezogener Daten. Sie dürfen nur bei tatsächlicher Notwendigkeit, mit festgelegter anwendbarer Verarbeitungsbedingung, geeigneten technischen und organisatorischen Maßnahmen und beschränktem Zugriff verarbeitet werden; für Marketingnachrichten dürfen sie nicht verwendet werden."
+                              },
+                    "transfers":  {
+                                      "title":  "5. Empfänger und internationale Übermittlungen",
+                                      "body":  "NoraMedi kann personenbezogene Daten an Empfänger der folgenden Kategorien übermitteln, um seine Dienste zu erbringen. Die konkreten Empfänger können je nach Dienstleistungsvertrag und Klinikkonfiguration variieren.",
+                                      "recipients":  [
+                                                         "Hosting- und Infrastrukturanbieter (Server, Datenbanken, Dateispeicherung).",
+                                                         "E-Mail-Dienstleister (für Benachrichtigungs-, Einladungs- und Passwortzurücksetzungs-Nachrichten).",
+                                                         "Meta Platforms / WhatsApp / Instagram (wenn Kanalfunktionen durch die Klinik aktiviert werden).",
+                                                         "Google / Gemini oder der relevante KI-Anbieter (wenn KI-gestützte Funktionen aktiviert werden).",
+                                                         "Rechtliche und Verwaltungsbehörden (bei gesetzlicher Verpflichtung oder autorisierter Anfrage).",
+                                                         "Klinikpersonal und autorisierte Organisationsnutzer (im Rahmen rollenbasierter Zugriffskontrollen)."
+                                                     ],
+                                      "international":  "Einige Infrastruktur- und Dienstleister können personenbezogene Daten außerhalb der Türkei oder der EU verarbeiten. Solche Übermittlungen werden nach Artikel 9 KVKK und, soweit anwendbar, Kapitel V DSGVO bewertet. Internationale Übermittlungsbedingungen können je nach Klinikkonfiguration und aktivierten Funktionen variieren."
+                                  },
+                    "retention":  {
+                                      "title":  "6. Aufbewahrung und Löschung",
+                                      "body":  "Daten werden nur so lange aufbewahrt, wie es für ihren Zweck erforderlich ist. Die folgenden Aufbewahrungsfristen gelten auf Plattformebene; Kliniken können zusätzliche Richtlinien gemäß ihren eigenen Datenpflichten festlegen.",
+                                      "rows":  [
+                                                   {
+                                                       "label":  "Einstellungen der öffentlichen Website",
+                                                       "value":  "Als funktionale Einstellungen im Browser gespeichert und durch Nutzer löschbar."
+                                                   },
+                                                   {
+                                                       "label":  "Gesprächsnachrichten",
+                                                       "value":  "365 Tage (gemäß der automatischen Bereinigungsrichtlinie)."
+                                                   },
+                                                   {
+                                                       "label":  "Gesprächsstatus",
+                                                       "value":  "90 Tage."
+                                                   },
+                                                   {
+                                                       "label":  "Eingehende Kanalereignisse",
+                                                       "value":  "90 Tage."
+                                                   },
+                                                   {
+                                                       "label":  "Betriebsereignisse",
+                                                       "value":  "180 Tage."
+                                                   },
+                                                   {
+                                                       "label":  "Kontakt- / Demoanfragen",
+                                                       "value":  "365 Tage."
+                                                   },
+                                                   {
+                                                       "label":  "Alte abgeschlossene Posteingangseinträge",
+                                                       "value":  "Können gemäß der Aufbewahrungsrichtlinie einer Schwärzung oder Maskierung unterzogen werden."
+                                                   },
+                                                   {
+                                                       "label":  "Rechtliche, Prüf-, Finanz-, klinische und wesentliche Patientendaten",
+                                                       "value":  "Werden nicht automatisch durch den Support-Daten-Bereinigungsprozess gelöscht; unterliegen den anwendbaren gesetzlichen und vertraglichen Aufbewahrungsfristen."
+                                                   }
+                                               ]
+                                  },
+                    "rights":  {
+                                   "title":  "7. Rechte betroffener Personen und Anträge",
+                                   "body":  "Je nach Umfang können betroffene Personen Rechte nach Artikel 11 KVKK und Artikel 15-22 DSGVO ausüben. Diese Rechte umfassen:",
+                                   "items":  [
+                                                 "Auskunft, ob ihre Daten verarbeitet werden, sowie Information und Zugang.",
+                                                 "Berichtigung unvollständiger oder unrichtiger Daten.",
+                                                 "Löschung, Vernichtung oder Anonymisierung, soweit die anwendbaren Bedingungen erfüllt sind.",
+                                                 "Einschränkung der Verarbeitung oder Widerspruch dagegen.",
+                                                 "Information über Dritte, an die Daten übermittelt wurden, und gegebenenfalls Datenübertragbarkeit.",
+                                                 "Widerruf der Einwilligung bei einwilligungsbasierten Verarbeitungen.",
+                                                 "Beschwerde bei der zuständigen Aufsichtsbehörde."
+                                             ],
+                                   "contact":  "Datenschutzanfragen zu NoraMedi-Plattform- und Kontodaten sind an privacy@noramedi.com zu richten; Sicherheitsmeldungen an security@noramedi.com; Support- und Kontozugriffsfragen an support@noramedi.com; rechtliche oder vertragliche Mitteilungen an legal@noramedi.com. Anfragen zu Patientendaten von Kliniken sind vorrangig an die betreffende Klinik (den Verantwortlichen) zu richten; NoraMedi kann die Klinik im anwendbaren vertraglichen Rahmen unterstützen."
+                               },
+                    "sources":  {
+                                    "notice":  "KVKK - Leitfaden zur Erfüllung der Informationspflicht",
+                                    "transfer":  "KVKK - Bekanntmachung zu Standardverträgen für internationale Übermittlungen (10.07.2024)",
+                                    "gdpr":  "EUR-Lex - DSGVO/GDPR (insbesondere Artikel 9, 13-14 und Kapitel V)"
+                                }
+                },
+    "cookies":  {
+                    "title":  "Cookie- und lokale Speicherrichtlinie",
+                    "description":  "Informationen zum aktuellen Stand und den Nutzungsregeln für Browserspeichermethoden auf der öffentlichen Präsentationsseite und im angemeldeten Produktbereich.",
+                    "current":  {
+                                    "title":  "Aktueller Stand der öffentlichen Seite",
+                                    "body":  "Nach Prüfung des Codes enthält die Seite `/landing` keine Werbe-, Analysepixel- oder Marketing-Cookies. Die Anwendung nutzt lokalen Speicher für Oberflächeneinstellungen; im angemeldeten Produktbereich können zusätzlich funktionale Daten wie Sitzung und Klinikauswahl verwendet werden."
+                                },
+                    "scope":  {
+                                  "title":  "1. Was erläutert diese Richtlinie?",
+                                  "body":  "Cookies und ähnliche Browserspeichermethoden können Informationen auf einem Gerät speichern oder auf gespeicherte Informationen zugreifen. Soweit dies eine Verarbeitung personenbezogener Daten darstellt, gelten Datenschutzpflichten nach KVKK; bei EU-Nutzern sind außerdem ePrivacy-Regeln und bei personenbezogenen Daten DSGVO-Vorschriften zu bewerten."
+                              },
+                    "storage":  {
+                                    "title":  "2. Derzeitige funktionale Speichernutzung",
+                                    "body":  "Die folgende Tabelle beschreibt funktionale Speicherbereiche, die im aktuellen Code der Anwendung beobachtet wurden. Sie muss vor dem Produktivbetrieb und vor der Ergänzung von Drittanbieterwerkzeugen erneut geprüft werden.",
+                                    "rows":  [
+                                                 {
+                                                     "label":  "Designeinstellung",
+                                                     "value":  "Wird aus dem lokalen Speicher gelesen, um die helle/dunkle Erscheinungsform der Oberfläche anzuwenden. Sie kann bestehen bleiben, bis sie in den Browsereinstellungen gelöscht wird."
+                                                 },
+                                                 {
+                                                     "label":  "Spracheinstellung",
+                                                     "value":  "Die i18next-Konfiguration zur Spracherkennung nutzt lokalen Speicher, um die Oberflächensprache zu merken. Dies ist funktionale Nutzung."
+                                                 },
+                                                 {
+                                                     "label":  "Angemeldeter Produktbereich",
+                                                     "value":  "Nach der Anmeldung können funktionale lokale Speicherwerte genutzt werden, um die Sitzung zu betreiben, autorisierte Ansichten bereitzustellen und die gewählte Klinikeinstellung zu erhalten; sie sind für die öffentliche Präsentationsnavigation nicht erforderlich."
+                                                 }
+                                             ]
+                                },
+                    "future":  {
+                                   "title":  "3. Wenn optionale Werkzeuge hinzugefügt werden",
+                                   "body":  "Werden künftig Analyse-, Werbe-, Retargeting- oder ähnliche nicht notwendige Werkzeuge ergänzt, reicht diese aktuelle Richtlinie allein nicht aus.",
+                                   "items":  [
+                                                 "Vor Aktivierung eines Werkzeugs müssen Name, Anbieter, Zweck, Dauer, Empfänger und jede internationale Übermittlung in das Verzeichnis und auf diese Seite aufgenommen werden.",
+                                                 "Soweit erforderlich, darf nicht notwendige Speicherung oder Zugriff nicht vor einer Nutzerentscheidung beginnen; Ablehnen muss ebenso einfach sein wie Annehmen.",
+                                                 "Eine Oberfläche zur späteren Änderung von Einstellungen und zur Führung von Einwilligungsnachweisen muss vorbereitet werden.",
+                                                 "Verarbeiten Drittanbieterwerkzeuge personenbezogene Daten, müssen gleichzeitig die Datenschutzhinweise aktualisiert werden."
+                                             ]
+                               },
+                    "controls":  {
+                                     "title":  "4. Einstellungen und Fragen",
+                                     "items":  [
+                                                   "Nutzer können bestehende lokale Speicherdaten in den Browsereinstellungen löschen; dies kann Sprach-, Design- oder Sitzungsverhalten zurücksetzen.",
+                                                   "Werden nicht notwendige Cookies eingeführt, stellt diese Seite einen Link zum Einstellungsbereich bereit.",
+                                                   "Bei Fragen zur Datenverarbeitung oder zum Browserspeicher wenden Sie sich bitte an contact@noramedi.com."
+                                               ]
+                                 },
+                    "sources":  {
+                                    "guide":  "KVKK - Leitfaden zu Cookie-Praktiken",
+                                    "eprivacy":  "EUR-Lex - ePrivacy-Richtlinie 2002/58/EG (Artikel 5(3))",
+                                    "edpb":  "EDPB - Leitlinien 2/2023 zum technischen Anwendungsbereich von Artikel 5(3), endgültige Fassung (16.10.2024)"
+                                }
+                },
+    "communications":  {
+                           "title":  "Hinweise zu Kommunikationskanälen und Integrationen",
+                           "description":  "Datenschutz-, Inhaltsgrundsätze und Sicherheitsinformationen zur Nutzung der WhatsApp-, Instagram- und KI-Assistenten-Funktionen im NoraMedi-Klinikbetrieb.",
+                           "scope":  {
+                                         "title":  "1. Zu den Kanalfunktionen",
+                                         "body":  "WhatsApp- und Instagram-Verbindungsfunktionen sowie der KI-gestützte Terminassistent sind optionale Funktionen in NoraMedi, die von der Klinik konfiguriert werden müssen. Bei Aktivierung dieser Funktionen muss die betreffende Klinik ihre eigene Datenschutzinformation für Patienten/Kontakte und, falls erforderlich, ihren Prozess zur ausdrücklichen Einwilligung abschließen, bevor Patienten- und Kommunikationsdaten erhoben werden."
+                                     },
+                           "channels":  {
+                                            "title":  "2. Unterstützte Kanalabläufe",
+                                            "body":  "Bei aktiviertem Kanal können autorisierte Kliniknutzer Kommunikationsanfragen über die folgenden Abläufe verwalten.",
+                                            "rows":  [
+                                                         {
+                                                             "label":  "WhatsApp",
+                                                             "value":  "Verknüpfung von Gesprächen mit dem Klinikbetrieb über Verbindungsverwaltung und Posteingang."
+                                                         },
+                                                         {
+                                                             "label":  "Instagram DM",
+                                                             "value":  "Weiterleitung von Anfragen aus dem DM-Posteingang in Terminabläufe."
+                                                         },
+                                                         {
+                                                             "label":  "Meta und Plattformrollen",
+                                                             "value":  "Meta Platforms, WhatsApp und Instagram sind unabhängige Verantwortliche/Dienstleister für ihre eigenen Plattformen. Nutzerdaten auf diesen Plattformen unterliegen den Datenschutzbedingungen von Meta."
+                                                         },
+                                                         {
+                                                             "label":  "Personenbezogene Daten im Nachrichteninhalt",
+                                                             "value":  "Wenn Nutzer personenbezogene Informationen in Kanalnachrichten teilen, werden diese Teil des Nachrichteninhalts. Sensible Gesundheitsinformationen dürfen nicht in Nachrichten geteilt werden."
+                                                         }
+                                                     ]
+                                        },
+                           "roles":  {
+                                         "title":  "3. Verantwortlichkeit",
+                                         "body":  "Die Klinik handelt als primär Verantwortliche, soweit sie Zwecke für ihre Patienten und Kommunikationsanfragen bestimmt. Ob NoraMedi als Auftragsverarbeiter oder unabhängiger Verantwortlicher handelt, wird im Dienstleistungsvertrag bestimmt. Meta, WhatsApp und Instagram sind unabhängige Verantwortliche/Dienstleister für ihre eigenen Plattformen."
+                                     },
+                           "ai":  {
+                                      "title":  "4. KI-Assistenten-Funktion",
+                                      "body":  "Bei aktiviertem KI-gestützten Terminassistenten kann der Gesprächskontext durch den relevanten KI-Anbieter verarbeitet werden. Wichtige Einschränkungen dieser Funktion:",
+                                      "items":  [
+                                                    "Der KI-Assistent stellt keinerlei Diagnosen, Behandlungsempfehlungen, Notfallgesundheitsbewertungen oder medizinische Ratschläge bereit.",
+                                                    "Der KI-Assistent operiert ausschließlich für Terminzuordnung und Kommunikationsweiterleitung.",
+                                                    "Die KI-Assistenten-Funktion muss von der Klinik aktiviert werden und eine angemessene Patienteninformation muss bereitgestellt werden."
+                                                ]
+                                  },
+                           "messages":  {
+                                            "title":  "5. Betriebsnachrichten von Marketingkommunikation trennen",
+                                            "body":  "Die technische Bereitschaft eines Kanals bedeutet nicht, dass jede Nachrichtenart ohne Genehmigung gesendet werden darf.",
+                                            "rows":  [
+                                                         {
+                                                             "label":  "Termin- / Betriebsinformation",
+                                                             "value":  "Wird als erforderliche und verhältnismäßige Dienstkommunikation bewertet. Eine Nachricht sollte nur Mindestinhalt, beispielsweise eine Terminerinnerung, enthalten und keine Diagnose, Behandlungsdetails oder sensiblen Gesundheitsinformationen umfassen."
+                                                         },
+                                                         {
+                                                             "label":  "Kampagne oder Werbung",
+                                                             "value":  "In der Türkei werden vor Abschluss der nach Gesetz Nr. 6563, den Regeln für kommerzielle elektronische Kommunikation und gegebenenfalls IYS erforderlichen Verfahren keine Nachrichten gesendet."
+                                                         },
+                                                         {
+                                                             "label":  "Direktmarketing an EU-Empfänger",
+                                                             "value":  "Vor Einrichtung des erforderlichen Genehmigungs- oder Widerspruchsmechanismus nach Bewertung der ePrivacy-Regeln, der DSGVO und der Umsetzungsregeln des Zielmitgliedstaates werden keine Nachrichten gesendet."
+                                                         }
+                                                     ]
+                                        },
+                           "protection":  {
+                                              "title":  "6. Datenminimierung und Sicherheit",
+                                              "items":  [
+                                                            "In WhatsApp- oder Instagram-Nachrichtentexten dürfen keine Diagnose, Behandlungspläne, Bilder, Rezepte oder andere sensiblen Gesundheitsinhalte versendet werden.",
+                                                            "Eingehende Nachrichten dürfen nur von Rollen eingesehen werden, die sie für ihre Aufgaben benötigen; Zugriffsprotokolle sind zu führen.",
+                                                            "Wird eine Terminanfrage in einen Betriebsdatensatz überführt, dürfen nur notwendige Informationen übertragen werden; unnötige Gesprächsinhalte dürfen nicht vervielfältigt werden.",
+                                                            "Für Sendungen an falsche Empfänger, Kontoübernahmen oder unberechtigte Zugriffe muss ein Verfahren zur Vorfallreaktion bestehen."
+                                                        ]
+                                          },
+                           "emergency":  {
+                                             "title":  "Gesundheitliche Notfallsituationen",
+                                             "body":  "NoraMedi und seine Kanalfunktionen sind nicht für Notfallgesundheitsdienste konzipiert. In einer dringenden oder lebensbedrohlichen Gesundheitssituation wenden Sie sich bitte direkt an den Notruf (112) oder den zuständigen Notfallgesundheitsdienstleister. Warten Sie nicht auf eine Antwort über klinische Terminkanäle."
+                                         },
+                           "sources":  {
+                                           "commercial":  "Handelsministerium der Republik Türkiye - Vorschriften zum elektronischen Handel und zur kommerziellen elektronischen Kommunikation",
+                                           "transfer":  "KVKK - Amtliche Dokumente zur internationalen Übermittlung personenbezogener Daten",
+                                           "eprivacy":  "EUR-Lex - ePrivacy-Richtlinie 2002/58/EG (Artikel 13 für Direktmarketing)",
+                                           "gdpr":  "EUR-Lex - DSGVO/GDPR"
+                                       }
+                       },
+    "dataRequest":  {
+                        "title":  "Antrag auf Ausübung von Betroffenenrechten",
+                        "description":  "Erfahren Sie, wie Sie einen Antrag auf Auskunft, Berichtigung, Löschung, Widerspruch oder Beschwerde zu Ihren personenbezogenen Daten stellen können.",
+                        "platform":  {
+                                         "title":  "1. Anträge zur NoraMedi-Plattform",
+                                         "body":  "Für Anträge zu Ihrem NoraMedi-Plattformkonto, Ihren Datenschutzpräferenzen oder von der Plattform verarbeiteten Daten verwenden Sie bitte die folgenden Kontaktadressen.",
+                                         "rows":  [
+                                                      {
+                                                          "label":  "Datenschutz / KVKK / DSGVO-Anträge",
+                                                          "value":  "privacy@noramedi.com"
+                                                      },
+                                                      {
+                                                          "label":  "Sicherheitsmeldungen und vermutete Verletzungen",
+                                                          "value":  "security@noramedi.com"
+                                                      },
+                                                      {
+                                                          "label":  "Kontozugriff und Supportfragen",
+                                                          "value":  "support@noramedi.com"
+                                                      },
+                                                      {
+                                                          "label":  "Rechtliche und vertragliche Mitteilungen",
+                                                          "value":  "legal@noramedi.com"
+                                                      }
+                                                  ]
+                                     },
+                        "types":  {
+                                      "title":  "2. Antragskategorien",
+                                      "body":  "Sie können die folgenden Rechte nach Artikel 11 KVKK und, soweit anwendbar, Artikel 15-22 DSGVO ausüben:",
+                                      "items":  [
+                                                    "Auskunft und Information: Erfahren, ob Ihre Daten verarbeitet werden, und eine Kopie erhalten.",
+                                                    "Berichtigung: Berichtigung unvollständiger oder unrichtiger Daten beantragen.",
+                                                    "Löschung oder Anonymisierung: Löschung oder Anonymisierung Ihrer Daten beantragen, soweit die anwendbaren Bedingungen erfüllt sind.",
+                                                    "Widerspruch oder Einschränkung: Der Verarbeitung widersprechen oder deren Einschränkung beantragen.",
+                                                    "Widerruf der Einwilligung: Einwilligung für einwilligungsbasierte Verarbeitungen widerrufen.",
+                                                    "Übermittlungsinformation: Die Dritten erfahren, an die Ihre Daten übermittelt wurden.",
+                                                    "Sicherheits- und Datenschutzbeschwerde: Einen vermuteten Datenschutzverstoß oder eine Sicherheitslücke melden.",
+                                                    "Formelle Beschwerde: Beschwerde bei der KVKK oder der zuständigen EU-Aufsichtsbehörde einreichen."
+                                                ]
+                                  },
+                        "clinic":  {
+                                       "title":  "3. Anträge zu Patientendaten von Kliniken",
+                                       "body":  "Patientendaten, Termindaten und klinische Kommunikationsdaten, die von einer Klinik auf der NoraMedi-Plattform verarbeitet werden, werden primär von dieser Klinik kontrolliert. Anträge zu solchen Daten sollten Sie direkt an die Klinik richten, bei der Sie Leistungen erhalten haben. NoraMedi kann die Klinik im anwendbaren vertraglichen Rahmen unterstützen; NoraMedi trifft jedoch keine primären Verantwortlichenentscheidungen im Namen von Kliniken."
+                                   },
+                        "response":  {
+                                         "title":  "4. Antwortfristen",
+                                         "body":  "Anträge werden innerhalb von dreißig Tagen nach KVKK und innerhalb eines Monats nach DSGVO beantwortet. Diese Frist kann je nach Art oder Umfang des Antrags verlängert werden; Sie werden in diesem Fall informiert. Die Einreichung Ihres Antrags in schriftlicher Form an privacy@noramedi.com trägt zur Beschleunigung des Verfahrens bei."
+                                     },
+                        "sources":  {
+                                        "kvkk":  "Türkische Datenschutzbehörde - Betroffenenrechte und Antragsverfahren",
+                                        "gdpr":  "EUR-Lex - DSGVO Artikel 15-22 (Betroffenenrechte)"
+                                    }
+                    },
+    "consent":  {
+                    "title":  "Einwilligungsvorlagen",
+                    "description":  "Muster für Datenschutzinformationen und ausdrückliche Einwilligung für WhatsApp- und Instagram-Terminkanäle. Die Texte auf dieser Seite sind allgemeine Vorlagen, die Kliniken an ihre eigenen Bedingungen anpassen können.",
+                    "disclaimer":  {
+                                       "title":  "Zum Vorlagencharakter dieser Seite",
+                                       "body":  "Die Texte auf dieser Seite sind allgemeine Vorlagen und stellen keine Garantie für rechtliche Konformität dar. Jede Klinik sollte diese Texte im Licht ihrer eigenen Dienstleistungen, verarbeiteten Datenkategorien und des anwendbaren Rechts mit einem Rechtsberater prüfen."
+                                   },
+                    "distinction":  {
+                                        "title":  "1. Datenschutzinformation und ausdrückliche Einwilligung unterscheiden",
+                                        "body":  "Nach KVKK und DSGVO sind die Informationspflicht und die ausdrückliche Einwilligung unterschiedliche Konzepte, die getrennt erfüllt werden müssen.",
+                                        "items":  [
+                                                      "Datenschutzinformation: Umfasst die Identität des Verantwortlichen, Verarbeitungszwecke, Rechtsgrundlagen, Aufbewahrungsfristen, Übermittlungsempfänger und Betroffenenrechte. Muss unabhängig von einer Einwilligungseinholung bereitgestellt werden.",
+                                                      "Ausdrückliche Einwilligung: Nur für Verarbeitungsvorgänge erforderlich, bei denen die ausdrückliche Einwilligung die identifizierte Rechtsgrundlage ist. Muss für jeden Verarbeitungsvorgang gesondert, freiwillig, spezifisch und informiert eingeholt werden.",
+                                                      "Für Terminvorgänge kann auch eine andere Rechtsgrundlage wie Vertragserfüllung oder berechtigte Interessen in Betracht kommen; in solchen Fällen kann eine Information allein ausreichen."
+                                                  ]
+                                    },
+                    "template":  {
+                                     "title":  "2. Mustertexte für Terminkanäle",
+                                     "body":  "Die folgenden Texte sind Mustervorlagen für Kanäle, die Terminanfragen über WhatsApp oder Instagram erhalten. Sie müssen von der Klinik angepasst werden, um den Klinikname, die Kontaktdaten des Verantwortlichen und den Link zur Datenschutzinformation einzufügen.",
+                                     "notice":  "Beispiel für Datenschutzinformation-Link: \u0027Um zu erfahren, wie Ihre personenbezogenen Daten verarbeitet werden, können Sie die Datenschutzerklärung von [Klinikname] lesen: [Link]\u0027",
+                                     "explicit":  "Beispiel für ausdrückliche Einwilligung: \u0027Ich willige in die Verarbeitung meiner personenbezogenen Daten zum Zweck der Entgegennahme meiner Terminanfrage und der Kontaktaufnahme mit mir ein.\u0027"
+                                 },
+                    "clinicNote":  {
+                                       "title":  "3. Anpassungspflicht der Kliniken",
+                                       "body":  "Diese Vorlagen bieten nur einen allgemeinen Ausgangspunkt. Jede Klinik ist verantwortlich für die Erstellung ihrer eigenen Datenschutzinformation, die die Firma des Verantwortlichen, verarbeitete Datenkategorien, Aufbewahrungsfristen und Übermittlungsbedingungen enthält, sowie ggf. ihrer Einwilligungsdokumentation für ihren Patientenkommunikationskanal. Die unveränderte Verwendung dieser Vorlagen garantiert keine rechtliche Konformität."
+                                   },
+                    "sources":  {
+                                    "kvkk":  "KVKK - Leitfaden zur Erfüllung der Informationspflicht",
+                                    "gdpr":  "EUR-Lex - DSGVO Artikel 7 und Erwägungsgrund 32 (Bedingungen für die Einwilligung)"
+                                }
+                },
+    "clinicKvkk":  {
+                       "backToLegal":  "Rechtliche Informationen",
+                       "loading":  "Wird geladen...",
+                       "notAvailableTitle":  "Datenschutzhinweis nicht verfügbar",
+                       "notAvailableBody":  "Der Datenschutzhinweis dieser Klinik ist derzeit nicht veröffentlicht. Bitte wenden Sie sich direkt an die Klinik.",
+                       "noticeTitle":  "Informationshinweis",
+                       "noticeBody":  "Diese Seite enthält den Datenschutzhinweis, der von der Klinik für ihre eigenen Patienten- und Kontaktdaten erstellt wurde. NoraMedi stellt technische Plattformdienste für diese Daten bereit.",
+                       "controllerTitle":  "Verantwortlicher",
+                       "privacyNoticeTitle":  "Datenschutzhinweis",
+                       "channelDisclosureTitle":  "Offenlegung der Kommunikationskanäle",
+                       "aiWarningTitle":  "KI / Kanaldienste",
+                       "aiWarningBody":  "Jeder KI-Assistent, der über WhatsApp oder Instagram antwortet, bietet keine medizinische Diagnose, Behandlungsberatung, Notfalldienste oder Gesundheitsberatung an. Rufen Sie im Notfall den Notruf an oder wenden Sie sich direkt an die Klinik.",
+                       "platformNoteTitle":  "Plattformdienstanbieter",
+                       "platformNoteBody":  "NoraMedi (Mustafa Basol - Peaknova) stellt technische Plattformdienste für diese Klinik bereit. Die Klinik ist der primäre Verantwortliche für ihre eigenen Patienten-, Termin- und Kommunikationsdaten. Bei Fragen zu Plattformdiensten wenden Sie sich an privacy@noramedi.com.",
+                       "fields":  {
+                                      "dataControllerTitle":  "Verantwortlicher",
+                                      "address":  "Adresse",
+                                      "phone":  "Telefon",
+                                      "privacyRequestEmail":  "Datenschutzanfrage-E-Mail",
+                                      "kepEmail":  "KEP-E-Mail",
+                                      "website":  "Webseite",
+                                      "dataProtectionContact":  "Datenschutzkontakt",
+                                      "version":  "Version",
+                                      "effectiveDate":  "Datum des Inkrafttretens"
+                                  }
+                   }
 }

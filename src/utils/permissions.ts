@@ -590,3 +590,12 @@ export function canViewContactRequests(user: UserForPermission | null | undefine
     role === 'RECEPTIONIST'
   );
 }
+
+/**
+ * Klinik KVKK/Gizlilik profili yönetimi.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER.
+ */
+export function canManageClinicLegalProfile(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
