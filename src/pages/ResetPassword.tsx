@@ -4,6 +4,16 @@ import { Lock, Loader2, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react
 import { useTranslation } from 'react-i18next';
 import { authService } from '../services/api';
 
+const getPasswordRuleErrors = (password: string, t: (key: string) => string) => {
+  const errors: string[] = [];
+  if (password.length < 8) errors.push(t('passwordRequirements.minLength'));
+  if (!/[A-Z]/.test(password)) errors.push(t('passwordRequirements.uppercase'));
+  if (!/[a-z]/.test(password)) errors.push(t('passwordRequirements.lowercase'));
+  if (!/\d/.test(password)) errors.push(t('passwordRequirements.number'));
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push(t('passwordRequirements.special'));
+  return errors;
+};
+
 const ResetPassword: React.FC = () => {
   const { t } = useTranslation('auth');
   const [searchParams] = useSearchParams();
@@ -15,9 +25,16 @@ const ResetPassword: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
+  const passwordErrors = getPasswordRuleErrors(newPassword, t);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (passwordErrors.length > 0) {
+      setError(t('resetPasswordPage.errorWeakPassword'));
+      return;
+    }
 
     if (newPassword !== confirmPassword) {
       setError(t('resetPasswordPage.errorMismatch'));
@@ -37,6 +54,10 @@ const ResetPassword: React.FC = () => {
       const code = err?.response?.data?.code;
       if (code === 'RESET_TOKEN_INVALID' || code === 'RESET_TOKEN_EXPIRED' || code === 'RESET_TOKEN_USED') {
         setError(t('resetPasswordPage.errorInvalidToken'));
+      } else if (code === 'PASSWORD_WEAK') {
+        setError(t('resetPasswordPage.errorWeakPassword'));
+      } else if (code === 'RESET_FIELDS_REQUIRED') {
+        setError(t('resetPasswordPage.errorFieldsRequired'));
       } else {
         setError(t('resetPasswordPage.errorGeneric'));
       }
@@ -143,11 +164,20 @@ const ResetPassword: React.FC = () => {
                 <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                   <p className="font-semibold">{t('passwordRequirements.title')}</p>
                   <ul className="space-y-1 pl-2">
-                    <li>• {t('passwordRequirements.minLength')}</li>
-                    <li>• {t('passwordRequirements.uppercase')}</li>
-                    <li>• {t('passwordRequirements.lowercase')}</li>
-                    <li>• {t('passwordRequirements.number')}</li>
-                    <li>• {t('passwordRequirements.special')}</li>
+                    {[
+                      t('passwordRequirements.minLength'),
+                      t('passwordRequirements.uppercase'),
+                      t('passwordRequirements.lowercase'),
+                      t('passwordRequirements.number'),
+                      t('passwordRequirements.special'),
+                    ].map((rule) => {
+                      const failed = newPassword.length > 0 && passwordErrors.includes(rule);
+                      return (
+                        <li key={rule} className={failed ? 'text-red-500 dark:text-red-400 font-medium' : undefined}>
+                          • {rule}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
 
