@@ -45,9 +45,11 @@ interface ConfirmResult {
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
+  selectedClinicId?: string;
+  availableClinics?: { id: string; name: string }[];
 }
 
-const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
+const UserImportModal: React.FC<Props> = ({ onClose, onSuccess, selectedClinicId, availableClinics = [] }) => {
   const { t } = useTranslation(['users', 'common']);
   const [step, setStep] = useState<Step>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -57,7 +59,11 @@ const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [targetClinicId, setTargetClinicId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isAllClinics = !selectedClinicId || selectedClinicId === 'all';
+  const effectiveClinicId = isAllClinics ? targetClinicId : selectedClinicId;
 
   const selectFile = (f: File) => {
     if (!f.name.endsWith('.xlsx')) {
@@ -74,7 +80,7 @@ const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
   const handleDownloadTemplate = async () => {
     try {
-      const res = await userService.downloadImportTemplate();
+      const res = await userService.downloadImportTemplate(effectiveClinicId || undefined);
       const url = URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
@@ -96,7 +102,7 @@ const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await userService.importPreview(file);
+      const res = await userService.importPreview(file, effectiveClinicId || undefined);
       setPreview(res.data);
       setStep('preview');
     } catch (err: any) {
@@ -111,7 +117,7 @@ const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await userService.importConfirm(file);
+      const res = await userService.importConfirm(file, effectiveClinicId || undefined);
       setResult(res.data);
       setStep('result');
     } catch (err: any) {
@@ -157,6 +163,28 @@ const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           {/* ─── Adım: Yükleme ─────────────────────────────────────────────── */}
           {step === 'upload' && (
             <div className="space-y-4">
+              {/* Klinik bağlamı */}
+              {isAllClinics ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">{t('users:importModal.allClinicsHint')}</p>
+                  <select
+                    value={targetClinicId}
+                    onChange={(e) => setTargetClinicId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="">{t('users:importModal.selectTargetClinic')}</option>
+                    {availableClinics.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 text-sm text-violet-700">
+                  <CheckCircle2 size={14} className="shrink-0" />
+                  {t('users:importModal.clinicContext')}
+                </div>
+              )}
+
               <div className="bg-violet-50 border border-violet-100 rounded-lg p-4 text-sm text-violet-800 space-y-1">
                 <p className="font-semibold">{t('users:importModal.howItWorks.title')}</p>
                 <ol className="list-decimal list-inside space-y-1 text-violet-700">
@@ -337,7 +365,7 @@ const UserImportModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               </button>
               <button
                 onClick={handlePreview}
-                disabled={!file || loading}
+                disabled={!file || loading || (isAllClinics && !targetClinicId)}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}

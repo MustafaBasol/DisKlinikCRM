@@ -12,7 +12,7 @@
     "howItWorks": {
       "title": "Wie funktioniert es?",
       "downloadTemplate": "Laden Sie die Vorlage herunter und verwenden Sie die UUIDs von der Filialen-Seite als Referenz.",
-      "fillData": "Füllen Sie die Personaldaten aus (Pflicht: Vorname, Nachname, E-Mail, Rolle, Filial-ID).",
+      "fillData": "Füllen Sie die Personaldaten aus (Pflicht: Vorname, Nachname, E-Mail, Rolle). Bleibt die Filial-ID leer, wird der ausgewählte Standort verwendet.",
       "temporaryPassword": "Wenn das Passwort leer ist, erzeugt das System ein temporäres Passwort und zeigt es nur einmal an.",
       "skipExisting": "Bestehende E-Mails werden übersprungen und nicht überschrieben."
     },
@@ -32,6 +32,10 @@
       "skippedRowsTitle": "Übersprungene Zeilen:",
       "invitationFailedWarning": "Einige Benutzer wurden erstellt, aber die Einladungs-E-Mail konnte nicht gesendet werden. Sie können über 'Passwort vergessen' ein Passwort festlegen."
     },
+    "targetClinicLabel": "Zielstandort",
+    "selectTargetClinic": "Zielstandort auswählen...",
+    "allClinicsHint": "Sie befinden sich in der Gesamtansicht. Wählen Sie den Zielstandort für den Import:",
+    "clinicContext": "Benutzer werden in den ausgewählten Standort importiert.",
     "errors": {
       "fileType": "Nur .xlsx-Dateien werden akzeptiert.",
       "fileSize": "Die Datei überschreitet die Grenze von 5 MB.",
