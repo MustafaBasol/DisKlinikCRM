@@ -32,7 +32,7 @@ const CommunicationsNoticePage = () => {
   const channelRows = t('communications.channels.rows', { returnObjects: true }) as LegalTableRow[];
   const messageRows = t('communications.messages.rows', { returnObjects: true }) as LegalTableRow[];
   const protectionItems = t('communications.protection.items', { returnObjects: true }) as string[];
-  const activationItems = t('communications.activation.items', { returnObjects: true }) as string[];
+  const aiItems = t('communications.ai.items', { returnObjects: true }) as string[];
 
   return (
     <LegalLayout
@@ -40,9 +40,9 @@ const CommunicationsNoticePage = () => {
       description={t('communications.description')}
       metaTitle={t('meta.communications')}
     >
-      <LegalNotice title={t('communications.status.title')}>
-        {t('communications.status.body')}
-      </LegalNotice>
+      <LegalSection title={t('communications.scope.title')}>
+        <p>{t('communications.scope.body')}</p>
+      </LegalSection>
 
       <LegalSection title={t('communications.channels.title')}>
         <p>{t('communications.channels.body')}</p>
@@ -51,6 +51,11 @@ const CommunicationsNoticePage = () => {
 
       <LegalSection title={t('communications.roles.title')}>
         <p>{t('communications.roles.body')}</p>
+      </LegalSection>
+
+      <LegalSection title={t('communications.ai.title')}>
+        <p>{t('communications.ai.body')}</p>
+        <LegalList items={aiItems} />
       </LegalSection>
 
       <LegalSection title={t('communications.messages.title')}>
@@ -62,10 +67,9 @@ const CommunicationsNoticePage = () => {
         <LegalList items={protectionItems} />
       </LegalSection>
 
-      <LegalSection title={t('communications.activation.title')}>
-        <p>{t('communications.activation.body')}</p>
-        <LegalList items={activationItems} />
-      </LegalSection>
+      <LegalNotice title={t('communications.emergency.title')}>
+        {t('communications.emergency.body')}
+      </LegalNotice>
 
       <LegalSources items={communicationsSources} />
     </LegalLayout>

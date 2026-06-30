@@ -7,62 +7,76 @@
     "center": "Informations juridiques | NoraMedi CRM",
     "privacy": "Avis de confidentialité | NoraMedi CRM",
     "cookies": "Politique des cookies et du stockage local | NoraMedi CRM",
-    "communications": "Communications électroniques et intégrations | NoraMedi CRM"
+    "communications": "Information sur les canaux de communication | NoraMedi CRM",
+    "dataRequest": "Demande d'exercice de droits | NoraMedi CRM",
+    "consent": "Modèles de consentement | NoraMedi CRM"
   },
   "nav": {
     "label": "Pages juridiques",
     "center": "Informations juridiques",
     "privacy": "Confidentialité",
     "cookies": "Politique des cookies",
-    "communications": "Canaux de communication"
+    "communications": "Canaux de communication",
+    "dataRequest": "Demande d'exercice de droits",
+    "consent": "Modèles de consentement"
   },
   "shared": {
-    "label": "Projet d'information juridique",
+    "label": "Information juridique",
     "back": "Retour à la page de présentation",
     "themeToggle": "Changer le thème",
     "languageSelector": "Choisir la langue",
-    "draftTitle": "À compléter avant publication",
-    "draftBody": "Ces pages sont des projets de mise en oeuvre préparés selon les principales obligations d'information des réglementations turques et de l'Union européenne ; elles ne constituent ni un avis juridique ni une garantie de conformité. Lorsque les coordonnées du responsable du traitement, les prestataires réels, les durées de conservation, les mécanismes de transfert et les procédures de consentement aux communications auront été déterminés, elles devront être revues par un conseil juridique.",
-    "reviewDate": "Dernier examen des sources réglementaires : 25 mai 2026",
+    "draftTitle": "Note juridique",
+    "draftBody": "Ces pages sont préparées à des fins d'information générale sur les pratiques de traitement des données de NoraMedi. Elles ne constituent pas un avis juridique. Les cliniques et autres responsables du traitement doivent consulter un conseiller juridique pour leurs propres obligations.",
+    "reviewDate": "Dernière mise à jour : juin 2026",
     "sources": "Principales sources officielles",
-    "sourcesDescription": "Les textes officiels et publications d'autorités ci-dessous ont servi à définir le périmètre de ce projet."
+    "sourcesDescription": "Les textes officiels et publications d'autorités ci-dessous ont servi à définir le périmètre de cette page."
   },
   "center": {
     "title": "Centre d'informations juridiques",
-    "description": "Espace de préparation à la publication des textes relatifs à la protection des données et aux communications électroniques pour la page publique et le produit d'opérations cliniques intégrant WhatsApp et Instagram.",
+    "description": "Pages d'information générale sur la confidentialité, les cookies, les canaux de communication et les droits des personnes applicables à la plateforme NoraMedi.",
     "pagesTitle": "Pages d'information",
-    "pagesDescription": "Chaque texte explique séparément le comportement public actuel du produit et les obligations à finaliser avant activation en production.",
+    "pagesDescription": "Chaque page explique les pratiques de traitement des données pertinentes de NoraMedi et le cadre réglementaire applicable.",
     "open": "Consulter la page",
     "cards": [
       {
         "path": "/legal/privacy",
         "title": "Avis de confidentialité",
-        "description": "Traitement, transfert, conservation et droits des personnes selon la KVKK et, le cas échéant, le RGPD."
+        "description": "Traitement des données de la plateforme, transferts, conservation et droits des personnes selon la KVKK et, le cas échéant, le RGPD."
       },
       {
         "path": "/legal/cookies",
         "title": "Politique des cookies et du stockage local",
-        "description": "Comportement actuel du stockage fonctionnel du navigateur et futures règles de consentement aux cookies."
+        "description": "Comportement actuel du stockage fonctionnel du navigateur et informations sur l'utilisation des cookies."
       },
       {
         "path": "/legal/communications",
         "title": "Information sur les canaux de communication",
-        "description": "Flux WhatsApp et Instagram, autorisations de communications commerciales et principe d'absence de partage de données sensibles."
+        "description": "Fonctionnalités de canal WhatsApp et Instagram, utilisation de l'assistant IA et principes de contenu des messages."
+      },
+      {
+        "path": "/legal/data-subject-request",
+        "title": "Demande d'exercice de droits",
+        "description": "Comment soumettre une demande d'accès, de rectification, de suppression ou d'opposition concernant vos données personnelles."
+      },
+      {
+        "path": "/legal/consent",
+        "title": "Modèles de consentement",
+        "description": "Exemples d'information et de consentement explicite pour les canaux de prise de rendez-vous WhatsApp/Instagram."
       }
     ],
     "scope": {
       "title": "Périmètre et limite",
-      "body": "NoraMedi CRM est un produit CRM destiné à gérer les opérations cliniques ; il n'est pas présenté comme une plateforme de diagnostic, de prescription ou de dossier médical électronique complet. Toutefois, les flux de patients, rendez-vous et communications pouvant contenir des données personnelles et, dans certains usages, des données de santé sensibles, la minimisation des données et l'accès autorisé sont indispensables."
+      "body": "NoraMedi est une plateforme SaaS/CRM de gestion des opérations cliniques, fournie par Mustafa Basol - Peaknova. Les flux de patients, rendez-vous et communications peuvent contenir des données personnelles et, dans certains usages, des données de santé sensibles ; la minimisation des données et l'accès autorisé sont donc indispensables. NoraMedi n'est pas présentée comme une plateforme de diagnostic, de prescription ou de dossier médical électronique complet."
     },
     "checklist": {
-      "title": "Éléments à finaliser avant publication",
-      "description": "Pour utiliser ces textes dans un service réel, votre organisation doit finaliser les informations et contrôles suivants.",
+      "title": "Guide de protection des données pour les cliniques",
+      "description": "Les cliniques utilisant la plateforme pour leurs propres données de patients et de communication doivent évaluer les obligations suivantes en leur qualité de responsables du traitement.",
       "items": [
-        "La raison sociale du responsable du traitement, les données MERSIS/fiscales, l'adresse postale et le canal de contact protection des données doivent être indiqués.",
-        "Les catégories réelles de données, finalités, bases juridiques et durées de conservation/suppression doivent être alignées sur l'inventaire des données.",
-        "Les rôles de sous-traitants, contrats et éventuels mécanismes de transfert international pour l'hébergement, la messagerie et les prestataires Meta/WhatsApp/Instagram doivent être documentés.",
-        "Pour les communications électroniques marketing en Turquie, les processus d'accord/refus et, le cas échéant, IYS doivent être appliqués ; pour un public UE, ePrivacy/RGPD et les règles de l'État membre concerné doivent être appliqués.",
-        "L'absence de données de santé sensibles dans les messages, les contrôles d'accès, la journalisation et les procédures de réponse aux violations doivent être vérifiés opérationnellement."
+        "La clinique doit préparer sa propre information destinée aux patients et, si nécessaire, sa documentation de consentement explicite.",
+        "Les catégories réelles de données, finalités et durées de conservation doivent être alignées sur l'inventaire des données au niveau clinique.",
+        "Avant activation des fonctionnalités de canal WhatsApp/Instagram, les rôles de sous-traitants et les conditions de transfert au niveau clinique doivent être documentés.",
+        "Les mécanismes d'accord/refus et, si nécessaire, les procédures IYS pour les communications électroniques commerciales relèvent de la responsabilité de la clinique.",
+        "L'absence de données de santé sensibles dans les canaux de messagerie et les contrôles d'accès doivent être vérifiés opérationnellement."
       ]
     },
     "sources": {
@@ -73,52 +87,82 @@
   },
   "privacy": {
     "title": "Avis de confidentialité et de traitement des données personnelles",
-    "description": "Projet de texte pour les obligations d'information au titre de la KVKK en Turquie et du RGPD lorsque des services sont proposés à des personnes dans l'Union européenne ou que leur comportement est suivi.",
+    "description": "Information générale sur le traitement des données personnelles, les transferts, la conservation et les droits des personnes au titre de la KVKK et, le cas échéant, du RGPD, dans le cadre de la plateforme NoraMedi.",
     "controller": {
-      "title": "1. Responsable du traitement et contact",
-      "body": "La clinique ou l'entreprise qui détermine les finalités et moyens du traitement des données personnelles sera responsable du traitement dans le contexte d'utilisation concerné. Le rôle du fournisseur de la plateforme, responsable ou sous-traitant, devra être établi séparément selon le service et le contrat.",
-      "requiredTitle": "Informations obligatoires de publication manquantes",
-      "requiredBody": "[Raison sociale du responsable], [adresse postale], [données MERSIS/fiscales], [adresse e-mail ou KEP pour les demandes] et, le cas échéant, [contact représentant UE / délégué à la protection des données] doivent être insérés ici avant le lancement du service."
+      "title": "1. Fournisseur de la plateforme et contact",
+      "body": "NoraMedi est une plateforme SaaS de gestion des opérations cliniques fournie par Mustafa Basol - Peaknova. Les cliniques agissent en qualité de responsables du traitement principaux au titre de la KVKK et, le cas échéant, du RGPD pour les traitements découlant de leurs propres données de patients, de rendez-vous et de communications. NoraMedi peut agir en qualité de sous-traitant ou de prestataire de services dans le cadre des services de plateforme et d'infrastructure ; ce rôle est déterminé séparément selon le contrat de service et le contexte d'utilisation.",
+      "contactRows": [
+        { "label": "Plateforme / Produit", "value": "NoraMedi" },
+        { "label": "Fournisseur", "value": "Mustafa Basol - Peaknova" },
+        { "label": "Contact général", "value": "contact@noramedi.com" },
+        { "label": "Assistance", "value": "support@noramedi.com" },
+        { "label": "Demandes de confidentialité / KVKK / RGPD", "value": "privacy@noramedi.com" },
+        { "label": "Signalements de sécurité", "value": "security@noramedi.com" },
+        { "label": "Notifications juridiques / contractuelles", "value": "legal@noramedi.com" }
+      ]
     },
     "data": {
       "title": "2. Catégories de données susceptibles d'être traitées",
-      "body": "Le périmètre ci-dessous repose sur la page de présentation actuelle et les fonctions opérationnelles décrites du produit. Il doit être limité ou mis à jour selon l'inventaire réel avant tout usage contractuel.",
+      "body": "Le périmètre ci-dessous est basé sur les fonctionnalités actuelles de la plateforme et les scénarios d'utilisation clinique. Les cliniques doivent déterminer leur périmètre de traitement spécifique en fonction de leur propre inventaire des données.",
       "rows": [
         {
-          "label": "Utilisation du site public",
-          "value": "Données de stockage fonctionnel du navigateur telles que les préférences de langue et de thème ; aucun outil de suivi analytique ou publicitaire n'a été identifié dans cette version."
+          "label": "Utilisation du site public et préférences fonctionnelles",
+          "value": "Données de stockage fonctionnel du navigateur telles que les préférences de langue et de thème ; aucun outil de suivi analytique ou publicitaire n'est utilisé dans cette version."
         },
         {
-          "label": "Zone de demande de démo",
-          "value": "Les informations saisies dans le formulaire d'aperçu actuel ne sont ni envoyées ni enregistrées. Si une fonctionnalité réelle est activée, une information distincte sur les coordonnées devra être fournie."
+          "label": "Demandes de démo / contact",
+          "value": "Si un formulaire de démo ou de contact est activé, les coordonnées soumises peuvent être traitées."
         },
         {
-          "label": "Compte d'opérations cliniques",
-          "value": "Lorsque le service est activé, des données d'utilisateur/rôle, clinique et établissement, contact patient, rendez-vous, opportunité de traitement, tâche, suivi de paiement et journal d'activité peuvent être traitées."
+          "label": "Compte de plateforme et données utilisateur",
+          "value": "Nom d'utilisateur, e-mail, identifiants d'authentification chiffrés, données de rôle et de permissions, journaux de connexion/déconnexion."
         },
         {
-          "label": "Flux WhatsApp et Instagram",
-          "value": "Lorsqu'un canal est activé, les informations de connexion, métadonnées de message et contenus de conversation peuvent entrer dans le flux opérationnel. Aucune donnée de santé sensible ne doit être partagée dans les messages."
+          "label": "Données de configuration clinique / organisation / établissement",
+          "value": "Nom de la clinique, détails des établissements, horaires, définitions de services et structure organisationnelle."
         },
         {
-          "label": "Journaux de sécurité et d'audit",
-          "value": "Les données d'autorisation, d'activité/audit et de sécurité peuvent être traitées aux fins de contrôle d'accès et d'analyse d'incident."
+          "label": "Données de rôles et de permissions du personnel",
+          "value": "Rôles attribués au personnel clinique, permissions d'accès et informations sur les tâches opérationnelles."
+        },
+        {
+          "label": "Données de contact patient et de rendez-vous",
+          "value": "Nom du patient, coordonnées, rendez-vous et données de suivi traités dans le CRM. Les données de santé sont classées comme données de catégorie particulière."
+        },
+        {
+          "label": "Métadonnées de connexion WhatsApp / Instagram et contenu des messages",
+          "value": "Lorsqu'un canal est activé, les informations de connexion, identifiants de l'expéditeur, date et contenu des messages et état des conversations peuvent être traités."
+        },
+        {
+          "label": "Données de traitement de l'assistant IA",
+          "value": "Lorsque des fonctionnalités assistées par IA sont activées, le contexte des conversations et les données de correspondance de rendez-vous peuvent être envoyés au fournisseur IA."
+        },
+        {
+          "label": "Journaux de sécurité / audit / opérationnels",
+          "value": "Données d'autorisation, d'activité et d'audit conservées pour le contrôle d'accès et l'analyse d'incident."
+        },
+        {
+          "label": "Données de facturation / suivi des paiements",
+          "value": "Données de facturation et de transaction liées aux abonnements à la plateforme et au suivi des paiements dans le CRM."
         }
       ]
     },
     "purposes": {
       "title": "3. Finalités du traitement",
       "items": [
-        "Fournir la gestion opérationnelle par clinique, établissement, équipe et rôle.",
-        "Gérer la visibilité des rendez-vous, tâches de suivi, parcours de traitement/service et paiements.",
-        "Lorsqu'ils sont activés, permettre aux équipes autorisées d'intégrer les conversations WhatsApp et Instagram aux opérations.",
-        "Protéger la sécurité des comptes et services, prévenir les accès non autorisés et tenir des journaux d'audit.",
-        "Répondre aux demandes des personnes, obligations réglementaires et processus contractuels."
+        "Exploitation de la plateforme CRM et fourniture de la gestion opérationnelle par clinique, établissement, équipe et rôle.",
+        "Création de compte, authentification, sécurité et gestion des accès.",
+        "Gestion des rendez-vous, tâches de suivi, parcours de traitement/service et visibilité des paiements.",
+        "Routage et gestion de la boîte de réception des canaux de communication WhatsApp et Instagram (lorsqu'un canal est activé).",
+        "Correspondance de rendez-vous assistée par IA et fonction d'assistant de communication (lorsque la fonctionnalité est activée).",
+        "Assistance, dépannage, audit et prévention des abus.",
+        "Accomplissement des obligations légales et contractuelles.",
+        "Traitement des demandes des personnes concernées."
       ]
     },
     "basis": {
       "title": "4. Bases juridiques et données sensibles",
-      "body": "La base juridique de chaque catégorie de données doit être établie séparément dans l'inventaire selon l'usage réel, le rôle du responsable et le pays ciblé. Le consentement ne doit pas être considéré comme une base générale présumée lorsqu'une autre base juridique est requise.",
+      "body": "La base juridique de chaque catégorie de données doit être établie séparément en fonction de l'utilisation réelle, du rôle du responsable et du pays ciblé. Le consentement ne doit pas être considéré comme une base générale présumée lorsqu'une autre base juridique est requise.",
       "rows": [
         {
           "label": "Service et opérations de compte",
@@ -137,56 +181,68 @@
     },
     "transfers": {
       "title": "5. Destinataires et transferts internationaux",
-      "body": "L'hébergement, le support ou les connexions WhatsApp/Instagram peuvent entraîner un partage de données personnelles avec des prestataires à l'étranger. Ce projet n'affirme pas qu'un prestataire a été retenu pour la production ni qu'un transfert est prêt.",
-      "actions": [
-        "Le nom, le rôle, le pays et le périmètre de données traitées de chaque destinataire ou sous-traitant doivent être finalisés.",
-        "Pour les transferts depuis la Turquie, aucun transfert ne doit débuter avant application d'une méthode actuelle prévue par l'article 9 de la KVKK, par exemple des clauses contractuelles standard lorsque les conditions sont réunies.",
-        "Lorsque le RGPD s'applique, les décisions d'adéquation ou garanties appropriées et évaluations complémentaires du chapitre V doivent être documentées pour les transferts vers des pays tiers.",
-        "Avant activation de fonctions Meta, WhatsApp ou Instagram, des informations de transfert propres aux cliniques et personnes concernées doivent être présentées."
-      ]
+      "body": "NoraMedi peut transférer des données personnelles aux catégories de destinataires suivantes pour fournir ses services. Les destinataires précis peuvent varier selon le contrat de service et la configuration de la clinique.",
+      "recipients": [
+        "Prestataires d'hébergement et d'infrastructure (serveurs, bases de données, stockage de fichiers).",
+        "Prestataire de services de messagerie électronique (pour les notifications, invitations et messages de réinitialisation de mot de passe).",
+        "Meta Platforms / WhatsApp / Instagram (lorsque les fonctionnalités de canal sont activées par la clinique).",
+        "Google / Gemini ou le fournisseur IA concerné (lorsque les fonctionnalités assistées par IA sont activées).",
+        "Autorités légales et administratives (en cas d'obligation légale ou de demande autorisée).",
+        "Personnel clinique et utilisateurs de l'organisation autorisés (dans le cadre des contrôles d'accès basés sur les rôles)."
+      ],
+      "international": "Certains prestataires d'infrastructure et de services peuvent traiter des données personnelles en dehors de la Turquie ou de l'UE. Ces transferts sont évalués au titre de l'article 9 de la KVKK et, le cas échéant, du chapitre V du RGPD. Les conditions de transfert international peuvent varier selon la configuration de la clinique et les fonctionnalités activées."
     },
     "retention": {
       "title": "6. Conservation et suppression",
-      "body": "Les données ne doivent être conservées que pendant la durée nécessaire à leur finalité ; les procédures de suppression, destruction ou anonymisation doivent être documentées selon les obligations juridiques et contractuelles réelles. Les durées ci-dessous ne sont pas encore définies.",
+      "body": "Les données ne sont conservées que pendant la durée nécessaire à leur finalité. Les durées de conservation suivantes s'appliquent au niveau de la plateforme ; les cliniques peuvent définir des politiques supplémentaires en fonction de leurs propres obligations en matière de données.",
       "rows": [
         {
           "label": "Préférences du site public",
-          "value": "Stockées dans le navigateur en tant que préférences fonctionnelles et supprimables par l'utilisateur. Le cycle de vie exact doit être confirmé avant publication."
+          "value": "Stockées dans le navigateur en tant que préférences fonctionnelles et supprimables par l'utilisateur."
         },
         {
-          "label": "Formulaire de démo",
-          "value": "Cette version d'aperçu ne soumettant ni n'enregistrant de données, aucune donnée de demande n'est conservée."
+          "label": "Messages de conversation",
+          "value": "365 jours (dans le cadre de la politique de nettoyage automatique)."
         },
         {
-          "label": "Données de compte et d'opérations cliniques",
-          "value": "[La durée de conservation et le cycle de suppression seront indiqués après finalisation de l'inventaire des données.]"
+          "label": "État des conversations",
+          "value": "90 jours."
         },
         {
-          "label": "Messages et journaux d'audit",
-          "value": "[Une durée conforme aux besoins, à la réglementation, aux litiges et à la sécurité sera définie et indiquée.]"
+          "label": "Événements entrants de canal",
+          "value": "90 jours."
+        },
+        {
+          "label": "Événements opérationnels",
+          "value": "180 jours."
+        },
+        {
+          "label": "Demandes de contact / démo",
+          "value": "365 jours."
+        },
+        {
+          "label": "Anciennes entrées de boîte de réception résolues",
+          "value": "Peuvent être soumises à caviardage ou masquage selon la politique de conservation."
+        },
+        {
+          "label": "Données légales, d'audit, financières, cliniques et dossiers patients essentiels",
+          "value": "Non supprimées automatiquement par le traitement de nettoyage des données de support ; soumises aux durées de conservation légales et contractuelles applicables."
         }
       ]
     },
     "rights": {
       "title": "7. Droits des personnes et demandes",
-      "body": "Selon le périmètre, les personnes concernées peuvent exercer les droits prévus à l'article 11 de la KVKK et aux articles 15 à 22 du RGPD. Ces droits incluent notamment les demandes visant à :",
+      "body": "Selon le périmètre, les personnes concernées peuvent exercer les droits prévus à l'article 11 de la KVKK et aux articles 15 à 22 du RGPD. Ces droits incluent :",
       "items": [
         "Savoir si leurs données sont traitées et demander information et accès.",
         "Demander la rectification de données incomplètes ou inexactes.",
-        "Demander la suppression, destruction, limitation du traitement ou s'opposer lorsque les conditions applicables sont réunies.",
+        "Demander la suppression, destruction ou anonymisation lorsque les conditions applicables sont réunies.",
+        "Demander la limitation du traitement ou s'y opposer.",
         "Connaître les tiers destinataires et demander, lorsque pertinent, la portabilité des données.",
-        "Retirer un consentement pour les traitements fondés sur celui-ci et introduire une réclamation auprès de l'autorité de contrôle compétente."
+        "Retirer un consentement pour les traitements fondés sur celui-ci.",
+        "Introduire une réclamation auprès de l'autorité de contrôle compétente."
       ],
-      "contact": "Les demandes seront reçues via [adresse de demande du responsable / KEP / e-mail] à indiquer avant publication. Les voies de réclamation en Turquie relèvent des procédures KVKK ; les demandes entrant dans le champ du RGPD relèvent des procédures de l'autorité de contrôle UE compétente."
-    },
-    "publish": {
-      "title": "8. Avant publication de ce texte",
-      "items": [
-        "L'inventaire des données, l'évaluation de l'obligation VERBIS et la politique de conservation/suppression doivent être vérifiés pour l'entreprise réelle.",
-        "Les rôles accédant aux données sensibles et les règles de contenu des messages doivent être testés.",
-        "Les contrats fournisseurs, documents de transfert et mesures de sécurité doivent être cohérents avec les déclarations du texte.",
-        "Le texte doit être mis à jour lorsque des fonctions ou prestataires sont ajoutés et afficher une date d'entrée en vigueur actuelle."
-      ]
+      "contact": "Les demandes de confidentialité relatives au compte et aux données de la plateforme NoraMedi doivent être envoyées à privacy@noramedi.com ; les signalements de sécurité à security@noramedi.com ; les questions d'assistance et d'accès au compte à support@noramedi.com ; et les notifications juridiques ou contractuelles à legal@noramedi.com. Les demandes relatives aux données patients des cliniques doivent être adressées en priorité à la clinique concernée (responsable du traitement) ; NoraMedi peut assister la clinique dans le cadre contractuel applicable."
     },
     "sources": {
       "notice": "KVKK - Guide relatif à l'obligation d'information",
@@ -196,7 +252,7 @@
   },
   "cookies": {
     "title": "Politique des cookies et du stockage local",
-    "description": "Projet d'information sur la situation actuelle et les règles d'utilisation futures des méthodes de stockage du navigateur dans la page de présentation et la zone produit connectée.",
+    "description": "Informations sur la situation actuelle et les règles d'utilisation des méthodes de stockage du navigateur dans la page de présentation publique et la zone produit connectée.",
     "current": {
       "title": "Situation actuelle de la page publique",
       "body": "Selon l'examen du code, la page `/landing` ne contient aucun cookie publicitaire, pixel d'analyse ou cookie marketing. L'application comprend un stockage local pour les préférences d'interface ; la zone produit connectée peut également utiliser des données fonctionnelles telles que la session et la sélection de clinique."
@@ -238,7 +294,7 @@
       "items": [
         "L'utilisateur peut effacer les données de stockage local via les réglages de son navigateur ; cela peut réinitialiser la langue, le thème ou la session.",
         "Si des cookies non essentiels sont mis en service, cette page fournira un lien d'accès au panneau de préférences.",
-        "Une adresse de contact du responsable doit être ajoutée avant publication pour les questions relatives au traitement des données ou au stockage du navigateur."
+        "Pour toute question relative au traitement des données ou au stockage du navigateur, veuillez contacter contact@noramedi.com."
       ]
     },
     "sources": {
@@ -248,76 +304,154 @@
     }
   },
   "communications": {
-    "title": "Information sur les communications électroniques et intégrations de canaux",
-    "description": "Projet de texte relatif à la protection des données, aux autorisations de communication commerciale et aux principes de contenu sûr lorsque WhatsApp et Instagram sont utilisés dans les opérations cliniques.",
-    "status": {
-      "title": "Les surfaces d'intégration existent ; l'aptitude à la production doit être finalisée séparément",
-      "body": "Les flux de connexion/boîte WhatsApp et de connexion/boîte DM Instagram sont prêts dans le produit. Toutefois, avant toute utilisation réelle par une clinique, la configuration des comptes, les rôles de responsable, les conditions de transfert, les contrats prestataires et, si nécessaire, les autorisations de communication doivent être vérifiés."
+    "title": "Information sur les canaux de communication et intégrations",
+    "description": "Protection des données, principes de contenu et informations de sécurité relatives à l'utilisation des fonctionnalités WhatsApp, Instagram et assistant IA dans les opérations cliniques NoraMedi.",
+    "scope": {
+      "title": "1. À propos des fonctionnalités de canal",
+      "body": "Les fonctionnalités de connexion WhatsApp et Instagram ainsi que l'assistant de rendez-vous assisté par IA sont des fonctionnalités optionnelles de NoraMedi qui doivent être configurées par la clinique. Lorsque ces fonctionnalités sont activées, la clinique concernée doit compléter sa propre information à l'intention des patients/contacts et, si nécessaire, son processus de consentement explicite avant de collecter des données de patients et de communications."
     },
     "channels": {
-      "title": "1. Flux de canaux pris en charge",
-      "body": "Les flux prévus pour permettre aux utilisateurs autorisés de gérer les demandes de communication dans les opérations sont présentés ci-dessous.",
+      "title": "2. Flux de canaux pris en charge",
+      "body": "Lorsqu'un canal est activé, les utilisateurs cliniques autorisés peuvent gérer les demandes de communication via les flux suivants.",
       "rows": [
         {
           "label": "WhatsApp",
-          "value": "Possibilité d'associer les conversations aux opérations de la clinique ou de l'établissement via la gestion de connexion et une boîte de réception."
+          "value": "Association des conversations aux opérations de la clinique via la gestion de connexion et une boîte de réception."
         },
         {
           "label": "Instagram DM",
-          "value": "Possibilité d'orienter les demandes pertinentes de la gestion de connexion et de la boîte DM vers le flux des rendez-vous."
+          "value": "Orientation des demandes depuis la boîte DM vers les flux de rendez-vous."
         },
         {
-          "label": "Informations potentiellement traitées",
-          "value": "Informations du compte canal, identifiants de communication de l'expéditeur, date et contenu du message, établissement attribué ou état de traitement ; l'information doit être mise à jour selon la configuration réelle."
+          "label": "Meta et rôles de plateforme",
+          "value": "Meta Platforms, WhatsApp et Instagram sont des responsables du traitement/prestataires de services indépendants pour leurs propres plateformes. Les données des utilisateurs sur ces plateformes sont soumises aux conditions de confidentialité de Meta."
+        },
+        {
+          "label": "Données personnelles dans le contenu des messages",
+          "value": "Si les utilisateurs choisissent de partager des informations personnelles dans les messages de canal, ces informations font partie du contenu du message. Les informations de santé sensibles ne doivent pas être partagées dans les messages."
         }
       ]
     },
     "roles": {
-      "title": "2. Responsabilité du traitement et prestataires",
-      "body": "La clinique agit comme responsable du traitement dans la mesure où elle détermine les finalités concernant ses patients et demandes de communication. Le statut du fournisseur NoraMedi CRM, sous-traitant ou responsable indépendant/conjoint, doit être établi dans le contrat de service. Les rôles, emplacements des données et conditions de transfert de Meta, WhatsApp, Instagram et des prestataires d'hébergement doivent être documentés avant activation."
+      "title": "3. Responsabilité du traitement",
+      "body": "La clinique agit comme responsable du traitement principal dans la mesure où elle détermine les finalités concernant ses patients et demandes de communication. Le statut de NoraMedi, sous-traitant ou responsable indépendant, est établi dans le contrat de service. Meta, WhatsApp et Instagram sont des responsables du traitement/prestataires de services indépendants pour leurs propres plateformes."
+    },
+    "ai": {
+      "title": "4. Fonctionnalité assistant IA",
+      "body": "Lorsque l'assistant de rendez-vous assisté par IA est activé, le contexte des conversations peut être traité par le fournisseur IA concerné. Limitations importantes de cette fonctionnalité :",
+      "items": [
+        "L'assistant IA ne fournit pas de diagnostic, de recommandations de traitement, d'évaluation d'urgence sanitaire ni de conseil médical d'aucune sorte.",
+        "L'assistant IA opère uniquement à des fins de correspondance de rendez-vous et de routage des communications.",
+        "La fonctionnalité assistant IA doit être activée par la clinique et une information appropriée doit être fournie aux patients."
+      ]
     },
     "messages": {
-      "title": "3. Distinguer les messages opérationnels des communications marketing",
+      "title": "5. Distinguer les messages opérationnels des communications marketing",
       "body": "La disponibilité technique d'un canal ne signifie pas que tout type de message peut être envoyé sans autorisation.",
       "rows": [
         {
-          "label": "Information de rendez-vous/opérationnelle",
-          "value": "Évaluée séparément comme communication de service nécessaire et proportionnée. Le message doit être minimal, par exemple un simple rappel de rendez-vous, et ne doit contenir ni diagnostic, ni détail de traitement, ni donnée de santé sensible."
+          "label": "Information de rendez-vous / opérationnelle",
+          "value": "Évaluée comme communication de service nécessaire et proportionnée. Le message doit être minimal, par exemple un simple rappel de rendez-vous, et ne doit contenir ni diagnostic, ni détail de traitement, ni donnée de santé sensible."
         },
         {
           "label": "Campagne ou promotion",
-          "value": "En Turquie, aucun message n'est envoyé avant finalisation des processus requis par la loi n° 6563, les règles relatives aux communications électroniques commerciales et IYS le cas échéant ; les choix d'accord et de refus doivent être gérés."
+          "value": "En Turquie, aucun message n'est envoyé avant finalisation des processus requis par la loi n° 6563, les règles relatives aux communications électroniques commerciales et IYS le cas échéant."
         },
         {
           "label": "Marketing direct destiné à des destinataires UE",
-          "value": "Aucun message n'est envoyé avant établissement du mécanisme d'autorisation ou d'opposition requis après évaluation d'ePrivacy, du RGPD et des règles de mise en oeuvre de l'État membre ciblé."
+          "value": "Aucun message n'est envoyé sans établissement du mécanisme d'autorisation ou d'opposition requis après évaluation d'ePrivacy, du RGPD et des règles de mise en œuvre de l'État membre ciblé."
         }
       ]
     },
     "protection": {
-      "title": "4. Minimisation des données dans les communications cliniques",
+      "title": "6. Minimisation des données et sécurité",
       "items": [
         "Aucun diagnostic, plan de traitement, image, ordonnance ou autre contenu de santé sensible ne doit être envoyé dans le corps d'un message WhatsApp ou Instagram.",
-        "Les messages reçus ne doivent être consultés que par les rôles qui en ont besoin pour leurs fonctions, avec conservation de journaux d'accès et d'activité.",
+        "Les messages reçus ne doivent être consultés que par les rôles qui en ont besoin pour leurs fonctions, avec conservation de journaux d'accès.",
         "Lorsqu'une demande de rendez-vous devient un enregistrement opérationnel, seules les informations nécessaires doivent être transférées ; le contenu inutile de conversation ne doit pas être dupliqué.",
-        "Une procédure de réponse à incident et d'évaluation de violation de données doit exister pour les envois au mauvais destinataire, prises de contrôle de compte ou accès non autorisés."
+        "Une procédure de réponse à incident doit exister pour les envois au mauvais destinataire, prises de contrôle de compte ou accès non autorisés."
       ]
     },
-    "activation": {
-      "title": "5. Avant activation d'un canal en utilisation réelle",
-      "body": "Pour chaque clinique et canal activé, cette page ne doit pas être présentée comme un engagement définitif tant que les contrôles suivants ne sont pas documentés.",
-      "items": [
-        "Le propriétaire du compte canal, les utilisateurs autorisés, la finalité d'utilisation et les catégories de données doivent être identifiés.",
-        "L'information, la condition de traitement, la gestion nécessaire des accords/refus et la durée de conservation doivent être finalisées pour l'usage du canal.",
-        "Lorsqu'un partage international de données se produit, les mécanismes de transfert KVKK et, le cas échéant, RGPD doivent être appliqués.",
-        "Les modèles de messages doivent être examinés au regard du principe de non-partage de données sensibles, et les messages marketing distingués des messages de service."
-      ]
+    "emergency": {
+      "title": "Situations d'urgence sanitaire",
+      "body": "NoraMedi et ses fonctionnalités de canal ne sont pas conçues pour les services de santé d'urgence. En cas de situation sanitaire urgente ou mettant la vie en danger, veuillez contacter directement les services d'urgence (15 ou 112) ou le prestataire de soins d'urgence compétent. N'attendez pas de réponse via les canaux de prise de rendez-vous clinique."
     },
     "sources": {
       "commercial": "Ministère du Commerce de la République de Türkiye - Réglementation du commerce électronique et des communications électroniques commerciales",
       "transfer": "KVKK - Documents officiels relatifs aux transferts internationaux de données personnelles",
       "eprivacy": "EUR-Lex - Directive ePrivacy 2002/58/CE (article 13 pour le marketing direct)",
       "gdpr": "EUR-Lex - RGPD/GDPR"
+    }
+  },
+  "dataRequest": {
+    "title": "Demande d'exercice de droits",
+    "description": "Découvrez comment soumettre une demande d'accès, de rectification, de suppression, d'opposition ou de plainte concernant vos données personnelles.",
+    "platform": {
+      "title": "1. Demandes relatives à la plateforme NoraMedi",
+      "body": "Pour les demandes relatives à votre compte de plateforme NoraMedi, vos préférences de confidentialité ou les données traitées par la plateforme, veuillez utiliser les adresses de contact suivantes.",
+      "rows": [
+        { "label": "Demandes de confidentialité / KVKK / RGPD", "value": "privacy@noramedi.com" },
+        { "label": "Signalements de sécurité et violations supposées", "value": "security@noramedi.com" },
+        { "label": "Accès au compte et questions d'assistance", "value": "support@noramedi.com" },
+        { "label": "Notifications juridiques et contractuelles", "value": "legal@noramedi.com" }
+      ]
+    },
+    "types": {
+      "title": "2. Catégories de demandes",
+      "body": "Vous pouvez exercer les droits suivants au titre de l'article 11 de la KVKK et, le cas échéant, des articles 15 à 22 du RGPD :",
+      "items": [
+        "Accès et information : savoir si vos données sont traitées et en obtenir une copie.",
+        "Rectification : demander la correction de données incomplètes ou inexactes.",
+        "Suppression ou anonymisation : demander la suppression ou l'anonymisation de vos données lorsque les conditions applicables sont réunies.",
+        "Opposition ou limitation : s'opposer au traitement ou demander sa limitation.",
+        "Retrait du consentement : retirer votre consentement pour les traitements fondés sur celui-ci.",
+        "Information sur les transferts : connaître les tiers destinataires de vos données.",
+        "Signalement de sécurité et de confidentialité : signaler une violation de données ou une vulnérabilité de sécurité supposée.",
+        "Plainte formelle : déposer une plainte auprès de la KVKK ou de l'autorité de contrôle UE compétente."
+      ]
+    },
+    "clinic": {
+      "title": "3. Demandes relatives aux données patients des cliniques",
+      "body": "Les dossiers patients, données de rendez-vous et données de communications cliniques traitées par une clinique sur la plateforme NoraMedi sont principalement contrôlés par cette clinique. Vous devez adresser vos demandes relatives à ces données directement à la clinique auprès de laquelle vous avez été pris en charge. NoraMedi peut assister la clinique dans le cadre contractuel applicable ; cependant, NoraMedi ne prend pas de décisions de responsable principal du traitement au nom des cliniques."
+    },
+    "response": {
+      "title": "4. Délais de réponse",
+      "body": "Les demandes visent à être traitées dans un délai de trente jours au titre de la KVKK et d'un mois au titre du RGPD. Ce délai peut être prolongé selon la nature ou la portée de la demande ; vous en serez informé le cas échéant. Soumettre votre demande par écrit à privacy@noramedi.com contribuera à accélérer le traitement."
+    },
+    "sources": {
+      "kvkk": "Autorité turque de protection des données - Droits des personnes et procédures de demande",
+      "gdpr": "EUR-Lex - RGPD articles 15-22 (droits des personnes concernées)"
+    }
+  },
+  "consent": {
+    "title": "Modèles de consentement",
+    "description": "Exemples d'information et de consentement explicite pour les canaux de prise de rendez-vous WhatsApp et Instagram. Les textes de cette page sont des modèles généraux que les cliniques peuvent adapter à leurs propres conditions.",
+    "disclaimer": {
+      "title": "À propos de la nature de modèle de cette page",
+      "body": "Les textes de cette page sont des modèles généraux et ne constituent pas une garantie de conformité légale. Chaque clinique doit examiner ces textes avec un conseiller juridique au regard de ses propres services, catégories de données traitées et droit applicable."
+    },
+    "distinction": {
+      "title": "1. Distinguer l'information du consentement explicite",
+      "body": "Au titre de la KVKK et du RGPD, l'obligation d'information et le consentement explicite sont des concepts distincts qui doivent être remplis séparément.",
+      "items": [
+        "Information : couvre l'identité du responsable du traitement, les finalités de traitement, les bases juridiques, les durées de conservation, les destinataires des transferts et les droits des personnes. Doit être fournie indépendamment de l'obtention d'un consentement.",
+        "Consentement explicite : requis uniquement pour les opérations de traitement dont la base juridique identifiée est le consentement explicite. Doit être obtenu séparément, librement, spécifiquement et de manière éclairée pour chaque opération de traitement.",
+        "Pour les opérations de rendez-vous, une autre base juridique telle que l'exécution d'un contrat ou l'intérêt légitime peut également être considérée ; dans ce cas, une simple information peut suffire sans consentement explicite."
+      ]
+    },
+    "template": {
+      "title": "2. Exemple de texte pour les canaux de rendez-vous",
+      "body": "Les textes suivants sont des modèles pour les canaux recevant des demandes de rendez-vous via WhatsApp ou Instagram. Ils doivent être adaptés par la clinique pour inclure le nom de la clinique, les coordonnées du responsable et le lien vers l'information.",
+      "notice": "Exemple de lien vers l'information : « Pour savoir comment vos données personnelles sont traitées, vous pouvez lire la notice de confidentialité de [Nom de la clinique] : [lien] »",
+      "explicit": "Exemple de consentement explicite : « Je consens au traitement de mes données personnelles aux fins de la prise en compte de ma demande de rendez-vous et d'un retour de contact. »"
+    },
+    "clinicNote": {
+      "title": "3. Adaptation par les cliniques",
+      "body": "Ces modèles ne constituent qu'un point de départ général. Chaque clinique est responsable de la préparation de sa propre information incluant la raison sociale du responsable, les catégories de données traitées, les durées de conservation et les conditions de transfert, ainsi que, si nécessaire, sa documentation de consentement explicite, pour son canal de communication avec les patients. L'utilisation de ces modèles sans modification ne garantit pas la conformité légale."
+    },
+    "sources": {
+      "kvkk": "KVKK - Guide relatif à l'obligation d'information",
+      "gdpr": "EUR-Lex - RGPD article 7 et considérant 32 (conditions du consentement)"
     }
   }
 }

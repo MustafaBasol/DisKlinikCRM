@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import LegalLayout, {
   LegalList,
-  LegalNotice,
   LegalSection,
   LegalSources,
   LegalTable,
@@ -25,21 +24,19 @@ const PrivacyNoticePage = () => {
       href: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
     },
   ];
+  const contactRows = t('privacy.controller.contactRows', { returnObjects: true }) as LegalTableRow[];
   const dataRows = t('privacy.data.rows', { returnObjects: true }) as LegalTableRow[];
   const purposes = t('privacy.purposes.items', { returnObjects: true }) as string[];
   const basisRows = t('privacy.basis.rows', { returnObjects: true }) as LegalTableRow[];
-  const transferActions = t('privacy.transfers.actions', { returnObjects: true }) as string[];
+  const transferRecipients = t('privacy.transfers.recipients', { returnObjects: true }) as string[];
   const retentionRows = t('privacy.retention.rows', { returnObjects: true }) as LegalTableRow[];
   const rights = t('privacy.rights.items', { returnObjects: true }) as string[];
-  const publishItems = t('privacy.publish.items', { returnObjects: true }) as string[];
 
   return (
     <LegalLayout title={t('privacy.title')} description={t('privacy.description')} metaTitle={t('meta.privacy')}>
       <LegalSection title={t('privacy.controller.title')}>
         <p>{t('privacy.controller.body')}</p>
-        <LegalNotice title={t('privacy.controller.requiredTitle')}>
-          {t('privacy.controller.requiredBody')}
-        </LegalNotice>
+        <LegalTable rows={contactRows} />
       </LegalSection>
 
       <LegalSection title={t('privacy.data.title')}>
@@ -59,7 +56,8 @@ const PrivacyNoticePage = () => {
 
       <LegalSection title={t('privacy.transfers.title')}>
         <p>{t('privacy.transfers.body')}</p>
-        <LegalList items={transferActions} />
+        <LegalList items={transferRecipients} />
+        <p>{t('privacy.transfers.international')}</p>
       </LegalSection>
 
       <LegalSection title={t('privacy.retention.title')}>
@@ -71,10 +69,6 @@ const PrivacyNoticePage = () => {
         <p>{t('privacy.rights.body')}</p>
         <LegalList items={rights} />
         <p>{t('privacy.rights.contact')}</p>
-      </LegalSection>
-
-      <LegalSection title={t('privacy.publish.title')}>
-        <LegalList items={publishItems} />
       </LegalSection>
 
       <LegalSources items={privacySources} />

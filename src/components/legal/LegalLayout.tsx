@@ -29,6 +29,8 @@ const legalNav = [
   { path: '/legal/privacy', key: 'nav.privacy', end: false },
   { path: '/legal/cookies', key: 'nav.cookies', end: false },
   { path: '/legal/communications', key: 'nav.communications', end: false },
+  { path: '/legal/data-subject-request', key: 'nav.dataRequest', end: false },
+  { path: '/legal/consent', key: 'nav.consent', end: false },
 ];
 
 const LegalLayout = ({ title, description, metaTitle, children }: LegalLayoutProps) => {

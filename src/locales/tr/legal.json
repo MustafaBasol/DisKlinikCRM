@@ -7,62 +7,76 @@
     "center": "Yasal Bilgilendirme | NoraMedi CRM",
     "privacy": "Gizlilik ve Aydınlatma Metni | NoraMedi CRM",
     "cookies": "Çerez ve Yerel Depolama Politikası | NoraMedi CRM",
-    "communications": "Elektronik İletişim ve Entegrasyonlar | NoraMedi CRM"
+    "communications": "İletişim Kanalları Bilgilendirmesi | NoraMedi CRM",
+    "dataRequest": "Veri Sahibi Başvurusu | NoraMedi CRM",
+    "consent": "Kanal Onay Şablonları | NoraMedi CRM"
   },
   "nav": {
     "label": "Yasal sayfalar",
     "center": "Yasal Bilgilendirme",
     "privacy": "Gizlilik ve Aydınlatma",
     "cookies": "Çerez Politikası",
-    "communications": "İletişim Kanalları"
+    "communications": "İletişim Kanalları",
+    "dataRequest": "Veri Sahibi Başvurusu",
+    "consent": "İzin Şablonları"
   },
   "shared": {
-    "label": "Hukuki bilgi taslağı",
+    "label": "Yasal bilgilendirme",
     "back": "Tanıtım sayfasına dön",
     "themeToggle": "Temayı değiştir",
     "languageSelector": "Dil seçin",
-    "draftTitle": "Yayına alma öncesi tamamlanmalıdır",
-    "draftBody": "Bu sayfalar Türkiye ve Avrupa Birliği düzenlemelerindeki temel bilgilendirme başlıklarına göre hazırlanmış uygulama taslaklarıdır; hukuki görüş veya uyumluluk garantisi değildir. Veri sorumlusu bilgileri, gerçek hizmet sağlayıcılar, saklama süreleri, aktarım mekanizmaları ve iletişim izin süreçleri belirlendikten sonra hukuk danışmanı tarafından gözden geçirilmelidir.",
-    "reviewDate": "Mevzuat kaynaklarının son gözden geçirilme tarihi: 25 Mayıs 2026",
+    "draftTitle": "Yasal bilgi notu",
+    "draftBody": "Bu sayfalar, NoraMedi platformunun veri işleme pratiklerine ilişkin genel bilgilendirme amacıyla hazırlanmıştır. Hukuki danışmanlık niteliği taşımaz. Klinikler ve diğer veri sorumluları, kendi yükümlülükleri için hukuk danışmanıyla ayrıca görüşmelidir.",
+    "reviewDate": "Son güncelleme: Haziran 2026",
     "sources": "Esas alınan resmi kaynaklar",
-    "sourcesDescription": "Bu taslak metnin kapsamı belirlenirken aşağıdaki resmi mevzuat ve kurum yayınları esas alınmıştır."
+    "sourcesDescription": "Bu sayfanın kapsamı belirlenirken aşağıdaki resmi mevzuat ve kurum yayınları esas alınmıştır."
   },
   "center": {
     "title": "Yasal Bilgilendirme Merkezi",
-    "description": "Kamuya açık tanıtım sayfası ile WhatsApp ve Instagram destekli klinik operasyon ürünü için veri koruma ve elektronik iletişim metinlerinin yayına hazırlık alanı.",
+    "description": "NoraMedi platformu kapsamında geçerli gizlilik, çerez, iletişim kanalları ve veri sahibi hakları konularındaki genel bilgilendirme sayfaları.",
     "pagesTitle": "Bilgilendirme sayfaları",
-    "pagesDescription": "Her metin, ürünün mevcut kamuya açık davranışını ve üretimde etkinleştirilmeden önce tamamlanması gereken yükümlülükleri ayrı biçimde açıklar.",
+    "pagesDescription": "Her sayfa, NoraMedi platformunun ilgili veri işleme pratiklerini ve uygulanabilir mevzuat çerçevesini açıklar.",
     "open": "Sayfayı incele",
     "cards": [
       {
         "path": "/legal/privacy",
         "title": "Gizlilik ve Aydınlatma Metni",
-        "description": "KVKK ve uygulanabildiği ölçüde GDPR kapsamında veri işleme, aktarım, saklama ve ilgili kişi hakları."
+        "description": "KVKK ve uygulanabildiği ölçüde GDPR kapsamında platform veri işleme, aktarım, saklama ve ilgili kişi hakları."
       },
       {
         "path": "/legal/cookies",
         "title": "Çerez ve Yerel Depolama Politikası",
-        "description": "Mevcut işlevsel tarayıcı saklama davranışı ile gelecekteki çerez rızası kuralları."
+        "description": "Mevcut işlevsel tarayıcı saklama davranışı ve çerez kullanımına ilişkin bilgilendirme."
       },
       {
         "path": "/legal/communications",
         "title": "İletişim Kanalları Bilgilendirmesi",
-        "description": "WhatsApp ve Instagram akışları, ticari ileti izinleri ve hassas veri paylaşmama ilkesi."
+        "description": "WhatsApp ve Instagram kanal özellikleri, YZ asistanı kullanımı ve mesaj içeriği ilkeleri."
+      },
+      {
+        "path": "/legal/data-subject-request",
+        "title": "Veri Sahibi Başvurusu",
+        "description": "Kişisel verilerinize ilişkin erişim, düzeltme, silme veya itiraz talebinde bulunma hakkında bilgi."
+      },
+      {
+        "path": "/legal/consent",
+        "title": "Kanal Onay Şablonları",
+        "description": "WhatsApp/Instagram randevu kanalı için aydınlatma ve açık rıza metin şablonları."
       }
     ],
     "scope": {
       "title": "Kapsam ve sınır",
-      "body": "NoraMedi CRM, klinik operasyonlarını yönetmeye yönelik bir CRM ürünüdür; tanı, reçete veya tam elektronik sağlık kaydı platformu olarak konumlandırılmaz. Bununla birlikte hasta, randevu ve iletişim akışları kişisel veri, bazı kullanımlarda ise sağlıkla ilişkili özel nitelikli veri içerebileceğinden veri minimizasyonu ve yetkili erişim yaklaşımı zorunludur."
+      "body": "NoraMedi, klinik operasyonlarını yönetmeye yönelik bir SaaS/CRM platformudur; Mustafa Basol - Peaknova tarafından sağlanmaktadır. Hasta, randevu ve iletişim akışları kişisel veri, bazı kullanımlarda ise sağlıkla ilişkili özel nitelikli veri içerebilir; bu nedenle veri minimizasyonu ve yetkili erişim yaklaşımı zorunludur. NoraMedi tanı, reçete veya tam elektronik sağlık kaydı platformu olarak konumlandırılmaz."
     },
     "checklist": {
-      "title": "Yayına almadan önce tamamlanacaklar",
-      "description": "Bu metinlerin gerçek bir hizmette kullanılabilmesi için aşağıdaki bilgiler ve kontroller kurumunuzca kesinleştirilmelidir.",
+      "title": "Kliniklere yönelik veri koruma rehberi",
+      "description": "Platformu kendi hasta ve iletişim verisi için kullanan klinikler, aşağıdaki yükümlülükleri kendi veri sorumlusu rolleri çerçevesinde değerlendirmelidir.",
       "items": [
-        "Veri sorumlusunun ticari unvanı, MERSİS/vergi bilgisi, posta adresi ve veri koruma irtibat kanalı girilmelidir.",
-        "İşlenen gerçek veri kategorileri, amaçlar, hukuki sebepler ve saklama/imha süreleri veri envanteriyle eşleştirilmelidir.",
-        "Barındırma, mesajlaşma ve Meta/WhatsApp/Instagram sağlayıcıları için veri işleyen rolleri, sözleşmeler ve varsa yurt dışı aktarım mekanizmaları belgelendirilmelidir.",
-        "Türkiye'de pazarlama niteliğindeki elektronik iletiler için onay/ret ve uygulanabildiği ölçüde İYS süreçleri, AB hedef kitlesi için ePrivacy/GDPR ve ilgili üye ülke kuralları uygulanmalıdır.",
-        "Özel nitelikli sağlık verisinin iletişim mesajlarında yer almaması, erişim kontrolleri, kayıt tutma ve ihlal müdahale süreçleri operasyonel olarak doğrulanmalıdır."
+        "Klinik, kendi hastalarına yönelik aydınlatma metni ve gerektiğinde açık rıza belgelerini hazırlamalıdır.",
+        "İşlenen gerçek veri kategorileri, amaçlar ve saklama süreleri klinik düzeyindeki veri envanteriyle eşleştirilmelidir.",
+        "WhatsApp/Instagram kanal özellikleri etkinleştirilmeden önce klinik düzeyinde veri işleyen rolleri ve aktarım koşulları belgelendirilmelidir.",
+        "Ticari elektronik ileti gönderimleri için onay/ret mekanizmaları ve gerektiğinde İYS süreçleri klinik sorumluluğunda yönetilmelidir.",
+        "Özel nitelikli sağlık verisinin mesaj kanallarında yer almaması ve erişim kontrolleri operasyonel olarak doğrulanmalıdır."
       ]
     },
     "sources": {
@@ -73,52 +87,82 @@
   },
   "privacy": {
     "title": "Gizlilik ve Kişisel Verilerin İşlenmesi Aydınlatma Metni",
-    "description": "Türkiye'de KVKK ve Avrupa Birliği'ndeki kişilere hizmet sunulması veya davranışlarının izlenmesi halinde uygulanabilecek GDPR aydınlatma yükümlülükleri için taslak metin.",
+    "description": "NoraMedi platformu kapsamında KVKK ve uygulanabildiği ölçüde GDPR çerçevesinde kişisel veri işleme, aktarım, saklama ve ilgili kişi hakları hakkında genel bilgilendirme.",
     "controller": {
-      "title": "1. Veri sorumlusu ve iletişim",
-      "body": "Kişisel verilerin hangi amaç ve yöntemle işlendiğini belirleyen klinik veya işletme, ilgili kullanım bağlamında veri sorumlusu olacaktır. Platform sağlayıcısının veri sorumlusu ya da veri işleyen rolü, sunulan hizmete ve sözleşmeye göre ayrıca belirlenmelidir.",
-      "requiredTitle": "Zorunlu yayın bilgisi eksik",
-      "requiredBody": "[Veri sorumlusu ticari unvanı], [posta adresi], [MERSİS/vergi bilgisi], [e-posta veya KEP başvuru adresi] ve varsa [AB temsilcisi / veri koruma görevlisi iletişimi] hizmet yayına alınmadan önce burada yer almalıdır."
+      "title": "1. Platform sağlayıcısı ve iletişim",
+      "body": "NoraMedi, Mustafa Basol - Peaknova tarafından sağlanan bir SaaS klinik operasyon yönetim platformudur. Klinikler, kendi hasta, randevu ve iletişim verilerinden kaynaklanan işlemler bakımından KVKK ve uygulanabildiği ölçüde GDPR kapsamında birincil veri sorumlusu olarak hareket eder. NoraMedi, platform ve altyapı hizmetleri çerçevesinde veri işleyen veya hizmet sağlayıcısı rolünde görev yapabilir; bu rol hizmet sözleşmesine ve kullanım bağlamına göre ayrıca belirlenir.",
+      "contactRows": [
+        { "label": "Platform / Ürün", "value": "NoraMedi" },
+        { "label": "Sağlayıcı", "value": "Mustafa Basol - Peaknova" },
+        { "label": "Genel iletişim", "value": "contact@noramedi.com" },
+        { "label": "Destek", "value": "support@noramedi.com" },
+        { "label": "Gizlilik / KVKK / GDPR başvuruları", "value": "privacy@noramedi.com" },
+        { "label": "Güvenlik bildirimleri", "value": "security@noramedi.com" },
+        { "label": "Hukuki / sözleşmesel bildirimler", "value": "legal@noramedi.com" }
+      ]
     },
     "data": {
       "title": "2. İşlenebilecek veri kategorileri",
-      "body": "Aşağıdaki kapsam, mevcut tanıtım sayfası ile ürünün tanımlanan operasyon özelliklerini esas alır. Sözleşmeli kullanım başlamadan önce gerçek veri envanteriyle daraltılmalı veya güncellenmelidir.",
+      "body": "Aşağıdaki kapsam, platformun mevcut özelliklerine ve klinik kullanım senaryolarına göre belirlenmiştir. Klinikler, kendi veri envanterleriyle somut işleme kapsamlarını ayrıca belirlemelidir.",
       "rows": [
         {
-          "label": "Kamuya açık web kullanımı",
-          "value": "Dil ve tema tercihi gibi işlevsel tarayıcı saklama verileri; bu sürümde analitik veya reklam izleme aracı tespit edilmemiştir."
+          "label": "Kamuya açık web kullanımı ve işlevsel tercihler",
+          "value": "Dil ve tema tercihi gibi işlevsel tarayıcı saklama verileri; bu sürümde analitik veya reklam izleme aracı kullanılmamaktadır."
         },
         {
-          "label": "Demo talep alanı",
-          "value": "Mevcut ön izleme formuna yazılan bilgiler gönderilmez veya kaydedilmez. Gerçek başvuru özelliği etkinleştirilirse iletişim verileri için ayrı aydınlatma sunulmalıdır."
+          "label": "Demo / iletişim talepleri",
+          "value": "Demo veya iletişim formu etkinleştirilmişse gönderilen iletişim bilgileri işlenebilir."
         },
         {
-          "label": "Klinik operasyon hesabı",
-          "value": "Hizmet etkinleştirildiğinde kullanıcı/rol, klinik ve şube, hasta iletişim, randevu, tedavi fırsatı, görev, ödeme takibi ve işlem kayıtları işlenebilir."
+          "label": "Platform hesabı ve kullanıcı verileri",
+          "value": "Kullanıcı adı, e-posta, şifrelenmiş kimlik doğrulama verisi, rol ve yetki bilgileri, giriş/çıkış kayıtları."
         },
         {
-          "label": "WhatsApp ve Instagram akışları",
-          "value": "Kanal etkinleştirildiğinde bağlantı bilgileri, mesaj meta verileri ve konuşma içeriği operasyon akışına dahil olabilir. Mesajlarda hassas sağlık bilgisi paylaşılmamalıdır."
+          "label": "Klinik / organizasyon / şube yapılandırma verileri",
+          "value": "Klinik adı, şube bilgileri, çalışma saatleri, hizmet tanımları ve organizasyonel yapı."
         },
         {
-          "label": "Güvenlik ve denetim kayıtları",
-          "value": "Yetkilendirme, işlem/audit ve güvenlik kayıtları, erişim kontrolü ve olay incelemesi amacıyla işlenebilir."
+          "label": "Personel rolleri ve yetki verileri",
+          "value": "Klinik personelinin atandığı roller, erişim yetkileri ve operasyonel görev bilgileri."
+        },
+        {
+          "label": "Hasta iletişim ve randevu verileri",
+          "value": "CRM'de işlenen hasta adı, iletişim bilgileri, randevu ve takip verileri. Sağlıkla ilişkili bilgiler özel nitelikli veri sayılır."
+        },
+        {
+          "label": "WhatsApp / Instagram bağlantı meta verisi ve mesaj içeriği",
+          "value": "Kanal etkinleştirilmişse bağlantı bilgileri, gönderici tanımlayıcıları, mesaj tarihi, içeriği ve konuşma durumu işlenebilir."
+        },
+        {
+          "label": "YZ asistanı işleme verileri",
+          "value": "YZ destekli özellikler etkinleştirilmişse konuşma bağlamı ve randevu eşleme verisi YZ sağlayıcısına iletilebilir."
+        },
+        {
+          "label": "Güvenlik / denetim / operasyonel kayıtlar",
+          "value": "Yetkilendirme, işlem ve denetim kayıtları, erişim kontrolü ve olay incelemesi amacıyla tutulur."
+        },
+        {
+          "label": "Fatura / ödeme takip verileri",
+          "value": "Platform aboneliği ve CRM ödeme takibiyle ilgili fatura ve işlem verileri."
         }
       ]
     },
     "purposes": {
       "title": "3. İşleme amaçları",
       "items": [
-        "Klinik, şube, ekip ve rol bazlı operasyon yönetimi sağlamak.",
-        "Randevu, takip görevi, tedavi/hizmet süreci ve ödeme görünürlüğünü yönetmek.",
-        "Etkinleştirilmesi halinde WhatsApp ve Instagram görüşmelerini yetkili ekiplerin operasyon akışına yönlendirmesi.",
-        "Hesap ve hizmet güvenliğini korumak, yetkisiz erişimi önlemek ve denetim kayıtlarını yürütmek.",
-        "İlgili kişi taleplerini, mevzuattan doğan yükümlülükleri ve sözleşmesel süreçleri yerine getirmek."
+        "CRM platformunun işletilmesi ve klinik, şube, ekip ve rol bazlı operasyon yönetiminin sağlanması.",
+        "Hesap oluşturma, kimlik doğrulama, güvenlik ve erişim yönetimi.",
+        "Randevu, takip görevi, tedavi/hizmet süreci ve ödeme görünürlüğünün yönetimi.",
+        "WhatsApp ve Instagram iletişim kanalı yönlendirme ve gelen kutusu yönetimi (kanal etkinleştirilmişse).",
+        "YZ destekli randevu eşleme ve iletişim asistanı işlevi (özellik etkinleştirilmişse).",
+        "Destek, sorun giderme, denetim ve kötüye kullanım önleme.",
+        "Hukuki ve sözleşmesel yükümlülüklerin yerine getirilmesi.",
+        "İlgili kişi taleplerinin karşılanması."
       ]
     },
     "basis": {
       "title": "4. Hukuki sebepler ve hassas veriler",
-      "body": "Her veri kategorisinin hukuki sebebi gerçek kullanım senaryosu, veri sorumlusunun rolü ve hedeflenen ülkeye göre veri envanterinde ayrıca belirlenmelidir. Açık rıza, başka bir hukuki sebep mevcutmuş gibi varsayılan genel bir dayanak olarak kullanılmamalıdır.",
+      "body": "Her veri kategorisinin hukuki sebebi, gerçek kullanım senaryosu, veri sorumlusunun rolü ve hedeflenen ülkeye göre belirlenmelidir. Açık rıza, başka bir hukuki sebep mevcutmuş gibi varsayılan genel bir dayanak olarak kullanılmamalıdır.",
       "rows": [
         {
           "label": "Hizmet ve hesap işlemleri",
@@ -137,56 +181,68 @@
     },
     "transfers": {
       "title": "5. Alıcılar ve yurt dışı aktarımları",
-      "body": "Barındırma, destek veya WhatsApp/Instagram bağlantıları yurt dışındaki sağlayıcılarla kişisel veri paylaşımı doğurabilir. Bu taslak herhangi bir sağlayıcının üretimde seçildiğini ya da aktarımın hazır olduğunu beyan etmez.",
-      "actions": [
-        "Alıcı veya veri işleyen sağlayıcıların adı, rolü, ülkesi ve işlenen veri kapsamı kesinleştirilmelidir.",
-        "Türkiye çıkışlı aktarımlar için KVKK Madde 9 kapsamındaki güncel aktarım yöntemi, örneğin uygun şartlarda standart sözleşme, uygulanmadan aktarım başlatılmamalıdır.",
-        "GDPR uygulanıyorsa üçüncü ülke aktarımlarında Bölüm V kapsamındaki yeterlilik kararı veya uygun güvence ve ek değerlendirmeler belgelenmelidir.",
-        "Meta, WhatsApp veya Instagram özellikleri açılmadan önce kliniklere ve ilgili kişilere özgü aktarım bilgisi gösterilmelidir."
-      ]
+      "body": "NoraMedi platformu, hizmetleri sunabilmek için aşağıdaki kategorilerdeki alıcılara kişisel veri iletebilir. Somut alıcılar, sözleşme ve klinik yapılandırmasına göre değişebilir.",
+      "recipients": [
+        "Barındırma ve altyapı sağlayıcıları (sunucu, veritabanı, dosya depolama).",
+        "E-posta hizmet sağlayıcısı (bildirim, davet ve parola sıfırlama iletileri için).",
+        "Meta Platforms / WhatsApp / Instagram (kanal özellikleri klinik tarafından etkinleştirilmişse).",
+        "Google / Gemini veya ilgili YZ sağlayıcısı (YZ destekli özellikler etkinleştirilmişse).",
+        "Hukuki ve idari yetkililer (yasal yükümlülük veya yetkili talep halinde).",
+        "Klinik personeli ve yetkili organizasyon kullanıcıları (rol bazlı erişim çerçevesinde)."
+      ],
+      "international": "Bazı altyapı ve hizmet sağlayıcılar kişisel verileri Türkiye veya AB dışında işleyebilir. Bu tür aktarımlar KVKK Madde 9 ve uygulanabildiği ölçüde GDPR Bölüm V kapsamında değerlendirilmektedir. Uluslararası aktarım koşulları klinik yapılandırması ve etkinleştirilen özelliklere göre farklılık gösterebilir."
     },
     "retention": {
       "title": "6. Saklama ve imha",
-      "body": "Veriler amaç için gereken süreyle sınırlı tutulmalı; silme, yok etme veya anonim hale getirme süreçleri gerçek mevzuat ve sözleşme yükümlülüklerine göre belgelenmelidir. Aşağıdaki süreler henüz tanımlanmamıştır.",
+      "body": "Veriler amaç için gereken süreyle sınırlı tutulur. Platform düzeyinde aşağıdaki saklama süreleri uygulanır; klinikler kendi veri yükümlülükleri doğrultusunda ek politikalar belirleyebilir.",
       "rows": [
         {
           "label": "Kamuya açık site tercihleri",
-          "value": "Tarayıcı üzerinde işlevsel tercih olarak tutulur; kullanıcı tarafından temizlenebilir. Kesin yaşam döngüsü yayından önce teyit edilmelidir."
+          "value": "Tarayıcıda işlevsel tercih olarak tutulur; kullanıcı tarafından silinebilir."
         },
         {
-          "label": "Demo formu",
-          "value": "Bu ön izleme sürümünde gönderim veya kayıt yapılmadığından saklanan talep verisi bulunmaz."
+          "label": "Konuşma mesajları",
+          "value": "365 gün (otomatik temizleme politikası kapsamında)."
         },
         {
-          "label": "Hesap ve klinik operasyon verileri",
-          "value": "[Saklama süresi ve imha periyodu veri envanteri tamamlandıktan sonra girilecektir.]"
+          "label": "Konuşma durumu",
+          "value": "90 gün."
         },
         {
-          "label": "Mesajlaşma ve audit kayıtları",
-          "value": "[İhtiyaç, mevzuat, uyuşmazlık ve güvenlik amaçlarıyla uyumlu süre belirlenerek girilecektir.]"
+          "label": "Gelen kanal olayları",
+          "value": "90 gün."
+        },
+        {
+          "label": "Operasyonel olaylar",
+          "value": "180 gün."
+        },
+        {
+          "label": "İletişim / demo talepleri",
+          "value": "365 gün."
+        },
+        {
+          "label": "Eski çözülmüş gelen kutusu girişleri",
+          "value": "Saklama politikası kapsamında yeniden düzenleme veya maskelemeye tabi tutulabilir."
+        },
+        {
+          "label": "Hukuki, denetim, finansal, klinik ve çekirdek hasta kayıtları",
+          "value": "Destek verisi temizleme işlemi tarafından otomatik olarak silinmez; ilgili yasal ve sözleşmesel sürelere tabidir."
         }
       ]
     },
     "rights": {
       "title": "7. İlgili kişi hakları ve başvuru",
-      "body": "Kapsama göre ilgili kişiler KVKK Madde 11 ile GDPR Madde 15-22 kapsamındaki haklarını kullanabilir. Bunlar özellikle aşağıdaki talepleri içerir:",
+      "body": "Kapsama göre ilgili kişiler KVKK Madde 11 ile GDPR Madde 15-22 kapsamındaki haklarını kullanabilir. Bu haklar aşağıdakileri kapsar:",
       "items": [
         "Verisinin işlenip işlenmediğini öğrenme, bilgi ve erişim talep etme.",
         "Eksik veya yanlış verinin düzeltilmesini isteme.",
-        "Uygulanabilir şartlarda silme, yok etme, işlemenin kısıtlanması veya itiraz talep etme.",
+        "Uygulanabilir şartlarda silme, yok etme veya anonim hale getirme talep etme.",
+        "İşlemenin kısıtlanmasını isteme veya itiraz etme.",
         "Aktarım yapılan üçüncü kişileri öğrenme ve uygun durumlarda veri taşınabilirliği talep etme.",
-        "Rızaya dayalı işlemlerde rızayı geri çekme ve yetkili denetim makamına şikayette bulunma."
+        "Rızaya dayalı işlemlerde rızayı geri çekme.",
+        "Yetkili denetim makamına şikayette bulunma."
       ],
-      "contact": "Başvurular yayından önce belirlenecek [veri sorumlusu başvuru adresi / KEP / e-posta] üzerinden alınacaktır. Türkiye'deki şikayet yolları KVKK usullerine, GDPR kapsamındaki talepler ise yetkili AB denetim makamı süreçlerine tabidir."
-    },
-    "publish": {
-      "title": "8. Bu metni yayımlamadan önce",
-      "items": [
-        "Veri envanteri, VERBİS yükümlülüğü değerlendirmesi ve saklama/imha politikası gerçek işletme üzerinden kontrol edilmelidir.",
-        "Özel nitelikli veriye erişen roller ve mesaj içerik kuralları test edilmelidir.",
-        "Tedarikçi sözleşmeleri, aktarım belgeleri ve güvenlik tedbirleri metindeki beyanlarla aynı hale getirilmelidir.",
-        "Metin yeni özellik veya sağlayıcı eklendikçe güncellenmeli ve güncel yürürlük tarihi gösterilmelidir."
-      ]
+      "contact": "NoraMedi platform ve hesap verilerine ilişkin gizlilik başvuruları privacy@noramedi.com adresine, güvenlik bildirimleri security@noramedi.com adresine, destek ve hesap erişim soruları support@noramedi.com adresine, hukuki ve sözleşmesel bildirimler ise legal@noramedi.com adresine iletilmelidir. Klinik hasta verilerine ilişkin talepler birincil olarak ilgili kliniğe (veri sorumlusuna) yönlendirilmelidir; NoraMedi sözleşmesel olarak uygulanabilir durumlarda kliniğe destek sağlayabilir."
     },
     "sources": {
       "notice": "KVKK - Aydınlatma Yükümlülüğünün Yerine Getirilmesi Rehberi",
@@ -196,18 +252,18 @@
   },
   "cookies": {
     "title": "Çerez ve Yerel Depolama Politikası",
-    "description": "Tanıtım sayfası ve giriş yapılan ürün alanında kullanılan tarayıcı saklama yöntemlerine ilişkin mevcut durum ve gelecek kullanım kuralları için taslak bilgilendirme.",
+    "description": "Kamuya açık tanıtım sayfası ve giriş yapılan ürün alanında kullanılan tarayıcı saklama yöntemlerine ilişkin mevcut durum ve kullanım kuralları hakkında bilgilendirme.",
     "current": {
       "title": "Mevcut kamuya açık sayfa durumu",
       "body": "Kod incelemesine göre `/landing` sayfasında reklam, analiz pikseli veya pazarlama çerezi bulunmamaktadır. Uygulama, arayüz tercihlerine yönelik yerel depolama davranışları içerir; giriş yapılan ürün alanı ayrıca oturum ve klinik seçimi gibi işlevsel veriler kullanabilir."
     },
     "scope": {
       "title": "1. Bu politika neyi açıklar?",
-      "body": "Çerezler ve benzeri tarayıcı saklama yöntemleri, cihazda bilgi saklamak veya saklanan bilgiye erişmek için kullanılabilir. KVKK açısından kişisel veri işlenmesi oluştuğunda veri koruma yükümlülükleri; AB kullanıcıları bakımından ePrivacy kuralları ve kişisel veri söz konusuysa GDPR hükümleri ayrıca değerlendirilmelidir."
+      "body": "Çerezler ve benzeri tarayıcı saklama yöntemleri cihazda bilgi saklamak veya saklanan bilgiye erişmek için kullanılabilir. KVKK açısından kişisel veri işlenmesi oluştuğunda veri koruma yükümlülükleri; AB kullanıcıları bakımından ePrivacy kuralları ve kişisel veri söz konusuysa GDPR hükümleri ayrıca değerlendirilmelidir."
     },
     "storage": {
       "title": "2. Mevcut işlevsel saklama kullanımı",
-      "body": "Aşağıdaki tablo, bu uygulamanın mevcut kodunda gözlenen işlevsel saklama alanlarını açıklamak üzere hazırlanmıştır. Üretim kurulumu ve üçüncü taraf araçlar eklenmeden önce yeniden doğrulanmalıdır.",
+      "body": "Aşağıdaki tablo, bu uygulamanın mevcut kodunda gözlenen işlevsel saklama alanlarını açıklar. Üretim kurulumu ve üçüncü taraf araçlar eklenmeden önce yeniden doğrulanmalıdır.",
       "rows": [
         {
           "label": "Tema tercihi",
@@ -238,7 +294,7 @@
       "items": [
         "Kullanıcı, tarayıcı ayarları üzerinden mevcut yerel depolama verilerini temizleyebilir; bu işlem dil, tema veya oturum davranışını sıfırlayabilir.",
         "Zorunlu olmayan çerezler kullanıma alınırsa bu sayfada tercih paneline erişim bağlantısı sağlanacaktır.",
-        "Veri işleme veya tarayıcı saklama soruları için yayına alma öncesinde veri sorumlusu irtibat adresi eklenmelidir."
+        "Veri işleme veya tarayıcı saklama konusundaki sorularınız için contact@noramedi.com adresine ulaşabilirsiniz."
       ]
     },
     "sources": {
@@ -248,76 +304,154 @@
     }
   },
   "communications": {
-    "title": "Elektronik İletişim ve Kanal Entegrasyonları Bilgilendirmesi",
-    "description": "WhatsApp ve Instagram özelliklerinin klinik operasyonlarında kullanılması halinde veri koruma, ticari ileti izinleri ve güvenli mesaj içeriği ilkeleri için taslak metin.",
-    "status": {
-      "title": "Entegrasyon yüzeyleri mevcut, üretim uygunluğu ayrıca tamamlanır",
-      "body": "Üründe WhatsApp bağlantı/gelen kutusu ile Instagram bağlantı/DM gelen kutusu akışları hazırdır. Bununla birlikte gerçek klinik kullanımından önce kanal hesabı kurulumu, veri sorumlusu rolleri, veri aktarım şartları, sağlayıcı sözleşmeleri ve gerekliyse ileti izinleri doğrulanmalıdır."
+    "title": "İletişim Kanalları ve Entegrasyonlar Bilgilendirmesi",
+    "description": "NoraMedi platformunda WhatsApp, Instagram ve YZ asistanı özelliklerinin klinik operasyonlarında kullanılmasına ilişkin veri koruma, içerik ilkeleri ve güvenlik bilgilendirmesi.",
+    "scope": {
+      "title": "1. Kanal özellikleri hakkında",
+      "body": "WhatsApp ve Instagram bağlantı özellikleri ile YZ destekli randevu asistanı, NoraMedi'de isteğe bağlı olarak sunulan ve klinik tarafından yapılandırılması gereken özelliklerdir. Bu özellikler etkinleştirildiğinde hasta ve iletişim verilerini toplamadan önce ilgili kliniğin kendi hasta/kişi aydınlatma metnini ve gerektiğinde açık rıza sürecini tamamlaması gerekmektedir."
     },
     "channels": {
-      "title": "1. Desteklenen kanal akışları",
-      "body": "Yetkili kullanıcıların iletişim taleplerini operasyon sürecinde yönetebilmesi için öngörülen akışlar aşağıdadır.",
+      "title": "2. Desteklenen kanal akışları",
+      "body": "Kanal etkinleştirildiğinde yetkili klinik kullanıcıları iletişim taleplerini aşağıdaki akışlar üzerinden yönetebilir.",
       "rows": [
         {
           "label": "WhatsApp",
-          "value": "Bağlantı yönetimi ve gelen kutusu üzerinden konuşmaların klinik/şube operasyonuyla ilişkilendirilebilmesi."
+          "value": "Bağlantı yönetimi ve gelen kutusu aracılığıyla konuşmaların klinik operasyonuyla ilişkilendirilmesi."
         },
         {
           "label": "Instagram DM",
-          "value": "Bağlantı yönetimi ve DM gelen kutusundan ilgili taleplerin randevu akışına yönlendirilebilmesi."
+          "value": "DM gelen kutusundan gelen taleplerin randevu akışına yönlendirilmesi."
         },
         {
-          "label": "İşlenen olası bilgi",
-          "value": "Kanal hesabı bilgisi, gönderici iletişim tanımlayıcıları, mesaj tarihi ve içeriği, atanan şube veya işlem durumu; gerçek yapılandırmaya göre aydınlatma güncellenmelidir."
+          "label": "Meta ve platform rolleri",
+          "value": "Meta Platforms, WhatsApp ve Instagram kendi platformları için bağımsız veri sorumlusu/hizmet sağlayıcı konumundadır. Kullanıcıların bu platformlardaki verileri Meta'nın gizlilik koşullarına tabidir."
+        },
+        {
+          "label": "Kişisel veri içeriği",
+          "value": "Kullanıcılar kanal mesajlarında kişisel bilgi paylaşmayı tercih ederse bu bilgiler mesaj içeriğinin parçası haline gelir. Mesajlarda hassas sağlık bilgisi paylaşılmamalıdır."
         }
       ]
     },
     "roles": {
-      "title": "2. Veri sorumluluğu ve sağlayıcılar",
-      "body": "Klinik, kendi hastaları ve iletişim talepleri için amaçları belirlediği ölçüde veri sorumlusu olarak hareket eder. NoraMedi CRM sağlayıcısının veri işleyen veya bağımsız/ortak veri sorumlusu olup olmadığı hizmet sözleşmesinde belirlenmelidir. Meta, WhatsApp, Instagram ve barındırma sağlayıcılarının rolleri, veri lokasyonları ve aktarım koşulları özellik etkinleştirilmeden önce kayıt altına alınmalıdır."
+      "title": "3. Veri sorumluluğu",
+      "body": "Klinik, kendi hastaları ve iletişim talepleri için amaçları belirlediği ölçüde birincil veri sorumlusu olarak hareket eder. NoraMedi CRM sağlayıcısının veri işleyen veya bağımsız veri sorumlusu olup olmadığı hizmet sözleşmesinde belirlenir. Meta, WhatsApp ve Instagram kendi platformlarında bağımsız veri sorumlusu/hizmet sağlayıcı konumundadır."
+    },
+    "ai": {
+      "title": "4. YZ asistanı özelliği",
+      "body": "YZ destekli randevu asistanı etkinleştirildiğinde konuşma bağlamı ilgili YZ sağlayıcısı aracılığıyla işlenebilir. Bu özelliğe ilişkin önemli sınırlar:",
+      "items": [
+        "YZ asistanı tanı koymaz, tedavi önermez, acil sağlık değerlendirmesi yapmaz ve tıbbi tavsiye vermez.",
+        "YZ asistanı yalnızca randevu eşleme ve iletişim yönlendirme amacıyla çalışır.",
+        "YZ asistanı özelliği klinik tarafından etkinleştirilmeli ve uygun hasta bilgilendirmesi sağlanmalıdır."
+      ]
     },
     "messages": {
-      "title": "3. Operasyon mesajı ile pazarlama iletişimini ayırın",
+      "title": "5. Operasyon mesajı ile pazarlama iletişimini ayırın",
       "body": "Bir kanalın teknik olarak hazır olması, her türlü mesajın izin almadan gönderilebileceği anlamına gelmez.",
       "rows": [
         {
-          "label": "Randevu/operasyon bilgilendirmesi",
-          "value": "Gerekli ve ölçülü hizmet iletişimi olarak ayrıca değerlendirilir. Mesaj, örneğin yalnızca randevu hatırlatması gibi asgari içeriği taşımalı; teşhis, tedavi ayrıntısı veya hassas sağlık bilgisi içermemelidir."
+          "label": "Randevu / operasyon bilgilendirmesi",
+          "value": "Gerekli ve ölçülü hizmet iletişimi olarak değerlendirilir. Mesaj yalnızca randevu hatırlatması gibi asgari içeriği taşımalı; tanı, tedavi ayrıntısı veya hassas sağlık bilgisi içermemelidir."
         },
         {
           "label": "Kampanya veya tanıtım",
-          "value": "Türkiye'de 6563 sayılı Kanun ile Ticari Elektronik İleti düzenlemeleri ve uygulanabildiği durumda İYS süreci tamamlanmadan gönderilmez; onay ve ret tercihleri yönetilmelidir."
+          "value": "Türkiye'de 6563 sayılı Kanun ve Ticari Elektronik İleti düzenlemeleri ile gerektiğinde İYS süreci tamamlanmadan gönderilmez."
         },
         {
           "label": "AB alıcılarına doğrudan pazarlama",
-          "value": "ePrivacy kuralları, GDPR ve hedef üye devletin uygulama kuralları değerlendirilerek gereken izin veya itiraz mekanizması kurulmadan gönderilmez."
+          "value": "ePrivacy, GDPR ve hedef üye devletin uygulama kuralları değerlendirilerek gerekli izin veya itiraz mekanizması kurulmadan gönderilmez."
         }
       ]
     },
     "protection": {
-      "title": "4. Klinik iletişiminde veri minimizasyonu",
+      "title": "6. Veri minimizasyonu ve güvenlik",
       "items": [
         "WhatsApp veya Instagram mesaj gövdesinde tanı, tedavi planı, görüntü, reçete veya başka hassas sağlık içeriği gönderilmemelidir.",
-        "Gelen mesajlar yalnızca görev gereği erişmesi gereken rollerce görüntülenmeli ve erişim/işlem kayıtları tutulmalıdır.",
-        "Randevu talebi operasyon kaydına dönüştürülürken sadece gerekli bilgiler aktarılmalı; gereksiz konuşma içeriği çoğaltılmamalıdır.",
-        "Yanlış alıcıya gönderim, hesap ele geçirilmesi veya yetkisiz erişim durumları için olay müdahale ve veri ihlali değerlendirme süreci bulunmalıdır."
+        "Gelen mesajlar yalnızca görev gereği erişmesi gereken rollerce görüntülenmeli ve erişim kayıtları tutulmalıdır.",
+        "Randevu talebi operasyon kaydına dönüştürülürken yalnızca gerekli bilgiler aktarılmalı; gereksiz konuşma içeriği çoğaltılmamalıdır.",
+        "Yanlış alıcıya gönderim, hesap ele geçirilmesi veya yetkisiz erişim durumları için olay müdahale süreci bulunmalıdır."
       ]
     },
-    "activation": {
-      "title": "5. Kanalı canlı kullanıma almadan önce",
-      "body": "Her klinik ve etkinleştirilen kanal için aşağıdaki kontroller belgelenmeden bu sayfa kesin kullanım taahhüdü olarak sunulmamalıdır.",
-      "items": [
-        "Kanal hesabı sahibi, yetkili kullanıcılar, kullanım amacı ve veri kategorileri belirlenmelidir.",
-        "Aydınlatma metni, işleme şartı, gerekli onay/ret yönetimi ve saklama süresi kanal kullanımına göre tamamlanmalıdır.",
-        "Yurt dışı veri paylaşımı oluşuyorsa KVKK ve uygulanıyorsa GDPR aktarım mekanizmaları uygulanmalıdır.",
-        "Mesaj şablonları hassas veri paylaşmama ilkesi açısından incelenmeli; pazarlama ile hizmet mesajları ayrılmalıdır."
-      ]
+    "emergency": {
+      "title": "Acil sağlık durumu uyarısı",
+      "body": "NoraMedi ve bağlı kanal özellikleri acil sağlık hizmetleri için tasarlanmamıştır. Acil veya hayati bir sağlık durumunda lütfen 112'yi veya ilgili acil sağlık hizmetlerini arayın. Klinik randevu kanalları üzerinden acil müdahale beklemeyin."
     },
     "sources": {
       "commercial": "T.C. Ticaret Bakanlığı - Elektronik ticaret mevzuatı ve Ticari Elektronik İleti düzenlemeleri",
       "transfer": "KVKK - Kişisel verilerin yurt dışına aktarımına ilişkin resmi dokümanlar",
       "eprivacy": "EUR-Lex - ePrivacy Directive 2002/58/EC (doğrudan pazarlama için Madde 13)",
       "gdpr": "EUR-Lex - GDPR"
+    }
+  },
+  "dataRequest": {
+    "title": "Veri Sahibi Başvurusu",
+    "description": "Kişisel verilerinize ilişkin erişim, düzeltme, silme, itiraz veya şikâyet talebinde bulunmak için doğru başvuru yolunu öğrenin.",
+    "platform": {
+      "title": "1. NoraMedi platform başvuruları",
+      "body": "NoraMedi platform hesabınıza, gizlilik tercihlerinize veya platform tarafından işlenen verilerinize ilişkin talepler için aşağıdaki iletişim adreslerini kullanabilirsiniz.",
+      "rows": [
+        { "label": "Gizlilik / KVKK / GDPR başvuruları", "value": "privacy@noramedi.com" },
+        { "label": "Güvenlik bildirimleri ve ihlal şüphesi", "value": "security@noramedi.com" },
+        { "label": "Hesap erişimi ve destek soruları", "value": "support@noramedi.com" },
+        { "label": "Hukuki ve sözleşmesel bildirimler", "value": "legal@noramedi.com" }
+      ]
+    },
+    "types": {
+      "title": "2. Başvuru kategorileri",
+      "body": "KVKK Madde 11 ve uygulanabildiği ölçüde GDPR Madde 15-22 kapsamında aşağıdaki haklarınızı kullanabilirsiniz:",
+      "items": [
+        "Erişim ve bilgi: Verilerinizin işlenip işlenmediğini öğrenme ve kopyasına erişim.",
+        "Düzeltme: Eksik veya hatalı verilerinizin düzeltilmesini talep etme.",
+        "Silme veya anonim hale getirme: Uygulanabilir şartlarda verilerinizin silinmesini veya anonim hale getirilmesini isteme.",
+        "İtiraz veya kısıtlama: İşlemeye itiraz etme ya da kısıtlanmasını talep etme.",
+        "Rıza geri çekme: Rızaya dayalı işlemlerde rızanızı geri çekme.",
+        "Aktarım bilgisi: Verilerinizin aktarıldığı üçüncü kişileri öğrenme.",
+        "Güvenlik ve gizlilik şikâyeti: Olası veri ihlali veya güvenlik açığını bildirme.",
+        "Resmi şikâyet: KVKK'ya veya yetkili AB denetim makamına şikâyette bulunma."
+      ]
+    },
+    "clinic": {
+      "title": "3. Klinik hasta verisi talepleri",
+      "body": "Bir kliniğin NoraMedi platformunda işlediği hasta kayıtları, randevu verileri veya klinik iletişim verileri birincil olarak ilgili klinik tarafından kontrol edilmektedir. Bu tür verilere ilişkin taleplerinizi doğrudan hizmet aldığınız kliniğe iletmelisiniz. NoraMedi, sözleşmesel çerçeve uygulanabildiğinde kliniğe destek sağlayabilir; ancak klinik adına birincil veri sorumlusu kararları almaz."
+    },
+    "response": {
+      "title": "4. Yanıt süreleri",
+      "body": "Başvurular KVKK kapsamında otuz gün, GDPR kapsamında ise bir ay içinde yanıtlanmayı hedeflemektedir. Talebin niteliği veya kapsamına göre bu süre uzatılabilir; bu durumda bilgilendirme yapılır. Başvurunuzu privacy@noramedi.com adresine yazılı olarak iletmeniz sürecin hızlanmasına yardımcı olur."
+    },
+    "sources": {
+      "kvkk": "Kişisel Verileri Koruma Kurumu - İlgili kişi hakları ve başvuru usulleri",
+      "gdpr": "EUR-Lex - GDPR Madde 15-22 (ilgili kişi hakları)"
+    }
+  },
+  "consent": {
+    "title": "Kanal Onay Şablonları",
+    "description": "WhatsApp ve Instagram randevu kanalları için aydınlatma ve açık rıza metin şablonları. Bu sayfada yer alan metinler kliniklerin kendi koşullarına uyarlayabileceği genel şablonlardır.",
+    "disclaimer": {
+      "title": "Şablon niteliği hakkında",
+      "body": "Bu sayfadaki metinler genel şablon niteliğindedir ve hukuki uyumluluk güvencesi oluşturmaz. Her klinik, kendi hizmetlerine, işlenen veri kategorilerine ve yürürlükteki mevzuata göre bu metinleri bir hukuk danışmanıyla gözden geçirmelidir."
+    },
+    "distinction": {
+      "title": "1. Aydınlatma ve açık rıza ayrımı",
+      "body": "KVKK ve GDPR kapsamında aydınlatma yükümlülüğü ile açık rıza farklı kavramlardır ve ayrı ayrı yerine getirilmelidir.",
+      "items": [
+        "Aydınlatma metni: Veri sorumlusu kimliği, işleme amaçları, hukuki sebepler, saklama süreleri, aktarım yapılan taraflar ve ilgili kişi haklarını kapsar. Onay alınmasından bağımsız olarak sunulmalıdır.",
+        "Açık rıza: Yalnızca açık rızanın hukuki sebep olarak belirlendiği işlemler için gereklidir. Her işlem için ayrı, özgür, belirli ve bilgilendirilmiş şekilde alınmalıdır.",
+        "Randevu operasyonu için sözleşmenin ifası veya meşru menfaat gibi farklı bir hukuki sebep de değerlendirilebilir; bu durumlarda açık rıza yerine yalnızca aydınlatma yeterli olabilir."
+      ]
+    },
+    "template": {
+      "title": "2. Randevu kanalı için örnek metin",
+      "body": "Aşağıdaki metinler WhatsApp veya Instagram üzerinden randevu talebi alan kanallar için örnek şablon niteliğindedir. Klinik adı, veri sorumlusu bilgileri ve aydınlatma bağlantısı eklenerek kliniklerin kendi koşullarına göre uyarlanmalıdır.",
+      "notice": "Aydınlatma bağlantısı örneği: \"Kişisel verilerinizin nasıl işlendiği hakkında bilgi almak için [Klinik Adı] Aydınlatma Metni'ni okuyabilirsiniz: [bağlantı]\"",
+      "explicit": "Açık rıza örneği: \"Randevu talebimin alınması ve tarafıma dönüş yapılması amacıyla kişisel verilerimin işlenmesini kabul ediyorum.\""
+    },
+    "clinicNote": {
+      "title": "3. Kliniklerin uyarlaması",
+      "body": "Bu şablonlar yalnızca genel bir başlangıç noktası sunmaktadır. Her klinik, kendi hasta iletişim kanalı kurulumunda veri sorumlusu ticari unvanını, işlenen veri kategorilerini, saklama sürelerini ve aktarım koşullarını içeren kendi aydınlatma metnini ve gerektiğinde açık rıza belgesini hazırlamakla yükümlüdür. Bu şablonların değiştirilmeksizin kullanılması hukuki uyumu garanti etmez."
+    },
+    "sources": {
+      "kvkk": "KVKK - Aydınlatma Yükümlülüğünün Yerine Getirilmesi Rehberi",
+      "gdpr": "EUR-Lex - GDPR Madde 7 ve Recital 32 (rızanın şartları)"
     }
   }
 }
