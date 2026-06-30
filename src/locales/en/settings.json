@@ -282,6 +282,7 @@
     "saveDraft": "Save Draft",
     "publish": "Publish",
     "updatePublished": "Update & Publish",
+    "publishedEditNote": "Profile is published. Changes are saved and go live immediately when you click Update & Publish.",
     "viewPublic": "View Public Page",
     "savedDraft": "Draft saved.",
     "publishedSuccess": "Privacy notice published.",

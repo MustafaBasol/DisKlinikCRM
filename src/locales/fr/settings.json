@@ -282,6 +282,7 @@
     "saveDraft": "Enregistrer le brouillon",
     "publish": "Publier",
     "updatePublished": "Mettre à jour et publier",
+    "publishedEditNote": "Le profil est publié. Les modifications sont enregistrées et mises en ligne immédiatement lors du clic sur Mettre à jour et publier.",
     "viewPublic": "Voir la page publique",
     "savedDraft": "Brouillon enregistré.",
     "publishedSuccess": "Avis de confidentialité publié.",

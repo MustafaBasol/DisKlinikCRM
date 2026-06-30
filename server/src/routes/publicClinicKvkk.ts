@@ -13,7 +13,7 @@ import prisma from '../db.js';
 
 const router = express.Router();
 
-const PUBLIC_PROFILE_SELECT = {
+export const PUBLIC_PROFILE_SELECT = {
   dataControllerTitle: true,
   address: true,
   city: true,

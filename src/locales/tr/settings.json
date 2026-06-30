@@ -282,6 +282,7 @@
     "saveDraft": "Taslak Kaydet",
     "publish": "Yayınla",
     "updatePublished": "Güncelle ve Yayınla",
+    "publishedEditNote": "Profil yayında. Değişiklikler 'Güncelle ve Yayınla' ile kaydedilir ve doğrudan yayına alınır.",
     "viewPublic": "Herkese Açık Sayfayı Görüntüle",
     "savedDraft": "Taslak kaydedildi.",
     "publishedSuccess": "Aydınlatma metni yayınlandı.",

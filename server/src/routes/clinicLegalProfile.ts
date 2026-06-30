@@ -3,13 +3,14 @@
  *
  * Endpoints (protected — require authenticated clinic session):
  *   GET    /api/clinics/:clinicId/legal-profile         — Get profile (draft or published)
- *   PUT    /api/clinics/:clinicId/legal-profile         — Create or update (upsert)
- *   POST   /api/clinics/:clinicId/legal-profile/publish — Publish (validates required fields)
+ *   PUT    /api/clinics/:clinicId/legal-profile         — Create or update draft (rejected if already published)
+ *   POST   /api/clinics/:clinicId/legal-profile/publish — Save+validate+publish atomically
  *
  * Security:
  *   - All routes require OWNER | ORG_ADMIN | CLINIC_MANAGER.
  *   - Cross-organization access denied via resolveEffectiveClinicId.
- *   - CLINIC_MANAGER access further restricted to their allowed clinics.
+ *   - PUT is blocked when profile is already published to prevent accidental unpublish.
+ *   - Publish accepts optional body to save and publish atomically in one step.
  */
 
 import express, { Response } from 'express';
@@ -20,9 +21,9 @@ import { resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
-const LEGAL_PROFILE_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'];
+export const LEGAL_PROFILE_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'];
 
-const legalProfileSchema = z.object({
+export const legalProfileSchema = z.object({
   dataControllerTitle: z.string().max(200).optional().nullable(),
   taxNumber: z.string().max(20).optional().nullable(),
   mersisNumber: z.string().max(30).optional().nullable(),
@@ -42,8 +43,8 @@ const legalProfileSchema = z.object({
   effectiveDate: z.string().optional().nullable(),
 });
 
-// Safe fields to return (no internal secrets)
-const SAFE_SELECT = {
+// Safe fields to return (no internal secrets or org IDs)
+export const SAFE_SELECT = {
   id: true,
   clinicId: true,
   dataControllerTitle: true,
@@ -67,6 +68,31 @@ const SAFE_SELECT = {
   createdAt: true,
   updatedAt: true,
 };
+
+/**
+ * Validate fields required before publishing.
+ * Pure function — exported for testability.
+ */
+export function validatePublishFields(record: {
+  dataControllerTitle?: string | null;
+  address?: string | null;
+  privacyNoticeText?: string | null;
+  privacyNoticeVersion?: string | null;
+  effectiveDate?: Date | null;
+  privacyRequestEmail?: string | null;
+  email?: string | null;
+}): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
+  if (!record.dataControllerTitle?.trim()) fieldErrors.dataControllerTitle = 'required';
+  if (!record.address?.trim()) fieldErrors.address = 'required';
+  if (!record.privacyNoticeText?.trim()) fieldErrors.privacyNoticeText = 'required';
+  if (!record.privacyNoticeVersion?.trim()) fieldErrors.privacyNoticeVersion = 'required';
+  if (!record.effectiveDate) fieldErrors.effectiveDate = 'required';
+  if (!record.privacyRequestEmail?.trim() && !record.email?.trim()) {
+    fieldErrors.privacyRequestEmail = 'privacyRequestEmail or email required';
+  }
+  return fieldErrors;
+}
 
 async function resolveClinic(req: AuthRequest, res: Response): Promise<string | false> {
   const clinicId = await resolveEffectiveClinicId(req.user!, req.params.clinicId as string);
@@ -99,12 +125,27 @@ router.get(
 );
 
 // PUT /api/clinics/:clinicId/legal-profile
+// Blocked when profile is already published — use POST /publish to update a published profile.
 router.put(
   '/clinics/:clinicId/legal-profile',
   authorize(LEGAL_PROFILE_ROLES),
   async (req: AuthRequest, res: Response) => {
     const clinicId = await resolveClinic(req, res);
     if (!clinicId) return;
+
+    try {
+      const current = await prisma.clinicLegalProfile.findUnique({
+        where: { clinicId },
+        select: { isPublished: true },
+      });
+      if (current?.isPublished) {
+        return res.status(409).json({
+          error: 'Cannot save as draft: profile is currently published. Use Publish to update the published profile.',
+        });
+      }
+    } catch {
+      return res.status(500).json({ error: 'Failed to check profile status' });
+    }
 
     const parsed = legalProfileSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -144,6 +185,8 @@ router.put(
 );
 
 // POST /api/clinics/:clinicId/legal-profile/publish
+// Accepts optional body (same schema as PUT) to save and publish atomically in one step.
+// This is the only allowed mutation path when the profile is already published.
 router.post(
   '/clinics/:clinicId/legal-profile/publish',
   authorize(LEGAL_PROFILE_ROLES),
@@ -152,6 +195,33 @@ router.post(
     if (!clinicId) return;
 
     try {
+      // If form data is included in the body, save it first (atomic update+publish flow).
+      if (req.body && Object.keys(req.body).length > 0) {
+        const parsed = legalProfileSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ error: 'Validation error', details: parsed.error.flatten().fieldErrors });
+        }
+        const data = parsed.data;
+        const effectiveDate = data.effectiveDate ? new Date(data.effectiveDate) : null;
+        await prisma.clinicLegalProfile.upsert({
+          where: { clinicId },
+          create: {
+            clinicId,
+            organizationId: req.user!.organizationId,
+            ...data,
+            effectiveDate,
+            email: data.email || null,
+            privacyRequestEmail: data.privacyRequestEmail || null,
+          },
+          update: {
+            ...data,
+            effectiveDate,
+            email: data.email || null,
+            privacyRequestEmail: data.privacyRequestEmail || null,
+          },
+        });
+      }
+
       const existing = await prisma.clinicLegalProfile.findUnique({
         where: { clinicId },
         select: {
@@ -166,19 +236,10 @@ router.post(
       });
 
       if (!existing) {
-        return res.status(404).json({ error: 'No legal profile found. Save a draft first.' });
+        return res.status(404).json({ error: 'No legal profile found. Fill in required fields before publishing.' });
       }
 
-      const fieldErrors: Record<string, string> = {};
-      if (!existing.dataControllerTitle?.trim()) fieldErrors.dataControllerTitle = 'required';
-      if (!existing.address?.trim()) fieldErrors.address = 'required';
-      if (!existing.privacyNoticeText?.trim()) fieldErrors.privacyNoticeText = 'required';
-      if (!existing.privacyNoticeVersion?.trim()) fieldErrors.privacyNoticeVersion = 'required';
-      if (!existing.effectiveDate) fieldErrors.effectiveDate = 'required';
-      if (!existing.privacyRequestEmail?.trim() && !existing.email?.trim()) {
-        fieldErrors.privacyRequestEmail = 'privacyRequestEmail or email required';
-      }
-
+      const fieldErrors = validatePublishFields(existing);
       if (Object.keys(fieldErrors).length > 0) {
         return res.status(422).json({ error: 'Required fields missing for publishing', fieldErrors });
       }

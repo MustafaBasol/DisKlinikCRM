@@ -131,7 +131,8 @@ const ClinicKvkkSection: React.FC<ClinicKvkkSectionProps> = ({ clinicId, clinicS
     setMessage(null);
     setFieldErrors({});
     try {
-      const res = await clinicLegalProfileService.publish(clinicId);
+      // Send form data with publish so updates are saved atomically before validation.
+      const res = await clinicLegalProfileService.publish(clinicId, profile as Record<string, unknown>);
       setProfile(res.data.profile ?? profile);
       setMessage({ type: 'success', text: t('kvkk.publishedSuccess') });
     } catch (err: any) {
@@ -196,15 +197,17 @@ const ClinicKvkkSection: React.FC<ClinicKvkkSectionProps> = ({ clinicId, clinicS
         {/* Action buttons */}
         {canEdit && (
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={saving || publishing}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              {saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" /> : <Save size={15} />}
-              {t('kvkk.saveDraft')}
-            </button>
+            {!profile.isPublished && (
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={saving || publishing}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" /> : <Save size={15} />}
+                {t('kvkk.saveDraft')}
+              </button>
+            )}
             <button
               type="button"
               onClick={handlePublish}
@@ -226,6 +229,9 @@ const ClinicKvkkSection: React.FC<ClinicKvkkSectionProps> = ({ clinicId, clinicS
               </a>
             )}
           </div>
+        )}
+        {profile.isPublished && canEdit && (
+          <p className="mt-3 text-xs text-gray-500">{t('kvkk.publishedEditNote')}</p>
         )}
 
         {/* Status message */}
