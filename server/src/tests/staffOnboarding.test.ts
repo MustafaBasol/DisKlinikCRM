@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
-import { buildStaffWelcomeEmail } from '../services/emailTemplates.js';
+import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';
 import { sendMail } from '../services/emailService.js';
+import { generateResetToken, RESET_TOKEN_EXPIRY_MINUTES } from '../utils/passwordResetToken.js';
 
 let passed = 0;
 let failed = 0;
@@ -59,75 +59,74 @@ await test('login normalizes email to lowercase before lookup', () => {
   assert.equal(normalized, 'doctor@example.com');
 });
 
-// ── Staff user created with emailVerifiedAt = null ───────────────────────────
+// ── Staff user is verified immediately at admin-creation time ────────────────
 
-await test('new staff user has emailVerifiedAt = null (cannot login until verified)', () => {
-  const newUser = { emailVerifiedAt: null as Date | null };
-  assert.equal(newUser.emailVerifiedAt, null, 'staff user must not be able to login before email verification');
+await test('admin-created staff user has emailVerifiedAt set immediately (admin vouches for the email)', () => {
+  const newUser = { emailVerifiedAt: new Date() as Date | null };
+  assert.ok(newUser.emailVerifiedAt !== null, 'admin-created staff user must not need a separate email-verify step');
 });
 
-await test('staff user can login after email verification sets emailVerifiedAt', () => {
-  const user = { emailVerifiedAt: null as Date | null };
-  user.emailVerifiedAt = new Date(); // simulates verify-email endpoint
-  assert.ok(user.emailVerifiedAt !== null);
-  assert.ok(user.emailVerifiedAt instanceof Date);
-});
+// ── Password setup token for staff onboarding (reuses password reset flow) ───
 
-// ── Verification token for staff user ────────────────────────────────────────
-
-await test('staff verification token is a 64-char hex SHA-256 hash', () => {
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+await test('staff onboarding reset token is a 64-char hex SHA-256 hash', () => {
+  const { rawToken, tokenHash } = generateResetToken();
   assert.equal(rawToken.length, 64);
   assert.equal(tokenHash.length, 64);
   assert.notEqual(rawToken, tokenHash, 'rawToken must not equal its hash');
 });
 
-await test('staff verification token expires 24h in the future', () => {
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+await test('staff onboarding reset token expiry matches RESET_TOKEN_EXPIRY_MINUTES', () => {
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000);
   assert.ok(expiresAt > new Date());
   const diffMs = expiresAt.getTime() - Date.now();
-  assert.ok(diffMs > 23 * 60 * 60 * 1000, 'expiry must be ~24h from now');
+  assert.ok(diffMs > (RESET_TOKEN_EXPIRY_MINUTES - 1) * 60 * 1000, 'expiry must be ~RESET_TOKEN_EXPIRY_MINUTES from now');
 });
 
-// ── Staff welcome email template ──────────────────────────────────────────────
+// ── Staff onboarding email template ───────────────────────────────────────────
 
-await test('buildStaffWelcomeEmail contains verifyUrl', () => {
-  const verifyUrl = 'https://app.noramedi.com/verify-email?token=abc123';
-  const { html, text, subject } = buildStaffWelcomeEmail({
+await test('buildStaffOnboardingEmail contains resetUrl', () => {
+  const resetUrl = 'https://app.noramedi.com/reset-password?token=abc123';
+  const { html, text, subject } = buildStaffOnboardingEmail({
     firstName: 'Ahmet',
     clinicName: 'Test Clinic',
-    verifyUrl,
+    resetUrl,
+    expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
   });
-  assert.ok(html.includes(verifyUrl), 'html must contain verifyUrl');
-  assert.ok(text.includes(verifyUrl), 'text must contain verifyUrl');
-  assert.ok(subject.includes('Hesabınız') || subject.includes('Account'), 'subject must mention account');
+  assert.ok(html.includes(resetUrl), 'html must contain resetUrl');
+  assert.ok(text.includes(resetUrl), 'text must contain resetUrl');
+  assert.ok(subject.includes('oluşturuldu'), 'subject must mention account creation');
 });
 
-await test('buildStaffWelcomeEmail contains clinic name', () => {
-  const { html, text } = buildStaffWelcomeEmail({
+await test('buildStaffOnboardingEmail contains clinic name', () => {
+  const { html, text } = buildStaffOnboardingEmail({
     firstName: 'Ali',
     clinicName: 'NoraMedi Test Clinic',
-    verifyUrl: 'https://app.noramedi.com/verify-email?token=xyz',
+    resetUrl: 'https://app.noramedi.com/reset-password?token=xyz',
+    expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
   });
   assert.ok(html.includes('NoraMedi Test Clinic'));
   assert.ok(text.includes('NoraMedi Test Clinic'));
 });
 
-await test('buildStaffWelcomeEmail does not contain localhost', () => {
-  const { html } = buildStaffWelcomeEmail({
+await test('buildStaffOnboardingEmail does not contain localhost', () => {
+  const { html } = buildStaffOnboardingEmail({
     firstName: 'Test',
     clinicName: 'Clinic',
-    verifyUrl: 'https://app.noramedi.com/verify-email?token=abc',
+    resetUrl: 'https://app.noramedi.com/reset-password?token=abc',
+    expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
   });
   assert.ok(!html.includes('localhost'), 'html must not contain localhost');
 });
 
-await test('staff welcome email token is in URL only, not raw in email body', () => {
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const verifyUrl = `https://app.noramedi.com/verify-email?token=${rawToken}`;
-  const { html, text } = buildStaffWelcomeEmail({ firstName: 'Test', clinicName: 'Clinic', verifyUrl });
+await test('staff onboarding email token is in URL only, not raw password or hash in email body', () => {
+  const { rawToken, tokenHash } = generateResetToken();
+  const resetUrl = `https://app.noramedi.com/reset-password?token=${rawToken}`;
+  const { html, text } = buildStaffOnboardingEmail({
+    firstName: 'Test',
+    clinicName: 'Clinic',
+    resetUrl,
+    expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
+  });
   assert.ok(!html.includes(tokenHash), 'tokenHash must not appear in email html');
   assert.ok(!text.includes(tokenHash), 'tokenHash must not appear in email text');
 });

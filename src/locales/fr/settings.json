@@ -214,8 +214,8 @@
       "emailAlreadyExists": "Cette adresse e-mail est déjà associée à un autre compte. Veuillez utiliser une adresse différente."
     },
     "success": {
-      "createdWithEmail": "Utilisateur créé. Un lien de vérification a été envoyé par e-mail.",
-      "createdNoEmail": "Utilisateur créé mais l'e-mail de vérification n'a pas pu être envoyé. Veuillez vérifier la configuration e-mail."
+      "createdWithEmail": "Utilisateur créé et e-mail d'invitation envoyé.",
+      "createdNoEmail": "Utilisateur créé mais l'e-mail d'invitation n'a pas pu être envoyé. L'utilisateur peut définir un mot de passe via « Mot de passe oublié »."
     }
   },
   "clinicAssignments": {

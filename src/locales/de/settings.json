@@ -214,8 +214,8 @@
       "emailAlreadyExists": "Diese E-Mail-Adresse ist bereits mit einem anderen Benutzerkonto verknüpft. Bitte verwenden Sie eine andere Adresse."
     },
     "success": {
-      "createdWithEmail": "Benutzer erstellt. Ein Bestätigungslink wurde per E-Mail gesendet.",
-      "createdNoEmail": "Benutzer erstellt, aber die Bestätigungs-E-Mail konnte nicht gesendet werden. Bitte überprüfen Sie die E-Mail-Einstellungen."
+      "createdWithEmail": "Benutzer erstellt und Einladungs-E-Mail gesendet.",
+      "createdNoEmail": "Benutzer erstellt, aber die Einladungs-E-Mail konnte nicht gesendet werden. Der Benutzer kann über 'Passwort vergessen' ein Passwort festlegen."
     }
   },
   "clinicAssignments": {

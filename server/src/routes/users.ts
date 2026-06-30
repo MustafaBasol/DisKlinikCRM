@@ -1,11 +1,11 @@
-import crypto from 'crypto';
 import express, { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { sendMail } from '../services/emailService.js';
-import { buildStaffWelcomeEmail } from '../services/emailTemplates.js';
+import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';
+import { createPasswordResetToken, RESET_TOKEN_EXPIRY_MINUTES } from '../utils/passwordResetToken.js';
 import {
   formatClinicDateTime,
   getParam,
@@ -179,7 +179,7 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
         role: validation.data.role,
         passwordHash,
         isActive: validation.data.isActive,
-        emailVerifiedAt: null,
+        emailVerifiedAt: new Date(),
       },
       select: {
         id: true, firstName: true, lastName: true, email: true,
@@ -194,24 +194,23 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
 
     let emailSent = false;
     try {
-      const appBaseUrl = process.env.APP_BASE_URL ?? 'https://app.noramedi.com';
-      const rawToken = crypto.randomBytes(32).toString('hex');
-      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await prisma.emailVerificationToken.create({
-        data: { userId: user.id, tokenHash, expiresAt },
-      });
-      const verifyUrl = `${appBaseUrl}/verify-email?token=${rawToken}`;
+      const appBaseUrl = (process.env.APP_BASE_URL ?? 'https://app.noramedi.com').replace(/\/$/, '');
+      const { rawToken } = await createPasswordResetToken(user.id);
+      const resetUrl = `${appBaseUrl}/reset-password?token=${rawToken}`;
       const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true } });
-      const { subject, html, text } = buildStaffWelcomeEmail({
+      const { subject, html, text } = buildStaffOnboardingEmail({
         firstName: user.firstName,
         clinicName: clinic?.name ?? 'NoraMedi',
-        verifyUrl,
+        resetUrl,
+        expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
       });
       const mailResult = await sendMail({ to: user.email, subject, html, text });
       emailSent = mailResult.sent;
-    } catch {
-      // non-blocking — user is created regardless
+      if (!emailSent) {
+        console.warn(`[users.create] onboarding email not sent for user ${user.id}: ${mailResult.reason}`);
+      }
+    } catch (err: any) {
+      console.warn(`[users.create] onboarding email failed for user ${user.id}: ${err?.message}`);
     }
 
     res.status(201).json({ ...user, _emailSent: emailSent });
