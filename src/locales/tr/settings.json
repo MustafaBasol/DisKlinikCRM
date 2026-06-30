@@ -272,5 +272,48 @@
         "appointmentsConflict": "{{date}} tarihinde {{count}} aktif randevu var. Randevu bulunan gün izin/tatil günü olarak kapatılamaz."
       }
     }
+  },
+  "kvkk": {
+    "nav": "KVKK / Gizlilik",
+    "title": "Klinik Aydınlatma Metni Yönetimi",
+    "loading": "Yükleniyor...",
+    "statusPublished": "Yayında",
+    "statusDraft": "Taslak",
+    "saveDraft": "Taslak Kaydet",
+    "publish": "Yayınla",
+    "updatePublished": "Güncelle ve Yayınla",
+    "viewPublic": "Herkese Açık Sayfayı Görüntüle",
+    "savedDraft": "Taslak kaydedildi.",
+    "publishedSuccess": "Aydınlatma metni yayınlandı.",
+    "saveError": "Kaydedilemedi.",
+    "publishError": "Yayınlanamadı.",
+    "publishValidationError": "Zorunlu alanları doldurun.",
+    "fieldRequired": "Bu alan zorunludur.",
+    "channelWarning": "WhatsApp ve Instagram kanalları hasta randevu toplama amacıyla, klinik KVKK aydınlatma metni yayınlanmadan kullanılmamalıdır.",
+    "sectionIdentity": "Veri Sorumlusu Bilgileri",
+    "sectionNotice": "Aydınlatma Metni",
+    "loadDefaultTr": "Türkçe Şablonu Yükle",
+    "privacyNoticeTextHelp": "Metnin yayınlanmadan önce hukuk danışmanınız tarafından incelenmesi tavsiye edilir. Şablon metin öneriden ibarettir.",
+    "channelDisclosureHelp": "WhatsApp ve Instagram kanalları aracılığıyla yapılan iletişime özgü açıklama metni. Boş bırakılabilir.",
+    "channelConsentHelp": "Kanal onay formu metni. İlerideki sürümde kullanılacaktır.",
+    "fields": {
+      "dataControllerTitle": "Veri Sorumlusu Unvanı",
+      "taxNumber": "Vergi Numarası",
+      "mersisNumber": "MERSİS Numarası",
+      "address": "Adres",
+      "city": "Şehir",
+      "country": "Ülke",
+      "phone": "Telefon",
+      "email": "E-posta",
+      "privacyRequestEmail": "Gizlilik Başvuru E-postası",
+      "kepEmail": "KEP Adresi",
+      "website": "Web Sitesi",
+      "dataProtectionContact": "Veri Koruma Kişisi",
+      "privacyNoticeText": "Aydınlatma Metni",
+      "channelDisclosureText": "Kanal Açıklama Metni",
+      "channelConsentText": "Kanal Onay Metni",
+      "privacyNoticeVersion": "Sürüm",
+      "effectiveDate": "Yürürlük Tarihi"
+    }
   }
 }

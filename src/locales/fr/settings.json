@@ -272,5 +272,48 @@
         "appointmentsConflict": "{{count}} rendez-vous actif(s) existe(nt) le {{date}}. Une journée avec rendez-vous ne peut pas être marquée comme absence ou jour férié."
       }
     }
+  },
+  "kvkk": {
+    "nav": "Confidentialité / KVKK",
+    "title": "Gestion de l'avis de confidentialité de la clinique",
+    "loading": "Chargement...",
+    "statusPublished": "Publié",
+    "statusDraft": "Brouillon",
+    "saveDraft": "Enregistrer le brouillon",
+    "publish": "Publier",
+    "updatePublished": "Mettre à jour et publier",
+    "viewPublic": "Voir la page publique",
+    "savedDraft": "Brouillon enregistré.",
+    "publishedSuccess": "Avis de confidentialité publié.",
+    "saveError": "Impossible d'enregistrer.",
+    "publishError": "Impossible de publier.",
+    "publishValidationError": "Veuillez remplir les champs obligatoires.",
+    "fieldRequired": "Ce champ est obligatoire.",
+    "channelWarning": "Les canaux WhatsApp et Instagram ne doivent pas être utilisés pour la prise de rendez-vous patients tant que l'avis de confidentialité de la clinique n'est pas publié.",
+    "sectionIdentity": "Informations sur le responsable du traitement",
+    "sectionNotice": "Avis de confidentialité",
+    "loadDefaultTr": "Charger le modèle turc",
+    "privacyNoticeTextHelp": "Nous vous recommandons de faire réviser ce texte par un conseiller juridique avant de le publier. Le modèle est fourni à titre indicatif uniquement.",
+    "channelDisclosureHelp": "Texte de divulgation spécifique aux communications WhatsApp et Instagram. Peut être laissé vide.",
+    "channelConsentHelp": "Texte du formulaire de consentement du canal. Sera utilisé dans une version future.",
+    "fields": {
+      "dataControllerTitle": "Titre du responsable du traitement",
+      "taxNumber": "Numéro fiscal",
+      "mersisNumber": "Numéro MERSIS",
+      "address": "Adresse",
+      "city": "Ville",
+      "country": "Pays",
+      "phone": "Téléphone",
+      "email": "E-mail",
+      "privacyRequestEmail": "E-mail de demande de confidentialité",
+      "kepEmail": "E-mail KEP",
+      "website": "Site web",
+      "dataProtectionContact": "Contact protection des données",
+      "privacyNoticeText": "Texte de l'avis de confidentialité",
+      "channelDisclosureText": "Texte de divulgation du canal",
+      "channelConsentText": "Texte de consentement du canal",
+      "privacyNoticeVersion": "Version",
+      "effectiveDate": "Date d'entrée en vigueur"
+    }
   }
 }

@@ -80,6 +80,7 @@ model Clinic {
   postTreatmentTemplates            PostTreatmentMessageTemplate[]
   postTreatmentQueue                PostTreatmentMessageQueue[]
   patientPrivacyRequests            PatientPrivacyRequest[]
+  clinicLegalProfile                ClinicLegalProfile?
 
   @@unique([organizationId, slug])
 }
@@ -1733,4 +1734,34 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model ClinicLegalProfile {
+  id                    String    @id @default(uuid())
+  organizationId        String
+  clinicId              String    @unique
+  clinic                Clinic    @relation(fields: [clinicId], references: [id])
+  dataControllerTitle   String?
+  taxNumber             String?
+  mersisNumber          String?
+  address               String?
+  city                  String?
+  country               String?   @default("TR")
+  phone                 String?
+  email                 String?
+  privacyRequestEmail   String?
+  kepEmail              String?
+  website               String?
+  dataProtectionContact String?
+  privacyNoticeText     String?
+  channelDisclosureText String?
+  channelConsentText    String?
+  privacyNoticeVersion  String?
+  effectiveDate         DateTime?
+  isPublished           Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([clinicId])
 }
