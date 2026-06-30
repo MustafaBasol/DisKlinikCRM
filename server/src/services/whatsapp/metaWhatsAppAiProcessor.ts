@@ -57,6 +57,16 @@ import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
 import { sanitizeAiMessageHistory } from '../privacy/redaction.js';
 import { upsertContactRequest } from '../../routes/contactRequests.js';
+import {
+  checkChannelConsent,
+  parseConsentReply,
+  logChannelConsent,
+  loadConsentMetadata,
+  MISSING_LEGAL_PROFILE_BLOCK_TEXT,
+  CONSENT_DECLINED_TEXT,
+  CONSENT_ACCEPTED_TEXT,
+  CONSENT_REPROMPT_TEXT,
+} from '../channelConsentGate.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +78,7 @@ type MetaWaStep =
   | 'awaiting_confirmation'
   | 'awaiting_handoff_note'
   | 'awaiting_patient_selection'
+  | 'awaiting_channel_consent'
   | null;
 
 type MetaWaStateJson = BookingStateJson & {
@@ -959,6 +970,84 @@ const buildReplyText = async (args: {
         metaMatchingPatients.find(p => `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName) ?? null;
     }
   }
+
+  // ── Channel consent gate ─────────────────────────────────────────────────
+  if (currentStep === 'awaiting_channel_consent') {
+    const reply = parseConsentReply(args.text);
+    const meta = await loadConsentMetadata(args.clinic.id);
+    if (reply === 'accepted' && meta) {
+      await logChannelConsent({
+        organizationId: args.clinic.organizationId,
+        clinicId: args.clinic.id,
+        channel: 'whatsapp',
+        contactIdentifier: args.phone,
+        status: 'accepted',
+        consentTextVersion: meta.version,
+        consentTextSnapshot: meta.consentSnapshot,
+        privacyUrl: meta.privacyUrl,
+        conversationId: args.conversationKey,
+        sourceMessageId: args.messageId ?? null,
+      });
+      await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+        customerName,
+        step: null,
+        currentIntent: null,
+        lastMessage: args.text,
+        lastProviderMessageId: args.messageId ?? null,
+        stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+      });
+      return CONSENT_ACCEPTED_TEXT;
+    }
+    if (reply === 'declined' && meta) {
+      await logChannelConsent({
+        organizationId: args.clinic.organizationId,
+        clinicId: args.clinic.id,
+        channel: 'whatsapp',
+        contactIdentifier: args.phone,
+        status: 'declined',
+        consentTextVersion: meta.version,
+        consentTextSnapshot: meta.consentSnapshot,
+        privacyUrl: meta.privacyUrl,
+        conversationId: args.conversationKey,
+        sourceMessageId: args.messageId ?? null,
+      });
+      await upsertMetaWaState(args.clinic.id, args.conversationKey, { customerName, step: null, currentIntent: null, lastMessage: args.text, lastProviderMessageId: args.messageId ?? null, stateJson: null });
+      return CONSENT_DECLINED_TEXT;
+    }
+    const consentRecheck = await checkChannelConsent({ organizationId: args.clinic.organizationId, clinicId: args.clinic.id, channel: 'whatsapp', contactIdentifier: args.phone });
+    if (consentRecheck.status === 'accepted') {
+      await upsertMetaWaState(args.clinic.id, args.conversationKey, { customerName, step: null, currentIntent: null, lastMessage: args.text, lastProviderMessageId: args.messageId ?? null, stateJson: null });
+      return CONSENT_ACCEPTED_TEXT;
+    }
+    if (consentRecheck.status === 'blocked_missing_legal_profile') return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
+    return consentRecheck.promptText ?? CONSENT_REPROMPT_TEXT;
+  }
+
+  const consentGateResult = await checkChannelConsent({
+    organizationId: args.clinic.organizationId,
+    clinicId: args.clinic.id,
+    channel: 'whatsapp',
+    contactIdentifier: args.phone,
+  });
+  if (consentGateResult.status === 'blocked_missing_legal_profile') {
+    console.warn('[meta-wa-assistant] consent-gate blocked: missing legal profile', {
+      clinicId: summarizeId(args.clinic.id),
+      organizationId: args.clinic.organizationId,
+    });
+    return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
+  }
+  if (consentGateResult.status === 'needs_consent' || consentGateResult.status === 'declined') {
+    await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+      customerName,
+      step: 'awaiting_channel_consent',
+      currentIntent: null,
+      lastMessage: args.text,
+      lastProviderMessageId: args.messageId ?? null,
+      stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+    });
+    return consentGateResult.promptText;
+  }
+  // ── End consent gate ────────────────────────────────────────────────────
 
   // ── Patient selection step ────────────────────────────────────────────────
   if (currentStep === 'awaiting_patient_selection') {
