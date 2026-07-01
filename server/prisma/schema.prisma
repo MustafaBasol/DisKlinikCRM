@@ -686,8 +686,18 @@ model MessageTemplate {
   metaTemplateSubmittedAt     DateTime?
   metaTemplateVariableMap     Json?
 
+  // Snapshot of the WhatsApp connection/WABA this template was submitted against.
+  // Lets us detect when a clinic's active connection later changes to a different
+  // WABA, so a previously-approved template isn't silently trusted for the new one.
+  metaTemplateConnectionId  String?
+  metaTemplateConnection    WhatsAppConnection? @relation("MessageTemplateMetaConnection", fields: [metaTemplateConnectionId], references: [id])
+  metaWabaIdSnapshot        String?
+  metaPhoneNumberIdSnapshot String?
+
   sentMessages SentMessage[]
   recallCandidates RecallCandidate[]
+
+  @@index([metaTemplateConnectionId])
 }
 
 model SentMessage {
@@ -1342,9 +1352,10 @@ model WhatsAppConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clinics      ClinicWhatsAppConnection[]
-  sentMessages SentMessage[]
-  inboxEntries WhatsAppInboxEntry[]
+  clinics       ClinicWhatsAppConnection[]
+  sentMessages  SentMessage[]
+  inboxEntries  WhatsAppInboxEntry[]
+  metaTemplates MessageTemplate[] @relation("MessageTemplateMetaConnection")
 
   @@unique([organizationId, name])
   @@index([organizationId])

@@ -18,6 +18,7 @@ import {
   type SyncTemplateResult,
 } from '../services/metaTemplateService.js';
 import { resolveConnectionForClinic } from '../services/whatsapp/whatsappService.js';
+import { evaluateTemplateBinding } from '../services/whatsapp/templateBinding.js';
 import type { WhatsAppConnectionRecord } from '../services/whatsapp/WhatsAppProvider.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -53,6 +54,8 @@ type TemplateSyncRecord = {
   clinicId: string;
   metaTemplateName: string | null;
   metaTemplateStatus: string | null;
+  metaTemplateConnectionId?: string | null;
+  metaWabaIdSnapshot?: string | null;
 };
 
 export type SyncDeps = {
@@ -82,6 +85,8 @@ function defaultDeps(): SyncDeps {
           clinicId: true,
           metaTemplateName: true,
           metaTemplateStatus: true,
+          metaTemplateConnectionId: true,
+          metaWabaIdSnapshot: true,
         },
         take: batchSize,
         orderBy: { metaTemplateLastSyncedAt: 'asc' },
@@ -137,6 +142,22 @@ export async function syncPendingMetaTemplateStatuses(
 
       if (!connection.metaWabaId) {
         console.warn('[meta-template-sync] missing-waba-id', {
+          clinicIdSuffix: template.clinicId.slice(-4),
+        });
+        summary.failed++;
+        continue;
+      }
+
+      if (
+        template.metaTemplateConnectionId &&
+        template.metaWabaIdSnapshot &&
+        evaluateTemplateBinding(template, connection) === 'mismatched'
+      ) {
+        // The clinic's active connection/WABA no longer matches what this template
+        // was submitted against. Don't sync against the wrong WABA — a human needs
+        // to resubmit via the manual sync endpoint, which resolves the stored binding.
+        console.warn('[meta-template-sync] waba-mismatch', {
+          templateIdSuffix: template.id.slice(-4),
           clinicIdSuffix: template.clinicId.slice(-4),
         });
         summary.failed++;

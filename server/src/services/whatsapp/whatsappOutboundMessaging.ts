@@ -26,6 +26,7 @@
 import prisma from '../../db.js';
 import { resolveConnectionForClinic } from './whatsappService.js';
 import { getWhatsAppProvider } from './whatsappProviderFactory.js';
+import { evaluateTemplateBinding } from './templateBinding.js';
 import type { WhatsAppConnectionRecord } from './WhatsAppProvider.js';
 
 // ─── Error codes ──────────────────────────────────────────────────────────────
@@ -50,7 +51,36 @@ export type MetaTemplateSnapshot = {
   metaTemplateStatus: string | null;
   metaTemplateLanguage: string | null;
   metaTemplateVariableMap: unknown;
+  metaTemplateConnectionId?: string | null;
+  metaWabaIdSnapshot?: string | null;
 };
+
+/**
+ * Select the fields needed for evaluateTemplateBinding alongside the usual
+ * MetaTemplateSnapshot select — kept in one place so every purpose-based lookup
+ * checks the connection/WABA binding the same way.
+ */
+const META_TEMPLATE_SNAPSHOT_SELECT = {
+  metaTemplateName: true,
+  metaTemplateStatus: true,
+  metaTemplateLanguage: true,
+  metaTemplateVariableMap: true,
+  metaTemplateConnectionId: true,
+  metaWabaIdSnapshot: true,
+} as const;
+
+/**
+ * A template only counts as usable for automations if its stored connection/WABA
+ * binding matches the currently active connection. Templates with no stored
+ * binding (submitted before this snapshot existed) are treated as NOT usable —
+ * they must be resubmitted before automations will send them again.
+ */
+function isTemplateUsableForConnection(
+  template: MetaTemplateSnapshot,
+  connection: WhatsAppConnectionRecord,
+): boolean {
+  return evaluateTemplateBinding(template, connection) === 'matched';
+}
 
 // ─── Parameter builder ────────────────────────────────────────────────────────
 
@@ -201,15 +231,13 @@ export async function sendProactiveWhatsAppMessage(args: {
 
   let template: MetaTemplateSnapshot | null = null;
   if (connection.provider === 'meta_cloud_api' && templateId) {
-    template = await prisma.messageTemplate.findFirst({
+    const candidate = await prisma.messageTemplate.findFirst({
       where: { id: templateId, clinicId, channel: 'whatsapp' },
-      select: {
-        metaTemplateName: true,
-        metaTemplateStatus: true,
-        metaTemplateLanguage: true,
-        metaTemplateVariableMap: true,
-      },
+      select: META_TEMPLATE_SNAPSHOT_SELECT,
     });
+    if (candidate && isTemplateUsableForConnection(candidate, connection)) {
+      template = candidate;
+    }
   }
 
   return sendProactiveWhatsAppMessageWithConnection(connection, template, { phone, text, variables });
@@ -310,7 +338,7 @@ export async function sendNoShowRecoveryWhatsApp(args: {
 
   let template: MetaTemplateSnapshot | null = null;
   if (connection.provider === 'meta_cloud_api') {
-    template = await prisma.messageTemplate.findFirst({
+    const candidate = await prisma.messageTemplate.findFirst({
       where: {
         clinicId,
         channel: 'whatsapp',
@@ -318,13 +346,11 @@ export async function sendNoShowRecoveryWhatsApp(args: {
         isActive: true,
       },
       orderBy: { createdAt: 'asc' },
-      select: {
-        metaTemplateName: true,
-        metaTemplateStatus: true,
-        metaTemplateLanguage: true,
-        metaTemplateVariableMap: true,
-      },
+      select: META_TEMPLATE_SNAPSHOT_SELECT,
     });
+    if (candidate && isTemplateUsableForConnection(candidate, connection)) {
+      template = candidate;
+    }
   }
 
   return sendNoShowRecoveryWhatsAppWithConnection(connection, template, {
@@ -432,16 +458,14 @@ export async function sendAppointmentConfirmationWhatsApp(args: {
 
   let template: MetaTemplateSnapshot | null = null;
   if (connection.provider === 'meta_cloud_api') {
-    template = await prisma.messageTemplate.findFirst({
+    const candidate = await prisma.messageTemplate.findFirst({
       where: { clinicId, channel: 'whatsapp', purpose: 'appointment_confirmation', isActive: true },
       orderBy: { createdAt: 'asc' },
-      select: {
-        metaTemplateName: true,
-        metaTemplateStatus: true,
-        metaTemplateLanguage: true,
-        metaTemplateVariableMap: true,
-      },
+      select: META_TEMPLATE_SNAPSHOT_SELECT,
     });
+    if (candidate && isTemplateUsableForConnection(candidate, connection)) {
+      template = candidate;
+    }
   }
 
   return sendAppointmentConfirmationWhatsAppWithConnection(connection, template, {
@@ -541,7 +565,7 @@ export async function sendPostTreatmentWhatsApp(args: {
 
   let template: MetaTemplateSnapshot | null = null;
   if (connection.provider === 'meta_cloud_api') {
-    template = await prisma.messageTemplate.findFirst({
+    const candidate = await prisma.messageTemplate.findFirst({
       where: {
         clinicId,
         channel: 'whatsapp',
@@ -549,13 +573,11 @@ export async function sendPostTreatmentWhatsApp(args: {
         isActive: true,
       },
       orderBy: { createdAt: 'asc' },
-      select: {
-        metaTemplateName: true,
-        metaTemplateStatus: true,
-        metaTemplateLanguage: true,
-        metaTemplateVariableMap: true,
-      },
+      select: META_TEMPLATE_SNAPSHOT_SELECT,
     });
+    if (candidate && isTemplateUsableForConnection(candidate, connection)) {
+      template = candidate;
+    }
   }
 
   return sendPostTreatmentWhatsAppWithConnection(connection, template, {

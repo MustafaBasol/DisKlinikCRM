@@ -67,6 +67,7 @@
     "statusApproved": "Einsatzbereit",
     "statusRejected": "Abgelehnt",
     "statusNeedsAttention": "Aufmerksamkeit erforderlich",
-    "statusUnknown": "Unbekannt"
+    "statusUnknown": "Unbekannt",
+    "bindingWarning": "Diese Vorlage wurde möglicherweise für ein anderes WhatsApp Business-Konto genehmigt. Sie muss möglicherweise erneut eingereicht werden, bevor sie mit der aktuellen Verbindung verwendet werden kann."
   }
 }

@@ -132,8 +132,11 @@ const MessageTemplates: React.FC = () => {
   const handleMetaSync = async (template: any) => {
     setActionLoading(`sync-${template.id}`);
     try {
-      await messageTemplateService.metaSync(template.id);
-      fetchTemplates();
+      const response = await messageTemplateService.metaSync(template.id);
+      await fetchTemplates();
+      if (response.data?.requiresResubmission) {
+        setNotice({ type: 'error', message: t('messageTemplates:whatsappApproval.bindingWarning') });
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.error ?? 'Onay durumu alınamadı.';
       alert(msg);
@@ -287,7 +290,17 @@ const MessageTemplates: React.FC = () => {
                       </td>
                       <td className="p-4">
                         {isWhatsApp ? (
-                          <MetaApprovalBadge status={metaStatus} submitted={submitted} />
+                          <div className="flex items-center gap-1.5">
+                            <MetaApprovalBadge status={metaStatus} submitted={submitted} />
+                            {submitted && template.requiresResubmission && (
+                              <span
+                                title={t('messageTemplates:whatsappApproval.bindingWarning')}
+                                className="inline-flex items-center text-amber-500"
+                              >
+                                <AlertTriangle size={13} />
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-xs text-gray-300">—</span>
                         )}

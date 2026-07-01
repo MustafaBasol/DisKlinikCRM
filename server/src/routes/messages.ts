@@ -4,7 +4,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';
-import { sendWhatsAppMessage, resolveConnectionForClinic } from '../services/whatsapp/whatsappService.js';
+import { sendWhatsAppMessage, resolveConnectionForClinic, resolveConnectionById } from '../services/whatsapp/whatsappService.js';
 import { resolveEffectiveClinicId, validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { recordOperationalEvent } from '../services/operationalEventService.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
@@ -17,6 +17,8 @@ import {
   syncMetaTemplateStatus,
   META_ERRORS,
 } from '../services/metaTemplateService.js';
+import { evaluateTemplateBinding, type TemplateBindingStatus } from '../services/whatsapp/templateBinding.js';
+import type { WhatsAppConnectionRecord } from '../services/whatsapp/WhatsAppProvider.js';
 
 const router = express.Router();
 const LOW_SENSITIVITY_CHANNELS = new Set(['sms', 'whatsapp']);
@@ -116,7 +118,24 @@ router.get('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
     else if (isActive === 'false') where.isActive = false;
 
     const templates = await prisma.messageTemplate.findMany({ where, orderBy: { name: 'asc' } });
-    res.json(templates);
+
+    const connectionCache = new Map<string, WhatsAppConnectionRecord | null>();
+    const withBindingStatus = await Promise.all(templates.map(async (template) => {
+      const { metaTemplateConnectionId, metaWabaIdSnapshot, ...safe } = template;
+      if (template.channel !== 'whatsapp' || !template.metaTemplateName) return safe;
+
+      if (!connectionCache.has(template.clinicId)) {
+        connectionCache.set(template.clinicId, await resolveConnectionForClinic(template.clinicId));
+      }
+      const connection = connectionCache.get(template.clinicId) ?? null;
+      const bindingStatus: TemplateBindingStatus = connection
+        ? evaluateTemplateBinding(template, connection)
+        : 'unbound';
+
+      return { ...safe, bindingStatus, requiresResubmission: bindingStatus !== 'matched' };
+    }));
+
+    res.json(withBindingStatus);
   } catch {
     res.status(500).json({ error: 'Failed to fetch templates' });
   }
@@ -522,6 +541,11 @@ router.post('/message-templates/:id/meta/submit', authorize(['OWNER', 'ORG_ADMIN
         metaTemplateVariableMap: variableMap,
         metaTemplateSubmittedAt: new Date(),
         metaTemplateRejectionReason: null,
+        // Snapshot which connection/WABA this submission targeted, so later
+        // sync/usage can detect if the clinic's active connection has changed.
+        metaTemplateConnectionId: connection.id,
+        metaWabaIdSnapshot: connection.metaWabaId,
+        metaPhoneNumberIdSnapshot: connection.metaPhoneNumberId ?? null,
       },
     });
 
@@ -555,7 +579,34 @@ router.post('/message-templates/:id/meta/sync', authorize(['OWNER', 'ORG_ADMIN',
       return res.status(400).json({ error: 'This template has not been submitted for WhatsApp approval yet.' });
     }
 
-    const connection = await resolveConnectionForClinic(clinicId);
+    let connection: WhatsAppConnectionRecord | null = null;
+    let bindingStatus: TemplateBindingStatus = 'unbound';
+
+    if (template.metaTemplateConnectionId) {
+      // Template has a stored binding — use that specific connection, not whatever
+      // is currently the clinic's default, so we never silently sync against the
+      // wrong WABA.
+      connection = await resolveConnectionById(template.metaTemplateConnectionId, clinicId);
+      if (!connection) {
+        return res.status(422).json({
+          code: META_ERRORS.CONNECTION_NOT_FOUND,
+          error: 'Bu şablonun bağlı olduğu WhatsApp bağlantısı artık bulunamıyor veya devre dışı bırakılmış. Lütfen şablonu yeniden gönderin.',
+        });
+      }
+      bindingStatus = evaluateTemplateBinding(template, connection);
+      if (bindingStatus === 'mismatched') {
+        return res.status(409).json({
+          code: META_ERRORS.WABA_MISMATCH,
+          error: 'Bu şablon farklı bir WhatsApp Business hesabı için onaylanmış olabilir. Mevcut bağlantıda kullanmadan önce yeniden gönderim/onay gerekebilir.',
+          requiresResubmission: true,
+        });
+      }
+    } else {
+      // Legacy template with no stored binding — fall back to the clinic's default
+      // connection, but flag the result as unbound so the UI can warn the user.
+      connection = await resolveConnectionForClinic(clinicId);
+    }
+
     if (!connection) {
       return res.status(422).json({ code: META_ERRORS.CONNECTION_NOT_FOUND, error: 'Bu işlemi yapabilmek için önce WhatsApp Cloud API bağlantısı kurulmalıdır.' });
     }
@@ -572,6 +623,8 @@ router.post('/message-templates/:id/meta/sync', authorize(['OWNER', 'ORG_ADMIN',
       status: result.status,
       rejectionReason: result.rejectionReason,
       lastSyncedAt: new Date(),
+      bindingStatus,
+      requiresResubmission: bindingStatus !== 'matched',
     });
   } catch {
     res.status(500).json({ error: 'Failed to sync WhatsApp approval status' });
@@ -596,11 +649,26 @@ router.get('/message-templates/:id/meta/status', authorize(['OWNER', 'ORG_ADMIN'
         metaTemplateLastSyncedAt: true,
         metaTemplateSubmittedAt: true,
         metaTemplateVariableMap: true,
+        metaTemplateConnectionId: true,
+        metaWabaIdSnapshot: true,
       },
     });
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    res.json(template);
+    let bindingStatus: TemplateBindingStatus = 'unbound';
+    if (template.metaTemplateName) {
+      const connection = template.metaTemplateConnectionId
+        ? await resolveConnectionById(template.metaTemplateConnectionId, clinicId)
+        : await resolveConnectionForClinic(clinicId);
+      bindingStatus = connection ? evaluateTemplateBinding(template, connection) : 'unbound';
+    }
+
+    const { metaTemplateConnectionId, metaWabaIdSnapshot, ...safeTemplate } = template;
+    res.json({
+      ...safeTemplate,
+      bindingStatus,
+      requiresResubmission: Boolean(template.metaTemplateName) && bindingStatus !== 'matched',
+    });
   } catch {
     res.status(500).json({ error: 'Failed to fetch WhatsApp approval status' });
   }
