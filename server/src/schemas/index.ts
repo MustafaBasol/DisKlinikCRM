@@ -179,14 +179,14 @@ const appointmentStatusEnum = z.enum([
 ]);
 
 const appointmentBaseSchema = z.object({
-  patientId: z.string().uuid('Invalid patient ID'),
-  practitionerId: z.string().uuid('Invalid practitioner ID'),
-  appointmentTypeId: z.string().uuid('Invalid appointment type ID'),
+  patientId: z.string().min(1, 'Invalid patient ID'),
+  practitionerId: z.string().min(1, 'Invalid practitioner ID'),
+  appointmentTypeId: z.string().min(1, 'Invalid appointment type ID'),
   startTime: dateTimeSchema,
   endTime: dateTimeSchema,
   status: appointmentStatusEnum.default('scheduled'),
   notes: z.string().optional().nullable(),
-  treatmentCaseId: z.string().uuid().optional().nullable(),
+  treatmentCaseId: z.string().min(1).optional().nullable(),
 });
 
 export const appointmentSchema = appointmentBaseSchema.refine(data => data.endTime > data.startTime, {
