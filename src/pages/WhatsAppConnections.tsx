@@ -716,9 +716,14 @@ export default function WhatsAppConnections() {
                         {t('whatsapp:connections.token.expiring')}
                       </p>
                     )}
-                    {conn.provider === 'meta_cloud_api' && !conn.metaTokenExpiresAt && (
+                    {conn.provider === 'meta_cloud_api' && !conn.metaTokenExpiresAt && conn.status === 'connected' && (
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        {t('whatsapp:connections.token.unknown')}
+                        {t('whatsapp:connections.token.securelySaved')}
+                      </p>
+                    )}
+                    {conn.provider === 'meta_cloud_api' && !conn.metaTokenExpiresAt && conn.status !== 'connected' && (
+                      <p className="text-xs text-amber-500 dark:text-amber-400 mt-1">
+                        {t('whatsapp:connections.token.statusUnverified')}
                       </p>
                     )}
                     {/* Meta does not use QR */}
@@ -939,7 +944,11 @@ export default function WhatsAppConnections() {
                           {!conn.metaTokenExpiresAt && conn.provider === 'meta_cloud_api' && (
                             <>
                               <dt>{t('whatsapp:connections.token.validity')}</dt>
-                              <dd className="text-amber-600 dark:text-amber-400">{t('whatsapp:connections.token.unknownShort')}</dd>
+                              <dd className={conn.status === 'connected' ? 'text-gray-700 dark:text-gray-300' : 'text-amber-600 dark:text-amber-400'}>
+                                {conn.status === 'connected'
+                                  ? t('whatsapp:connections.token.storedSecurelyShort')
+                                  : t('whatsapp:connections.token.unknownShort')}
+                              </dd>
                             </>
                           )}
                         </>

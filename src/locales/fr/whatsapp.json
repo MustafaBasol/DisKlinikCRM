@@ -118,11 +118,13 @@
     "token": {
       "expired": "Le token d'accès Meta a expiré ; renouvelez la connexion.",
       "expiring": "Le token d'accès Meta expirera bientôt ; planifiez son renouvellement.",
-      "unknown": "La date de validité du token est inconnue ; les informations du token n'ont pas été saisies.",
+      "securelySaved": "Les informations d'accès Meta sont enregistrées en toute sécurité. Le token n'est pas affiché pour des raisons de sécurité.",
+      "statusUnverified": "Le statut d'accès Meta n'a pas pu être vérifié. Testez la connexion ou reconnectez-vous avec Meta.",
       "validity": "Validité du token",
       "expiredShort": "Expiré",
       "expiringShort": "Expire bientôt",
-      "unknownShort": "Inconnue ; informations du token non saisies"
+      "storedSecurelyShort": "Stocké en toute sécurité / non affiché",
+      "unknownShort": "Inconnue ; testez la connexion ou reconnectez-vous"
     },
     "qr": {
       "metaNotUsed": "Meta Cloud API n'utilise pas de QR. Connectez le compte avec \"Connecter avec Meta\" ou une configuration manuelle.",
