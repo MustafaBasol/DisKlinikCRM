@@ -50,7 +50,11 @@ export type ResolvedIntentRouterDependencies = {
   formatServiceList: (services: ResolvedIntentRouterService[]) => string;
   formatMainMenu: (customerName?: string | null, isReturningCustomer?: boolean, clinicName?: string | null) => string;
   handleCancelIntent: () => Promise<string>;
+  noActiveServicesText?: string;
 };
+
+const DEFAULT_NO_ACTIVE_SERVICES_TEXT =
+  'Şu anda bu klinik için randevuya açık hizmet tanımlı görünmüyor. Talebinizi ekibe iletebilirim.';
 
 export const routeResolvedWhatsAppIntent = async ({
   extraction,
@@ -66,6 +70,7 @@ export const routeResolvedWhatsAppIntent = async ({
   formatServiceList,
   formatMainMenu,
   handleCancelIntent,
+  noActiveServicesText = DEFAULT_NO_ACTIVE_SERVICES_TEXT,
 }: ResolvedIntentRouterDependencies) => {
   const effectiveIntent = extraction.intent === 'check_appointment'
     ? 'appointment_query'
@@ -89,7 +94,7 @@ export const routeResolvedWhatsAppIntent = async ({
 
   if (effectiveIntent === 'service_info') {
     await resetState(customerName);
-    return formatServiceList(services);
+    return services.length > 0 ? formatServiceList(services) : noActiveServicesText;
   }
 
   if (effectiveIntent === 'check_appointment' || effectiveIntent === 'appointment_query') {
@@ -103,6 +108,10 @@ export const routeResolvedWhatsAppIntent = async ({
   }
 
   if (effectiveIntent === 'book_appointment') {
+    if (services.length === 0) {
+      await resetState(customerName);
+      return noActiveServicesText;
+    }
     await upsertState({
       customerName,
       currentIntent: 'book_appointment',
