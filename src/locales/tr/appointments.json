@@ -46,6 +46,7 @@
   "actions": {
     "backToList": "Randevulara Dön",
     "confirm": "Onayla",
+    "edit": "Düzenle",
     "complete": "Tamamla",
     "cancel": "İptal Et",
     "noShow": "Gelmedi İşaretle",

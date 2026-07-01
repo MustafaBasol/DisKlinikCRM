@@ -46,6 +46,7 @@
   "actions": {
     "backToList": "Retour aux rendez-vous",
     "confirm": "Confirmer",
+    "edit": "Modifier",
     "complete": "Terminer",
     "cancel": "Annuler",
     "noShow": "Marquer absent",

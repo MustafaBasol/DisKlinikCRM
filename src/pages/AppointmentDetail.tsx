@@ -15,22 +15,27 @@ import {
   MessageSquare,
   ClipboardList,
   Plus,
-  Briefcase
+  Briefcase,
+  Edit
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { appointmentService, taskService, treatmentCaseService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import { useAuth } from '../context/AuthContext';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
+import AppointmentForm from '../components/AppointmentForm';
 import { getErrorMessage } from '../utils/errors';
+import { canCreateAppointment } from '../utils/permissions';
 
 const AppointmentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation(['appointments', 'common']);
   const { formatCurrency, formatDate, formatTime, formatDateTime } = useClinicPreferences();
-  
+  const { user } = useAuth();
+
   const [appointment, setAppointment] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
@@ -38,7 +43,9 @@ const AppointmentDetail: React.FC = () => {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [isTreatmentFormOpen, setIsTreatmentFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canEdit = canCreateAppointment(user);
 
   const fetchDetail = async () => {
     if (!id) return;
@@ -132,6 +139,12 @@ const AppointmentDetail: React.FC = () => {
               </div>
               
               <div className="flex gap-2">
+                {canEdit && (
+                  <button onClick={() => setIsEditFormOpen(true)} className="btn-secondary text-gray-600 hover:bg-gray-50">
+                    <Edit size={18} />
+                    {t('appointments:actions.edit')}
+                  </button>
+                )}
                 {appointment.status === 'scheduled' && (
                   <button onClick={() => handleStatusUpdate('confirmed')} className="btn-primary">
                     <CheckCircle2 size={18} />
@@ -360,13 +373,24 @@ const AppointmentDetail: React.FC = () => {
       )}
 
       {isMessageModalOpen && (
-        <PrepareMessageModal 
+        <PrepareMessageModal
           patientId={appointment.patientId}
           clinicId={appointment.clinicId}
           appointmentId={appointment.id}
           onClose={() => setIsMessageModalOpen(false)}
           onSuccess={() => {
             setIsMessageModalOpen(false);
+            fetchDetail();
+          }}
+        />
+      )}
+
+      {isEditFormOpen && (
+        <AppointmentForm
+          initialData={appointment}
+          onClose={() => setIsEditFormOpen(false)}
+          onSuccess={() => {
+            setIsEditFormOpen(false);
             fetchDetail();
           }}
         />
