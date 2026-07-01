@@ -108,13 +108,8 @@ export type ProcessInstagramIncomingMessageResult =
   | { status: 'processed'; replySent: boolean; replyText: string }
   | { status: 'skipped'; reason: 'clinic_unresolved' | 'connection_unavailable' | 'empty_text' };
 
-const FALLBACK_SERVICES: InstagramAssistantService[] = [
-  { id: '11111111-1111-4111-8111-111111111111', name: 'Agiz, Dis ve Cene Cerrahisi', durationMinutes: 30 },
-  { id: '22222222-2222-4222-8222-222222222222', name: 'Dis Beyazlatma', durationMinutes: 30 },
-  { id: '33333333-3333-4333-8333-333333333333', name: 'Endodonti (Kanal Tedavisi)', durationMinutes: 60 },
-  { id: '44444444-4444-4444-8444-444444444444', name: 'Estetik Dis Hekimligi', durationMinutes: 45 },
-  { id: 'd4e8a00f-b601-4b8d-a21b-f3a13899f336', name: 'Gulus Tasarimi', durationMinutes: 60 },
-];
+const NO_ACTIVE_SERVICES_TEXT =
+  'Şu anda bu klinik için randevuya açık hizmet tanımlı görünmüyor. Talebinizi ekibe iletebilirim.';
 
 export const buildInstagramConversationKey = (connectionId: string, externalSenderId: string) =>
   `instagram:${connectionId}:${externalSenderId}`;
@@ -331,12 +326,11 @@ const resetInstagramConversationState = async (
 });
 
 const getAssistantServices = async (clinicId: string): Promise<InstagramAssistantService[]> => {
-  const services = await prisma.appointmentType.findMany({
+  return prisma.appointmentType.findMany({
     where: { clinicId, isActive: true, isService: true },
     select: { id: true, name: true, durationMinutes: true },
     orderBy: { name: 'asc' },
   });
-  return services.length > 0 ? services : FALLBACK_SERVICES;
 };
 
 const formatServiceList = (services: InstagramAssistantService[]) =>
@@ -1037,7 +1031,9 @@ export const buildConsentResumeMessage = (
   const prefix = 'Teşekkürler, onayınızı aldık.';
   switch (step) {
     case 'awaiting_service':
-      return `${prefix} ${formatServiceList(ctx.services)}`;
+      return ctx.services.length > 0
+        ? `${prefix} ${formatServiceList(ctx.services)}`
+        : `${prefix} ${NO_ACTIVE_SERVICES_TEXT}`;
     case 'awaiting_date':
       return ctx.selectedAppointmentTypeName
         ? `${prefix} ${ctx.selectedAppointmentTypeName} için hangi gün randevu istersiniz?`
@@ -1235,6 +1231,17 @@ const buildReplyText = async (args: {
 
   if (currentStep === 'main_menu' && standaloneNumericSelection !== null) {
     if (standaloneNumericSelection === 1) {
+      if (services.length === 0) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: null,
+          step: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: null,
+        });
+        return NO_ACTIVE_SERVICES_TEXT;
+      }
       await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         customerName,
         currentIntent: 'book_appointment',
@@ -1260,10 +1267,14 @@ const buildReplyText = async (args: {
         conversationKey: args.conversationKey,
       });
     }
-    if (standaloneNumericSelection === 4) return formatServiceList(services);
+    if (standaloneNumericSelection === 4) return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
   }
 
   if (currentStep === 'awaiting_service') {
+    if (services.length === 0) {
+      await resetInstagramConversationState(args.clinic.id, args.conversationKey, customerName);
+      return NO_ACTIVE_SERVICES_TEXT;
+    }
     const serviceReply = await handleAwaitingServiceStep({
       text: args.text,
       phone: args.conversationKey,
@@ -1581,6 +1592,10 @@ const buildReplyText = async (args: {
     }
 
     if (!pendingSlot || !appointmentTypeId || !selectedDateForRequest) {
+      if (services.length === 0) {
+        await resetInstagramConversationState(args.clinic.id, args.conversationKey, providedName);
+        return NO_ACTIVE_SERVICES_TEXT;
+      }
       await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         customerName: providedName,
         currentIntent: 'book_appointment',
@@ -1672,6 +1687,10 @@ const buildReplyText = async (args: {
     const persistedName = customerName?.trim() || null;
 
     if (!persistedName || !pendingSlot || !appointmentTypeId || !selectedDateForRequest) {
+      if (services.length === 0) {
+        await resetInstagramConversationState(args.clinic.id, args.conversationKey, persistedName);
+        return NO_ACTIVE_SERVICES_TEXT;
+      }
       await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         customerName: persistedName,
         currentIntent: 'book_appointment',
@@ -1821,7 +1840,7 @@ const buildReplyText = async (args: {
 
   if (decision.action === 'answer_service_info' || intent === 'service_info') {
     await resetInstagramConversationState(args.clinic.id, args.conversationKey, customerName);
-    return formatServiceList(services);
+    return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
   }
 
   if (decision.action === 'appointment_lookup' || intent === 'appointment_query') {
@@ -1882,6 +1901,10 @@ const buildReplyText = async (args: {
   }
 
   if (decision.action === 'start_booking' || decision.action === 'continue_booking' || intent === 'book_appointment') {
+    if (services.length === 0) {
+      await resetInstagramConversationState(args.clinic.id, args.conversationKey, customerName);
+      return NO_ACTIVE_SERVICES_TEXT;
+    }
     await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
       customerName,
       currentIntent: 'book_appointment',

@@ -1360,6 +1360,80 @@ const run = async () => {
     assert.equal(recorder.calls[0].currentIntent, 'book_appointment');
   });
 
+  await runFixture('resolved intent router never shows a demo/fallback service list when clinic has zero active services', async () => {
+    const recorder = createStateRecorder();
+    let resetCalls = 0;
+    const message = await routeResolvedWhatsAppIntent({
+      extraction: {
+        intent: 'book_appointment',
+        appointmentTypeName: null,
+        appointmentTypeId: null,
+        dateText: null,
+        exactTime: null,
+        afterTime: null,
+        timePreference: null,
+        clarificationReason: null,
+        confidence: 0.98,
+        needsClarification: false,
+      },
+      state: null,
+      customerName,
+      clinicName: 'Disklinik',
+      inputText: 'randevu almak istiyorum',
+      services: [],
+      upsertState: recorder.upsertState,
+      resetState: async () => {
+        resetCalls += 1;
+      },
+      getAppointments: async () => [],
+      formatAppointmentLookup: () => 'appointments',
+      formatServiceList: () => 'Agiz, Dis ve Cene Cerrahisi\nDis Beyazlatma\nEndodonti\nEstetik Dis Hekimligi',
+      formatMainMenu: () => 'main menu',
+      handleCancelIntent: async () => 'cancel',
+    });
+
+    assert.equal(resetCalls, 1);
+    assert.equal(recorder.calls.length, 0, 'must never transition into awaiting_service when there are no active services');
+    assert.doesNotMatch(message, /Agiz|Beyazlatma|Endodonti|Estetik/i);
+    assert.match(message, /randevuya açık hizmet tanımlı görünmüyor/i);
+  });
+
+  await runFixture('resolved intent router service_info reply has no fallback services when clinic has zero active services', async () => {
+    let resetCalls = 0;
+    const message = await routeResolvedWhatsAppIntent({
+      extraction: {
+        intent: 'service_info',
+        appointmentTypeName: null,
+        appointmentTypeId: null,
+        dateText: null,
+        exactTime: null,
+        afterTime: null,
+        timePreference: null,
+        clarificationReason: null,
+        confidence: 0.98,
+        needsClarification: false,
+      },
+      state: null,
+      customerName,
+      clinicName: 'Disklinik',
+      inputText: 'hangi hizmetleriniz var',
+      services: [],
+      upsertState: async () => undefined,
+      resetState: async () => {
+        resetCalls += 1;
+      },
+      getAppointments: async () => [],
+      formatAppointmentLookup: () => 'appointments',
+      formatServiceList: () => 'Agiz, Dis ve Cene Cerrahisi\nDis Beyazlatma',
+      formatMainMenu: () => 'main menu',
+      handleCancelIntent: async () => 'cancel',
+    });
+
+    assert.equal(resetCalls, 1);
+    assert.doesNotMatch(message, /Agiz|Beyazlatma/i);
+    assert.match(message, /randevuya açık hizmet tanımlı görünmüyor/i);
+  });
+
   await runFixture('resolved intent router resets state for appointment lookup', async () => {
     const recorder = createStateRecorder();
     let resetCalls = 0;

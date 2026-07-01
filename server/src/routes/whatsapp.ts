@@ -213,13 +213,8 @@ const OFF_TOPIC_REFUSAL_MESSAGE =
   'Bu kanal yalnızca klinik randevuları ve klinik bilgilendirme için kullanılmaktadır. ' +
   'Randevu almak, randevunuzu değiştirmek veya yetkiliyle görüşmek isterseniz yardımcı olabilirim.';
 
-const WHATSAPP_FALLBACK_SERVICES: AssistantService[] = [
-  { id: '11111111-1111-4111-8111-111111111111', name: 'Ağız, Diş ve Çene Cerrahisi', durationMinutes: 30 },
-  { id: '22222222-2222-4222-8222-222222222222', name: 'Diş Beyazlatma Bleaching', durationMinutes: 30 },
-  { id: '33333333-3333-4333-8333-333333333333', name: 'Endodonti (Kanal Tedavisi)', durationMinutes: 60 },
-  { id: '44444444-4444-4444-8444-444444444444', name: 'Estetik Diş Hekimliği', durationMinutes: 45 },
-  { id: 'd4e8a00f-b601-4b8d-a21b-f3a13899f336', name: 'Gülüş Tasarımı', durationMinutes: 60 },
-];
+const NO_ACTIVE_SERVICES_TEXT =
+  'Şu anda bu klinik için randevuya açık hizmet tanımlı görünmüyor. Talebinizi ekibe iletebilirim.';
 
 // ---- Utility Functions ----
 
@@ -1109,12 +1104,11 @@ const getClinicForWhatsAppInstance = async (instanceName?: string | null) => {
 };
 
 const getAssistantServices = async (clinicId: string): Promise<AssistantService[]> => {
-  const services = await prisma.appointmentType.findMany({
+  return prisma.appointmentType.findMany({
     where: { clinicId, isActive: true, isService: true },
     select: { id: true, name: true, durationMinutes: true },
     orderBy: { name: 'asc' },
   });
-  return services.length > 0 ? services : WHATSAPP_FALLBACK_SERVICES;
 };
 
 /**
@@ -2368,7 +2362,10 @@ const executeAgentDecision = async (args: {
 
   if (decision.action === 'answer_service_info' || intent === 'service_info') {
     await resetWhatsAppConversationState(args.clinic.id, args.input.phone, args.customerName);
-    return ['Hizmetlerimiz şu şekilde:', ...((await getAssistantServices(args.clinic.id)).map((service, index) => `${index + 1}. ${service.name}`))].join('\n');
+    const infoServices = await getAssistantServices(args.clinic.id);
+    return infoServices.length > 0
+      ? ['Hizmetlerimiz şu şekilde:', ...infoServices.map((service, index) => `${index + 1}. ${service.name}`)].join('\n')
+      : NO_ACTIVE_SERVICES_TEXT;
   }
 
   if (decision.action === 'ask_clarification') {
@@ -2442,7 +2439,9 @@ export const buildConsentResumeMessage = (
   const prefix = 'Teşekkürler, onayınızı aldık.';
   switch (step) {
     case 'awaiting_service':
-      return `${prefix} ${formatServiceList(ctx.services)}`;
+      return ctx.services.length > 0
+        ? `${prefix} ${formatServiceList(ctx.services)}`
+        : `${prefix} ${NO_ACTIVE_SERVICES_TEXT}`;
     case 'awaiting_date':
       return ctx.selectedAppointmentTypeName
         ? `${prefix} ${ctx.selectedAppointmentTypeName} için hangi gün randevu istersiniz?`
@@ -2524,6 +2523,24 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     });
   }
   const services = await getAssistantServices(clinic.id);
+  // When the resolved clinic has no active bookable services, never show a numbered
+  // service list or move the conversation into awaiting_service — reply safely instead.
+  const respondWithServiceList = async (
+    stateUpdate: Parameters<typeof upsertWhatsAppConversationState>[2],
+  ): Promise<string> => {
+    if (services.length === 0) {
+      await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+        customerName: stateUpdate.customerName,
+        currentIntent: null,
+        step: null,
+        lastMessage: stateUpdate.lastMessage,
+        stateJson: null,
+      });
+      return NO_ACTIVE_SERVICES_TEXT;
+    }
+    await upsertWhatsAppConversationState(clinic.id, inputPhone, stateUpdate);
+    return formatServiceList(services);
+  };
   const normalizedText = normalizeIntentText(input.text);
   const standaloneNumericSelection = extractStandaloneNumericSelection(input.text);
   const persistedCustomerName = existingPatient ? getPatientFullName(existingPatient) : null;
@@ -2862,14 +2879,13 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         }
 
         // Default: start_booking or awaiting_service — proceed to service selection
-        await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+        return respondWithServiceList({
           customerName: selectedName,
           step: 'awaiting_service',
           currentIntent: 'book_appointment',
           lastMessage: input.text,
           stateJson: { selectedPatientId: selectedPatient.id, matchedServices: stateJson.matchedServices },
         });
-        return formatServiceList(services);
       }
       const patientList = pendingOptions.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
       console.log('[whatsapp-patient-selection] invalid', {
@@ -3038,8 +3054,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     }
     if (currentStep === 'awaiting_date') {
       logStateTransition(input.phone, currentStep, 'awaiting_service', 'back_command');
-      await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: 'book_appointment', step: 'awaiting_service', lastMessage: input.text, ...clearBookingState() });
-      return formatServiceList(services);
+      return respondWithServiceList({ customerName, currentIntent: 'book_appointment', step: 'awaiting_service', lastMessage: input.text, ...clearBookingState() });
     }
     if (currentStep === 'awaiting_time') {
       logStateTransition(input.phone, currentStep, 'awaiting_date', 'back_command');
@@ -3080,8 +3095,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       });
       return `${selectedService.name} hizmetini seçtiniz. Hangi gün için randevu istersiniz? Örneğin yarın, 22 Mayıs veya cuma yazabilirsiniz.`;
     }
-    await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: 'book_appointment', step: 'awaiting_service', lastMessage: input.text, ...clearBookingState() });
-    return formatServiceList(services);
+    return respondWithServiceList({ customerName, currentIntent: 'book_appointment', step: 'awaiting_service', lastMessage: input.text, ...clearBookingState() });
   }
 
   if ((hasActiveBookingFlow || currentStep === 'awaiting_time') && selectedAppointmentTypeId && isChangeDateRequest(input.text)) {
@@ -3119,7 +3133,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   if (currentStep === 'main_menu' && standaloneNumericSelection !== null) {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'main_menu-deterministic', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     if (standaloneNumericSelection === 1) {
-      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+      return respondWithServiceList({
         customerName,
         currentIntent: 'book_appointment',
         step: 'awaiting_service',
@@ -3130,7 +3144,6 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         lastMessage: input.text,
         stateJson: null,
       });
-      return formatServiceList(services);
     }
     if (standaloneNumericSelection === 2) {
       const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
@@ -3140,13 +3153,19 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       return handleCancelIntent(clinic.id, input.phone);
     }
     if (standaloneNumericSelection === 4) {
-      return ['Hizmetlerimiz şu şekilde:', ...services.map((s, i) => `${i + 1}. ${s.name}`)].join('\n');
+      return services.length > 0
+        ? ['Hizmetlerimiz şu şekilde:', ...services.map((s, i) => `${i + 1}. ${s.name}`)].join('\n')
+        : NO_ACTIVE_SERVICES_TEXT;
     }
     return 'Bu numarayı mevcut seçenekler içinde anlayamadım. İsterseniz ne yapmak istediğinizi kısaca yazabilirsiniz.';
   }
 
   if (currentStep === 'awaiting_service' && standaloneNumericSelection !== null) {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_service-deterministic', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    if (services.length === 0) {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: null, step: null, lastMessage: input.text, stateJson: null });
+      return NO_ACTIVE_SERVICES_TEXT;
+    }
     return handleAwaitingServiceStep({
       text: input.text, phone: input.phone, customerName, services,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate, selectedTime: state?.selectedTime },
@@ -3434,12 +3453,11 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
           return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
         }
       }
-      await upsertWhatsAppConversationState(clinic.id, input.phone, {
+      return respondWithServiceList({
         customerName: fullName, currentIntent: 'book_appointment', step: 'awaiting_service',
         selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedPractitionerId: null,
         selectedDate: null, selectedTime: null, lastMessage: input.text, stateJson: null,
       });
-      return formatServiceList(services);
     }
     await upsertWhatsAppConversationState(clinic.id, input.phone, {
       customerName: fullName, currentIntent: null, step: 'main_menu',
@@ -3462,8 +3480,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
   if (currentStep === 'main_menu') {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'main_menu', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null });
     if (normalizedText === '1') {
-      await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: 'book_appointment', step: 'awaiting_service', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null, selectedTime: null, lastMessage: input.text, stateJson: null });
-      return formatServiceList(services);
+      return respondWithServiceList({ customerName, currentIntent: 'book_appointment', step: 'awaiting_service', selectedAppointmentTypeId: null, selectedAppointmentTypeName: null, selectedDate: null, selectedTime: null, lastMessage: input.text, stateJson: null });
     }
     if (normalizedText === '2') {
       const appointments = await getAppointmentsForPhone(clinic.id, input.phone);
@@ -3471,7 +3488,9 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     }
     if (normalizedText === '3') return handleCancelIntent(clinic.id, input.phone);
     if (normalizedText === '4') {
-      return ['Hizmetlerimiz şu şekilde:', ...services.map((s, i) => `${i + 1}. ${s.name}`)].join('\n');
+      return services.length > 0
+        ? ['Hizmetlerimiz şu şekilde:', ...services.map((s, i) => `${i + 1}. ${s.name}`)].join('\n')
+        : NO_ACTIVE_SERVICES_TEXT;
     }
     if (/^\d+$/.test(normalizedText)) return 'Bu numarayı mevcut seçenekler içinde anlayamadım. İsterseniz ne yapmak istediğinizi kısaca yazabilirsiniz.';
   }
@@ -3492,6 +3511,10 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
 
   if (currentStep === 'awaiting_service') {
     console.log('[whatsapp-assistant] route-handler', { phone: redactPhone(input.phone), handler: 'awaiting_service', selectedAppointmentTypeId: state?.selectedAppointmentTypeId ?? null, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate: state?.selectedDate ?? null });
+    if (services.length === 0) {
+      await upsertWhatsAppConversationState(clinic.id, input.phone, { customerName, currentIntent: null, step: null, lastMessage: input.text, stateJson: null });
+      return NO_ACTIVE_SERVICES_TEXT;
+    }
     return handleAwaitingServiceStep({
       text: input.text, phone: input.phone, customerName, services,
       state: { selectedAppointmentTypeId: state?.selectedAppointmentTypeId, selectedAppointmentTypeName: state?.selectedAppointmentTypeName, selectedDate: state?.selectedDate, selectedTime: state?.selectedTime },
@@ -3578,6 +3601,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     formatAppointmentLookup: formatAppointmentLookupForMessage,
     formatServiceList, formatMainMenu,
     handleCancelIntent: () => handleCancelIntent(clinic.id, input.phone),
+    noActiveServicesText: NO_ACTIVE_SERVICES_TEXT,
   });
 };
 
