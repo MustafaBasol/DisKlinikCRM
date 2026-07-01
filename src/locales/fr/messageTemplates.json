@@ -67,6 +67,7 @@
     "statusApproved": "Prêt à l'emploi",
     "statusRejected": "Refusé",
     "statusNeedsAttention": "Attention requise",
-    "statusUnknown": "Inconnu"
+    "statusUnknown": "Inconnu",
+    "bindingWarning": "Ce modèle a peut-être été approuvé pour un compte WhatsApp Business différent. Il pourrait nécessiter un nouvel envoi avant de pouvoir être utilisé avec la connexion actuelle."
   }
 }

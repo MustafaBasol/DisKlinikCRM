@@ -78,6 +78,29 @@ export async function resolveConnectionForClinic(
 }
 
 /**
+ * Resolve a specific WhatsApp connection by id, scoped to a clinic.
+ *
+ * Returns null if the connection is not assigned to this clinic (prevents using
+ * another clinic's connection) or if it has been deactivated.
+ */
+export async function resolveConnectionById(
+  connectionId: string,
+  clinicId: string,
+): Promise<WhatsAppConnectionRecord | null> {
+  const mapping = await prisma.clinicWhatsAppConnection.findFirst({
+    where: { clinicId, whatsappConnectionId: connectionId },
+    include: { whatsappConnection: true },
+  });
+
+  if (!mapping) return null;
+
+  const conn = mapping.whatsappConnection as WhatsAppConnectionRecord & { isActive?: boolean };
+  if (!conn.isActive) return null;
+
+  return conn;
+}
+
+/**
  * Send a text message for a given clinic.
  *
  * @param clinicId     - The clinic to resolve a WhatsApp connection for

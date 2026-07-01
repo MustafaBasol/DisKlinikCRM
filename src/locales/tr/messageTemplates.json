@@ -67,6 +67,7 @@
     "statusApproved": "Kullanıma Hazır",
     "statusRejected": "Reddedildi",
     "statusNeedsAttention": "Dikkat Gerekiyor",
-    "statusUnknown": "Bilinmiyor"
+    "statusUnknown": "Bilinmiyor",
+    "bindingWarning": "Bu şablon farklı bir WhatsApp Business hesabı için onaylanmış olabilir. Mevcut bağlantıda kullanmadan önce yeniden gönderim/onay gerekebilir."
   }
 }

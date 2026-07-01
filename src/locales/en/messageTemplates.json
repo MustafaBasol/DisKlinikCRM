@@ -67,6 +67,7 @@
     "statusApproved": "Ready to Use",
     "statusRejected": "Rejected",
     "statusNeedsAttention": "Needs Attention",
-    "statusUnknown": "Unknown"
+    "statusUnknown": "Unknown",
+    "bindingWarning": "This template may have been approved for a different WhatsApp Business account. It may need to be resubmitted before it can be used with the current connection."
   }
 }

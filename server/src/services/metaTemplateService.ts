@@ -27,6 +27,7 @@ export const META_ERRORS = {
   WABA_ID_MISSING: 'META_WABA_ID_MISSING',
   ACCESS_TOKEN_MISSING: 'META_ACCESS_TOKEN_MISSING',
   SUBMIT_FAILED: 'META_TEMPLATE_SUBMIT_FAILED',
+  WABA_MISMATCH: 'META_WABA_MISMATCH',
 } as const;
 
 // ── Statuses ──────────────────────────────────────────────────────────────────
