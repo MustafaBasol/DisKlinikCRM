@@ -118,11 +118,13 @@
     "token": {
       "expired": "Meta access token süresi doldu; bağlantıyı yenileyin.",
       "expiring": "Meta access token yakında dolacak; token yenilemeyi planlayın.",
-      "unknown": "Token geçerlilik tarihi bilinmiyor; token bilgisi girilmemiş.",
+      "securelySaved": "Meta erişim bilgileri güvenli şekilde kaydedildi. Token güvenlik nedeniyle gösterilmez.",
+      "statusUnverified": "Meta erişim durumu doğrulanamadı. Bağlantıyı test edin veya Meta ile yeniden bağlanın.",
       "validity": "Token geçerlilik",
       "expiredShort": "Süresi doldu",
       "expiringShort": "Yakında dolacak",
-      "unknownShort": "Bilinmiyor; token bilgisi girilmemiş"
+      "storedSecurelyShort": "Güvenli şekilde saklanıyor / gösterilmiyor",
+      "unknownShort": "Bilinmiyor; bağlantıyı test edin veya yeniden bağlanın"
     },
     "qr": {
       "metaNotUsed": "Meta Cloud API QR kodu kullanmaz. Hesabı \"Meta ile Bağlan\" butonu veya manuel yapılandırma ile bağlayın.",

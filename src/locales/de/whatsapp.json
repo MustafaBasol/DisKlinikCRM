@@ -118,11 +118,13 @@
     "token": {
       "expired": "Meta Access Token ist abgelaufen; erneuern Sie die Verbindung.",
       "expiring": "Meta Access Token laeuft bald ab; planen Sie eine Token-Erneuerung.",
-      "unknown": "Gueltigkeitsdatum des Tokens ist unbekannt; Token-Informationen wurden nicht eingegeben.",
+      "securelySaved": "Meta-Zugangsdaten wurden sicher gespeichert. Der Token wird aus Sicherheitsgruenden nicht angezeigt.",
+      "statusUnverified": "Meta-Zugangsstatus konnte nicht ueberprueft werden. Testen Sie die Verbindung oder verbinden Sie sich erneut mit Meta.",
       "validity": "Token-Gueltigkeit",
       "expiredShort": "Abgelaufen",
       "expiringShort": "Laeuft bald ab",
-      "unknownShort": "Unbekannt; Token-Informationen wurden nicht eingegeben"
+      "storedSecurelyShort": "Sicher gespeichert / nicht angezeigt",
+      "unknownShort": "Unbekannt; Verbindung testen oder erneut verbinden"
     },
     "qr": {
       "metaNotUsed": "Meta Cloud API verwendet keine QR-Codes. Verbinden Sie das Konto ueber \"Mit Meta verbinden\" oder manuelle Konfiguration.",
