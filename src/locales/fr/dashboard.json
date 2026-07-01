@@ -42,6 +42,8 @@
   "alerts": {
     "overdueTasks": "Suivis en retard",
     "noShowFollowUp": "Absences à contacter",
-    "pendingCollections": "Soldes impayés"
+    "pendingCollections": "Soldes impayés",
+    "openTasks": "Tâches ouvertes",
+    "pendingAppointmentRequests": "Demandes de rendez-vous en attente"
   }
 }

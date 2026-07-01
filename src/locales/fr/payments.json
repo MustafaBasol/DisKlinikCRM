@@ -68,6 +68,7 @@
   },
   "confirmCancel": "Annuler ce paiement ?",
   "empty": "Aucun paiement trouvé.",
+  "emptyFilteredStatus": "Aucun paiement « {{status}} » trouvé.",
   "noRelatedPayments": "Aucun paiement lié trouvé.",
   "financeDashboard": {
     "title": "Tableau de bord financier",

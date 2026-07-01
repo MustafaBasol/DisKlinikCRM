@@ -42,6 +42,8 @@
   "alerts": {
     "overdueTasks": "Overdue Follow-ups",
     "noShowFollowUp": "No-Shows to Contact",
-    "pendingCollections": "Unpaid Balances"
+    "pendingCollections": "Unpaid Balances",
+    "openTasks": "Open Tasks",
+    "pendingAppointmentRequests": "Pending Appointment Requests"
   }
 }

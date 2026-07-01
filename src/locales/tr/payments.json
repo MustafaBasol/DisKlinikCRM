@@ -68,6 +68,7 @@
   },
   "confirmCancel": "Bu ödeme iptal edilsin mi?",
   "empty": "Ödeme kaydı bulunmuyor.",
+  "emptyFilteredStatus": "{{status}} durumunda ödeme bulunamadı.",
   "noRelatedPayments": "İlgili ödeme bulunmuyor.",
   "financeDashboard": {
     "title": "Finans Paneli",

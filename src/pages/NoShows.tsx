@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   UserX,
@@ -138,12 +138,18 @@ export default function NoShows() {
   const { selectedClinicId } = useClinic();
   const { t } = useTranslation(['noShows', 'common']);
   const { formatCurrency, formatDate } = useClinicPreferences();
+  const [searchParams] = useSearchParams();
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<string>('last_30_days');
   const [doctorFilter, setDoctorFilter] = useState<string>('');
-  const [recoveryFilter, setRecoveryFilter] = useState<string>('');
+  // Read from URL so the dashboard "No-show Follow-up" card link
+  // (/no-shows?recoveryStatus=unresolved) applies immediately and survives a refresh.
+  const [recoveryFilter, setRecoveryFilter] = useState<string>(() => {
+    const fromUrl = searchParams.get('recoveryStatus');
+    return fromUrl && ['unresolved', 'contacted', 'recovered'].includes(fromUrl) ? fromUrl : '';
+  });
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 

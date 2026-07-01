@@ -47,7 +47,7 @@ router.get('/patients/check-phone-duplicate', authorize(['OWNER', 'ORG_ADMIN', '
 // GET /api/patients
 // BILLING dahil — yalnızca patientListSelect (kimlik + iletişim) alanları döner, klinik veri içermez.
 router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const { search, status, source, includeArchived, clinicId: selectedClinicId } = req.query;
+  const { search, status, source, includeArchived, clinicId: selectedClinicId, createdWithinDays } = req.query;
   const { normalizedRole, id: userId } = req.user!;
 
   try {
@@ -72,6 +72,16 @@ router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
     }
 
     if (source) where.source = String(source);
+
+    if (createdWithinDays) {
+      const days = Number(createdWithinDays);
+      if (Number.isFinite(days) && days > 0) {
+        const cutoff = new Date();
+        cutoff.setHours(0, 0, 0, 0);
+        cutoff.setDate(cutoff.getDate() - days);
+        where.createdAt = { gte: cutoff };
+      }
+    }
 
     if (normalizedRole === 'DENTIST') {
       where.AND = [

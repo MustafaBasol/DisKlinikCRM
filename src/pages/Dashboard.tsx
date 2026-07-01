@@ -2,10 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { 
   Users, 
   Calendar, 
-  Clock, 
+  Clock,
   TrendingUp,
   AlertCircle,
-  MoreVertical,
   ArrowUpRight,
   ArrowDownRight,
   Loader2,
@@ -21,9 +20,19 @@ import {
   Award,
   Activity,
   Star,
+  ClipboardList,
+  MessageCircle,
+  CalendarDays,
 } from 'lucide-react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
-import { normalizeRole, canViewWhatsAppInbox, canViewFinanceDashboard, canViewPatients, canCreateAppointment } from '../utils/permissions';
+import {
+  normalizeRole,
+  canViewFinanceDashboard,
+  canViewPatients,
+  canCreateAppointment,
+  canViewAppointmentRequests,
+  canViewNoShowDashboard,
+} from '../utils/permissions';
 import {
   BarChart,
   Bar,
@@ -44,6 +53,7 @@ import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { useTranslation } from 'react-i18next';
 import AppointmentForm from '../components/AppointmentForm';
+import PatientForm from '../components/PatientForm';
 
 const STAGE_COLORS: Record<string, string> = {
   new: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
@@ -316,6 +326,8 @@ const Dashboard: React.FC = () => {
   
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isNewApptOpen, setIsNewApptOpen] = useState(false);
+  const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -352,39 +364,78 @@ const Dashboard: React.FC = () => {
   }
 
   const statCards = [
-    { 
-      label: t('dashboard:todayAppointments'), 
-      value: data?.stats?.todayAppointments || 0, 
-      icon: <Calendar size={24} />, 
-      color: "bg-blue-500", 
+    {
+      label: t('dashboard:todayAppointments'),
+      value: data?.stats?.todayAppointments || 0,
+      icon: <Calendar size={24} />,
+      color: "bg-blue-500",
       trend: t('dashboard:stats.weekTotal', { count: data?.stats?.weekAppointments }),
-      trendType: "info" 
+      trendType: "info",
+      link: '/appointments?date=today',
     },
-    { 
-      label: t('dashboard:newPatients'), 
-      value: data?.stats?.newPatientsMonth || 0, 
-      icon: <Users size={24} />, 
-      color: "bg-teal-500", 
+    {
+      label: t('dashboard:newPatients'),
+      value: data?.stats?.newPatientsMonth || 0,
+      icon: <Users size={24} />,
+      color: "bg-teal-500",
       trend: t('dashboard:stats.monthTrend'),
-      trendType: "up" 
+      trendType: "up",
+      link: '/patients?createdWithin=30d',
     },
-    { 
-      label: t('dashboard:monthlyRevenue'), 
-      value: formatCurrency(data?.stats?.monthlyRevenue || 0), 
-      icon: <TrendingUp size={24} />, 
-      color: "bg-purple-500", 
+    {
+      label: t('dashboard:monthlyRevenue'),
+      value: formatCurrency(data?.stats?.monthlyRevenue || 0),
+      icon: <TrendingUp size={24} />,
+      color: "bg-purple-500",
       trend: t('dashboard:stats.revenueGoal'),
-      trendType: "up" 
+      trendType: "up",
+      link: '/finance?period=this_month',
     },
-    { 
-      label: t('dashboard:pendingCollections'), 
-      value: formatCurrency(data?.stats?.pendingAmount || 0), 
-      icon: <DollarSign size={24} />, 
-      color: "bg-amber-500", 
-      trend: t('dashboard:stats.actionRequired'), 
-      trendType: "warning" 
+    {
+      label: t('dashboard:pendingCollections'),
+      value: formatCurrency(data?.stats?.pendingAmount || 0),
+      icon: <DollarSign size={24} />,
+      color: "bg-amber-500",
+      trend: t('dashboard:stats.actionRequired'),
+      trendType: "warning",
+      link: '/payments?status=pending',
     },
   ];
+
+  // Fixed operational cards shown to the right of the "Unpaid Balances" alert —
+  // always rendered with real counts (0 when there's nothing pending), so the row
+  // never has an empty/dead area regardless of which conditional alerts fire.
+  const operationalCards: Array<{
+    key: string; title: string; count: number; icon: React.ReactNode; link: string; colorClasses: string;
+  }> = [];
+  if (canViewAppointmentRequests(user)) {
+    operationalCards.push({
+      key: 'pendingAppointmentRequests',
+      title: t('dashboard:alerts.pendingAppointmentRequests'),
+      count: data?.stats?.pendingAppointmentRequests || 0,
+      icon: <MessageCircle size={18} />,
+      link: '/appointment-requests?status=pending',
+      colorClasses: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+    });
+  }
+  operationalCards.push({
+    key: 'openTasks',
+    title: t('dashboard:alerts.openTasks'),
+    count: data?.stats?.pendingTasks || 0,
+    icon: <ClipboardList size={18} />,
+    link: '/tasks?status=open',
+    colorClasses: 'bg-blue-50 border-blue-100 text-blue-700',
+  });
+  if (canViewNoShowDashboard(user)) {
+    operationalCards.push({
+      key: 'noShowFollowUp',
+      title: t('dashboard:alerts.noShowFollowUp'),
+      count: data?.stats?.noShowsMonth || 0,
+      icon: <UserMinus size={18} />,
+      link: '/no-shows?recoveryStatus=unresolved',
+      colorClasses: 'bg-orange-50 border-orange-100 text-orange-700',
+    });
+  }
 
   const getAlertIcon = (iconName: string) => {
     switch (iconName) {
@@ -405,21 +456,33 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           {canCreateAppointment(user) && (
-            <Link to="/appointments" className="btn-primary">
+            <button
+              type="button"
+              onClick={() => setIsNewApptOpen(true)}
+              className="btn-primary"
+              title={t('common:newAppointment')}
+              aria-label={t('common:newAppointment')}
+            >
               <Plus size={18} />
               {t('common:newAppointment')}
-            </Link>
+            </button>
           )}
           {canViewPatients(user) && (
-            <Link to="/patients" className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => setIsNewPatientOpen(true)}
+              className="btn-secondary"
+              title={t('common:newPatient')}
+              aria-label={t('common:newPatient')}
+            >
               <Plus size={18} />
               {t('common:newPatient')}
-            </Link>
+            </button>
           )}
-          {canViewWhatsAppInbox(user) && (
-            <Link to="/whatsapp-inbox" className="btn-secondary">
-              <MessageSquare size={18} />
-              {t('common:whatsappInbox')}
+          {canCreateAppointment(user) && (
+            <Link to="/appointments?view=timeline" className="btn-secondary" title={t('common:calendar')}>
+              <CalendarDays size={18} />
+              {t('common:calendar')}
             </Link>
           )}
           {canViewFinanceDashboard(user) && (
@@ -431,18 +494,22 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Alerts */}
-      {data?.alerts?.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {data.alerts.map((alert: any, idx: number) => (
-            <Link 
-              key={idx} 
+      {/* Alerts + operational cards — "Unpaid Balances" (when pending) fills slot 1,
+          the fixed operational cards always fill the remaining slots so this row is
+          never left with a large empty area. */}
+      {(data?.alerts?.length > 0 || operationalCards.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {data?.alerts?.map((alert: any, idx: number) => (
+            <Link
+              key={`alert-${idx}`}
               to={alert.link}
-              className={`p-4 rounded-2xl flex items-center gap-4 border transition-all hover:shadow-md ${
+              className={`p-4 rounded-2xl flex items-center gap-4 border transition-all hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 cursor-pointer ${
                 alert.type === 'danger' ? 'bg-red-50 border-red-100 text-red-700' :
                 alert.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-700' :
                 'bg-blue-50 border-blue-100 text-blue-700'
               }`}
+              title={t(`dashboard:alerts.${alert.title}`)}
+              aria-label={t(`dashboard:alerts.${alert.title}`)}
             >
               <div className={`p-2 rounded-xl ${
                 alert.type === 'danger' ? 'bg-red-100' :
@@ -460,20 +527,42 @@ const Dashboard: React.FC = () => {
               <ChevronRight size={20} className="opacity-50" />
             </Link>
           ))}
+          {operationalCards.map((card) => (
+            <Link
+              key={card.key}
+              to={card.link}
+              className={`p-4 rounded-2xl flex items-center gap-4 border transition-all hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 cursor-pointer ${card.colorClasses}`}
+              title={card.title}
+              aria-label={card.title}
+            >
+              <div className="p-2 rounded-xl bg-white/60">
+                {card.icon}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold uppercase tracking-wider opacity-70">{card.title}</p>
+                <p className="text-lg font-bold">{card.count}</p>
+              </div>
+              <ChevronRight size={20} className="opacity-50" />
+            </Link>
+          ))}
         </div>
       )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat, idx) => (
-          <div key={idx} className="card p-6 hover:shadow-md transition-all group">
+          <Link
+            key={idx}
+            to={stat.link}
+            title={stat.label}
+            aria-label={stat.label}
+            className="card p-6 hover:shadow-md transition-all group cursor-pointer block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+          >
             <div className="flex items-start justify-between">
               <div className={`p-3 rounded-xl text-white ${stat.color} shadow-lg shadow-${stat.color.split('-')[1]}-200 group-hover:scale-110 transition-transform`}>
                 {stat.icon}
               </div>
-              <button className="text-gray-400 hover:text-gray-600">
-                <MoreVertical size={20} />
-              </button>
+              <ChevronRight size={20} className="text-gray-300 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all" />
             </div>
             <div className="mt-4">
               <h3 className="text-gray-500 text-sm font-medium">{stat.label}</h3>
@@ -492,7 +581,7 @@ const Dashboard: React.FC = () => {
                 {stat.trend}
               </span>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 
@@ -721,6 +810,19 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {isNewApptOpen && (
+        <AppointmentForm
+          onClose={() => setIsNewApptOpen(false)}
+          onSuccess={() => { setIsNewApptOpen(false); navigate('/appointments'); }}
+        />
+      )}
+      {isNewPatientOpen && (
+        <PatientForm
+          onClose={() => setIsNewPatientOpen(false)}
+          onSuccess={() => { setIsNewPatientOpen(false); navigate('/patients'); }}
+        />
+      )}
     </div>
   );
 };

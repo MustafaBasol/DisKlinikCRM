@@ -148,6 +148,7 @@ tests.push(
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
     assert.equal(result.preparedMessages, 0);
+    assert.equal(result.pendingAppointmentRequests, 0);
   }),
 );
 
@@ -162,6 +163,7 @@ tests.push(
       overdueTasks: null,
       openTreatments: null,
       preparedMessagesWeek: null,
+      pendingAppointmentRequests: null,
     });
     assert.equal(result.todayAppointments, 0);
     assert.equal(result.weekAppointments, 0);
@@ -171,6 +173,7 @@ tests.push(
     assert.equal(result.overdueTasks, 0);
     assert.equal(result.openTreatments, 0);
     assert.equal(result.preparedMessages, 0);
+    assert.equal(result.pendingAppointmentRequests, 0);
   }),
 );
 
@@ -229,6 +232,7 @@ tests.push(
       overdueTasks: 2,
       openTreatments: 15,
       preparedMessagesWeek: 4,
+      pendingAppointmentRequests: 6,
     });
     assert.equal(result.todayAppointments, 5);
     assert.equal(result.weekAppointments, 23);
@@ -238,6 +242,7 @@ tests.push(
     assert.equal(result.overdueTasks, 2);
     assert.equal(result.openTreatments, 15);
     assert.equal(result.preparedMessages, 4);
+    assert.equal(result.pendingAppointmentRequests, 6);
   }),
 );
 
@@ -271,6 +276,7 @@ tests.push(
       'monthlyRevenue',
       'pendingAmount',
       'preparedMessages',
+      'pendingAppointmentRequests',
     ];
     for (const key of expectedKeys) {
       assert.ok(key in result, `Eksik alan: ${key}`);

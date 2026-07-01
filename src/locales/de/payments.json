@@ -68,6 +68,7 @@
   },
   "confirmCancel": "Diese Zahlung stornieren?",
   "empty": "Keine Zahlungsdatensätze gefunden.",
+  "emptyFilteredStatus": "Keine Zahlungen mit Status \"{{status}}\" gefunden.",
   "noRelatedPayments": "Keine zugehörigen Zahlungen gefunden.",
   "financeDashboard": {
     "title": "Finanz-Dashboard",

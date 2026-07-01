@@ -12,9 +12,12 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { appointmentRequestService, appointmentService, appointmentTypeService, userService } from '../services/api';
 import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+
+const APPOINTMENT_REQUEST_STATUSES = ['pending', 'approved', 'rejected', 'converted', 'closed'];
 
 type EditForm = {
   appointmentTypeId: string;
@@ -41,8 +44,14 @@ const AppointmentRequests: React.FC = () => {
   const { t } = useTranslation(['appointmentRequests', 'common']);
   const { formatDateTime, formatTime } = useClinicPreferences();
   const { selectedClinicId } = useClinic();
+  const [searchParams] = useSearchParams();
   const [allRequests, setAllRequests] = useState<any[]>([]);
-  const [status, setStatus] = useState('');
+  // Read from URL so links like /appointment-requests?status=pending apply immediately
+  // and survive a refresh.
+  const [status, setStatus] = useState(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && APPOINTMENT_REQUEST_STATUSES.includes(fromUrl) ? fromUrl : '';
+  });
   const [channel, setChannel] = useState('');
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState('');

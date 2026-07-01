@@ -11,6 +11,7 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
   const { normalizedRole, id: userId } = req.user!;
   const selectedClinicId = req.query.clinicId as string | undefined;
   const canViewPatientAgenda = normalizedRole !== 'BILLING';
+  const canViewApptRequests = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'].includes(normalizedRole);
 
   try {
     const scope = await validateAndGetScope(req.user!, selectedClinicId, res);
@@ -87,6 +88,11 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
       preparedMessagesWeek: prisma.sentMessage.count({
         where: { ...clinicIdWhere, status: 'prepared', createdAt: { gte: weekStart } },
       }),
+      pendingAppointmentRequests: canViewApptRequests
+        ? prisma.appointmentRequest.count({
+            where: { ...clinicIdWhere, status: 'pending', requestType: { not: 'info' } },
+          })
+        : Promise.resolve(0),
     };
 
     const results = await Promise.all(Object.values(statsPromises));
@@ -110,13 +116,11 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         })
       : [];
 
+    // NOT: "overdueTasks" ve "noShowFollowUp" uyarıları artık ana dashboard'da
+    // sabit operasyonel kartlar (Open Tasks / No-show Follow-up) olarak gösteriliyor
+    // — burada tekrar üretilmiyor (bkz. Dashboard.tsx). Sadece "Ödenmemiş Bakiyeler"
+    // (Unpaid Balances) uyarısı bu diziden geliyor.
     const alerts: any[] = [];
-    if (canViewPatientAgenda && stats.overdueTasks > 0) {
-      alerts.push({ type: 'danger', icon: 'Clock', title: 'overdueTasks', count: stats.overdueTasks, link: '/tasks?overdue=true' });
-    }
-    if (canViewPatientAgenda && stats.noShowsMonth > 0) {
-      alerts.push({ type: 'warning', icon: 'UserMinus', title: 'noShowFollowUp', count: stats.noShowsMonth, link: '/appointments?status=no_show' });
-    }
     const pendingAmount = stats.pendingPayments?._sum?.amount ?? 0;
     if (pendingAmount > 0) {
       alerts.push({ type: 'info', icon: 'DollarSign', title: 'pendingCollections', value: pendingAmount, link: '/payments?status=pending' });
@@ -237,6 +241,7 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         monthlyRevenue: stats.monthlyRevenue?._sum?.amount ?? 0,
         pendingAmount: stats.pendingPayments?._sum?.amount ?? 0,
         preparedMessages: stats.preparedMessagesWeek ?? 0,
+        pendingAppointmentRequests: stats.pendingAppointmentRequests ?? 0,
       },
       agenda,
       alerts,
@@ -269,6 +274,7 @@ export function buildSafeStats(raw: {
   monthlyRevenue?: { _sum?: { amount?: number | null } } | null;
   pendingPayments?: { _sum?: { amount?: number | null } } | null;
   preparedMessagesWeek?: number | null;
+  pendingAppointmentRequests?: number | null;
 }) {
   return {
     todayAppointments: raw.todayAppointments ?? 0,
@@ -283,6 +289,7 @@ export function buildSafeStats(raw: {
     monthlyRevenue: raw.monthlyRevenue?._sum?.amount ?? 0,
     pendingAmount: raw.pendingPayments?._sum?.amount ?? 0,
     preparedMessages: raw.preparedMessagesWeek ?? 0,
+    pendingAppointmentRequests: raw.pendingAppointmentRequests ?? 0,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   TrendingUp,
@@ -118,8 +118,14 @@ export default function FinanceDashboard() {
   const { t } = useTranslation(['payments', 'common']);
   const navigate = useNavigate();
   const { defaultCurrency, formatCurrency, formatDate } = useClinicPreferences();
+  const [searchParams] = useSearchParams();
 
-  const [range, setRange] = useState('this_month');
+  // "period" is read from the URL (e.g. /finance?period=this_month) so dashboard KPI
+  // links apply the range immediately; falls back to the existing default otherwise.
+  const [range, setRange] = useState(() => {
+    const fromUrl = searchParams.get('period');
+    return fromUrl && RANGE_OPTIONS.some(opt => opt.value === fromUrl) ? fromUrl : 'this_month';
+  });
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
