@@ -46,6 +46,7 @@
   "actions": {
     "backToList": "Back to Appointments",
     "confirm": "Confirm",
+    "edit": "Edit",
     "complete": "Complete",
     "cancel": "Cancel",
     "noShow": "No Show",

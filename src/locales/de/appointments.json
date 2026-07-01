@@ -46,6 +46,7 @@
   "actions": {
     "backToList": "Zurück zu Terminen",
     "confirm": "Bestätigen",
+    "edit": "Bearbeiten",
     "complete": "Abschließen",
     "cancel": "Stornieren",
     "noShow": "Als nicht erschienen markieren",
