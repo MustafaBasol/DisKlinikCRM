@@ -17,6 +17,7 @@
 
 import prisma from '../../db.js';
 import { recordOperationalEvent } from '../operationalEventService.js';
+import { decryptJson } from '../../utils/encryption.js';
 import { getSmsProvider } from './smsProviders.js';
 import { normalizeSmsPhone, resolveSmsRegion, type SmsRegion } from './smsRouting.js';
 import {
@@ -90,13 +91,13 @@ function pickProviderForRegion(entitlement: SmsEntitlement, region: SmsRegion): 
   if (region === 'tr') {
     return {
       providerKey: entitlement.settings?.turkeyProvider ?? null,
-      config: entitlement.settings?.turkeyProviderConfig ?? null,
+      config: decryptJson(entitlement.settings?.turkeyProviderConfig),
     };
   }
   if (region === 'eu') {
     return {
       providerKey: entitlement.settings?.europeProvider ?? null,
-      config: entitlement.settings?.europeProviderConfig ?? null,
+      config: decryptJson(entitlement.settings?.europeProviderConfig),
     };
   }
   return { providerKey: null, config: null };

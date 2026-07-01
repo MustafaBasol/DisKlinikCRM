@@ -22,6 +22,7 @@ import { sendClinicSms } from '../services/sms/smsService.js';
 import { getSmsEntitlement, getSmsMonthlyUsage, currentSmsPeriod } from '../services/sms/smsEntitlement.js';
 import { AVAILABLE_SMS_PROVIDERS, getSmsProvider } from '../services/sms/smsProviders.js';
 import { patientContactSelect, userNameSelect } from '../utils/prismaSelects.js';
+import { encryptJson } from '../utils/encryption.js';
 
 const router = express.Router();
 
@@ -30,10 +31,12 @@ const USAGE_ROLES = [...SETTINGS_ROLES, 'BILLING'];
 const SEND_ROLES = [...SETTINGS_ROLES, 'RECEPTIONIST'];
 const HISTORY_ROLES = [...SETTINGS_ROLES, 'RECEPTIONIST'];
 
-function toJsonInput(value: unknown) {
+// Provider configs hold API credentials — encrypt at rest (AES-256-GCM),
+// same as WhatsApp access tokens. Decrypted only inside smsService.
+function toJsonInput(value: Record<string, unknown> | null | undefined) {
   if (value === null) return Prisma.DbNull;
   if (value === undefined) return undefined;
-  return value as Prisma.InputJsonValue;
+  return encryptJson(value) as unknown as Prisma.InputJsonValue;
 }
 
 async function buildStatusPayload(clinicId: string) {
