@@ -160,6 +160,13 @@
       "webhookSecretPlaceholder": "Secret de vérification webhook",
       "metaManualSettings": "Meta Cloud API - configuration manuelle",
       "metaManualHint": "Sinon, renseignez manuellement ci-dessous les informations Meta Business Manager > WhatsApp > API Setup.",
+      "metaEmbeddedDescription": "La clinique connecte son propre compte WhatsApp Business et son numéro de téléphone via Meta.",
+      "metaEmbeddedNotReady": "Meta Embedded Signup n'est pas configuré sur ce déploiement. Utilisez la configuration manuelle avancée ci-dessous pour connecter ce compte WhatsApp Business.",
+      "advancedManualSetup": {
+        "toggleShow": "Configuration manuelle avancée",
+        "toggleHide": "Masquer la configuration manuelle avancée",
+        "hint": "Réservé au repli technique/administrateur — la plupart des cliniques doivent utiliser \"Se connecter avec Meta\" ci-dessus. Les jetons et secrets ne sont plus jamais affichés après l'enregistrement."
+      },
       "metaBusinessId": "Business ID",
       "metaWabaId": "WhatsApp Business Account ID (WABA ID)",
       "metaPhoneNumberId": "Phone Number ID",
