@@ -1,0 +1,73 @@
+{
+  "nav": "SMS",
+  "title": "Module SMS",
+  "subtitle": "Envoyez des SMS de rendez-vous et aux patients via le forfait SMS de votre clinique.",
+  "errors": {
+    "loadFailed": "Échec du chargement des paramètres SMS."
+  },
+  "notifications": {
+    "saved": "Paramètres SMS enregistrés.",
+    "saveFailed": "Échec de l'enregistrement des paramètres SMS."
+  },
+  "addon": {
+    "active": "Le module SMS est actif",
+    "viaPlan": "inclus dans votre forfait",
+    "inactive": "Le module SMS n'est pas actif",
+    "contactSales": "L'envoi de SMS est une option payante. Contactez votre administrateur de plateforme pour l'activer pour cette clinique."
+  },
+  "quota": {
+    "title": "Utilisation mensuelle ({{period}})",
+    "usage": "{{used}} / {{total}} SMS",
+    "remaining": "{{count}} SMS restants ce mois-ci",
+    "exhausted": "Le quota mensuel est épuisé — l'envoi de SMS est bloqué jusqu'au mois prochain."
+  },
+  "providers": {
+    "title": "Paramètres du fournisseur",
+    "subtitle": "Les numéros turcs sont acheminés vers le fournisseur Turquie, les numéros européens vers le fournisseur Europe. Les autres régions ne sont pas prises en charge.",
+    "turkey": "Fournisseur Turquie",
+    "europe": "Fournisseur Europe",
+    "none": "Non sélectionné",
+    "configured": "Fournisseur prêt",
+    "notConfigured": "Aucun fournisseur configuré — l'envoi vers cette région échouera",
+    "senderName": "Nom de l'expéditeur",
+    "senderNameHint": "Identifiant alphanumérique de l'expéditeur affiché aux destinataires, si le fournisseur le prend en charge.",
+    "names": {
+      "mock_turkey": "Fournisseur de test (Turquie)",
+      "mock_europe": "Fournisseur de test (Europe)"
+    }
+  },
+  "history": {
+    "title": "Historique SMS",
+    "subtitle": "Envois récents, y compris les tentatives bloquées et échouées.",
+    "columns": {
+      "date": "Date",
+      "patient": "Patient",
+      "purpose": "Objet",
+      "region": "Région",
+      "status": "Statut",
+      "detail": "Détail"
+    },
+    "empty": "Aucun SMS pour le moment."
+  },
+  "purposes": {
+    "appointment_confirmation": "Confirmation de rendez-vous",
+    "appointment_reminder": "Rappel de rendez-vous",
+    "appointment_cancellation": "Annulation de rendez-vous",
+    "appointment_reschedule": "Report de rendez-vous",
+    "no_show_recovery": "Relance après absence",
+    "post_treatment_followup": "Suivi post-traitement",
+    "manual_message": "Message manuel",
+    "payment_reminder": "Rappel de paiement",
+    "marketing": "Marketing"
+  },
+  "statuses": {
+    "queued": "En file d'attente",
+    "sent": "Envoyé",
+    "delivered": "Distribué",
+    "failed": "Échec",
+    "blocked_quota": "Bloqué (quota)",
+    "blocked_consent": "Bloqué (consentement)",
+    "blocked_region": "Bloqué (région)",
+    "blocked_template": "Bloqué (modèle)"
+  }
+}

@@ -52,6 +52,7 @@ import postTreatmentRoutes from './routes/postTreatment.js';
 import patientPrivacyRoutes from './routes/patientPrivacy.js';
 import clinicLegalProfileRoutes from './routes/clinicLegalProfile.js';
 import publicClinicKvkkRoutes from './routes/publicClinicKvkk.js';
+import smsRoutes from './routes/sms.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { startMetaTemplateSyncJob } from './jobs/metaTemplateSyncJob.js';
 import { startDataRetentionCleanupJob } from './jobs/dataRetentionCleanupJob.js';
@@ -178,6 +179,7 @@ app.use('/api', usersImportRoutes);
 app.use('/api', postTreatmentRoutes);
 app.use('/api', patientPrivacyRoutes);
 app.use('/api', clinicLegalProfileRoutes);
+app.use('/api', smsRoutes);
 
 app.listen(port, host, () => {
   console.log(`Server is running on ${host}:${port}`);

@@ -54,6 +54,48 @@ export function decryptSecret(ciphertext: string): string {
   return decipher.update(data) + decipher.final('utf8');
 }
 
+const ENCRYPTED_JSON_KEY = '__encrypted';
+const TAGGED_SECRET_PREFIX = 'enc:v1:';
+
+/**
+ * Encrypt a secret string with a version prefix, for columns that may still
+ * hold legacy plaintext values (e.g. webhook secrets).
+ */
+export function encryptSecretTagged(plaintext: string): string {
+  return TAGGED_SECRET_PREFIX + encryptSecret(plaintext);
+}
+
+/**
+ * Decrypt a value produced by encryptSecretTagged(). Legacy plaintext values
+ * (no prefix) are returned as-is so existing rows keep working until re-saved.
+ */
+export function decryptSecretTagged(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (!value.startsWith(TAGGED_SECRET_PREFIX)) return value;
+  return decryptSecret(value.slice(TAGGED_SECRET_PREFIX.length));
+}
+
+/**
+ * Encrypt a JSON object for storage in a Prisma Json column.
+ * Stored shape: { "__encrypted": "<hex ciphertext>" }
+ */
+export function encryptJson(value: Record<string, unknown>): Record<string, string> {
+  return { [ENCRYPTED_JSON_KEY]: encryptSecret(JSON.stringify(value)) };
+}
+
+/**
+ * Decrypt a Json column value produced by encryptJson().
+ * Legacy plaintext objects (no __encrypted marker) are returned as-is so
+ * existing rows keep working until re-saved.
+ */
+export function decryptJson(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const ciphertext = record[ENCRYPTED_JSON_KEY];
+  if (typeof ciphertext !== 'string') return record;
+  return JSON.parse(decryptSecret(ciphertext)) as Record<string, unknown>;
+}
+
 /**
  * Returns true if ENCRYPTION_KEY is set and valid.
  * Use for startup validation.

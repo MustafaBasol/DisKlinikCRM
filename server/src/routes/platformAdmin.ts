@@ -494,6 +494,42 @@ router.patch('/clinics/:id/plan', async (req, res: Response) => {
   }
 });
 
+// PATCH /api/platform/clinics/:id/sms-addon — sell/enable the SMS add-on + set monthly quota
+router.patch('/clinics/:id/sms-addon', async (req, res: Response) => {
+  const { id } = req.params;
+  const { addonEnabled, monthlyQuota } = req.body;
+
+  if (addonEnabled !== undefined && typeof addonEnabled !== 'boolean') {
+    return res.status(400).json({ error: 'addonEnabled must be a boolean' });
+  }
+  if (monthlyQuota !== undefined && (!Number.isInteger(monthlyQuota) || monthlyQuota < 0 || monthlyQuota > 1_000_000)) {
+    return res.status(400).json({ error: 'monthlyQuota must be a non-negative integer' });
+  }
+
+  try {
+    const clinic = await prisma.clinic.findUnique({ where: { id }, select: { id: true, organizationId: true } });
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    const settings = await prisma.clinicSmsSettings.upsert({
+      where: { clinicId: id },
+      update: {
+        ...(addonEnabled !== undefined ? { addonEnabled } : {}),
+        ...(monthlyQuota !== undefined ? { monthlyQuota } : {}),
+      },
+      create: {
+        clinicId: id,
+        organizationId: clinic.organizationId,
+        addonEnabled: addonEnabled ?? false,
+        monthlyQuota: monthlyQuota ?? 0,
+      },
+      select: { clinicId: true, addonEnabled: true, monthlyQuota: true },
+    });
+    res.json(settings);
+  } catch {
+    res.status(500).json({ error: 'Failed to update SMS add-on' });
+  }
+});
+
 // GET /api/platform/clinics/:id/users
 router.get('/clinics/:id/users', async (req, res: Response) => {
   const { id } = req.params;

@@ -8,6 +8,7 @@ import { CLINIC_OPERATING_PREFERENCES_UPDATED_EVENT } from '../context/ClinicPre
 import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole, canManageClinicLegalProfile } from '../utils/permissions';
 import { clinicOperatingPreferencesService, notificationPreferencesService } from '../services/api';
 import ClinicKvkkSection from '../components/settings/ClinicKvkkSection';
+import SmsSettingsSection from '../components/settings/SmsSettingsSection';
 import {
   ClinicOperatingPreferences,
   DateFormatPreference,
@@ -55,7 +56,7 @@ type NotificationPreferences = {
   };
 };
 
-type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations' | 'kvkk';
+type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations' | 'sms' | 'kvkk';
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   whatsapp: {
@@ -238,7 +239,7 @@ const SimplePreferenceRow: React.FC<SimplePreferenceRowProps> = ({
 );
 
 const Settings: React.FC = () => {
-  const { t, i18n } = useTranslation(['common', 'settings', 'recall']);
+  const { t, i18n } = useTranslation(['common', 'settings', 'recall', 'sms']);
   const { user } = useAuth();
   const { availableClinics, selectedClinicId } = useClinic();
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
@@ -254,6 +255,8 @@ const Settings: React.FC = () => {
   const canSeeIntegrationsTab = !isDentist && canSeeIntegrations;
   const canSeeAvailability = canManageUsers(user) || isDentist;
   const canSeeKvkk = canManageClinicLegalProfile(user);
+  // SMS settings/provider management is restricted to admin/manager roles
+  const canSeeSms = !isDentist && canManageUsers(user);
   const firstAllowedTab: SettingsTab = canSeeGeneral
     ? 'general'
     : canSeeAvailability
@@ -298,6 +301,7 @@ const Settings: React.FC = () => {
       (activeTab === 'users' && canSeeUsers) ||
       (activeTab === 'integrations' && canSeeIntegrationsTab) ||
       (activeTab === 'availability' && canSeeAvailability) ||
+      (activeTab === 'sms' && canSeeSms) ||
       (activeTab === 'kvkk' && canSeeKvkk);
 
     if (!activeTabAllowed) {
@@ -311,6 +315,7 @@ const Settings: React.FC = () => {
     canSeeIntegrationsTab,
     canSeeKvkk,
     canSeeServices,
+    canSeeSms,
     canSeeUsers,
     firstAllowedTab,
   ]);
@@ -566,6 +571,17 @@ const Settings: React.FC = () => {
               >
                 <CalendarClock size={18} />
                 {t('settings:availability.title')}
+              </button>
+            )}
+            {canSeeSms && (
+              <button
+                onClick={() => setActiveTab('sms')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'sms' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <MessageSquare size={18} />
+                {t('sms:nav')}
               </button>
             )}
             {canSeeKvkk && (
@@ -1161,6 +1177,13 @@ const Settings: React.FC = () => {
 
           {canSeeAvailability && activeTab === 'availability' && (
             <DoctorAvailabilityManager />
+          )}
+
+          {canSeeSms && activeTab === 'sms' && (
+            <SmsSettingsSection
+              clinicId={selectedClinic?.id}
+              canEdit={canManageUsers(user)}
+            />
           )}
 
           {canSeeKvkk && activeTab === 'kvkk' && (

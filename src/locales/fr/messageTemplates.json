@@ -21,6 +21,9 @@
     "appointment_confirmation": "Confirmation de rendez-vous",
     "no_show_recovery": "Suivi absence",
     "post_treatment_followup": "Suivi post-traitement",
+    "appointment_cancellation": "Annulation de rendez-vous",
+    "appointment_reschedule": "Report de rendez-vous",
+    "marketing": "Marketing",
     "general_message": "Message général"
   },
   "variables": {

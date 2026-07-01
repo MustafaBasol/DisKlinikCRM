@@ -82,6 +82,9 @@ model Clinic {
   patientPrivacyRequests            PatientPrivacyRequest[]
   clinicLegalProfile                ClinicLegalProfile?
   channelConsentLogs                ChannelConsentLog[]
+  smsSettings                       ClinicSmsSettings?
+  smsMessages                       SmsMessage[]
+  smsUsageCounters                  SmsUsageCounter[]
 
   @@unique([organizationId, slug])
 }
@@ -140,6 +143,7 @@ model User {
   performedRecallActions     RecallAction[]                 @relation("RecallActionPerformer")
   passwordResetTokens        PasswordResetToken[]
   emailVerificationTokens    EmailVerificationToken[]
+  smsMessagesCreated         SmsMessage[]                   @relation("SmsMessageCreator")
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -193,6 +197,10 @@ model Patient {
   notes                String?
   communicationConsent Boolean      @default(false)
   marketingConsent     Boolean      @default(false)
+  // SMS opt-out (KVKK/GDPR): blocks all outbound SMS when set.
+  // Foundation for future STOP/RET/IPTAL/UNSUBSCRIBE inbound keywords.
+  smsOptOut            Boolean      @default(false)
+  smsOptOutAt          DateTime?
   organizationId       String // Phase 1b: NOT NULL after backfill
   organization         Organization @relation(fields: [organizationId], references: [id])
   primaryClinicId      String? // Default/preferred branch (not exclusive)
@@ -230,6 +238,7 @@ model Patient {
   recallCandidates                  RecallCandidate[]
   recallActions                     RecallAction[]
   privacyRequests                   PatientPrivacyRequest[]
+  smsMessages                       SmsMessage[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -303,6 +312,7 @@ model Appointment {
   recallCandidates RecallCandidate[]
   recallActions    RecallAction[]
   sourceRequests AppointmentRequest[] @relation("ConvertedAppointment")
+  smsMessages    SmsMessage[]
 }
 
 model AppointmentRequest {
@@ -696,6 +706,7 @@ model MessageTemplate {
 
   sentMessages SentMessage[]
   recallCandidates RecallCandidate[]
+  smsMessages  SmsMessage[]     @relation("SmsMessageTemplate")
 
   @@index([metaTemplateConnectionId])
 }
@@ -1799,4 +1810,89 @@ model ChannelConsentLog {
   @@index([clinicId, channel, contactIdentifier])
   @@index([clinicId, consentTextVersion])
   @@index([organizationId])
+}
+
+// ── SMS Add-on Module ─────────────────────────────────────────────────────────
+
+/// Per-clinic SMS add-on configuration. SMS is DISABLED unless addonEnabled=true
+/// here or the clinic/organization plan has features.sms === true.
+model ClinicSmsSettings {
+  id             String   @id @default(uuid())
+  organizationId String
+  clinicId       String   @unique
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  /// Clinic-level add-on activation (managed by platform admin, sold as package)
+  addonEnabled   Boolean  @default(false)
+  /// Monthly outbound SMS quota. 0 = no sending allowed even when enabled.
+  monthlyQuota   Int      @default(0)
+  /// Alphanumeric sender id / originator shown to recipients (provider-dependent)
+  senderName     String?
+  /// Provider key for Turkish numbers (e.g. mock_turkey; real providers later)
+  turkeyProvider       String?
+  turkeyProviderConfig Json?
+  /// Provider key for European numbers (e.g. mock_europe; real providers later)
+  europeProvider       String?
+  europeProviderConfig Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+/// Outbound SMS queue + clinic-scoped history. One row per send attempt,
+/// including sends blocked by quota/consent/region so staff can see why.
+model SmsMessage {
+  id             String   @id @default(uuid())
+  organizationId String
+  clinicId       String
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  patientId      String?
+  patient        Patient? @relation(fields: [patientId], references: [id])
+  appointmentId  String?
+  appointment    Appointment? @relation(fields: [appointmentId], references: [id])
+  templateId     String?
+  template       MessageTemplate? @relation("SmsMessageTemplate", fields: [templateId], references: [id])
+  /// appointment_confirmation | appointment_reminder | appointment_cancellation |
+  /// appointment_reschedule | no_show_recovery | post_treatment_followup |
+  /// manual_message | payment_reminder | marketing
+  purpose        String
+  /// Normalized E.164 recipient (no other personal data duplicated here)
+  recipient      String
+  body           String
+  /// queued | sent | delivered | failed | blocked_addon | blocked_quota |
+  /// blocked_consent | blocked_region | blocked_template
+  status         String   @default("queued")
+  /// tr | eu | unsupported — routing decision snapshot
+  providerRegion String?
+  /// Provider key that handled (or would handle) the message
+  provider       String?
+  externalMessageId String?
+  errorCode      String?
+  errorMessage   String?
+  /// Duplicate prevention key (e.g. purpose+appointment+date); unique when set
+  dedupeKey      String?  @unique
+  queuedAt       DateTime @default(now())
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  createdById    String?
+  createdBy      User?    @relation("SmsMessageCreator", fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([clinicId, status, createdAt])
+  @@index([clinicId, patientId])
+  @@index([organizationId])
+}
+
+/// Atomic per-clinic monthly usage counter (period = "YYYY-MM").
+/// Incremented with a guarded update so concurrent sends cannot exceed quota.
+model SmsUsageCounter {
+  id        String   @id @default(uuid())
+  clinicId  String
+  clinic    Clinic   @relation(fields: [clinicId], references: [id])
+  period    String
+  sentCount Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([clinicId, period])
 }

@@ -13,8 +13,11 @@ const PURPOSES = [
   'appointment_reminder',
   'payment_reminder',
   'appointment_confirmation',
+  'appointment_cancellation',
+  'appointment_reschedule',
   'no_show_recovery',
   'post_treatment_followup',
+  'marketing',
   'general_message',
 ] as const;
 
@@ -154,6 +157,7 @@ const MessageTemplateForm: React.FC<MessageTemplateFormProps> = ({ template, onC
                 <option value="en">English</option>
                 <option value="tr">Türkçe</option>
                 <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
               </select>
             </div>
             <div className="flex items-center gap-2 pt-6">

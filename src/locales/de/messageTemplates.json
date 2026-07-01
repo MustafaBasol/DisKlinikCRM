@@ -21,6 +21,9 @@
     "appointment_confirmation": "Terminbestätigung",
     "no_show_recovery": "Nichterscheinen-Nachverfolgung",
     "post_treatment_followup": "Nachsorge",
+    "appointment_cancellation": "Terminabsage",
+    "appointment_reschedule": "Terminverschiebung",
+    "marketing": "Marketing",
     "general_message": "Allgemeine Nachricht"
   },
   "variables": {

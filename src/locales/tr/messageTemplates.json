@@ -21,6 +21,9 @@
     "appointment_confirmation": "Randevu Onayı",
     "no_show_recovery": "Gelmeyen Hasta Takibi",
     "post_treatment_followup": "Tedavi Sonrası Takip",
+    "appointment_cancellation": "Randevu İptali",
+    "appointment_reschedule": "Randevu Erteleme",
+    "marketing": "Pazarlama",
     "general_message": "Genel Mesaj"
   },
   "variables": {

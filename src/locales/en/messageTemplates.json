@@ -21,6 +21,9 @@
     "appointment_confirmation": "Appointment Confirmation",
     "no_show_recovery": "No-Show Follow-Up",
     "post_treatment_followup": "Post-Treatment Follow-Up",
+    "appointment_cancellation": "Appointment Cancellation",
+    "appointment_reschedule": "Appointment Reschedule",
+    "marketing": "Marketing",
     "general_message": "General Message"
   },
   "variables": {

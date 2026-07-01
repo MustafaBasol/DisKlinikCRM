@@ -306,8 +306,11 @@ export const MESSAGE_TEMPLATE_PURPOSES = [
   'appointment_reminder',
   'payment_reminder',
   'appointment_confirmation',
+  'appointment_cancellation',
+  'appointment_reschedule',
   'no_show_recovery',
   'post_treatment_followup',
+  'marketing',
   'general_message',
 ] as const;
 
@@ -318,9 +321,43 @@ export const messageTemplateSchema = z.object({
   channel: z.enum(['sms', 'whatsapp', 'email']),
   subject: z.string().optional().nullable(),
   body: z.string().min(1, 'Body is required'),
-  language: z.enum(['en', 'fr', 'tr']),
+  language: z.enum(['en', 'fr', 'tr', 'de']),
   isActive: z.boolean().default(true),
   purpose: z.enum(MESSAGE_TEMPLATE_PURPOSES).default('general_message'),
+});
+
+// --- SMS Add-on Module ---
+
+export const SMS_SEND_PURPOSES = [
+  'appointment_confirmation',
+  'appointment_reminder',
+  'appointment_cancellation',
+  'appointment_reschedule',
+  'no_show_recovery',
+  'post_treatment_followup',
+  'manual_message',
+  'payment_reminder',
+  'marketing',
+] as const;
+
+export const smsSettingsSchema = z.object({
+  senderName: z.string().max(20).optional().nullable(),
+  turkeyProvider: z.string().max(50).optional().nullable(),
+  turkeyProviderConfig: z.record(z.string(), z.unknown()).optional().nullable(),
+  europeProvider: z.string().max(50).optional().nullable(),
+  europeProviderConfig: z.record(z.string(), z.unknown()).optional().nullable(),
+});
+
+export const smsSendSchema = z.object({
+  patientId: z.string().min(1, 'Patient ID is required'),
+  clinicId: z.string().min(1).optional().nullable(),
+  appointmentId: z.string().min(1).optional().nullable(),
+  templateId: z.string().min(1).optional().nullable(),
+  purpose: z.enum(SMS_SEND_PURPOSES).default('manual_message'),
+  body: z.string().max(1000).optional().nullable(),
+}).refine(data => Boolean(data.body?.trim()) || Boolean(data.templateId), {
+  message: 'Either body or templateId is required',
+  path: ['body'],
 });
 
 export const prepareMessageSchema = z.object({
