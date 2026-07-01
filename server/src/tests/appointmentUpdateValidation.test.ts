@@ -15,6 +15,14 @@
  * düz/okunabilir bir gövde döndürüyor — payments.ts'deki mevcut desenle aynı.
  * Bu test appointmentSchema/appointmentUpdateSchema kurallarını ve route'un
  * issue-mapping mantığını (aynı dönüşüm burada simüle edilir) doğrular.
+ *
+ * İkinci fix: patientId/practitionerId/appointmentTypeId/treatmentCaseId
+ * alanları `z.string().uuid()` gerektiriyordu, ama prod/demo verisinde bu
+ * ID'ler `demo_patient_...`, `demo_svc_...` gibi UUID olmayan string'ler.
+ * Bu, gerçek kayıtları düzenlerken 400 ile çöküyordu. Şema artık sadece
+ * boş olmayan string istiyor (`z.string().min(1)`); var olma/klinik-scope
+ * kontrolü zaten route handler'da relationGuards (findPatientInClinic vb.)
+ * ile ayrıca yapılıyor.
  */
 
 import assert from 'node:assert/strict';
@@ -46,15 +54,26 @@ const validId3 = '33333333-3333-4333-8333-333333333333';
 
 console.log('\n=== appointmentSchema (create): gerekli alanlar ===');
 
-test('practitionerId geçersiz UUID ise reddedilir', () => {
+test('practitionerId boş string ise reddedilir', () => {
   const result = appointmentSchema.safeParse({
     patientId: validId,
-    practitionerId: 'not-a-uuid',
+    practitionerId: '',
     appointmentTypeId: validId2,
     startTime: '2026-08-01T09:00:00.000Z',
     endTime: '2026-08-01T09:30:00.000Z',
   });
   assert.equal(result.success, false);
+});
+
+test('UUID olmayan ama boş olmayan demo ID\'ler kabul edilir (varlık kontrolü route\'da yapılır)', () => {
+  const result = appointmentSchema.safeParse({
+    patientId: 'demo_patient_noramedi_ahmet_sahin',
+    practitionerId: '0ff12df5-bced-4074-9719-7ba39f60e075',
+    appointmentTypeId: 'demo_svc_noramedi_test_oral_surgery',
+    startTime: '2026-08-01T09:00:00.000Z',
+    endTime: '2026-08-01T09:30:00.000Z',
+  });
+  assert.equal(result.success, true);
 });
 
 test('endTime startTime\'dan önce ise reddedilir', () => {
@@ -86,9 +105,27 @@ test('sadece notes gönderilse kabul edilir (partial)', () => {
   assert.equal(result.success, true);
 });
 
-test('practitionerId gönderilirse geçerli UUID olmalı', () => {
-  const result = appointmentUpdateSchema.safeParse({ practitionerId: 'not-a-uuid' });
+test('practitionerId gönderilirse boş olmamalı', () => {
+  const result = appointmentUpdateSchema.safeParse({ practitionerId: '' });
   assert.equal(result.success, false);
+});
+
+test('practitionerId UUID olmayan demo ID olarak gönderilirse kabul edilir', () => {
+  const result = appointmentUpdateSchema.safeParse({ practitionerId: 'demo_dentist_noramedi_01' });
+  assert.equal(result.success, true);
+});
+
+test('patientId/appointmentTypeId demo ID + treatmentCaseId null olan gerçek PUT payload kabul edilir', () => {
+  const result = appointmentUpdateSchema.safeParse({
+    patientId: 'demo_patient_noramedi_ahmet_sahin',
+    practitionerId: '0ff12df5-bced-4074-9719-7ba39f60e075',
+    appointmentTypeId: 'demo_svc_noramedi_test_oral_surgery',
+    startTime: '2026-07-04T10:00:00.000Z',
+    endTime: '2026-07-04T10:45:00.000Z',
+    notes: '[DEMO:NORAMEDI_TEST:APPOINTMENTS] Cerrahi değerlendirme randevusu.',
+    treatmentCaseId: null,
+  });
+  assert.equal(result.success, true);
 });
 
 test('startTime verilip endTime verilmezse zaman sırası kontrolü atlanır (kabul edilir)', () => {
@@ -108,8 +145,8 @@ console.log('\n=== Hata gövdesi şekli: route artık düz/okunabilir issues dö
 
 test('issues dizisi her zaman string path + string message içerir (nested object değil)', () => {
   const result = appointmentUpdateSchema.safeParse({
-    practitionerId: 'not-a-uuid',
-    appointmentTypeId: 'also-not-a-uuid',
+    practitionerId: '',
+    appointmentTypeId: '',
   });
   assert.equal(result.success, false);
   if (!result.success) {

@@ -284,6 +284,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
 
@@ -341,16 +342,33 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
       }
       onSuccess();
     } catch (err: unknown) {
-      const response = (err as { response?: { status?: number; data?: { code?: string } } })?.response;
+      const response = (err as {
+        response?: {
+          status?: number;
+          data?: { code?: string; error?: string; issues?: Array<{ path?: string; message?: string }> };
+        };
+      })?.response;
       if (response?.data?.code === 'APPOINTMENT_OUTSIDE_AVAILABILITY') {
         setAvailabilityWarning(true);
       } else if (response?.status === 409) {
         setError(t('appointments:form.overlapError'));
       } else {
-        const fallback = isEditMode
-          ? t('appointments:form.updateFailedGeneric')
-          : t('appointments:form.createFailedGeneric');
-        setError(getErrorMessage(err, fallback));
+        const data = response?.data;
+        const touchesPatientOrService =
+          (Array.isArray(data?.issues) && data.issues.some(
+            issue => issue?.path === 'patientId' || issue?.path === 'appointmentTypeId',
+          )) ||
+          data?.error === 'Invalid patient' ||
+          data?.error === 'Invalid appointment type';
+
+        if (touchesPatientOrService) {
+          setError(t('appointments:form.patientOrServiceInvalid'));
+        } else {
+          const fallback = isEditMode
+            ? t('appointments:form.updateFailedGeneric')
+            : t('appointments:form.createFailedGeneric');
+          setError(getErrorMessage(err, fallback));
+        }
       }
     } finally {
       setLoading(false);
@@ -391,7 +409,8 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate className="p-5 sm:p-6 space-y-5 overflow-y-auto">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0">
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
           {isNoShowReschedule && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-700/50 dark:text-amber-200">
               <Info size={16} className="mt-0.5 flex-shrink-0" />
@@ -420,13 +439,6 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
                   {t('appointments:form.instagramSourceBody')}
                 </div>
               </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm">
-              <AlertCircle size={18} />
-              {error}
             </div>
           )}
 
@@ -674,11 +686,20 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
               />
             </div>
           </div>
+        </div>
 
-          <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+        <div className="border-t border-gray-100 dark:border-gray-700 p-4 sm:p-5 space-y-3 bg-white dark:bg-gray-800 flex-shrink-0">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2.5 text-red-600 text-sm dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-200">
+              <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <button
               type="button"
               onClick={onClose}
+              disabled={loading}
               className="flex-1 btn-secondary justify-center"
             >
               {t('common:cancel')}
@@ -695,6 +716,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
               )}
             </button>
           </div>
+        </div>
         </form>
       </div>
       {availabilityWarning && (
