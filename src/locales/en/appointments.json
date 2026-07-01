@@ -65,6 +65,8 @@
     "endTime": "End Time",
     "notes": "Notes",
     "overlapError": "Overlap detected! Practitioner is busy at this time.",
+    "updateFailedGeneric": "Could not update the appointment. Please check the details and try again.",
+    "createFailedGeneric": "Could not create the appointment. Please check the details and try again.",
     "durationInfo": "{{minutes}} minutes",
     "helperText": "Select the patient, service and practitioner to view available appointment times.",
     "availableSlots": "Available Times",

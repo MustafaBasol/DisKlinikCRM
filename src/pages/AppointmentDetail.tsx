@@ -23,6 +23,7 @@ import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
+import { getErrorMessage } from '../utils/errors';
 
 const AppointmentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,8 +51,8 @@ const AppointmentDetail: React.FC = () => {
 
       const treatmentsRes = await treatmentCaseService.getAll({ patientId: res.data.patientId });
       setTreatmentCases(treatmentsRes.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to fetch details');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, t('appointments:detail.fetchFailed', { defaultValue: 'Failed to fetch details' })));
     } finally {
       setLoading(false);
     }

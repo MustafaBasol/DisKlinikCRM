@@ -86,6 +86,13 @@ export const PlatformAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const initAuth = async () => {
       clearLegacyStorage();
+      // Regular clinic users never hold a platform-admin session — skip the probe outside
+      // /platform routes to avoid a guaranteed noisy 401 on every clinic page load.
+      if (!window.location.pathname.startsWith('/platform')) {
+        setAdmin(null);
+        setIsLoading(false);
+        return;
+      }
       try {
         const { data } = await platformApi.get('/platform/me');
         await platformApi.get('/platform/auth/csrf').catch(() => undefined);
