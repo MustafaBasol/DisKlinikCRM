@@ -43,7 +43,7 @@ import {
   CONSENT_REPROMPT_TEXT,
 } from '../channelConsentGate.js';
 
-type InstagramAssistantStep =
+export type InstagramAssistantStep =
   | 'main_menu'
   | 'awaiting_service'
   | 'awaiting_date'
@@ -55,8 +55,9 @@ type InstagramAssistantStep =
   | 'awaiting_channel_consent'
   | null;
 
-type InstagramAssistantStateJson = BookingStateJson & {
+export type InstagramAssistantStateJson = BookingStateJson & {
   pendingHandoffRequestId?: string;
+  resumeAfterChannelConsent?: string | null;
 };
 
 type InstagramAssistantClinic = {
@@ -70,7 +71,7 @@ type InstagramAssistantClinic = {
   website: string | null;
 };
 
-type InstagramAssistantService = {
+export type InstagramAssistantService = {
   id: string;
   name: string;
   durationMinutes: number;
@@ -257,6 +258,7 @@ const readStateJson = (value: unknown): InstagramAssistantStateJson => {
       ? record.pendingConfirmationSlot as SavedAvailableSlot
       : undefined,
     pendingHandoffRequestId: typeof record.pendingHandoffRequestId === 'string' ? record.pendingHandoffRequestId : undefined,
+    resumeAfterChannelConsent: typeof record.resumeAfterChannelConsent === 'string' ? record.resumeAfterChannelConsent : undefined,
   };
 };
 
@@ -1003,6 +1005,61 @@ const applyAgentStatePatch = async (args: {
   await upsertInstagramConversationState(args.clinicId, args.conversationKey, patchData);
 };
 
+// ── Channel consent gate: flow-resume helpers ──────────────────────────────────
+
+// Steps that represent an in-progress booking/selection flow. If channel consent is
+// required while the conversation is on one of these steps, we must not discard the
+// flow — we stash it in resumeAfterChannelConsent and restore it once consent is settled.
+export const CONSENT_RESUMABLE_STEPS: InstagramAssistantStep[] = [
+  'awaiting_service',
+  'awaiting_date',
+  'awaiting_time',
+  'awaiting_confirmation',
+  'awaiting_name',
+  'awaiting_phone',
+];
+
+export const isConsentResumableStep = (step: string | null | undefined): step is InstagramAssistantStep =>
+  Boolean(step) && CONSENT_RESUMABLE_STEPS.includes(step as InstagramAssistantStep);
+
+// Builds the message shown right after consent is accepted mid-flow. Never replays the
+// message that triggered the consent prompt (it was never processed) — instead it re-asks
+// for whatever the interrupted step was waiting on, using already-confirmed prior context.
+export const buildConsentResumeMessage = (
+  step: InstagramAssistantStep,
+  ctx: {
+    services: InstagramAssistantService[];
+    selectedAppointmentTypeName?: string | null;
+    selectedDate?: string | null;
+    stateJson: InstagramAssistantStateJson;
+  },
+): string => {
+  const prefix = 'Teşekkürler, onayınızı aldık.';
+  switch (step) {
+    case 'awaiting_service':
+      return `${prefix} ${formatServiceList(ctx.services)}`;
+    case 'awaiting_date':
+      return ctx.selectedAppointmentTypeName
+        ? `${prefix} ${ctx.selectedAppointmentTypeName} için hangi gün randevu istersiniz?`
+        : `${prefix} Lütfen randevu istediğiniz günü tekrar yazar mısınız?`;
+    case 'awaiting_time': {
+      const slots = ctx.stateJson.lastShownSlots ?? ctx.stateJson.availableSlots ?? [];
+      if (ctx.selectedDate && slots.length > 0) {
+        return `${prefix} ${formatAvailabilityMessage(ctx.selectedDate, slots)}`;
+      }
+      return `${prefix} Lütfen randevu istediğiniz saati tekrar yazar mısınız?`;
+    }
+    case 'awaiting_confirmation':
+      return `${prefix} Randevunuzu onaylıyor musunuz? Lütfen evet veya hayır yazın.`;
+    case 'awaiting_name':
+      return `${prefix} Randevu için ad soyadınızı öğrenebilir miyim?`;
+    case 'awaiting_phone':
+      return `${prefix} Sizinle iletişime geçebilmemiz için telefon numaranızı paylaşır mısınız?`;
+    default:
+      return CONSENT_ACCEPTED_TEXT;
+  }
+};
+
 const buildReplyText = async (args: {
   clinic: InstagramAssistantClinic;
   entry: InstagramInboxContext | null;
@@ -1043,6 +1100,32 @@ const buildReplyText = async (args: {
   if (currentStep === 'awaiting_channel_consent') {
     const reply = parseConsentReply(args.text);
     const meta = await loadConsentMetadata(args.clinic.id);
+    const resumeStep = isConsentResumableStep(stateJson.resumeAfterChannelConsent) ? stateJson.resumeAfterChannelConsent : null;
+    const { resumeAfterChannelConsent: _discardResume, ...resumedStateJson } = stateJson;
+    const resumeAfterAccept = async () => {
+      if (resumeStep) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName,
+          step: resumeStep,
+          currentIntent: state?.currentIntent ?? 'book_appointment',
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: resumedStateJson,
+        });
+        return buildConsentResumeMessage(resumeStep, {
+          services, selectedAppointmentTypeName: state?.selectedAppointmentTypeName ?? null, selectedDate, stateJson: resumedStateJson,
+        });
+      }
+      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+        customerName,
+        step: null,
+        currentIntent: null,
+        lastMessage: args.text,
+        lastProviderMessageId: args.externalMessageId ?? null,
+        stateJson: null,
+      });
+      return CONSENT_ACCEPTED_TEXT;
+    };
     if (reply === 'accepted' && meta) {
       await logChannelConsent({
         organizationId: args.clinic.organizationId,
@@ -1056,15 +1139,7 @@ const buildReplyText = async (args: {
         conversationId: args.externalConversationId ?? args.conversationKey,
         sourceMessageId: args.externalMessageId ?? null,
       });
-      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
-        customerName,
-        step: null,
-        currentIntent: null,
-        lastMessage: args.text,
-        lastProviderMessageId: args.externalMessageId ?? null,
-        stateJson: null,
-      });
-      return CONSENT_ACCEPTED_TEXT;
+      return resumeAfterAccept();
     }
     if (reply === 'declined' && meta) {
       await logChannelConsent({
@@ -1084,8 +1159,7 @@ const buildReplyText = async (args: {
     }
     const consentRecheck = await checkChannelConsent({ organizationId: args.clinic.organizationId, clinicId: args.clinic.id, channel: 'instagram', contactIdentifier: args.externalSenderId });
     if (consentRecheck.status === 'accepted') {
-      await upsertInstagramConversationState(args.clinic.id, args.conversationKey, { customerName, step: null, currentIntent: null, lastMessage: args.text, lastProviderMessageId: args.externalMessageId ?? null, stateJson: null });
-      return CONSENT_ACCEPTED_TEXT;
+      return resumeAfterAccept();
     }
     if (consentRecheck.status === 'blocked_missing_legal_profile') return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
     return consentRecheck.promptText ?? CONSENT_REPROMPT_TEXT;
@@ -1105,13 +1179,17 @@ const buildReplyText = async (args: {
     return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
   }
   if (consentGateResult.status === 'needs_consent' || consentGateResult.status === 'declined') {
+    const isResumable = isConsentResumableStep(currentStep);
     await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
       customerName,
       step: 'awaiting_channel_consent',
-      currentIntent: null,
+      currentIntent: isResumable ? (state?.currentIntent ?? null) : null,
       lastMessage: args.text,
       lastProviderMessageId: args.externalMessageId ?? null,
-      stateJson: null,
+      stateJson: {
+        ...stateJson,
+        resumeAfterChannelConsent: isResumable ? currentStep : null,
+      },
     });
     return consentGateResult.promptText;
   }
