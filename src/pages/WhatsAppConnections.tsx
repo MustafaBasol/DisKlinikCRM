@@ -156,6 +156,7 @@ export default function WhatsAppConnections() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteConn, setConfirmDeleteConn] = useState<WhatsAppConnection | null>(null);
+  const [showAdvancedMetaSetup, setShowAdvancedMetaSetup] = useState(false);
 
   const canManage = canManageWhatsAppConnections(user);
   const canView = canViewWhatsAppStatus(user);
@@ -194,6 +195,7 @@ export default function WhatsAppConnections() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setFormError(null);
+    setShowAdvancedMetaSetup(false);
     setShowModal(true);
   }
 
@@ -218,6 +220,8 @@ export default function WhatsAppConnections() {
       linkedClinicIds: (conn.clinics ?? []).map((c) => c.clinicId),
     });
     setFormError(null);
+    // Manual fields default to collapsed even when editing an existing manual connection.
+    setShowAdvancedMetaSetup(false);
     setShowModal(true);
   }
 
@@ -1029,11 +1033,6 @@ export default function WhatsAppConnections() {
                   <option value="evolution_api">Evolution API</option>
                   <option value="meta_cloud_api">Meta Cloud API</option>
                 </select>
-                {form.provider === 'meta_cloud_api' && !META_ENV_READY && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                    {t('whatsapp:connections.modal.metaManualAllowed')}
-                  </p>
-                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1121,76 +1120,98 @@ export default function WhatsAppConnections() {
                 </div>
               )}
 
-              {/* Meta Cloud API fields */}
+              {/* Meta Cloud API — Embedded Signup first */}
               {form.provider === 'meta_cloud_api' && (
                 <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-700">
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    {t('whatsapp:connections.modal.metaManualSettings')}
-                  </p>
-                  {META_ENV_READY && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowModal(false);
-                        handleMetaEmbeddedSignup(form.linkedClinicIds);
-                      }}
-                      disabled={metaConnecting}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {metaConnecting ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                      {t('whatsapp:connections.actions.connectMetaAutomatic')}
-                    </button>
-                  )}
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {t('whatsapp:connections.modal.metaManualHint')}
-                  </p>
-                  {[
-                    { key: 'metaBusinessId', label: t('whatsapp:connections.modal.metaBusinessId') },
-                    { key: 'metaWabaId', label: t('whatsapp:connections.modal.metaWabaId') },
-                    { key: 'metaPhoneNumberId', label: t('whatsapp:connections.modal.metaPhoneNumberId') },
-                    { key: 'metaAppId', label: t('whatsapp:connections.modal.metaAppId') },
-                    { key: 'metaWebhookVerifyToken', label: t('whatsapp:connections.modal.metaWebhookVerifyToken') },
-                  ].map(({ key, label }) => (
-                    <div key={key}>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {label}
-                      </label>
-                      <input
-                        value={form[key as keyof ConnectionFormData] as string}
-                        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-                  ))}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('whatsapp:connections.modal.webhookSecret')} <span className="text-gray-400">({t('whatsapp:connections.modal.optionalSignature')})</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={form.metaWebhookSecret}
-                      onChange={(e) => setForm((f) => ({ ...f, metaWebhookSecret: e.target.value }))}
-                      placeholder={editingId ? t('whatsapp:connections.modal.configuredIfPlaceholder') : t('whatsapp:connections.modal.metaWebhookSecretPlaceholder')}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('whatsapp:connections.modal.accessToken')} {editingId && <span className="text-gray-400">({t('whatsapp:connections.modal.leaveBlankUnchanged')})</span>}
-                    </label>
-                    <input
-                      type="password"
-                      value={form.metaAccessTokenEncrypted}
-                      onChange={(e) => setForm((f) => ({ ...f, metaAccessTokenEncrypted: e.target.value }))}
-                      placeholder={editingId ? t('whatsapp:connections.modal.configuredPlaceholder') : t('whatsapp:connections.modal.accessTokenPlaceholder')}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                    {editingId && (
-                      <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                        {t('whatsapp:connections.modal.accessTokenEncryptedHint')}
+                  {META_ENV_READY ? (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        {t('whatsapp:connections.modal.metaEmbeddedDescription')}
                       </p>
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowModal(false);
+                          handleMetaEmbeddedSignup(form.linkedClinicIds);
+                        }}
+                        disabled={metaConnecting}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {metaConnecting ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+                        {t('whatsapp:connections.actions.connectMetaAutomatic')}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-700 dark:text-amber-300">
+                      {t('whatsapp:connections.modal.metaEmbeddedNotReady')}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedMetaSetup((v) => !v)}
+                    className="w-full flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide hover:text-gray-700 dark:hover:text-gray-200"
+                  >
+                    {showAdvancedMetaSetup ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    {showAdvancedMetaSetup
+                      ? t('whatsapp:connections.modal.advancedManualSetup.toggleHide')
+                      : t('whatsapp:connections.modal.advancedManualSetup.toggleShow')}
+                  </button>
+
+                  {showAdvancedMetaSetup && (
+                    <div className="space-y-3 pl-3 border-l-2 border-gray-100 dark:border-gray-700">
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {t('whatsapp:connections.modal.advancedManualSetup.hint')}
+                      </p>
+                      {[
+                        { key: 'metaBusinessId', label: t('whatsapp:connections.modal.metaBusinessId') },
+                        { key: 'metaWabaId', label: t('whatsapp:connections.modal.metaWabaId') },
+                        { key: 'metaPhoneNumberId', label: t('whatsapp:connections.modal.metaPhoneNumberId') },
+                        { key: 'metaAppId', label: t('whatsapp:connections.modal.metaAppId') },
+                        { key: 'metaWebhookVerifyToken', label: t('whatsapp:connections.modal.metaWebhookVerifyToken') },
+                      ].map(({ key, label }) => (
+                        <div key={key}>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {label}
+                          </label>
+                          <input
+                            value={form[key as keyof ConnectionFormData] as string}
+                            onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                      ))}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {t('whatsapp:connections.modal.webhookSecret')} <span className="text-gray-400">({t('whatsapp:connections.modal.optionalSignature')})</span>
+                        </label>
+                        <input
+                          type="password"
+                          value={form.metaWebhookSecret}
+                          onChange={(e) => setForm((f) => ({ ...f, metaWebhookSecret: e.target.value }))}
+                          placeholder={editingId ? t('whatsapp:connections.modal.configuredIfPlaceholder') : t('whatsapp:connections.modal.metaWebhookSecretPlaceholder')}
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {t('whatsapp:connections.modal.accessToken')} {editingId && <span className="text-gray-400">({t('whatsapp:connections.modal.leaveBlankUnchanged')})</span>}
+                        </label>
+                        <input
+                          type="password"
+                          value={form.metaAccessTokenEncrypted}
+                          onChange={(e) => setForm((f) => ({ ...f, metaAccessTokenEncrypted: e.target.value }))}
+                          placeholder={editingId ? t('whatsapp:connections.modal.configuredPlaceholder') : t('whatsapp:connections.modal.accessTokenPlaceholder')}
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        {editingId && (
+                          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                            {t('whatsapp:connections.modal.accessTokenEncryptedHint')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

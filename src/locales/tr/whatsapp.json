@@ -160,6 +160,13 @@
       "webhookSecretPlaceholder": "Webhook doğrulama gizli anahtarı",
       "metaManualSettings": "Meta Cloud API - Manuel Yapılandırma",
       "metaManualHint": "Ya da aşağıya Meta Business Manager > WhatsApp > API Setup bilgilerini manuel girin.",
+      "metaEmbeddedDescription": "Klinik, kendi WhatsApp Business hesabını ve telefon numarasını Meta üzerinden bağlar.",
+      "metaEmbeddedNotReady": "Bu ortamda Meta Embedded Signup yapılandırılmamış. Bu WhatsApp Business hesabını bağlamak için aşağıdaki gelişmiş manuel kurulumu kullanın.",
+      "advancedManualSetup": {
+        "toggleShow": "Gelişmiş manuel kurulum",
+        "toggleHide": "Gelişmiş manuel kurulumu gizle",
+        "hint": "Yalnızca teknik/yönetici yedek yöntemi içindir — çoğu klinik yukarıdaki \"Meta ile Bağlan\" seçeneğini kullanmalıdır. Token ve gizli anahtarlar kaydedildikten sonra bir daha gösterilmez."
+      },
       "metaBusinessId": "Business ID",
       "metaWabaId": "WhatsApp Business Account ID (WABA ID)",
       "metaPhoneNumberId": "Phone Number ID",
