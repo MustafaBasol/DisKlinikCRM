@@ -85,7 +85,7 @@ type AssistantIntent =
   | 'symptom_or_complaint'
   | 'off_topic_or_smalltalk'
   | 'unknown';
-type AssistantStep =
+export type AssistantStep =
   | 'main_menu'
   | 'awaiting_name'
   | 'awaiting_service'
@@ -132,7 +132,7 @@ type WhatsAppContactPatient = {
   phone: string | null;
 };
 
-type AssistantService = {
+export type AssistantService = {
   id: string;
   name: string;
   durationMinutes: number;
@@ -157,7 +157,7 @@ type SavedServiceOption = {
   name: string;
 };
 
-type ConversationStateJson = {
+export type ConversationStateJson = {
   availableSlots?: SavedAvailableSlot[];
   lastShownSlots?: SavedAvailableSlot[];
   cancellableAppointments?: SavedAppointmentSummary[];
@@ -174,6 +174,7 @@ type ConversationStateJson = {
   pendingPatientOptions?: Array<{ id: string; firstName: string; lastName: string }> | null;
   selectedPatientId?: string | null;
   resumeAfterPatientSelection?: string | null;
+  resumeAfterChannelConsent?: string | null;
 };
 
 // ---- Helper Middlewares ----
@@ -349,6 +350,7 @@ const readConversationStateJson = (value: unknown): ConversationStateJson => {
       : undefined,
     selectedPatientId: typeof stateValue.selectedPatientId === 'string' ? stateValue.selectedPatientId : undefined,
     resumeAfterPatientSelection: typeof stateValue.resumeAfterPatientSelection === 'string' ? stateValue.resumeAfterPatientSelection : undefined,
+    resumeAfterChannelConsent: typeof stateValue.resumeAfterChannelConsent === 'string' ? stateValue.resumeAfterChannelConsent : undefined,
   };
 };
 
@@ -2405,6 +2407,76 @@ const executeAgentDecision = async (args: {
   return null;
 };
 
+// ---- Channel consent gate: flow-resume helpers ----
+
+// Steps that represent an in-progress booking/selection flow. If channel consent is
+// required while the conversation is on one of these steps, we must not discard the
+// flow — we stash it in resumeAfterChannelConsent and restore it once consent is settled.
+export const CONSENT_RESUMABLE_STEPS: AssistantStep[] = [
+  'awaiting_service',
+  'awaiting_date',
+  'awaiting_time',
+  'awaiting_name',
+  'awaiting_patient_selection',
+  'awaiting_confirmation',
+  'awaiting_general_date',
+  'awaiting_general_time',
+  'awaiting_general_practitioner',
+];
+
+export const isConsentResumableStep = (step: string | null | undefined): step is AssistantStep =>
+  Boolean(step) && CONSENT_RESUMABLE_STEPS.includes(step as AssistantStep);
+
+// Builds the message shown right after consent is accepted mid-flow. Never replays the
+// message that triggered the consent prompt (it was never processed) — instead it re-asks
+// for whatever the interrupted step was waiting on, using already-confirmed prior context.
+export const buildConsentResumeMessage = (
+  step: AssistantStep,
+  ctx: {
+    services: AssistantService[];
+    selectedAppointmentTypeName?: string | null;
+    selectedDate?: string | null;
+    stateJson: ConversationStateJson;
+  },
+): string => {
+  const prefix = 'Teşekkürler, onayınızı aldık.';
+  switch (step) {
+    case 'awaiting_service':
+      return `${prefix} ${formatServiceList(ctx.services)}`;
+    case 'awaiting_date':
+      return ctx.selectedAppointmentTypeName
+        ? `${prefix} ${ctx.selectedAppointmentTypeName} için hangi gün randevu istersiniz?`
+        : `${prefix} Lütfen randevu istediğiniz günü tekrar yazar mısınız?`;
+    case 'awaiting_time': {
+      const slots = ctx.stateJson.lastShownSlots ?? ctx.stateJson.availableSlots ?? [];
+      if (ctx.selectedDate && slots.length > 0) {
+        return `${prefix} ${formatAvailabilityMessage(ctx.selectedDate, slots)}`;
+      }
+      return `${prefix} Lütfen randevu istediğiniz saati tekrar yazar mısınız?`;
+    }
+    case 'awaiting_confirmation':
+      return `${prefix} Randevunuzu onaylıyor musunuz? Lütfen evet veya hayır yazın.`;
+    case 'awaiting_name':
+      return `${prefix} Randevu için ad soyadınızı öğrenebilir miyim?`;
+    case 'awaiting_patient_selection': {
+      const options = ctx.stateJson.pendingPatientOptions ?? [];
+      if (options.length > 0) {
+        const list = options.map((p, i) => `${i + 1}. ${p.firstName} ${p.lastName}`).join('\n');
+        return `${prefix} Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${list}\n\nLütfen numarayı girin (örneğin: 1)`;
+      }
+      return `${prefix} Randevu almak veya bilgi sormak için talebinizi yazabilirsiniz.`;
+    }
+    case 'awaiting_general_date':
+      return `${prefix} Lütfen randevu istediğiniz günü tekrar yazar mısınız?`;
+    case 'awaiting_general_time':
+      return `${prefix} Lütfen randevu istediğiniz saati tekrar yazar mısınız?`;
+    case 'awaiting_general_practitioner':
+      return `${prefix} Hangi hekimle görüşmek istersiniz?`;
+    default:
+      return CONSENT_ACCEPTED_TEXT;
+  }
+};
+
 // ---- Main Conversation Handler ----
 
 const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, clinic: NonNullable<Awaited<ReturnType<typeof getDefaultClinic>>>) => {
@@ -2593,11 +2665,26 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         conversationId: inputPhone,
         sourceMessageId: input.messageId ?? null,
       });
+      const resumeStep = isConsentResumableStep(stateJson.resumeAfterChannelConsent) ? stateJson.resumeAfterChannelConsent : null;
+      const { resumeAfterChannelConsent: _discard, ...resumedStateJson } = stateJson;
+      if (resumeStep) {
+        await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+          customerName,
+          step: resumeStep,
+          currentIntent: state?.currentIntent ?? 'book_appointment',
+          lastMessage: input.text,
+          stateJson: resumedStateJson,
+        });
+        return buildConsentResumeMessage(resumeStep, {
+          services, selectedAppointmentTypeName, selectedDate, stateJson: resumedStateJson,
+        });
+      }
       await upsertWhatsAppConversationState(clinic.id, inputPhone, {
         customerName,
         step: null,
         currentIntent: null,
         lastMessage: input.text,
+        stateJson: null,
       });
       return CONSENT_ACCEPTED_TEXT;
     }
@@ -2619,6 +2706,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
         step: null,
         currentIntent: null,
         lastMessage: input.text,
+        stateJson: null,
       });
       return CONSENT_DECLINED_TEXT;
     }
@@ -2635,8 +2723,24 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     if (consentResult.status === 'blocked_missing_legal_profile') {
       return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
     }
-    // Somehow accepted now (e.g. staff accepted on behalf) — clear step and continue
-    await upsertWhatsAppConversationState(clinic.id, inputPhone, { customerName, step: null, currentIntent: null, lastMessage: input.text });
+    // Somehow accepted now (e.g. staff accepted on behalf) — resume the interrupted flow if any
+    {
+      const resumeStep = isConsentResumableStep(stateJson.resumeAfterChannelConsent) ? stateJson.resumeAfterChannelConsent : null;
+      const { resumeAfterChannelConsent: _discard, ...resumedStateJson } = stateJson;
+      if (resumeStep) {
+        await upsertWhatsAppConversationState(clinic.id, inputPhone, {
+          customerName,
+          step: resumeStep,
+          currentIntent: state?.currentIntent ?? 'book_appointment',
+          lastMessage: input.text,
+          stateJson: resumedStateJson,
+        });
+        return buildConsentResumeMessage(resumeStep, {
+          services, selectedAppointmentTypeName, selectedDate, stateJson: resumedStateJson,
+        });
+      }
+      await upsertWhatsAppConversationState(clinic.id, inputPhone, { customerName, step: null, currentIntent: null, lastMessage: input.text, stateJson: null });
+    }
     return CONSENT_ACCEPTED_TEXT;
   }
 
@@ -2655,11 +2759,16 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     return MISSING_LEGAL_PROFILE_BLOCK_TEXT;
   }
   if (consentGateResult.status === 'needs_consent' || consentGateResult.status === 'declined') {
+    const isResumable = isConsentResumableStep(currentStep);
     await upsertWhatsAppConversationState(clinic.id, inputPhone, {
       customerName,
       step: 'awaiting_channel_consent',
-      currentIntent: null,
+      currentIntent: isResumable ? (state?.currentIntent ?? null) : null,
       lastMessage: input.text,
+      stateJson: {
+        ...stateJson,
+        resumeAfterChannelConsent: isResumable ? currentStep : null,
+      },
     });
     return consentGateResult.promptText;
   }
