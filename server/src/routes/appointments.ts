@@ -308,7 +308,12 @@ router.post('/appointments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
   const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
   const validation = appointmentSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+  if (!validation.success) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      issues: validation.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })),
+    });
+  }
 
   const { patientId, practitionerId, appointmentTypeId, startTime, endTime } = validation.data;
 
@@ -401,7 +406,12 @@ router.put('/appointments/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
   const { normalizedRole, id: userId } = req.user!;
 
   const validation = appointmentUpdateSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+  if (!validation.success) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      issues: validation.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })),
+    });
+  }
 
   try {
     const accessibleIds = await getAccessibleClinicIds(req.user!);

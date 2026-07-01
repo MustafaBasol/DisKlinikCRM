@@ -15,6 +15,7 @@ import {
   userService,
 } from '../services/api';
 import { formatTimeInTimeZone, getDateKeyInTimeZone } from '../utils/dateTime';
+import { getErrorMessage } from '../utils/errors';
 
 export interface AppointmentFormPrefill {
   patientId?: string;
@@ -126,7 +127,9 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     [types, formData.appointmentTypeId],
   );
 
-  const canFetchSlots = Boolean(formData.appointmentTypeId && formData.practitionerId && formData.date);
+  const canFetchSlots = Boolean(
+    formData.appointmentTypeId && formData.practitionerId && formData.date && effectiveClinicId,
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -250,6 +253,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
       doctorId: formData.practitionerId,
       serviceId: formData.appointmentTypeId,
       date: formData.date,
+      clinicId: effectiveClinicId,
       excludeAppointmentId: isEditMode ? initialData.id : undefined,
     })
       .then(res => {
@@ -270,7 +274,7 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
     return () => {
       isCurrent = false;
     };
-  }, [canFetchSlots, formData.appointmentTypeId, formData.practitionerId, formData.date, initialData?.id, isEditMode, t]);
+  }, [canFetchSlots, formData.appointmentTypeId, formData.practitionerId, formData.date, effectiveClinicId, initialData?.id, isEditMode, t]);
 
   const updateSlotDependency = (patch: Partial<typeof formData>) => {
     setSelectedSlot(null);
@@ -336,13 +340,17 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ onClose, onSuccess, i
         }
       }
       onSuccess();
-    } catch (err: any) {
-      if (err.response?.data?.code === 'APPOINTMENT_OUTSIDE_AVAILABILITY') {
+    } catch (err: unknown) {
+      const response = (err as { response?: { status?: number; data?: { code?: string } } })?.response;
+      if (response?.data?.code === 'APPOINTMENT_OUTSIDE_AVAILABILITY') {
         setAvailabilityWarning(true);
-      } else if (err.response?.status === 409) {
+      } else if (response?.status === 409) {
         setError(t('appointments:form.overlapError'));
       } else {
-        setError(err.response?.data?.error || t('common:errorGeneric'));
+        const fallback = isEditMode
+          ? t('appointments:form.updateFailedGeneric')
+          : t('appointments:form.createFailedGeneric');
+        setError(getErrorMessage(err, fallback));
       }
     } finally {
       setLoading(false);

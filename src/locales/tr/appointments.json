@@ -65,6 +65,8 @@
     "notes": "Notlar",
     "basePrice": "Temel fiyat",
     "overlapError": "Çakışma tespit edildi! Hekim bu saatte meşgul.",
+    "updateFailedGeneric": "Randevu güncellenemedi. Lütfen bilgileri kontrol edip tekrar deneyin.",
+    "createFailedGeneric": "Randevu oluşturulamadı. Lütfen bilgileri kontrol edip tekrar deneyin.",
     "durationInfo": "{{minutes}} dakika",
     "helperText": "Hasta, hizmet ve hekim seçerek uygun randevu saatlerini görüntüleyin.",
     "availableSlots": "Uygun Saatler",

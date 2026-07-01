@@ -141,7 +141,7 @@ export const treatmentPackageService = {
 
 export const appointmentService = {
   getAll: (params?: any) => api.get('/appointments', { params }),
-  getAvailableSlots: (params: { doctorId: string; serviceId: string; date: string; excludeAppointmentId?: string }) =>
+  getAvailableSlots: (params: { doctorId: string; serviceId: string; date: string; clinicId?: string; excludeAppointmentId?: string }) =>
     api.get('/appointments/available-slots', { params }),
   getById: (id: string) => api.get(`/appointments/${id}`),
   create: (data: any) => api.post('/appointments', data),

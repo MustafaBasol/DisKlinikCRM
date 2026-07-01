@@ -65,6 +65,8 @@
     "endTime": "Endzeit",
     "notes": "Notizen",
     "overlapError": "Überschneidung erkannt! Der Behandler ist zu dieser Zeit beschäftigt.",
+    "updateFailedGeneric": "Der Termin konnte nicht aktualisiert werden. Bitte überprüfen Sie die Angaben und versuchen Sie es erneut.",
+    "createFailedGeneric": "Der Termin konnte nicht erstellt werden. Bitte überprüfen Sie die Angaben und versuchen Sie es erneut.",
     "durationInfo": "{{minutes}} Minuten",
     "helperText": "Wählen Sie Patient, Leistung und Behandler aus, um verfügbare Terminzeiten anzuzeigen.",
     "availableSlots": "Verfügbare Zeiten",
