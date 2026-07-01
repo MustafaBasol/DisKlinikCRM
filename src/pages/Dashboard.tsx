@@ -437,15 +437,6 @@ const Dashboard: React.FC = () => {
     });
   }
 
-  const getAlertIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Clock': return <Clock size={18} />;
-      case 'UserMinus': return <UserMinus size={18} />;
-      case 'DollarSign': return <DollarSign size={18} />;
-      default: return <AlertCircle size={18} />;
-    }
-  };
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header */}
@@ -494,39 +485,11 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Alerts + operational cards — "Unpaid Balances" (when pending) fills slot 1,
-          the fixed operational cards always fill the remaining slots so this row is
-          never left with a large empty area. */}
-      {(data?.alerts?.length > 0 || operationalCards.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {data?.alerts?.map((alert: any, idx: number) => (
-            <Link
-              key={`alert-${idx}`}
-              to={alert.link}
-              className={`p-4 rounded-2xl flex items-center gap-4 border transition-all hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 cursor-pointer ${
-                alert.type === 'danger' ? 'bg-red-50 border-red-100 text-red-700' :
-                alert.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-700' :
-                'bg-blue-50 border-blue-100 text-blue-700'
-              }`}
-              title={t(`dashboard:alerts.${alert.title}`)}
-              aria-label={t(`dashboard:alerts.${alert.title}`)}
-            >
-              <div className={`p-2 rounded-xl ${
-                alert.type === 'danger' ? 'bg-red-100' :
-                alert.type === 'warning' ? 'bg-amber-100' :
-                'bg-blue-100'
-              }`}>
-                {getAlertIcon(alert.icon)}
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-bold uppercase tracking-wider opacity-70">{t(`dashboard:alerts.${alert.title}`)}</p>
-                <p className="text-lg font-bold">
-                  {alert.count !== undefined ? alert.count : formatCurrency(alert.value || 0)}
-                </p>
-              </div>
-              <ChevronRight size={20} className="opacity-50" />
-            </Link>
-          ))}
+      {/* Operational action row — "Unpaid Balances" is intentionally not shown here
+          since it duplicates the "Pending Collections" KPI card below; this row is
+          purely the 3 fixed operational cards. */}
+      {operationalCards.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {operationalCards.map((card) => (
             <Link
               key={card.key}
