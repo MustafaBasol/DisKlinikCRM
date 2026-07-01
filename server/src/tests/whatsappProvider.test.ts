@@ -1110,7 +1110,7 @@ async function sprintSixteenBTests() {
   console.log(`Sprint 16B tests — ${passed} passed, ${failed} failed`);
 }
 
-main().then(() => extendedTests()).then(() => sprintSixteenBTests()).then(() => connectionLifecycleTests()).then(() => sprintSeventeenBTests()).then(() => connectionValidationAndTestPersistenceTests()).then(() => {
+main().then(() => extendedTests()).then(() => sprintSixteenBTests()).then(() => connectionLifecycleTests()).then(() => sprintSeventeenBTests()).then(() => connectionValidationAndTestPersistenceTests()).then(() => onboardingReadinessChecklistTests()).then(() => {
   console.log(`\n${'─'.repeat(50)}`);
   console.log('All tests complete');
 }).catch((err) => {
@@ -1798,4 +1798,145 @@ async function connectionValidationAndTestPersistenceTests() {
 
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`Phase 3 validation + test-persistence tests complete`);
+}
+
+// ─── Phase 5 — Onboarding readiness checklist endpoint ───────────────────────
+// Mirrors GET /organization/whatsapp-connections/:id/readiness in
+// organizationWhatsApp.ts. Inline replica, same convention as the rest of
+// this file — no direct import of the Express route module.
+async function onboardingReadinessChecklistTests() {
+  section('Phase 5 — readiness endpoint: org scoping');
+
+  await test('connection from another organization is not found (404 path)', () => {
+    const connections = [
+      { id: 'conn-1', organizationId: 'org-a' },
+      { id: 'conn-2', organizationId: 'org-b' },
+    ];
+    function findScoped(id: string, organizationId: string) {
+      return connections.find((c) => c.id === id && c.organizationId === organizationId) ?? null;
+    }
+    assert.equal(findScoped('conn-1', 'org-b'), null);
+    assert.equal(findScoped('conn-1', 'org-a')?.id, 'conn-1');
+  });
+
+  await test('canViewWhatsAppStatus gates access: CLINIC_MANAGER allowed, ASSISTANT blocked', () => {
+    const cm = { role: 'CLINIC_MANAGER', canAccessAllClinics: false };
+    const assistantRole = { role: 'ASSISTANT', canAccessAllClinics: false };
+    assert.equal(canViewWhatsAppStatus(cm), true);
+    assert.equal(canViewWhatsAppStatus(assistantRole), false);
+  });
+
+  section('Phase 5 — readiness aggregation shape');
+
+  const TEMPLATE_READINESS_PURPOSES = ['appointment_reminder', 'no_show_recovery', 'post_treatment_followup'] as const;
+
+  function buildReadinessResponse(
+    clinics: Array<{ id: string; clinicId: string; name: string }>,
+    legalProfiles: Array<{ clinicId: string; isPublished: boolean }>,
+    serviceCounts: Array<{ clinicId: string; count: number }>,
+    approvedTemplatePurposes: string[],
+  ) {
+    if (clinics.length === 0) {
+      return {
+        clinics: [],
+        templates: Object.fromEntries(TEMPLATE_READINESS_PURPOSES.map((p) => [p, false])),
+      };
+    }
+    const publishedByClinicId = new Map(legalProfiles.map((p) => [p.clinicId, p.isPublished]));
+    const serviceCountByClinicId = new Map(serviceCounts.map((s) => [s.clinicId, s.count]));
+    const approvedPurposes = new Set(approvedTemplatePurposes);
+    return {
+      clinics: clinics.map((c) => ({
+        id: c.id,
+        name: c.name,
+        legalProfilePublished: publishedByClinicId.get(c.clinicId) ?? false,
+        activeServiceCount: serviceCountByClinicId.get(c.clinicId) ?? 0,
+      })),
+      templates: Object.fromEntries(TEMPLATE_READINESS_PURPOSES.map((p) => [p, approvedPurposes.has(p)])),
+    };
+  }
+
+  await test('no linked clinics → empty clinics array, all template purposes false', () => {
+    const result = buildReadinessResponse([], [], [], []);
+    assert.deepEqual(result.clinics, []);
+    assert.equal(result.templates.appointment_reminder, false);
+    assert.equal(result.templates.no_show_recovery, false);
+    assert.equal(result.templates.post_treatment_followup, false);
+  });
+
+  await test('clinic with published legal profile + active services → both ready', () => {
+    const result = buildReadinessResponse(
+      [{ id: 'clinic-1', clinicId: 'clinic-1', name: 'Main Clinic' }],
+      [{ clinicId: 'clinic-1', isPublished: true }],
+      [{ clinicId: 'clinic-1', count: 3 }],
+      [],
+    );
+    assert.equal(result.clinics[0].legalProfilePublished, true);
+    assert.equal(result.clinics[0].activeServiceCount, 3);
+  });
+
+  await test('clinic with no legal profile record → legalProfilePublished defaults to false', () => {
+    const result = buildReadinessResponse(
+      [{ id: 'clinic-1', clinicId: 'clinic-1', name: 'Main Clinic' }],
+      [], // no ClinicLegalProfile row at all
+      [],
+      [],
+    );
+    assert.equal(result.clinics[0].legalProfilePublished, false);
+    assert.equal(result.clinics[0].activeServiceCount, 0);
+  });
+
+  await test('two linked clinics resolve independently', () => {
+    const result = buildReadinessResponse(
+      [
+        { id: 'clinic-1', clinicId: 'clinic-1', name: 'Branch A' },
+        { id: 'clinic-2', clinicId: 'clinic-2', name: 'Branch B' },
+      ],
+      [{ clinicId: 'clinic-1', isPublished: true }],
+      [{ clinicId: 'clinic-2', count: 5 }],
+      [],
+    );
+    const a = result.clinics.find((c) => c.id === 'clinic-1')!;
+    const b = result.clinics.find((c) => c.id === 'clinic-2')!;
+    assert.equal(a.legalProfilePublished, true);
+    assert.equal(a.activeServiceCount, 0);
+    assert.equal(b.legalProfilePublished, false);
+    assert.equal(b.activeServiceCount, 5);
+  });
+
+  await test('approved template purposes map to true, others stay false', () => {
+    const result = buildReadinessResponse(
+      [{ id: 'clinic-1', clinicId: 'clinic-1', name: 'Main Clinic' }],
+      [],
+      [],
+      ['appointment_reminder', 'post_treatment_followup'],
+    );
+    assert.equal(result.templates.appointment_reminder, true);
+    assert.equal(result.templates.no_show_recovery, false);
+    assert.equal(result.templates.post_treatment_followup, true);
+  });
+
+  section('Phase 5 — readiness response never includes secret fields');
+
+  await test('response shape contains only safe checklist fields', () => {
+    const response = buildReadinessResponse(
+      [{ id: 'clinic-1', clinicId: 'clinic-1', name: 'Main Clinic' }],
+      [{ clinicId: 'clinic-1', isPublished: true }],
+      [{ clinicId: 'clinic-1', count: 2 }],
+      ['appointment_reminder'],
+    );
+    const serialized = JSON.stringify(response);
+    for (const secretField of [
+      'evolutionApiKeyEncrypted',
+      'metaAccessTokenEncrypted',
+      'metaWebhookVerifyToken',
+      'metaWebhookSecret',
+      'webhookSecret',
+    ]) {
+      assert.ok(!serialized.includes(secretField), `${secretField} must not appear in readiness response`);
+    }
+  });
+
+  console.log(`\n${'─'.repeat(50)}`);
+  console.log(`Phase 5 onboarding readiness checklist tests complete`);
 }

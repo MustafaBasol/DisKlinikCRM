@@ -461,6 +461,7 @@ export const whatsappConnectionService = {
   update: (id: string, data: Record<string, unknown>) =>
     api.put(`/organization/whatsapp-connections/${id}`, data),
   test: (id: string) => api.post(`/organization/whatsapp-connections/${id}/test`),
+  getReadiness: (id: string) => api.get(`/organization/whatsapp-connections/${id}/readiness`),
   getQr: (id: string) => api.get(`/organization/whatsapp-connections/${id}/qr`),
   disconnect: (id: string) => api.post(`/organization/whatsapp-connections/${id}/disconnect`),
   setStatus: (id: string, data: { isActive: boolean; status?: string }) =>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -20,6 +20,7 @@ import {
   Power,
   PowerOff,
   Unplug,
+  Info,
 } from 'lucide-react';
 import { whatsappConnectionService, organizationBranchService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -53,6 +54,8 @@ interface WhatsAppConnection {
   metaAppId?: string | null;
   metaTokenStatus?: string | null;    // valid | expiring | expired | unknown
   metaTokenExpiresAt?: string | null; // ISO string from API
+  lastConnectedAt?: string | null;
+  lastError?: string | null;
   createdAt: string;
   isLegacy?: boolean; // Virtual entry: not yet saved to DB
   clinics?: Array<{
@@ -66,6 +69,22 @@ interface WhatsAppConnection {
 interface ClinicOption {
   id: string;
   name: string;
+}
+
+interface TemplatePurposeReadiness {
+  appointment_reminder: boolean;
+  no_show_recovery: boolean;
+  post_treatment_followup: boolean;
+}
+
+interface ConnectionReadiness {
+  clinics: Array<{
+    id: string;
+    name: string;
+    legalProfilePublished: boolean;
+    activeServiceCount: number;
+  }>;
+  templates: TemplatePurposeReadiness;
 }
 
 interface ConnectionFormData {
@@ -122,6 +141,123 @@ const STATUS_COLOR: Record<string, string> = {
   error: 'text-red-600 dark:text-red-400',
 };
 
+// ── Meta readiness checklist ───────────────────────────────────────────────────
+
+type ChecklistRowState = 'ready' | 'warning' | 'info';
+
+const ROW_ICON: Record<ChecklistRowState, JSX.Element> = {
+  ready: <CheckCircle2 size={13} className="text-green-600 dark:text-green-400 shrink-0 mt-0.5" />,
+  warning: <AlertTriangle size={13} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />,
+  info: <Info size={13} className="text-blue-500 dark:text-blue-400 shrink-0 mt-0.5" />,
+};
+
+const ROW_TEXT: Record<ChecklistRowState, string> = {
+  ready: 'text-gray-600 dark:text-gray-300',
+  warning: 'text-amber-700 dark:text-amber-300',
+  info: 'text-gray-500 dark:text-gray-400',
+};
+
+function ChecklistRow({ state, children }: { state: ChecklistRowState; children: ReactNode }) {
+  return (
+    <li className="flex items-start gap-1.5">
+      {ROW_ICON[state]}
+      <span className={ROW_TEXT[state]}>{children}</span>
+    </li>
+  );
+}
+
+function MetaReadinessChecklist({
+  conn,
+  readiness,
+  t,
+  formatDate,
+}: {
+  conn: WhatsAppConnection;
+  readiness: ConnectionReadiness | 'loading' | 'error' | undefined;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+  formatDate: (d: string) => string;
+}) {
+  const branchCount = conn.clinics?.length ?? 0;
+
+  const templatePurposes: Array<{ key: keyof TemplatePurposeReadiness; label: string }> = [
+    { key: 'appointment_reminder', label: t('whatsapp:connections.readiness.templates.appointmentReminder') },
+    { key: 'no_show_recovery', label: t('whatsapp:connections.readiness.templates.noShowRecovery') },
+    { key: 'post_treatment_followup', label: t('whatsapp:connections.readiness.templates.postTreatmentFollowup') },
+  ];
+
+  return (
+    <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
+      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+        {t('whatsapp:connections.readiness.title')}
+      </p>
+      <ul className="space-y-1.5 text-xs">
+        {/* 1. Connection status */}
+        <ChecklistRow state={conn.status === 'connected' ? 'ready' : 'warning'}>
+          {conn.status === 'connected'
+            ? t('whatsapp:connections.readiness.connection.connected')
+            : t('whatsapp:connections.readiness.connection.notConnected')}
+          {conn.lastConnectedAt && (
+            <> · {t('whatsapp:connections.readiness.connection.lastConnected', { date: formatDate(conn.lastConnectedAt) })}</>
+          )}
+          {conn.lastError && (
+            <> · {t('whatsapp:connections.readiness.connection.lastError', { error: conn.lastError })}</>
+          )}
+        </ChecklistRow>
+
+        {/* 2. Branch assignment */}
+        <ChecklistRow state={branchCount > 0 ? 'ready' : 'warning'}>
+          {branchCount > 0
+            ? t('whatsapp:connections.readiness.branch.ready', { count: branchCount })
+            : t('whatsapp:connections.readiness.branch.warning')}
+        </ChecklistRow>
+
+        {/* 3 & 4. Per-clinic KVKK + active services */}
+        {readiness === 'loading' && (
+          <ChecklistRow state="info">{t('whatsapp:connections.readiness.loading')}</ChecklistRow>
+        )}
+        {readiness === 'error' && (
+          <ChecklistRow state="info">{t('whatsapp:connections.readiness.loadFailed')}</ChecklistRow>
+        )}
+        {readiness && readiness !== 'loading' && readiness !== 'error' && (
+          <>
+            {readiness.clinics.map((c) => (
+              <ChecklistRow key={`${c.id}-privacy`} state={c.legalProfilePublished ? 'ready' : 'warning'}>
+                {c.legalProfilePublished
+                  ? t('whatsapp:connections.readiness.privacy.ready', { clinic: c.name })
+                  : t('whatsapp:connections.readiness.privacy.warning', { clinic: c.name })}
+              </ChecklistRow>
+            ))}
+            {readiness.clinics.map((c) => (
+              <ChecklistRow key={`${c.id}-services`} state={c.activeServiceCount > 0 ? 'ready' : 'warning'}>
+                {c.activeServiceCount > 0
+                  ? t('whatsapp:connections.readiness.services.ready', { clinic: c.name, count: c.activeServiceCount })
+                  : t('whatsapp:connections.readiness.services.warning', { clinic: c.name })}
+              </ChecklistRow>
+            ))}
+
+            {/* 5. Template readiness */}
+            <ChecklistRow state="info">
+              <span className="block">{t('whatsapp:connections.readiness.templates.info')}</span>
+              <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                {templatePurposes.map(({ key, label }) => (
+                  <span key={key} className={readiness.templates[key] ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}>
+                    {label}: {readiness.templates[key]
+                      ? t('whatsapp:connections.readiness.templates.approved')
+                      : t('whatsapp:connections.readiness.templates.missing')}
+                  </span>
+                ))}
+              </span>
+            </ChecklistRow>
+          </>
+        )}
+
+        {/* 6. Billing / charges explanation */}
+        <ChecklistRow state="info">{t('whatsapp:connections.readiness.billing.notice')}</ChecklistRow>
+      </ul>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function WhatsAppConnections() {
@@ -157,6 +293,7 @@ export default function WhatsAppConnections() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteConn, setConfirmDeleteConn] = useState<WhatsAppConnection | null>(null);
   const [showAdvancedMetaSetup, setShowAdvancedMetaSetup] = useState(false);
+  const [readinessById, setReadinessById] = useState<Record<string, ConnectionReadiness | 'loading' | 'error'>>({});
 
   const canManage = canManageWhatsAppConnections(user);
   const canView = canViewWhatsAppStatus(user);
@@ -188,6 +325,21 @@ export default function WhatsAppConnections() {
     fetchConnections();
     fetchClinics();
   }, [fetchConnections, fetchClinics]);
+
+  // Fetch the readiness checklist for each real (non-legacy) Meta Cloud API
+  // connection once it appears in the list.
+  useEffect(() => {
+    connections
+      .filter((c) => !c.isLegacy && c.provider === 'meta_cloud_api' && !readinessById[c.id])
+      .forEach((c) => {
+        setReadinessById((prev) => ({ ...prev, [c.id]: 'loading' }));
+        whatsappConnectionService
+          .getReadiness(c.id)
+          .then((res) => setReadinessById((prev) => ({ ...prev, [c.id]: res.data })))
+          .catch(() => setReadinessById((prev) => ({ ...prev, [c.id]: 'error' })));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connections]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -957,6 +1109,16 @@ export default function WhatsAppConnections() {
                       <dd>{formatDate(conn.createdAt)}</dd>
                     </dl>
                   </div>
+                )}
+
+                {/* Meta onboarding readiness checklist — always visible for Meta connections */}
+                {conn.provider === 'meta_cloud_api' && (
+                  <MetaReadinessChecklist
+                    conn={conn}
+                    readiness={readinessById[conn.id]}
+                    t={t}
+                    formatDate={formatDate}
+                  />
                 )}
               </div>
             );
