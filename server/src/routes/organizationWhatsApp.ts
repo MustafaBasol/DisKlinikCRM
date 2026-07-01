@@ -469,6 +469,88 @@ router.post(
   },
 );
 
+// GET /api/organization/whatsapp-connections/:id/readiness
+// Read-only onboarding checklist data for a single connection: per-linked-clinic
+// privacy/KVKK publish status, active bookable service counts, and whether
+// approved Meta templates exist for key automation purposes.
+// Returns only safe, non-secret data (no tokens, no webhook secrets).
+const TEMPLATE_READINESS_PURPOSES = [
+  'appointment_reminder',
+  'no_show_recovery',
+  'post_treatment_followup',
+] as const;
+
+router.get(
+  '/organization/whatsapp-connections/:id/readiness',
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']),
+  async (req: AuthRequest, res: Response) => {
+    if (!canViewWhatsAppStatus(req.user!)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    const organizationId = req.user!.organizationId;
+    const id = getParam(req, 'id');
+
+    try {
+      const connection = await prisma.whatsAppConnection.findFirst({
+        where: { id, organizationId },
+        include: {
+          clinics: { include: { clinic: { select: { id: true, name: true } } } },
+        },
+      });
+      if (!connection) return res.status(404).json({ error: 'Connection not found' });
+
+      const clinicIds = connection.clinics.map((c) => c.clinicId);
+
+      if (clinicIds.length === 0) {
+        return res.json({
+          clinics: [],
+          templates: Object.fromEntries(TEMPLATE_READINESS_PURPOSES.map((p) => [p, false])),
+        });
+      }
+
+      const [legalProfiles, serviceCounts, approvedTemplates] = await Promise.all([
+        prisma.clinicLegalProfile.findMany({
+          where: { clinicId: { in: clinicIds } },
+          select: { clinicId: true, isPublished: true },
+        }),
+        prisma.appointmentType.groupBy({
+          by: ['clinicId'],
+          where: { clinicId: { in: clinicIds }, isActive: true, isService: true },
+          _count: { _all: true },
+        }),
+        prisma.messageTemplate.findMany({
+          where: {
+            clinicId: { in: clinicIds },
+            channel: 'whatsapp',
+            isActive: true,
+            metaTemplateStatus: 'approved',
+            purpose: { in: [...TEMPLATE_READINESS_PURPOSES] },
+          },
+          select: { purpose: true },
+        }),
+      ]);
+
+      const publishedByClinicId = new Map(legalProfiles.map((p) => [p.clinicId, p.isPublished]));
+      const serviceCountByClinicId = new Map(serviceCounts.map((s) => [s.clinicId, s._count._all]));
+      const approvedPurposes = new Set(approvedTemplates.map((t) => t.purpose));
+
+      res.json({
+        clinics: connection.clinics.map((c) => ({
+          id: c.clinic.id,
+          name: c.clinic.name,
+          legalProfilePublished: publishedByClinicId.get(c.clinicId) ?? false,
+          activeServiceCount: serviceCountByClinicId.get(c.clinicId) ?? 0,
+        })),
+        templates: Object.fromEntries(
+          TEMPLATE_READINESS_PURPOSES.map((p) => [p, approvedPurposes.has(p)]),
+        ),
+      });
+    } catch {
+      res.status(500).json({ error: 'Failed to fetch connection readiness' });
+    }
+  },
+);
+
 // GET /api/organization/whatsapp-connections/:id/qr
 router.get(
   '/organization/whatsapp-connections/:id/qr',

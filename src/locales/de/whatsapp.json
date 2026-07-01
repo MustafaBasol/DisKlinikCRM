@@ -208,6 +208,40 @@
       "metaRejected": "Meta-Verbindung wurde abgelehnt: {{error}}",
       "metaMissingCode": "Meta-Autorisierung konnte nicht abgeschlossen werden: Code wurde nicht empfangen.",
       "metaCreateFailed": "Meta-Verbindung konnte nicht erstellt werden."
+    },
+    "readiness": {
+      "title": "Meta-Bereitschafts-Checkliste",
+      "loading": "Bereitschaft wird geprueft...",
+      "loadFailed": "Checkliste konnte nicht geladen werden.",
+      "connection": {
+        "connected": "Verbunden",
+        "notConnected": "Nicht verbunden",
+        "lastConnected": "Zuletzt verbunden: {{date}}",
+        "lastError": "Letzter Fehler: {{error}}"
+      },
+      "branch": {
+        "ready": "{{count}} Filiale(n) zugewiesen",
+        "warning": "Diese Verbindung ist keiner Filiale zugewiesen. Sie kann nicht zum Versenden von Nachrichten verwendet werden."
+      },
+      "privacy": {
+        "ready": "{{clinic}}: Datenschutzhinweis veroeffentlicht",
+        "warning": "{{clinic}}: Veroeffentlichen Sie den Datenschutzhinweis der Klinik, bevor Sie ueber WhatsApp Patientendaten erfassen."
+      },
+      "services": {
+        "ready": "{{clinic}}: Aktive Leistungen bereit: {{count}} Leistung(en).",
+        "warning": "{{clinic}}: Diese Klinik hat keine aktiven buchbaren Leistungen. Der Assistent kann keine Terminoptionen anbieten."
+      },
+      "templates": {
+        "info": "Fuer automatisierte Erinnerungen und Nachfassnachrichten sind genehmigte Meta-Vorlagen erforderlich.",
+        "appointmentReminder": "Terminerinnerung",
+        "noShowRecovery": "Nichterscheinen-Nachverfolgung",
+        "postTreatmentFollowup": "Nachsorge",
+        "approved": "Genehmigt",
+        "missing": "Noch nicht genehmigt"
+      },
+      "billing": {
+        "notice": "WhatsApp-Nachrichten- und Vorlagengebuehren koennen von Meta ueber die Zahlungsmethode des eigenen Meta Business/WhatsApp Business-Kontos der verbundenen Klinik berechnet werden. NoraMedi zeigt auf diesem Bildschirm keine Meta-Preise an."
+      }
     }
   }
 }

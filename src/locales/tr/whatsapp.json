@@ -208,6 +208,40 @@
       "metaRejected": "Meta bağlantısı reddedildi: {{error}}",
       "metaMissingCode": "Meta yetkilendirmesi tamamlanamadı: kod alınamadı.",
       "metaCreateFailed": "Meta bağlantısı oluşturulamadı."
+    },
+    "readiness": {
+      "title": "Meta Hazırlık Kontrol Listesi",
+      "loading": "Hazırlık durumu kontrol ediliyor...",
+      "loadFailed": "Hazırlık kontrol listesi yüklenemedi.",
+      "connection": {
+        "connected": "Bağlı",
+        "notConnected": "Bağlı değil",
+        "lastConnected": "Son bağlantı: {{date}}",
+        "lastError": "Son hata: {{error}}"
+      },
+      "branch": {
+        "ready": "{{count}} şubeye atanmış",
+        "warning": "Bu bağlantı hiçbir şubeye atanmamış. Mesaj gönderiminde kullanılamaz."
+      },
+      "privacy": {
+        "ready": "{{clinic}}: KVKK/aydınlatma metni yayınlandı",
+        "warning": "{{clinic}}: WhatsApp üzerinden hasta bilgisi toplamadan önce klinik KVKK/aydınlatma metni yayınlanmalıdır."
+      },
+      "services": {
+        "ready": "{{clinic}}: Aktif hizmetler hazır: {{count}} hizmet.",
+        "warning": "{{clinic}}: Bu klinikte randevuya açık aktif hizmet bulunmuyor. Asistan randevu seçenekleri sunamaz."
+      },
+      "templates": {
+        "info": "Otomatik hatırlatma ve takip mesajları için onaylı Meta şablonları gerekir.",
+        "appointmentReminder": "Randevu hatırlatma",
+        "noShowRecovery": "Gelmeyen hasta takibi",
+        "postTreatmentFollowup": "Tedavi sonrası takip",
+        "approved": "Onaylı",
+        "missing": "Henüz onaylı değil"
+      },
+      "billing": {
+        "notice": "WhatsApp mesaj ve şablon ücretleri, bağlı kliniğin kendi Meta Business/WhatsApp Business hesabındaki ödeme yöntemi üzerinden Meta tarafından ücretlendirilebilir. NoraMedi bu ekranda fiyat göstermez."
+      }
     }
   }
 }

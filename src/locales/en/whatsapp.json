@@ -208,6 +208,40 @@
       "metaRejected": "Meta connection was rejected: {{error}}",
       "metaMissingCode": "Meta authorization could not be completed: code was not received.",
       "metaCreateFailed": "Meta connection could not be created."
+    },
+    "readiness": {
+      "title": "Meta Readiness Checklist",
+      "loading": "Checking readiness...",
+      "loadFailed": "Readiness checklist could not be loaded.",
+      "connection": {
+        "connected": "Connected",
+        "notConnected": "Not connected",
+        "lastConnected": "Last connected: {{date}}",
+        "lastError": "Last error: {{error}}"
+      },
+      "branch": {
+        "ready": "Assigned to {{count}} branch(es)",
+        "warning": "This connection is not assigned to any branch. It cannot be used for messaging."
+      },
+      "privacy": {
+        "ready": "{{clinic}}: privacy notice published",
+        "warning": "{{clinic}}: publish the clinic privacy notice before collecting patient information through WhatsApp."
+      },
+      "services": {
+        "ready": "{{clinic}}: active services ready: {{count}} service(s).",
+        "warning": "{{clinic}}: this clinic has no active bookable services. The assistant cannot offer appointment options."
+      },
+      "templates": {
+        "info": "Approved Meta templates are required for automated reminders and follow-up messages.",
+        "appointmentReminder": "Appointment reminder",
+        "noShowRecovery": "No-show recovery",
+        "postTreatmentFollowup": "Post-treatment follow-up",
+        "approved": "Approved",
+        "missing": "Not approved yet"
+      },
+      "billing": {
+        "notice": "WhatsApp message and template charges may be billed by Meta through the connected clinic's own Meta Business/WhatsApp Business payment method. NoraMedi does not display Meta pricing on this screen."
+      }
     }
   }
 }

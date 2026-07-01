@@ -208,6 +208,40 @@
       "metaRejected": "Connexion Meta refusée : {{error}}",
       "metaMissingCode": "L'autorisation Meta n'a pas pu être terminée : code non reçu.",
       "metaCreateFailed": "La connexion Meta n'a pas pu être créée."
+    },
+    "readiness": {
+      "title": "Liste de contrôle Meta",
+      "loading": "Vérification de l'état de préparation...",
+      "loadFailed": "La liste de contrôle n'a pas pu être chargée.",
+      "connection": {
+        "connected": "Connecté",
+        "notConnected": "Non connecté",
+        "lastConnected": "Dernière connexion : {{date}}",
+        "lastError": "Dernière erreur : {{error}}"
+      },
+      "branch": {
+        "ready": "Assignée à {{count}} branche(s)",
+        "warning": "Cette connexion n'est assignée à aucune branche. Elle ne peut pas être utilisée pour l'envoi de messages."
+      },
+      "privacy": {
+        "ready": "{{clinic}} : avis de confidentialité publié",
+        "warning": "{{clinic}} : publiez l'avis de confidentialité de la clinique avant de collecter des informations patient via WhatsApp."
+      },
+      "services": {
+        "ready": "{{clinic}} : services actifs prêts : {{count}} service(s).",
+        "warning": "{{clinic}} : cette clinique n'a aucun service actif réservable. L'assistant ne peut pas proposer de créneaux de rendez-vous."
+      },
+      "templates": {
+        "info": "Des modèles Meta approuvés sont nécessaires pour les rappels et messages de suivi automatisés.",
+        "appointmentReminder": "Rappel de rendez-vous",
+        "noShowRecovery": "Relance des absences",
+        "postTreatmentFollowup": "Suivi post-traitement",
+        "approved": "Approuvé",
+        "missing": "Pas encore approuvé"
+      },
+      "billing": {
+        "notice": "Les frais de messages et de modèles WhatsApp peuvent être facturés par Meta via le moyen de paiement du compte Meta Business/WhatsApp Business de la clinique connectée. NoraMedi n'affiche pas les tarifs Meta sur cet écran."
+      }
     }
   }
 }
