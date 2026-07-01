@@ -1,0 +1,73 @@
+{
+  "nav": "SMS",
+  "title": "SMS-Zusatzmodul",
+  "subtitle": "Versenden Sie Termin- und Patienten-SMS über das SMS-Paket Ihrer Klinik.",
+  "errors": {
+    "loadFailed": "SMS-Einstellungen konnten nicht geladen werden."
+  },
+  "notifications": {
+    "saved": "SMS-Einstellungen gespeichert.",
+    "saveFailed": "SMS-Einstellungen konnten nicht gespeichert werden."
+  },
+  "addon": {
+    "active": "SMS-Zusatzmodul ist aktiv",
+    "viaPlan": "in Ihrem Tarif enthalten",
+    "inactive": "SMS-Zusatzmodul ist nicht aktiv",
+    "contactSales": "Der SMS-Versand ist ein optionales, kostenpflichtiges Zusatzmodul. Wenden Sie sich an Ihren Plattform-Administrator, um es für diese Klinik zu aktivieren."
+  },
+  "quota": {
+    "title": "Monatliche Nutzung ({{period}})",
+    "usage": "{{used}} / {{total}} SMS",
+    "remaining": "{{count}} SMS in diesem Monat verbleibend",
+    "exhausted": "Das monatliche Kontingent ist aufgebraucht — der SMS-Versand ist bis zum nächsten Monat blockiert."
+  },
+  "providers": {
+    "title": "Anbieter-Einstellungen",
+    "subtitle": "Türkische Nummern werden an den Türkei-Anbieter geleitet, europäische Nummern an den Europa-Anbieter. Andere Regionen werden nicht unterstützt.",
+    "turkey": "Türkei-Anbieter",
+    "europe": "Europa-Anbieter",
+    "none": "Nicht ausgewählt",
+    "configured": "Anbieter bereit",
+    "notConfigured": "Kein Anbieter konfiguriert — der Versand in diese Region schlägt fehl",
+    "senderName": "Absendername",
+    "senderNameHint": "Alphanumerische Absenderkennung, die Empfängern angezeigt wird, sofern der Anbieter dies unterstützt.",
+    "names": {
+      "mock_turkey": "Testanbieter (Türkei)",
+      "mock_europe": "Testanbieter (Europa)"
+    }
+  },
+  "history": {
+    "title": "SMS-Verlauf",
+    "subtitle": "Letzte SMS-Sendungen einschließlich blockierter und fehlgeschlagener Versuche.",
+    "columns": {
+      "date": "Datum",
+      "patient": "Patient",
+      "purpose": "Zweck",
+      "region": "Region",
+      "status": "Status",
+      "detail": "Detail"
+    },
+    "empty": "Noch keine SMS-Nachrichten."
+  },
+  "purposes": {
+    "appointment_confirmation": "Terminbestätigung",
+    "appointment_reminder": "Terminerinnerung",
+    "appointment_cancellation": "Terminabsage",
+    "appointment_reschedule": "Terminverschiebung",
+    "no_show_recovery": "No-Show-Nachverfolgung",
+    "post_treatment_followup": "Nachsorge nach Behandlung",
+    "manual_message": "Manuelle Nachricht",
+    "payment_reminder": "Zahlungserinnerung",
+    "marketing": "Marketing"
+  },
+  "statuses": {
+    "queued": "In Warteschlange",
+    "sent": "Gesendet",
+    "delivered": "Zugestellt",
+    "failed": "Fehlgeschlagen",
+    "blocked_quota": "Blockiert (Kontingent)",
+    "blocked_consent": "Blockiert (Einwilligung)",
+    "blocked_region": "Blockiert (Region)",
+    "blocked_template": "Blockiert (Vorlage)"
+  }
+}

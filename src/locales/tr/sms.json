@@ -1,0 +1,73 @@
+{
+  "nav": "SMS",
+  "title": "SMS Eklentisi",
+  "subtitle": "Kliniğinizin SMS paketi üzerinden randevu ve hasta SMS'leri gönderin.",
+  "errors": {
+    "loadFailed": "SMS ayarları yüklenemedi."
+  },
+  "notifications": {
+    "saved": "SMS ayarları kaydedildi.",
+    "saveFailed": "SMS ayarları kaydedilemedi."
+  },
+  "addon": {
+    "active": "SMS eklentisi aktif",
+    "viaPlan": "planınıza dahil",
+    "inactive": "SMS eklentisi aktif değil",
+    "contactSales": "SMS gönderimi opsiyonel ücretli bir eklentidir. Bu klinik için aktifleştirmek üzere platform yöneticinizle iletişime geçin."
+  },
+  "quota": {
+    "title": "Aylık kullanım ({{period}})",
+    "usage": "{{used}} / {{total}} SMS",
+    "remaining": "Bu ay {{count}} SMS hakkınız kaldı",
+    "exhausted": "Aylık kota doldu — SMS gönderimi gelecek aya kadar engellendi."
+  },
+  "providers": {
+    "title": "Sağlayıcı ayarları",
+    "subtitle": "Türk numaralar Türkiye sağlayıcısına, Avrupa numaraları Avrupa sağlayıcısına yönlendirilir. Diğer bölgeler desteklenmez.",
+    "turkey": "Türkiye sağlayıcısı",
+    "europe": "Avrupa sağlayıcısı",
+    "none": "Seçilmedi",
+    "configured": "Sağlayıcı hazır",
+    "notConfigured": "Sağlayıcı yapılandırılmadı — bu bölgeye gönderim başarısız olur",
+    "senderName": "Gönderici adı",
+    "senderNameHint": "Sağlayıcı destekliyorsa alıcılara görünen alfanümerik gönderici kimliği.",
+    "names": {
+      "mock_turkey": "Test sağlayıcısı (Türkiye)",
+      "mock_europe": "Test sağlayıcısı (Avrupa)"
+    }
+  },
+  "history": {
+    "title": "SMS geçmişi",
+    "subtitle": "Engellenen ve başarısız denemeler dahil son SMS gönderimleri.",
+    "columns": {
+      "date": "Tarih",
+      "patient": "Hasta",
+      "purpose": "Amaç",
+      "region": "Bölge",
+      "status": "Durum",
+      "detail": "Detay"
+    },
+    "empty": "Henüz SMS mesajı yok."
+  },
+  "purposes": {
+    "appointment_confirmation": "Randevu onayı",
+    "appointment_reminder": "Randevu hatırlatma",
+    "appointment_cancellation": "Randevu iptali",
+    "appointment_reschedule": "Randevu erteleme",
+    "no_show_recovery": "Gelmeyen hasta takibi",
+    "post_treatment_followup": "Tedavi sonrası takip",
+    "manual_message": "Manuel mesaj",
+    "payment_reminder": "Ödeme hatırlatma",
+    "marketing": "Pazarlama"
+  },
+  "statuses": {
+    "queued": "Kuyrukta",
+    "sent": "Gönderildi",
+    "delivered": "İletildi",
+    "failed": "Başarısız",
+    "blocked_quota": "Engellendi (kota)",
+    "blocked_consent": "Engellendi (onay)",
+    "blocked_region": "Engellendi (bölge)",
+    "blocked_template": "Engellendi (şablon)"
+  }
+}

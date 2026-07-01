@@ -18,6 +18,7 @@ import {
   META_ERRORS,
 } from '../services/metaTemplateService.js';
 import { evaluateTemplateBinding, type TemplateBindingStatus } from '../services/whatsapp/templateBinding.js';
+import { sendClinicSms } from '../services/sms/smsService.js';
 import type { WhatsAppConnectionRecord } from '../services/whatsapp/WhatsAppProvider.js';
 
 const router = express.Router();
@@ -268,6 +269,35 @@ router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_
       language: 'tr',
       purpose: 'appointment_reminder',
     },
+    // SMS add-on defaults
+    {
+      name: 'SMS Appointment Confirmation',
+      channel: 'sms',
+      body: '{{clinic_name}}: Dear {{patient_name}}, your appointment on {{appointment_date}} at {{appointment_time}} is confirmed.',
+      language: 'en',
+      purpose: 'appointment_confirmation',
+    },
+    {
+      name: 'SMS Randevu Onayı',
+      channel: 'sms',
+      body: '{{clinic_name}}: Sayın {{patient_name}}, {{appointment_date}} {{appointment_time}} randevunuz onaylanmıştır.',
+      language: 'tr',
+      purpose: 'appointment_confirmation',
+    },
+    {
+      name: 'SMS Appointment Cancellation',
+      channel: 'sms',
+      body: '{{clinic_name}}: Dear {{patient_name}}, your appointment on {{appointment_date}} at {{appointment_time}} has been cancelled. Please contact us to rebook.',
+      language: 'en',
+      purpose: 'appointment_cancellation',
+    },
+    {
+      name: 'SMS Randevu İptali',
+      channel: 'sms',
+      body: '{{clinic_name}}: Sayın {{patient_name}}, {{appointment_date}} {{appointment_time}} randevunuz iptal edilmiştir. Yeni randevu için bizimle iletişime geçebilirsiniz.',
+      language: 'tr',
+      purpose: 'appointment_cancellation',
+    },
   ];
 
   try {
@@ -442,6 +472,33 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
     }
     if (!message.recipient) {
       return res.status(400).json({ error: 'Message has no recipient' });
+    }
+
+    if (message.channel === 'sms') {
+      // SMS is a paid add-on: route through the SMS pipeline (entitlement,
+      // consent, quota, region routing). Never silently mark SMS as sent.
+      const smsResult = await sendClinicSms({
+        organizationId: req.user!.organizationId,
+        clinicId,
+        patientId: message.patientId,
+        appointmentId: message.appointmentId,
+        purpose: 'manual_message',
+        body: message.body,
+        createdById: req.user!.id,
+      });
+      if (!smsResult.ok) {
+        await prisma.sentMessage.update({ where: { id }, data: { status: 'failed' } });
+        await logActivity({
+          clinicId, userId: req.user!.id, entityType: 'message', entityId: id,
+          action: 'send_failed',
+          description: `${message.patient.firstName} ${message.patient.lastName} için SMS gönderilemedi: ${smsResult.error}`,
+        });
+        const httpStatus = smsResult.code === 'addon_disabled' || smsResult.code === 'quota_exceeded' ? 402
+          : smsResult.code === 'consent_blocked' ? 403
+          : smsResult.code === 'send_failed' ? 502
+          : 400;
+        return res.status(httpStatus).json({ error: smsResult.error, code: smsResult.code });
+      }
     }
 
     if (message.channel === 'whatsapp') {

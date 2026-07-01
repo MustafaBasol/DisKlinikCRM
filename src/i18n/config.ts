@@ -35,6 +35,7 @@ import organizationEn from '../locales/en/organization.json';
 import landingEn from '../locales/en/landing.json';
 import legalEn from '../locales/en/legal.json';
 import postTreatmentEn from '../locales/en/postTreatment.json';
+import smsEn from '../locales/en/sms.json';
 
 import commonTr from '../locales/tr/common.json';
 import authTr from '../locales/tr/auth.json';
@@ -68,6 +69,7 @@ import organizationTr from '../locales/tr/organization.json';
 import landingTr from '../locales/tr/landing.json';
 import legalTr from '../locales/tr/legal.json';
 import postTreatmentTr from '../locales/tr/postTreatment.json';
+import smsTr from '../locales/tr/sms.json';
 
 import commonFr from '../locales/fr/common.json';
 import authFr from '../locales/fr/auth.json';
@@ -101,6 +103,7 @@ import organizationFr from '../locales/fr/organization.json';
 import landingFr from '../locales/fr/landing.json';
 import legalFr from '../locales/fr/legal.json';
 import postTreatmentFr from '../locales/fr/postTreatment.json';
+import smsFr from '../locales/fr/sms.json';
 
 import commonDe from '../locales/de/common.json';
 import authDe from '../locales/de/auth.json';
@@ -134,6 +137,7 @@ import organizationDe from '../locales/de/organization.json';
 import landingDe from '../locales/de/landing.json';
 import legalDe from '../locales/de/legal.json';
 import postTreatmentDe from '../locales/de/postTreatment.json';
+import smsDe from '../locales/de/sms.json';
 
 const namespaces = [
   'common',
@@ -166,6 +170,7 @@ const namespaces = [
   'landing',
   'legal',
   'postTreatment',
+  'sms',
   'validation',
   'errors',
 ];
@@ -202,6 +207,7 @@ const resources = {
     landing: landingEn,
     legal: legalEn,
     postTreatment: postTreatmentEn,
+    sms: smsEn,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -236,6 +242,7 @@ const resources = {
     landing: landingTr,
     legal: legalTr,
     postTreatment: postTreatmentTr,
+    sms: smsTr,
     validation: validationTr,
     errors: errorsTr,
   },
@@ -270,6 +277,7 @@ const resources = {
     landing: landingFr,
     legal: legalFr,
     postTreatment: postTreatmentFr,
+    sms: smsFr,
     validation: validationFr,
     errors: errorsFr,
   },
@@ -304,6 +312,7 @@ const resources = {
     landing: landingDe,
     legal: legalDe,
     postTreatment: postTreatmentDe,
+    sms: smsDe,
     validation: validationDe,
     errors: errorsDe,
   }

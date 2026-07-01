@@ -1,0 +1,73 @@
+{
+  "nav": "SMS",
+  "title": "SMS Add-on",
+  "subtitle": "Send appointment and patient SMS through your clinic's SMS package.",
+  "errors": {
+    "loadFailed": "Failed to load SMS settings."
+  },
+  "notifications": {
+    "saved": "SMS settings saved.",
+    "saveFailed": "Failed to save SMS settings."
+  },
+  "addon": {
+    "active": "SMS add-on is active",
+    "viaPlan": "included in your plan",
+    "inactive": "SMS add-on is not active",
+    "contactSales": "SMS sending is an optional paid add-on. Contact your platform administrator to activate it for this clinic."
+  },
+  "quota": {
+    "title": "Monthly usage ({{period}})",
+    "usage": "{{used}} / {{total}} SMS",
+    "remaining": "{{count}} SMS remaining this month",
+    "exhausted": "Monthly quota is exhausted — SMS sending is blocked until next month."
+  },
+  "providers": {
+    "title": "Provider settings",
+    "subtitle": "Turkish numbers are routed to the Turkey provider, European numbers to the Europe provider. Other regions are not supported.",
+    "turkey": "Turkey provider",
+    "europe": "Europe provider",
+    "none": "Not selected",
+    "configured": "Provider ready",
+    "notConfigured": "No provider configured — sending to this region will fail",
+    "senderName": "Sender name",
+    "senderNameHint": "Alphanumeric sender ID shown to recipients, if supported by the provider.",
+    "names": {
+      "mock_turkey": "Test provider (Turkey)",
+      "mock_europe": "Test provider (Europe)"
+    }
+  },
+  "history": {
+    "title": "SMS history",
+    "subtitle": "Recent SMS sends including blocked and failed attempts.",
+    "columns": {
+      "date": "Date",
+      "patient": "Patient",
+      "purpose": "Purpose",
+      "region": "Region",
+      "status": "Status",
+      "detail": "Detail"
+    },
+    "empty": "No SMS messages yet."
+  },
+  "purposes": {
+    "appointment_confirmation": "Appointment confirmation",
+    "appointment_reminder": "Appointment reminder",
+    "appointment_cancellation": "Appointment cancellation",
+    "appointment_reschedule": "Appointment reschedule",
+    "no_show_recovery": "No-show recovery",
+    "post_treatment_followup": "Post-treatment follow-up",
+    "manual_message": "Manual message",
+    "payment_reminder": "Payment reminder",
+    "marketing": "Marketing"
+  },
+  "statuses": {
+    "queued": "Queued",
+    "sent": "Sent",
+    "delivered": "Delivered",
+    "failed": "Failed",
+    "blocked_quota": "Blocked (quota)",
+    "blocked_consent": "Blocked (consent)",
+    "blocked_region": "Blocked (region)",
+    "blocked_template": "Blocked (template)"
+  }
+}

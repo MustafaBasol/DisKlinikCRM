@@ -16,7 +16,7 @@ interface Plan {
   _count: { clinics: number; organizations: number };
 }
 
-const DEFAULT_FEATURES = { whatsapp: false, reports: false, compensation: false, inventory: false };
+const DEFAULT_FEATURES = { whatsapp: false, sms: false, reports: false, compensation: false, inventory: false };
 const FEATURE_KEYS = Object.keys(DEFAULT_FEATURES);
 
 const PlatformPlans: React.FC = () => {
