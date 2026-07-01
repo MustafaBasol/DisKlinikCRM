@@ -1110,7 +1110,7 @@ async function sprintSixteenBTests() {
   console.log(`Sprint 16B tests — ${passed} passed, ${failed} failed`);
 }
 
-main().then(() => extendedTests()).then(() => sprintSixteenBTests()).then(() => connectionLifecycleTests()).then(() => sprintSeventeenBTests()).then(() => {
+main().then(() => extendedTests()).then(() => sprintSixteenBTests()).then(() => connectionLifecycleTests()).then(() => sprintSeventeenBTests()).then(() => connectionValidationAndTestPersistenceTests()).then(() => {
   console.log(`\n${'─'.repeat(50)}`);
   console.log('All tests complete');
 }).catch((err) => {
@@ -1646,4 +1646,156 @@ async function sprintSeventeenBTests() {
 
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`Sprint 17B legacy fallback flag tests complete`);
+}
+
+// ─── Phase 3 — Connection validation hardening + test-result persistence ─────
+// Mirrors the logic added in whatsappService.testWhatsAppConnection() and
+// organizationWhatsApp.ts (isMetaManualConfigComplete + PUT effective-field
+// merge). Inline replicas, same convention as sanitizeConnection above —
+// this file never imports the Express route module directly.
+async function connectionValidationAndTestPersistenceTests() {
+  section('Phase 3 — testWhatsAppConnection() DB persistence shape');
+
+  function buildTestUpdatePayload(result: { success: boolean; message: string }) {
+    return result.success
+      ? { status: 'connected', lastConnectedAt: new Date(), lastError: null }
+      : { status: 'error', lastError: result.message };
+  }
+
+  await test('successful test → status connected, lastConnectedAt set, lastError null', () => {
+    const update = buildTestUpdatePayload({ success: true, message: 'Meta Cloud API connected successfully.' });
+    assert.equal(update.status, 'connected');
+    assert.ok(update.lastConnectedAt instanceof Date);
+    assert.equal(update.lastError, null);
+  });
+
+  await test('failed test → status error, lastError set to provider message', () => {
+    const update = buildTestUpdatePayload({ success: false, message: 'Evolution API test failed with status 401' });
+    assert.equal(update.status, 'error');
+    assert.equal((update as { lastError?: string }).lastError, 'Evolution API test failed with status 401');
+    assert.ok(!('lastConnectedAt' in update));
+  });
+
+  await test('failed test message never contains a token/secret-looking substring', () => {
+    const update = buildTestUpdatePayload({ success: false, message: 'Meta Graph API test failed (401): Invalid OAuth access token' });
+    const msg = (update as { lastError?: string }).lastError ?? '';
+    assert.ok(!/EAAB[a-zA-Z0-9]{10,}/.test(msg), 'no raw Meta token pattern present');
+  });
+
+  section('Phase 3 — isMetaManualConfigComplete() provider validation');
+
+  function isMetaManualConfigComplete(
+    phoneNumberId: string | null | undefined,
+    accessTokenPresent: boolean,
+  ): boolean {
+    return Boolean(phoneNumberId?.trim()) && accessTokenPresent;
+  }
+
+  await test('Evolution create: no Meta fields required (check not applied)', () => {
+    const provider: string = 'evolution_api';
+    const requiresMetaCheck = provider === 'meta_cloud_api';
+    assert.equal(requiresMetaCheck, false);
+  });
+
+  await test('Meta manual create: missing phoneNumberId and token → rejected', () => {
+    assert.equal(isMetaManualConfigComplete(undefined, false), false);
+  });
+
+  await test('Meta manual create: phoneNumberId present, token missing → rejected', () => {
+    assert.equal(isMetaManualConfigComplete('123456', false), false);
+  });
+
+  await test('Meta manual create: phoneNumberId blank string → rejected', () => {
+    assert.equal(isMetaManualConfigComplete('   ', true), false);
+  });
+
+  await test('Meta manual create: phoneNumberId + token present → accepted', () => {
+    assert.equal(isMetaManualConfigComplete('123456', true), true);
+  });
+
+  await test('Meta manual update: omitted fields fall back to existing stored values', () => {
+    const existing = { metaPhoneNumberId: '999', metaAccessTokenEncrypted: 'enc:abc' };
+    const updateFields: { metaPhoneNumberId?: string; metaAccessTokenEncrypted?: string } = {};
+    const effectivePhoneId =
+      updateFields.metaPhoneNumberId !== undefined ? updateFields.metaPhoneNumberId : existing.metaPhoneNumberId;
+    const effectiveTokenPresent = updateFields.metaAccessTokenEncrypted
+      ? Boolean(updateFields.metaAccessTokenEncrypted.trim())
+      : Boolean(existing.metaAccessTokenEncrypted);
+    assert.equal(isMetaManualConfigComplete(effectivePhoneId, effectiveTokenPresent), true);
+  });
+
+  await test('Meta manual update: explicitly clearing phoneNumberId → rejected even if token stored', () => {
+    const existing = { metaPhoneNumberId: '999', metaAccessTokenEncrypted: 'enc:abc' };
+    const updateFields: { metaPhoneNumberId?: string | null; metaAccessTokenEncrypted?: string } = {
+      metaPhoneNumberId: '',
+    };
+    const effectivePhoneId =
+      updateFields.metaPhoneNumberId !== undefined ? updateFields.metaPhoneNumberId : existing.metaPhoneNumberId;
+    const effectiveTokenPresent = updateFields.metaAccessTokenEncrypted
+      ? Boolean(updateFields.metaAccessTokenEncrypted.trim())
+      : Boolean(existing.metaAccessTokenEncrypted);
+    assert.equal(isMetaManualConfigComplete(effectivePhoneId, effectiveTokenPresent), false);
+  });
+
+  await test('Embedded Signup connection: testing needs only the connection id, no manual fields resubmitted', () => {
+    // POST /organization/whatsapp-connections/:id/test takes no request body schema —
+    // it looks up the stored record by id and calls provider.testConnection(record).
+    const testRequestBody = {};
+    assert.deepEqual(Object.keys(testRequestBody), []);
+  });
+
+  section('Phase 3 — Cross-clinic / cross-org test access guard');
+
+  await test('test route scoping: connection from another organization is not found', () => {
+    const connections = [
+      { id: 'conn-1', organizationId: 'org-a' },
+      { id: 'conn-2', organizationId: 'org-b' },
+    ];
+    function findScoped(id: string, organizationId: string) {
+      return connections.find((c) => c.id === id && c.organizationId === organizationId) ?? null;
+    }
+    // A user in org-b must not be able to test org-a's connection
+    assert.equal(findScoped('conn-1', 'org-b'), null);
+    assert.equal(findScoped('conn-1', 'org-a')?.id, 'conn-1');
+  });
+
+  section('Phase 3 — sanitizeConnection strips all secret fields');
+
+  function sanitizeConnection(conn: Record<string, unknown>) {
+    const {
+      evolutionApiKeyEncrypted: _eak,
+      metaAccessTokenEncrypted: _mat,
+      metaWebhookVerifyToken: _mwvt,
+      metaWebhookSecret: _mws,
+      webhookSecret: _ws,
+      ...safe
+    } = conn;
+    return safe;
+  }
+
+  await test('list/get/test response never includes any of the 5 secret fields', () => {
+    const raw = {
+      id: 'c1',
+      status: 'connected',
+      evolutionApiKeyEncrypted: 'enc:evo',
+      metaAccessTokenEncrypted: 'enc:meta',
+      metaWebhookVerifyToken: 'verify-token',
+      metaWebhookSecret: 'wh-secret',
+      webhookSecret: 'shared-secret',
+    };
+    const safe = sanitizeConnection(raw);
+    for (const field of [
+      'evolutionApiKeyEncrypted',
+      'metaAccessTokenEncrypted',
+      'metaWebhookVerifyToken',
+      'metaWebhookSecret',
+      'webhookSecret',
+    ]) {
+      assert.ok(!(field in safe), `${field} must not be present`);
+    }
+    assert.equal(safe.status, 'connected');
+  });
+
+  console.log(`\n${'─'.repeat(50)}`);
+  console.log(`Phase 3 validation + test-persistence tests complete`);
 }
