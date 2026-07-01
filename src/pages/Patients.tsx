@@ -3,18 +3,28 @@ import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Loader2, User, Build
 import { patientService } from '../services/api';
 import PatientForm from '../components/PatientForm';
 import PatientImportModal from '../components/PatientImportModal';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
 import { useAuth } from '../context/AuthContext';
 import { canImportPatients, canViewPatients } from '../utils/permissions';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
+// Parses URL values like "30d" into a day count for the createdWithin filter.
+function parseCreatedWithinDays(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const match = /^(\d+)d$/.exec(value);
+  if (!match) return undefined;
+  const days = Number(match[1]);
+  return days > 0 ? days : undefined;
+}
+
 const Patients: React.FC = () => {
   const { t } = useTranslation(['patients', 'common']);
   const { selectedClinicId, availableClinics, hasMultipleClinics } = useClinic();
   const { user: currentUser } = useAuth();
   const { formatDate } = useClinicPreferences();
+  const [searchParams] = useSearchParams();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -22,14 +32,16 @@ const Patients: React.FC = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [createdWithinDays] = useState(() => parseCreatedWithinDays(searchParams.get('createdWithin')));
 
   const fetchPatients = async () => {
     setLoading(true);
     try {
-      const response = await patientService.getAll({ 
-        search: search || undefined, 
+      const response = await patientService.getAll({
+        search: search || undefined,
         status: status || undefined,
-        includeArchived
+        includeArchived,
+        createdWithinDays,
       });
       setPatients(response.data);
     } catch (error) {
@@ -44,7 +56,7 @@ const Patients: React.FC = () => {
       fetchPatients();
     }, 300);
     return () => clearTimeout(timeout);
-  }, [search, status, includeArchived, selectedClinicId]);
+  }, [search, status, includeArchived, createdWithinDays, selectedClinicId]);
 
   // BILLING bu sayfanın klinik içeriğini göremez — hasta arama/seçimi Payments
   // sayfasındaki ödeme formu üzerinden yapılır.

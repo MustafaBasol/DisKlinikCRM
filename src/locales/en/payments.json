@@ -68,6 +68,7 @@
   },
   "confirmCancel": "Cancel this payment?",
   "empty": "No payment records found.",
+  "emptyFilteredStatus": "No {{status}} payments found.",
   "noRelatedPayments": "No related payments found.",
   "financeDashboard": {
     "title": "Finance Dashboard",

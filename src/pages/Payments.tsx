@@ -18,27 +18,35 @@ import {
   FileText,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { paymentService, patientService } from '../services/api';
 import PaymentForm from '../components/PaymentForm';
 import ReceiptModal from '../components/ReceiptModal';
 import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
+const PAYMENT_STATUSES = ['pending', 'partial', 'paid', 'refunded', 'cancelled'];
+
 const Payments: React.FC = () => {
   const { t } = useTranslation(['payments', 'common']);
   const { selectedClinicId } = useClinic();
   const { defaultCurrency, formatCurrency, formatDate, formatNumber } = useClinicPreferences();
-  
+  const [searchParams] = useSearchParams();
+
   const [payments, setPayments] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<any>(null);
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
-  
-  // Filters
+
+  // Filters — initialized from URL so links like /payments?status=pending apply immediately
+  // and survive a page refresh.
   const [patientId, setPatientId] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && PAYMENT_STATUSES.includes(fromUrl) ? fromUrl : '';
+  });
   const [method, setMethod] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -289,9 +297,13 @@ const Payments: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-gray-400">
+                  <td colSpan={8} className="p-12 text-center text-gray-400">
                     <CreditCard size={48} className="mx-auto mb-3 opacity-20" />
-                    <p>{t('common:noData')}</p>
+                    <p>
+                      {status
+                        ? t('payments:emptyFilteredStatus', { status: t(`payments:status.${status}`) })
+                        : t('payments:empty')}
+                    </p>
                   </td>
                 </tr>
               )}

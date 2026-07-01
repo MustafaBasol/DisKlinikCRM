@@ -63,14 +63,32 @@ const Appointments: React.FC = () => {
   const [editingAppointment, setEditingAppointment] = useState<any>(null);
   const [formPrefill, setFormPrefill] = useState<AppointmentFormPrefill | undefined>(undefined);
   
-  // View mode
-  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'multidoctor'>('list');
+  // View mode — initialized from ?view= so links like /appointments?view=timeline (Takvim
+  // quick action) open directly in that view, and a refresh keeps it.
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'multidoctor'>(() => {
+    const fromUrl = searchParams.get('view');
+    return fromUrl === 'timeline' || fromUrl === 'multidoctor' ? fromUrl : 'list';
+  });
 
-  // Filters
+  // Filters — status/date read from URL so dashboard KPI/alert links (e.g.
+  // /appointments?date=today, /appointments?status=no_show) apply immediately and survive a refresh.
   const [search, setSearch] = useState('');
-  const [selectedDate, setSelectedDate] = useState(toLocalDateString(new Date()));
-  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
-  const [status, setStatus] = useState('');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const fromUrl = searchParams.get('date');
+    if (fromUrl && fromUrl !== 'today' && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl)) return fromUrl;
+    return toLocalDateString(new Date());
+  });
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const fromUrl = searchParams.get('date');
+    if (fromUrl && fromUrl !== 'today' && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl)) {
+      return startOfMonth(new Date(`${fromUrl}T00:00:00`));
+    }
+    return startOfMonth(new Date());
+  });
+  const [status, setStatus] = useState(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && (APPOINTMENT_STATUS_KEYS as readonly string[]).includes(fromUrl) ? fromUrl : '';
+  });
   const [practitionerId, setPractitionerId] = useState('');
   const normalizedRole = user?.role?.toLowerCase();
   const isDoctor = normalizedRole === 'doctor' || normalizedRole === 'dentist';

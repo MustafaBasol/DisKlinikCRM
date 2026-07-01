@@ -13,17 +13,21 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { taskService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import TaskForm from '../components/TaskForm';
 import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
+const TASK_STATUSES = ['open', 'in_progress', 'completed', 'cancelled'];
+
 const Tasks: React.FC = () => {
   const { t } = useTranslation(['tasks', 'common']);
   const { user: currentUser } = useAuth();
   const { selectedClinicId } = useClinic();
   const { formatDate } = useClinicPreferences();
+  const [searchParams] = useSearchParams();
 
   const [tasks, setTasks] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -34,13 +38,17 @@ const Tasks: React.FC = () => {
   const [completionToast, setCompletionToast] = useState<{ taskId: string; taskTitle: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Filters
+  // Filters — status/overdue/dueToday read from URL so dashboard links
+  // (e.g. /tasks?status=open, /tasks?overdue=true) apply immediately and survive a refresh.
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('open');
+  const [status, setStatus] = useState(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl !== null ? (TASK_STATUSES.includes(fromUrl) ? fromUrl : '') : 'open';
+  });
   const [priority, setPriority] = useState('');
   const [assignedToId, setAssignedToId] = useState('');
-  const [overdue, setOverdue] = useState(false);
-  const [dueToday, setDueToday] = useState(false);
+  const [overdue, setOverdue] = useState(() => searchParams.get('overdue') === 'true');
+  const [dueToday, setDueToday] = useState(() => searchParams.get('dueToday') === 'true');
 
   const fetchTasks = async () => {
     setLoading(true);

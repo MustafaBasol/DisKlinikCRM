@@ -42,6 +42,8 @@
   "alerts": {
     "overdueTasks": "Gecikmiş Takipler",
     "noShowFollowUp": "Aranacak Randevular",
-    "pendingCollections": "Ödenmemiş Bakiyeler"
+    "pendingCollections": "Ödenmemiş Bakiyeler",
+    "openTasks": "Açık Görevler",
+    "pendingAppointmentRequests": "Bekleyen Randevu Talepleri"
   }
 }

@@ -42,6 +42,8 @@
   "alerts": {
     "overdueTasks": "Überfällige Nachfassaufgaben",
     "noShowFollowUp": "No-Shows zur Kontaktaufnahme",
-    "pendingCollections": "Unbezahlte Salden"
+    "pendingCollections": "Unbezahlte Salden",
+    "openTasks": "Offene Aufgaben",
+    "pendingAppointmentRequests": "Ausstehende Terminanfragen"
   }
 }
