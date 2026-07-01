@@ -141,7 +141,18 @@ export async function testWhatsAppConnection(
   }
 
   const provider = getWhatsAppProvider(record.provider);
-  return provider.testConnection(record as WhatsAppConnectionRecord);
+  const result = await provider.testConnection(record as WhatsAppConnectionRecord);
+
+  // Persist the outcome so status/lastConnectedAt/lastError reflect the real
+  // last-known reachability of this connection, not just the ephemeral response.
+  await prisma.whatsAppConnection.update({
+    where: { id: connectionId },
+    data: result.success
+      ? { status: 'connected', lastConnectedAt: new Date(), lastError: null }
+      : { status: 'error', lastError: result.message },
+  });
+
+  return result;
 }
 
 export async function getWhatsAppQrCode(connectionId: string): Promise<QrCodeResult> {

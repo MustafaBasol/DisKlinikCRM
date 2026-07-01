@@ -93,6 +93,23 @@ const connectionCreateSchema = z.object({
 
 const connectionUpdateSchema = connectionCreateSchema.partial();
 
+/**
+ * Manual Meta Cloud API setup (this route, as opposed to the Embedded Signup
+ * callback route) requires enough credential data to actually run a test —
+ * otherwise the connection is saved in a state that can never succeed.
+ */
+const META_MANUAL_SETUP_ERROR =
+  'Meta Cloud API manual setup requires Phone Number ID and Access Token. ' +
+  'Use "Connect with Meta" for automatic setup instead.';
+
+/** True when a Meta Cloud API manual configuration has enough data to be tested. */
+function isMetaManualConfigComplete(
+  phoneNumberId: string | null | undefined,
+  accessTokenPresent: boolean,
+): boolean {
+  return Boolean(phoneNumberId?.trim()) && accessTokenPresent;
+}
+
 // ─── Organization-level routes ────────────────────────────────────────────────
 
 // GET /api/organization/whatsapp-connections
@@ -169,6 +186,16 @@ router.post(
     const parsed = connectionCreateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+
+    if (
+      parsed.data.provider === 'meta_cloud_api' &&
+      !isMetaManualConfigComplete(
+        parsed.data.metaPhoneNumberId,
+        Boolean(parsed.data.metaAccessTokenEncrypted?.trim()),
+      )
+    ) {
+      return res.status(400).json({ error: META_MANUAL_SETUP_ERROR });
     }
 
     try {
@@ -291,8 +318,23 @@ router.put(
       });
       if (!existing) return res.status(404).json({ error: 'Connection not found' });
 
-      // Encrypt secrets before persisting — only if provided (partial update)
       const { linkedClinicIds, ...updateFields } = parsed.data;
+
+      const effectiveProvider = updateFields.provider ?? existing.provider;
+      if (effectiveProvider === 'meta_cloud_api') {
+        const effectivePhoneId =
+          updateFields.metaPhoneNumberId !== undefined
+            ? updateFields.metaPhoneNumberId
+            : existing.metaPhoneNumberId;
+        const effectiveTokenPresent = updateFields.metaAccessTokenEncrypted
+          ? Boolean(updateFields.metaAccessTokenEncrypted.trim())
+          : Boolean(existing.metaAccessTokenEncrypted);
+        if (!isMetaManualConfigComplete(effectivePhoneId, effectiveTokenPresent)) {
+          return res.status(400).json({ error: META_MANUAL_SETUP_ERROR });
+        }
+      }
+
+      // Encrypt secrets before persisting — only if provided (partial update)
       const updateData: Record<string, unknown> = { ...updateFields };
       if (typeof updateData.evolutionApiKeyEncrypted === 'string' && updateData.evolutionApiKeyEncrypted) {
         updateData.evolutionApiKeyEncrypted = encryptSecret(updateData.evolutionApiKeyEncrypted as string);
