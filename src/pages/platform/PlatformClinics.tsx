@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Search, Loader2, AlertCircle, ChevronLeft, ChevronRight,
-  CheckCircle2, Clock, Ban, RefreshCw,
+  CheckCircle2, Clock, Ban, RefreshCw, MessageSquare, X, Check,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
@@ -15,7 +15,8 @@ interface Clinic {
   address?: string;
   createdAt: string;
   organization?: { id: string; name: string; slug: string };
-  plan?: { displayName: string };
+  plan?: { displayName: string; features?: Record<string, boolean> | null };
+  smsSettings?: { addonEnabled: boolean; monthlyQuota: number } | null;
   _count: { users: number; patients: number; appointments: number };
 }
 
@@ -44,6 +45,9 @@ const PlatformClinics: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [smsClinic, setSmsClinic] = useState<Clinic | null>(null);
+  const [smsForm, setSmsForm] = useState({ addonEnabled: false, monthlyQuota: 0 });
+  const [smsSaving, setSmsSaving] = useState(false);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -68,6 +72,31 @@ const PlatformClinics: React.FC = () => {
       alert(t('platform:errors.statusUpdateFailed'));
     } finally {
       setActionId(null);
+    }
+  };
+
+  const openSmsModal = (clinic: Clinic) => {
+    setSmsClinic(clinic);
+    setSmsForm({
+      addonEnabled: clinic.smsSettings?.addonEnabled ?? false,
+      monthlyQuota: clinic.smsSettings?.monthlyQuota ?? 0,
+    });
+  };
+
+  const saveSmsAddon = async () => {
+    if (!smsClinic) return;
+    setSmsSaving(true);
+    try {
+      await api.patch(`/platform/clinics/${smsClinic.id}/sms-addon`, {
+        addonEnabled: smsForm.addonEnabled,
+        monthlyQuota: smsForm.monthlyQuota,
+      });
+      setSmsClinic(null);
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.error ?? t('platform:clinics.sms.saveFailed'));
+    } finally {
+      setSmsSaving(false);
     }
   };
 
@@ -128,6 +157,7 @@ const PlatformClinics: React.FC = () => {
                     <th className="px-4 py-3 text-left">{t('platform:clinics.columns.organization')}</th>
                     <th className="px-4 py-3 text-left">{t('platform:clinics.columns.plan')}</th>
                     <th className="px-4 py-3 text-center">{t('platform:clinics.columns.status')}</th>
+                    <th className="px-4 py-3 text-center">{t('platform:clinics.columns.sms')}</th>
                     <th className="px-4 py-3 text-center">{t('platform:clinics.columns.users')}</th>
                     <th className="px-4 py-3 text-center">{t('platform:clinics.columns.patients')}</th>
                     <th className="px-4 py-3 text-left">{t('platform:clinics.columns.created')}</th>
@@ -153,6 +183,22 @@ const PlatformClinics: React.FC = () => {
                           {t(`platform:statuses.${clinic.status}`, { defaultValue: clinic.status })}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-center">
+                        {clinic.smsSettings?.addonEnabled ? (
+                          <span className="inline-flex flex-col items-center gap-0.5">
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                              {t('platform:clinics.sms.addonBadge')}
+                            </span>
+                            <span className="text-xs text-gray-400">{clinic.smsSettings.monthlyQuota.toLocaleString(i18n.language || 'tr')}/{t('platform:clinics.sms.month')}</span>
+                          </span>
+                        ) : clinic.plan?.features?.sms ? (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+                            {t('platform:clinics.sms.planBadge')}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">{t('platform:clinics.sms.inactive')}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{clinic._count.users}</td>
                       <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{clinic._count.patients}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">
@@ -160,6 +206,14 @@ const PlatformClinics: React.FC = () => {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => openSmsModal(clinic)}
+                            disabled={actionId === clinic.id}
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/40 dark:text-violet-400 transition-colors disabled:opacity-50"
+                          >
+                            <MessageSquare size={12} />
+                            SMS
+                          </button>
                           {clinic.status !== 'active' && (
                             <button
                               onClick={() => updateStatus(clinic.id, 'active')}
@@ -184,7 +238,7 @@ const PlatformClinics: React.FC = () => {
                   ))}
                   {data?.data.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center text-gray-400 py-12">{t('platform:clinics.empty')}</td>
+                      <td colSpan={9} className="text-center text-gray-400 py-12">{t('platform:clinics.empty')}</td>
                     </tr>
                   )}
                 </tbody>
@@ -207,6 +261,83 @@ const PlatformClinics: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* SMS add-on modal */}
+      {smsClinic && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 dark:text-white">
+                {t('platform:clinics.sms.modalTitle', { name: smsClinic.name })}
+              </h3>
+              <button onClick={() => setSmsClinic(null)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="text-xs rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 space-y-1">
+              <p>
+                {t('platform:clinics.sms.planFeatureLabel')}{' '}
+                <span className={smsClinic.plan?.features?.sms ? 'text-green-600 dark:text-green-400 font-medium' : ''}>
+                  {smsClinic.plan?.features?.sms
+                    ? t('platform:clinics.sms.planFeatureOn', { plan: smsClinic.plan?.displayName ?? '' })
+                    : t('platform:clinics.sms.planFeatureOff')}
+                </span>
+              </p>
+              <p>
+                {t('platform:clinics.sms.sourceLabel')}{' '}
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {smsClinic.smsSettings?.addonEnabled
+                    ? t('platform:clinics.sms.sourceAddon')
+                    : smsClinic.plan?.features?.sms
+                      ? t('platform:clinics.sms.sourcePlan')
+                      : t('platform:clinics.sms.sourceNone')}
+                </span>
+              </p>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm cursor-pointer text-gray-900 dark:text-white">
+              <input
+                type="checkbox"
+                checked={smsForm.addonEnabled}
+                onChange={(e) => setSmsForm((f) => ({ ...f, addonEnabled: e.target.checked }))}
+                className="rounded text-blue-600"
+              />
+              {t('platform:clinics.sms.enableAddon')}
+            </label>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">{t('platform:clinics.sms.monthlyQuota')}</label>
+              <input
+                type="number"
+                min={0}
+                max={1000000}
+                value={smsForm.monthlyQuota}
+                onChange={(e) => setSmsForm((f) => ({ ...f, monthlyQuota: Math.max(0, Math.floor(Number(e.target.value) || 0)) }))}
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-400">{t('platform:clinics.sms.quotaHint')}</p>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                onClick={() => setSmsClinic(null)}
+                className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                {t('platform:actions.cancel')}
+              </button>
+              <button
+                onClick={saveSmsAddon}
+                disabled={smsSaving}
+                className="flex items-center gap-1 px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
+              >
+                {smsSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                {t('platform:actions.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

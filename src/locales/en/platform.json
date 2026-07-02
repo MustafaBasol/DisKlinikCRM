@@ -97,7 +97,26 @@
       "users": "Users",
       "patients": "Patients",
       "created": "Created",
-      "actions": "Actions"
+      "actions": "Actions",
+      "sms": "SMS"
+    },
+    "sms": {
+      "modalTitle": "SMS Add-on - {{name}}",
+      "addonBadge": "Add-on active",
+      "planBadge": "Via plan",
+      "inactive": "Inactive",
+      "month": "mo",
+      "enableAddon": "Enable SMS add-on for this clinic",
+      "monthlyQuota": "Monthly SMS quota",
+      "quotaHint": "Maximum number of SMS this clinic can send per month via the add-on (0 = none).",
+      "planFeatureLabel": "Plan SMS feature:",
+      "planFeatureOn": "Included in the {{plan}} plan",
+      "planFeatureOff": "Not included in the current plan",
+      "sourceLabel": "Currently enabled by:",
+      "sourceAddon": "Clinic add-on",
+      "sourcePlan": "Plan feature",
+      "sourceNone": "Not enabled",
+      "saveFailed": "Failed to update the SMS add-on"
     }
   },
   "organizations": {
