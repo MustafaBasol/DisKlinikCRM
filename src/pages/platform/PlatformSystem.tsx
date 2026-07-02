@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Loader2, AlertCircle, CheckCircle2, XCircle, RefreshCw,
-  Database, Server, MessageCircle,
+  Database, Server, MessageCircle, ShieldCheck,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
@@ -136,6 +136,164 @@ const PlatformSystem: React.FC = () => {
           </div>
         </div>
       ) : null}
+
+      <MfaSection />
+    </div>
+  );
+};
+
+/**
+ * Platform admin hesabı için TOTP (MFA) kaydı/yönetimi.
+ * Akış: setup → authenticator'a secret girilir → kodla verify → etkin.
+ */
+const MfaSection: React.FC = () => {
+  const { t } = useTranslation(['platform']);
+  const api = usePlatformApi();
+  const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
+  const [setup, setSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [disablePassword, setDisablePassword] = useState('');
+  const [disabling, setDisabling] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    api.get('/platform/me')
+      .then((res) => setMfaEnabled(!!res.data.mfaEnabled))
+      .catch(() => setMfaEnabled(null));
+  }, [api]);
+
+  const startSetup = async () => {
+    setBusy(true); setMessage(null);
+    try {
+      const { data } = await api.post('/platform/auth/mfa/setup');
+      setSetup(data);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.response?.data?.error ?? t('platform:mfa.setupFailed', 'MFA kurulumu başlatılamadı') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifySetup = async () => {
+    setBusy(true); setMessage(null);
+    try {
+      await api.post('/platform/auth/mfa/verify', { code });
+      setMfaEnabled(true);
+      setSetup(null);
+      setCode('');
+      setMessage({ type: 'ok', text: t('platform:mfa.enabled', 'MFA etkinleştirildi. Bir sonraki girişte kod istenecek.') });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.response?.data?.error ?? t('platform:mfa.invalidCode', 'Kod doğrulanamadı') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    setBusy(true); setMessage(null);
+    try {
+      await api.post('/platform/auth/mfa/disable', { code, password: disablePassword });
+      setMfaEnabled(false);
+      setDisabling(false);
+      setCode('');
+      setDisablePassword('');
+      setMessage({ type: 'ok', text: t('platform:mfa.disabled', 'MFA devre dışı bırakıldı.') });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.response?.data?.error ?? t('platform:mfa.disableFailed', 'MFA devre dışı bırakılamadı') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inputCls = 'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <ShieldCheck size={18} className={mfaEnabled ? 'text-green-500' : 'text-gray-400'} />
+        <h2 className="font-semibold text-gray-900 dark:text-white">
+          {t('platform:mfa.title', 'İki Adımlı Doğrulama (MFA)')}
+        </h2>
+        {mfaEnabled != null && (
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${mfaEnabled ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
+            {mfaEnabled ? t('platform:mfa.statusOn', 'Etkin') : t('platform:mfa.statusOff', 'Kapalı')}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        {t('platform:mfa.description', 'Bu hesap tüm kiracılara erişebilir; TOTP tabanlı ikinci faktör şiddetle önerilir.')}
+      </p>
+
+      {message && (
+        <p className={`text-sm rounded-lg px-3 py-2 mb-3 ${message.type === 'ok' ? 'text-green-700 bg-green-50 dark:bg-green-900/30 dark:text-green-400' : 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400'}`}>
+          {message.text}
+        </p>
+      )}
+
+      {mfaEnabled === false && !setup && (
+        <button onClick={startSetup} disabled={busy}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          {busy && <Loader2 size={14} className="animate-spin" />}
+          {t('platform:mfa.enable', 'MFA Kurulumunu Başlat')}
+        </button>
+      )}
+
+      {setup && (
+        <div className="space-y-3 max-w-lg">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            {t('platform:mfa.setupInstructions', 'Aşağıdaki secret\'ı authenticator uygulamanıza (Google Authenticator, 1Password vb.) manuel olarak ekleyin, ardından üretilen 6 haneli kodu girin.')}
+          </p>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1">
+            <p className="text-xs text-gray-500">{t('platform:mfa.secret', 'Secret (manuel giriş)')}</p>
+            <code className="text-sm font-mono break-all text-gray-900 dark:text-white select-all">{setup.secret}</code>
+            <p className="text-xs text-gray-500 pt-2">otpauth URI</p>
+            <code className="text-xs font-mono break-all text-gray-500 select-all">{setup.otpauthUri}</code>
+          </div>
+          <input type="text" inputMode="numeric" maxLength={6} value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            className={inputCls} placeholder="000000" />
+          <div className="flex gap-2">
+            <button onClick={verifySetup} disabled={busy || code.length !== 6}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              {busy && <Loader2 size={14} className="animate-spin" />}
+              {t('platform:mfa.verify', 'Doğrula ve Etkinleştir')}
+            </button>
+            <button onClick={() => { setSetup(null); setCode(''); }}
+              className="text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2">
+              {t('platform:actions.cancel', 'Vazgeç')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mfaEnabled && !disabling && (
+        <button onClick={() => { setDisabling(true); setMessage(null); }}
+          className="text-sm text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+          {t('platform:mfa.disable', 'MFA\'yı Devre Dışı Bırak')}
+        </button>
+      )}
+
+      {mfaEnabled && disabling && (
+        <div className="space-y-3 max-w-sm">
+          <input type="password" value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)}
+            className={inputCls} placeholder={t('platform:mfa.password', 'Hesap şifresi')} />
+          <input type="text" inputMode="numeric" maxLength={6} value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            className={inputCls} placeholder="000000" />
+          <div className="flex gap-2">
+            <button onClick={disableMfa} disabled={busy || code.length !== 6 || !disablePassword}
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              {busy && <Loader2 size={14} className="animate-spin" />}
+              {t('platform:mfa.confirmDisable', 'Devre Dışı Bırak')}
+            </button>
+            <button onClick={() => { setDisabling(false); setCode(''); setDisablePassword(''); }}
+              className="text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2">
+              {t('platform:actions.cancel', 'Vazgeç')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

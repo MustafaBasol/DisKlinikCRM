@@ -24,6 +24,11 @@
  */
 
 import assert from 'node:assert/strict';
+
+// These unit tests exercise the middleware via Bearer tokens; the production
+// default is now cookie-only, so enable the fallback explicitly for the suite.
+process.env.PLATFORM_BEARER_FALLBACK_ENABLED = 'true';
+
 import { BACKUP_FILENAME_RE, BACKUP_DIR, BACKUP_SCRIPT, BACKUP_LOG } from '../services/backupService.js';
 import { generatePlatformToken, authenticatePlatformAdmin } from '../middleware/platformAuth.js';
 import jwt from 'jsonwebtoken';

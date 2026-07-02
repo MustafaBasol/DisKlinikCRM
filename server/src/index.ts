@@ -59,15 +59,24 @@ import { startDataRetentionCleanupJob } from './jobs/dataRetentionCleanupJob.js'
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
 import { getBearerFallbackWarnings } from './utils/authFallback.js';
+import { httpLogger } from './utils/logger.js';
 
 dotenv.config();
 
 // ── Startup validation ────────────────────────────────────────────────────────
 if (!isEncryptionKeyConfigured()) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      '[FATAL] ENCRYPTION_KEY is not set or invalid. ' +
+      'WhatsApp/SMS credentials and webhook secrets cannot be encrypted at rest. ' +
+      'Set ENCRYPTION_KEY=<openssl rand -hex 32> and restart.',
+    );
+    process.exit(1);
+  }
   console.warn(
     '[WARN] ENCRYPTION_KEY is not set or invalid. ' +
-    'WhatsApp API keys will be stored unencrypted. ' +
-    'Set ENCRYPTION_KEY=<openssl rand -hex 32> before going to production.',
+    'Secret writes (WhatsApp tokens, SMS provider configs, webhook secrets) will fail. ' +
+    'Set ENCRYPTION_KEY=<openssl rand -hex 32>.',
   );
 }
 
@@ -104,10 +113,29 @@ const corsOptions: CorsOptions = {
 };
 
 app.disable('x-powered-by');
+
+// Behind a reverse proxy (nginx) req.ip must come from X-Forwarded-For,
+// otherwise every IP-keyed rate limit collapses into the proxy's address.
+// TRUST_PROXY accepts a hop count, "true"/"false", or an address/subnet list.
+const trustProxyEnv = (process.env.TRUST_PROXY ?? '1').trim();
+app.set(
+  'trust proxy',
+  /^\d+$/.test(trustProxyEnv)
+    ? parseInt(trustProxyEnv, 10)
+    : trustProxyEnv === 'true' ? true : trustProxyEnv === 'false' ? false : trustProxyEnv,
+);
+
+// Yapısal request logging (JSON). Body loglanmaz; auth/cookie başlıkları ve
+// URL'deki token parametreleri maskelenir — bkz. utils/logger.ts
+app.use(httpLogger);
+
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Frame-Options', 'DENY');
+  res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
   next();
 });
 app.use(cors(corsOptions));
@@ -180,6 +208,17 @@ app.use('/api', postTreatmentRoutes);
 app.use('/api', patientPrivacyRoutes);
 app.use('/api', clinicLegalProfileRoutes);
 app.use('/api', smsRoutes);
+
+// Global error handler — without this, unhandled errors fall through to
+// Express's default handler, which writes the stack trace into the response
+// whenever NODE_ENV !== 'production'.
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (res.headersSent) return next(err);
+  // Body-parser errors (malformed JSON, payload too large) carry a client status.
+  const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 500 ? err.status : 500;
+  if (status >= 500) console.error('[unhandled-error]', err);
+  res.status(status).json({ error: status >= 500 ? 'Internal server error' : 'Invalid request' });
+});
 
 app.listen(port, host, () => {
   console.log(`Server is running on ${host}:${port}`);

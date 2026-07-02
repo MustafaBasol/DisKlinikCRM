@@ -90,14 +90,6 @@ export async function toClinicOnlyScope(
 }
 
 /**
- * @deprecated Yetkilendirme için kullanmayın. Geriye dönük uyumluluk içindir.
- * clinicId = user.clinicId (defaultClinicId) scope'u döndürür.
- */
-export function getLegacyScope(user: NonNullable<AuthRequest['user']>): { clinicId: string } {
-  return { clinicId: user.clinicId };
-}
-
-/**
  * Kullanıcının erişebildiği klinik ID'lerini döndürür.
  * canAccessAllClinics ise organizasyon altındaki tüm aktif klinikleri döndürür.
  * Aksi hâlde allowedClinicIds listesini döndürür.

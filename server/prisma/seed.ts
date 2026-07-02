@@ -21,6 +21,13 @@ const colors = {
 };
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
+    throw new Error(
+      'Refusing to run the demo seed in production: it wipes all data and creates accounts with well-known passwords. ' +
+      'Set ALLOW_PROD_SEED=true only if you really mean it.',
+    );
+  }
+
   console.log('Starting Aile Dis single-branch demo seed...');
 
   await prisma.activityLog.deleteMany({});
@@ -80,7 +87,7 @@ async function main() {
   await prisma.platformAdmin.create({
     data: {
       email: 'platform@disklinik.com',
-      passwordHash: await bcrypt.hash('PlatformAdmin2026!', 12),
+      passwordHash: await bcrypt.hash(process.env.SEED_PLATFORM_ADMIN_PASSWORD || 'PlatformAdmin2026!', 12),
       name: 'Platform Admin',
     },
   });

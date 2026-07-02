@@ -9,6 +9,7 @@ import {
   checkLoginAttempt, recordLoginAttempt, resetLoginAttempts, validatePassword,
   checkForgotPasswordAttempt, recordForgotPasswordAttempt,
   checkResendVerificationAttempt, recordResendVerificationAttempt,
+  createRateLimiter,
 } from '../utils/helpers.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { sendMail } from '../services/emailService.js';
@@ -30,9 +31,14 @@ import {
 
 const router = express.Router();
 
+// IP-keyed login limit alongside the per-email one: without it, spraying one
+// password across many accounts is never throttled.
+const loginIpLimiter = createRateLimiter(20, 15 * 60 * 1000);
+
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
+  const clientIp = req.ip || 'unknown';
 
   try {
     if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -41,7 +47,7 @@ router.post('/login', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (!checkLoginAttempt(normalizedEmail)) {
+    if (!checkLoginAttempt(normalizedEmail) || !loginIpLimiter.check(clientIp)) {
       return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
     }
 
@@ -51,6 +57,7 @@ router.post('/login', async (req, res) => {
     if (matchCount > 1) {
       console.warn(`[login] Duplicate email detected (${matchCount} accounts). Blocking login for safety.`);
       recordLoginAttempt(normalizedEmail);
+      loginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -69,11 +76,13 @@ router.post('/login', async (req, res) => {
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       recordLoginAttempt(normalizedEmail);
+      loginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     if (!user.isActive) {
       recordLoginAttempt(normalizedEmail);
+      loginIpLimiter.record(clientIp);
       return res.status(403).json({ error: 'User account is inactive' });
     }
 
@@ -224,7 +233,7 @@ router.post(
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+        data: { passwordHash: await bcrypt.hash(newPassword, 12), passwordChangedAt: new Date() },
       });
 
       await logActivity({
@@ -435,7 +444,7 @@ router.post('/reset-password', async (req, res) => {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: resetToken.userId },
-        data: { passwordHash: newPasswordHash },
+        data: { passwordHash: newPasswordHash, passwordChangedAt: new Date() },
       }),
       prisma.passwordResetToken.update({
         where: { id: resetToken.id },
