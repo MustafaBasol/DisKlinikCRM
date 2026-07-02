@@ -30,4 +30,10 @@ export interface SmsProvider {
   readonly key: string;
   /** Send a single SMS. Must never throw — return { success: false, error }. */
   sendSms(payload: SmsSendPayload, config: SmsProviderConfig): Promise<SmsSendResult>;
+  /**
+   * Optional connectivity/credentials check used by the platform admin
+   * "test provider" action. Must never throw. Real adapters should hit the
+   * vendor's auth/balance endpoint; mocks simulate success.
+   */
+  testProvider?(config: SmsProviderConfig): Promise<SmsSendResult>;
 }

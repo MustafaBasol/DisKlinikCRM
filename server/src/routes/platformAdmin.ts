@@ -13,6 +13,13 @@ import { getPlatformSetting, setPlatformSetting } from '../services/platformSett
 import { createRateLimiter } from '../utils/helpers.js';
 import { encryptSecretTagged, decryptSecretTagged } from '../utils/encryption.js';
 import { generateTotpSecret, verifyTotp, buildOtpAuthUri } from '../utils/totp.js';
+import { platformSmsProviderSchema } from '../schemas/index.js';
+import { AVAILABLE_SMS_PROVIDERS } from '../services/sms/smsProviders.js';
+import {
+  encryptProviderCredentials,
+  runPlatformSmsProviderTest,
+  sanitizePlatformSmsProvider,
+} from '../services/sms/platformSmsProviders.js';
 
 const router = express.Router();
 
@@ -637,6 +644,95 @@ router.patch('/clinics/:id/sms-addon', async (req, res: Response) => {
     res.json(settings);
   } catch {
     res.status(500).json({ error: 'Failed to update SMS add-on' });
+  }
+});
+
+// ─── Platform SMS Providers ──────────────────────────────────────────────────
+// Global Turkey/Europe provider configs sold behind the clinic SMS add-on.
+// Credentials are encrypted at rest and NEVER returned in responses.
+
+// GET /api/platform/sms-providers — list configs (sanitized) + known adapter keys
+router.get('/sms-providers', async (_req, res: Response) => {
+  try {
+    const rows = await prisma.platformSmsProvider.findMany({
+      orderBy: [{ region: 'asc' }, { isDefault: 'desc' }, { displayName: 'asc' }],
+    });
+    res.json({ providers: rows.map(sanitizePlatformSmsProvider), adapters: AVAILABLE_SMS_PROVIDERS });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch SMS providers' });
+  }
+});
+
+// PUT /api/platform/sms-providers — upsert by (region, providerCode)
+router.put('/sms-providers', async (req, res: Response) => {
+  const parsed = platformSmsProviderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid provider payload' });
+  }
+  const { region, providerCode, displayName, isActive, isDefault, senderName, credentials } = parsed.data;
+  const encrypted = encryptProviderCredentials(credentials ?? null);
+
+  try {
+    const row = await prisma.$transaction(async (tx) => {
+      // A region has at most one default provider.
+      if (isDefault) {
+        await tx.platformSmsProvider.updateMany({
+          where: { region, NOT: { providerCode } },
+          data: { isDefault: false },
+        });
+      }
+      return tx.platformSmsProvider.upsert({
+        where: { region_providerCode: { region, providerCode } },
+        update: {
+          displayName,
+          ...(isActive !== undefined ? { isActive } : {}),
+          ...(isDefault !== undefined ? { isDefault } : {}),
+          ...(senderName !== undefined ? { senderName } : {}),
+          // Omitted/empty credentials keep the stored encrypted value;
+          // a non-empty object replaces it entirely.
+          ...(encrypted ? { credentials: encrypted } : {}),
+        },
+        create: {
+          region,
+          providerCode,
+          displayName,
+          isActive: isActive ?? false,
+          isDefault: isDefault ?? false,
+          senderName: senderName ?? null,
+          credentials: encrypted ?? undefined,
+        },
+      });
+    });
+    res.json(sanitizePlatformSmsProvider(row));
+  } catch {
+    res.status(500).json({ error: 'Failed to save SMS provider' });
+  }
+});
+
+// POST /api/platform/sms-providers/:id/test — safe connectivity check (no send)
+router.post('/sms-providers/:id/test', async (req, res: Response) => {
+  try {
+    const row = await prisma.platformSmsProvider.findUnique({ where: { id: req.params.id } });
+    if (!row) return res.status(404).json({ error: 'SMS provider not found' });
+
+    const result = await runPlatformSmsProviderTest(row);
+    const updated = await prisma.platformSmsProvider.update({
+      where: { id: row.id },
+      data: { lastTestedAt: new Date(), lastTestOk: result.ok, lastTestError: result.error },
+    });
+    res.json({ ok: result.ok, error: result.error, provider: sanitizePlatformSmsProvider(updated) });
+  } catch {
+    res.status(500).json({ error: 'Failed to test SMS provider' });
+  }
+});
+
+// DELETE /api/platform/sms-providers/:id
+router.delete('/sms-providers/:id', async (req, res: Response) => {
+  try {
+    await prisma.platformSmsProvider.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch {
+    res.status(404).json({ error: 'SMS provider not found' });
   }
 });
 

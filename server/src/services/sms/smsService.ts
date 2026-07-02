@@ -19,6 +19,7 @@ import prisma from '../../db.js';
 import { recordOperationalEvent } from '../operationalEventService.js';
 import { decryptJson } from '../../utils/encryption.js';
 import { getSmsProvider } from './smsProviders.js';
+import { resolvePlatformSmsProvider } from './platformSmsProviders.js';
 import { normalizeSmsPhone, resolveSmsRegion, type SmsRegion } from './smsRouting.js';
 import {
   getSmsEntitlement,
@@ -75,6 +76,7 @@ export type SmsSendDeps = {
   reserveQuota: typeof reserveSmsQuotaSlot;
   releaseQuota: typeof releaseSmsQuotaSlot;
   getProvider: typeof getSmsProvider;
+  getPlatformProvider: typeof resolvePlatformSmsProvider;
 };
 
 const defaultDeps: SmsSendDeps = {
@@ -82,25 +84,34 @@ const defaultDeps: SmsSendDeps = {
   reserveQuota: reserveSmsQuotaSlot,
   releaseQuota: releaseSmsQuotaSlot,
   getProvider: getSmsProvider,
+  getPlatformProvider: resolvePlatformSmsProvider,
 };
 
-function pickProviderForRegion(entitlement: SmsEntitlement, region: SmsRegion): {
-  providerKey: string | null;
-  config: unknown;
-} {
-  if (region === 'tr') {
-    return {
-      providerKey: entitlement.settings?.turkeyProvider ?? null,
-      config: decryptJson(entitlement.settings?.turkeyProviderConfig),
-    };
+/**
+ * Provider resolution for a region: a clinic-level override in
+ * ClinicSmsSettings wins when set; otherwise the platform-level provider
+ * configured centrally by the platform admin (PlatformSmsProvider) is used.
+ */
+async function pickProviderForRegion(
+  entitlement: SmsEntitlement,
+  region: SmsRegion,
+  deps: SmsSendDeps,
+): Promise<{ providerKey: string | null; config: unknown; senderName: string | null }> {
+  if (region !== 'tr' && region !== 'eu') {
+    return { providerKey: null, config: null, senderName: null };
   }
-  if (region === 'eu') {
-    return {
-      providerKey: entitlement.settings?.europeProvider ?? null,
-      config: decryptJson(entitlement.settings?.europeProviderConfig),
-    };
+  const clinicKey =
+    region === 'tr' ? entitlement.settings?.turkeyProvider : entitlement.settings?.europeProvider;
+  if (clinicKey) {
+    const rawConfig =
+      region === 'tr' ? entitlement.settings?.turkeyProviderConfig : entitlement.settings?.europeProviderConfig;
+    return { providerKey: clinicKey, config: decryptJson(rawConfig), senderName: null };
   }
-  return { providerKey: null, config: null };
+  const platform = await deps.getPlatformProvider(region);
+  if (platform) {
+    return { providerKey: platform.providerKey, config: platform.config, senderName: platform.senderName };
+  }
+  return { providerKey: null, config: null, senderName: null };
 }
 
 type BlockedRecordArgs = SendClinicSmsArgs & {
@@ -236,7 +247,7 @@ export async function sendClinicSms(
     return { ok: false, code: 'region_unsupported', error: 'This phone number region is not supported for SMS.', messageId };
   }
 
-  const { providerKey, config } = pickProviderForRegion(entitlement, region);
+  const { providerKey, config, senderName: platformSenderName } = await pickProviderForRegion(entitlement, region, deps);
   const provider = deps.getProvider(providerKey);
   if (!provider) {
     const messageId = await recordBlocked({
@@ -313,7 +324,7 @@ export async function sendClinicSms(
 
   // 7. Provider send
   const sendResult = await provider.sendSms(
-    { phone: normalized, text: body, senderName: entitlement.settings?.senderName ?? null },
+    { phone: normalized, text: body, senderName: entitlement.settings?.senderName ?? platformSenderName ?? null },
     (config ?? null) as Record<string, unknown> | null,
   );
 

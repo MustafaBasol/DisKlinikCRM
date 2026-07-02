@@ -1905,3 +1905,30 @@ model SmsUsageCounter {
 
   @@unique([clinicId, period])
 }
+
+/// Platform-level SMS provider configuration, managed only by platform admins.
+/// Clinics never see or edit these rows; sending falls back to the region's
+/// default platform provider when a clinic has no explicit provider override.
+model PlatformSmsProvider {
+  id            String    @id @default(uuid())
+  /// Routing region: tr | eu
+  region        String
+  /// Adapter key in the provider registry (e.g. mock_turkey, netgsm, twilio)
+  providerCode  String
+  displayName   String
+  isActive      Boolean   @default(false)
+  /// Default provider for the region when a clinic has no explicit override
+  isDefault     Boolean   @default(false)
+  /// Alphanumeric sender id / originator, when the provider supports it
+  senderName    String?
+  /// API credentials encrypted via encryptJson() — never returned by the API
+  credentials   Json?
+  lastTestedAt  DateTime?
+  lastTestOk    Boolean?
+  lastTestError String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([region, providerCode])
+  @@index([region, isActive, isDefault])
+}

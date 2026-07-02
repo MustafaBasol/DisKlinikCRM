@@ -54,7 +54,12 @@ import {
   SMS_PURPOSES,
 } from '../services/sms/smsTemplating.js';
 import { getSmsProvider, AVAILABLE_SMS_PROVIDERS } from '../services/sms/smsProviders.js';
-import { smsSendSchema, smsSettingsSchema, MESSAGE_TEMPLATE_PURPOSES } from '../schemas/index.js';
+import { smsSendSchema, smsSettingsSchema, platformSmsProviderSchema, MESSAGE_TEMPLATE_PURPOSES } from '../schemas/index.js';
+import {
+  sanitizePlatformSmsProvider,
+  encryptProviderCredentials,
+  runPlatformSmsProviderTest,
+} from '../services/sms/platformSmsProviders.js';
 
 // ─── Run tests ────────────────────────────────────────────────────────────────
 
@@ -318,6 +323,92 @@ async function main() {
 
   await test('quota slot is released when the provider send fails', () => {
     assert.ok(serviceSrc.includes('releaseQuota'), 'failed sends must not consume quota');
+  });
+
+  // ── Platform SMS providers (central provider config) ───────────────────────
+  section('Platform SMS provider management');
+
+  process.env.ENCRYPTION_KEY = 'e'.repeat(64);
+
+  await test('platformSmsProviderSchema accepts a valid payload', () => {
+    const parsed = platformSmsProviderSchema.safeParse({
+      region: 'tr', providerCode: 'netgsm', displayName: 'NetGSM',
+      isActive: true, isDefault: true, senderName: 'NORAMEDI',
+      credentials: { username: 'u', password: 'p' },
+    });
+    assert.ok(parsed.success);
+  });
+
+  await test('platformSmsProviderSchema rejects unknown region and bad provider code', () => {
+    assert.equal(platformSmsProviderSchema.safeParse({ region: 'us', providerCode: 'x', displayName: 'X' }).success, false);
+    assert.equal(platformSmsProviderSchema.safeParse({ region: 'tr', providerCode: 'Bad Code!', displayName: 'X' }).success, false);
+  });
+
+  await test('sanitizePlatformSmsProvider never exposes stored credentials', () => {
+    const row = {
+      id: '1', region: 'tr', providerCode: 'netgsm', displayName: 'NetGSM',
+      isActive: true, isDefault: true, senderName: null,
+      credentials: { __encrypted: 'deadbeef' },
+      lastTestedAt: null, lastTestOk: null, lastTestError: null, updatedAt: new Date(),
+    };
+    const sanitized = sanitizePlatformSmsProvider(row);
+    assert.equal((sanitized as Record<string, unknown>).credentials, undefined);
+    assert.equal(sanitized.credentialsConfigured, true);
+    assert.ok(!JSON.stringify(sanitized).includes('deadbeef'));
+    assert.equal(sanitizePlatformSmsProvider({ ...row, credentials: null }).credentialsConfigured, false);
+  });
+
+  await test('encryptProviderCredentials encrypts values and drops empty objects', () => {
+    assert.equal(encryptProviderCredentials(null), null);
+    assert.equal(encryptProviderCredentials({}), null);
+    const encrypted = encryptProviderCredentials({ apiKey: 'super-secret-key' });
+    assert.ok(encrypted && typeof encrypted.__encrypted === 'string');
+    assert.ok(!JSON.stringify(encrypted).includes('super-secret-key'));
+  });
+
+  await test('provider test succeeds in mock mode with encrypted credentials', async () => {
+    const result = await runPlatformSmsProviderTest({
+      providerCode: 'mock_turkey',
+      credentials: encryptProviderCredentials({ apiKey: 'k' }),
+    });
+    assert.deepEqual(result, { ok: true, error: null });
+  });
+
+  await test('provider test fails safely for an unregistered adapter', async () => {
+    const result = await runPlatformSmsProviderTest({ providerCode: 'netgsm', credentials: null });
+    assert.equal(result.ok, false);
+    assert.ok(result.error?.includes('netgsm'));
+  });
+
+  await test('provider test surfaces simulated failures (mock failure hook)', async () => {
+    const result = await runPlatformSmsProviderTest({
+      providerCode: 'mock_europe',
+      credentials: encryptProviderCredentials({ simulateFailure: true }),
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.error);
+  });
+
+  await test('platform admin routes manage sms providers and sanitize responses', () => {
+    const platformAdminSrc = src('../routes/platformAdmin.ts');
+    for (const needle of [
+      "router.get('/sms-providers'",
+      "router.put('/sms-providers'",
+      "router.post('/sms-providers/:id/test'",
+      "router.delete('/sms-providers/:id'",
+      'sanitizePlatformSmsProvider',
+      'platformSmsProviderSchema',
+    ]) {
+      assert.ok(platformAdminSrc.includes(needle), `platformAdmin.ts missing: ${needle}`);
+    }
+  });
+
+  await test('send pipeline falls back to the platform provider for the region', () => {
+    assert.ok(serviceSrc.includes('getPlatformProvider'), 'smsService must consult platform providers');
+  });
+
+  await test('Prisma schema contains the PlatformSmsProvider model', () => {
+    assert.ok(schemaSrc.includes('model PlatformSmsProvider'));
   });
 
   // ── Summary ─────────────────────────────────────────────────────────────────
