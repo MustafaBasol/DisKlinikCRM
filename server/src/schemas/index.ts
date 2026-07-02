@@ -348,6 +348,19 @@ export const smsSettingsSchema = z.object({
   europeProviderConfig: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
+/// Platform admin upsert of a platform-level SMS provider (per region).
+/// credentials: omitted or empty = keep the stored encrypted value; an object
+/// with keys = replace the stored encrypted value entirely.
+export const platformSmsProviderSchema = z.object({
+  region: z.enum(['tr', 'eu']),
+  providerCode: z.string().min(1).max(50).regex(/^[a-z0-9_]+$/, 'providerCode must be a lowercase slug'),
+  displayName: z.string().min(1).max(100),
+  isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+  senderName: z.string().max(20).optional().nullable(),
+  credentials: z.record(z.string(), z.unknown()).optional().nullable(),
+});
+
 export const smsSendSchema = z.object({
   patientId: z.string().min(1, 'Patient ID is required'),
   clinicId: z.string().min(1).optional().nullable(),

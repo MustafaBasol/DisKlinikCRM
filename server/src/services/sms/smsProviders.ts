@@ -28,6 +28,15 @@ class MockSmsProvider implements SmsProvider {
     }
     return { success: true, externalMessageId: `${this.key}-${randomUUID()}` };
   }
+
+  async testProvider(config: SmsProviderConfig): Promise<SmsSendResult> {
+    // Mock mode: simulate a successful connectivity check unless the config
+    // explicitly asks for a failure (test hook).
+    if (config && (config as Record<string, unknown>).simulateFailure === true) {
+      return { success: false, error: `Simulated ${this.key} provider test failure` };
+    }
+    return { success: true };
+  }
 }
 
 const REGISTRY = new Map<string, SmsProvider>([
