@@ -97,7 +97,26 @@
       "users": "Utilisateurs",
       "patients": "Patients",
       "created": "Création",
-      "actions": "Actions"
+      "actions": "Actions",
+      "sms": "SMS"
+    },
+    "sms": {
+      "modalTitle": "Module SMS - {{name}}",
+      "addonBadge": "Module actif",
+      "planBadge": "Via le plan",
+      "inactive": "Inactif",
+      "month": "mois",
+      "enableAddon": "Activer le module SMS pour cette clinique",
+      "monthlyQuota": "Quota SMS mensuel",
+      "quotaHint": "Nombre maximal de SMS que cette clinique peut envoyer par mois via le module (0 = aucun).",
+      "planFeatureLabel": "Fonction SMS du plan :",
+      "planFeatureOn": "Incluse dans le plan {{plan}}",
+      "planFeatureOff": "Non incluse dans le plan actuel",
+      "sourceLabel": "Actuellement activé par :",
+      "sourceAddon": "Module de la clinique",
+      "sourcePlan": "Fonction du plan",
+      "sourceNone": "Non activé",
+      "saveFailed": "Échec de la mise à jour du module SMS"
     }
   },
   "organizations": {

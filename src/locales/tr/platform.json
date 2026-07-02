@@ -97,7 +97,26 @@
       "users": "Kullanıcı",
       "patients": "Hasta",
       "created": "Oluşturulma",
-      "actions": "İşlemler"
+      "actions": "İşlemler",
+      "sms": "SMS"
+    },
+    "sms": {
+      "modalTitle": "SMS Eklentisi - {{name}}",
+      "addonBadge": "Eklenti aktif",
+      "planBadge": "Plan ile",
+      "inactive": "Pasif",
+      "month": "ay",
+      "enableAddon": "Bu klinik için SMS eklentisini etkinleştir",
+      "monthlyQuota": "Aylık SMS kotası",
+      "quotaHint": "Bu kliniğin eklenti ile ayda gönderebileceği en fazla SMS sayısı (0 = yok).",
+      "planFeatureLabel": "Plan SMS özelliği:",
+      "planFeatureOn": "{{plan}} planına dahil",
+      "planFeatureOff": "Mevcut plana dahil değil",
+      "sourceLabel": "Şu anda etkinleştiren:",
+      "sourceAddon": "Klinik eklentisi",
+      "sourcePlan": "Plan özelliği",
+      "sourceNone": "Etkin değil",
+      "saveFailed": "SMS eklentisi güncellenemedi"
     }
   },
   "organizations": {
