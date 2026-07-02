@@ -29,6 +29,7 @@ import {
 } from '../services/whatsapp/clinicResolver.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
+import { decryptSecretTagged } from '../utils/encryption.js';
 import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
 import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
 import {
@@ -271,7 +272,7 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
     }
 
     // Validate signature if secret configured
-    const secret = connection.metaWebhookSecret || connection.webhookSecret;
+    const secret = decryptSecretTagged(connection.metaWebhookSecret) || decryptSecretTagged(connection.webhookSecret);
     if (!secret && !requireWebhookSecretInProduction(secret)) {
       logWebhookEvent(
         connection.organizationId,
@@ -414,7 +415,7 @@ router.post(
       if (!connection) return;
 
       // Validate signature if secret configured
-      const secret = connection.metaWebhookSecret || connection.webhookSecret;
+      const secret = decryptSecretTagged(connection.metaWebhookSecret) || decryptSecretTagged(connection.webhookSecret);
       if (!secret && !requireWebhookSecretInProduction(secret)) {
         logWebhookEvent(
           connection.organizationId,

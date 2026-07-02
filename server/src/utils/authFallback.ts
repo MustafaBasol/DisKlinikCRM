@@ -13,9 +13,11 @@ export function isBearerFallbackEnabled(type: SessionType): boolean {
     ? 'CLINIC_BEARER_FALLBACK_ENABLED'
     : 'PLATFORM_BEARER_FALLBACK_ENABLED';
 
+  // Default OFF: the frontend is fully cookie-based, and Bearer requests skip
+  // CSRF protection entirely. Enable explicitly only during a cookie migration.
   return readBooleanFlag(
     process.env[specificKey] ?? process.env.AUTH_BEARER_FALLBACK_ENABLED,
-    true,
+    false,
   );
 }
 

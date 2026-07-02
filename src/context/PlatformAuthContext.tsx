@@ -17,7 +17,7 @@ interface PlatformAuthState {
   admin: PlatformAdmin | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, totpCode?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -109,8 +109,8 @@ export const PlatformAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => window.removeEventListener('platform-auth:expired', handleExpired);
   }, [clearLegacyStorage]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await platformApi.post('/platform/auth/login', { email, password });
+  const login = useCallback(async (email: string, password: string, totpCode?: string) => {
+    const res = await platformApi.post('/platform/auth/login', { email, password, ...(totpCode ? { totpCode } : {}) });
     clearLegacyStorage();
     setAdmin(res.data.admin);
   }, [clearLegacyStorage]);

@@ -7,6 +7,7 @@ import { patientSchema, patientUpdateSchema } from '../schemas/index.js';
 import { checkPatientLimit } from '../middleware/planLimits.js';
 import { validateAndGetScope, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { patientListSelect, userNameRoleSelect, userNameSelect } from '../utils/prismaSelects.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
 
@@ -135,6 +136,17 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
       if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(billingPatient.clinicId)) {
         return res.status(403).json({ error: 'Access denied to this patient' });
       }
+      // KVKK erişim hesap verebilirliği: hassas kayıt görüntülemeleri de loglanır
+      writeAuditLog({
+        organizationId: orgId,
+        clinicId: billingPatient.clinicId,
+        actorUserId: userId,
+        actorRole: req.user!.role,
+        action: 'patient_record_viewed',
+        entityType: 'patient',
+        entityId: billingPatient.id,
+        ...extractRequestMeta(req),
+      });
       return res.json(billingPatient);
     }
 
@@ -231,6 +243,18 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
     } catch (tcErr: any) {
       console.warn('[patients/:id] enriched treatmentCases query failed (migration pending?):', tcErr?.message);
     }
+
+    // KVKK erişim hesap verebilirliği: hassas kayıt görüntülemeleri de loglanır
+    writeAuditLog({
+      organizationId: orgId,
+      clinicId,
+      actorUserId: userId,
+      actorRole: req.user!.role,
+      action: 'patient_record_viewed',
+      entityType: 'patient',
+      entityId: patient.id,
+      ...extractRequestMeta(req),
+    });
 
     res.json({ ...patient, treatmentCases: treatmentCasesEnriched, toothRecords, whatsappConversationMessages, instagramConversationMessages });
   } catch (err: any) {

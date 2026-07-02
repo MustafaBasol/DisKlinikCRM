@@ -79,6 +79,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         isActive: true,
         organizationId: true,
         canAccessAllClinics: true,
+        passwordChangedAt: true,
         userClinics: {
           where: { isActive: true },
           select: { clinicId: true },
@@ -88,6 +89,16 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
     if (!dbUser || !dbUser.isActive) {
       return res.status(401).json({ error: 'Unauthorized: User is inactive' });
+    }
+
+    // Tokens issued before the last password change are revoked (stolen-token
+    // containment: changing the password kills existing 8h sessions).
+    if (
+      dbUser.passwordChangedAt &&
+      typeof decoded.iat === 'number' &&
+      decoded.iat < Math.floor(dbUser.passwordChangedAt.getTime() / 1000)
+    ) {
+      return res.status(401).json({ error: 'Unauthorized: Session expired' });
     }
 
     const canAccessAllClinics = dbUser.canAccessAllClinics === true;

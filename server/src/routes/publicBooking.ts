@@ -7,8 +7,12 @@ import {
   assertSlotAvailable,
   SlotConflictError,
 } from '../services/appointments/appointmentAvailabilityService.js';
+import { createRateLimiter } from '../utils/helpers.js';
 
 const router = express.Router();
+
+// Unauthenticated write endpoint — throttle per IP to limit spam requests.
+const bookingSubmitLimiter = createRateLimiter(10, 15 * 60 * 1000);
 
 // GET /api/public/booking/:clinicId — clinic info + active services + active doctors
 router.get('/booking/:clinicId', async (req: Request, res: Response) => {
@@ -84,6 +88,13 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
 // POST /api/public/booking/:clinicId — submit appointment request (no auth)
 router.post('/booking/:clinicId', async (req: Request, res: Response) => {
   const clinicId = req.params.clinicId as string;
+
+  const clientIp = req.ip || 'unknown';
+  if (!bookingSubmitLimiter.check(clientIp)) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+  bookingSubmitLimiter.record(clientIp);
+
   const {
     patientName,
     phone,

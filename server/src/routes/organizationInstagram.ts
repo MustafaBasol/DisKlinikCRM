@@ -35,7 +35,7 @@ import {
 } from '../utils/roles.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
-import { encryptSecret } from '../utils/encryption.js';
+import { encryptSecret, encryptSecretTagged } from '../utils/encryption.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { testConnection } from '../services/instagram/InstagramMessagingProvider.js';
 
@@ -227,7 +227,7 @@ router.post(
           accessTokenEncrypted,
           pageAccessTokenEncrypted,
           webhookVerifyToken: verifyToken,
-          webhookSecret: data.webhookSecret ?? null,
+          webhookSecret: data.webhookSecret ? encryptSecretTagged(data.webhookSecret) : null,
           metaAppId: data.metaAppId ?? null,
           metaBusinessId: data.metaBusinessId ?? null,
           status: 'disconnected',
@@ -371,7 +371,9 @@ router.put(
       if (data.instagramUsername !== undefined) updateData.instagramUsername = data.instagramUsername;
       if (data.facebookPageId !== undefined) updateData.facebookPageId = data.facebookPageId;
       if (data.webhookVerifyToken !== undefined) updateData.webhookVerifyToken = data.webhookVerifyToken || existing.webhookVerifyToken;
-      if (data.webhookSecret !== undefined) updateData.webhookSecret = data.webhookSecret;
+      if (data.webhookSecret !== undefined) {
+        updateData.webhookSecret = data.webhookSecret ? encryptSecretTagged(data.webhookSecret) : data.webhookSecret;
+      }
       if (data.metaAppId !== undefined) updateData.metaAppId = data.metaAppId;
       if (data.metaBusinessId !== undefined) updateData.metaBusinessId = data.metaBusinessId;
 

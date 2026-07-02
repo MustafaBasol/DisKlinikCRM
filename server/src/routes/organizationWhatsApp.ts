@@ -32,7 +32,7 @@ import {
 } from '../utils/roles.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
-import { encryptSecret } from '../utils/encryption.js';
+import { encryptSecret, encryptSecretTagged } from '../utils/encryption.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { recordOperationalEvent } from '../services/operationalEventService.js';
 import { isLegacyFallbackEnabled, hasLegacyEnvVars } from '../utils/legacyWhatsApp.js';
@@ -208,6 +208,12 @@ router.post(
       if (typeof createData.metaAccessTokenEncrypted === 'string' && createData.metaAccessTokenEncrypted) {
         createData.metaAccessTokenEncrypted = encryptSecret(createData.metaAccessTokenEncrypted as string);
       }
+      if (typeof createData.metaWebhookSecret === 'string' && createData.metaWebhookSecret) {
+        createData.metaWebhookSecret = encryptSecretTagged(createData.metaWebhookSecret as string);
+      }
+      if (typeof createData.webhookSecret === 'string' && createData.webhookSecret) {
+        createData.webhookSecret = encryptSecretTagged(createData.webhookSecret as string);
+      }
       const connection = await prisma.whatsAppConnection.create({
         data: createData as Parameters<typeof prisma.whatsAppConnection.create>[0]['data'],
       });
@@ -341,6 +347,12 @@ router.put(
       }
       if (typeof updateData.metaAccessTokenEncrypted === 'string' && updateData.metaAccessTokenEncrypted) {
         updateData.metaAccessTokenEncrypted = encryptSecret(updateData.metaAccessTokenEncrypted as string);
+      }
+      if (typeof updateData.metaWebhookSecret === 'string' && updateData.metaWebhookSecret) {
+        updateData.metaWebhookSecret = encryptSecretTagged(updateData.metaWebhookSecret as string);
+      }
+      if (typeof updateData.webhookSecret === 'string' && updateData.webhookSecret) {
+        updateData.webhookSecret = encryptSecretTagged(updateData.webhookSecret as string);
       }
       const updated = await prisma.whatsAppConnection.update({
         where: { id },

@@ -10,6 +10,8 @@ const PlatformLogin: React.FC = () => {
   const { login } = usePlatformAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -18,10 +20,15 @@ const PlatformLogin: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, totpCode || undefined);
       navigate('/platform');
     } catch (err: any) {
-      setError(err.response?.data?.error ?? t('platform:errors.loginFailed'));
+      const code = err.response?.data?.code;
+      if (code === 'MFA_REQUIRED') {
+        setMfaRequired(true);
+      } else {
+        setError(err.response?.data?.error ?? t('platform:errors.loginFailed'));
+      }
     } finally {
       setLoading(false);
     }
@@ -67,6 +74,29 @@ const PlatformLogin: React.FC = () => {
               required
             />
           </div>
+
+          {mfaRequired && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('platform:login.mfaCode', 'Doğrulama kodu (MFA)')}
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-widest"
+                placeholder="000000"
+                required
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t('platform:login.mfaHint', 'Authenticator uygulamanızdaki 6 haneli kodu girin.')}
+              </p>
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg px-3 py-2">

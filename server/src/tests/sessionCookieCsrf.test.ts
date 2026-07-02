@@ -216,14 +216,14 @@ await test('cookie domain warnings catch URL-style domains', async () => {
   });
 });
 
-await test('Bearer fallback defaults to enabled during migration', async () => {
+await test('Bearer fallback defaults to disabled (cookie auth is the only default path)', async () => {
   await withEnv({
     AUTH_BEARER_FALLBACK_ENABLED: undefined,
     CLINIC_BEARER_FALLBACK_ENABLED: undefined,
     PLATFORM_BEARER_FALLBACK_ENABLED: undefined,
   }, () => {
-    assert.equal(isBearerFallbackEnabled('clinic'), true);
-    assert.equal(isBearerFallbackEnabled('platform'), true);
+    assert.equal(isBearerFallbackEnabled('clinic'), false);
+    assert.equal(isBearerFallbackEnabled('platform'), false);
   });
 });
 

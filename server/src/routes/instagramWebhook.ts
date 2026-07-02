@@ -19,6 +19,7 @@ import {
 } from '../services/instagram/instagramClinicResolver.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
+import { decryptSecretTagged } from '../utils/encryption.js';
 import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';
 import {
   createInboundEventOrDetectDuplicate,
@@ -301,14 +302,15 @@ function acceptsInstagramWebhookSignature(
   rawBody: Buffer,
   route: 'global' | 'connection',
 ): boolean {
-  if (!connection.webhookSecret && !requireWebhookSecretInProduction(connection.webhookSecret)) {
+  const webhookSecret = decryptSecretTagged(connection.webhookSecret);
+  if (!webhookSecret && !requireWebhookSecretInProduction(webhookSecret)) {
     logWebhookEvent(connection.organizationId, connection.id, 'instagram_webhook_no_secret_rejected',
       'Instagram webhook rejected: no webhook secret configured in production', { route });
     return false;
   }
 
-  if (connection.webhookSecret) {
-    const valid = validateHubSignature(rawBody, signature, connection.webhookSecret);
+  if (webhookSecret) {
+    const valid = validateHubSignature(rawBody, signature, webhookSecret);
     if (valid === false) {
       logWebhookEvent(connection.organizationId, connection.id, 'instagram_webhook_signature_invalid',
         'X-Hub-Signature-256 validation failed', {

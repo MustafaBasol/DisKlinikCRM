@@ -117,6 +117,45 @@ export const validatePassword = (password: string): { valid: boolean; errors: st
   return { valid: errors.length === 0, errors };
 };
 
+// --- Security: Generic Rate Limiter Factory ---
+// NOTE: state is in-memory — it resets on process restart and is NOT shared
+// across instances. Move to a shared store (Redis/DB counter) before running
+// multiple replicas behind a load balancer.
+
+export interface RateLimiter {
+  check: (key: string) => boolean;
+  record: (key: string) => void;
+  reset: (key: string) => void;
+}
+
+export const createRateLimiter = (max: number, windowMs: number): RateLimiter => {
+  const attempts = new Map<string, { count: number; timestamp: number }>();
+  return {
+    check(key: string): boolean {
+      const now = Date.now();
+      const attempt = attempts.get(key);
+      if (!attempt) return true;
+      if (now - attempt.timestamp > windowMs) {
+        attempts.delete(key);
+        return true;
+      }
+      return attempt.count < max;
+    },
+    record(key: string): void {
+      const now = Date.now();
+      const attempt = attempts.get(key);
+      if (!attempt || now - attempt.timestamp > windowMs) {
+        attempts.set(key, { count: 1, timestamp: now });
+      } else {
+        attempt.count++;
+      }
+    },
+    reset(key: string): void {
+      attempts.delete(key);
+    },
+  };
+};
+
 // --- Security: Rate Limiting (Login Attempts) ---
 
 const loginAttempts = new Map<string, { count: number; timestamp: number }>();

@@ -99,6 +99,8 @@ model User {
   phone               String?
   role                String // OWNER | ORG_ADMIN | CLINIC_MANAGER | DENTIST | RECEPTIONIST | BILLING | ASSISTANT
   passwordHash        String
+  /// JWTs issued before this moment are rejected — set on every password change/reset
+  passwordChangedAt   DateTime?
   isActive            Boolean      @default(true)
   lastLoginAt         DateTime?
   commissionRate      Float        @default(0)
@@ -1212,13 +1214,17 @@ model Plan {
 }
 
 model PlatformAdmin {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  isActive            Boolean   @default(true)
+  /// AES-256-GCM şifreli TOTP secret'ı (`enc:v1:` önekli, utils/encryption.ts)
+  totpSecretEncrypted String?
+  /// Dolu ise login'de TOTP kodu zorunludur; setup → verify akışıyla set edilir
+  totpEnabledAt       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 model ClinicInvitation {
@@ -1336,7 +1342,7 @@ model WhatsAppConnection {
   // Evolution API fields
   evolutionApiUrl          String?
   evolutionInstanceName    String? @unique
-  // TODO: encrypt before storing (no encryption utility in this project yet)
+  // Encrypted at rest with AES-256-GCM (utils/encryption.ts encryptSecret)
   evolutionApiKeyEncrypted String?
 
   // Meta Cloud API foundation fields
@@ -1344,9 +1350,11 @@ model WhatsAppConnection {
   metaWabaId               String?
   metaPhoneNumberId        String?   @unique
   metaAppId                String?
-  // TODO: encrypt before storing
+  // Encrypted at rest with AES-256-GCM (utils/encryption.ts encryptSecret)
   metaAccessTokenEncrypted String?
   metaWebhookVerifyToken   String?
+  // Encrypted at rest with enc:v1: prefix (utils/encryption.ts encryptSecretTagged);
+  // legacy plaintext rows are still readable until re-saved
   metaWebhookSecret        String?
   // Token lifecycle tracking — Meta tokens expire ~60 days unless refreshed
   // valid | expiring | expired | unknown
@@ -1354,7 +1362,7 @@ model WhatsAppConnection {
   metaTokenExpiresAt       DateTime?
   metaTokenLastCheckedAt   DateTime?
 
-  // Shared webhook secret for this connection
+  // Shared webhook secret for this connection — encrypted at rest (enc:v1: prefix)
   webhookSecret   String?
   lastConnectedAt DateTime?
   lastError       String?
@@ -1529,6 +1537,7 @@ model InstagramConnection {
   /// Page-scoped access token (if different from user token)
   pageAccessTokenEncrypted String?
   webhookVerifyToken       String?
+  /// Encrypted at rest (enc:v1: prefix, utils/encryption.ts encryptSecretTagged)
   webhookSecret            String?
   metaAppId                String?
   metaBusinessId           String?

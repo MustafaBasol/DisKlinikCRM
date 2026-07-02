@@ -10,8 +10,16 @@ import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { loadDataRetentionConfig } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting, setPlatformSetting } from '../services/platformSettings.js';
+import { createRateLimiter } from '../utils/helpers.js';
+import { encryptSecretTagged, decryptSecretTagged } from '../utils/encryption.js';
+import { generateTotpSecret, verifyTotp, buildOtpAuthUri } from '../utils/totp.js';
 
 const router = express.Router();
+
+// Brute-force protection for the most privileged credential in the system:
+// 5 attempts per email and 20 per IP, both over 15 minutes.
+const platformLoginEmailLimiter = createRateLimiter(5, 15 * 60 * 1000);
+const platformLoginIpLimiter = createRateLimiter(20, 15 * 60 * 1000);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -33,16 +41,44 @@ router.post('/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'Email and password required' });
   }
 
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const clientIp = req.ip || 'unknown';
+
+  if (!platformLoginEmailLimiter.check(normalizedEmail) || !platformLoginIpLimiter.check(clientIp)) {
+    return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+  }
+
   try {
     const admin = await prisma.platformAdmin.findUnique({ where: { email } });
     if (!admin || !admin.isActive) {
+      platformLoginEmailLimiter.record(normalizedEmail);
+      platformLoginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const valid = await bcrypt.compare(password, admin.passwordHash);
     if (!valid) {
+      platformLoginEmailLimiter.record(normalizedEmail);
+      platformLoginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    // MFA etkinse ikinci faktörü doğrula (şifre doğrulandıktan sonra —
+    // MFA_REQUIRED cevabı şifresi geçersiz birine hesap durumu sızdırmaz)
+    if (admin.totpEnabledAt) {
+      const totpCode = String(req.body.totpCode ?? '').trim();
+      if (!totpCode) {
+        return res.status(401).json({ error: 'MFA code required', code: 'MFA_REQUIRED' });
+      }
+      const totpSecret = decryptSecretTagged(admin.totpSecretEncrypted);
+      if (!totpSecret || !verifyTotp(totpSecret, totpCode)) {
+        platformLoginEmailLimiter.record(normalizedEmail);
+        platformLoginIpLimiter.record(clientIp);
+        return res.status(401).json({ error: 'Invalid MFA code', code: 'MFA_INVALID' });
+      }
+    }
+
+    platformLoginEmailLimiter.reset(normalizedEmail);
 
     const sessionId = createSessionId();
     const token = generatePlatformToken({
@@ -93,12 +129,85 @@ router.get('/me', async (req: PlatformAdminRequest, res: Response) => {
   try {
     const admin = await prisma.platformAdmin.findUnique({
       where: { id: req.platformAdmin!.id },
-      select: { id: true, email: true, name: true, isActive: true, createdAt: true },
+      select: { id: true, email: true, name: true, isActive: true, createdAt: true, totpEnabledAt: true },
     });
     if (!admin) return res.status(404).json({ error: 'Not found' });
-    res.json(admin);
+    res.json({ ...admin, mfaEnabled: !!admin.totpEnabledAt, totpEnabledAt: undefined });
   } catch {
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// ─── MFA (TOTP) ──────────────────────────────────────────────────────────────
+
+// POST /api/platform/auth/mfa/setup — yeni secret üret (henüz etkin değil)
+router.post('/auth/mfa/setup', async (req: PlatformAdminRequest, res: Response) => {
+  try {
+    const admin = await prisma.platformAdmin.findUnique({ where: { id: req.platformAdmin!.id } });
+    if (!admin) return res.status(404).json({ error: 'Not found' });
+    if (admin.totpEnabledAt) {
+      return res.status(400).json({ error: 'MFA is already enabled. Disable it first to re-enroll.' });
+    }
+
+    const secret = generateTotpSecret();
+    await prisma.platformAdmin.update({
+      where: { id: admin.id },
+      data: { totpSecretEncrypted: encryptSecretTagged(secret) },
+    });
+
+    // Secret yalnızca bu cevapta düz döner (QR/manuel giriş için); DB'de şifreli.
+    res.json({ secret, otpauthUri: buildOtpAuthUri(secret, admin.email) });
+  } catch {
+    res.status(500).json({ error: 'Failed to start MFA setup' });
+  }
+});
+
+// POST /api/platform/auth/mfa/verify — setup'ı kodla onayla, MFA'yı etkinleştir
+router.post('/auth/mfa/verify', async (req: PlatformAdminRequest, res: Response) => {
+  try {
+    const code = String(req.body?.code ?? '').trim();
+    const admin = await prisma.platformAdmin.findUnique({ where: { id: req.platformAdmin!.id } });
+    if (!admin) return res.status(404).json({ error: 'Not found' });
+    if (admin.totpEnabledAt) return res.status(400).json({ error: 'MFA is already enabled' });
+
+    const secret = decryptSecretTagged(admin.totpSecretEncrypted);
+    if (!secret) return res.status(400).json({ error: 'MFA setup not started' });
+    if (!verifyTotp(secret, code)) {
+      return res.status(400).json({ error: 'Invalid MFA code' });
+    }
+
+    await prisma.platformAdmin.update({
+      where: { id: admin.id },
+      data: { totpEnabledAt: new Date() },
+    });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to verify MFA code' });
+  }
+});
+
+// POST /api/platform/auth/mfa/disable — şifre + geçerli kod ister
+router.post('/auth/mfa/disable', async (req: PlatformAdminRequest, res: Response) => {
+  try {
+    const code = String(req.body?.code ?? '').trim();
+    const password = String(req.body?.password ?? '');
+    const admin = await prisma.platformAdmin.findUnique({ where: { id: req.platformAdmin!.id } });
+    if (!admin) return res.status(404).json({ error: 'Not found' });
+    if (!admin.totpEnabledAt) return res.status(400).json({ error: 'MFA is not enabled' });
+
+    const passwordValid = await bcrypt.compare(password, admin.passwordHash);
+    const secret = decryptSecretTagged(admin.totpSecretEncrypted);
+    if (!passwordValid || !secret || !verifyTotp(secret, code)) {
+      return res.status(401).json({ error: 'Invalid password or MFA code' });
+    }
+
+    await prisma.platformAdmin.update({
+      where: { id: admin.id },
+      data: { totpSecretEncrypted: null, totpEnabledAt: null },
+    });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to disable MFA' });
   }
 });
 

@@ -155,6 +155,12 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
     return res.status(400).json({ error: 'Password does not meet security requirements', details: passwordValidation.errors });
   }
 
+  // Şube yöneticisi kendi seviyesinde (admin) kullanıcı yaratamaz — sadece
+  // OWNER/ORG_ADMIN yeni admin ekleyebilir.
+  if (req.user!.normalizedRole === 'CLINIC_MANAGER' && validation.data.role === 'admin') {
+    return res.status(403).json({ error: 'Clinic managers cannot create admin users' });
+  }
+
   try {
     const existingGlobal = await prisma.user.findFirst({
       where: { email: { equals: validation.data.email, mode: 'insensitive' } },
@@ -250,6 +256,16 @@ router.put('/users/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), as
     if (!existing) return res.status(404).json({ error: 'User not found' });
     const clinicId = existing.clinicId;
 
+    // Şube yöneticisi admin rolündeki kullanıcılara dokunamaz (hedef OWNER da
+    // olabilir — şifre/e-posta değişikliği hesap devralmaya döner) ve kimseyi
+    // admin'e yükseltemez.
+    if (
+      req.user!.normalizedRole === 'CLINIC_MANAGER' &&
+      (existing.role === 'admin' || validation.data.role === 'admin')
+    ) {
+      return res.status(403).json({ error: 'Clinic managers cannot manage admin users' });
+    }
+
     if (validation.data.email && validation.data.email.toLowerCase().trim() !== existing.email.toLowerCase()) {
       const emailOwner = await prisma.user.findFirst({
         where: { email: { equals: validation.data.email, mode: 'insensitive' }, id: { not: id } },
@@ -272,7 +288,7 @@ router.put('/users/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), as
       where: { id },
       data: {
         ...rest,
-        ...(password ? { passwordHash: await bcrypt.hash(password, 12) } : {}),
+        ...(password ? { passwordHash: await bcrypt.hash(password, 12), passwordChangedAt: new Date() } : {}),
       },
       select: {
         id: true, firstName: true, lastName: true, email: true,
