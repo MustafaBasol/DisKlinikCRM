@@ -18,12 +18,20 @@
     "exhausted": "Le quota mensuel est épuisé — l'envoi de SMS est bloqué jusqu'au mois prochain."
   },
   "providers": {
-    "title": "Acheminement SMS et gestion des fournisseurs",
-    "subtitle": "Les fournisseurs SMS sont gérés par l'administrateur de la plateforme. Les messages sont acheminés automatiquement selon le pays du numéro du destinataire et les règles du forfait SMS de votre clinique.",
-    "turkey": "Numéros turcs",
-    "europe": "Numéros européens",
-    "regionAvailable": "Disponible",
-    "regionUnavailable": "Non disponible — contactez votre administrateur de plateforme"
+    "title": "Fournisseur et routage",
+    "managedByPlatform": "Les fournisseurs SMS et les règles de routage sont gérés par votre administrateur de plateforme."
+  },
+  "regions": {
+    "turkey": "Numéros Turquie",
+    "europe": "Numéros Europe",
+    "allowed": "Autorisé",
+    "notAllowed": "Non autorisé"
+  },
+  "routing": {
+    "title": "Politique de routage",
+    "automatic": "Automatique, selon la région du numéro du destinataire",
+    "forceTurkey": "Toujours utiliser le fournisseur Turquie",
+    "forceEurope": "Toujours utiliser le fournisseur Europe"
   },
   "history": {
     "title": "Historique SMS",

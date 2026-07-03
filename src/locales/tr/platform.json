@@ -117,7 +117,33 @@
       "sourceAddon": "Klinik eklentisi",
       "sourcePlan": "Plan özelliği",
       "sourceNone": "Etkin değil",
-      "saveFailed": "SMS eklentisi güncellenemedi"
+      "saveFailed": "SMS eklentisi güncellenemedi",
+      "regions": {
+        "title": "İzin verilen hedef bölgeler",
+        "turkey": "Türkiye numaraları",
+        "europe": "Avrupa numaraları"
+      },
+      "routing": {
+        "title": "Yönlendirme politikası",
+        "automatic": "Alıcı telefon bölgesine göre otomatik",
+        "forceTurkey": "Her zaman Türkiye sağlayıcısı",
+        "forceEurope": "Her zaman Avrupa sağlayıcısı",
+        "hint": "Otomatik modda SMS sağlayıcısı alıcının telefon ülke koduna göre seçilir."
+      },
+      "resolvedProviders": {
+        "title": "Çözümlenen sağlayıcılar (salt okunur)",
+        "none": "Uygun sağlayıcı yok"
+      },
+      "preview": {
+        "title": "Yönlendirme önizlemesi",
+        "placeholder": "Örnek telefon numarası (örn. +905321234567)",
+        "run": "Önizle",
+        "failed": "Önizleme yapılamadı",
+        "normalizedPhone": "Normalleştirilmiş numara",
+        "detectedRegion": "Tespit edilen bölge",
+        "blocked": "Engellendi",
+        "selectedProvider": "Seçilen sağlayıcı"
+      }
     }
   },
   "organizations": {

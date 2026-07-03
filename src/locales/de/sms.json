@@ -18,12 +18,20 @@
     "exhausted": "Das monatliche Kontingent ist aufgebraucht — der SMS-Versand ist bis zum nächsten Monat blockiert."
   },
   "providers": {
-    "title": "SMS-Weiterleitung und Anbieterverwaltung",
-    "subtitle": "SMS-Anbieter werden vom Plattform-Administrator verwaltet. Nachrichten werden automatisch anhand des Landes der Empfängernummer und der SMS-Paketregeln Ihrer Klinik weitergeleitet.",
-    "turkey": "Türkische Nummern",
-    "europe": "Europäische Nummern",
-    "regionAvailable": "Verfügbar",
-    "regionUnavailable": "Nicht verfügbar — wenden Sie sich an Ihren Plattform-Administrator"
+    "title": "Anbieter und Routing",
+    "managedByPlatform": "SMS-Anbieter und Routing-Regeln werden von Ihrem Plattform-Administrator verwaltet."
+  },
+  "regions": {
+    "turkey": "Türkei-Nummern",
+    "europe": "Europa-Nummern",
+    "allowed": "Erlaubt",
+    "notAllowed": "Nicht erlaubt"
+  },
+  "routing": {
+    "title": "Routing-Richtlinie",
+    "automatic": "Automatisch, nach Ländervorwahl des Empfängers",
+    "forceTurkey": "Immer den Türkei-Anbieter verwenden",
+    "forceEurope": "Immer den Europa-Anbieter verwenden"
   },
   "history": {
     "title": "SMS-Verlauf",

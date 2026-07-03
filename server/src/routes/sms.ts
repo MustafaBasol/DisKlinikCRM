@@ -38,7 +38,7 @@ const HISTORY_ROLES = [...SETTINGS_ROLES, 'RECEPTIONIST'];
  * without exposing the provider's identity to the clinic.
  */
 async function isRegionAvailable(region: 'tr' | 'eu', entitlement: SmsEntitlement): Promise<boolean> {
-  const overrideKey = region === 'tr' ? entitlement.settings?.turkeyProvider : entitlement.settings?.europeProvider;
+  const overrideKey = region === 'tr' ? entitlement.effective?.turkeyProvider : entitlement.effective?.europeProvider;
   if (overrideKey && getSmsProvider(overrideKey)) return true;
   const platformRow = await prisma.platformSmsProvider.findFirst({
     where: { region, isActive: true },
@@ -66,6 +66,10 @@ async function buildStatusPayload(clinicId: string) {
       tr: { available: trAvailable },
       eu: { available: euAvailable },
     },
+    // Read-only — providers/regions/routing are managed by platform admin only.
+    turkeyAllowed: entitlement.effective?.turkeyAllowed ?? false,
+    europeAllowed: entitlement.effective?.europeAllowed ?? false,
+    routingPolicy: entitlement.effective?.routingPolicy ?? 'automatic_by_recipient_phone_region',
   };
 }
 

@@ -18,12 +18,20 @@
     "exhausted": "Aylık kota doldu — SMS gönderimi gelecek aya kadar engellendi."
   },
   "providers": {
-    "title": "SMS yönlendirme ve sağlayıcı yönetimi",
-    "subtitle": "SMS sağlayıcıları platform yöneticisi tarafından yönetilir. Mesajlar, alıcının telefon ülkesine ve kliniğinizin SMS paket kurallarına göre otomatik olarak yönlendirilir.",
+    "title": "Sağlayıcı ve yönlendirme",
+    "managedByPlatform": "SMS sağlayıcıları ve yönlendirme kuralları platform yöneticisi tarafından yönetilir."
+  },
+  "regions": {
     "turkey": "Türkiye numaraları",
     "europe": "Avrupa numaraları",
-    "regionAvailable": "Kullanılabilir",
-    "regionUnavailable": "Kullanılamıyor — platform yöneticinizle iletişime geçin"
+    "allowed": "İzinli",
+    "notAllowed": "İzinli değil"
+  },
+  "routing": {
+    "title": "Yönlendirme politikası",
+    "automatic": "Alıcı telefon bölgesine göre otomatik seçim",
+    "forceTurkey": "Her zaman Türkiye sağlayıcısı kullanılır",
+    "forceEurope": "Her zaman Avrupa sağlayıcısı kullanılır"
   },
   "history": {
     "title": "SMS geçmişi",

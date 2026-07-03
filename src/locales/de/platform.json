@@ -117,7 +117,33 @@
       "sourceAddon": "Klinik-Add-on",
       "sourcePlan": "Plan-Funktion",
       "sourceNone": "Nicht aktiviert",
-      "saveFailed": "SMS-Add-on konnte nicht aktualisiert werden"
+      "saveFailed": "SMS-Add-on konnte nicht aktualisiert werden",
+      "regions": {
+        "title": "Erlaubte Zielregionen",
+        "turkey": "Türkei-Nummern",
+        "europe": "Europa-Nummern"
+      },
+      "routing": {
+        "title": "Routing-Richtlinie",
+        "automatic": "Automatisch, nach Ländervorwahl des Empfängers",
+        "forceTurkey": "Immer den Türkei-Anbieter verwenden",
+        "forceEurope": "Immer den Europa-Anbieter verwenden",
+        "hint": "Im Automatikmodus wird der SMS-Anbieter anhand der Ländervorwahl des Empfängers ausgewählt."
+      },
+      "resolvedProviders": {
+        "title": "Aufgelöste Anbieter (schreibgeschützt)",
+        "none": "Kein kompatibler Anbieter"
+      },
+      "preview": {
+        "title": "Routing-Vorschau",
+        "placeholder": "Beispiel-Telefonnummer (z. B. +905321234567)",
+        "run": "Vorschau",
+        "failed": "Vorschau konnte nicht ausgeführt werden",
+        "normalizedPhone": "Normalisierte Nummer",
+        "detectedRegion": "Erkannte Region",
+        "blocked": "Blockiert",
+        "selectedProvider": "Ausgewählter Anbieter"
+      }
     }
   },
   "organizations": {
