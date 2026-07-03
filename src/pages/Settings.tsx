@@ -1182,7 +1182,6 @@ const Settings: React.FC = () => {
           {canSeeSms && activeTab === 'sms' && (
             <SmsSettingsSection
               clinicId={selectedClinic?.id}
-              canEdit={canManageUsers(user)}
             />
           )}
 

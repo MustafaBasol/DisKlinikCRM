@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  MessageSquare, Loader2, Save, AlertCircle, CheckCircle2, XCircle, RefreshCw,
+  MessageSquare, Loader2, AlertCircle, CheckCircle2, XCircle, RefreshCw, Info,
 } from 'lucide-react';
 import { smsService } from '../../services/api';
 
@@ -12,12 +12,10 @@ type SmsStatusPayload = {
   monthlyQuota: number;
   usedThisMonth: number;
   remaining: number;
-  senderName: string | null;
-  turkeyProvider: string | null;
-  turkeyProviderConfigured: boolean;
-  europeProvider: string | null;
-  europeProviderConfigured: boolean;
-  availableProviders: { tr: string[]; eu: string[] };
+  regions: {
+    tr: { available: boolean };
+    eu: { available: boolean };
+  };
 };
 
 type SmsHistoryEntry = {
@@ -47,18 +45,14 @@ const STATUS_BADGE: Record<string, string> = {
 
 interface SmsSettingsSectionProps {
   clinicId?: string;
-  canEdit: boolean;
 }
 
-const SmsSettingsSection: React.FC<SmsSettingsSectionProps> = ({ clinicId, canEdit }) => {
+const SmsSettingsSection: React.FC<SmsSettingsSectionProps> = ({ clinicId }) => {
   const { t } = useTranslation(['sms', 'common']);
   const [status, setStatus] = useState<SmsStatusPayload | null>(null);
   const [history, setHistory] = useState<SmsHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [form, setForm] = useState({ senderName: '', turkeyProvider: '', europeProvider: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,13 +62,7 @@ const SmsSettingsSection: React.FC<SmsSettingsSectionProps> = ({ clinicId, canEd
         smsService.getSettings(clinicId),
         smsService.getHistory(clinicId ? { clinicId, limit: 50 } : { limit: 50 }),
       ]);
-      const data: SmsStatusPayload = settingsRes.data;
-      setStatus(data);
-      setForm({
-        senderName: data.senderName ?? '',
-        turkeyProvider: data.turkeyProvider ?? '',
-        europeProvider: data.europeProvider ?? '',
-      });
+      setStatus(settingsRes.data);
       setHistory(historyRes.data);
     } catch {
       setError(t('sms:errors.loadFailed'));
@@ -84,29 +72,6 @@ const SmsSettingsSection: React.FC<SmsSettingsSectionProps> = ({ clinicId, canEd
   }, [clinicId, t]);
 
   useEffect(() => { load(); }, [load]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setSaveMessage(null);
-    try {
-      const res = await smsService.updateSettings({
-        senderName: form.senderName || null,
-        turkeyProvider: form.turkeyProvider || null,
-        europeProvider: form.europeProvider || null,
-      }, clinicId);
-      setStatus(res.data);
-      setSaveMessage({ type: 'success', text: t('sms:notifications.saved') });
-    } catch (err: any) {
-      const detail = err?.response?.data?.error;
-      setSaveMessage({
-        type: 'error',
-        text: typeof detail === 'string' ? detail : t('sms:notifications.saveFailed'),
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary-500" /></div>;
@@ -185,89 +150,31 @@ const SmsSettingsSection: React.FC<SmsSettingsSectionProps> = ({ clinicId, canEd
         )}
       </div>
 
-      {/* Provider settings */}
+      {/* Provider/routing info — read-only, no clinic-side provider controls */}
       {status?.addonActive && (
         <div className="card p-6">
-          <h3 className="text-base font-bold mb-1">{t('sms:providers.title')}</h3>
-          <p className="text-sm text-gray-500 mb-4">{t('sms:providers.subtitle')}</p>
-
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                  {t('sms:providers.turkey')}
-                </label>
-                <select
-                  className="input-field w-full"
-                  value={form.turkeyProvider}
-                  disabled={!canEdit}
-                  onChange={(e) => setForm({ ...form, turkeyProvider: e.target.value })}
-                >
-                  <option value="">{t('sms:providers.none')}</option>
-                  {status.availableProviders.tr.map(p => (
-                    <option key={p} value={p}>{t(`sms:providers.names.${p}`, { defaultValue: p })}</option>
-                  ))}
-                </select>
-                <p className={`mt-1 text-[11px] ${status.turkeyProviderConfigured ? 'text-green-600' : 'text-gray-400'}`}>
-                  {status.turkeyProviderConfigured ? t('sms:providers.configured') : t('sms:providers.notConfigured')}
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                  {t('sms:providers.europe')}
-                </label>
-                <select
-                  className="input-field w-full"
-                  value={form.europeProvider}
-                  disabled={!canEdit}
-                  onChange={(e) => setForm({ ...form, europeProvider: e.target.value })}
-                >
-                  <option value="">{t('sms:providers.none')}</option>
-                  {status.availableProviders.eu.map(p => (
-                    <option key={p} value={p}>{t(`sms:providers.names.${p}`, { defaultValue: p })}</option>
-                  ))}
-                </select>
-                <p className={`mt-1 text-[11px] ${status.europeProviderConfigured ? 'text-green-600' : 'text-gray-400'}`}>
-                  {status.europeProviderConfigured ? t('sms:providers.configured') : t('sms:providers.notConfigured')}
-                </p>
-              </div>
+          <div className="flex items-start gap-2 mb-4">
+            <Info size={18} className="text-gray-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-base font-bold mb-1">{t('sms:providers.title')}</h3>
+              <p className="text-sm text-gray-500">{t('sms:providers.subtitle')}</p>
             </div>
+          </div>
 
-            <div className="max-w-xs">
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                {t('sms:providers.senderName')}
-              </label>
-              <input
-                type="text"
-                maxLength={20}
-                className="input-field w-full"
-                value={form.senderName}
-                disabled={!canEdit}
-                onChange={(e) => setForm({ ...form, senderName: e.target.value })}
-              />
-              <p className="mt-1 text-[11px] text-gray-400">{t('sms:providers.senderNameHint')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-gray-100 px-3 py-2">
+              <span className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('sms:providers.turkey')}</span>
+              <span className={`text-sm font-medium ${status.regions.tr.available ? 'text-green-600' : 'text-gray-400'}`}>
+                {status.regions.tr.available ? t('sms:providers.regionAvailable') : t('sms:providers.regionUnavailable')}
+              </span>
             </div>
-
-            {saveMessage && (
-              <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${
-                saveMessage.type === 'success'
-                  ? 'border border-green-100 bg-green-50 text-green-700'
-                  : 'border border-red-100 bg-red-50 text-red-700'
-              }`}>
-                {saveMessage.type === 'success' ? <CheckCircle2 size={16} className="mt-0.5" /> : <AlertCircle size={16} className="mt-0.5" />}
-                <span>{saveMessage.text}</span>
-              </div>
-            )}
-
-            {canEdit && (
-              <div className="flex justify-end pt-2 border-t border-gray-100">
-                <button type="submit" disabled={saving} className="btn-primary">
-                  {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                  {t('common:save')}
-                </button>
-              </div>
-            )}
-          </form>
+            <div className="rounded-lg border border-gray-100 px-3 py-2">
+              <span className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('sms:providers.europe')}</span>
+              <span className={`text-sm font-medium ${status.regions.eu.available ? 'text-green-600' : 'text-gray-400'}`}>
+                {status.regions.eu.available ? t('sms:providers.regionAvailable') : t('sms:providers.regionUnavailable')}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
