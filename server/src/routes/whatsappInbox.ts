@@ -11,7 +11,9 @@
  *   - All queries are scoped to req.user.organizationId — no cross-org leakage.
  *   - CLINIC_MANAGER can only resolve to clinics they have access to.
  *   - Patient lookups are always scoped to the same organization.
- *   - Resolved messages are NOT exposed before linking to preserve privacy.
+ *   - Message history is only exposed once a conversation has a clinic assignment
+ *     (and the user has access to that clinic); unassigned entries expose only
+ *     the lastMessageText snapshot.
  */
 
 import express from 'express';
@@ -24,6 +26,10 @@ import { normalizeRole } from '../utils/roles.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { findPatientInClinic, findUserAssignedToClinic } from '../utils/relationGuards.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
+import {
+  backfillConversationMessagePatient,
+  persistWhatsAppConversationMessage,
+} from '../services/whatsapp/conversationMessageStore.js';
 
 const router = express.Router();
 
@@ -176,8 +182,11 @@ router.get(
       // Patient pages read WhatsAppConversationMessage directly. Include those
       // routed patient conversations here so "All conversations" matches the
       // patient WhatsApp tab instead of only showing manual-resolution entries.
+      // patientId != null: unlinked conversations are already represented by their
+      // WhatsAppInboxEntry — including them here would duplicate rows in the list.
       const messageWhere: Prisma.WhatsAppConversationMessageWhereInput = {
         clinic: { organizationId: user.organizationId },
+        patientId: { not: null },
       };
 
       if (clinicId && typeof clinicId === 'string') {
@@ -346,6 +355,16 @@ router.post(
         },
       });
 
+      // Backfill unlinked conversation messages for this phone now that staff
+      // resolved the conversation to a clinic (+ optionally a patient).
+      if (resolvedPatientId) {
+        await backfillConversationMessagePatient({
+          clinicId,
+          phone: entry.phone,
+          patientId: resolvedPatientId,
+        }).catch(error => console.error('[whatsapp-inbox] resolve backfill failed', error));
+      }
+
       res.json({ ok: true, entry: updated });
 
       // Audit log — non-blocking
@@ -422,6 +441,14 @@ router.post(
         },
       });
 
+      // Backfill unlinked conversation messages for this clinic + phone so the
+      // patient detail Messages tab shows the full history after linking.
+      await backfillConversationMessagePatient({
+        clinicId: entry.clinicId,
+        phone: entry.phone,
+        patientId: patient.id,
+      }).catch(error => console.error('[whatsapp-inbox] link-patient backfill failed', error));
+
       res.json({ ok: true, entry: updated });
     } catch (error) {
       console.error('[whatsapp-inbox] link-patient error', error);
@@ -455,10 +482,9 @@ router.get(
         }
       }
 
-      // Full message history is only stored once a conversation is linked to a
-      // patient (WhatsAppConversationMessage.patientId is required). Unlinked
-      // conversations only have the single lastMessageText snapshot.
-      if (!entry.clinicId || !entry.patientId) {
+      // Conversations without a clinic assignment only expose the single
+      // lastMessageText snapshot (privacy: no clinic scope to authorize against).
+      if (!entry.clinicId) {
         const messages = entry.lastMessageText
           ? [
               {
@@ -472,8 +498,15 @@ router.get(
         return res.json({ messages, partial: true });
       }
 
+      // The inbox thread is per phone: query by phone so unlinked messages
+      // (patientId null, persisted before staff linked a patient) are included.
       const messages = await prisma.whatsAppConversationMessage.findMany({
-        where: { clinicId: entry.clinicId, patientId: entry.patientId },
+        where: entry.patientId
+          ? {
+              clinicId: entry.clinicId,
+              OR: [{ patientId: entry.patientId }, { phone: normalizePhone(entry.phone), patientId: null }],
+            }
+          : { clinicId: entry.clinicId, phone: normalizePhone(entry.phone) },
         orderBy: { createdAt: 'asc' },
         take: 200,
       });
@@ -530,18 +563,14 @@ router.post(
         return res.status(502).json({ error: result.error ?? 'Failed to send WhatsApp message' });
       }
 
-      if (entry.patientId) {
-        await prisma.whatsAppConversationMessage.create({
-          data: {
-            clinicId: entry.clinicId,
-            patientId: entry.patientId,
-            phone: normalizePhone(entry.phone),
-            providerMessageId: result.externalMessageId ?? null,
-            direction: 'outgoing',
-            text: message.trim(),
-          },
-        });
-      }
+      await persistWhatsAppConversationMessage({
+        clinicId: entry.clinicId,
+        patientId: entry.patientId ?? null,
+        phone: entry.phone,
+        providerMessageId: result.externalMessageId ?? null,
+        direction: 'outgoing',
+        text: message.trim(),
+      }).catch(error => console.error('[whatsapp-inbox] reply persistence failed', error));
 
       await prisma.whatsAppInboxEntry.update({
         where: { id: entryId },
