@@ -10,7 +10,8 @@
  * - Reply sent via MetaCloudWhatsAppProvider.sendMessage()
  * - AppointmentRequest.source = 'meta_whatsapp'
  * - Patient lookup by phone (reliable in WA); auto-creation is intentionally skipped.
- * - No separate message history table; inbox entry updatedAt bumped after reply.
+ * - Every inbound/outbound message is persisted to WhatsAppConversationMessage
+ *   (patientId null when unresolved; backfilled when staff links the inbox entry).
  * - Idempotency gate is enforced in the webhook BEFORE this processor is called.
  *
  * Security:
@@ -39,6 +40,7 @@ import {
 } from '../whatsappAvailability.js';
 import { interpretTimeRequest } from '../whatsappInterpreter.js';
 import { MetaCloudWhatsAppProvider } from './MetaCloudWhatsAppProvider.js';
+import { persistWhatsAppConversationMessage } from './conversationMessageStore.js';
 import type { WhatsAppConnectionRecord } from './WhatsAppProvider.js';
 import { recordOperationalEvent } from '../operationalEventService.js';
 import { logActivity } from '../../utils/activity.js';
@@ -1742,6 +1744,27 @@ export const processMetaWhatsAppIncomingMessage = async (
     inboxEntry?.patient ?? (await findExistingPatientByPhone(clinic.id, args.phone));
   const conversationKey = buildMetaWaConversationKey(args.connectionId, args.phone);
 
+  // Persist the inbound message before any AI processing so history survives
+  // reply failures. patientId stays null for unresolved/ambiguous senders and
+  // is backfilled when staff links the inbox entry to a patient.
+  const resolvedPatientId = inboxEntry?.patientId ?? existingPatient?.id ?? null;
+  try {
+    await persistWhatsAppConversationMessage({
+      clinicId: clinic.id,
+      patientId: resolvedPatientId,
+      phone: args.phone,
+      direction: 'incoming',
+      text,
+      providerMessageId: args.messageId ?? null,
+      rawPayload: args.rawPayload ?? null,
+    });
+  } catch (error) {
+    console.error('[meta-wa-assistant] failed to persist incoming conversation message', {
+      clinicId: summarizeId(clinic.id),
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   const replyText = await buildReplyText({
     clinic,
     inboxEntry: inboxEntry
@@ -1773,6 +1796,22 @@ export const processMetaWhatsAppIncomingMessage = async (
       errorMessage,
     });
     throw new Error(errorMessage);
+  }
+
+  try {
+    await persistWhatsAppConversationMessage({
+      clinicId: clinic.id,
+      patientId: resolvedPatientId,
+      phone: args.phone,
+      direction: 'outgoing',
+      text: replyText,
+      providerMessageId: result.externalMessageId ?? null,
+    });
+  } catch (error) {
+    console.error('[meta-wa-assistant] failed to persist outgoing conversation message', {
+      clinicId: summarizeId(clinic.id),
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   // Bump inbox entry so it surfaces at top in staff views

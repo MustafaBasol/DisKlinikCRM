@@ -2,6 +2,7 @@ import express from 'express';
 import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
+import { backfillConversationMessagePatient } from '../services/whatsapp/conversationMessageStore.js';
 import {
   resolveClinicForIncomingMessage,
   upsertInboxEntry,
@@ -1185,6 +1186,10 @@ const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fu
     },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
+  // Link conversation messages saved before the patient existed (patientId null)
+  // to the newly created patient so the patient detail Messages tab is complete.
+  await backfillConversationMessagePatient({ clinicId, phone, patientId: patient.id })
+    .catch(error => console.error('[whatsapp-assistant] conversation message backfill failed', error));
   const systemUserId = await getClinicSystemUserId(clinicId);
   if (systemUserId) {
     await logActivity({
@@ -1229,7 +1234,7 @@ const ensureWhatsAppContactPatient = async (clinicId: string, phone: string, pro
 
 const saveWhatsAppConversationMessage = async (args: {
   clinicId: string;
-  patientId: string;
+  patientId: string | null;
   phone: string;
   providerMessageId?: string | null;
   direction: 'incoming' | 'outgoing';
@@ -2515,13 +2520,14 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
     existingPatient = nameMatches.length === 1 ? nameMatches[0] : null;
   }
 
-  if (existingPatient) {
-    await saveWhatsAppConversationMessage({
-      clinicId: clinic.id, patientId: existingPatient.id, phone: inputPhone,
-      providerMessageId: input.messageId,
-      direction: 'incoming', text: input.text, rawPayload: input.rawPayload,
-    });
-  }
+  // Always persist the inbound message. patientId stays null when the sender is
+  // unknown or the phone is shared by multiple patients without a selection —
+  // it is backfilled once the patient is created or staff links the conversation.
+  await saveWhatsAppConversationMessage({
+    clinicId: clinic.id, patientId: existingPatient?.id ?? null, phone: inputPhone,
+    providerMessageId: input.messageId,
+    direction: 'incoming', text: input.text, rawPayload: input.rawPayload,
+  });
   const services = await getAssistantServices(clinic.id);
   // When the resolved clinic has no active bookable services, never show a numbered
   // service list or move the conversation into awaiting_service — reply safely instead.
@@ -3417,7 +3423,6 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
       return 'Kaydınızı oluşturabilmem için ad ve soyadınızı birlikte paylaşır mısınız? Örneğin Mustafa Yılmaz gibi yazabilirsiniz.';
     }
     const createdPatient = await createPatientFromWhatsAppName(clinic.id, input.phone, input.text);
-    await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: createdPatient.id, phone: input.phone, providerMessageId: input.messageId, direction: 'incoming', text: input.text, rawPayload: input.rawPayload });
     const fullName = getPatientFullName(createdPatient);
     if (state?.currentIntent === 'book_appointment') {
       const pendingSlot = stateJson.pendingConfirmationSlot ?? null;
@@ -3721,12 +3726,10 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
             const responseText = await handleIncomingWhatsAppMessage(incomingMessage, resolvedClinic);
             const patient = await findExistingPatientByPhone(resolvedClinic.id, incomingMessage.phone);
             await sendWhatsAppMessage(resolvedClinic.id, { phone: incomingMessage.phone, text: responseText });
-            if (patient) {
-              await saveWhatsAppConversationMessage({
-                clinicId: resolvedClinic.id, patientId: patient.id,
-                phone: incomingMessage.phone, direction: 'outgoing', text: responseText,
-              });
-            }
+            await saveWhatsAppConversationMessage({
+              clinicId: resolvedClinic.id, patientId: patient?.id ?? null,
+              phone: incomingMessage.phone, direction: 'outgoing', text: responseText,
+            });
             await markWhatsAppProviderMessageProcessed(resolvedClinic.id, incomingMessage.phone, incomingMessage.messageId);
             await markInboundEventProcessed(inboundEventId);
             console.info('[whatsapp-assistant] send-result (db-resolved)', {
@@ -3809,9 +3812,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
     const responseText = await handleIncomingWhatsAppMessage(incomingMessage, clinic);
     const patient = await findExistingPatientByPhone(clinic.id, incomingMessage.phone);
     await sendWhatsAppMessage(clinic.id, { phone: incomingMessage.phone, text: responseText });
-    if (patient) {
-      await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: patient.id, phone: incomingMessage.phone, direction: 'outgoing', text: responseText });
-    }
+    await saveWhatsAppConversationMessage({ clinicId: clinic.id, patientId: patient?.id ?? null, phone: incomingMessage.phone, direction: 'outgoing', text: responseText });
     await markWhatsAppProviderMessageProcessed(clinic.id, incomingMessage.phone, incomingMessage.messageId);
     await markInboundEventProcessed(inboundEventId);
     console.info('[whatsapp-assistant] send-result', { phone: redactPhone(incomingMessage.phone), instance: normalizedPayload.instance ?? null });

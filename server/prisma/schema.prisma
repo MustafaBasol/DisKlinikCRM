@@ -412,8 +412,8 @@ model WhatsAppConversationMessage {
   id                String   @id @default(uuid())
   clinicId          String
   clinic            Clinic   @relation(fields: [clinicId], references: [id])
-  patientId         String
-  patient           Patient  @relation(fields: [patientId], references: [id])
+  patientId         String?
+  patient           Patient? @relation(fields: [patientId], references: [id])
   phone             String
   providerMessageId String?
   direction         String
