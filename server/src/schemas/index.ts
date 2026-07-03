@@ -519,7 +519,8 @@ export const labWorkOrderSchema = z.object({
   currency: z.enum(validCurrencies).optional().nullable(),
 });
 
-export const labWorkOrderUpdateSchema = labWorkOrderSchema.partial();
+// patientId is immutable after creation — never accept it on the generic update payload.
+export const labWorkOrderUpdateSchema = labWorkOrderSchema.omit({ patientId: true }).partial();
 
 export const labWorkOrderStatusUpdateSchema = z.object({
   status: z.enum(LAB_WORK_ORDER_STATUSES),

@@ -25,7 +25,7 @@ import {
   type LabWorkOrderStatus,
 } from '../services/labOrders/labOrderStatusTransitions.js';
 import { buildDashboardSummary } from '../services/labOrders/labOrderSummary.js';
-import { LAB_WORK_ORDER_STATUSES } from '../schemas/index.js';
+import { LAB_WORK_ORDER_STATUSES, labWorkOrderUpdateSchema } from '../schemas/index.js';
 
 // ─── Test harness ─────────────────────────────────────────────────────────────
 
@@ -239,6 +239,80 @@ async function main() {
     const prefsSrc = src('../services/notificationPreferences.ts');
     assert.ok(prefsSrc.includes('labOrdersOverdue: togglePreferenceSchema'));
     assert.ok(prefsSrc.includes("enabledTypes.push('lab_case_overdue')"));
+  });
+
+  // ── PUT /lab-orders/:id cannot change patientId ──────────────────────────
+  section('Lab order update immutability');
+
+  await test('labWorkOrderUpdateSchema strips patientId from a parsed update payload', () => {
+    const parsed = labWorkOrderUpdateSchema.parse({
+      patientId: '11111111-1111-1111-1111-111111111111',
+      shade: 'A2',
+    });
+    assert.equal((parsed as Record<string, unknown>).patientId, undefined);
+    assert.equal(parsed.shade, 'A2');
+  });
+
+  await test('PUT /lab-orders/:id route defensively strips patientId before calling prisma.update', () => {
+    const putHandlerMatch = labOrdersRouteSrc.match(/router\.put\('\/lab-orders\/:id'[\s\S]*?(?=router\.(patch|delete)\()/);
+    assert.ok(putHandlerMatch, 'PUT /lab-orders/:id handler not found');
+    const putHandlerSrc = putHandlerMatch![0];
+    assert.ok(
+      /const\s*{\s*patientId:\s*_ignoredPatientId\s*,\s*\.\.\.updateData\s*}\s*=\s*validation\.data/.test(putHandlerSrc),
+      'PUT handler should destructure patientId out of validation.data before building the update payload',
+    );
+    assert.ok(/data:\s*updateData/.test(putHandlerSrc), 'prisma.labWorkOrder.update should be called with the stripped updateData, not raw validation.data');
+  });
+
+  // ── Attachment upload clinic isolation ───────────────────────────────────
+  section('Attachment upload path isolation');
+
+  await test('multer disk storage writes to a shared temp dir, not uploads/{req.user.clinicId}', () => {
+    assert.ok(labOrdersRouteSrc.includes('TEMP_UPLOAD_DIR'), 'expected a TEMP_UPLOAD_DIR staging directory');
+    assert.ok(!/req\.user\?\.clinicId/.test(labOrdersRouteSrc), 'multer destination should no longer branch on req.user.clinicId');
+    const destinationMatch = labOrdersRouteSrc.match(/destination:\s*\([^)]*\)\s*=>\s*{\s*cb\(null,\s*([A-Za-z_]+)\);/);
+    assert.ok(destinationMatch, 'multer destination callback not found');
+    assert.equal(destinationMatch![1], 'TEMP_UPLOAD_DIR');
+  });
+
+  await test('attachment upload moves the file into uploads/{order.clinicId} after loading the order', () => {
+    const uploadRouteMatch = labOrdersRouteSrc.match(/router\.post\(\s*'\/lab-orders\/:id\/attachments'[\s\S]*?(?=router\.get\('\/lab-orders\/:id\/attachments')/);
+    assert.ok(uploadRouteMatch, 'POST /lab-orders/:id/attachments handler not found');
+    const uploadRouteSrc = uploadRouteMatch![0];
+
+    const orderLookupIndex = uploadRouteSrc.indexOf('prisma.labWorkOrder.findFirst');
+    const moveIndex = uploadRouteSrc.indexOf('fs.renameSync(req.file.path, finalPath)');
+    const signatureCheckIndex = uploadRouteSrc.indexOf('isAllowedFileSignature(req.file.path');
+    const dbInsertIndex = uploadRouteSrc.indexOf('prisma.labOrderAttachment.create');
+
+    assert.ok(orderLookupIndex !== -1 && moveIndex !== -1 && signatureCheckIndex !== -1 && dbInsertIndex !== -1, 'expected order lookup, file move, signature check and DB insert to all be present');
+    assert.ok(orderLookupIndex < moveIndex, 'file should be moved only after the lab order has been loaded/authorized');
+    assert.ok(moveIndex < signatureCheckIndex, 'file signature must be re-checked at its final path, after the move');
+    assert.ok(signatureCheckIndex < dbInsertIndex, 'signature must be validated before the DB row is created');
+
+    assert.ok(uploadRouteSrc.includes('path.join(BASE_UPLOAD_DIR, order.clinicId)'), 'final directory should be derived from order.clinicId, not req.user.clinicId');
+    assert.ok(uploadRouteSrc.includes('req.file.path = finalPath'), 'req.file.path must be updated to the final path before later use');
+  });
+
+  await test('every early-return in the upload handler cleans up the temp/final file', () => {
+    const uploadRouteMatch = labOrdersRouteSrc.match(/router\.post\(\s*'\/lab-orders\/:id\/attachments'[\s\S]*?(?=router\.get\('\/lab-orders\/:id\/attachments')/);
+    const uploadRouteSrc = uploadRouteMatch![0];
+    const unlinkCalls = uploadRouteSrc.match(/fs\.unlinkSync\(/g) ?? [];
+    // no-clinic-access, order-not-found, bad-signature, and the catch-all failure path
+    assert.ok(unlinkCalls.length >= 4, `expected at least 4 cleanup unlink calls, found ${unlinkCalls.length}`);
+  });
+
+  // ── Frontend edit form preserves existing values ─────────────────────────
+  section('Frontend edit form field preservation');
+
+  await test('LabOrders.tsx initializes shade/material/notesForLab from the existing order on edit', () => {
+    const labOrdersPageSrc = readFileSync(fileURLToPath(new URL('../../../src/pages/LabOrders.tsx', import.meta.url)), 'utf8');
+    assert.ok(/useState\(order\?\.shade\s*\?\?\s*''\)/.test(labOrdersPageSrc), 'shade should seed from order?.shade');
+    assert.ok(/useState\(order\?\.material\s*\?\?\s*''\)/.test(labOrdersPageSrc), 'material should seed from order?.material');
+    assert.ok(/useState\(order\?\.notesForLab\s*\?\?\s*''\)/.test(labOrdersPageSrc), 'notesForLab should seed from order?.notesForLab');
+    assert.ok(/shade:\s*string\s*\|\s*null;/.test(labOrdersPageSrc), 'LabOrderRow type should declare shade');
+    assert.ok(/material:\s*string\s*\|\s*null;/.test(labOrdersPageSrc), 'LabOrderRow type should declare material');
+    assert.ok(/notesForLab:\s*string\s*\|\s*null;/.test(labOrdersPageSrc), 'LabOrderRow type should declare notesForLab');
   });
 
   // ── Clinic isolation (mock-based, mirrors treatmentCaseClinicScope.test.ts) ─

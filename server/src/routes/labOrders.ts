@@ -175,9 +175,14 @@ router.put('/lab-orders/:id', authorize([...LAB_ORDER_MANAGE_ROLES]), async (req
     if (treatmentCaseId && !treatmentCase) return res.status(400).json({ error: 'Invalid treatment case' });
     if (practitionerId && !practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
 
+    // patientId, clinicId, status and audit fields must never be touched by this generic update —
+    // status changes go through PATCH /:id/status, and the schema already omits patientId, but we
+    // strip it again here defensively since `data` is spread straight into Prisma.
+    const { patientId: _ignoredPatientId, ...updateData } = validation.data as Record<string, unknown>;
+
     const updated = await prisma.labWorkOrder.update({
       where: { id },
-      data: validation.data,
+      data: updateData,
       include: labOrderInclude,
     });
 
@@ -279,6 +284,12 @@ router.delete('/lab-orders/:id', authorize([...LAB_ORDER_DELETE_ROLES]), async (
 const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(BASE_UPLOAD_DIR)) fs.mkdirSync(BASE_UPLOAD_DIR, { recursive: true });
 
+// req.user.clinicId is only the uploader's *default* clinic, not necessarily the lab order's
+// clinic (a user can have access to multiple clinics). Files are written here first, then moved
+// into uploads/{order.clinicId}/ once the order has been loaded and authorized below.
+const TEMP_UPLOAD_DIR = path.join(BASE_UPLOAD_DIR, '_tmp');
+if (!fs.existsSync(TEMP_UPLOAD_DIR)) fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
+
 const ALLOWED_MIME = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'application/pdf',
@@ -314,11 +325,8 @@ function isAllowedFileSignature(filePath: string, declaredMime: string, original
 }
 
 const storage = multer.diskStorage({
-  destination: (req: any, _file, cb) => {
-    const clinicId = req.user?.clinicId ?? 'unknown';
-    const clinicDir = path.join(BASE_UPLOAD_DIR, clinicId);
-    fs.mkdirSync(clinicDir, { recursive: true });
-    cb(null, clinicDir);
+  destination: (_req, _file, cb) => {
+    cb(null, TEMP_UPLOAD_DIR);
   },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -373,6 +381,14 @@ router.post(
         fs.unlinkSync(req.file.path);
         return res.status(404).json({ error: 'Lab work order not found' });
       }
+
+      // Move out of the shared temp dir into the order's actual clinic directory now that it's
+      // been authorized — never trust req.user.clinicId for where the file ends up on disk.
+      const clinicDir = path.join(BASE_UPLOAD_DIR, order.clinicId);
+      fs.mkdirSync(clinicDir, { recursive: true });
+      const finalPath = path.join(clinicDir, req.file.filename);
+      fs.renameSync(req.file.path, finalPath);
+      req.file.path = finalPath;
 
       if (!isAllowedFileSignature(req.file.path, req.file.mimetype, req.file.originalname)) {
         fs.unlinkSync(req.file.path);

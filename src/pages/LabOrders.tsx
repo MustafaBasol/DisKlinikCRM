@@ -31,6 +31,9 @@ interface LabOrderRow {
   status: LabWorkOrderStatus;
   workType: string;
   toothFdi: string | null;
+  shade: string | null;
+  material: string | null;
+  notesForLab: string | null;
   revisionCount: number;
   expectedReturnDate: string | null;
   labCost: number | null;
@@ -457,12 +460,12 @@ function LabOrderFormModal({
   const [practitionerId, setPractitionerId] = useState(order?.practitioner?.id ?? '');
   const [workType, setWorkType] = useState(order?.workType ?? LAB_WORK_TYPES[0]);
   const [toothFdi, setToothFdi] = useState(order?.toothFdi ?? '');
-  const [shade, setShade] = useState('');
-  const [material, setMaterial] = useState('');
+  const [shade, setShade] = useState(order?.shade ?? '');
+  const [material, setMaterial] = useState(order?.material ?? '');
   const [expectedReturnDate, setExpectedReturnDate] = useState(order?.expectedReturnDate?.slice(0, 10) ?? '');
   const [labCost, setLabCost] = useState(order?.labCost != null ? String(order.labCost) : '');
   const [currency, setCurrency] = useState(order?.currency ?? '');
-  const [notesForLab, setNotesForLab] = useState('');
+  const [notesForLab, setNotesForLab] = useState(order?.notesForLab ?? '');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
