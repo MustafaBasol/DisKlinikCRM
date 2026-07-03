@@ -343,11 +343,21 @@ const normalizeBookingText = (value: string) => value
   .replace(/\s+/g, ' ')
   .trim();
 
-const isServiceListRequest = (text: string) => {
+export const isServiceListRequest = (text: string) => {
   const normalized = normalizeBookingText(text);
+  if (!normalized) return false;
+  // Broad match: any mention of "liste"/"hizmet"/"servis" combined with a
+  // resend/repeat/help verb catches phrasings we can't fully enumerate
+  // (e.g. "Listeyi tekrar iletir misiniz", "hizmet listesini gönderir misiniz").
+  const mentionsListOrService = ['liste', 'hizmet', 'servis'].some(term => normalized.includes(term));
+  const mentionsResendVerb = [
+    'tekrar', 'yeniden', 'gonder', 'goster', 'ilet', 'ver', 'soyle', 'paylas', 'yolla',
+  ].some(verb => normalized.includes(verb));
+  if (mentionsListOrService && mentionsResendVerb) return true;
   return [
     'hangi hizmetleriniz var',
     'hangi hizmetler var',
+    'hangi hizmet var',
     'hizmetleriniz neler',
     'hizmetler neler',
     'hizmetleri goster',
@@ -437,7 +447,10 @@ export const handleAwaitingServiceStep = async ({
           }
         : null,
     });
-    return 'Lütfen listedeki hizmet numarasını seçin. Örneğin 1, 2 veya 5 yazabilirsiniz.';
+    return [
+      'Size uygun hizmeti seçebilmem için lütfen aşağıdaki listeden numara yazın:',
+      ...selectableServices.map((service, index) => `${index + 1}. ${service.name}`),
+    ].join('\n');
   }
 
   await upsertState({

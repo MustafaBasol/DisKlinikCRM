@@ -14,7 +14,7 @@ export type WhatsAppConversationAgentResolution = {
   source: WhatsAppConversationAgentSource;
 };
 
-const getGoogleAiStudioConfig = () => {
+export const getGoogleAiStudioConfig = () => {
   const apiKey = process.env.GOOGLE_AI_STUDIO_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
   const model = process.env.GOOGLE_AI_MODEL?.trim() || 'gemini-2.0-flash';
   const enabledFlag = process.env.WHATSAPP_AI_AGENT_ENABLED?.trim().toLocaleLowerCase('tr-TR');
