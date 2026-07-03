@@ -29,9 +29,12 @@ import {
   handleAwaitingDateStep,
   handleAwaitingServiceStep,
   handleAwaitingTimeStep,
+  isDeterministicConfirmationReply,
+  isServiceListRequest,
   type BookingStateJson,
 } from '../whatsappBookingFlow.js';
 import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';
+import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';
 import type { WhatsAppAgentDecision } from '../whatsappAgentSchema.js';
 import {
   buildAvailableSlots,
@@ -40,10 +43,14 @@ import {
 } from '../whatsappAvailability.js';
 import { interpretTimeRequest } from '../whatsappInterpreter.js';
 import { MetaCloudWhatsAppProvider } from './MetaCloudWhatsAppProvider.js';
-import { persistWhatsAppConversationMessage } from './conversationMessageStore.js';
+import {
+  backfillConversationMessagePatient,
+  persistWhatsAppConversationMessage,
+} from './conversationMessageStore.js';
 import type { WhatsAppConnectionRecord } from './WhatsAppProvider.js';
 import { recordOperationalEvent } from '../operationalEventService.js';
 import { logActivity } from '../../utils/activity.js';
+import { splitNameForPatient } from '../../utils/patientName.js';
 import {
   checkPractitionerAvailability,
   formatClinicDateTime,
@@ -52,6 +59,7 @@ import {
 import {
   formatTurkishDateLong,
   formatTurkishDateWithWeekday,
+  normalizeDateFromTurkishInput,
   WHATSAPP_ASSISTANT_TIME_ZONE,
 } from '../../utils/whatsappDate.js';
 import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
@@ -78,16 +86,25 @@ export type MetaWaStep =
   | 'awaiting_date'
   | 'awaiting_time'
   | 'awaiting_confirmation'
+  | 'awaiting_name'
+  | 'post_booking'
   | 'awaiting_handoff_note'
   | 'awaiting_patient_selection'
   | 'awaiting_channel_consent'
   | null;
+
+export type MetaWaBookingSummary = {
+  serviceName: string | null;
+  date: string | null;
+  time: string | null;
+};
 
 export type MetaWaStateJson = BookingStateJson & {
   pendingHandoffRequestId?: string;
   pendingPatientOptions?: Array<{ id: string; firstName: string; lastName: string }> | null;
   selectedPatientId?: string | null;
   resumeAfterChannelConsent?: string | null;
+  lastBookingSummary?: MetaWaBookingSummary | null;
 };
 
 type MetaWaClinic = {
@@ -146,6 +163,68 @@ export const buildMetaWaConversationKey = (connectionId: string, phone: string):
 const summarizeId = (value: string | null | undefined) =>
   value ? { length: value.length, suffix: value.slice(-4) } : null;
 
+const redactPhone = (phone: string) => `***${phone.slice(-4)}`;
+
+const logWhatsAppAgentDecision = (args: {
+  provider: 'meta';
+  clinicId: string;
+  phone: string;
+  currentStep: MetaWaStep;
+  deterministicMatched: boolean;
+  nluUsed: boolean;
+  detectedIntent: string;
+  confidence: number;
+  responseType: string;
+}) => {
+  console.info('[whatsapp-agent] decision', {
+    provider: args.provider,
+    clinicId: summarizeId(args.clinicId),
+    phoneSuffix: redactPhone(args.phone),
+    currentStep: args.currentStep,
+    deterministicMatched: args.deterministicMatched,
+    nluUsed: args.nluUsed,
+    detectedIntent: args.detectedIntent,
+    confidence: args.confidence,
+    responseType: args.responseType,
+  });
+};
+
+const logPostBookingDecision = (args: {
+  provider: 'meta';
+  clinicId: string;
+  phone: string;
+  detectedIntent: string;
+  responseType: string;
+}) => {
+  console.info('[whatsapp-agent] post-booking-decision', {
+    provider: args.provider,
+    clinicId: summarizeId(args.clinicId),
+    phoneSuffix: redactPhone(args.phone),
+    detectedIntent: args.detectedIntent,
+    responseType: args.responseType,
+  });
+};
+
+const logIdentityResolution = (args: {
+  provider: 'meta';
+  clinicId: string;
+  phone: string;
+  matchCount: number;
+  selectedPatientIdPresent: boolean;
+  needsNameCollection: boolean;
+  action: string;
+}) => {
+  console.info('[whatsapp-agent] identity-resolution', {
+    provider: args.provider,
+    clinicId: summarizeId(args.clinicId),
+    phoneSuffix: redactPhone(args.phone),
+    matchCount: args.matchCount,
+    selectedPatientIdPresent: args.selectedPatientIdPresent,
+    needsNameCollection: args.needsNameCollection,
+    action: args.action,
+  });
+};
+
 // ── Text helpers ──────────────────────────────────────────────────────────────
 
 const normalizePhoneDigits = (v: string) => v.replace(/\D/g, '');
@@ -164,8 +243,36 @@ const isGreeting = (text: string) =>
 
 const isMainMenuCommand = (text: string) => {
   const n = normalizeSearchText(text);
-  return ['menu', 'menu goster', 'ana menu', 'basa don', 'reset', 'yeniden basla']
-    .some(p => n === p || n.includes(p));
+  return [
+    'menu', 'menu goster', 'ana menu', 'basa don', 'reset', 'yeniden basla',
+    'bastan basla', 'bastan baslayalim', 'iptal', 'vazgec', 'vazgectim',
+  ].some(p => n === p || n.includes(p));
+};
+
+// Identifies a step where a user could get stuck behind a numeric-only
+// prompt (e.g. awaiting_service) and should be able to bail out with plain
+// language ("iptal", "vazgeç", "temsilci", ...).
+export const isStuckBookingStep = (currentStep: MetaWaStep) =>
+  currentStep === 'awaiting_service'
+  || currentStep === 'awaiting_date'
+  || currentStep === 'awaiting_time'
+  || currentStep === 'awaiting_confirmation'
+  || currentStep === 'awaiting_name'
+  || currentStep === 'post_booking';
+
+// Turkish placeholder values ("-", "bilinmiyor") are treated as no last name at all so
+// a booking never gets finalized with a name that only superficially looks provided.
+export const hasValidLastName = (lastName?: string | null) => {
+  const normalized = (lastName ?? '').trim().toLocaleLowerCase('tr-TR');
+  return Boolean(normalized) && !['-', 'unknown', 'bilinmiyor'].includes(normalized);
+};
+
+export const isHumanHandoffRequest = (text: string) => {
+  const n = normalizeSearchText(text);
+  return [
+    'temsilci', 'yetkili', 'operator', 'canli destek', 'personelle gorusmek',
+    'resepsiyonla gorusmek', 'insanla gorusmek', 'beni arasin',
+  ].some(p => n === p || n.includes(p));
 };
 
 const isNegativeHandoffNote = (text: string) => {
@@ -463,6 +570,10 @@ const readStateJson = (value: unknown): MetaWaStateJson => {
       : undefined,
     selectedPatientId: typeof r.selectedPatientId === 'string' ? r.selectedPatientId : undefined,
     resumeAfterChannelConsent: typeof r.resumeAfterChannelConsent === 'string' ? r.resumeAfterChannelConsent : undefined,
+    lastBookingSummary:
+      r.lastBookingSummary && typeof r.lastBookingSummary === 'object' && !Array.isArray(r.lastBookingSummary)
+        ? (r.lastBookingSummary as MetaWaBookingSummary)
+        : undefined,
   };
 };
 
@@ -568,6 +679,81 @@ const findExistingPatientByPhone = async (
   // Multiple patients can share the same phone (e.g. family/guardian). Return null when
   // ambiguous so we never auto-link a message to the wrong patient.
   return matches.length === 1 ? matches[0] : null;
+};
+
+// ── Patient identity resolution / creation ───────────────────────────────────
+
+/**
+ * Links a provided full name to an existing patient on this phone, or creates a new
+ * Patient record. Never guesses across a shared phone with multiple patients unless
+ * the provided name exactly matches one of them — mirrors the Evolution WhatsApp
+ * pattern in routes/whatsapp.ts (ensureWhatsAppContactPatient) for provider parity.
+ * Returns null when providedName does not contain a valid first+last name — callers
+ * must not create an AppointmentRequest without a resolved patient in that case.
+ */
+const ensureMetaWaContactPatient = async (
+  clinic: MetaWaClinic,
+  phone: string,
+  providedName: string,
+): Promise<{ id: string; firstName: string; lastName: string } | null> => {
+  const parsedName = providedName.trim() ? splitNameForPatient(providedName) : null;
+  if (!parsedName || !parsedName.firstName || !hasValidLastName(parsedName.lastName)) {
+    return null;
+  }
+
+  const allMatches = await findPatientsByPhone(clinic.id, phone);
+  if (allMatches.length === 1) {
+    const existing = allMatches[0];
+    if (!existing.firstName.trim() || !hasValidLastName(existing.lastName)) {
+      return prisma.patient.update({
+        where: { id: existing.id },
+        data: { firstName: parsedName.firstName, lastName: parsedName.lastName },
+        select: { id: true, firstName: true, lastName: true },
+      });
+    }
+    return existing;
+  }
+  if (allMatches.length > 1) {
+    const first = parsedName.firstName.toLocaleLowerCase('tr-TR');
+    const last = parsedName.lastName.toLocaleLowerCase('tr-TR');
+    return allMatches.find(
+      p => p.firstName.toLocaleLowerCase('tr-TR') === first && p.lastName.toLocaleLowerCase('tr-TR') === last,
+    ) ?? null; // ambiguous shared phone with no name match — never create a duplicate/guess
+  }
+
+  const patient = await prisma.patient.create({
+    data: {
+      clinicId: clinic.id,
+      organizationId: clinic.organizationId,
+      firstName: parsedName.firstName,
+      lastName: parsedName.lastName,
+      phone: normalizePhoneDigits(phone) || phone,
+      source: 'meta_whatsapp',
+      patientStatus: 'new',
+      communicationConsent: false,
+      notes: 'Meta WhatsApp üzerinden ilk temas sonrası oluşturuldu.',
+    },
+    select: { id: true, firstName: true, lastName: true },
+  });
+
+  await backfillConversationMessagePatient({ clinicId: clinic.id, phone, patientId: patient.id })
+    .catch(error => console.error('[meta-wa-assistant] conversation message backfill failed', error));
+
+  const systemUserId = await getClinicSystemUserId(clinic.id);
+  if (systemUserId) {
+    await logActivity({
+      clinicId: clinic.id,
+      userId: systemUserId,
+      entityType: 'patient',
+      entityId: patient.id,
+      action: 'created',
+      description: 'Patient automatically created from first Meta WhatsApp contact',
+      patientId: patient.id,
+      metadata: { systemGenerated: true, source: 'meta_whatsapp', phone: summarizeId(phone) },
+    });
+  }
+
+  return patient;
 };
 
 // ── AppointmentRequest source metadata ───────────────────────────────────────
@@ -910,6 +1096,7 @@ export const CONSENT_RESUMABLE_STEPS: MetaWaStep[] = [
   'awaiting_date',
   'awaiting_time',
   'awaiting_confirmation',
+  'awaiting_name',
   'awaiting_patient_selection',
 ];
 
@@ -947,6 +1134,8 @@ export const buildConsentResumeMessage = (
     }
     case 'awaiting_confirmation':
       return `${prefix} Randevunuzu onaylıyor musunuz? Lütfen evet veya hayır yazın.`;
+    case 'awaiting_name':
+      return `${prefix} Randevu talebinizi oluşturabilmem için adınızı ve soyadınızı paylaşır mısınız?`;
     case 'awaiting_patient_selection': {
       const options = ctx.stateJson.pendingPatientOptions ?? [];
       if (options.length > 0) {
@@ -995,12 +1184,9 @@ const buildReplyText = async (args: {
   const nextSelectedDate = selectedDate ?? extractedDateFromInput;
   const nextSelectedTime = selectedTime ?? extractedTimeFromInput ?? extractedThresholdTime;
 
-  // customerName: from inbox/patient link or stored state
-  const customerName =
-    (args.inboxEntry?.patient
-      ? `${args.inboxEntry.patient.firstName} ${args.inboxEntry.patient.lastName}`.trim()
-      : null) ??
-    (state?.customerName ?? null);
+  // Stored name from a prior turn (before this message resolves anything new) — used
+  // only to disambiguate a shared phone below, not as the final customerName.
+  const storedCustomerName = state?.customerName ?? null;
 
   // Resolve patient for shared-phone scenarios.
   // If staff already linked a patient via inbox, use that. Otherwise look up by phone and
@@ -1022,12 +1208,33 @@ const buildReplyText = async (args: {
           select: { id: true, firstName: true, lastName: true, phone: true },
         });
       }
-    } else if (metaMatchingPatients.length > 1 && customerName) {
-      const storedName = customerName.toLocaleLowerCase('tr-TR').trim();
+    } else if (metaMatchingPatients.length > 1 && storedCustomerName) {
+      const storedName = storedCustomerName.toLocaleLowerCase('tr-TR').trim();
       resolvedPatient =
         metaMatchingPatients.find(p => `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === storedName) ?? null;
     }
   }
+
+  // customerName: prefer a resolved patient record (existing patient found by phone,
+  // whether or not staff has linked the inbox entry yet) so a returning patient is
+  // greeted by name from their very first message, then fall back to whatever name
+  // was stored in a prior conversation turn.
+  const customerName =
+    (args.inboxEntry?.patient
+      ? `${args.inboxEntry.patient.firstName} ${args.inboxEntry.patient.lastName}`.trim()
+      : null) ??
+    (resolvedPatient ? `${resolvedPatient.firstName} ${resolvedPatient.lastName}`.trim() : null) ??
+    storedCustomerName;
+
+  logIdentityResolution({
+    provider: 'meta',
+    clinicId: args.clinic.id,
+    phone: args.phone,
+    matchCount: metaMatchingPatients.length,
+    selectedPatientIdPresent: Boolean(resolvedPatient?.id ?? stateJson.selectedPatientId),
+    needsNameCollection: !resolvedPatient && !customerName,
+    action: resolvedPatient ? 'resolved_existing_patient' : metaMatchingPatients.length > 1 ? 'ambiguous_shared_phone' : 'no_patient_match',
+  });
 
   // ── Channel consent gate ─────────────────────────────────────────────────
   if (currentStep === 'awaiting_channel_consent') {
@@ -1175,6 +1382,31 @@ const buildReplyText = async (args: {
     return `Bu numarayla birden fazla hasta kaydı bulunuyor. Randevu hangi hasta için?\n\n${patientList}\n\nLütfen numarayı girin (örneğin: 1)`;
   }
 
+  // ── Human handoff escape from a stuck booking step ──────────────────────────
+  if (isStuckBookingStep(currentStep) && isHumanHandoffRequest(args.text)) {
+    logWhatsAppAgentDecision({
+      provider: 'meta',
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      currentStep,
+      deterministicMatched: true,
+      nluUsed: false,
+      detectedIntent: 'human_handoff',
+      confidence: 1,
+      responseType: 'human_handoff',
+    });
+    return createHandoffRequest({
+      clinic: args.clinic,
+      inboxEntryId: args.inboxEntry?.id ?? null,
+      connectionId: args.connectionId,
+      phone: args.phone,
+      customerName,
+      text: args.text,
+      conversationKey: args.conversationKey,
+      patientId: resolvedPatient?.id ?? stateJson.selectedPatientId ?? null,
+    });
+  }
+
   // ── Main menu command ──────────────────────────────────────────────────────
   if (isMainMenuCommand(args.text)) {
     await upsertMetaWaState(args.clinic.id, args.conversationKey, {
@@ -1185,11 +1417,22 @@ const buildReplyText = async (args: {
       lastProviderMessageId: args.messageId ?? null,
       stateJson: null,
     });
+    logWhatsAppAgentDecision({
+      provider: 'meta',
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      currentStep,
+      deterministicMatched: true,
+      nluUsed: false,
+      detectedIntent: 'main_menu_reset',
+      confidence: 1,
+      responseType: 'main_menu',
+    });
     return formatMainMenu(args.clinic.name, customerName);
   }
 
-  // ── Greeting at top-level ──────────────────────────────────────────────────
-  if ((!currentStep || currentStep === 'main_menu') && isGreeting(args.text)) {
+  // ── Greeting at top-level (including a stale awaiting_service state) ───────
+  if ((!currentStep || currentStep === 'main_menu' || currentStep === 'awaiting_service') && isGreeting(args.text)) {
     await upsertMetaWaState(args.clinic.id, args.conversationKey, {
       customerName,
       currentIntent: null,
@@ -1197,6 +1440,17 @@ const buildReplyText = async (args: {
       lastMessage: args.text,
       lastProviderMessageId: args.messageId ?? null,
       stateJson: null,
+    });
+    logWhatsAppAgentDecision({
+      provider: 'meta',
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      currentStep,
+      deterministicMatched: true,
+      nluUsed: false,
+      detectedIntent: 'greeting',
+      confidence: 1,
+      responseType: 'main_menu',
     });
     return formatMainMenu(args.clinic.name, customerName);
   }
@@ -1259,6 +1513,9 @@ const buildReplyText = async (args: {
   }
 
   // ── Create appointment callback (reused by time + confirmation steps) ──────
+  // Requires a real name by this point (the confirmation/name step never calls this
+  // with an empty name) — no "WhatsApp Kullanicisi" placeholder is ever written to a
+  // real booking's AppointmentRequest.
   const sharedCreateAppointment = async (
     _clinicId: string,
     _phone: string,
@@ -1267,19 +1524,42 @@ const buildReplyText = async (args: {
     selectedSlot: SavedAvailableSlot,
     rawMessage?: string | null,
   ) => {
-    const patientId =
+    let patientId =
       args.inboxEntry?.patientId ??
       args.patientId ??
       resolvedPatient?.id ??
       stateJson.selectedPatientId ??
       null;
 
+    if (!patientId) {
+      const patient = await ensureMetaWaContactPatient(args.clinic, args.phone, name);
+      if (!patient) throw new Error('PATIENT_LAST_NAME_REQUIRED');
+      patientId = patient.id;
+
+      if (args.inboxEntry && !args.inboxEntry.patientId) {
+        await prisma.whatsAppInboxEntry.update({
+          where: { id: args.inboxEntry.id },
+          data: { patientId },
+        }).catch(error => console.error('[meta-wa-assistant] inbox patientId link failed', error));
+      }
+
+      logIdentityResolution({
+        provider: 'meta',
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        matchCount: 1,
+        selectedPatientIdPresent: true,
+        needsNameCollection: false,
+        action: 'patient_created_or_linked_at_booking',
+      });
+    }
+
     const request = await createMetaWaAppointmentRequest({
       clinic: args.clinic,
       inboxEntryId: args.inboxEntry?.id ?? null,
       connectionId: args.connectionId,
       phone: args.phone,
-      customerName: name || customerName || 'WhatsApp Kullanicisi',
+      customerName: name,
       patientId,
       appointmentTypeId,
       selectedSlot,
@@ -1294,6 +1574,74 @@ const buildReplyText = async (args: {
       await resetMetaWaState(args.clinic.id, args.conversationKey, customerName);
       return NO_ACTIVE_SERVICES_TEXT;
     }
+
+    // Deterministic parser (numeric selection / list-resend / substring match) runs
+    // first. Only when NONE of those can resolve the message do we escalate to the
+    // step-aware semantic layer — this keeps high-confidence structured inputs fast
+    // and free of any AI dependency (required-behavior rule #1/#2/#9).
+    const willResolveDeterministically =
+      isServiceListRequest(args.text)
+      || extractNumericSelection(args.text) !== null
+      || findServiceMatches(args.text, services).length > 0;
+
+    if (!willResolveDeterministically) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep: 'awaiting_service',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: nextSelectedDate,
+        selectedTime: nextSelectedTime,
+      });
+
+      logWhatsAppAgentDecision({
+        provider: 'meta',
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_service_nlu',
+      });
+
+      if (nluDecision.intent === 'select_service_by_name_or_description' && nluDecision.confidence >= 0.5) {
+        const matchedService = services.find(s => s.id === nluDecision.extractedServiceId);
+        if (matchedService) {
+          await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_date',
+            selectedAppointmentTypeId: matchedService.id,
+            selectedAppointmentTypeName: matchedService.name,
+            selectedDate: nextSelectedDate ?? null,
+            selectedTime: nextSelectedTime ?? null,
+            lastMessage: args.text,
+            lastProviderMessageId: args.messageId ?? null,
+            stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+          });
+          return `${matchedService.name} hizmetini seçtiniz. Hangi gün için randevu istersiniz? Örneğin bugün, yarın, 16.05 veya 16 Mayıs yazabilirsiniz.`;
+        }
+      }
+
+      if (nluDecision.intent === 'ask_service_price_or_duration' && nluDecision.confidence >= 0.5) {
+        return [
+          'Fiyat bilgisini bu kanaldan net olarak paylaşamıyorum, ancak hizmet süreleri şöyle:',
+          ...services.map((s, i) => `${i + 1}. ${s.name} (${s.durationMinutes} dk)`),
+          '',
+          'Randevu oluşturmak için lütfen hizmet numarasını yazın.',
+        ].join('\n');
+      }
+      // repeat_service_list / cannot_choose_service / unknown / low confidence:
+      // fall through to the deterministic handler below, whose fallback already
+      // includes the full numbered service list plus a clear instruction.
+    }
+
     const serviceReply = await handleAwaitingServiceStep({
       text: args.text,
       phone: args.conversationKey,
@@ -1316,6 +1664,18 @@ const buildReplyText = async (args: {
             : data),
           lastProviderMessageId: args.messageId ?? null,
         }),
+    });
+
+    logWhatsAppAgentDecision({
+      provider: 'meta',
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      currentStep,
+      deterministicMatched: true,
+      nluUsed: false,
+      detectedIntent: 'book_appointment',
+      confidence: 1,
+      responseType: 'awaiting_service',
     });
 
     const stateAfterService = await prisma.whatsAppConversationState.findUnique({
@@ -1369,6 +1729,63 @@ const buildReplyText = async (args: {
 
   // ── Booking step: awaiting_date ───────────────────────────────────────────
   if (currentStep === 'awaiting_date') {
+    // extractedDateFromInput already ran normalizeDateFromTurkishInput + AI date
+    // normalization for every message at the top of this function — if that (or a
+    // pending past-date clarification reply) found nothing, the deterministic date
+    // handler below would only produce a generic "Tarihi anlayamadım" fallback.
+    // Escalate to the step-aware layer first so we can offer something more useful
+    // (e.g. redirect a "hizmeti değiştirmek istiyorum" back to service selection).
+    const dateWillResolveDeterministically = Boolean(extractedDateFromInput) || Boolean(stateJson.pendingPastDateClarification);
+    if (!dateWillResolveDeterministically) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep: 'awaiting_date',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: nextSelectedDate,
+        selectedTime: nextSelectedTime,
+      });
+
+      logWhatsAppAgentDecision({
+        provider: 'meta',
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_date_nlu',
+      });
+
+      if (nluDecision.intent === 'change_service' && nluDecision.confidence >= 0.5) {
+        await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_service',
+          selectedAppointmentTypeId: null,
+          selectedAppointmentTypeName: null,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.messageId ?? null,
+          stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+        });
+        return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
+      }
+
+      if (nluDecision.intent === 'ask_available_dates' && nluDecision.confidence >= 0.5) {
+        return `${state?.selectedAppointmentTypeName ?? 'Seçtiğiniz hizmet'} için hangi günü kontrol etmemi istersiniz? Örneğin bugün, yarın, cuma veya 16 Mayıs yazabilirsiniz.`;
+      }
+      // provide_date / repeat_service_list / unknown_date_request / low confidence:
+      // fall through to the deterministic handler, whose own fallback is already
+      // contextual ("Tarihi anlayamadım. Örneğin bugün, yarın, ...").
+    }
+
     return handleAwaitingDateStep({
       prisma,
       clinicId: args.clinic.id,
@@ -1415,6 +1832,86 @@ const buildReplyText = async (args: {
 
   // ── Booking step: awaiting_time ───────────────────────────────────────────
   if (currentStep === 'awaiting_time') {
+    const timeInterpretation = interpretTimeRequest(args.text);
+    const timeWillResolveDeterministically =
+      extractNumericSelection(args.text) !== null
+      || timeInterpretation.exactTime !== null
+      || timeInterpretation.afterTimeMinutes !== null
+      || timeInterpretation.rangeStartMinutes !== null
+      || Boolean(timeInterpretation.preference)
+      || timeInterpretation.wantsMoreOptions
+      || timeInterpretation.wantsDifferentDate
+      || Boolean(normalizeDateFromTurkishInput(args.text, new Date(), args.clinic.timezone || WHATSAPP_ASSISTANT_TIME_ZONE))
+      || findSlotMatches(args.text, stateJson.availableSlots ?? []).matches.length > 0;
+
+    if (!timeWillResolveDeterministically) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep: 'awaiting_time',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: state?.selectedDate ?? null,
+        selectedTime: null,
+      });
+
+      logWhatsAppAgentDecision({
+        provider: 'meta',
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_time_nlu',
+      });
+
+      if (nluDecision.intent === 'change_date' && nluDecision.confidence >= 0.5) {
+        await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_date',
+          selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.messageId ?? null,
+          stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+        });
+        return 'Elbette, hangi gün için randevu istersiniz?';
+      }
+
+      if (nluDecision.intent === 'change_service' && nluDecision.confidence >= 0.5) {
+        await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_service',
+          selectedAppointmentTypeId: null,
+          selectedAppointmentTypeName: null,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.messageId ?? null,
+          stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+        });
+        return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
+      }
+
+      if (nluDecision.intent === 'ask_available_times' && nluDecision.confidence >= 0.5 && state?.selectedDate) {
+        const lastShown = stateJson.lastShownSlots ?? stateJson.availableSlots ?? [];
+        if (lastShown.length > 0) {
+          return formatAvailabilityMessage(state.selectedDate, lastShown);
+        }
+      }
+      // provide_time / unknown_time_request / low confidence: fall through to the
+      // deterministic handler, whose own fallback already lists next-step options.
+    }
+
     return handleAwaitingTimeStep({
       prisma,
       clinicId: args.clinic.id,
@@ -1510,11 +2007,207 @@ const buildReplyText = async (args: {
 
   // ── Booking step: awaiting_confirmation ───────────────────────────────────
   if (currentStep === 'awaiting_confirmation') {
+    // Explicit approve/reject ("evet", "hayır", "1", "👍", ...) is deterministic and
+    // must never be reinterpreted. Anything else at this step (e.g. "saat 15 daha iyi
+    // olur") is a change request or an ambiguous reply, not a confirmation — treating
+    // it as one would silently book the wrong slot.
+    if (!isDeterministicConfirmationReply(args.text)) {
+      const pendingSlot = stateJson.pendingConfirmationSlot ?? null;
+      const availableSlots = stateJson.availableSlots ?? [];
+      const lastShownSlots = stateJson.lastShownSlots ?? [];
+      const deterministicNewTime = interpretTimeRequest(args.text).exactTime;
+
+      if (deterministicNewTime && pendingSlot) {
+        logWhatsAppAgentDecision({
+          provider: 'meta',
+          clinicId: args.clinic.id,
+          phone: args.phone,
+          currentStep,
+          deterministicMatched: true,
+          nluUsed: false,
+          detectedIntent: 'change_time',
+          confidence: 1,
+          responseType: 'awaiting_confirmation_change_time',
+        });
+
+        const matchingSlot = availableSlots.find(slot => slot.localStartTime === deterministicNewTime) ?? null;
+        if (matchingSlot) {
+          await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_confirmation',
+            selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+            selectedPractitionerId: matchingSlot.practitionerId,
+            selectedDate: state?.selectedDate,
+            selectedTime: matchingSlot.localStartTime,
+            lastMessage: args.text,
+            lastProviderMessageId: args.messageId ?? null,
+            stateJson: {
+              ...(stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : {}),
+              availableSlots,
+              lastShownSlots,
+              pendingConfirmationSlot: matchingSlot,
+            },
+          });
+          return `${formatTurkishDateLong(state!.selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${matchingSlot.localStartTime} için ${matchingSlot.practitionerName} uygun görünüyor. Bu saat için randevu talebinizi oluşturmamı onaylıyor musunuz?`;
+        }
+
+        // Requested time isn't directly available — hand off to the time step's
+        // existing nearby-slot logic instead of silently rejecting the change.
+        await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_time',
+          selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+          selectedPractitionerId: null,
+          selectedDate: state?.selectedDate,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.messageId ?? null,
+          stateJson: {
+            ...(stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : {}),
+            availableSlots,
+            lastShownSlots,
+          },
+        });
+        return handleAwaitingTimeStep({
+          prisma,
+          clinicId: args.clinic.id,
+          phone: args.conversationKey,
+          text: args.text,
+          customerName,
+          state: {
+            selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+            selectedPractitionerId: null,
+            selectedDate: state?.selectedDate,
+          },
+          stateJson: { availableSlots, lastShownSlots },
+          extractNumericSelection,
+          findSlotMatches,
+          formatAvailabilityMessage,
+          minutesToTime,
+          logAvailabilitySave: (total, shown) => console.debug('[meta-wa] slot-save', { total, shown }),
+          interpretTimeWithAi: async messageText => {
+            const interpreted = interpretTimeRequest(messageText);
+            return {
+              exactTime: interpreted.exactTime,
+              afterTime: interpreted.afterTimeMinutes !== null ? minutesToTime(interpreted.afterTimeMinutes) : null,
+              timePreference: interpreted.preference,
+            };
+          },
+          upsertState: data =>
+            upsertMetaWaState(args.clinic.id, args.conversationKey, {
+              ...(stateJson.selectedPatientId
+                ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+                : data),
+              lastProviderMessageId: args.messageId ?? null,
+            }),
+          resetState: nextCustomerName => resetMetaWaState(args.clinic.id, args.conversationKey, nextCustomerName),
+          createAppointment: sharedCreateAppointment,
+        });
+      }
+
+      if (pendingSlot) {
+        const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+          clinicId: args.clinic.id,
+          phone: args.phone,
+          currentStep: 'awaiting_confirmation',
+          currentIntent: state?.currentIntent ?? null,
+          lastMessage: state?.lastMessage ?? null,
+          userText: args.text,
+          availableServices: services,
+          selectedService: state?.selectedAppointmentTypeName ?? null,
+          selectedDate: state?.selectedDate ?? null,
+          selectedTime: state?.selectedPractitionerId ? pendingSlot.localStartTime : null,
+        });
+
+        logWhatsAppAgentDecision({
+          provider: 'meta',
+          clinicId: args.clinic.id,
+          phone: args.phone,
+          currentStep,
+          deterministicMatched: false,
+          nluUsed: nluSource !== 'unavailable',
+          detectedIntent: nluDecision.intent,
+          confidence: nluDecision.confidence,
+          responseType: 'awaiting_confirmation_nlu',
+        });
+
+        if (nluDecision.intent === 'change_date' && nluDecision.confidence >= 0.5) {
+          await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_date',
+            selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+            selectedDate: null,
+            selectedTime: null,
+            lastMessage: args.text,
+            lastProviderMessageId: args.messageId ?? null,
+            stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+          });
+          return 'Elbette, hangi gün için randevu istersiniz?';
+        }
+
+        if (nluDecision.intent === 'change_service' && nluDecision.confidence >= 0.5) {
+          await upsertMetaWaState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_service',
+            selectedAppointmentTypeId: null,
+            selectedAppointmentTypeName: null,
+            selectedDate: null,
+            selectedTime: null,
+            lastMessage: args.text,
+            lastProviderMessageId: args.messageId ?? null,
+            stateJson: stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : null,
+          });
+          return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
+        }
+
+        if (nluDecision.intent === 'ask_summary' && nluDecision.confidence >= 0.5) {
+          return `Randevu özeti: ${state?.selectedAppointmentTypeName ?? 'Seçtiğiniz hizmet'}, ${formatTurkishDateLong(state!.selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${pendingSlot.localStartTime} (${pendingSlot.practitionerName}). Bu randevu talebini oluşturmamı onaylıyor musunuz?`;
+        }
+        // reject_or_change_booking / human_handoff / unknown / low confidence:
+        // fall through to the deterministic handler below, which safely re-asks
+        // for an explicit evet/hayır without losing the pending slot.
+      }
+    }
+
+    // After a successful booking, land on post_booking (not a full reset) so a
+    // follow-up "teşekkürler" / "durumu nedir" gets a contextual reply instead of
+    // falling through to the generic top-level fallback.
+    const resetToPostBooking = (nextCustomerName?: string | null) =>
+      upsertMetaWaState(args.clinic.id, args.conversationKey, {
+        customerName: nextCustomerName ?? customerName ?? null,
+        currentIntent: null,
+        step: 'post_booking',
+        selectedAppointmentTypeId: null,
+        selectedAppointmentTypeName: null,
+        selectedPractitionerId: null,
+        selectedDate: null,
+        selectedTime: null,
+        stateJson: {
+          lastBookingSummary: {
+            serviceName: state?.selectedAppointmentTypeName ?? null,
+            date: state?.selectedDate ?? null,
+            time: stateJson.pendingConfirmationSlot?.localStartTime ?? null,
+          },
+          ...(stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : {}),
+        },
+      });
+
     return handleAwaitingConfirmationStep({
       clinicId: args.clinic.id,
       phone: args.conversationKey,
       text: args.text,
-      customerName: customerName ?? 'WhatsApp Kullanicisi',
+      // No placeholder fallback: a falsy customerName here must reach the
+      // handler's own `!customerName` gate and route to awaiting_name — never
+      // silently substitute "WhatsApp Kullanicisi" as if a name were provided.
+      customerName,
       state: {
         selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
         selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
@@ -1522,8 +2215,7 @@ const buildReplyText = async (args: {
         selectedDate: state?.selectedDate,
       },
       stateJson,
-      resetState: nextCustomerName =>
-        resetMetaWaState(args.clinic.id, args.conversationKey, nextCustomerName),
+      resetState: resetToPostBooking,
       upsertState: data =>
         upsertMetaWaState(args.clinic.id, args.conversationKey, {
           ...(stateJson.selectedPatientId
@@ -1533,6 +2225,163 @@ const buildReplyText = async (args: {
         }),
       createAppointment: sharedCreateAppointment,
     });
+  }
+
+  // ── Name collection (only reached from awaiting_confirmation when customerName
+  // is missing) ──────────────────────────────────────────────────────────────
+  if (currentStep === 'awaiting_name') {
+    const parsedName = splitNameForPatient(args.text);
+    if (!parsedName.firstName || !hasValidLastName(parsedName.lastName)) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep: 'awaiting_name',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: state?.selectedDate ?? null,
+        selectedTime: null,
+      });
+      logWhatsAppAgentDecision({
+        provider: 'meta',
+        clinicId: args.clinic.id,
+        phone: args.phone,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_name_nlu',
+      });
+      if (nluDecision.intent === 'ask_why_name_needed') {
+        return 'Randevu talebinizi doğru şekilde kaydedebilmemiz ve klinik ekibinin size ulaşabilmesi için ad soyad bilgisine ihtiyacımız var.';
+      }
+      return 'Randevu talebinizi oluşturabilmem için lütfen ad ve soyadınızı birlikte yazar mısınız? (Örnek: Ayşe Yılmaz)';
+    }
+
+    logWhatsAppAgentDecision({
+      provider: 'meta',
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      currentStep,
+      deterministicMatched: true,
+      nluUsed: false,
+      detectedIntent: 'provide_name',
+      confidence: 1,
+      responseType: 'awaiting_name_provided',
+    });
+
+    const fullName = `${parsedName.firstName} ${parsedName.lastName}`.trim();
+    const resetToPostBooking = (nextCustomerName?: string | null) =>
+      upsertMetaWaState(args.clinic.id, args.conversationKey, {
+        customerName: nextCustomerName ?? fullName,
+        currentIntent: null,
+        step: 'post_booking',
+        selectedAppointmentTypeId: null,
+        selectedAppointmentTypeName: null,
+        selectedPractitionerId: null,
+        selectedDate: null,
+        selectedTime: null,
+        stateJson: {
+          lastBookingSummary: {
+            serviceName: state?.selectedAppointmentTypeName ?? null,
+            date: state?.selectedDate ?? null,
+            time: stateJson.pendingConfirmationSlot?.localStartTime ?? null,
+          },
+          ...(stateJson.selectedPatientId ? { selectedPatientId: stateJson.selectedPatientId } : {}),
+        },
+      });
+
+    // The user already answered "evet" before being asked for their name (see
+    // handleAwaitingConfirmationStep's `!customerName` gate) — re-run that same
+    // deterministic approval path now that a valid name exists, rather than
+    // re-asking for confirmation a second time.
+    return handleAwaitingConfirmationStep({
+      clinicId: args.clinic.id,
+      phone: args.conversationKey,
+      text: 'evet',
+      customerName: fullName,
+      state: {
+        selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+        selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+        selectedPractitionerId: state?.selectedPractitionerId,
+        selectedDate: state?.selectedDate,
+      },
+      stateJson,
+      resetState: resetToPostBooking,
+      upsertState: data =>
+        upsertMetaWaState(args.clinic.id, args.conversationKey, {
+          ...(stateJson.selectedPatientId
+            ? { ...data, stateJson: { ...(data.stateJson ?? {}), selectedPatientId: stateJson.selectedPatientId } }
+            : data),
+          lastProviderMessageId: args.messageId ?? null,
+        }),
+      createAppointment: sharedCreateAppointment,
+    });
+  }
+
+  // ── Post-booking follow-up (gratitude/closing/status/change/cancel) ────────
+  if (currentStep === 'post_booking') {
+    const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      currentStep: 'post_booking',
+      currentIntent: state?.currentIntent ?? null,
+      lastMessage: state?.lastMessage ?? null,
+      userText: args.text,
+      availableServices: services,
+      selectedService: null,
+      selectedDate: null,
+      selectedTime: null,
+    });
+
+    logWhatsAppAgentDecision({
+      provider: 'meta',
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      currentStep,
+      deterministicMatched: false,
+      nluUsed: nluSource !== 'unavailable',
+      detectedIntent: nluDecision.intent,
+      confidence: nluDecision.confidence,
+      responseType: 'post_booking_nlu',
+    });
+    logPostBookingDecision({
+      provider: 'meta',
+      clinicId: args.clinic.id,
+      phone: args.phone,
+      detectedIntent: nluDecision.intent,
+      responseType: 'post_booking',
+    });
+
+    const summary = stateJson.lastBookingSummary ?? null;
+
+    if (nluDecision.intent === 'gratitude') {
+      return 'Rica ederiz. Talebiniz klinik ekibine iletildi. Onay durumunu size bildireceğiz.';
+    }
+    if (nluDecision.intent === 'closing') {
+      return 'Rica ederiz, sağlıklı günler dileriz.';
+    }
+    if (nluDecision.intent === 'ask_request_status') {
+      return summary?.serviceName
+        ? `${summary.serviceName} için ${summary.date ? formatTurkishDateLong(summary.date, WHATSAPP_ASSISTANT_TIME_ZONE) : ''}${summary.time ? ` saat ${summary.time}` : ''} talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.`
+        : 'Randevu talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.';
+    }
+    if (nluDecision.intent === 'change_request' || nluDecision.intent === 'cancel_request') {
+      return createHandoffRequest({
+        clinic: args.clinic,
+        inboxEntryId: args.inboxEntry?.id ?? null,
+        connectionId: args.connectionId,
+        phone: args.phone,
+        customerName,
+        text: args.text,
+        conversationKey: args.conversationKey,
+        patientId: resolvedPatient?.id ?? stateJson.selectedPatientId ?? null,
+      });
+    }
+    return 'Randevu talebinizin durumunu sorabilir, saat veya tarih değişikliği isteyebilir, iptal talep edebilir ya da yetkili biriyle görüşmek isteyebilirsiniz. Nasıl yardımcı olabilirim?';
   }
 
   // ── AI agent decision ─────────────────────────────────────────────────────
@@ -1563,6 +2412,18 @@ const buildReplyText = async (args: {
     agentSource,
     action: decision?.action ?? null,
     intent: decision?.intent ?? null,
+  });
+
+  logWhatsAppAgentDecision({
+    provider: 'meta',
+    clinicId: args.clinic.id,
+    phone: args.phone,
+    currentStep,
+    deterministicMatched: false,
+    nluUsed: agentSource !== 'unavailable',
+    detectedIntent: decision?.intent ?? 'unknown',
+    confidence: decision?.confidence ?? 0,
+    responseType: decision?.action ?? 'unresolved',
   });
 
   if (!decision) {
