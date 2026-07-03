@@ -13,13 +13,14 @@ import { getPlatformSetting, setPlatformSetting } from '../services/platformSett
 import { createRateLimiter } from '../utils/helpers.js';
 import { encryptSecretTagged, decryptSecretTagged } from '../utils/encryption.js';
 import { generateTotpSecret, verifyTotp, buildOtpAuthUri } from '../utils/totp.js';
-import { platformSmsProviderSchema } from '../schemas/index.js';
+import { platformSmsProviderSchema, smsRoutingPreviewSchema } from '../schemas/index.js';
 import { AVAILABLE_SMS_PROVIDERS } from '../services/sms/smsProviders.js';
 import {
   encryptProviderCredentials,
   runPlatformSmsProviderTest,
   sanitizePlatformSmsProvider,
 } from '../services/sms/platformSmsProviders.js';
+import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRoutingPolicy.js';
 
 const router = express.Router();
 
@@ -488,7 +489,12 @@ router.get('/clinics', async (req, res: Response) => {
           maxUsers: true, maxPatients: true, createdAt: true,
           organization: { select: { id: true, name: true, slug: true } },
           plan: { select: { name: true, displayName: true, features: true } },
-          smsSettings: { select: { addonEnabled: true, monthlyQuota: true } },
+          smsSettings: {
+            select: {
+              addonEnabled: true, monthlyQuota: true,
+              turkeyAllowed: true, europeAllowed: true, routingPolicy: true,
+            },
+          },
           _count: { select: { users: true, patients: true, appointments: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -611,16 +617,27 @@ router.patch('/clinics/:id/plan', async (req, res: Response) => {
   }
 });
 
-// PATCH /api/platform/clinics/:id/sms-addon — sell/enable the SMS add-on + set monthly quota
+// PATCH /api/platform/clinics/:id/sms-addon — sell/enable the SMS add-on,
+// set monthly quota, allowed destination regions, and routing policy.
+// Clinics cannot edit any of this — it is sold/configured by platform admin.
 router.patch('/clinics/:id/sms-addon', async (req, res: Response) => {
   const { id } = req.params;
-  const { addonEnabled, monthlyQuota } = req.body;
+  const { addonEnabled, monthlyQuota, turkeyAllowed, europeAllowed, routingPolicy } = req.body;
 
   if (addonEnabled !== undefined && typeof addonEnabled !== 'boolean') {
     return res.status(400).json({ error: 'addonEnabled must be a boolean' });
   }
   if (monthlyQuota !== undefined && (!Number.isInteger(monthlyQuota) || monthlyQuota < 0 || monthlyQuota > 1_000_000)) {
     return res.status(400).json({ error: 'monthlyQuota must be a non-negative integer' });
+  }
+  if (turkeyAllowed !== undefined && typeof turkeyAllowed !== 'boolean') {
+    return res.status(400).json({ error: 'turkeyAllowed must be a boolean' });
+  }
+  if (europeAllowed !== undefined && typeof europeAllowed !== 'boolean') {
+    return res.status(400).json({ error: 'europeAllowed must be a boolean' });
+  }
+  if (routingPolicy !== undefined && !(SMS_ROUTING_POLICIES as readonly string[]).includes(routingPolicy)) {
+    return res.status(400).json({ error: `routingPolicy must be one of: ${SMS_ROUTING_POLICIES.join(', ')}` });
   }
 
   try {
@@ -632,18 +649,97 @@ router.patch('/clinics/:id/sms-addon', async (req, res: Response) => {
       update: {
         ...(addonEnabled !== undefined ? { addonEnabled } : {}),
         ...(monthlyQuota !== undefined ? { monthlyQuota } : {}),
+        ...(turkeyAllowed !== undefined ? { turkeyAllowed } : {}),
+        ...(europeAllowed !== undefined ? { europeAllowed } : {}),
+        ...(routingPolicy !== undefined ? { routingPolicy } : {}),
       },
       create: {
         clinicId: id,
         organizationId: clinic.organizationId,
         addonEnabled: addonEnabled ?? false,
         monthlyQuota: monthlyQuota ?? 0,
+        turkeyAllowed: turkeyAllowed ?? false,
+        europeAllowed: europeAllowed ?? false,
+        routingPolicy: routingPolicy ?? 'automatic_by_recipient_phone_region',
       },
-      select: { clinicId: true, addonEnabled: true, monthlyQuota: true },
+      select: {
+        clinicId: true, addonEnabled: true, monthlyQuota: true,
+        turkeyAllowed: true, europeAllowed: true, routingPolicy: true,
+      },
     });
     res.json(settings);
   } catch {
     res.status(500).json({ error: 'Failed to update SMS add-on' });
+  }
+});
+
+// POST /api/platform/clinics/:id/sms-addon/preview-routing — platform-admin-only
+// dry run of the exact same resolver the real send pipeline uses. Never sends
+// an SMS and never returns provider credentials.
+router.post('/clinics/:id/sms-addon/preview-routing', async (req, res: Response) => {
+  const parsed = smsRoutingPreviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid preview payload' });
+  }
+
+  try {
+    const settings = await prisma.clinicSmsSettings.findUnique({
+      where: { clinicId: req.params.id },
+      select: {
+        addonEnabled: true, monthlyQuota: true,
+        turkeyAllowed: true, europeAllowed: true, routingPolicy: true,
+        turkeyProvider: true, turkeyProviderConfig: true,
+        europeProvider: true, europeProviderConfig: true,
+      },
+    });
+    if (!settings) {
+      return res.json({
+        normalizedPhone: null, detectedRegion: null, targetRegion: null,
+        blocked: true, blockedReason: 'addon_disabled',
+        blockedMessage: 'SMS add-on is not active for this clinic.', provider: null,
+      });
+    }
+    if (!settings.addonEnabled) {
+      return res.json({
+        normalizedPhone: null, detectedRegion: null, targetRegion: null,
+        blocked: true, blockedReason: 'addon_disabled',
+        blockedMessage: 'SMS add-on is not active for this clinic.', provider: null,
+      });
+    }
+
+    const routing = await resolveSmsRouting(parsed.data.phone, settings);
+    if (!routing.ok) {
+      return res.json({
+        normalizedPhone: routing.normalizedPhone,
+        detectedRegion: routing.detectedRegion,
+        targetRegion: null,
+        blocked: true,
+        blockedReason: routing.code,
+        blockedMessage: routing.message,
+        provider: null,
+      });
+    }
+
+    let displayName = routing.providerKey;
+    if (routing.providerSource === 'platform_default') {
+      const row = await prisma.platformSmsProvider.findFirst({
+        where: { region: routing.targetRegion, providerCode: routing.providerKey, isActive: true },
+        select: { displayName: true },
+      });
+      displayName = row?.displayName ?? routing.providerKey;
+    }
+
+    res.json({
+      normalizedPhone: routing.normalizedPhone,
+      detectedRegion: routing.detectedRegion,
+      targetRegion: routing.targetRegion,
+      blocked: false,
+      blockedReason: null,
+      blockedMessage: null,
+      provider: { key: routing.providerKey, displayName, source: routing.providerSource },
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to preview SMS routing' });
   }
 });
 

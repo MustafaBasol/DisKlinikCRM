@@ -60,6 +60,7 @@ import {
   encryptProviderCredentials,
   runPlatformSmsProviderTest,
 } from '../services/sms/platformSmsProviders.js';
+import { resolveSmsRouting, type SmsRoutingSettings } from '../services/sms/smsRoutingPolicy.js';
 
 // ─── Run tests ────────────────────────────────────────────────────────────────
 
@@ -412,6 +413,127 @@ async function main() {
 
   await test('Prisma schema contains the PlatformSmsProvider model', () => {
     assert.ok(schemaSrc.includes('model PlatformSmsProvider'));
+  });
+
+  // ── Clinic destination-region permissions + routing policy ─────────────────
+  section('SMS routing policy resolution');
+
+  const bothAllowed: SmsRoutingSettings = {
+    turkeyAllowed: true, europeAllowed: true, routingPolicy: 'automatic_by_recipient_phone_region',
+  };
+  const platformDeps = (region: 'tr' | 'eu') => ({
+    getPlatformProvider: async (r: 'tr' | 'eu') =>
+      r === region ? { providerKey: `mock_${region === 'tr' ? 'turkey' : 'europe'}`, config: null, senderName: null } : null,
+  });
+  const noProviderDeps = { getPlatformProvider: async () => null };
+
+  await test('+90 resolves to the Turkey provider when Turkey destination is allowed', async () => {
+    const result = await resolveSmsRouting('+905321234567', bothAllowed, platformDeps('tr') as any);
+    assert.equal(result.ok, true);
+    assert.ok(result.ok && result.targetRegion === 'tr' && result.providerKey === 'mock_turkey');
+  });
+
+  await test('+33 resolves to the Europe provider when Europe destination is allowed', async () => {
+    const result = await resolveSmsRouting('+33612345678', bothAllowed, platformDeps('eu') as any);
+    assert.equal(result.ok, true);
+    assert.ok(result.ok && result.targetRegion === 'eu' && result.providerKey === 'mock_europe');
+  });
+
+  await test('+90 is blocked when Turkey destination is disabled for the clinic', async () => {
+    const result = await resolveSmsRouting('+905321234567', { ...bothAllowed, turkeyAllowed: false }, platformDeps('tr') as any);
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.code === 'region_disabled');
+  });
+
+  await test('+33 is blocked when Europe destination is disabled for the clinic', async () => {
+    const result = await resolveSmsRouting('+33612345678', { ...bothAllowed, europeAllowed: false }, platformDeps('eu') as any);
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.code === 'region_disabled');
+  });
+
+  await test('unsupported country is blocked safely regardless of policy', async () => {
+    const result = await resolveSmsRouting('+15551234567', bothAllowed, platformDeps('tr') as any);
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.code === 'region_unsupported');
+  });
+
+  await test('force_turkey_provider blocks a Europe recipient', async () => {
+    const result = await resolveSmsRouting(
+      '+33612345678', { ...bothAllowed, routingPolicy: 'force_turkey_provider' }, platformDeps('tr') as any,
+    );
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.code === 'policy_conflict');
+  });
+
+  await test('force_europe_provider blocks a Turkey recipient', async () => {
+    const result = await resolveSmsRouting(
+      '+905321234567', { ...bothAllowed, routingPolicy: 'force_europe_provider' }, platformDeps('eu') as any,
+    );
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.code === 'policy_conflict');
+  });
+
+  await test('force_turkey_provider resolves a Turkey recipient to the Turkey provider', async () => {
+    const result = await resolveSmsRouting(
+      '+905321234567', { ...bothAllowed, routingPolicy: 'force_turkey_provider' }, platformDeps('tr') as any,
+    );
+    assert.equal(result.ok, true);
+    assert.ok(result.ok && result.targetRegion === 'tr');
+  });
+
+  await test('no active compatible platform provider blocks safely', async () => {
+    const result = await resolveSmsRouting('+905321234567', bothAllowed, noProviderDeps as any);
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.code === 'provider_not_configured');
+  });
+
+  await test('invalid/empty phone is blocked safely', async () => {
+    const result = await resolveSmsRouting('', bothAllowed, noProviderDeps as any);
+    assert.equal(result.ok, false);
+    assert.ok(!result.ok && result.code === 'invalid_phone');
+  });
+
+  await test('a clinic-level legacy override wins over the platform provider', async () => {
+    const settings: SmsRoutingSettings = { ...bothAllowed, turkeyProvider: 'clinic_custom_tr' };
+    const result = await resolveSmsRouting('+905321234567', settings, platformDeps('tr') as any);
+    assert.equal(result.ok, true);
+    assert.ok(result.ok && result.providerKey === 'clinic_custom_tr' && result.providerSource === 'clinic_override');
+  });
+
+  await test('platform admin preview-routing endpoint reuses the shared resolver (same result guarantee)', () => {
+    const platformAdminSrc = src('../routes/platformAdmin.ts');
+    assert.ok(platformAdminSrc.includes("router.post('/clinics/:id/sms-addon/preview-routing'"));
+    assert.ok(platformAdminSrc.includes('resolveSmsRouting('));
+  });
+
+  await test('smsService send pipeline uses the same resolveSmsRouting resolver as preview', () => {
+    assert.ok(serviceSrc.includes('resolveRouting'), 'smsService must call the shared routing resolver');
+  });
+
+  await test('preview-routing route is defined only under platform admin auth, never under clinic /sms routes', () => {
+    assert.ok(!routesSrc.includes('preview-routing'), 'clinic sms routes must not expose the routing preview');
+    const platformAdminSrc = src('../routes/platformAdmin.ts');
+    const authIdx = platformAdminSrc.indexOf("router.use(authenticatePlatformAdmin");
+    const previewIdx = platformAdminSrc.indexOf("router.post('/clinics/:id/sms-addon/preview-routing'");
+    assert.ok(authIdx > -1 && previewIdx > authIdx, 'preview-routing must be mounted after platform admin auth');
+  });
+
+  await test('clinics have no writable settings schema or endpoint for routing/region controls', () => {
+    const schemasSrc = src('../schemas/index.ts');
+    assert.ok(!schemasSrc.includes('smsSettingsSchema'), 'clinic-writable SMS settings schema must not exist');
+    assert.ok(!routesSrc.includes("router.put('/sms/settings'"), 'clinic sms routes must not expose a settings-write endpoint');
+  });
+
+  await test('clinic Settings SMS status payload exposes read-only region/routing info', () => {
+    assert.ok(routesSrc.includes('turkeyAllowed: entitlement.settings?.turkeyAllowed'));
+    assert.ok(routesSrc.includes('europeAllowed: entitlement.settings?.europeAllowed'));
+    assert.ok(routesSrc.includes('routingPolicy: entitlement.settings?.routingPolicy'));
+  });
+
+  await test('Prisma schema contains the clinic SMS routing fields', () => {
+    for (const needle of ['turkeyAllowed', 'europeAllowed', 'routingPolicy']) {
+      assert.ok(schemaSrc.includes(needle), `schema missing: ${needle}`);
+    }
   });
 
   // ── Summary ─────────────────────────────────────────────────────────────────

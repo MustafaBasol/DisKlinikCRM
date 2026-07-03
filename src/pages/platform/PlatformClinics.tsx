@@ -16,7 +16,13 @@ interface Clinic {
   createdAt: string;
   organization?: { id: string; name: string; slug: string };
   plan?: { displayName: string; features?: Record<string, boolean> | null };
-  smsSettings?: { addonEnabled: boolean; monthlyQuota: number } | null;
+  smsSettings?: {
+    addonEnabled: boolean;
+    monthlyQuota: number;
+    turkeyAllowed: boolean;
+    europeAllowed: boolean;
+    routingPolicy: string;
+  } | null;
   _count: { users: number; patients: number; appointments: number };
 }
 
@@ -26,6 +32,25 @@ interface PagedResponse {
   page: number;
   limit: number;
   pages: number;
+}
+
+type RoutingPolicy = 'automatic_by_recipient_phone_region' | 'force_turkey_provider' | 'force_europe_provider';
+
+interface PlatformSmsProviderRow {
+  region: 'tr' | 'eu';
+  displayName: string;
+  isActive: boolean;
+  isDefault: boolean;
+}
+
+interface RoutingPreviewResult {
+  normalizedPhone: string | null;
+  detectedRegion: string | null;
+  targetRegion: string | null;
+  blocked: boolean;
+  blockedReason: string | null;
+  blockedMessage: string | null;
+  provider: { key: string; displayName: string; source: string } | null;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -46,8 +71,19 @@ const PlatformClinics: React.FC = () => {
   const [page, setPage] = useState(1);
   const [actionId, setActionId] = useState<string | null>(null);
   const [smsClinic, setSmsClinic] = useState<Clinic | null>(null);
-  const [smsForm, setSmsForm] = useState({ addonEnabled: false, monthlyQuota: 0 });
+  const [smsForm, setSmsForm] = useState({
+    addonEnabled: false,
+    monthlyQuota: 0,
+    turkeyAllowed: false,
+    europeAllowed: false,
+    routingPolicy: 'automatic_by_recipient_phone_region' as RoutingPolicy,
+  });
   const [smsSaving, setSmsSaving] = useState(false);
+  const [smsProviders, setSmsProviders] = useState<PlatformSmsProviderRow[]>([]);
+  const [previewPhone, setPreviewPhone] = useState('');
+  const [previewResult, setPreviewResult] = useState<RoutingPreviewResult | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -80,7 +116,16 @@ const PlatformClinics: React.FC = () => {
     setSmsForm({
       addonEnabled: clinic.smsSettings?.addonEnabled ?? false,
       monthlyQuota: clinic.smsSettings?.monthlyQuota ?? 0,
+      turkeyAllowed: clinic.smsSettings?.turkeyAllowed ?? false,
+      europeAllowed: clinic.smsSettings?.europeAllowed ?? false,
+      routingPolicy: (clinic.smsSettings?.routingPolicy as RoutingPolicy) ?? 'automatic_by_recipient_phone_region',
     });
+    setPreviewPhone('');
+    setPreviewResult(null);
+    setPreviewError('');
+    api.get('/platform/sms-providers')
+      .then((res) => setSmsProviders(res.data?.providers ?? []))
+      .catch(() => setSmsProviders([]));
   };
 
   const saveSmsAddon = async () => {
@@ -90,6 +135,9 @@ const PlatformClinics: React.FC = () => {
       await api.patch(`/platform/clinics/${smsClinic.id}/sms-addon`, {
         addonEnabled: smsForm.addonEnabled,
         monthlyQuota: smsForm.monthlyQuota,
+        turkeyAllowed: smsForm.turkeyAllowed,
+        europeAllowed: smsForm.europeAllowed,
+        routingPolicy: smsForm.routingPolicy,
       });
       setSmsClinic(null);
       fetchData();
@@ -99,6 +147,28 @@ const PlatformClinics: React.FC = () => {
       setSmsSaving(false);
     }
   };
+
+  const runRoutingPreview = async () => {
+    if (!smsClinic || !previewPhone.trim()) return;
+    setPreviewLoading(true);
+    setPreviewError('');
+    setPreviewResult(null);
+    try {
+      const res = await api.post(`/platform/clinics/${smsClinic.id}/sms-addon/preview-routing`, {
+        phone: previewPhone.trim(),
+      });
+      setPreviewResult(res.data);
+    } catch (err: any) {
+      setPreviewError(err.response?.data?.error ?? t('platform:clinics.sms.preview.failed'));
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const turkeyDefaultProvider = smsProviders.find((p) => p.region === 'tr' && p.isActive && p.isDefault)
+    ?? smsProviders.find((p) => p.region === 'tr' && p.isActive);
+  const europeDefaultProvider = smsProviders.find((p) => p.region === 'eu' && p.isActive && p.isDefault)
+    ?? smsProviders.find((p) => p.region === 'eu' && p.isActive);
 
   return (
     <div className="space-y-5">
@@ -265,7 +335,7 @@ const PlatformClinics: React.FC = () => {
       {/* SMS add-on modal */}
       {smsClinic && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-md space-y-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-gray-900 dark:text-white">
                 {t('platform:clinics.sms.modalTitle', { name: smsClinic.name })}
@@ -317,6 +387,117 @@ const PlatformClinics: React.FC = () => {
                 className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="mt-1 text-xs text-gray-400">{t('platform:clinics.sms.quotaHint')}</p>
+            </div>
+
+            {/* Allowed destination regions */}
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                {t('platform:clinics.sms.regions.title')}
+              </p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer text-gray-900 dark:text-white">
+                  <input
+                    type="checkbox"
+                    checked={smsForm.turkeyAllowed}
+                    onChange={(e) => setSmsForm((f) => ({ ...f, turkeyAllowed: e.target.checked }))}
+                    className="rounded text-blue-600"
+                  />
+                  {t('platform:clinics.sms.regions.turkey')}
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer text-gray-900 dark:text-white">
+                  <input
+                    type="checkbox"
+                    checked={smsForm.europeAllowed}
+                    onChange={(e) => setSmsForm((f) => ({ ...f, europeAllowed: e.target.checked }))}
+                    className="rounded text-blue-600"
+                  />
+                  {t('platform:clinics.sms.regions.europe')}
+                </label>
+              </div>
+            </div>
+
+            {/* Routing policy */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                {t('platform:clinics.sms.routing.title')}
+              </label>
+              <select
+                value={smsForm.routingPolicy}
+                onChange={(e) => setSmsForm((f) => ({ ...f, routingPolicy: e.target.value as RoutingPolicy }))}
+                className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="automatic_by_recipient_phone_region">{t('platform:clinics.sms.routing.automatic')}</option>
+                <option value="force_turkey_provider">{t('platform:clinics.sms.routing.forceTurkey')}</option>
+                <option value="force_europe_provider">{t('platform:clinics.sms.routing.forceEurope')}</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-400">{t('platform:clinics.sms.routing.hint')}</p>
+            </div>
+
+            {/* Resolved provider summary (read-only) */}
+            <div className="rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2 text-xs space-y-1">
+              <p className="font-medium text-gray-600 dark:text-gray-400">{t('platform:clinics.sms.resolvedProviders.title')}</p>
+              <p className="flex items-center justify-between">
+                <span className="text-gray-500">{t('platform:clinics.sms.regions.turkey')}</span>
+                <span className={turkeyDefaultProvider ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}>
+                  {turkeyDefaultProvider ? turkeyDefaultProvider.displayName : t('platform:clinics.sms.resolvedProviders.none')}
+                </span>
+              </p>
+              <p className="flex items-center justify-between">
+                <span className="text-gray-500">{t('platform:clinics.sms.regions.europe')}</span>
+                <span className={europeDefaultProvider ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}>
+                  {europeDefaultProvider ? europeDefaultProvider.displayName : t('platform:clinics.sms.resolvedProviders.none')}
+                </span>
+              </p>
+            </div>
+
+            {/* Provider resolution preview */}
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                {t('platform:clinics.sms.preview.title')}
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder={t('platform:clinics.sms.preview.placeholder')}
+                  value={previewPhone}
+                  onChange={(e) => setPreviewPhone(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={runRoutingPreview}
+                  disabled={previewLoading || !previewPhone.trim()}
+                  className="px-3 py-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  {previewLoading ? <Loader2 size={13} className="animate-spin" /> : null}
+                  {t('platform:clinics.sms.preview.run')}
+                </button>
+              </div>
+
+              {previewError && (
+                <p className="mt-2 text-xs text-red-600">{previewError}</p>
+              )}
+
+              {previewResult && (
+                <div className="mt-2 rounded-lg bg-gray-50 dark:bg-gray-800 px-3 py-2 text-xs space-y-1">
+                  <p>
+                    <span className="text-gray-500">{t('platform:clinics.sms.preview.normalizedPhone')}: </span>
+                    <span className="text-gray-900 dark:text-white">{previewResult.normalizedPhone ?? '—'}</span>
+                  </p>
+                  <p>
+                    <span className="text-gray-500">{t('platform:clinics.sms.preview.detectedRegion')}: </span>
+                    <span className="text-gray-900 dark:text-white uppercase">{previewResult.detectedRegion ?? '—'}</span>
+                  </p>
+                  {previewResult.blocked ? (
+                    <p className="text-amber-600 dark:text-amber-400">
+                      {t('platform:clinics.sms.preview.blocked')}: {previewResult.blockedMessage}
+                    </p>
+                  ) : (
+                    <p className="text-green-600 dark:text-green-400">
+                      {t('platform:clinics.sms.preview.selectedProvider')}: {previewResult.provider?.displayName}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 justify-end pt-2">

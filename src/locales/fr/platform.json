@@ -117,7 +117,33 @@
       "sourceAddon": "Module de la clinique",
       "sourcePlan": "Fonction du plan",
       "sourceNone": "Non activé",
-      "saveFailed": "Échec de la mise à jour du module SMS"
+      "saveFailed": "Échec de la mise à jour du module SMS",
+      "regions": {
+        "title": "Régions de destination autorisées",
+        "turkey": "Numéros Turquie",
+        "europe": "Numéros Europe"
+      },
+      "routing": {
+        "title": "Politique de routage",
+        "automatic": "Automatique, selon la région du numéro du destinataire",
+        "forceTurkey": "Toujours utiliser le fournisseur Turquie",
+        "forceEurope": "Toujours utiliser le fournisseur Europe",
+        "hint": "En mode automatique, le fournisseur SMS est sélectionné selon l'indicatif du pays du destinataire."
+      },
+      "resolvedProviders": {
+        "title": "Fournisseurs résolus (lecture seule)",
+        "none": "Aucun fournisseur compatible"
+      },
+      "preview": {
+        "title": "Aperçu du routage",
+        "placeholder": "Numéro de téléphone exemple (ex. +905321234567)",
+        "run": "Aperçu",
+        "failed": "Impossible d'exécuter l'aperçu",
+        "normalizedPhone": "Numéro normalisé",
+        "detectedRegion": "Région détectée",
+        "blocked": "Bloqué",
+        "selectedProvider": "Fournisseur sélectionné"
+      }
     }
   },
   "organizations": {

@@ -66,6 +66,10 @@ async function buildStatusPayload(clinicId: string) {
       tr: { available: trAvailable },
       eu: { available: euAvailable },
     },
+    // Read-only — providers/regions/routing are managed by platform admin only.
+    turkeyAllowed: entitlement.settings?.turkeyAllowed ?? false,
+    europeAllowed: entitlement.settings?.europeAllowed ?? false,
+    routingPolicy: entitlement.settings?.routingPolicy ?? 'automatic_by_recipient_phone_region',
   };
 }
 

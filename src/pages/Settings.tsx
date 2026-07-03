@@ -1180,9 +1180,7 @@ const Settings: React.FC = () => {
           )}
 
           {canSeeSms && activeTab === 'sms' && (
-            <SmsSettingsSection
-              clinicId={selectedClinic?.id}
-            />
+            <SmsSettingsSection clinicId={selectedClinic?.id} />
           )}
 
           {canSeeKvkk && activeTab === 'kvkk' && (

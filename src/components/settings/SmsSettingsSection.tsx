@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  MessageSquare, Loader2, AlertCircle, CheckCircle2, XCircle, RefreshCw, Info,
+  MessageSquare, Loader2, AlertCircle, CheckCircle2, XCircle, RefreshCw,
 } from 'lucide-react';
 import { smsService } from '../../services/api';
 
@@ -16,6 +16,9 @@ type SmsStatusPayload = {
     tr: { available: boolean };
     eu: { available: boolean };
   };
+  turkeyAllowed: boolean;
+  europeAllowed: boolean;
+  routingPolicy: string;
 };
 
 type SmsHistoryEntry = {
@@ -46,6 +49,12 @@ const STATUS_BADGE: Record<string, string> = {
 interface SmsSettingsSectionProps {
   clinicId?: string;
 }
+
+const ROUTING_POLICY_KEY: Record<string, string> = {
+  automatic_by_recipient_phone_region: 'sms:routing.automatic',
+  force_turkey_provider: 'sms:routing.forceTurkey',
+  force_europe_provider: 'sms:routing.forceEurope',
+};
 
 const SmsSettingsSection: React.FC<SmsSettingsSectionProps> = ({ clinicId }) => {
   const { t } = useTranslation(['sms', 'common']);
@@ -150,30 +159,42 @@ const SmsSettingsSection: React.FC<SmsSettingsSectionProps> = ({ clinicId }) => 
         )}
       </div>
 
-      {/* Provider/routing info — read-only, no clinic-side provider controls */}
+      {/* Read-only routing info — providers and routing are managed by platform admin */}
       {status?.addonActive && (
         <div className="card p-6">
-          <div className="flex items-start gap-2 mb-4">
-            <Info size={18} className="text-gray-400 mt-0.5 flex-shrink-0" />
-            <div>
-              <h3 className="text-base font-bold mb-1">{t('sms:providers.title')}</h3>
-              <p className="text-sm text-gray-500">{t('sms:providers.subtitle')}</p>
+          <h3 className="text-base font-bold mb-1">{t('sms:providers.title')}</h3>
+          <p className="text-sm text-gray-500 mb-4">{t('sms:providers.managedByPlatform')}</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
+              <span className="text-sm text-gray-700">{t('sms:regions.turkey')}</span>
+              {status.turkeyAllowed ? (
+                <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                  <CheckCircle2 size={14} /> {t('sms:regions.allowed')}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs font-medium text-gray-400">
+                  <XCircle size={14} /> {t('sms:regions.notAllowed')}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
+              <span className="text-sm text-gray-700">{t('sms:regions.europe')}</span>
+              {status.europeAllowed ? (
+                <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                  <CheckCircle2 size={14} /> {t('sms:regions.allowed')}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs font-medium text-gray-400">
+                  <XCircle size={14} /> {t('sms:regions.notAllowed')}
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-gray-100 px-3 py-2">
-              <span className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('sms:providers.turkey')}</span>
-              <span className={`text-sm font-medium ${status.regions.tr.available ? 'text-green-600' : 'text-gray-400'}`}>
-                {status.regions.tr.available ? t('sms:providers.regionAvailable') : t('sms:providers.regionUnavailable')}
-              </span>
-            </div>
-            <div className="rounded-lg border border-gray-100 px-3 py-2">
-              <span className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('sms:providers.europe')}</span>
-              <span className={`text-sm font-medium ${status.regions.eu.available ? 'text-green-600' : 'text-gray-400'}`}>
-                {status.regions.eu.available ? t('sms:providers.regionAvailable') : t('sms:providers.regionUnavailable')}
-              </span>
-            </div>
+          <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+            <span className="font-medium text-gray-800">{t('sms:routing.title')}: </span>
+            {t(ROUTING_POLICY_KEY[status.routingPolicy] ?? 'sms:routing.automatic')}
           </div>
         </div>
       )}

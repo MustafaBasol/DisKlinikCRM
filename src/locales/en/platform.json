@@ -117,7 +117,33 @@
       "sourceAddon": "Clinic add-on",
       "sourcePlan": "Plan feature",
       "sourceNone": "Not enabled",
-      "saveFailed": "Failed to update the SMS add-on"
+      "saveFailed": "Failed to update the SMS add-on",
+      "regions": {
+        "title": "Allowed destination regions",
+        "turkey": "Turkey numbers",
+        "europe": "Europe numbers"
+      },
+      "routing": {
+        "title": "Routing policy",
+        "automatic": "Automatic, by recipient phone region",
+        "forceTurkey": "Always use the Turkey provider",
+        "forceEurope": "Always use the Europe provider",
+        "hint": "In automatic mode, SMS provider is selected by recipient phone country code."
+      },
+      "resolvedProviders": {
+        "title": "Resolved providers (read-only)",
+        "none": "No compatible provider"
+      },
+      "preview": {
+        "title": "Routing preview",
+        "placeholder": "Sample phone number (e.g. +905321234567)",
+        "run": "Preview",
+        "failed": "Could not run preview",
+        "normalizedPhone": "Normalized phone",
+        "detectedRegion": "Detected region",
+        "blocked": "Blocked",
+        "selectedProvider": "Selected provider"
+      }
     }
   },
   "organizations": {

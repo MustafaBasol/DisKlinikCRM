@@ -353,6 +353,12 @@ export const platformSmsProviderSchema = z.object({
   credentials: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
+/// Platform admin "preview routing" tool: given a sample phone number, show
+/// which region/provider a real send would resolve to (no send, no secrets).
+export const smsRoutingPreviewSchema = z.object({
+  phone: z.string().min(1, 'Phone number is required'),
+});
+
 export const smsSendSchema = z.object({
   patientId: z.string().min(1, 'Patient ID is required'),
   clinicId: z.string().min(1).optional().nullable(),

@@ -17,15 +17,14 @@
 
 import prisma from '../../db.js';
 import { recordOperationalEvent } from '../operationalEventService.js';
-import { decryptJson } from '../../utils/encryption.js';
 import { getSmsProvider } from './smsProviders.js';
 import { resolvePlatformSmsProvider } from './platformSmsProviders.js';
 import { normalizeSmsPhone, resolveSmsRegion, type SmsRegion } from './smsRouting.js';
+import { resolveSmsRouting, type SmsRoutingBlockCode } from './smsRoutingPolicy.js';
 import {
   getSmsEntitlement,
   reserveSmsQuotaSlot,
   releaseSmsQuotaSlot,
-  type SmsEntitlement,
 } from './smsEntitlement.js';
 import {
   evaluateSmsConsent,
@@ -41,6 +40,8 @@ export type SmsBlockCode =
   | 'addon_disabled'
   | 'invalid_phone'
   | 'region_unsupported'
+  | 'region_disabled'
+  | 'policy_conflict'
   | 'provider_not_configured'
   | 'consent_blocked'
   | 'template_invalid'
@@ -77,6 +78,7 @@ export type SmsSendDeps = {
   releaseQuota: typeof releaseSmsQuotaSlot;
   getProvider: typeof getSmsProvider;
   getPlatformProvider: typeof resolvePlatformSmsProvider;
+  resolveRouting: typeof resolveSmsRouting;
 };
 
 const defaultDeps: SmsSendDeps = {
@@ -85,34 +87,17 @@ const defaultDeps: SmsSendDeps = {
   releaseQuota: releaseSmsQuotaSlot,
   getProvider: getSmsProvider,
   getPlatformProvider: resolvePlatformSmsProvider,
+  resolveRouting: resolveSmsRouting,
 };
 
-/**
- * Provider resolution for a region: a clinic-level override in
- * ClinicSmsSettings wins when set; otherwise the platform-level provider
- * configured centrally by the platform admin (PlatformSmsProvider) is used.
- */
-async function pickProviderForRegion(
-  entitlement: SmsEntitlement,
-  region: SmsRegion,
-  deps: SmsSendDeps,
-): Promise<{ providerKey: string | null; config: unknown; senderName: string | null }> {
-  if (region !== 'tr' && region !== 'eu') {
-    return { providerKey: null, config: null, senderName: null };
-  }
-  const clinicKey =
-    region === 'tr' ? entitlement.settings?.turkeyProvider : entitlement.settings?.europeProvider;
-  if (clinicKey) {
-    const rawConfig =
-      region === 'tr' ? entitlement.settings?.turkeyProviderConfig : entitlement.settings?.europeProviderConfig;
-    return { providerKey: clinicKey, config: decryptJson(rawConfig), senderName: null };
-  }
-  const platform = await deps.getPlatformProvider(region);
-  if (platform) {
-    return { providerKey: platform.providerKey, config: platform.config, senderName: platform.senderName };
-  }
-  return { providerKey: null, config: null, senderName: null };
-}
+/** Maps a routing-resolution block code to the SmsMessage history status. */
+const ROUTING_BLOCK_STATUS: Record<SmsRoutingBlockCode, string> = {
+  invalid_phone: 'failed',
+  region_unsupported: 'blocked_region',
+  region_disabled: 'blocked_region',
+  policy_conflict: 'blocked_region',
+  provider_not_configured: 'failed',
+};
 
 type BlockedRecordArgs = SendClinicSmsArgs & {
   recipient: string;
@@ -237,17 +222,22 @@ export async function sendClinicSms(
   }
   body = body.slice(0, MAX_SMS_BODY_LENGTH);
 
-  // Region + provider resolution
-  if (region === 'unsupported') {
+  // Region + provider resolution — same resolver used by the platform admin
+  // preview endpoint, so a "would send" preview always matches reality.
+  const routing = await deps.resolveRouting(normalized, entitlement.settings, {
+    getPlatformProvider: deps.getPlatformProvider,
+  });
+  if (!routing.ok) {
     const messageId = await recordBlocked({
-      ...args, recipient: normalized, body, status: 'blocked_region',
-      region, errorCode: 'region_unsupported',
-      errorMessage: 'Recipient region is not supported for SMS.',
+      ...args, recipient: normalized, body, status: ROUTING_BLOCK_STATUS[routing.code],
+      region, errorCode: routing.code, errorMessage: routing.message,
     });
-    return { ok: false, code: 'region_unsupported', error: 'This phone number region is not supported for SMS.', messageId };
+    return { ok: false, code: routing.code, error: routing.message, messageId };
   }
 
-  const { providerKey, config, senderName: platformSenderName } = await pickProviderForRegion(entitlement, region, deps);
+  const providerKey = routing.providerKey;
+  const config = routing.config;
+  const platformSenderName = routing.senderName;
   const provider = deps.getProvider(providerKey);
   if (!provider) {
     const messageId = await recordBlocked({

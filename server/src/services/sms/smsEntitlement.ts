@@ -34,6 +34,9 @@ export type SmsEntitlement = {
     turkeyProviderConfig: unknown;
     europeProvider: string | null;
     europeProviderConfig: unknown;
+    turkeyAllowed: boolean;
+    europeAllowed: boolean;
+    routingPolicy: string;
   } | null;
 };
 
@@ -55,6 +58,9 @@ export async function getSmsEntitlement(clinicId: string): Promise<SmsEntitlemen
         turkeyProviderConfig: true,
         europeProvider: true,
         europeProviderConfig: true,
+        turkeyAllowed: true,
+        europeAllowed: true,
+        routingPolicy: true,
       },
     }),
     prisma.clinic.findUnique({

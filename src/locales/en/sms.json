@@ -18,12 +18,20 @@
     "exhausted": "Monthly quota is exhausted — SMS sending is blocked until next month."
   },
   "providers": {
-    "title": "SMS routing and provider management",
-    "subtitle": "SMS providers are managed by the platform administrator. Messages are routed automatically based on the recipient's phone country and your clinic's SMS package rules.",
+    "title": "Provider and routing",
+    "managedByPlatform": "SMS providers and routing rules are managed by your platform administrator."
+  },
+  "regions": {
     "turkey": "Turkey numbers",
     "europe": "Europe numbers",
-    "regionAvailable": "Available",
-    "regionUnavailable": "Not available — contact your platform administrator"
+    "allowed": "Allowed",
+    "notAllowed": "Not allowed"
+  },
+  "routing": {
+    "title": "Routing policy",
+    "automatic": "Automatic, by recipient phone region",
+    "forceTurkey": "Always use the Turkey provider",
+    "forceEurope": "Always use the Europe provider"
   },
   "history": {
     "title": "SMS history",

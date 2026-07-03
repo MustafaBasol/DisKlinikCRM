@@ -1842,6 +1842,14 @@ model ClinicSmsSettings {
   /// Provider key for European numbers (e.g. mock_europe; real providers later)
   europeProvider       String?
   europeProviderConfig Json?
+  /// Destination-region permissions, set only by platform admin. Off by
+  /// default for newly-enabled add-ons; existing active clinics were
+  /// backfilled to true when this column was introduced (see migration
+  /// 20260703100000_add_sms_clinic_routing_policy).
+  turkeyAllowed  Boolean  @default(false)
+  europeAllowed  Boolean  @default(false)
+  /// automatic_by_recipient_phone_region | force_turkey_provider | force_europe_provider
+  routingPolicy  String   @default("automatic_by_recipient_phone_region")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
