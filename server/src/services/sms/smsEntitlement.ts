@@ -21,28 +21,97 @@ const DEFAULT_PLAN_MONTHLY_QUOTA = Math.max(
   parseInt(process.env.SMS_DEFAULT_PLAN_MONTHLY_QUOTA ?? '100', 10) || 0,
 );
 
+export type SmsEntitlementSettings = {
+  id: string;
+  addonEnabled: boolean;
+  monthlyQuota: number;
+  senderName: string | null;
+  turkeyProvider: string | null;
+  turkeyProviderConfig: unknown;
+  europeProvider: string | null;
+  europeProviderConfig: unknown;
+  turkeyAllowed: boolean;
+  europeAllowed: boolean;
+  routingPolicy: string;
+};
+
+/**
+ * Normalized routing-relevant settings that are ALWAYS complete when SMS is
+ * enabled, regardless of whether enablement comes from the paid clinic
+ * add-on or a plan feature. Both the real send pipeline and the platform
+ * admin preview endpoint must resolve routing from this object (never from
+ * the raw `settings` row directly) so they can never diverge.
+ */
+export type EffectiveSmsRoutingSettings = {
+  turkeyAllowed: boolean;
+  europeAllowed: boolean;
+  routingPolicy: string;
+  turkeyProvider: string | null;
+  turkeyProviderConfig: unknown;
+  europeProvider: string | null;
+  europeProviderConfig: unknown;
+  senderName: string | null;
+};
+
 export type SmsEntitlement = {
   enabled: boolean;
   source: 'clinic_addon' | 'plan_feature' | null;
   monthlyQuota: number;
-  settings: {
-    id: string;
-    addonEnabled: boolean;
-    monthlyQuota: number;
-    senderName: string | null;
-    turkeyProvider: string | null;
-    turkeyProviderConfig: unknown;
-    europeProvider: string | null;
-    europeProviderConfig: unknown;
-    turkeyAllowed: boolean;
-    europeAllowed: boolean;
-    routingPolicy: string;
-  } | null;
+  /** Raw ClinicSmsSettings row, or null when the clinic never had one created. */
+  settings: SmsEntitlementSettings | null;
+  /**
+   * Effective routing settings for resolveSmsRouting(). Non-null whenever
+   * `enabled` is true. Plan-enabled clinics without an admin-managed
+   * ClinicSmsSettings row (or with a stale addonEnabled=false row from
+   * before the add-on was configured) default both destination regions to
+   * allowed, preserving previously-working plan-granted SMS sending.
+   */
+  effective: EffectiveSmsRoutingSettings | null;
 };
 
 function planHasSmsFeature(features: unknown): boolean {
   return !!features && typeof features === 'object'
     && (features as Record<string, unknown>).sms === true;
+}
+
+/**
+ * Build the effective routing settings for an entitled clinic.
+ *
+ * - clinic_addon: the ClinicSmsSettings row is admin-managed for the add-on,
+ *   so its turkeyAllowed/europeAllowed/routingPolicy are used as-is.
+ * - plan_feature: region flags on ClinicSmsSettings only carry real meaning
+ *   once an admin has actively enabled the add-on (addonEnabled === true).
+ *   Otherwise (row missing, or a stale/never-configured row with
+ *   addonEnabled === false) default both regions to allowed so plan-granted
+ *   SMS keeps working exactly as it did before routing policy existed.
+ */
+export function buildEffectiveSmsRoutingSettings(
+  source: 'clinic_addon' | 'plan_feature',
+  settings: SmsEntitlementSettings | null,
+): EffectiveSmsRoutingSettings {
+  const adminManaged = source === 'clinic_addon' || settings?.addonEnabled === true;
+  if (settings && adminManaged) {
+    return {
+      turkeyAllowed: settings.turkeyAllowed,
+      europeAllowed: settings.europeAllowed,
+      routingPolicy: settings.routingPolicy,
+      turkeyProvider: settings.turkeyProvider,
+      turkeyProviderConfig: settings.turkeyProviderConfig,
+      europeProvider: settings.europeProvider,
+      europeProviderConfig: settings.europeProviderConfig,
+      senderName: settings.senderName,
+    };
+  }
+  return {
+    turkeyAllowed: true,
+    europeAllowed: true,
+    routingPolicy: settings?.routingPolicy ?? 'automatic_by_recipient_phone_region',
+    turkeyProvider: settings?.turkeyProvider ?? null,
+    turkeyProviderConfig: settings?.turkeyProviderConfig ?? null,
+    europeProvider: settings?.europeProvider ?? null,
+    europeProviderConfig: settings?.europeProviderConfig ?? null,
+    senderName: settings?.senderName ?? null,
+  };
 }
 
 export async function getSmsEntitlement(clinicId: string): Promise<SmsEntitlement> {
@@ -77,7 +146,10 @@ export async function getSmsEntitlement(clinicId: string): Promise<SmsEntitlemen
     planHasSmsFeature(clinic?.plan?.features);
 
   if (settings?.addonEnabled) {
-    return { enabled: true, source: 'clinic_addon', monthlyQuota: settings.monthlyQuota, settings };
+    return {
+      enabled: true, source: 'clinic_addon', monthlyQuota: settings.monthlyQuota, settings,
+      effective: buildEffectiveSmsRoutingSettings('clinic_addon', settings),
+    };
   }
   if (planEnabled) {
     return {
@@ -85,9 +157,10 @@ export async function getSmsEntitlement(clinicId: string): Promise<SmsEntitlemen
       source: 'plan_feature',
       monthlyQuota: settings?.monthlyQuota ?? DEFAULT_PLAN_MONTHLY_QUOTA,
       settings,
+      effective: buildEffectiveSmsRoutingSettings('plan_feature', settings),
     };
   }
-  return { enabled: false, source: null, monthlyQuota: 0, settings };
+  return { enabled: false, source: null, monthlyQuota: 0, settings, effective: null };
 }
 
 /** Current usage period key, e.g. "2026-07" (UTC). */

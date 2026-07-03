@@ -222,9 +222,11 @@ export async function sendClinicSms(
   }
   body = body.slice(0, MAX_SMS_BODY_LENGTH);
 
-  // Region + provider resolution — same resolver used by the platform admin
-  // preview endpoint, so a "would send" preview always matches reality.
-  const routing = await deps.resolveRouting(normalized, entitlement.settings, {
+  // Region + provider resolution — same resolver AND same effective-settings
+  // builder used by the platform admin preview endpoint, so a "would send"
+  // preview always matches reality (including plan-enabled clinics with no
+  // admin-managed ClinicSmsSettings row).
+  const routing = await deps.resolveRouting(normalized, entitlement.effective, {
     getPlatformProvider: deps.getPlatformProvider,
   });
   if (!routing.ok) {
@@ -314,7 +316,7 @@ export async function sendClinicSms(
 
   // 7. Provider send
   const sendResult = await provider.sendSms(
-    { phone: normalized, text: body, senderName: entitlement.settings?.senderName ?? platformSenderName ?? null },
+    { phone: normalized, text: body, senderName: entitlement.effective?.senderName ?? platformSenderName ?? null },
     (config ?? null) as Record<string, unknown> | null,
   );
 

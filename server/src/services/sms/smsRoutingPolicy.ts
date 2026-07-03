@@ -10,8 +10,8 @@
  * returns a stable code so callers can render/log a clear reason.
  */
 
-import { normalizeSmsPhone, resolveSmsRegion, SmsRegion } from './smsRouting.js';
-import { resolvePlatformSmsProvider, PlatformSmsRegion } from './platformSmsProviders.js';
+import { normalizeSmsPhone, resolveSmsRegion, type SmsRegion } from './smsRouting.js';
+import { resolvePlatformSmsProvider, type PlatformSmsRegion } from './platformSmsProviders.js';
 import { decryptJson } from '../../utils/encryption.js';
 
 export const SMS_ROUTING_POLICIES = [

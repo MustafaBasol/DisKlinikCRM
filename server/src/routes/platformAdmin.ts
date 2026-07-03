@@ -21,6 +21,7 @@ import {
   sanitizePlatformSmsProvider,
 } from '../services/sms/platformSmsProviders.js';
 import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRoutingPolicy.js';
+import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 
 const router = express.Router();
 
@@ -674,8 +675,10 @@ router.patch('/clinics/:id/sms-addon', async (req, res: Response) => {
 });
 
 // POST /api/platform/clinics/:id/sms-addon/preview-routing — platform-admin-only
-// dry run of the exact same resolver the real send pipeline uses. Never sends
-// an SMS and never returns provider credentials.
+// dry run of the exact same resolver AND entitlement logic the real send
+// pipeline uses (sendClinicSms -> getSmsEntitlement -> resolveSmsRouting), so
+// preview and real send can never diverge — including for clinics enabled via
+// a plan feature rather than the paid add-on.
 router.post('/clinics/:id/sms-addon/preview-routing', async (req, res: Response) => {
   const parsed = smsRoutingPreviewSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -683,23 +686,8 @@ router.post('/clinics/:id/sms-addon/preview-routing', async (req, res: Response)
   }
 
   try {
-    const settings = await prisma.clinicSmsSettings.findUnique({
-      where: { clinicId: req.params.id },
-      select: {
-        addonEnabled: true, monthlyQuota: true,
-        turkeyAllowed: true, europeAllowed: true, routingPolicy: true,
-        turkeyProvider: true, turkeyProviderConfig: true,
-        europeProvider: true, europeProviderConfig: true,
-      },
-    });
-    if (!settings) {
-      return res.json({
-        normalizedPhone: null, detectedRegion: null, targetRegion: null,
-        blocked: true, blockedReason: 'addon_disabled',
-        blockedMessage: 'SMS add-on is not active for this clinic.', provider: null,
-      });
-    }
-    if (!settings.addonEnabled) {
+    const entitlement = await getSmsEntitlement(req.params.id);
+    if (!entitlement.enabled || !entitlement.effective) {
       return res.json({
         normalizedPhone: null, detectedRegion: null, targetRegion: null,
         blocked: true, blockedReason: 'addon_disabled',
@@ -707,7 +695,7 @@ router.post('/clinics/:id/sms-addon/preview-routing', async (req, res: Response)
       });
     }
 
-    const routing = await resolveSmsRouting(parsed.data.phone, settings);
+    const routing = await resolveSmsRouting(parsed.data.phone, entitlement.effective);
     if (!routing.ok) {
       return res.json({
         normalizedPhone: routing.normalizedPhone,
