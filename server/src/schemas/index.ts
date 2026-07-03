@@ -340,14 +340,6 @@ export const SMS_SEND_PURPOSES = [
   'marketing',
 ] as const;
 
-export const smsSettingsSchema = z.object({
-  senderName: z.string().max(20).optional().nullable(),
-  turkeyProvider: z.string().max(50).optional().nullable(),
-  turkeyProviderConfig: z.record(z.string(), z.unknown()).optional().nullable(),
-  europeProvider: z.string().max(50).optional().nullable(),
-  europeProviderConfig: z.record(z.string(), z.unknown()).optional().nullable(),
-});
-
 /// Platform admin upsert of a platform-level SMS provider (per region).
 /// credentials: omitted or empty = keep the stored encrypted value; an object
 /// with keys = replace the stored encrypted value entirely.

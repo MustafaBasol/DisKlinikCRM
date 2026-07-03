@@ -5,10 +5,6 @@
   "errors": {
     "loadFailed": "Échec du chargement des paramètres SMS."
   },
-  "notifications": {
-    "saved": "Paramètres SMS enregistrés.",
-    "saveFailed": "Échec de l'enregistrement des paramètres SMS."
-  },
   "addon": {
     "active": "Le module SMS est actif",
     "viaPlan": "inclus dans votre forfait",
@@ -22,19 +18,12 @@
     "exhausted": "Le quota mensuel est épuisé — l'envoi de SMS est bloqué jusqu'au mois prochain."
   },
   "providers": {
-    "title": "Paramètres du fournisseur",
-    "subtitle": "Les numéros turcs sont acheminés vers le fournisseur Turquie, les numéros européens vers le fournisseur Europe. Les autres régions ne sont pas prises en charge.",
-    "turkey": "Fournisseur Turquie",
-    "europe": "Fournisseur Europe",
-    "none": "Non sélectionné",
-    "configured": "Fournisseur prêt",
-    "notConfigured": "Aucun fournisseur configuré — l'envoi vers cette région échouera",
-    "senderName": "Nom de l'expéditeur",
-    "senderNameHint": "Identifiant alphanumérique de l'expéditeur affiché aux destinataires, si le fournisseur le prend en charge.",
-    "names": {
-      "mock_turkey": "Fournisseur de test (Turquie)",
-      "mock_europe": "Fournisseur de test (Europe)"
-    }
+    "title": "Acheminement SMS et gestion des fournisseurs",
+    "subtitle": "Les fournisseurs SMS sont gérés par l'administrateur de la plateforme. Les messages sont acheminés automatiquement selon le pays du numéro du destinataire et les règles du forfait SMS de votre clinique.",
+    "turkey": "Numéros turcs",
+    "europe": "Numéros européens",
+    "regionAvailable": "Disponible",
+    "regionUnavailable": "Non disponible — contactez votre administrateur de plateforme"
   },
   "history": {
     "title": "Historique SMS",

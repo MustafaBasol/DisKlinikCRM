@@ -5,10 +5,6 @@
   "errors": {
     "loadFailed": "SMS-Einstellungen konnten nicht geladen werden."
   },
-  "notifications": {
-    "saved": "SMS-Einstellungen gespeichert.",
-    "saveFailed": "SMS-Einstellungen konnten nicht gespeichert werden."
-  },
   "addon": {
     "active": "SMS-Zusatzmodul ist aktiv",
     "viaPlan": "in Ihrem Tarif enthalten",
@@ -22,19 +18,12 @@
     "exhausted": "Das monatliche Kontingent ist aufgebraucht — der SMS-Versand ist bis zum nächsten Monat blockiert."
   },
   "providers": {
-    "title": "Anbieter-Einstellungen",
-    "subtitle": "Türkische Nummern werden an den Türkei-Anbieter geleitet, europäische Nummern an den Europa-Anbieter. Andere Regionen werden nicht unterstützt.",
-    "turkey": "Türkei-Anbieter",
-    "europe": "Europa-Anbieter",
-    "none": "Nicht ausgewählt",
-    "configured": "Anbieter bereit",
-    "notConfigured": "Kein Anbieter konfiguriert — der Versand in diese Region schlägt fehl",
-    "senderName": "Absendername",
-    "senderNameHint": "Alphanumerische Absenderkennung, die Empfängern angezeigt wird, sofern der Anbieter dies unterstützt.",
-    "names": {
-      "mock_turkey": "Testanbieter (Türkei)",
-      "mock_europe": "Testanbieter (Europa)"
-    }
+    "title": "SMS-Weiterleitung und Anbieterverwaltung",
+    "subtitle": "SMS-Anbieter werden vom Plattform-Administrator verwaltet. Nachrichten werden automatisch anhand des Landes der Empfängernummer und der SMS-Paketregeln Ihrer Klinik weitergeleitet.",
+    "turkey": "Türkische Nummern",
+    "europe": "Europäische Nummern",
+    "regionAvailable": "Verfügbar",
+    "regionUnavailable": "Nicht verfügbar — wenden Sie sich an Ihren Plattform-Administrator"
   },
   "history": {
     "title": "SMS-Verlauf",

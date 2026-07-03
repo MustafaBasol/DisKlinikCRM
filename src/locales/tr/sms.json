@@ -5,10 +5,6 @@
   "errors": {
     "loadFailed": "SMS ayarları yüklenemedi."
   },
-  "notifications": {
-    "saved": "SMS ayarları kaydedildi.",
-    "saveFailed": "SMS ayarları kaydedilemedi."
-  },
   "addon": {
     "active": "SMS eklentisi aktif",
     "viaPlan": "planınıza dahil",
@@ -22,19 +18,12 @@
     "exhausted": "Aylık kota doldu — SMS gönderimi gelecek aya kadar engellendi."
   },
   "providers": {
-    "title": "Sağlayıcı ayarları",
-    "subtitle": "Türk numaralar Türkiye sağlayıcısına, Avrupa numaraları Avrupa sağlayıcısına yönlendirilir. Diğer bölgeler desteklenmez.",
-    "turkey": "Türkiye sağlayıcısı",
-    "europe": "Avrupa sağlayıcısı",
-    "none": "Seçilmedi",
-    "configured": "Sağlayıcı hazır",
-    "notConfigured": "Sağlayıcı yapılandırılmadı — bu bölgeye gönderim başarısız olur",
-    "senderName": "Gönderici adı",
-    "senderNameHint": "Sağlayıcı destekliyorsa alıcılara görünen alfanümerik gönderici kimliği.",
-    "names": {
-      "mock_turkey": "Test sağlayıcısı (Türkiye)",
-      "mock_europe": "Test sağlayıcısı (Avrupa)"
-    }
+    "title": "SMS yönlendirme ve sağlayıcı yönetimi",
+    "subtitle": "SMS sağlayıcıları platform yöneticisi tarafından yönetilir. Mesajlar, alıcının telefon ülkesine ve kliniğinizin SMS paket kurallarına göre otomatik olarak yönlendirilir.",
+    "turkey": "Türkiye numaraları",
+    "europe": "Avrupa numaraları",
+    "regionAvailable": "Kullanılabilir",
+    "regionUnavailable": "Kullanılamıyor — platform yöneticinizle iletişime geçin"
   },
   "history": {
     "title": "SMS geçmişi",

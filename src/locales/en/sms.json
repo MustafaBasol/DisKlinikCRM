@@ -5,10 +5,6 @@
   "errors": {
     "loadFailed": "Failed to load SMS settings."
   },
-  "notifications": {
-    "saved": "SMS settings saved.",
-    "saveFailed": "Failed to save SMS settings."
-  },
   "addon": {
     "active": "SMS add-on is active",
     "viaPlan": "included in your plan",
@@ -22,19 +18,12 @@
     "exhausted": "Monthly quota is exhausted — SMS sending is blocked until next month."
   },
   "providers": {
-    "title": "Provider settings",
-    "subtitle": "Turkish numbers are routed to the Turkey provider, European numbers to the Europe provider. Other regions are not supported.",
-    "turkey": "Turkey provider",
-    "europe": "Europe provider",
-    "none": "Not selected",
-    "configured": "Provider ready",
-    "notConfigured": "No provider configured — sending to this region will fail",
-    "senderName": "Sender name",
-    "senderNameHint": "Alphanumeric sender ID shown to recipients, if supported by the provider.",
-    "names": {
-      "mock_turkey": "Test provider (Turkey)",
-      "mock_europe": "Test provider (Europe)"
-    }
+    "title": "SMS routing and provider management",
+    "subtitle": "SMS providers are managed by the platform administrator. Messages are routed automatically based on the recipient's phone country and your clinic's SMS package rules.",
+    "turkey": "Turkey numbers",
+    "europe": "Europe numbers",
+    "regionAvailable": "Available",
+    "regionUnavailable": "Not available — contact your platform administrator"
   },
   "history": {
     "title": "SMS history",

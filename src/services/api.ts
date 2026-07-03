@@ -623,8 +623,6 @@ export const publicClinicKvkkService = {
 export const smsService = {
   getSettings: (clinicId?: string) =>
     api.get('/sms/settings', { params: clinicId ? { clinicId } : undefined }),
-  updateSettings: (data: Record<string, unknown>, clinicId?: string) =>
-    api.put('/sms/settings', data, { params: clinicId ? { clinicId } : undefined }),
   getUsage: (clinicId?: string) =>
     api.get('/sms/usage', { params: clinicId ? { clinicId } : undefined }),
   getHistory: (params?: Record<string, unknown>) =>

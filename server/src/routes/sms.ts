@@ -2,13 +2,15 @@
  * sms.ts — SMS add-on module routes.
  *
  * All endpoints are clinic-scoped and role-protected:
- *  - Settings/provider management: OWNER, ORG_ADMIN, CLINIC_MANAGER
+ *  - Settings (read-only status): OWNER, ORG_ADMIN, CLINIC_MANAGER
  *  - Usage summary: management roles + BILLING (read-only)
  *  - Manual sending: operational roles (no DENTIST/ASSISTANT)
  *  - History: management + RECEPTIONIST
  *
- * The add-on itself (activation + quota) is managed from the platform admin
- * panel — clinics cannot enable SMS or raise their own quota here.
+ * NoraMedi sells SMS as a centrally managed add-on: the platform admin owns
+ * all provider/routing configuration (see platformAdmin.ts sms-providers and
+ * sms-addon routes). Clinics only ever see status/usage/history here — there
+ * is no clinic-facing endpoint to set providers or sender names.
  */
 
 import express, { Response } from 'express';
@@ -16,13 +18,12 @@ import prisma from '../db.js';
 import { Prisma } from '@prisma/client';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
-import { smsSettingsSchema, smsSendSchema } from '../schemas/index.js';
+import { smsSendSchema } from '../schemas/index.js';
 import { resolveEffectiveClinicId, validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { sendClinicSms } from '../services/sms/smsService.js';
-import { getSmsEntitlement, getSmsMonthlyUsage, currentSmsPeriod } from '../services/sms/smsEntitlement.js';
-import { AVAILABLE_SMS_PROVIDERS, getSmsProvider } from '../services/sms/smsProviders.js';
+import { getSmsEntitlement, getSmsMonthlyUsage, currentSmsPeriod, type SmsEntitlement } from '../services/sms/smsEntitlement.js';
+import { getSmsProvider } from '../services/sms/smsProviders.js';
 import { patientContactSelect, userNameSelect } from '../utils/prismaSelects.js';
-import { encryptJson } from '../utils/encryption.js';
 
 const router = express.Router();
 
@@ -31,18 +32,29 @@ const USAGE_ROLES = [...SETTINGS_ROLES, 'BILLING'];
 const SEND_ROLES = [...SETTINGS_ROLES, 'RECEPTIONIST'];
 const HISTORY_ROLES = [...SETTINGS_ROLES, 'RECEPTIONIST'];
 
-// Provider configs hold API credentials — encrypt at rest (AES-256-GCM),
-// same as WhatsApp access tokens. Decrypted only inside smsService.
-function toJsonInput(value: Record<string, unknown> | null | undefined) {
-  if (value === null) return Prisma.DbNull;
-  if (value === undefined) return undefined;
-  return encryptJson(value) as unknown as Prisma.InputJsonValue;
+/**
+ * Region availability for the clinic status page: true when a provider will
+ * actually resolve for a send (clinic-level override or platform default) —
+ * without exposing the provider's identity to the clinic.
+ */
+async function isRegionAvailable(region: 'tr' | 'eu', entitlement: SmsEntitlement): Promise<boolean> {
+  const overrideKey = region === 'tr' ? entitlement.settings?.turkeyProvider : entitlement.settings?.europeProvider;
+  if (overrideKey && getSmsProvider(overrideKey)) return true;
+  const platformRow = await prisma.platformSmsProvider.findFirst({
+    where: { region, isActive: true },
+    select: { id: true },
+  });
+  return Boolean(platformRow);
 }
 
 async function buildStatusPayload(clinicId: string) {
   const entitlement = await getSmsEntitlement(clinicId);
   const period = currentSmsPeriod();
   const used = await getSmsMonthlyUsage(clinicId, period);
+  const [trAvailable, euAvailable] = await Promise.all([
+    isRegionAvailable('tr', entitlement),
+    isRegionAvailable('eu', entitlement),
+  ]);
   return {
     addonActive: entitlement.enabled,
     addonSource: entitlement.source,
@@ -50,16 +62,14 @@ async function buildStatusPayload(clinicId: string) {
     monthlyQuota: entitlement.monthlyQuota,
     usedThisMonth: used,
     remaining: Math.max(0, entitlement.monthlyQuota - used),
-    senderName: entitlement.settings?.senderName ?? null,
-    turkeyProvider: entitlement.settings?.turkeyProvider ?? null,
-    turkeyProviderConfigured: Boolean(getSmsProvider(entitlement.settings?.turkeyProvider)),
-    europeProvider: entitlement.settings?.europeProvider ?? null,
-    europeProviderConfigured: Boolean(getSmsProvider(entitlement.settings?.europeProvider)),
-    availableProviders: AVAILABLE_SMS_PROVIDERS,
+    regions: {
+      tr: { available: trAvailable },
+      eu: { available: euAvailable },
+    },
   };
 }
 
-// GET /api/sms/settings — add-on status, quota/usage, provider configuration
+// GET /api/sms/settings — add-on status, quota/usage, read-only routing availability
 router.get('/sms/settings', authorize(SETTINGS_ROLES), async (req: AuthRequest, res: Response) => {
   try {
     const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
@@ -68,58 +78,6 @@ router.get('/sms/settings', authorize(SETTINGS_ROLES), async (req: AuthRequest, 
     res.json(await buildStatusPayload(clinicId));
   } catch {
     res.status(500).json({ error: 'Failed to fetch SMS settings' });
-  }
-});
-
-// PUT /api/sms/settings — provider selection + sender name (NOT activation/quota)
-router.put('/sms/settings', authorize(SETTINGS_ROLES), async (req: AuthRequest, res: Response) => {
-  const validation = smsSettingsSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
-
-  try {
-    const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
-    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
-
-    const { senderName, turkeyProvider, turkeyProviderConfig, europeProvider, europeProviderConfig } = validation.data;
-
-    // Only known provider keys may be selected (fail closed on typos)
-    if (turkeyProvider && !getSmsProvider(turkeyProvider)) {
-      return res.status(400).json({ error: `Unknown Turkey SMS provider: ${turkeyProvider}` });
-    }
-    if (europeProvider && !getSmsProvider(europeProvider)) {
-      return res.status(400).json({ error: `Unknown Europe SMS provider: ${europeProvider}` });
-    }
-
-    const data = {
-      senderName: senderName !== undefined ? senderName : undefined,
-      turkeyProvider: turkeyProvider !== undefined ? turkeyProvider : undefined,
-      turkeyProviderConfig: toJsonInput(turkeyProviderConfig),
-      europeProvider: europeProvider !== undefined ? europeProvider : undefined,
-      europeProviderConfig: toJsonInput(europeProviderConfig),
-    };
-
-    await prisma.clinicSmsSettings.upsert({
-      where: { clinicId },
-      update: data,
-      create: {
-        clinicId,
-        organizationId: req.user!.organizationId,
-        senderName: senderName ?? null,
-        turkeyProvider: turkeyProvider ?? null,
-        turkeyProviderConfig: toJsonInput(turkeyProviderConfig),
-        europeProvider: europeProvider ?? null,
-        europeProviderConfig: toJsonInput(europeProviderConfig),
-      },
-    });
-
-    await logActivity({
-      clinicId, userId: req.user!.id, entityType: 'sms_settings', entityId: clinicId,
-      action: 'updated', description: 'SMS sağlayıcı ayarları güncellendi',
-    });
-
-    res.json(await buildStatusPayload(clinicId));
-  } catch {
-    res.status(500).json({ error: 'Failed to update SMS settings' });
   }
 });
 

@@ -54,7 +54,7 @@ import {
   SMS_PURPOSES,
 } from '../services/sms/smsTemplating.js';
 import { getSmsProvider, AVAILABLE_SMS_PROVIDERS } from '../services/sms/smsProviders.js';
-import { smsSendSchema, smsSettingsSchema, platformSmsProviderSchema, MESSAGE_TEMPLATE_PURPOSES } from '../schemas/index.js';
+import { smsSendSchema, platformSmsProviderSchema, MESSAGE_TEMPLATE_PURPOSES } from '../schemas/index.js';
 import {
   sanitizePlatformSmsProvider,
   encryptProviderCredentials,
@@ -244,15 +244,6 @@ async function main() {
     assert.equal(result.success, false);
   });
 
-  await test('smsSettingsSchema accepts provider selection and sender name', () => {
-    const result = smsSettingsSchema.safeParse({
-      senderName: 'KLINIK',
-      turkeyProvider: 'mock_turkey',
-      europeProvider: null,
-    });
-    assert.equal(result.success, true);
-  });
-
   await test('message template purposes include cancellation/reschedule/marketing', () => {
     for (const p of ['appointment_cancellation', 'appointment_reschedule', 'marketing']) {
       assert.ok((MESSAGE_TEMPLATE_PURPOSES as readonly string[]).includes(p), `missing purpose ${p}`);
@@ -291,10 +282,22 @@ async function main() {
 
   await test('all SMS routes are wrapped with authorize()', () => {
     const routeDefs = routesSrc.match(/router\.(get|put|post)\('\/sms\/[^']+',\s*([^,]+),/g) ?? [];
-    assert.ok(routeDefs.length >= 5, `expected at least 5 sms routes, found ${routeDefs.length}`);
+    assert.ok(routeDefs.length >= 4, `expected at least 4 sms routes, found ${routeDefs.length}`);
     for (const def of routeDefs) {
       assert.ok(def.includes('authorize('), `route missing authorize(): ${def}`);
     }
+  });
+
+  await test('clinics cannot write provider/sender settings — no PUT /sms/settings route', () => {
+    assert.ok(!routesSrc.includes("router.put('/sms/settings'"),
+      'clinic-facing SMS routes must not expose a provider/sender settings write endpoint');
+    assert.ok(!routesSrc.includes('senderName') && !routesSrc.includes('turkeyProviderConfig'),
+      'clinic-facing sms.ts must not read/write provider credential fields');
+  });
+
+  await test('clinic SMS status payload exposes read-only region availability, not provider identity', () => {
+    assert.ok(routesSrc.includes('regions:'), 'buildStatusPayload must expose read-only region availability');
+    assert.ok(!routesSrc.includes('availableProviders'), 'clinic status payload must not list provider keys');
   });
 
   await test('messages/:id/send routes SMS through sendClinicSms (no silent fake-send)', () => {
