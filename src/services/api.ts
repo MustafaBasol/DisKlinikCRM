@@ -554,6 +554,33 @@ export const noShowService = {
     api.post(`/appointments/${appointmentId}/no-show/create-task`, data ?? {}),
 };
 
+// ── Dental Laboratory Tracking ──────────────────────────────────────────────────
+
+export const laboratoryService = {
+  getAll: (params?: { isActive?: boolean; clinicId?: string }) => api.get('/laboratories', { params }),
+  create: (data: any) => api.post('/laboratories', data),
+  update: (id: string, data: any) => api.put(`/laboratories/${id}`, data),
+  delete: (id: string) => api.delete(`/laboratories/${id}`),
+};
+
+export const labOrderService = {
+  getAll: (params?: { status?: string; laboratoryId?: string; patientId?: string; overdue?: boolean; clinicId?: string }) =>
+    api.get('/lab-orders', { params }),
+  getDashboard: (params?: { clinicId?: string }) => api.get('/lab-orders/dashboard', { params }),
+  getById: (id: string) => api.get(`/lab-orders/${id}`),
+  create: (data: any, clinicId?: string) => api.post('/lab-orders', data, { params: clinicId ? { clinicId } : {} }),
+  update: (id: string, data: any) => api.put(`/lab-orders/${id}`, data),
+  updateStatus: (id: string, data: { status: string; note?: string; newExpectedReturnDate?: string | null; cancelReason?: string }) =>
+    api.patch(`/lab-orders/${id}/status`, data),
+  delete: (id: string) => api.delete(`/lab-orders/${id}`),
+  getAttachments: (id: string) => api.get(`/lab-orders/${id}/attachments`),
+  uploadAttachment: (id: string, formData: FormData) =>
+    api.post(`/lab-orders/${id}/attachments`, formData, { headers: { 'Content-Type': undefined } }),
+  deleteAttachment: (id: string, attId: string) => api.delete(`/lab-orders/${id}/attachments/${attId}`),
+  downloadAttachment: (id: string, attId: string) =>
+    api.get(`/lab-orders/${id}/attachments/${attId}/download`, { responseType: 'blob' }),
+};
+
 // ── Instagram Connection Services ──────────────────────────────────────────────
 
 export const instagramConnectionService = {

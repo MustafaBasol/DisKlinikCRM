@@ -1,0 +1,101 @@
+{
+  "title": "Suivi du Laboratoire Dentaire",
+  "subtitle": "Suivez les travaux des patients envoyés aux laboratoires dentaires externes, de l'empreinte à la livraison.",
+  "statuses": {
+    "pending": "En attente",
+    "impression_taken": "Empreinte prise",
+    "sent_to_lab": "Envoyé au laboratoire",
+    "in_progress": "En production",
+    "received_from_lab": "Reçu du laboratoire",
+    "fitting_or_trial": "Essayage en attente",
+    "revision_requested": "Révision demandée",
+    "completed": "Terminé",
+    "cancelled": "Annulé"
+  },
+  "workTypes": {
+    "crown": "Couronne",
+    "bridge": "Bridge",
+    "denture_full": "Prothèse complète",
+    "denture_partial": "Prothèse partielle",
+    "implant_prosthetic": "Prothèse sur implant",
+    "night_guard": "Gouttière nocturne",
+    "aligner": "Gouttière transparente",
+    "retainer": "Contention",
+    "repair": "Réparation",
+    "temp_prosthetic": "Prothèse provisoire",
+    "other": "Autre"
+  },
+  "dashboard": {
+    "pendingCount": "En attente / En production",
+    "receivedCount": "Reçu du laboratoire",
+    "fittingPendingCount": "Essayage en attente",
+    "revisionRequestedCount": "Révision demandée",
+    "overdueCount": "En retard",
+    "completedCount": "Terminé"
+  },
+  "filters": {
+    "all": "Tous",
+    "overdueOnly": "En retard",
+    "byLaboratory": "Tous les laboratoires"
+  },
+  "table": {
+    "patient": "Patient",
+    "laboratory": "Laboratoire",
+    "workType": "Type de travail",
+    "status": "Statut",
+    "expectedReturnDate": "Retour prévu",
+    "cost": "Coût"
+  },
+  "actions": {
+    "newOrder": "Nouveau travail",
+    "editOrder": "Modifier le travail",
+    "changeStatus": "Changer le statut..."
+  },
+  "form": {
+    "patient": "Patient",
+    "laboratory": "Laboratoire",
+    "workType": "Type de travail",
+    "practitioner": "Praticien",
+    "toothFdi": "Dent (FDI)",
+    "shade": "Teinte",
+    "material": "Matériau",
+    "expectedReturnDate": "Date de retour prévue",
+    "labCost": "Coût du laboratoire",
+    "currency": "Devise",
+    "notesForLab": "Notes pour le laboratoire"
+  },
+  "laboratory": {
+    "manageButton": "Gérer les laboratoires",
+    "title": "Laboratoires",
+    "name": "Nom du laboratoire",
+    "contactPerson": "Personne de contact",
+    "phone": "Téléphone",
+    "email": "E-mail",
+    "add": "Ajouter un laboratoire",
+    "empty": "Aucun laboratoire pour le moment."
+  },
+  "history": {
+    "title": "Historique des statuts",
+    "empty": "Aucun changement de statut pour le moment.",
+    "revisionBadge": "Révision n°{{count}}"
+  },
+  "attachments": {
+    "title": "Pièces jointes",
+    "upload": "Téléverser un fichier",
+    "empty": "Aucune pièce jointe pour le moment."
+  },
+  "empty": {
+    "noOrders": "Aucun travail de laboratoire trouvé pour les filtres sélectionnés."
+  },
+  "success": {
+    "created": "Travail de laboratoire créé.",
+    "updated": "Travail de laboratoire mis à jour.",
+    "statusUpdated": "Statut mis à jour.",
+    "attachmentUploaded": "Pièce jointe téléversée.",
+    "laboratoryCreated": "Laboratoire ajouté."
+  },
+  "errors": {
+    "loadFailed": "Une erreur s'est produite lors du chargement des données.",
+    "actionFailed": "L'action a échoué."
+  }
+}

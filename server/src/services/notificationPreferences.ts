@@ -30,6 +30,7 @@ export const notificationPreferencesSchema = z.object({
     overdueTasks: togglePreferenceSchema,
     appointmentRequests: togglePreferenceSchema,
     lowStock: togglePreferenceSchema,
+    labOrdersOverdue: togglePreferenceSchema,
   }),
 });
 
@@ -68,6 +69,9 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
       enabled: true,
     },
     lowStock: {
+      enabled: true,
+    },
+    labOrdersOverdue: {
       enabled: true,
     },
   },
@@ -114,6 +118,10 @@ export function normalizeNotificationPreferences(raw: unknown): NotificationPref
     base.inApp.lowStock = {
       ...base.inApp.lowStock,
       ...(value.inApp?.lowStock ?? {}),
+    };
+    base.inApp.labOrdersOverdue = {
+      ...base.inApp.labOrdersOverdue,
+      ...(value.inApp?.labOrdersOverdue ?? {}),
     };
   }
 
@@ -173,6 +181,7 @@ export function getEnabledInAppNotificationTypes(preferences: NotificationPrefer
   if (preferences.inApp.overdueTasks.enabled) enabledTypes.push('overdue_task');
   if (preferences.inApp.appointmentRequests.enabled) enabledTypes.push('appointment_request');
   if (preferences.inApp.lowStock.enabled) enabledTypes.push('low_stock');
+  if (preferences.inApp.labOrdersOverdue.enabled) enabledTypes.push('lab_case_overdue');
 
   return enabledTypes;
 }

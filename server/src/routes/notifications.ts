@@ -7,6 +7,7 @@ import {
 } from '../services/notificationPreferences.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { PRE_RECEIPT_STATUSES } from '../services/labOrders/labOrderStatusTransitions.js';
 
 const router = express.Router();
 
@@ -150,6 +151,40 @@ router.get(
             subtitle: r.patientName || r.phone,
             link: '/appointment-requests',
             createdAt: r.createdAt,
+          });
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Overdue lab work orders (past expectedReturnDate, still not received from the lab)
+    if (
+      preferences.inApp.labOrdersOverdue.enabled &&
+      ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'].includes(role)
+    ) {
+      try {
+        const overdueLabOrders = await prisma.labWorkOrder.findMany({
+          where: {
+            clinicId,
+            deletedAt: null,
+            expectedReturnDate: { lt: now },
+            status: { in: [...PRE_RECEIPT_STATUSES] },
+          },
+          include: {
+            patient: { select: { firstName: true, lastName: true } },
+            laboratory: { select: { name: true } },
+          },
+          orderBy: { expectedReturnDate: 'asc' },
+          take: 5,
+        });
+        for (const o of overdueLabOrders) {
+          const daysAgo = Math.floor((now.getTime() - new Date(o.expectedReturnDate!).getTime()) / (1000 * 60 * 60 * 24));
+          await upsertNotification(clinicId, {
+            externalId: `lab-overdue-${o.id}`,
+            type: 'lab_case_overdue',
+            title: `${o.patient.firstName} ${o.patient.lastName} — ${o.laboratory.name}`,
+            subtitle: `${daysAgo} gün gecikmiş`,
+            link: '/lab-orders',
+            createdAt: o.expectedReturnDate!,
           });
         }
       } catch { /* ignore */ }

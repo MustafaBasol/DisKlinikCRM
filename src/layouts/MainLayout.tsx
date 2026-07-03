@@ -35,6 +35,7 @@ import {
   KeyRound,
   AlertCircle,
   CheckCircle,
+  FlaskConical,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -60,6 +61,7 @@ import {
   canViewOperations,
   canViewNoShowDashboard,
   canViewRecallDashboard,
+  canViewLabOrders,
   canViewInstagramInbox,
   canViewAppointmentRequests,
   canViewContactRequests,
@@ -416,6 +418,9 @@ const MainLayoutInner: React.FC = () => {
     }
     if (canViewNoShowDashboard(user)) {
       items.push({ path: '/no-shows', icon: <UserX size={18} />, label: t('common:noShowTracking') });
+    }
+    if (canViewLabOrders(user)) {
+      items.push({ path: '/lab-orders', icon: <FlaskConical size={18} />, label: t('common:labOrders') });
     }
     if (canViewRecallDashboard(user)) {
       items.push({ path: '/recall', icon: <RotateCcw size={18} />, label: t('recall:nav') });

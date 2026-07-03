@@ -29,62 +29,65 @@ model Clinic {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  users                        User[]
-  doctorAvailabilities         DoctorAvailability[]
-  doctorOffDays                DoctorOffDay[]
-  patients                     Patient[]
-  appointmentTypes             AppointmentType[]
-  appointments                 Appointment[]
-  appointmentRequests          AppointmentRequest[]
-  contactRequests              ContactRequest[]
-  treatmentCases               TreatmentCase[]
-  tasks                        Task[]
-  payments                     Payment[]
-  insuranceProvisions          InsuranceProvision[]
-  messageTemplates             MessageTemplate[]
-  sentMessages                 SentMessage[]
-  activityLogs                 ActivityLog[]
-  whatsappConversationStates   WhatsAppConversationState[]
-  whatsappConversationMessages WhatsAppConversationMessage[]
-  settings                     Setting[]
-  recallSetting                ClinicRecallSetting?
-  recallCandidates             RecallCandidate[]
-  recallActions                RecallAction[]
-  patientAttachments           PatientAttachment[]
-  toothRecords                 ToothRecord[]
-  paymentPlans                 PaymentPlan[]
-  practitionerCompRules        PractitionerCompensationRule[]
-  serviceCompRules             ServiceCompensationRule[]
-  practitionerEarnings         PractitionerEarning[]
-  practitionerPayouts          PractitionerPayout[]
-  inventoryItems               InventoryItem[]
-  inventoryTransactions        InventoryTransaction[]
-  treatmentPlanProcedures      TreatmentPlanProcedure[]
-  treatmentPackages            TreatmentPackage[]
-  treatmentPackageItems        TreatmentPackageItem[]
-  appointmentTypeMaterials     AppointmentTypeMaterial[]
-  treatmentPackageMaterials    TreatmentPackageMaterial[]
-  treatmentPackageApplications TreatmentPackageApplication[]
-  notifications                Notification[]
-  invitations                  ClinicInvitation[]
-  defaultUsers                 User[]                         @relation("UserDefaultClinic")
-  primaryPatients              Patient[]                      @relation("PatientPrimaryClinic")
-  userClinics                  UserClinic[]
-  patientClinics               PatientClinic[]
-  clinicWorkingHours           ClinicWorkingHours[]
-  clinicWhatsAppConnections    ClinicWhatsAppConnection[]
-  whatsappInboxEntries         WhatsAppInboxEntry[]           @relation("InboxEntryClinic")
-  clinicInstagramConnections        ClinicInstagramConnection[]
-  instagramInboxEntries             InstagramInboxEntry[]          @relation("InstagramInboxEntryClinic")
-  instagramConversationMessages     InstagramConversationMessage[]
-  postTreatmentTemplates            PostTreatmentMessageTemplate[]
-  postTreatmentQueue                PostTreatmentMessageQueue[]
-  patientPrivacyRequests            PatientPrivacyRequest[]
-  clinicLegalProfile                ClinicLegalProfile?
-  channelConsentLogs                ChannelConsentLog[]
-  smsSettings                       ClinicSmsSettings?
-  smsMessages                       SmsMessage[]
-  smsUsageCounters                  SmsUsageCounter[]
+  users                         User[]
+  doctorAvailabilities          DoctorAvailability[]
+  doctorOffDays                 DoctorOffDay[]
+  patients                      Patient[]
+  appointmentTypes              AppointmentType[]
+  appointments                  Appointment[]
+  appointmentRequests           AppointmentRequest[]
+  contactRequests               ContactRequest[]
+  treatmentCases                TreatmentCase[]
+  tasks                         Task[]
+  payments                      Payment[]
+  insuranceProvisions           InsuranceProvision[]
+  messageTemplates              MessageTemplate[]
+  sentMessages                  SentMessage[]
+  activityLogs                  ActivityLog[]
+  whatsappConversationStates    WhatsAppConversationState[]
+  whatsappConversationMessages  WhatsAppConversationMessage[]
+  settings                      Setting[]
+  recallSetting                 ClinicRecallSetting?
+  recallCandidates              RecallCandidate[]
+  recallActions                 RecallAction[]
+  patientAttachments            PatientAttachment[]
+  toothRecords                  ToothRecord[]
+  paymentPlans                  PaymentPlan[]
+  practitionerCompRules         PractitionerCompensationRule[]
+  serviceCompRules              ServiceCompensationRule[]
+  practitionerEarnings          PractitionerEarning[]
+  practitionerPayouts           PractitionerPayout[]
+  inventoryItems                InventoryItem[]
+  inventoryTransactions         InventoryTransaction[]
+  treatmentPlanProcedures       TreatmentPlanProcedure[]
+  treatmentPackages             TreatmentPackage[]
+  treatmentPackageItems         TreatmentPackageItem[]
+  appointmentTypeMaterials      AppointmentTypeMaterial[]
+  treatmentPackageMaterials     TreatmentPackageMaterial[]
+  treatmentPackageApplications  TreatmentPackageApplication[]
+  notifications                 Notification[]
+  invitations                   ClinicInvitation[]
+  defaultUsers                  User[]                         @relation("UserDefaultClinic")
+  primaryPatients               Patient[]                      @relation("PatientPrimaryClinic")
+  userClinics                   UserClinic[]
+  patientClinics                PatientClinic[]
+  clinicWorkingHours            ClinicWorkingHours[]
+  clinicWhatsAppConnections     ClinicWhatsAppConnection[]
+  whatsappInboxEntries          WhatsAppInboxEntry[]           @relation("InboxEntryClinic")
+  clinicInstagramConnections    ClinicInstagramConnection[]
+  instagramInboxEntries         InstagramInboxEntry[]          @relation("InstagramInboxEntryClinic")
+  instagramConversationMessages InstagramConversationMessage[]
+  postTreatmentTemplates        PostTreatmentMessageTemplate[]
+  postTreatmentQueue            PostTreatmentMessageQueue[]
+  patientPrivacyRequests        PatientPrivacyRequest[]
+  clinicLegalProfile            ClinicLegalProfile?
+  channelConsentLogs            ChannelConsentLog[]
+  smsSettings                   ClinicSmsSettings?
+  smsMessages                   SmsMessage[]
+  smsUsageCounters              SmsUsageCounter[]
+  laboratories                  Laboratory[]
+  labWorkOrders                 LabWorkOrder[]
+  labOrderAttachments           LabOrderAttachment[]
 
   @@unique([organizationId, slug])
 }
@@ -113,39 +116,44 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  tasksCreated               Task[]                         @relation("TaskCreator")
-  tasksAssigned              Task[]                         @relation("TaskAssignee")
-  appointments               Appointment[]                  @relation("Practitioner")
-  appointmentRequests        AppointmentRequest[]           @relation("AppointmentRequestPractitioner")
-  contactRequestsAssigned    ContactRequest[]               @relation("ContactRequestAssignee")
-  contactRequestsResolved    ContactRequest[]               @relation("ContactRequestResolver")
-  availabilities             DoctorAvailability[]           @relation("DoctorAvailability")
-  offDays                    DoctorOffDay[]                 @relation("DoctorOffDays")
-  treatmentCases             TreatmentCase[]                @relation("Practitioner")
-  insuranceAssigned          InsuranceProvision[]           @relation("InsuranceAssignedTo")
-  insuranceCreated           InsuranceProvision[]           @relation("InsuranceCreatedBy")
-  sentMessages               SentMessage[]
-  createdTemplates           MessageTemplate[]              @relation("TemplateCreator")
-  activityLogs               ActivityLog[]
-  uploadedAttachments        PatientAttachment[]            @relation("AttachmentUploader")
-  toothRecordsCreated        ToothRecord[]                  @relation("ToothRecordCreator")
-  paymentPlans               PaymentPlan[]
-  compensationRules          PractitionerCompensationRule[] @relation("PractitionerCompRules")
-  serviceCompRules           ServiceCompensationRule[]      @relation("ServiceCompRules")
-  practitionerEarnings       PractitionerEarning[]          @relation("PractitionerEarnings")
-  practitionerPayouts        PractitionerPayout[]           @relation("PractitionerPayouts")
-  payoutsCreated             PractitionerPayout[]           @relation("PayoutCreator")
-  inventoryTransactions      InventoryTransaction[]         @relation("InventoryPerformedBy")
-  proceduresCreated          TreatmentPlanProcedure[]       @relation("ProcedureCreator")
-  packageApplicationsCreated TreatmentPackageApplication[]  @relation("TreatmentPackageApplicationCreator")
-  userClinics                UserClinic[]
-  resolvedInboxEntries       WhatsAppInboxEntry[]           @relation("InboxEntryResolver")
-  resolvedInstagramEntries   InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
-  assignedRecallCandidates   RecallCandidate[]              @relation("RecallCandidateAssignee")
-  performedRecallActions     RecallAction[]                 @relation("RecallActionPerformer")
-  passwordResetTokens        PasswordResetToken[]
-  emailVerificationTokens    EmailVerificationToken[]
-  smsMessagesCreated         SmsMessage[]                   @relation("SmsMessageCreator")
+  tasksCreated                Task[]                         @relation("TaskCreator")
+  tasksAssigned               Task[]                         @relation("TaskAssignee")
+  appointments                Appointment[]                  @relation("Practitioner")
+  appointmentRequests         AppointmentRequest[]           @relation("AppointmentRequestPractitioner")
+  contactRequestsAssigned     ContactRequest[]               @relation("ContactRequestAssignee")
+  contactRequestsResolved     ContactRequest[]               @relation("ContactRequestResolver")
+  availabilities              DoctorAvailability[]           @relation("DoctorAvailability")
+  offDays                     DoctorOffDay[]                 @relation("DoctorOffDays")
+  treatmentCases              TreatmentCase[]                @relation("Practitioner")
+  insuranceAssigned           InsuranceProvision[]           @relation("InsuranceAssignedTo")
+  insuranceCreated            InsuranceProvision[]           @relation("InsuranceCreatedBy")
+  sentMessages                SentMessage[]
+  createdTemplates            MessageTemplate[]              @relation("TemplateCreator")
+  activityLogs                ActivityLog[]
+  uploadedAttachments         PatientAttachment[]            @relation("AttachmentUploader")
+  toothRecordsCreated         ToothRecord[]                  @relation("ToothRecordCreator")
+  paymentPlans                PaymentPlan[]
+  compensationRules           PractitionerCompensationRule[] @relation("PractitionerCompRules")
+  serviceCompRules            ServiceCompensationRule[]      @relation("ServiceCompRules")
+  practitionerEarnings        PractitionerEarning[]          @relation("PractitionerEarnings")
+  practitionerPayouts         PractitionerPayout[]           @relation("PractitionerPayouts")
+  payoutsCreated              PractitionerPayout[]           @relation("PayoutCreator")
+  inventoryTransactions       InventoryTransaction[]         @relation("InventoryPerformedBy")
+  proceduresCreated           TreatmentPlanProcedure[]       @relation("ProcedureCreator")
+  packageApplicationsCreated  TreatmentPackageApplication[]  @relation("TreatmentPackageApplicationCreator")
+  userClinics                 UserClinic[]
+  resolvedInboxEntries        WhatsAppInboxEntry[]           @relation("InboxEntryResolver")
+  resolvedInstagramEntries    InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
+  assignedRecallCandidates    RecallCandidate[]              @relation("RecallCandidateAssignee")
+  performedRecallActions      RecallAction[]                 @relation("RecallActionPerformer")
+  passwordResetTokens         PasswordResetToken[]
+  emailVerificationTokens     EmailVerificationToken[]
+  smsMessagesCreated          SmsMessage[]                   @relation("SmsMessageCreator")
+  laboratoriesCreated         Laboratory[]                   @relation("LaboratoryCreator")
+  labWorkOrdersCreated        LabWorkOrder[]                 @relation("LabWorkOrderCreator")
+  labWorkOrdersAsPractitioner LabWorkOrder[]                 @relation("LabWorkOrderPractitioner")
+  labWorkOrderStatusChanges   LabWorkOrderStatusHistory[]    @relation("LabWorkOrderStatusChanger")
+  labOrderAttachmentsUploaded LabOrderAttachment[]           @relation("LabOrderAttachmentUploader")
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -216,31 +224,32 @@ model Patient {
   updatedAt            DateTime     @updatedAt
   deletedAt            DateTime?
 
-  appointments                 Appointment[]
-  appointmentRequests          AppointmentRequest[]
-  contactRequests              ContactRequest[]
-  treatmentCases               TreatmentCase[]
-  tasks                        Task[]
-  payments                     Payment[]
-  insuranceProvisions          InsuranceProvision[]
-  sentMessages                 SentMessage[]
-  activityLogs                 ActivityLog[]
-  whatsappConversationMessages WhatsAppConversationMessage[]
-  attachments                  PatientAttachment[]
-  toothRecords                 ToothRecord[]
-  paymentPlans                 PaymentPlan[]
-  practitionerEarnings         PractitionerEarning[]
-  treatmentPlanProcedures      TreatmentPlanProcedure[]
-  treatmentPackageApplications TreatmentPackageApplication[]
-  patientClinics               PatientClinic[]
-  whatsappInboxEntries              WhatsAppInboxEntry[]          @relation("InboxEntryPatient")
-  instagramInboxEntries             InstagramInboxEntry[]         @relation("InstagramInboxEntryPatient")
-  instagramConversationMessages     InstagramConversationMessage[]
-  postTreatmentQueue                PostTreatmentMessageQueue[]
-  recallCandidates                  RecallCandidate[]
-  recallActions                     RecallAction[]
-  privacyRequests                   PatientPrivacyRequest[]
-  smsMessages                       SmsMessage[]
+  appointments                  Appointment[]
+  appointmentRequests           AppointmentRequest[]
+  contactRequests               ContactRequest[]
+  treatmentCases                TreatmentCase[]
+  tasks                         Task[]
+  payments                      Payment[]
+  insuranceProvisions           InsuranceProvision[]
+  sentMessages                  SentMessage[]
+  activityLogs                  ActivityLog[]
+  whatsappConversationMessages  WhatsAppConversationMessage[]
+  attachments                   PatientAttachment[]
+  toothRecords                  ToothRecord[]
+  paymentPlans                  PaymentPlan[]
+  practitionerEarnings          PractitionerEarning[]
+  treatmentPlanProcedures       TreatmentPlanProcedure[]
+  treatmentPackageApplications  TreatmentPackageApplication[]
+  patientClinics                PatientClinic[]
+  whatsappInboxEntries          WhatsAppInboxEntry[]           @relation("InboxEntryPatient")
+  instagramInboxEntries         InstagramInboxEntry[]          @relation("InstagramInboxEntryPatient")
+  instagramConversationMessages InstagramConversationMessage[]
+  postTreatmentQueue            PostTreatmentMessageQueue[]
+  recallCandidates              RecallCandidate[]
+  recallActions                 RecallAction[]
+  privacyRequests               PatientPrivacyRequest[]
+  smsMessages                   SmsMessage[]
+  labWorkOrders                 LabWorkOrder[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -265,12 +274,12 @@ model AppointmentType {
   appointments            Appointment[]
   appointmentRequests     AppointmentRequest[]
   treatmentCases          TreatmentCase[]
-  serviceCompRules        ServiceCompensationRule[] @relation("ServiceCompRules")
-  practitionerEarnings    PractitionerEarning[]     @relation("EarningService")
+  serviceCompRules        ServiceCompensationRule[]      @relation("ServiceCompRules")
+  practitionerEarnings    PractitionerEarning[]          @relation("EarningService")
   treatmentPlanProcedures TreatmentPlanProcedure[]
   packageItems            TreatmentPackageItem[]
   materials               AppointmentTypeMaterial[]
-  inventoryTransactions   InventoryTransaction[]    @relation("InventoryTransactionService")
+  inventoryTransactions   InventoryTransaction[]         @relation("InventoryTransactionService")
   postTreatmentTemplates  PostTreatmentMessageTemplate[]
   postTreatmentQueue      PostTreatmentMessageQueue[]
 }
@@ -308,13 +317,13 @@ model Appointment {
   treatmentCaseId String?
   treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
 
-  tasks          Task[]
-  sentMessages   SentMessage[]
-  activityLogs   ActivityLog[]
+  tasks            Task[]
+  sentMessages     SentMessage[]
+  activityLogs     ActivityLog[]
   recallCandidates RecallCandidate[]
   recallActions    RecallAction[]
-  sourceRequests AppointmentRequest[] @relation("ConvertedAppointment")
-  smsMessages    SmsMessage[]
+  sourceRequests   AppointmentRequest[] @relation("ConvertedAppointment")
+  smsMessages      SmsMessage[]
 }
 
 model AppointmentRequest {
@@ -355,29 +364,29 @@ model AppointmentRequest {
 }
 
 model ContactRequest {
-  id                    String    @id @default(uuid())
-  clinicId              String
-  clinic                Clinic    @relation(fields: [clinicId], references: [id])
-  patientId             String?
-  patient               Patient?  @relation(fields: [patientId], references: [id])
-  channel               String    // whatsapp, meta_whatsapp, instagram, manual
-  sourceConversationId  String?
-  sourceMessageId       String?
-  externalSenderId      String?
-  phone                 String?
-  name                  String?
-  type                  String    @default("staff_handoff") // callback_request, staff_handoff, information_request, complaint, other
-  status                String    @default("pending")       // pending, in_progress, resolved, closed
-  priority              String    @default("normal")        // normal, urgent
-  note                  String?
-  lastMessage           String?
-  assignedToId          String?
-  assignedTo            User?     @relation("ContactRequestAssignee", fields: [assignedToId], references: [id])
-  resolvedById          String?
-  resolvedBy            User?     @relation("ContactRequestResolver", fields: [resolvedById], references: [id])
-  resolvedAt            DateTime?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                   String    @id @default(uuid())
+  clinicId             String
+  clinic               Clinic    @relation(fields: [clinicId], references: [id])
+  patientId            String?
+  patient              Patient?  @relation(fields: [patientId], references: [id])
+  channel              String // whatsapp, meta_whatsapp, instagram, manual
+  sourceConversationId String?
+  sourceMessageId      String?
+  externalSenderId     String?
+  phone                String?
+  name                 String?
+  type                 String    @default("staff_handoff") // callback_request, staff_handoff, information_request, complaint, other
+  status               String    @default("pending") // pending, in_progress, resolved, closed
+  priority             String    @default("normal") // normal, urgent
+  note                 String?
+  lastMessage          String?
+  assignedToId         String?
+  assignedTo           User?     @relation("ContactRequestAssignee", fields: [assignedToId], references: [id])
+  resolvedById         String?
+  resolvedBy           User?     @relation("ContactRequestResolver", fields: [resolvedById], references: [id])
+  resolvedAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([clinicId, status])
   @@index([clinicId, channel])
@@ -462,6 +471,7 @@ model TreatmentCase {
   procedures            TreatmentPlanProcedure[]
   packageApplications   TreatmentPackageApplication[]
   recallCandidates      RecallCandidate[]
+  labWorkOrders         LabWorkOrder[]
 }
 
 model TreatmentPackage {
@@ -480,13 +490,13 @@ model TreatmentPackage {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  items                 TreatmentPackageItem[]
-  materials             TreatmentPackageMaterial[]
-  applications          TreatmentPackageApplication[]
-  procedures            TreatmentPlanProcedure[]
-  inventoryTransactions InventoryTransaction[]
+  items                  TreatmentPackageItem[]
+  materials              TreatmentPackageMaterial[]
+  applications           TreatmentPackageApplication[]
+  procedures             TreatmentPlanProcedure[]
+  inventoryTransactions  InventoryTransaction[]
   postTreatmentTemplates PostTreatmentMessageTemplate[]
-  postTreatmentQueue    PostTreatmentMessageQueue[]
+  postTreatmentQueue     PostTreatmentMessageQueue[]
 
   @@unique([clinicId, name])
   @@index([clinicId, isActive])
@@ -690,8 +700,8 @@ model MessageTemplate {
   // Meta WhatsApp Template Management
   metaTemplateName            String?
   metaTemplateLanguage        String?
-  metaTemplateCategory        String?   // utility, marketing, authentication
-  metaTemplateStatus          String?   // draft, submitted, approved, rejected, paused, disabled, unknown
+  metaTemplateCategory        String? // utility, marketing, authentication
+  metaTemplateStatus          String? // draft, submitted, approved, rejected, paused, disabled, unknown
   metaTemplateId              String?
   metaTemplateRejectionReason String?
   metaTemplateLastSyncedAt    DateTime?
@@ -706,9 +716,9 @@ model MessageTemplate {
   metaWabaIdSnapshot        String?
   metaPhoneNumberIdSnapshot String?
 
-  sentMessages SentMessage[]
+  sentMessages     SentMessage[]
   recallCandidates RecallCandidate[]
-  smsMessages  SmsMessage[]     @relation("SmsMessageTemplate")
+  smsMessages      SmsMessage[]      @relation("SmsMessageTemplate")
 
   @@index([metaTemplateConnectionId])
 }
@@ -1258,22 +1268,22 @@ model Organization {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  clinics                    Clinic[]
-  users                      User[]
-  patients                   Patient[]
-  invitations                ClinicInvitation[]
-  inventoryItems             InventoryItem[]
-  clinicWorkingHours         ClinicWorkingHours[]
-  whatsappConnections        WhatsAppConnection[]
-  clinicWhatsAppConnections  ClinicWhatsAppConnection[]
-  sentMessages               SentMessage[]
-  whatsappInboxEntries       WhatsAppInboxEntry[]
-  instagramConnections            InstagramConnection[]
-  clinicInstagramConnections      ClinicInstagramConnection[]
-  instagramInboxEntries           InstagramInboxEntry[]
-  instagramConversationMessages   InstagramConversationMessage[]
-  postTreatmentTemplates          PostTreatmentMessageTemplate[]
-  postTreatmentQueue              PostTreatmentMessageQueue[]
+  clinics                       Clinic[]
+  users                         User[]
+  patients                      Patient[]
+  invitations                   ClinicInvitation[]
+  inventoryItems                InventoryItem[]
+  clinicWorkingHours            ClinicWorkingHours[]
+  whatsappConnections           WhatsAppConnection[]
+  clinicWhatsAppConnections     ClinicWhatsAppConnection[]
+  sentMessages                  SentMessage[]
+  whatsappInboxEntries          WhatsAppInboxEntry[]
+  instagramConnections          InstagramConnection[]
+  clinicInstagramConnections    ClinicInstagramConnection[]
+  instagramInboxEntries         InstagramInboxEntry[]
+  instagramConversationMessages InstagramConversationMessage[]
+  postTreatmentTemplates        PostTreatmentMessageTemplate[]
+  postTreatmentQueue            PostTreatmentMessageQueue[]
 }
 
 model UserClinic {
@@ -1374,7 +1384,7 @@ model WhatsAppConnection {
   clinics       ClinicWhatsAppConnection[]
   sentMessages  SentMessage[]
   inboxEntries  WhatsAppInboxEntry[]
-  metaTemplates MessageTemplate[] @relation("MessageTemplateMetaConnection")
+  metaTemplates MessageTemplate[]          @relation("MessageTemplateMetaConnection")
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -1550,9 +1560,9 @@ model InstagramConnection {
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 
-  clinics                      ClinicInstagramConnection[]
-  inboxEntries                 InstagramInboxEntry[]
-  conversationMessages         InstagramConversationMessage[]
+  clinics              ClinicInstagramConnection[]
+  inboxEntries         InstagramInboxEntry[]
+  conversationMessages InstagramConversationMessage[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -1641,26 +1651,26 @@ model InstagramConversationMessage {
 /// Clinic-defined post-treatment message templates.
 /// A single service/package can have multiple templates.
 model PostTreatmentMessageTemplate {
-  id                  String            @id @default(uuid())
-  organizationId      String
-  organization        Organization      @relation(fields: [organizationId], references: [id])
-  clinicId            String
-  clinic              Clinic            @relation(fields: [clinicId], references: [id])
-  title               String
+  id                   String            @id @default(uuid())
+  organizationId       String
+  organization         Organization      @relation(fields: [organizationId], references: [id])
+  clinicId             String
+  clinic               Clinic            @relation(fields: [clinicId], references: [id])
+  title                String
   /// service | package
-  targetType          String
-  serviceId           String?
-  service             AppointmentType?  @relation(fields: [serviceId], references: [id])
-  treatmentPackageId  String?
-  treatmentPackage    TreatmentPackage? @relation(fields: [treatmentPackageId], references: [id])
-  messageBody         String
+  targetType           String
+  serviceId            String?
+  service              AppointmentType?  @relation(fields: [serviceId], references: [id])
+  treatmentPackageId   String?
+  treatmentPackage     TreatmentPackage? @relation(fields: [treatmentPackageId], references: [id])
+  messageBody          String
   /// whatsapp | instagram | preferred
-  channel             String            @default("preferred")
-  sendDelayMinutes    Int               @default(0)
-  requireStaffApproval Boolean         @default(false)
-  isActive            Boolean           @default(true)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  channel              String            @default("preferred")
+  sendDelayMinutes     Int               @default(0)
+  requireStaffApproval Boolean           @default(false)
+  isActive             Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   messageQueue PostTreatmentMessageQueue[]
 
@@ -1719,22 +1729,22 @@ model PlatformSetting {
 
 /// KVKK/GDPR patient privacy rights requests (access, rectification, anonymization, etc.)
 model PatientPrivacyRequest {
-  id                 String    @id @default(uuid())
-  clinicId           String
-  clinic             Clinic    @relation(fields: [clinicId], references: [id])
-  patientId          String?
-  patient            Patient?  @relation(fields: [patientId], references: [id])
+  id                String    @id @default(uuid())
+  clinicId          String
+  clinic            Clinic    @relation(fields: [clinicId], references: [id])
+  patientId         String?
+  patient           Patient?  @relation(fields: [patientId], references: [id])
   /// access_export | rectification | anonymization | deletion_review | restriction | objection | other
-  requestType        String
+  requestType       String
   /// pending | in_review | completed | rejected | cancelled
-  status             String    @default("pending")
-  requestedByUserId  String?
-  handledByUserId    String?
-  requestNote        String?
-  decisionNote       String?
-  completedAt        DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  status            String    @default("pending")
+  requestedByUserId String?
+  handledByUserId   String?
+  requestNote       String?
+  decisionNote      String?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([clinicId, status])
   @@index([clinicId, patientId])
@@ -1799,22 +1809,22 @@ model ClinicLegalProfile {
 }
 
 model ChannelConsentLog {
-  id                   String    @id @default(uuid())
-  organizationId       String
-  clinicId             String
-  clinic               Clinic    @relation(fields: [clinicId], references: [id])
-  channel              String    // whatsapp | instagram
-  contactIdentifier    String    // normalized phone (WA) or externalSenderId (Instagram)
-  conversationId       String?   // conversation key or inbox entry id
-  sourceMessageId      String?   // provider message id of the consent reply
-  consentStatus        String    // accepted | declined
-  consentTextVersion   String
-  consentTextSnapshot  String
-  privacyUrl           String
-  locale               String    @default("tr")
-  acceptedAt           DateTime?
-  declinedAt           DateTime?
-  createdAt            DateTime  @default(now())
+  id                  String    @id @default(uuid())
+  organizationId      String
+  clinicId            String
+  clinic              Clinic    @relation(fields: [clinicId], references: [id])
+  channel             String // whatsapp | instagram
+  contactIdentifier   String // normalized phone (WA) or externalSenderId (Instagram)
+  conversationId      String? // conversation key or inbox entry id
+  sourceMessageId     String? // provider message id of the consent reply
+  consentStatus       String // accepted | declined
+  consentTextVersion  String
+  consentTextSnapshot String
+  privacyUrl          String
+  locale              String    @default("tr")
+  acceptedAt          DateTime?
+  declinedAt          DateTime?
+  createdAt           DateTime  @default(now())
 
   @@index([clinicId, channel, contactIdentifier])
   @@index([clinicId, consentTextVersion])
@@ -1826,16 +1836,16 @@ model ChannelConsentLog {
 /// Per-clinic SMS add-on configuration. SMS is DISABLED unless addonEnabled=true
 /// here or the clinic/organization plan has features.sms === true.
 model ClinicSmsSettings {
-  id             String   @id @default(uuid())
-  organizationId String
-  clinicId       String   @unique
-  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  id                   String   @id @default(uuid())
+  organizationId       String
+  clinicId             String   @unique
+  clinic               Clinic   @relation(fields: [clinicId], references: [id])
   /// Clinic-level add-on activation (managed by platform admin, sold as package)
-  addonEnabled   Boolean  @default(false)
+  addonEnabled         Boolean  @default(false)
   /// Monthly outbound SMS quota. 0 = no sending allowed even when enabled.
-  monthlyQuota   Int      @default(0)
+  monthlyQuota         Int      @default(0)
   /// Alphanumeric sender id / originator shown to recipients (provider-dependent)
-  senderName     String?
+  senderName           String?
   /// Provider key for Turkish numbers (e.g. mock_turkey; real providers later)
   turkeyProvider       String?
   turkeyProviderConfig Json?
@@ -1846,12 +1856,12 @@ model ClinicSmsSettings {
   /// default for newly-enabled add-ons; existing active clinics were
   /// backfilled to true when this column was introduced (see migration
   /// 20260703100000_add_sms_clinic_routing_policy).
-  turkeyAllowed  Boolean  @default(false)
-  europeAllowed  Boolean  @default(false)
+  turkeyAllowed        Boolean  @default(false)
+  europeAllowed        Boolean  @default(false)
   /// automatic_by_recipient_phone_region | force_turkey_provider | force_europe_provider
-  routingPolicy  String   @default("automatic_by_recipient_phone_region")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  routingPolicy        String   @default("automatic_by_recipient_phone_region")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([organizationId])
 }
@@ -1859,42 +1869,42 @@ model ClinicSmsSettings {
 /// Outbound SMS queue + clinic-scoped history. One row per send attempt,
 /// including sends blocked by quota/consent/region so staff can see why.
 model SmsMessage {
-  id             String   @id @default(uuid())
-  organizationId String
-  clinicId       String
-  clinic         Clinic   @relation(fields: [clinicId], references: [id])
-  patientId      String?
-  patient        Patient? @relation(fields: [patientId], references: [id])
-  appointmentId  String?
-  appointment    Appointment? @relation(fields: [appointmentId], references: [id])
-  templateId     String?
-  template       MessageTemplate? @relation("SmsMessageTemplate", fields: [templateId], references: [id])
+  id                String           @id @default(uuid())
+  organizationId    String
+  clinicId          String
+  clinic            Clinic           @relation(fields: [clinicId], references: [id])
+  patientId         String?
+  patient           Patient?         @relation(fields: [patientId], references: [id])
+  appointmentId     String?
+  appointment       Appointment?     @relation(fields: [appointmentId], references: [id])
+  templateId        String?
+  template          MessageTemplate? @relation("SmsMessageTemplate", fields: [templateId], references: [id])
   /// appointment_confirmation | appointment_reminder | appointment_cancellation |
   /// appointment_reschedule | no_show_recovery | post_treatment_followup |
   /// manual_message | payment_reminder | marketing
-  purpose        String
+  purpose           String
   /// Normalized E.164 recipient (no other personal data duplicated here)
-  recipient      String
-  body           String
+  recipient         String
+  body              String
   /// queued | sent | delivered | failed | blocked_addon | blocked_quota |
   /// blocked_consent | blocked_region | blocked_template
-  status         String   @default("queued")
+  status            String           @default("queued")
   /// tr | eu | unsupported — routing decision snapshot
-  providerRegion String?
+  providerRegion    String?
   /// Provider key that handled (or would handle) the message
-  provider       String?
+  provider          String?
   externalMessageId String?
-  errorCode      String?
-  errorMessage   String?
+  errorCode         String?
+  errorMessage      String?
   /// Duplicate prevention key (e.g. purpose+appointment+date); unique when set
-  dedupeKey      String?  @unique
-  queuedAt       DateTime @default(now())
-  sentAt         DateTime?
-  deliveredAt    DateTime?
-  createdById    String?
-  createdBy      User?    @relation("SmsMessageCreator", fields: [createdById], references: [id])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  dedupeKey         String?          @unique
+  queuedAt          DateTime         @default(now())
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  createdById       String?
+  createdBy         User?            @relation("SmsMessageCreator", fields: [createdById], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([clinicId, status, createdAt])
   @@index([clinicId, patientId])
@@ -1939,4 +1949,119 @@ model PlatformSmsProvider {
 
   @@unique([region, providerCode])
   @@index([region, isActive, isDefault])
+}
+
+// ── Dental Laboratory Tracking ─────────────────────────────────────────────────
+
+model Laboratory {
+  id            String    @id @default(uuid())
+  clinicId      String
+  clinic        Clinic    @relation(fields: [clinicId], references: [id])
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  notes         String?
+  isActive      Boolean   @default(true)
+  createdById   String?
+  createdBy     User?     @relation("LaboratoryCreator", fields: [createdById], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  labWorkOrders LabWorkOrder[]
+
+  @@index([clinicId, isActive])
+}
+
+model LabWorkOrder {
+  id              String         @id @default(uuid())
+  clinicId        String
+  clinic          Clinic         @relation(fields: [clinicId], references: [id])
+  patientId       String
+  patient         Patient        @relation(fields: [patientId], references: [id])
+  laboratoryId    String
+  laboratory      Laboratory     @relation(fields: [laboratoryId], references: [id])
+  treatmentCaseId String?
+  treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  practitionerId  String?
+  practitioner    User?          @relation("LabWorkOrderPractitioner", fields: [practitionerId], references: [id])
+
+  // Work item classification
+  workType      String // crown, bridge, denture_full, denture_partial, implant_prosthetic,
+  // night_guard, aligner, retainer, repair, temp_prosthetic, other
+  toothFdi      String? // comma-separated FDI codes or range, free text (multi-tooth cases)
+  shade         String?
+  material      String?
+  notesForLab   String?
+  notesInternal String?
+
+  // Status flow: pending -> impression_taken -> sent_to_lab -> in_progress -> received_from_lab
+  //   -> fitting_or_trial -> revision_requested (loops back to sent_to_lab) -> completed
+  // cancelled reachable from any non-completed status
+  status        String @default("pending")
+  revisionCount Int    @default(0)
+
+  impressionTakenAt  DateTime?
+  sentToLabAt        DateTime?
+  expectedReturnDate DateTime?
+  receivedFromLabAt  DateTime?
+  fittingScheduledAt DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancelReason       String?
+
+  // Clinic's own reference only — no invoicing/billing integration
+  labCost  Float?
+  currency String? // USD | EUR | TRY | GBP | CAD | CHF
+
+  createdById String
+  createdBy   User      @relation("LabWorkOrderCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  attachments   LabOrderAttachment[]
+  statusHistory LabWorkOrderStatusHistory[]
+
+  @@index([clinicId, status])
+  @@index([clinicId, patientId])
+  @@index([clinicId, laboratoryId])
+  @@index([clinicId, expectedReturnDate])
+}
+
+// Append-only audit trail of status transitions (incl. remake loop-backs), kept
+// separate from the generic ActivityLog so the UI can render a compact per-order
+// timeline without joining ActivityLog's generic entityType/entityId rows.
+model LabWorkOrderStatusHistory {
+  id             String       @id @default(uuid())
+  labWorkOrderId String
+  labWorkOrder   LabWorkOrder @relation(fields: [labWorkOrderId], references: [id])
+  fromStatus     String?
+  toStatus       String
+  note           String?
+  changedById    String
+  changedBy      User         @relation("LabWorkOrderStatusChanger", fields: [changedById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([labWorkOrderId, createdAt])
+}
+
+model LabOrderAttachment {
+  id             String       @id @default(uuid())
+  clinicId       String
+  clinic         Clinic       @relation(fields: [clinicId], references: [id])
+  labWorkOrderId String
+  labWorkOrder   LabWorkOrder @relation(fields: [labWorkOrderId], references: [id])
+  fileName       String
+  originalName   String
+  fileSize       Int
+  mimeType       String
+  filePath       String
+  uploadedById   String
+  uploadedBy     User         @relation("LabOrderAttachmentUploader", fields: [uploadedById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([clinicId, labWorkOrderId])
 }

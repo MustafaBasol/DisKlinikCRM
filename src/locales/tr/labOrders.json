@@ -1,0 +1,101 @@
+{
+  "title": "Diş Laboratuvarı Takibi",
+  "subtitle": "Ölçüden teslimata kadar hastalara ait dış laboratuvar işlerini takip edin.",
+  "statuses": {
+    "pending": "Beklemede",
+    "impression_taken": "Ölçü Alındı",
+    "sent_to_lab": "Laboratuvara Gönderildi",
+    "in_progress": "Üretimde",
+    "received_from_lab": "Laboratuvardan Geldi",
+    "fitting_or_trial": "Prova Bekliyor",
+    "revision_requested": "Revizyon İstendi",
+    "completed": "Tamamlandı",
+    "cancelled": "İptal Edildi"
+  },
+  "workTypes": {
+    "crown": "Kron",
+    "bridge": "Köprü",
+    "denture_full": "Tam Protez",
+    "denture_partial": "Parsiyel Protez",
+    "implant_prosthetic": "İmplant Üstü Protez",
+    "night_guard": "Gece Plağı",
+    "aligner": "Şeffaf Plak",
+    "retainer": "Retainer",
+    "repair": "Tamir",
+    "temp_prosthetic": "Geçici Protez",
+    "other": "Diğer"
+  },
+  "dashboard": {
+    "pendingCount": "Beklemede / Üretimde",
+    "receivedCount": "Laboratuvardan Geldi",
+    "fittingPendingCount": "Prova Bekliyor",
+    "revisionRequestedCount": "Revizyon İstendi",
+    "overdueCount": "Gecikmiş",
+    "completedCount": "Tamamlandı"
+  },
+  "filters": {
+    "all": "Tümü",
+    "overdueOnly": "Gecikmiş",
+    "byLaboratory": "Tüm Laboratuvarlar"
+  },
+  "table": {
+    "patient": "Hasta",
+    "laboratory": "Laboratuvar",
+    "workType": "İş Türü",
+    "status": "Durum",
+    "expectedReturnDate": "Beklenen Dönüş",
+    "cost": "Maliyet"
+  },
+  "actions": {
+    "newOrder": "Yeni Laboratuvar İşi",
+    "editOrder": "Laboratuvar İşini Düzenle",
+    "changeStatus": "Durum değiştir..."
+  },
+  "form": {
+    "patient": "Hasta",
+    "laboratory": "Laboratuvar",
+    "workType": "İş Türü",
+    "practitioner": "Hekim",
+    "toothFdi": "Diş (FDI)",
+    "shade": "Renk",
+    "material": "Materyal",
+    "expectedReturnDate": "Beklenen Dönüş Tarihi",
+    "labCost": "Laboratuvar Ücreti",
+    "currency": "Para Birimi",
+    "notesForLab": "Laboratuvar İçin Notlar"
+  },
+  "laboratory": {
+    "manageButton": "Laboratuvarları Yönet",
+    "title": "Laboratuvarlar",
+    "name": "Laboratuvar adı",
+    "contactPerson": "Yetkili kişi",
+    "phone": "Telefon",
+    "email": "E-posta",
+    "add": "Laboratuvar Ekle",
+    "empty": "Henüz laboratuvar eklenmedi."
+  },
+  "history": {
+    "title": "Durum Geçmişi",
+    "empty": "Henüz durum değişikliği yok.",
+    "revisionBadge": "Revizyon #{{count}}"
+  },
+  "attachments": {
+    "title": "Dosya Ekleri",
+    "upload": "Dosya yükle",
+    "empty": "Henüz dosya eklenmedi."
+  },
+  "empty": {
+    "noOrders": "Seçili filtrelerle eşleşen laboratuvar işi bulunamadı."
+  },
+  "success": {
+    "created": "Laboratuvar işi oluşturuldu.",
+    "updated": "Laboratuvar işi güncellendi.",
+    "statusUpdated": "Durum güncellendi.",
+    "attachmentUploaded": "Dosya yüklendi.",
+    "laboratoryCreated": "Laboratuvar eklendi."
+  },
+  "errors": {
+    "loadFailed": "Veriler yüklenirken bir hata oluştu.",
+    "actionFailed": "İşlem başarısız oldu."
+  }
+}
