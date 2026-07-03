@@ -599,3 +599,39 @@ export function canManageClinicLegalProfile(user: UserForPermission | null | und
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
+
+// ── Dental Laboratory Tracking ────────────────────────────────────────────────
+
+/**
+ * Lab work order / laboratory directory görüntüleme (read-only dahil).
+ * server/src/routes/labOrders.ts LAB_ORDER_READ_ROLES ile senkron: tüm klinik
+ * rolleri (BILLING dahil, yalnızca görüntüleme).
+ */
+export function canViewLabOrders(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'DENTIST' ||
+    role === 'RECEPTIONIST' ||
+    role === 'ASSISTANT' ||
+    role === 'BILLING'
+  );
+}
+
+/**
+ * Lab work order oluşturma/düzenleme/durum değiştirme/iptal.
+ * server/src/routes/labOrders.ts LAB_ORDER_MANAGE_ROLES ile senkron: BILLING hariç.
+ */
+export function canManageLabOrders(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'DENTIST' ||
+    role === 'RECEPTIONIST' ||
+    role === 'ASSISTANT'
+  );
+}

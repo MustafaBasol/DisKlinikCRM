@@ -1,0 +1,101 @@
+{
+  "title": "Dental Laboratory Tracking",
+  "subtitle": "Track patient work sent to external dental laboratories, from impression to delivery.",
+  "statuses": {
+    "pending": "Pending",
+    "impression_taken": "Impression Taken",
+    "sent_to_lab": "Sent to Lab",
+    "in_progress": "In Production",
+    "received_from_lab": "Received from Lab",
+    "fitting_or_trial": "Fitting/Trial Pending",
+    "revision_requested": "Revision Requested",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
+  },
+  "workTypes": {
+    "crown": "Crown",
+    "bridge": "Bridge",
+    "denture_full": "Full Denture",
+    "denture_partial": "Partial Denture",
+    "implant_prosthetic": "Implant Prosthetic",
+    "night_guard": "Night Guard",
+    "aligner": "Clear Aligner",
+    "retainer": "Retainer",
+    "repair": "Repair",
+    "temp_prosthetic": "Temporary Prosthetic",
+    "other": "Other"
+  },
+  "dashboard": {
+    "pendingCount": "Pending / In Production",
+    "receivedCount": "Received from Lab",
+    "fittingPendingCount": "Fitting/Trial Pending",
+    "revisionRequestedCount": "Revision Requested",
+    "overdueCount": "Overdue",
+    "completedCount": "Completed"
+  },
+  "filters": {
+    "all": "All",
+    "overdueOnly": "Overdue",
+    "byLaboratory": "All Laboratories"
+  },
+  "table": {
+    "patient": "Patient",
+    "laboratory": "Laboratory",
+    "workType": "Work Type",
+    "status": "Status",
+    "expectedReturnDate": "Expected Return",
+    "cost": "Cost"
+  },
+  "actions": {
+    "newOrder": "New Lab Work",
+    "editOrder": "Edit Lab Work",
+    "changeStatus": "Change status..."
+  },
+  "form": {
+    "patient": "Patient",
+    "laboratory": "Laboratory",
+    "workType": "Work Type",
+    "practitioner": "Practitioner",
+    "toothFdi": "Tooth (FDI)",
+    "shade": "Shade",
+    "material": "Material",
+    "expectedReturnDate": "Expected Return Date",
+    "labCost": "Lab Cost",
+    "currency": "Currency",
+    "notesForLab": "Notes for Lab"
+  },
+  "laboratory": {
+    "manageButton": "Manage Laboratories",
+    "title": "Laboratories",
+    "name": "Laboratory name",
+    "contactPerson": "Contact person",
+    "phone": "Phone",
+    "email": "Email",
+    "add": "Add Laboratory",
+    "empty": "No laboratories yet."
+  },
+  "history": {
+    "title": "Status History",
+    "empty": "No status changes yet.",
+    "revisionBadge": "Revision #{{count}}"
+  },
+  "attachments": {
+    "title": "Attachments",
+    "upload": "Upload file",
+    "empty": "No attachments yet."
+  },
+  "empty": {
+    "noOrders": "No lab work orders found for the selected filters."
+  },
+  "success": {
+    "created": "Lab work order created.",
+    "updated": "Lab work order updated.",
+    "statusUpdated": "Status updated.",
+    "attachmentUploaded": "Attachment uploaded.",
+    "laboratoryCreated": "Laboratory added."
+  },
+  "errors": {
+    "loadFailed": "An error occurred while loading data.",
+    "actionFailed": "Action failed."
+  }
+}

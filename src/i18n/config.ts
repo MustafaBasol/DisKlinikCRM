@@ -27,6 +27,7 @@ import bookingEn from '../locales/en/booking.json';
 import branchesEn from '../locales/en/branches.json';
 import inventoryEn from '../locales/en/inventory.json';
 import noShowsEn from '../locales/en/noShows.json';
+import labOrdersEn from '../locales/en/labOrders.json';
 import recallEn from '../locales/en/recall.json';
 import reportsEn from '../locales/en/reports.json';
 import earningsEn from '../locales/en/earnings.json';
@@ -61,6 +62,7 @@ import bookingTr from '../locales/tr/booking.json';
 import branchesTr from '../locales/tr/branches.json';
 import inventoryTr from '../locales/tr/inventory.json';
 import noShowsTr from '../locales/tr/noShows.json';
+import labOrdersTr from '../locales/tr/labOrders.json';
 import recallTr from '../locales/tr/recall.json';
 import reportsTr from '../locales/tr/reports.json';
 import earningsTr from '../locales/tr/earnings.json';
@@ -95,6 +97,7 @@ import bookingFr from '../locales/fr/booking.json';
 import branchesFr from '../locales/fr/branches.json';
 import inventoryFr from '../locales/fr/inventory.json';
 import noShowsFr from '../locales/fr/noShows.json';
+import labOrdersFr from '../locales/fr/labOrders.json';
 import recallFr from '../locales/fr/recall.json';
 import reportsFr from '../locales/fr/reports.json';
 import earningsFr from '../locales/fr/earnings.json';
@@ -129,6 +132,7 @@ import bookingDe from '../locales/de/booking.json';
 import branchesDe from '../locales/de/branches.json';
 import inventoryDe from '../locales/de/inventory.json';
 import noShowsDe from '../locales/de/noShows.json';
+import labOrdersDe from '../locales/de/labOrders.json';
 import recallDe from '../locales/de/recall.json';
 import reportsDe from '../locales/de/reports.json';
 import earningsDe from '../locales/de/earnings.json';
@@ -162,6 +166,7 @@ const namespaces = [
   'branches',
   'inventory',
   'noShows',
+  'labOrders',
   'recall',
   'reports',
   'earnings',
@@ -199,6 +204,7 @@ const resources = {
     branches: branchesEn,
     inventory: inventoryEn,
     noShows: noShowsEn,
+    labOrders: labOrdersEn,
     recall: recallEn,
     reports: reportsEn,
     earnings: earningsEn,
@@ -234,6 +240,7 @@ const resources = {
     branches: branchesTr,
     inventory: inventoryTr,
     noShows: noShowsTr,
+    labOrders: labOrdersTr,
     recall: recallTr,
     reports: reportsTr,
     earnings: earningsTr,
@@ -269,6 +276,7 @@ const resources = {
     branches: branchesFr,
     inventory: inventoryFr,
     noShows: noShowsFr,
+    labOrders: labOrdersFr,
     recall: recallFr,
     reports: reportsFr,
     earnings: earningsFr,
@@ -304,6 +312,7 @@ const resources = {
     branches: branchesDe,
     inventory: inventoryDe,
     noShows: noShowsDe,
+    labOrders: labOrdersDe,
     recall: recallDe,
     reports: reportsDe,
     earnings: earningsDe,

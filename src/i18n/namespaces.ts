@@ -12,6 +12,7 @@ export const NS = {
   BRANCHES: 'branches',
   INVENTORY: 'inventory',
   NO_SHOWS: 'noShows',
+  LAB_ORDERS: 'labOrders',
   RECALL: 'recall',
   REPORTS: 'reports',
   EARNINGS: 'earnings',

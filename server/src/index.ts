@@ -53,6 +53,8 @@ import patientPrivacyRoutes from './routes/patientPrivacy.js';
 import clinicLegalProfileRoutes from './routes/clinicLegalProfile.js';
 import publicClinicKvkkRoutes from './routes/publicClinicKvkk.js';
 import smsRoutes from './routes/sms.js';
+import laboratoriesRoutes from './routes/laboratories.js';
+import labOrdersRoutes from './routes/labOrders.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { startMetaTemplateSyncJob } from './jobs/metaTemplateSyncJob.js';
 import { startDataRetentionCleanupJob } from './jobs/dataRetentionCleanupJob.js';
@@ -208,6 +210,8 @@ app.use('/api', postTreatmentRoutes);
 app.use('/api', patientPrivacyRoutes);
 app.use('/api', clinicLegalProfileRoutes);
 app.use('/api', smsRoutes);
+app.use('/api', laboratoriesRoutes);
+app.use('/api', labOrdersRoutes);
 
 // Global error handler — without this, unhandled errors fall through to
 // Express's default handler, which writes the stack trace into the response

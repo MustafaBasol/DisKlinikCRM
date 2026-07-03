@@ -1,0 +1,101 @@
+{
+  "title": "Zahnlabor-Tracking",
+  "subtitle": "Verfolgen Sie Patientenarbeiten, die an externe Dentallabore gesendet wurden, vom Abdruck bis zur Lieferung.",
+  "statuses": {
+    "pending": "Ausstehend",
+    "impression_taken": "Abdruck genommen",
+    "sent_to_lab": "An Labor gesendet",
+    "in_progress": "In Produktion",
+    "received_from_lab": "Vom Labor erhalten",
+    "fitting_or_trial": "Anprobe ausstehend",
+    "revision_requested": "Nacharbeit angefordert",
+    "completed": "Abgeschlossen",
+    "cancelled": "Storniert"
+  },
+  "workTypes": {
+    "crown": "Krone",
+    "bridge": "Brücke",
+    "denture_full": "Vollprothese",
+    "denture_partial": "Teilprothese",
+    "implant_prosthetic": "Implantatprothetik",
+    "night_guard": "Aufbissschiene",
+    "aligner": "Klare Zahnschiene",
+    "retainer": "Retainer",
+    "repair": "Reparatur",
+    "temp_prosthetic": "Provisorischer Zahnersatz",
+    "other": "Sonstiges"
+  },
+  "dashboard": {
+    "pendingCount": "Ausstehend / In Produktion",
+    "receivedCount": "Vom Labor erhalten",
+    "fittingPendingCount": "Anprobe ausstehend",
+    "revisionRequestedCount": "Nacharbeit angefordert",
+    "overdueCount": "Überfällig",
+    "completedCount": "Abgeschlossen"
+  },
+  "filters": {
+    "all": "Alle",
+    "overdueOnly": "Überfällig",
+    "byLaboratory": "Alle Labore"
+  },
+  "table": {
+    "patient": "Patient",
+    "laboratory": "Labor",
+    "workType": "Arbeitstyp",
+    "status": "Status",
+    "expectedReturnDate": "Erwartete Rückgabe",
+    "cost": "Kosten"
+  },
+  "actions": {
+    "newOrder": "Neuer Laborauftrag",
+    "editOrder": "Laborauftrag bearbeiten",
+    "changeStatus": "Status ändern..."
+  },
+  "form": {
+    "patient": "Patient",
+    "laboratory": "Labor",
+    "workType": "Arbeitstyp",
+    "practitioner": "Behandler",
+    "toothFdi": "Zahn (FDI)",
+    "shade": "Farbe",
+    "material": "Material",
+    "expectedReturnDate": "Erwartetes Rückgabedatum",
+    "labCost": "Laborkosten",
+    "currency": "Währung",
+    "notesForLab": "Notizen für das Labor"
+  },
+  "laboratory": {
+    "manageButton": "Labore verwalten",
+    "title": "Labore",
+    "name": "Laborname",
+    "contactPerson": "Ansprechpartner",
+    "phone": "Telefon",
+    "email": "E-Mail",
+    "add": "Labor hinzufügen",
+    "empty": "Noch keine Labore vorhanden."
+  },
+  "history": {
+    "title": "Statusverlauf",
+    "empty": "Noch keine Statusänderungen.",
+    "revisionBadge": "Nacharbeit Nr. {{count}}"
+  },
+  "attachments": {
+    "title": "Anhänge",
+    "upload": "Datei hochladen",
+    "empty": "Noch keine Anhänge."
+  },
+  "empty": {
+    "noOrders": "Keine Laboraufträge für die ausgewählten Filter gefunden."
+  },
+  "success": {
+    "created": "Laborauftrag erstellt.",
+    "updated": "Laborauftrag aktualisiert.",
+    "statusUpdated": "Status aktualisiert.",
+    "attachmentUploaded": "Anhang hochgeladen.",
+    "laboratoryCreated": "Labor hinzugefügt."
+  },
+  "errors": {
+    "loadFailed": "Beim Laden der Daten ist ein Fehler aufgetreten.",
+    "actionFailed": "Aktion fehlgeschlagen."
+  }
+}

@@ -462,3 +462,69 @@ export const practitionerPayoutSchema = z.object({
   note: z.string().optional().nullable(),
   earningIds: z.array(z.string().uuid()).optional().default([]),
 });
+
+// --- Dental Laboratory Tracking ---
+
+export const LAB_WORK_ORDER_STATUSES = [
+  'pending',
+  'impression_taken',
+  'sent_to_lab',
+  'in_progress',
+  'received_from_lab',
+  'fitting_or_trial',
+  'revision_requested',
+  'completed',
+  'cancelled',
+] as const;
+
+export const LAB_WORK_TYPES = [
+  'crown',
+  'bridge',
+  'denture_full',
+  'denture_partial',
+  'implant_prosthetic',
+  'night_guard',
+  'aligner',
+  'retainer',
+  'repair',
+  'temp_prosthetic',
+  'other',
+] as const;
+
+export const laboratorySchema = z.object({
+  name: z.string().min(1, 'Laboratory name is required'),
+  contactPerson: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.preprocess(value => value === '' ? null : value, z.string().email().optional().nullable()),
+  address: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+export const laboratoryUpdateSchema = laboratorySchema.partial();
+
+export const labWorkOrderSchema = z.object({
+  patientId: z.string().uuid('Invalid patient ID'),
+  laboratoryId: z.string().uuid('Invalid laboratory ID'),
+  treatmentCaseId: optionalUuid,
+  practitionerId: optionalUuid,
+  workType: z.enum(LAB_WORK_TYPES),
+  toothFdi: z.string().optional().nullable(),
+  shade: z.string().optional().nullable(),
+  material: z.string().optional().nullable(),
+  notesForLab: z.string().optional().nullable(),
+  notesInternal: z.string().optional().nullable(),
+  expectedReturnDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+  labCost: z.number().nonnegative('Lab cost must be non-negative').optional().nullable(),
+  currency: z.enum(validCurrencies).optional().nullable(),
+});
+
+export const labWorkOrderUpdateSchema = labWorkOrderSchema.partial();
+
+export const labWorkOrderStatusUpdateSchema = z.object({
+  status: z.enum(LAB_WORK_ORDER_STATUSES),
+  note: z.string().optional().nullable(),
+  // Set when a transition (e.g. a remake loop-back into sent_to_lab) needs a new target date.
+  newExpectedReturnDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+  cancelReason: z.string().optional().nullable(),
+});
