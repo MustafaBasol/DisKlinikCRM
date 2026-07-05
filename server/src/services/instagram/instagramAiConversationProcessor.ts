@@ -6,6 +6,7 @@ import {
   handleAwaitingDateStep,
   handleAwaitingServiceStep,
   handleAwaitingTimeStep,
+  isDeterministicConfirmationReply,
   type BookingStateJson,
 } from '../whatsappBookingFlow.js';
 import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';
@@ -42,6 +43,7 @@ import {
   CONSENT_ACCEPTED_TEXT,
   CONSENT_REPROMPT_TEXT,
 } from '../channelConsentGate.js';
+import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';
 
 export type InstagramAssistantStep =
   | 'main_menu'
@@ -53,11 +55,19 @@ export type InstagramAssistantStep =
   | 'awaiting_phone'
   | 'awaiting_handoff_note'
   | 'awaiting_channel_consent'
+  | 'post_booking'
   | null;
+
+export type InstagramBookingSummary = {
+  serviceName: string | null;
+  date: string | null;
+  time: string | null;
+};
 
 export type InstagramAssistantStateJson = BookingStateJson & {
   pendingHandoffRequestId?: string;
   resumeAfterChannelConsent?: string | null;
+  lastBookingSummary?: InstagramBookingSummary | null;
 };
 
 type InstagramAssistantClinic = {
@@ -134,6 +144,67 @@ export const canProcessInstagramAi = (args: { clinicId?: string | null; needsCli
 const summarizeIdentifier = (value: string | null | undefined) => {
   if (!value) return null;
   return { length: value.length, suffix: value.slice(-4) };
+};
+
+const senderSuffix = (externalSenderId: string) => externalSenderId.slice(-4);
+
+const logInstagramAgentDecision = (args: {
+  clinicId: string;
+  externalSenderId: string;
+  currentStep: InstagramAssistantStep;
+  deterministicMatched: boolean;
+  nluUsed: boolean;
+  detectedIntent: string;
+  confidence: number;
+  responseType: string;
+}) => {
+  console.info('[instagram-agent] decision', {
+    provider: 'instagram',
+    clinicId: summarizeIdentifier(args.clinicId),
+    senderSuffix: senderSuffix(args.externalSenderId),
+    currentStep: args.currentStep,
+    deterministicMatched: args.deterministicMatched,
+    nluUsed: args.nluUsed,
+    detectedIntent: args.detectedIntent,
+    confidence: args.confidence,
+    responseType: args.responseType,
+  });
+};
+
+const logInstagramIdentityResolution = (args: {
+  clinicId: string;
+  externalSenderId: string;
+  matchCount: number;
+  selectedPatientIdPresent: boolean;
+  needsNameCollection: boolean;
+  needsPhoneCollection: boolean;
+  action: string;
+}) => {
+  console.info('[instagram-agent] identity-resolution', {
+    provider: 'instagram',
+    clinicId: summarizeIdentifier(args.clinicId),
+    senderSuffix: senderSuffix(args.externalSenderId),
+    matchCount: args.matchCount,
+    selectedPatientIdPresent: args.selectedPatientIdPresent,
+    needsNameCollection: args.needsNameCollection,
+    needsPhoneCollection: args.needsPhoneCollection,
+    action: args.action,
+  });
+};
+
+const logInstagramPostBookingDecision = (args: {
+  clinicId: string;
+  externalSenderId: string;
+  detectedIntent: string;
+  responseType: string;
+}) => {
+  console.info('[instagram-agent] post-booking-decision', {
+    provider: 'instagram',
+    clinicId: summarizeIdentifier(args.clinicId),
+    senderSuffix: senderSuffix(args.externalSenderId),
+    detectedIntent: args.detectedIntent,
+    responseType: args.responseType,
+  });
 };
 
 const normalizeText = (value: string) => value.trim().toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ');
@@ -254,6 +325,9 @@ const readStateJson = (value: unknown): InstagramAssistantStateJson => {
       : undefined,
     pendingHandoffRequestId: typeof record.pendingHandoffRequestId === 'string' ? record.pendingHandoffRequestId : undefined,
     resumeAfterChannelConsent: typeof record.resumeAfterChannelConsent === 'string' ? record.resumeAfterChannelConsent : undefined,
+    lastBookingSummary: record.lastBookingSummary && typeof record.lastBookingSummary === 'object' && !Array.isArray(record.lastBookingSummary)
+      ? record.lastBookingSummary as InstagramBookingSummary
+      : undefined,
   };
 };
 
@@ -323,6 +397,26 @@ const resetInstagramConversationState = async (
   selectedDate: null,
   selectedTime: null,
   stateJson: null,
+});
+
+// After a successful booking, land on post_booking (not a full reset) so a
+// follow-up "teşekkürler" / "durumu nedir" gets a contextual reply instead of
+// falling through to the generic top-level fallback.
+const resetInstagramConversationToPostBooking = async (
+  clinicId: string,
+  conversationKey: string,
+  customerName: string | null,
+  summary: InstagramBookingSummary,
+) => upsertInstagramConversationState(clinicId, conversationKey, {
+  customerName: customerName ?? null,
+  currentIntent: null,
+  step: 'post_booking',
+  selectedAppointmentTypeId: null,
+  selectedAppointmentTypeName: null,
+  selectedPractitionerId: null,
+  selectedDate: null,
+  selectedTime: null,
+  stateJson: { lastBookingSummary: summary },
 });
 
 const getAssistantServices = async (clinicId: string): Promise<InstagramAssistantService[]> => {
@@ -811,6 +905,15 @@ const ensureInstagramPatientProfile = async (args: {
       },
       data: { patientId: existingByPhone.id },
     });
+    logInstagramIdentityResolution({
+      clinicId: args.clinic.id,
+      externalSenderId: args.externalSenderId,
+      matchCount: 1,
+      selectedPatientIdPresent: true,
+      needsNameCollection: false,
+      needsPhoneCollection: false,
+      action: 'existing_patient_linked_by_phone',
+    });
     return {
       id: existingByPhone.id,
       fullName: `${existingByPhone.firstName} ${existingByPhone.lastName}`.trim(),
@@ -840,6 +943,16 @@ const ensureInstagramPatientProfile = async (args: {
       externalSenderId: args.externalSenderId,
     },
     data: { patientId: createdPatient.id },
+  });
+
+  logInstagramIdentityResolution({
+    clinicId: args.clinic.id,
+    externalSenderId: args.externalSenderId,
+    matchCount: 0,
+    selectedPatientIdPresent: true,
+    needsNameCollection: false,
+    needsPhoneCollection: false,
+    action: 'patient_created_at_booking',
   });
 
   return {
@@ -1275,6 +1388,73 @@ const buildReplyText = async (args: {
       await resetInstagramConversationState(args.clinic.id, args.conversationKey, customerName);
       return NO_ACTIVE_SERVICES_TEXT;
     }
+
+    // Deterministic parser (numeric selection / substring match) runs first. Only
+    // when neither can resolve the message do we escalate to the step-aware
+    // semantic layer, keeping high-confidence structured input AI-free.
+    const serviceWillResolveDeterministically =
+      extractNumericSelection(args.text) !== null || findServiceMatches(args.text, services).length > 0;
+
+    if (!serviceWillResolveDeterministically) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.externalSenderId,
+        currentStep: 'awaiting_service',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: nextSelectedDate,
+        selectedTime: nextSelectedTime,
+      });
+
+      logInstagramAgentDecision({
+        clinicId: args.clinic.id,
+        externalSenderId: args.externalSenderId,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_service_nlu',
+      });
+
+      if (nluDecision.intent === 'select_service_by_name_or_description' && nluDecision.confidence >= 0.5) {
+        const matchedService = services.find(s => s.id === nluDecision.extractedServiceId);
+        if (matchedService) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_date',
+            selectedAppointmentTypeId: matchedService.id,
+            selectedAppointmentTypeName: matchedService.name,
+            selectedDate: nextSelectedDate ?? null,
+            selectedTime: nextSelectedTime ?? null,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: null,
+          });
+          return `${matchedService.name} hizmetini seçtiniz. Hangi gün için randevu istersiniz? Örneğin bugün, yarın, 16.05 veya 16 Mayıs yazabilirsiniz.`;
+        }
+      }
+
+      if (nluDecision.intent === 'repeat_service_list' && nluDecision.confidence >= 0.5) {
+        return formatServiceList(services);
+      }
+
+      if (nluDecision.intent === 'ask_service_price_or_duration' && nluDecision.confidence >= 0.5) {
+        return [
+          'Fiyat bilgisini bu kanaldan net olarak paylaşamıyorum, ancak hizmet süreleri şöyle:',
+          ...services.map((s, i) => `${i + 1}. ${s.name} (${s.durationMinutes} dk)`),
+          '',
+          'Randevu oluşturmak için lütfen hizmet numarasını yazın.',
+        ].join('\n');
+      }
+      // cannot_choose_service / unknown / low confidence: fall through to the
+      // deterministic handler, whose fallback already resends the service list.
+    }
+
     const serviceReply = await handleAwaitingServiceStep({
       text: args.text,
       phone: args.conversationKey,
@@ -1345,6 +1525,59 @@ const buildReplyText = async (args: {
   }
 
   if (currentStep === 'awaiting_date') {
+    if (!extractedDateFromInput) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.externalSenderId,
+        currentStep: 'awaiting_date',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: nextSelectedDate,
+        selectedTime: nextSelectedTime,
+      });
+
+      logInstagramAgentDecision({
+        clinicId: args.clinic.id,
+        externalSenderId: args.externalSenderId,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_date_nlu',
+      });
+
+      if (nluDecision.intent === 'change_service' && nluDecision.confidence >= 0.5) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_service',
+          selectedAppointmentTypeId: null,
+          selectedAppointmentTypeName: null,
+          selectedPractitionerId: null,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: null,
+        });
+        return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
+      }
+
+      if (nluDecision.intent === 'repeat_service_list' && nluDecision.confidence >= 0.5) {
+        return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
+      }
+
+      if (nluDecision.intent === 'ask_available_dates' && nluDecision.confidence >= 0.5) {
+        return `${state?.selectedAppointmentTypeName ?? 'Seçtiğiniz hizmet'} için hangi günü kontrol etmemi istersiniz? Örneğin bugün, yarın, cuma veya 16 Mayıs yazabilirsiniz.`;
+      }
+      // provide_date / unknown_date_request / low confidence: fall through to the
+      // deterministic handler, whose own fallback is already contextual.
+    }
+
     return handleAwaitingDateStep({
       prisma,
       clinicId: args.clinic.id,
@@ -1384,6 +1617,81 @@ const buildReplyText = async (args: {
   }
 
   if (currentStep === 'awaiting_time') {
+    const timeInterpretation = interpretTimeRequest(args.text);
+    const timeWillResolveDeterministically =
+      extractNumericSelection(args.text) !== null
+      || timeInterpretation.exactTime !== null
+      || timeInterpretation.afterTimeMinutes !== null
+      || Boolean(extractedDateFromInput)
+      || findSlotMatches(args.text, stateJson.availableSlots ?? []).matches.length > 0;
+
+    if (!timeWillResolveDeterministically) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.externalSenderId,
+        currentStep: 'awaiting_time',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: state?.selectedDate ?? null,
+        selectedTime: null,
+      });
+
+      logInstagramAgentDecision({
+        clinicId: args.clinic.id,
+        externalSenderId: args.externalSenderId,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_time_nlu',
+      });
+
+      if (nluDecision.intent === 'change_date' && nluDecision.confidence >= 0.5) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_date',
+          selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: null,
+        });
+        return 'Elbette, hangi gün için randevu istersiniz?';
+      }
+
+      if (nluDecision.intent === 'change_service' && nluDecision.confidence >= 0.5) {
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_service',
+          selectedAppointmentTypeId: null,
+          selectedAppointmentTypeName: null,
+          selectedDate: null,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: null,
+        });
+        return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
+      }
+
+      if (nluDecision.intent === 'ask_available_times' && nluDecision.confidence >= 0.5 && state?.selectedDate) {
+        const lastShown = stateJson.lastShownSlots ?? stateJson.availableSlots ?? [];
+        if (lastShown.length > 0) {
+          return formatAvailabilityMessage(state.selectedDate, lastShown);
+        }
+      }
+      // provide_time / unknown_time_request / low confidence: fall through to the
+      // deterministic handler, whose own fallback already lists next-step options.
+    }
+
     return handleAwaitingTimeStep({
       prisma,
       clinicId: args.clinic.id,
@@ -1482,6 +1790,135 @@ const buildReplyText = async (args: {
   }
 
   if (currentStep === 'awaiting_confirmation') {
+    // Explicit approve/reject is deterministic and must never be reinterpreted.
+    // Anything else here (e.g. "saat 15 olsun") is a change request, not a
+    // confirmation — treating it as one would silently book the wrong slot.
+    if (!isDeterministicConfirmationReply(args.text)) {
+      const pendingSlot = stateJson.pendingConfirmationSlot ?? null;
+      const deterministicNewTime = interpretTimeRequest(args.text).exactTime;
+
+      if (deterministicNewTime && pendingSlot) {
+        const matchingSlot = (stateJson.availableSlots ?? []).find(slot => slot.localStartTime === deterministicNewTime) ?? null;
+        logInstagramAgentDecision({
+          clinicId: args.clinic.id,
+          externalSenderId: args.externalSenderId,
+          currentStep,
+          deterministicMatched: true,
+          nluUsed: false,
+          detectedIntent: 'change_time',
+          confidence: 1,
+          responseType: 'awaiting_confirmation_change_time',
+        });
+
+        if (matchingSlot) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_confirmation',
+            selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+            selectedPractitionerId: matchingSlot.practitionerId,
+            selectedDate: state?.selectedDate,
+            selectedTime: matchingSlot.localStartTime,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: {
+              availableSlots: stateJson.availableSlots,
+              lastShownSlots: stateJson.lastShownSlots,
+              pendingConfirmationSlot: matchingSlot,
+            },
+          });
+          return `${formatTurkishDateLong(state!.selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${matchingSlot.localStartTime} için ${matchingSlot.practitionerName} uygun görünüyor. Bu saat için randevu talebinizi oluşturmamı onaylıyor musunuz?`;
+        }
+
+        await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+          customerName,
+          currentIntent: 'book_appointment',
+          step: 'awaiting_time',
+          selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+          selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+          selectedPractitionerId: null,
+          selectedDate: state?.selectedDate,
+          selectedTime: null,
+          lastMessage: args.text,
+          lastProviderMessageId: args.externalMessageId ?? null,
+          stateJson: {
+            availableSlots: stateJson.availableSlots,
+            lastShownSlots: stateJson.lastShownSlots,
+          },
+        });
+        // Handled below by re-entering awaiting_time on the next message; give a
+        // contextual nudge now rather than silently confirming the old slot.
+        return 'Belirttiğiniz saat şu anda listede yok. Uygun saatlerden birini seçmek ister misiniz?';
+      }
+
+      if (pendingSlot) {
+        const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+          clinicId: args.clinic.id,
+          phone: args.externalSenderId,
+          currentStep: 'awaiting_confirmation',
+          currentIntent: state?.currentIntent ?? null,
+          lastMessage: state?.lastMessage ?? null,
+          userText: args.text,
+          availableServices: services,
+          selectedService: state?.selectedAppointmentTypeName ?? null,
+          selectedDate: state?.selectedDate ?? null,
+          selectedTime: pendingSlot.localStartTime,
+        });
+
+        logInstagramAgentDecision({
+          clinicId: args.clinic.id,
+          externalSenderId: args.externalSenderId,
+          currentStep,
+          deterministicMatched: false,
+          nluUsed: nluSource !== 'unavailable',
+          detectedIntent: nluDecision.intent,
+          confidence: nluDecision.confidence,
+          responseType: 'awaiting_confirmation_nlu',
+        });
+
+        if (nluDecision.intent === 'change_date' && nluDecision.confidence >= 0.5) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_date',
+            selectedAppointmentTypeId: state?.selectedAppointmentTypeId,
+            selectedAppointmentTypeName: state?.selectedAppointmentTypeName,
+            selectedDate: null,
+            selectedTime: null,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: null,
+          });
+          return `${state?.selectedAppointmentTypeName ?? 'Seçtiğiniz hizmet'} için hangi günü kontrol etmemi istersiniz?`;
+        }
+
+        if (nluDecision.intent === 'change_service' && nluDecision.confidence >= 0.5) {
+          await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
+            customerName,
+            currentIntent: 'book_appointment',
+            step: 'awaiting_service',
+            selectedAppointmentTypeId: null,
+            selectedAppointmentTypeName: null,
+            selectedPractitionerId: null,
+            selectedDate: null,
+            selectedTime: null,
+            lastMessage: args.text,
+            lastProviderMessageId: args.externalMessageId ?? null,
+            stateJson: null,
+          });
+          return services.length > 0 ? formatServiceList(services) : NO_ACTIVE_SERVICES_TEXT;
+        }
+
+        if (nluDecision.intent === 'ask_summary' && nluDecision.confidence >= 0.5) {
+          return `Randevu özeti: ${state?.selectedAppointmentTypeName ?? 'Seçtiğiniz hizmet'}, ${formatTurkishDateLong(state!.selectedDate!, WHATSAPP_ASSISTANT_TIME_ZONE)} tarihinde saat ${pendingSlot.localStartTime} (${pendingSlot.practitionerName}). Bu randevu talebini oluşturmamı onaylıyor musunuz?`;
+        }
+        // reject_or_change_booking / human_handoff / unknown / low confidence:
+        // fall through to the deterministic handler below, which safely re-asks
+        // for an explicit evet/hayır without losing the pending slot.
+      }
+    }
+
     return handleAwaitingConfirmationStep({
       clinicId: args.clinic.id,
       phone: args.conversationKey,
@@ -1502,7 +1939,11 @@ const buildReplyText = async (args: {
         ...data,
         lastProviderMessageId: args.externalMessageId ?? null,
       }),
-      resetState: nextCustomerName => resetInstagramConversationState(args.clinic.id, args.conversationKey, nextCustomerName),
+      resetState: nextCustomerName => resetInstagramConversationToPostBooking(args.clinic.id, args.conversationKey, nextCustomerName ?? null, {
+        serviceName: state?.selectedAppointmentTypeName ?? null,
+        date: state?.selectedDate ?? null,
+        time: stateJson.pendingConfirmationSlot?.localStartTime ?? null,
+      }),
       createAppointment: async (_clinicId, _phone, name, appointmentTypeId, selectedSlot, rawMessage) => {
         if (!hasUsableInstagramFullName(name)) {
           await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
@@ -1571,6 +2012,38 @@ const buildReplyText = async (args: {
     const providedName = args.text.trim().replace(/\s+/g, ' ');
 
     if (!hasUsableInstagramFullName(providedName)) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.externalSenderId,
+        currentStep: 'awaiting_name',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: selectedDateForRequest,
+        selectedTime: null,
+      });
+      logInstagramAgentDecision({
+        clinicId: args.clinic.id,
+        externalSenderId: args.externalSenderId,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_name_nlu',
+      });
+      logInstagramIdentityResolution({
+        clinicId: args.clinic.id,
+        externalSenderId: args.externalSenderId,
+        matchCount: 0,
+        selectedPatientIdPresent: Boolean(args.entry?.patientId),
+        needsNameCollection: true,
+        needsPhoneCollection: !hasRealPatientPhone(args.entry?.patient?.phone),
+        action: 'awaiting_name_retry',
+      });
+
       await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         customerName: null,
         currentIntent: 'book_appointment',
@@ -1588,6 +2061,10 @@ const buildReplyText = async (args: {
           pendingConfirmationSlot: pendingSlot,
         },
       });
+
+      if (nluDecision.intent === 'ask_why_name_needed') {
+        return 'Randevu talebinizi doğru şekilde kaydedebilmemiz ve klinik ekibinin size ulaşabilmesi için ad soyad bilgisine ihtiyacımız var.';
+      }
       return 'Randevu talebinizi tamamlayabilmem için adınızı ve soyadınızı birlikte paylaşır mısınız? Örneğin: Anatoly Echo';
     }
 
@@ -1649,8 +2126,12 @@ const buildReplyText = async (args: {
         rawMessage: args.text,
       });
 
-      await resetInstagramConversationState(args.clinic.id, args.conversationKey, providedName);
       const serviceName = state?.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
+      await resetInstagramConversationToPostBooking(args.clinic.id, args.conversationKey, providedName, {
+        serviceName,
+        date: selectedDateForRequest,
+        time: pendingSlot.localStartTime,
+      });
       return formatInstagramBookingCreatedReply({
         customerName: providedName,
         selectedDate: selectedDateForRequest,
@@ -1717,6 +2198,38 @@ const buildReplyText = async (args: {
     });
 
     if (!resolvedPatient?.phone) {
+      const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+        clinicId: args.clinic.id,
+        phone: args.externalSenderId,
+        currentStep: 'awaiting_phone',
+        currentIntent: state?.currentIntent ?? null,
+        lastMessage: state?.lastMessage ?? null,
+        userText: args.text,
+        availableServices: services,
+        selectedService: state?.selectedAppointmentTypeName ?? null,
+        selectedDate: selectedDateForRequest,
+        selectedTime: null,
+      });
+      logInstagramAgentDecision({
+        clinicId: args.clinic.id,
+        externalSenderId: args.externalSenderId,
+        currentStep,
+        deterministicMatched: false,
+        nluUsed: nluSource !== 'unavailable',
+        detectedIntent: nluDecision.intent,
+        confidence: nluDecision.confidence,
+        responseType: 'awaiting_phone_nlu',
+      });
+      logInstagramIdentityResolution({
+        clinicId: args.clinic.id,
+        externalSenderId: args.externalSenderId,
+        matchCount: 0,
+        selectedPatientIdPresent: false,
+        needsNameCollection: false,
+        needsPhoneCollection: true,
+        action: 'awaiting_phone_retry',
+      });
+
       await upsertInstagramConversationState(args.clinic.id, args.conversationKey, {
         customerName: persistedName,
         currentIntent: 'book_appointment',
@@ -1734,6 +2247,10 @@ const buildReplyText = async (args: {
           pendingConfirmationSlot: pendingSlot,
         },
       });
+
+      if (nluDecision.intent === 'ask_why_phone_needed') {
+        return 'Randevu talebinizi klinik ekibine iletebilmemiz ve size ulaşabilmemiz için telefon numaranıza ihtiyacımız var.';
+      }
       return 'Telefon numarasını tam anlayamadım. Lütfen ülke koduyla birlikte yazabilir misiniz? Örneğin: +33 6 ...';
     }
 
@@ -1752,8 +2269,12 @@ const buildReplyText = async (args: {
         rawMessage: args.text,
       });
 
-      await resetInstagramConversationState(args.clinic.id, args.conversationKey, resolvedPatient.fullName);
       const serviceName = state?.selectedAppointmentTypeName ?? request.appointmentType?.name ?? 'seçtiğiniz hizmet';
+      await resetInstagramConversationToPostBooking(args.clinic.id, args.conversationKey, resolvedPatient.fullName, {
+        serviceName,
+        date: selectedDateForRequest,
+        time: pendingSlot.localStartTime,
+      });
       return formatInstagramBookingCreatedReply({
         customerName: resolvedPatient.fullName,
         selectedDate: selectedDateForRequest,
@@ -1781,6 +2302,66 @@ const buildReplyText = async (args: {
       console.error('[instagram-assistant] appointment-create-error', error);
       return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
     }
+  }
+
+  // ── Post-booking follow-up (gratitude/closing/status/change/cancel) ────────
+  if (currentStep === 'post_booking') {
+    const { decision: nluDecision, source: nluSource } = await resolveStepAwareWhatsAppIntent({
+      clinicId: args.clinic.id,
+      phone: args.externalSenderId,
+      currentStep: 'post_booking',
+      currentIntent: state?.currentIntent ?? null,
+      lastMessage: state?.lastMessage ?? null,
+      userText: args.text,
+      availableServices: services,
+      selectedService: null,
+      selectedDate: null,
+      selectedTime: null,
+    });
+
+    logInstagramAgentDecision({
+      clinicId: args.clinic.id,
+      externalSenderId: args.externalSenderId,
+      currentStep,
+      deterministicMatched: false,
+      nluUsed: nluSource !== 'unavailable',
+      detectedIntent: nluDecision.intent,
+      confidence: nluDecision.confidence,
+      responseType: 'post_booking_nlu',
+    });
+    logInstagramPostBookingDecision({
+      clinicId: args.clinic.id,
+      externalSenderId: args.externalSenderId,
+      detectedIntent: nluDecision.intent,
+      responseType: 'post_booking',
+    });
+
+    const summary = stateJson.lastBookingSummary ?? null;
+
+    if (nluDecision.intent === 'gratitude') {
+      return 'Rica ederiz. Talebiniz klinik ekibine iletildi. Onay durumunu size bildireceğiz.';
+    }
+    if (nluDecision.intent === 'closing') {
+      return 'Rica ederiz, sağlıklı günler dileriz.';
+    }
+    if (nluDecision.intent === 'ask_request_status') {
+      return summary?.serviceName
+        ? `${summary.serviceName} için ${summary.date ? formatTurkishDateLong(summary.date, WHATSAPP_ASSISTANT_TIME_ZONE) : ''}${summary.time ? ` saat ${summary.time}` : ''} talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.`
+        : 'Randevu talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.';
+    }
+    if (nluDecision.intent === 'change_request' || nluDecision.intent === 'cancel_request') {
+      return createHandoffRequest({
+        clinic: args.clinic,
+        entry: args.entry,
+        instagramConnectionId: args.instagramConnectionId,
+        externalSenderId: args.externalSenderId,
+        externalConversationId: args.externalConversationId,
+        customerName,
+        text: args.text,
+        conversationKey: args.conversationKey,
+      });
+    }
+    return 'Randevu talebinizin durumunu sorabilir, saat veya tarih değişikliği isteyebilir, iptal talep edebilir ya da yetkili biriyle görüşmek isteyebilirsiniz. Nasıl yardımcı olabilirim?';
   }
 
   const clinicFacts = await loadClinicFacts(args.clinic);
