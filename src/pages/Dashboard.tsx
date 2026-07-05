@@ -32,6 +32,7 @@ import {
   canCreateAppointment,
   canViewAppointmentRequests,
   canViewNoShowDashboard,
+  canViewOperations,
 } from '../utils/permissions';
 import {
   BarChart,
@@ -54,6 +55,7 @@ import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { useTranslation } from 'react-i18next';
 import AppointmentForm from '../components/AppointmentForm';
 import PatientForm from '../components/PatientForm';
+import SetupChecklist from '../components/SetupChecklist';
 
 const STAGE_COLORS: Record<string, string> = {
   new: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
@@ -415,7 +417,7 @@ const Dashboard: React.FC = () => {
       count: data?.stats?.pendingAppointmentRequests || 0,
       icon: <MessageCircle size={18} />,
       link: '/appointment-requests?status=pending',
-      colorClasses: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+      colorClasses: 'bg-indigo-50 border-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:border-indigo-800 dark:text-indigo-300',
     });
   }
   operationalCards.push({
@@ -424,7 +426,7 @@ const Dashboard: React.FC = () => {
     count: data?.stats?.pendingTasks || 0,
     icon: <ClipboardList size={18} />,
     link: '/tasks?status=open',
-    colorClasses: 'bg-blue-50 border-blue-100 text-blue-700',
+    colorClasses: 'bg-blue-50 border-blue-100 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300',
   });
   if (canViewNoShowDashboard(user)) {
     operationalCards.push({
@@ -433,7 +435,7 @@ const Dashboard: React.FC = () => {
       count: data?.stats?.noShowsMonth || 0,
       icon: <UserMinus size={18} />,
       link: '/no-shows?recoveryStatus=unresolved',
-      colorClasses: 'bg-orange-50 border-orange-100 text-orange-700',
+      colorClasses: 'bg-orange-50 border-orange-100 text-orange-700 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300',
     });
   }
 
@@ -442,8 +444,8 @@ const Dashboard: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('common:dashboard')}</h1>
-          <p className="text-gray-500 mt-1">{t('dashboard:welcome', { name: user?.firstName })}. {t('dashboard:subtitle')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('common:dashboard')}</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">{t('dashboard:welcome', { name: user?.firstName })}. {t('dashboard:subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canCreateAppointment(user) && (
@@ -485,6 +487,9 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* New-clinic onboarding checklist (dismissible, localStorage-backed) */}
+      <SetupChecklist />
+
       {/* Operational action row — "Unpaid Balances" is intentionally not shown here
           since it duplicates the "Pending Collections" KPI card below; this row is
           purely the 3 fixed operational cards. */}
@@ -498,7 +503,7 @@ const Dashboard: React.FC = () => {
               title={card.title}
               aria-label={card.title}
             >
-              <div className="p-2 rounded-xl bg-white/60">
+              <div className="p-2 rounded-xl bg-white/60 dark:bg-white/10">
                 {card.icon}
               </div>
               <div className="flex-1">
@@ -528,8 +533,8 @@ const Dashboard: React.FC = () => {
               <ChevronRight size={20} className="text-gray-300 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all" />
             </div>
             <div className="mt-4">
-              <h3 className="text-gray-500 text-sm font-medium">{stat.label}</h3>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+              <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">{stat.label}</h3>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{stat.value}</p>
             </div>
             <div className="mt-4 flex items-center gap-2">
               {stat.trendType === 'up' && <ArrowUpRight size={16} className="text-green-500" />}
@@ -551,18 +556,18 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Today's Agenda */}
         <div className="lg:col-span-2 card overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+          <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Calendar size={20} className="text-primary-600" />
               {t('dashboard:todayAgenda')}
             </h2>
-            <Link to="/appointments" className="text-primary-600 text-sm font-semibold hover:underline">{t('common:viewAll')}</Link>
+            <Link to="/appointments" className="text-primary-600 dark:text-primary-400 text-sm font-semibold hover:underline">{t('common:viewAll')}</Link>
           </div>
           <div className="overflow-x-auto">
             {data?.agenda?.length > 0 ? (
               <table className="w-full">
                 <thead>
-                  <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50/50">
+                  <tr className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50/50 dark:bg-gray-800/50">
                     <th className="px-6 py-4">{t('patients:list.name')}</th>
                     <th className="px-6 py-4">{t('common:practitioner')}</th>
                     <th className="px-6 py-4">{t('common:time')}</th>
@@ -570,27 +575,27 @@ const Dashboard: React.FC = () => {
                     <th className="px-6 py-4">{t('patients:list.status')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {data.agenda.map((appt: any) => (
-                    <tr key={appt.id} className="hover:bg-gray-50 transition-colors group cursor-pointer" onClick={() => navigate(`/appointments/${appt.id}`)}>
+                    <tr key={appt.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group cursor-pointer" onClick={() => navigate(`/appointments/${appt.id}`)}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300 group-hover:bg-primary-50 group-hover:text-primary-600 dark:group-hover:bg-primary-900/30 dark:group-hover:text-primary-400 transition-colors">
                             {appt.patient.firstName[0]}{appt.patient.lastName[0]}
                           </div>
-                          <p className="font-bold text-gray-900 group-hover:text-primary-600 transition-colors">{appt.patient.firstName} {appt.patient.lastName}</p>
+                          <p className="font-bold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{appt.patient.firstName} {appt.patient.lastName}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700">
+                      <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                         {appt.practitioner.firstName} {appt.practitioner.lastName}
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                      <td className="px-6 py-4 text-sm font-medium text-gray-700 dark:text-gray-300">
                         {formatTime(appt.startTime)}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: appt.appointmentType.color || '#3b82f6' }}></div>
-                          <span className="text-sm text-gray-600">{appt.appointmentType.name}</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{appt.appointmentType.name}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -617,23 +622,23 @@ const Dashboard: React.FC = () => {
 
         {/* Recent Activity */}
         <div className="card flex flex-col">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+          <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <History size={20} className="text-primary-600" />
               {t('dashboard:activityFeed')}
             </h2>
           </div>
           <div className="p-6 flex-1 overflow-y-auto max-h-[500px]">
             {data?.activities?.length > 0 ? (
-              <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-50">
+              <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-50 dark:before:bg-gray-800">
                 {data.activities.map((log: any, idx: number) => (
                   <div key={idx} className="relative pl-10 group">
-                    <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-white border-2 border-gray-100 flex items-center justify-center z-10 group-hover:border-primary-200 group-hover:bg-primary-50 transition-all">
+                    <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 flex items-center justify-center z-10 group-hover:border-primary-200 group-hover:bg-primary-50 dark:group-hover:border-primary-800 dark:group-hover:bg-primary-900/30 transition-all">
                       <div className="w-2 h-2 rounded-full bg-primary-500"></div>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-900 leading-snug">
-                        <span className="font-bold text-gray-900">{log.user.firstName}</span> {log.description}
+                      <p className="text-sm text-gray-900 dark:text-gray-300 leading-snug">
+                        <span className="font-bold text-gray-900 dark:text-white">{log.user.firstName}</span> {log.description}
                       </p>
                       <p className="text-[10px] text-gray-400 mt-1 font-medium">
                         {formatDateTime(log.createdAt)}
@@ -649,12 +654,14 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="p-4 bg-gray-50 border-t border-gray-100 mt-auto">
-            <Link to="/activity-logs" className="text-xs font-bold text-primary-600 hover:underline flex items-center justify-center gap-1">
-              {t('dashboard:viewFullLogs')}
-              <ChevronRight size={14} />
-            </Link>
-          </div>
+          {canViewOperations(user) && (
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 mt-auto">
+              <Link to="/operations" className="text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline flex items-center justify-center gap-1">
+                {t('dashboard:viewFullLogs')}
+                <ChevronRight size={14} />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -663,7 +670,7 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Haftalık randevu trendi */}
           <div className="card p-6 lg:col-span-2">
-            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
               <BarChart2 size={18} className="text-primary-600" />
               {t('dashboard:charts.appointmentTrend')}
             </h2>
@@ -682,7 +689,7 @@ const Dashboard: React.FC = () => {
 
           {/* Hizmet bazlı dağılım */}
           <div className="card p-6">
-            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
               <TrendingUp size={18} className="text-primary-600" />
               {t('dashboard:charts.serviceDistribution')}
             </h2>
@@ -716,7 +723,7 @@ const Dashboard: React.FC = () => {
 
           {/* Aylık gelir trendi */}
           <div className="card p-6 lg:col-span-3">
-            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
               <DollarSign size={18} className="text-primary-600" />
               {t('dashboard:charts.revenueTrend')}
             </h2>
@@ -746,30 +753,30 @@ const Dashboard: React.FC = () => {
       {/* Operational Summary Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="card p-6 flex items-center gap-4">
-          <div className="p-4 bg-red-50 text-red-600 rounded-2xl">
+          <div className="p-4 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 rounded-2xl">
             <UserMinus size={24} />
           </div>
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('dashboard:noShowsMonth')}</p>
-            <p className="text-xl font-bold">{data?.stats?.noShowsMonth || 0}</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white">{data?.stats?.noShowsMonth || 0}</p>
           </div>
         </div>
         <div className="card p-6 flex items-center gap-4">
-          <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl">
+          <div className="p-4 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded-2xl">
             <Briefcase size={24} />
           </div>
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('dashboard:openTreatments')}</p>
-            <p className="text-xl font-bold">{data?.stats?.openTreatments || 0}</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white">{data?.stats?.openTreatments || 0}</p>
           </div>
         </div>
         <div className="card p-6 flex items-center gap-4">
-          <div className="p-4 bg-green-50 text-green-600 rounded-2xl">
+          <div className="p-4 bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 rounded-2xl">
             <MessageSquare size={24} />
           </div>
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('dashboard:preparedMessages')}</p>
-            <p className="text-xl font-bold">{data?.stats?.preparedMessages || 0}</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white">{data?.stats?.preparedMessages || 0}</p>
           </div>
         </div>
       </div>

@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /resend-verification
+Disallow: /platform
+Disallow: /dashboard
+Disallow: /auth/
+
+Sitemap: https://noramedi.com/sitemap.xml

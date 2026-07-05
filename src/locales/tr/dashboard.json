@@ -12,6 +12,20 @@
   "noShowsMonth": "Bu Ayki Gelmeyenler",
   "openTreatments": "Açık Tedavi Dosyaları",
   "preparedMessages": "Hazırlanan Mesajlar (Hafta)",
+  "setup": {
+    "title": "Kliniğinizi kurmaya başlayın",
+    "subtitle": "Birkaç adımda NoraMedi'yi kliniğinize hazırlayın.",
+    "dismiss": "Kurulum listesini gizle",
+    "progress": "{{done}}/{{total}} tamamlandı",
+    "go": "Git",
+    "steps": {
+      "clinic": { "title": "Klinik bilgilerini tamamlayın" },
+      "team": { "title": "Ekibinizi ekleyin" },
+      "services": { "title": "Hizmetleri tanımlayın" },
+      "patient": { "title": "İlk hastanızı kaydedin" },
+      "appointment": { "title": "İlk randevuyu oluşturun" }
+    }
+  },
   "doctor": {
     "greeting": "Merhaba, Dr. {{name}}",
     "weekAppointments": "Bu Hafta",

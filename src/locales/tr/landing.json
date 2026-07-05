@@ -11,10 +11,13 @@
     "multiClinic": "Çoklu Klinik",
     "integrations": "Entegrasyonlar",
     "workflow": "Nasıl Çalışır",
+    "pricing": "Fiyatlandırma",
     "faq": "SSS",
     "login": "Giriş Yap",
     "themeToggle": "Temayı değiştir",
-    "languageSelector": "Dil seçin"
+    "languageSelector": "Dil seçin",
+    "openMenu": "Menüyü aç",
+    "closeMenu": "Menüyü kapat"
   },
   "actions": {
     "requestDemo": "Demo Talep Et",
@@ -259,6 +262,90 @@
       }
     }
   },
+  "socialProof": {
+    "label": "Kullanıcı deneyimi",
+    "title": "Klinik ekipleri NoraMedi ile neyi çözüyor?",
+    "stats": {
+      "appointments": { "value": "7/24", "label": "WhatsApp üzerinden randevu talebi alma" },
+      "channels": { "value": "2 kanal", "label": "WhatsApp + Instagram tek gelen kutusunda" },
+      "branches": { "value": "Sınırsız", "label": "Tek panelden şube karşılaştırması" },
+      "languages": { "value": "4 dil", "label": "Türkçe, İngilizce, Almanca, Fransızca arayüz" }
+    },
+    "testimonials": {
+      "manager": {
+        "quote": "Şubelerimizin randevu, tahsilat ve doluluk verilerini tek ekranda karşılaştırabiliyoruz. Günlük operasyon değerlendirmemiz artık dakikalar sürüyor.",
+        "initials": "SK",
+        "role": "Klinik Yöneticisi",
+        "clinic": "Çok şubeli klinik, İstanbul"
+      },
+      "dentist": {
+        "quote": "Hastalarımın tedavi geçmişine ve ödeme durumuna saniyeler içinde ulaşıyorum. Hakediş takibim de otomatik ilerliyor.",
+        "initials": "AD",
+        "role": "Diş Hekimi",
+        "clinic": "Tek şubeli klinik, Ankara"
+      },
+      "reception": {
+        "quote": "WhatsApp ve Instagram mesajları tek gelen kutusunda toplandığı için hiçbir randevu talebi kaybolmuyor.",
+        "initials": "EY",
+        "role": "Resepsiyon Sorumlusu",
+        "clinic": "Klinik, İzmir"
+      }
+    },
+    "note": "Görüşler erken erişim kullanım senaryolarını yansıtır."
+  },
+  "pricing": {
+    "label": "Fiyatlandırma",
+    "title": "Kliniğinizin büyüklüğüne uygun planlar",
+    "description": "Tüm planlar temel CRM özelliklerini içerir; klinik sayınıza ve iletişim kanallarınıza göre genişler.",
+    "popularBadge": "En Popüler",
+    "note": "Fiyatlar KDV hariçtir. İhtiyacınıza özel teklif için demo talebi oluşturabilirsiniz.",
+    "plans": {
+      "starter": {
+        "name": "Başlangıç",
+        "description": "Tek klinik için temel operasyon yönetimi.",
+        "price": "₺1.490",
+        "period": "/ay",
+        "cta": "Demo Talep Et",
+        "features": {
+          "0": "Randevu ve hasta yönetimi",
+          "1": "Tedavi ve ödeme takibi",
+          "2": "Görev yönetimi",
+          "3": "3 kullanıcıya kadar",
+          "4": "E-posta desteği"
+        }
+      },
+      "professional": {
+        "name": "Profesyonel",
+        "description": "Büyüyen klinikler için iletişim kanalları ve raporlama.",
+        "price": "₺2.990",
+        "period": "/ay",
+        "cta": "Demo Talep Et",
+        "features": {
+          "0": "Başlangıç planındaki her şey",
+          "1": "WhatsApp ve Instagram gelen kutusu",
+          "2": "Hatırlatma otomasyonları",
+          "3": "Finans ve raporlama panelleri",
+          "4": "10 kullanıcıya kadar",
+          "5": "Öncelikli destek"
+        }
+      },
+      "enterprise": {
+        "name": "Kurumsal",
+        "description": "Çok şubeli organizasyonlar için merkezi yönetim.",
+        "price": "Özel Teklif",
+        "period": "",
+        "cta": "Bizimle İletişime Geçin",
+        "features": {
+          "0": "Profesyonel planındaki her şey",
+          "1": "Çoklu şube yönetimi",
+          "2": "Sınırsız kullanıcı",
+          "3": "Rol ve yetki özelleştirme",
+          "4": "KVKK uyum araçları",
+          "5": "Özel kurulum ve eğitim"
+        }
+      }
+    }
+  },
   "footer": {
     "product": "Ürün",
     "company": "Bilgi",
@@ -266,6 +353,7 @@
       "features": "Özellikler",
       "multiClinic": "Çoklu Klinik",
       "integrations": "Entegrasyonlar",
+      "pricing": "Fiyatlandırma",
       "demo": "Demo",
       "login": "Giriş Yap",
       "legal": "Yasal Bilgilendirme",

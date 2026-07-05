@@ -346,4 +346,11 @@ i18n
     defaultNS: 'common',
   });
 
+// Keep <html lang> in sync with the active language (SEO/accessibility).
+const syncDocumentLanguage = (lng: string) => {
+  document.documentElement.setAttribute('lang', lng);
+};
+syncDocumentLanguage(i18n.resolvedLanguage || i18n.language || 'tr');
+i18n.on('languageChanged', syncDocumentLanguage);
+
 export default i18n;
