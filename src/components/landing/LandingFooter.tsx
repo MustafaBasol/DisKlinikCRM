@@ -28,6 +28,7 @@ const LandingFooter = () => {
           <a href="#features">{t('footer.links.features')}</a>
           <a href="#multi-clinic">{t('footer.links.multiClinic')}</a>
           <a href="#integrations">{t('footer.links.integrations')}</a>
+          <a href="#pricing">{t('footer.links.pricing')}</a>
           <a href="#demo">{t('footer.links.demo')}</a>
         </FooterColumn>
         <FooterColumn title={t('footer.company')}>

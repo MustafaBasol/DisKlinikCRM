@@ -12,6 +12,20 @@
   "noShowsMonth": "No-Shows in diesem Monat",
   "openTreatments": "Offene Behandlungsakten",
   "preparedMessages": "Vorbereitete Nachrichten (Woche)",
+  "setup": {
+    "title": "Richten Sie Ihre Klinik ein",
+    "subtitle": "Machen Sie NoraMedi in wenigen Schritten startklar für Ihre Klinik.",
+    "dismiss": "Einrichtungsliste ausblenden",
+    "progress": "{{done}}/{{total}} abgeschlossen",
+    "go": "Los",
+    "steps": {
+      "clinic": { "title": "Klinikdaten vervollständigen" },
+      "team": { "title": "Team hinzufügen" },
+      "services": { "title": "Leistungen definieren" },
+      "patient": { "title": "Ersten Patienten anlegen" },
+      "appointment": { "title": "Ersten Termin erstellen" }
+    }
+  },
   "doctor": {
     "greeting": "Hallo, Dr. {{name}}",
     "weekAppointments": "Diese Woche",

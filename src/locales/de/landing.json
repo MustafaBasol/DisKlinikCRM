@@ -11,10 +11,13 @@
     "multiClinic": "Mehrere Kliniken",
     "integrations": "Integrationen",
     "workflow": "So funktioniert es",
+    "pricing": "Preise",
     "faq": "FAQ",
     "login": "Anmelden",
     "themeToggle": "Design wechseln",
-    "languageSelector": "Sprache auswählen"
+    "languageSelector": "Sprache auswählen",
+    "openMenu": "Menü öffnen",
+    "closeMenu": "Menü schließen"
   },
   "actions": {
     "requestDemo": "Demo anfragen",
@@ -259,6 +262,90 @@
       }
     }
   },
+  "socialProof": {
+    "label": "Nutzererfahrung",
+    "title": "Was lösen Klinikteams mit NoraMedi?",
+    "stats": {
+      "appointments": { "value": "24/7", "label": "Terminanfragen über WhatsApp" },
+      "channels": { "value": "2 Kanäle", "label": "WhatsApp + Instagram in einem Posteingang" },
+      "branches": { "value": "Unbegrenzt", "label": "Filialvergleich aus einem Panel" },
+      "languages": { "value": "4 Sprachen", "label": "Oberfläche auf Türkisch, Englisch, Deutsch, Französisch" }
+    },
+    "testimonials": {
+      "manager": {
+        "quote": "Wir vergleichen Termin-, Zahlungs- und Auslastungsdaten unserer Filialen auf einem Bildschirm. Unser tägliches Operations-Review dauert jetzt nur Minuten.",
+        "initials": "SK",
+        "role": "Klinikmanagerin",
+        "clinic": "Klinik mit mehreren Filialen, Istanbul"
+      },
+      "dentist": {
+        "quote": "Ich erreiche Behandlungshistorie und Zahlungsstatus meiner Patienten in Sekunden. Auch meine Honorarabrechnung läuft automatisch.",
+        "initials": "AD",
+        "role": "Zahnarzt",
+        "clinic": "Klinik mit einer Filiale, Ankara"
+      },
+      "reception": {
+        "quote": "Da WhatsApp- und Instagram-Nachrichten in einem Posteingang landen, geht keine Terminanfrage mehr verloren.",
+        "initials": "EY",
+        "role": "Empfangsleitung",
+        "clinic": "Klinik, Izmir"
+      }
+    },
+    "note": "Die Zitate spiegeln Nutzungsszenarien aus dem Early Access wider."
+  },
+  "pricing": {
+    "label": "Preise",
+    "title": "Pläne passend zur Größe Ihrer Klinik",
+    "description": "Alle Pläne enthalten die zentralen CRM-Funktionen und wachsen mit der Anzahl Ihrer Kliniken und Kommunikationskanäle.",
+    "popularBadge": "Am beliebtesten",
+    "note": "Preise zzgl. MwSt. Fordern Sie eine Demo für ein individuelles Angebot an.",
+    "plans": {
+      "starter": {
+        "name": "Starter",
+        "description": "Grundlegendes Betriebsmanagement für eine einzelne Klinik.",
+        "price": "₺1.490",
+        "period": "/Monat",
+        "cta": "Demo anfordern",
+        "features": {
+          "0": "Termin- und Patientenverwaltung",
+          "1": "Behandlungs- und Zahlungsverfolgung",
+          "2": "Aufgabenverwaltung",
+          "3": "Bis zu 3 Benutzer",
+          "4": "E-Mail-Support"
+        }
+      },
+      "professional": {
+        "name": "Professional",
+        "description": "Kommunikationskanäle und Reporting für wachsende Kliniken.",
+        "price": "₺2.990",
+        "period": "/Monat",
+        "cta": "Demo anfordern",
+        "features": {
+          "0": "Alles aus Starter",
+          "1": "WhatsApp- und Instagram-Posteingang",
+          "2": "Erinnerungsautomationen",
+          "3": "Finanz- und Reporting-Dashboards",
+          "4": "Bis zu 10 Benutzer",
+          "5": "Priorisierter Support"
+        }
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "description": "Zentrale Verwaltung für Organisationen mit mehreren Filialen.",
+        "price": "Individuelles Angebot",
+        "period": "",
+        "cta": "Kontaktieren Sie uns",
+        "features": {
+          "0": "Alles aus Professional",
+          "1": "Verwaltung mehrerer Filialen",
+          "2": "Unbegrenzte Benutzer",
+          "3": "Anpassbare Rollen und Berechtigungen",
+          "4": "KVKK/DSGVO-Compliance-Werkzeuge",
+          "5": "Individuelles Onboarding und Schulung"
+        }
+      }
+    }
+  },
   "footer": {
     "product": "Produkt",
     "company": "Informationen",
@@ -266,6 +353,7 @@
       "features": "Funktionen",
       "multiClinic": "Mehrere Kliniken",
       "integrations": "Integrationen",
+      "pricing": "Preise",
       "demo": "Demo",
       "login": "Anmelden",
       "legal": "Rechtliche Informationen",

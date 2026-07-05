@@ -11,10 +11,13 @@
     "multiClinic": "Multi-clinique",
     "integrations": "Intégrations",
     "workflow": "Fonctionnement",
+    "pricing": "Tarifs",
     "faq": "FAQ",
     "login": "Connexion",
     "themeToggle": "Changer le thème",
-    "languageSelector": "Choisir la langue"
+    "languageSelector": "Choisir la langue",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu"
   },
   "actions": {
     "requestDemo": "Demander une démo",
@@ -259,6 +262,90 @@
       }
     }
   },
+  "socialProof": {
+    "label": "Expérience utilisateur",
+    "title": "Que résolvent les équipes de clinique avec NoraMedi ?",
+    "stats": {
+      "appointments": { "value": "24h/24", "label": "Demandes de rendez-vous via WhatsApp" },
+      "channels": { "value": "2 canaux", "label": "WhatsApp + Instagram dans une seule boîte de réception" },
+      "branches": { "value": "Illimité", "label": "Comparaison des succursales depuis un seul panneau" },
+      "languages": { "value": "4 langues", "label": "Interface en turc, anglais, allemand, français" }
+    },
+    "testimonials": {
+      "manager": {
+        "quote": "Nous comparons les données de rendez-vous, d'encaissement et d'occupation de nos succursales sur un seul écran. Notre revue opérationnelle quotidienne ne prend plus que quelques minutes.",
+        "initials": "SK",
+        "role": "Responsable de clinique",
+        "clinic": "Clinique multi-succursales, Istanbul"
+      },
+      "dentist": {
+        "quote": "J'accède à l'historique de traitement et au statut de paiement de mes patients en quelques secondes. Le suivi de mes honoraires est également automatique.",
+        "initials": "AD",
+        "role": "Dentiste",
+        "clinic": "Clinique à succursale unique, Ankara"
+      },
+      "reception": {
+        "quote": "Comme les messages WhatsApp et Instagram arrivent dans une seule boîte de réception, aucune demande de rendez-vous ne se perd.",
+        "initials": "EY",
+        "role": "Responsable d'accueil",
+        "clinic": "Clinique, Izmir"
+      }
+    },
+    "note": "Les témoignages reflètent des scénarios d'utilisation en accès anticipé."
+  },
+  "pricing": {
+    "label": "Tarifs",
+    "title": "Des formules adaptées à la taille de votre clinique",
+    "description": "Toutes les formules incluent les fonctionnalités CRM essentielles et évoluent avec le nombre de cliniques et de canaux de communication.",
+    "popularBadge": "La plus populaire",
+    "note": "Prix hors TVA. Demandez une démo pour une offre adaptée à vos besoins.",
+    "plans": {
+      "starter": {
+        "name": "Essentiel",
+        "description": "Gestion opérationnelle de base pour une seule clinique.",
+        "price": "₺1 490",
+        "period": "/mois",
+        "cta": "Demander une démo",
+        "features": {
+          "0": "Gestion des rendez-vous et des patients",
+          "1": "Suivi des traitements et des paiements",
+          "2": "Gestion des tâches",
+          "3": "Jusqu'à 3 utilisateurs",
+          "4": "Assistance par e-mail"
+        }
+      },
+      "professional": {
+        "name": "Professionnel",
+        "description": "Canaux de communication et rapports pour les cliniques en croissance.",
+        "price": "₺2 990",
+        "period": "/mois",
+        "cta": "Demander une démo",
+        "features": {
+          "0": "Tout le contenu d'Essentiel",
+          "1": "Boîte de réception WhatsApp et Instagram",
+          "2": "Automatisations de rappels",
+          "3": "Tableaux de bord financiers et de reporting",
+          "4": "Jusqu'à 10 utilisateurs",
+          "5": "Assistance prioritaire"
+        }
+      },
+      "enterprise": {
+        "name": "Entreprise",
+        "description": "Gestion centralisée pour les organisations multi-succursales.",
+        "price": "Offre personnalisée",
+        "period": "",
+        "cta": "Contactez-nous",
+        "features": {
+          "0": "Tout le contenu de Professionnel",
+          "1": "Gestion multi-succursales",
+          "2": "Utilisateurs illimités",
+          "3": "Personnalisation des rôles et permissions",
+          "4": "Outils de conformité KVKK/RGPD",
+          "5": "Intégration et formation sur mesure"
+        }
+      }
+    }
+  },
   "footer": {
     "product": "Produit",
     "company": "Informations",
@@ -266,6 +353,7 @@
       "features": "Fonctionnalités",
       "multiClinic": "Multi-clinique",
       "integrations": "Intégrations",
+      "pricing": "Tarifs",
       "demo": "Démo",
       "login": "Connexion",
       "legal": "Informations juridiques",

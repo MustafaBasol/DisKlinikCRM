@@ -12,6 +12,20 @@
   "noShowsMonth": "No-Shows This Month",
   "openTreatments": "Open Treatment Cases",
   "preparedMessages": "Prepared Messages (Week)",
+  "setup": {
+    "title": "Start setting up your clinic",
+    "subtitle": "Get NoraMedi ready for your clinic in a few steps.",
+    "dismiss": "Hide setup checklist",
+    "progress": "{{done}}/{{total}} completed",
+    "go": "Go",
+    "steps": {
+      "clinic": { "title": "Complete clinic details" },
+      "team": { "title": "Add your team" },
+      "services": { "title": "Define your services" },
+      "patient": { "title": "Register your first patient" },
+      "appointment": { "title": "Create the first appointment" }
+    }
+  },
   "doctor": {
     "greeting": "Hello, Dr. {{name}}",
     "weekAppointments": "This Week",

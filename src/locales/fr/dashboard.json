@@ -12,6 +12,20 @@
   "noShowsMonth": "Absences ce mois-ci",
   "openTreatments": "Dossiers de traitement ouverts",
   "preparedMessages": "Messages préparés (semaine)",
+  "setup": {
+    "title": "Commencez à configurer votre clinique",
+    "subtitle": "Préparez NoraMedi pour votre clinique en quelques étapes.",
+    "dismiss": "Masquer la liste de configuration",
+    "progress": "{{done}}/{{total}} terminé",
+    "go": "Aller",
+    "steps": {
+      "clinic": { "title": "Complétez les informations de la clinique" },
+      "team": { "title": "Ajoutez votre équipe" },
+      "services": { "title": "Définissez vos prestations" },
+      "patient": { "title": "Enregistrez votre premier patient" },
+      "appointment": { "title": "Créez le premier rendez-vous" }
+    }
+  },
   "doctor": {
     "greeting": "Bonjour, Dr {{name}}",
     "weekAppointments": "Cette semaine",

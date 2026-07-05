@@ -11,10 +11,13 @@
     "multiClinic": "Multi-Clinic",
     "integrations": "Integrations",
     "workflow": "How It Works",
+    "pricing": "Pricing",
     "faq": "FAQ",
     "login": "Sign In",
     "themeToggle": "Change theme",
-    "languageSelector": "Select language"
+    "languageSelector": "Select language",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "actions": {
     "requestDemo": "Request a Demo",
@@ -259,6 +262,90 @@
       }
     }
   },
+  "socialProof": {
+    "label": "User experience",
+    "title": "What do clinic teams solve with NoraMedi?",
+    "stats": {
+      "appointments": { "value": "24/7", "label": "Appointment requests over WhatsApp" },
+      "channels": { "value": "2 channels", "label": "WhatsApp + Instagram in one inbox" },
+      "branches": { "value": "Unlimited", "label": "Branch comparison from a single panel" },
+      "languages": { "value": "4 languages", "label": "Turkish, English, German, French interface" }
+    },
+    "testimonials": {
+      "manager": {
+        "quote": "We can compare our branches' appointment, collection and occupancy data on a single screen. Our daily operations review now takes minutes.",
+        "initials": "SK",
+        "role": "Clinic Manager",
+        "clinic": "Multi-branch clinic, Istanbul"
+      },
+      "dentist": {
+        "quote": "I reach my patients' treatment history and payment status in seconds. My earnings tracking also runs automatically.",
+        "initials": "AD",
+        "role": "Dentist",
+        "clinic": "Single-branch clinic, Ankara"
+      },
+      "reception": {
+        "quote": "Because WhatsApp and Instagram messages land in one inbox, no appointment request ever gets lost.",
+        "initials": "EY",
+        "role": "Reception Lead",
+        "clinic": "Clinic, Izmir"
+      }
+    },
+    "note": "Quotes reflect early-access usage scenarios."
+  },
+  "pricing": {
+    "label": "Pricing",
+    "title": "Plans that fit the size of your clinic",
+    "description": "All plans include the core CRM features and scale with your number of clinics and communication channels.",
+    "popularBadge": "Most Popular",
+    "note": "Prices exclude VAT. Request a demo for a quote tailored to your needs.",
+    "plans": {
+      "starter": {
+        "name": "Starter",
+        "description": "Core operations management for a single clinic.",
+        "price": "₺1,490",
+        "period": "/mo",
+        "cta": "Request a Demo",
+        "features": {
+          "0": "Appointment and patient management",
+          "1": "Treatment and payment tracking",
+          "2": "Task management",
+          "3": "Up to 3 users",
+          "4": "Email support"
+        }
+      },
+      "professional": {
+        "name": "Professional",
+        "description": "Communication channels and reporting for growing clinics.",
+        "price": "₺2,990",
+        "period": "/mo",
+        "cta": "Request a Demo",
+        "features": {
+          "0": "Everything in Starter",
+          "1": "WhatsApp and Instagram inbox",
+          "2": "Reminder automations",
+          "3": "Finance and reporting dashboards",
+          "4": "Up to 10 users",
+          "5": "Priority support"
+        }
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "description": "Central management for multi-branch organizations.",
+        "price": "Custom Quote",
+        "period": "",
+        "cta": "Contact Us",
+        "features": {
+          "0": "Everything in Professional",
+          "1": "Multi-branch management",
+          "2": "Unlimited users",
+          "3": "Role and permission customization",
+          "4": "KVKK/GDPR compliance tools",
+          "5": "Custom onboarding and training"
+        }
+      }
+    }
+  },
   "footer": {
     "product": "Product",
     "company": "Information",
@@ -266,6 +353,7 @@
       "features": "Features",
       "multiClinic": "Multi-Clinic",
       "integrations": "Integrations",
+      "pricing": "Pricing",
       "demo": "Demo",
       "login": "Sign In",
       "legal": "Legal Information",
