@@ -33,7 +33,7 @@
     "test:orgdash": "tsx src/tests/organizationDashboard.test.ts",
     "test:dashboard": "tsx src/tests/dashboard.test.ts",
     "test:imports": "tsx src/tests/excelImport.test.ts",
-    "test:instagram": "tsx src/tests/instagramProvider.test.ts",
+    "test:instagram": "tsx src/tests/instagramProvider.test.ts && tsx src/tests/instagramConversion.test.ts && tsx src/tests/instagramAssistantParity.test.ts",
     "test:meta-wa": "tsx src/tests/metaWhatsAppWebhook.test.ts && tsx src/tests/whatsappAwaitingServiceStep.test.ts && tsx src/tests/whatsappStepAwareNlu.test.ts && tsx src/tests/whatsappIdentityAndPostBooking.test.ts",
     "test:consent-resume": "tsx src/tests/channelConsentFlowResume.test.ts",
     "test:meta-template": "tsx src/tests/metaTemplateService.test.ts",

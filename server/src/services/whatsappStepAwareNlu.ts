@@ -25,6 +25,7 @@ export type WhatsAppStepAwareStep =
   | 'awaiting_time'
   | 'awaiting_confirmation'
   | 'awaiting_name'
+  | 'awaiting_phone'
   | 'post_booking'
   | null
   | undefined;
@@ -44,6 +45,13 @@ export const stepAwareNameIntents = [
   'correct_name',
   'ask_why_name_needed',
   'unknown_name_request',
+] as const;
+
+export const stepAwarePhoneIntents = [
+  'provide_phone',
+  'correct_phone',
+  'ask_why_phone_needed',
+  'unknown_phone_request',
 ] as const;
 
 export const stepAwarePostBookingIntents = [
@@ -97,6 +105,7 @@ export type WhatsAppStepAwareIntent =
   | (typeof stepAwareTimeIntents)[number]
   | (typeof stepAwareConfirmationIntents)[number]
   | (typeof stepAwareNameIntents)[number]
+  | (typeof stepAwarePhoneIntents)[number]
   | (typeof stepAwarePostBookingIntents)[number];
 
 const getAllowedIntentsForStep = (step: WhatsAppStepAwareStep): WhatsAppStepAwareIntent[] => {
@@ -111,9 +120,11 @@ const getAllowedIntentsForStep = (step: WhatsAppStepAwareStep): WhatsAppStepAwar
             ? stepAwareConfirmationIntents
             : step === 'awaiting_name'
               ? stepAwareNameIntents
-              : step === 'post_booking'
-                ? stepAwarePostBookingIntents
-                : [];
+              : step === 'awaiting_phone'
+                ? stepAwarePhoneIntents
+                : step === 'post_booking'
+                  ? stepAwarePostBookingIntents
+                  : [];
   return [...stepAwareGeneralIntents, ...stepIntents];
 };
 
@@ -277,6 +288,17 @@ export const ruleBasedStepAwareFallback = (args: ResolveStepAwareWhatsAppIntentA
       return makeDecision('ask_why_name_needed', 0.7);
     }
     return makeDecision('unknown_name_request', 0.3);
+  }
+
+  // Phone collection, like name collection, is never itself resolved by AI/rule
+  // classification — an actual phone number is validated deterministically by the
+  // caller before this module is consulted. This only classifies WHY the
+  // deterministic phone parse failed.
+  if (args.currentStep === 'awaiting_phone') {
+    if (['neden istiyor', 'nicin istiyor', 'neden gerekli', 'ne icin lazim', 'niye soruyor', 'neden soruyor'].some(p => text.includes(p))) {
+      return makeDecision('ask_why_phone_needed', 0.7);
+    }
+    return makeDecision('unknown_phone_request', 0.3);
   }
 
   if (args.currentStep === 'post_booking') {
