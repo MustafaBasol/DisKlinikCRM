@@ -529,3 +529,93 @@ export const labWorkOrderStatusUpdateSchema = z.object({
   newExpectedReturnDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   cancelReason: z.string().optional().nullable(),
 });
+
+// --- Imaging / Device Integration Foundation (Phase 1) ---
+
+// DICOM'dan esinlenen modality kodları (IO: intraoral sensör, PX: panoramik,
+// CT: CBCT, CEPH: sefalometrik, IO_CAMERA: ağız içi kamera, SCANNER: tarayıcı).
+export const IMAGING_MODALITIES = [
+  'IO',
+  'PX',
+  'CT',
+  'CEPH',
+  'IO_CAMERA',
+  'SCANNER',
+  'OTHER',
+] as const;
+
+export const IMAGING_REQUEST_STATUSES = [
+  'requested',
+  'scheduled',
+  'received',
+  'cancelled',
+  'failed',
+] as const;
+
+export const IMAGING_REQUEST_PRIORITIES = ['routine', 'urgent'] as const;
+
+export const IMAGING_DEVICE_CONNECTION_TYPES = ['manual', 'bridge', 'dicomweb'] as const;
+
+// İlişki ID'leri UUID'ye zorlanmaz (demo/prod'da UUID olmayan ID'ler var —
+// bkz. appointmentBaseSchema); varlık ve klinik aidiyeti relationGuards ile
+// route katmanında doğrulanır.
+const optionalId = z.preprocess(
+  value => (value === '' || value === null ? undefined : value),
+  z.string().min(1).optional(),
+);
+
+export const imagingDeviceSchema = z.object({
+  name: z.string().min(1, 'Device name is required').max(200),
+  modality: z.enum(IMAGING_MODALITIES),
+  manufacturer: z.string().max(200).optional().nullable(),
+  modelName: z.string().max(200).optional().nullable(),
+  // Phase 1 yalnızca manuel yüklemeyi destekler; bridge/dicomweb kayıtları
+  // ileride köprü/PACS entegrasyonu geldiğinde kullanılacak.
+  connectionType: z.enum(IMAGING_DEVICE_CONNECTION_TYPES).default('manual'),
+  isActive: z.boolean().default(true),
+  notes: z.string().max(2000).optional().nullable(),
+  clinicId: optionalId,
+});
+
+export const imagingDeviceUpdateSchema = imagingDeviceSchema.omit({ clinicId: true }).partial();
+
+export const imagingRequestSchema = z.object({
+  patientId: z.string().min(1, 'Patient is required'),
+  appointmentId: optionalId,
+  treatmentCaseId: optionalId,
+  requestedModality: z.enum(IMAGING_MODALITIES),
+  requestedDeviceId: optionalId,
+  priority: z.enum(IMAGING_REQUEST_PRIORITIES).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  clinicId: optionalId,
+});
+
+// patientId is immutable after creation — link corrections go through the
+// study link/unlink endpoints, not the request.
+export const imagingRequestUpdateSchema = z.object({
+  appointmentId: optionalId,
+  treatmentCaseId: optionalId,
+  requestedModality: z.enum(IMAGING_MODALITIES).optional(),
+  requestedDeviceId: optionalId,
+  status: z.enum(IMAGING_REQUEST_STATUSES).optional(),
+  priority: z.enum(IMAGING_REQUEST_PRIORITIES).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export const imagingStudyUploadSchema = z.object({
+  patientId: optionalId,
+  appointmentId: optionalId,
+  treatmentCaseId: optionalId,
+  deviceId: optionalId,
+  imagingRequestId: optionalId,
+  modality: z.enum(IMAGING_MODALITIES),
+  description: z.string().max(2000).optional().nullable(),
+  studyDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+  clinicId: optionalId,
+});
+
+export const imagingStudyLinkSchema = z.object({
+  patientId: z.string().min(1, 'Patient is required'),
+  appointmentId: optionalId,
+  treatmentCaseId: optionalId,
+});

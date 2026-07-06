@@ -88,6 +88,10 @@ model Clinic {
   laboratories                  Laboratory[]
   labWorkOrders                 LabWorkOrder[]
   labOrderAttachments           LabOrderAttachment[]
+  imagingDevices                ImagingDevice[]
+  imagingRequests               ImagingRequest[]
+  imagingStudies                ImagingStudy[]
+  imagingImages                 ImagingImage[]
 
   @@unique([organizationId, slug])
 }
@@ -154,6 +158,9 @@ model User {
   labWorkOrdersAsPractitioner LabWorkOrder[]                 @relation("LabWorkOrderPractitioner")
   labWorkOrderStatusChanges   LabWorkOrderStatusHistory[]    @relation("LabWorkOrderStatusChanger")
   labOrderAttachmentsUploaded LabOrderAttachment[]           @relation("LabOrderAttachmentUploader")
+  imagingDevicesCreated       ImagingDevice[]                @relation("ImagingDeviceCreator")
+  imagingRequestsRequested    ImagingRequest[]               @relation("ImagingRequestRequester")
+  imagingStudiesCreated       ImagingStudy[]                 @relation("ImagingStudyCreator")
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -250,6 +257,8 @@ model Patient {
   privacyRequests               PatientPrivacyRequest[]
   smsMessages                   SmsMessage[]
   labWorkOrders                 LabWorkOrder[]
+  imagingRequests               ImagingRequest[]
+  imagingStudies                ImagingStudy[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -324,6 +333,8 @@ model Appointment {
   recallActions    RecallAction[]
   sourceRequests   AppointmentRequest[] @relation("ConvertedAppointment")
   smsMessages      SmsMessage[]
+  imagingRequests  ImagingRequest[]
+  imagingStudies   ImagingStudy[]
 
   // Postgres'te Prisma FK kolonlarına otomatik indeks koymaz; takvim ve
   // uygunluk (available-slots) sorguları bu indeksler olmadan tablo taraması yapar.
@@ -478,6 +489,8 @@ model TreatmentCase {
   packageApplications   TreatmentPackageApplication[]
   recallCandidates      RecallCandidate[]
   labWorkOrders         LabWorkOrder[]
+  imagingRequests       ImagingRequest[]
+  imagingStudies        ImagingStudy[]
 }
 
 model TreatmentPackage {
@@ -2098,4 +2111,109 @@ model LabOrderAttachment {
   createdAt      DateTime     @default(now())
 
   @@index([clinicId, labWorkOrderId])
+}
+
+// ─── Imaging / Device Integration Foundation (Phase 1) ─────────────────────
+// Standards-first temel: modality kodları DICOM'dan esinlenir, UID alanları
+// gelecekteki DICOMweb/PACS entegrasyonu için nullable tutulur. Orijinal
+// görüntüler değişmezdir (immutable) — binary güncelleme/silme endpoint'i yok;
+// arşivleme yalnızca ImagingStudy.status'u değiştirir.
+
+model ImagingDevice {
+  id             String   @id @default(uuid())
+  clinicId       String
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  name           String
+  modality       String // IO | PX | CT | CEPH | IO_CAMERA | SCANNER | OTHER
+  manufacturer   String?
+  modelName      String?
+  connectionType String   @default("manual") // manual | bridge | dicomweb (bridge/dicomweb: gelecek fazlar)
+  isActive       Boolean  @default(true)
+  notes          String?
+  createdById    String
+  createdBy      User     @relation("ImagingDeviceCreator", fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  imagingRequests ImagingRequest[]
+  imagingStudies  ImagingStudy[]
+
+  @@index([clinicId, isActive])
+}
+
+// Minimal çekim istemi (acquisition job) — gelecekte DICOM Modality Worklist
+// ve köprü (bridge) işleri bu modele bağlanır.
+model ImagingRequest {
+  id                String         @id @default(uuid())
+  clinicId          String
+  clinic            Clinic         @relation(fields: [clinicId], references: [id])
+  patientId         String
+  patient           Patient        @relation(fields: [patientId], references: [id])
+  appointmentId     String?
+  appointment       Appointment?   @relation(fields: [appointmentId], references: [id])
+  treatmentCaseId   String?
+  treatmentCase     TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
+  requestedModality String // IO | PX | CT | CEPH | IO_CAMERA | SCANNER | OTHER
+  requestedDeviceId String?
+  requestedDevice   ImagingDevice? @relation(fields: [requestedDeviceId], references: [id])
+  status            String         @default("requested") // requested | scheduled | received | cancelled | failed
+  priority          String? // routine | urgent
+  notes             String?
+  requestedByUserId String
+  requestedBy       User           @relation("ImagingRequestRequester", fields: [requestedByUserId], references: [id])
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  imagingStudies ImagingStudy[]
+
+  @@index([clinicId, status])
+  @@index([clinicId, patientId])
+}
+
+model ImagingStudy {
+  id               String          @id @default(uuid())
+  clinicId         String
+  clinic           Clinic          @relation(fields: [clinicId], references: [id])
+  patientId        String? // NULL ⇒ bağlanmamış kuyruğu (unlinked queue)
+  patient          Patient?        @relation(fields: [patientId], references: [id])
+  appointmentId    String?
+  appointment      Appointment?    @relation(fields: [appointmentId], references: [id])
+  treatmentCaseId  String?
+  treatmentCase    TreatmentCase?  @relation(fields: [treatmentCaseId], references: [id])
+  deviceId         String?
+  device           ImagingDevice?  @relation(fields: [deviceId], references: [id])
+  imagingRequestId String?
+  imagingRequest   ImagingRequest? @relation(fields: [imagingRequestId], references: [id])
+  modality         String // IO | PX | CT | CEPH | IO_CAMERA | SCANNER | OTHER
+  studyDate        DateTime        @default(now())
+  description      String?
+  source           String          @default("manual_upload") // manual_upload | bridge | import
+  status           String          @default("active") // active | archived — tanısal veri hiç hard-delete edilmez
+  studyInstanceUid String? // DICOMweb-uyumluluk için; manuel yüklemede boş kalır
+  createdById      String
+  createdBy        User            @relation("ImagingStudyCreator", fields: [createdById], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  images ImagingImage[]
+
+  @@index([clinicId, patientId])
+  @@index([clinicId, status])
+}
+
+model ImagingImage {
+  id             String       @id @default(uuid())
+  clinicId       String
+  clinic         Clinic       @relation(fields: [clinicId], references: [id])
+  studyId        String
+  study          ImagingStudy @relation(fields: [studyId], references: [id])
+  fileName       String
+  originalName   String
+  fileSize       Int
+  mimeType       String
+  filePath       String // depolama anahtarı (fileStorage.ts) — asla public URL üretilmez
+  sopInstanceUid String? // DICOM-uyumluluk için; manuel yüklemede boş kalır
+  createdAt      DateTime     @default(now())
+
+  @@index([clinicId, studyId])
 }
