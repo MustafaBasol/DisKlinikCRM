@@ -50,12 +50,12 @@ const LegalLayout = ({ title, description, metaTitle, children }: LegalLayoutPro
         <div className="landing-container flex min-h-[4.75rem] flex-wrap items-center justify-between gap-4 py-3">
           <Link to="/landing" className="flex flex-col items-start gap-0.5" aria-label={t('brand.name')}>
             <img
-              src="/assets/brand/noramedi/logo-horizontal-light.svg"
+              src="/assets/brand/noramedi/logo-horizontal-light@2x.png"
               alt={t('brand.name')}
               className="h-9 w-auto dark:hidden"
             />
             <img
-              src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+              src="/assets/brand/noramedi/logo-horizontal-dark@2x.png"
               alt={t('brand.name')}
               className="h-9 w-auto hidden dark:block"
             />

@@ -23,12 +23,12 @@ const LandingHeader = () => {
       <div className="landing-container flex h-[4.75rem] items-center justify-between gap-4">
         <a href="#top" className="flex shrink-0 items-center" aria-label={t('brand.name')}>
           <img
-            src="/assets/brand/noramedi/logo-horizontal-light.svg"
+            src="/assets/brand/noramedi/logo-horizontal-light@2x.png"
             alt={t('brand.name')}
             className="h-9 w-auto dark:hidden"
           />
           <img
-            src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+            src="/assets/brand/noramedi/logo-horizontal-dark@2x.png"
             alt={t('brand.name')}
             className="h-9 w-auto hidden dark:block"
           />

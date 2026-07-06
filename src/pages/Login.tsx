@@ -42,12 +42,12 @@ const Login: React.FC = () => {
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
             <img
-              src="/assets/brand/noramedi/logo-horizontal-light.svg"
+              src="/assets/brand/noramedi/logo-horizontal-light@2x.png"
               alt="NoraMedi CRM"
               className="h-12 w-auto dark:hidden"
             />
             <img
-              src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+              src="/assets/brand/noramedi/logo-horizontal-dark@2x.png"
               alt="NoraMedi CRM"
               className="h-12 w-auto hidden dark:block"
             />
