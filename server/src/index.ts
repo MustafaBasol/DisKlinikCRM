@@ -1,6 +1,8 @@
 import express from 'express';
 import cors, { CorsOptions } from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
+import prisma from './db.js';
 import { authenticate } from './middleware/auth.js';
 import { csrfProtection } from './middleware/csrf.js';
 import authRoutes from './routes/auth.js';
@@ -58,6 +60,7 @@ import labOrdersRoutes from './routes/labOrders.js';
 import { startReminderJobs } from './jobs/reminders.js';
 import { startMetaTemplateSyncJob } from './jobs/metaTemplateSyncJob.js';
 import { startDataRetentionCleanupJob } from './jobs/dataRetentionCleanupJob.js';
+import { startInboundEventRetryJob } from './jobs/inboundEventRetryJob.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
 import { getBearerFallbackWarnings } from './utils/authFallback.js';
@@ -141,12 +144,29 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(cors(corsOptions));
+// Büyük JSON listeleri (randevu/hasta) gzip ile ~5-10x küçülür; nginx gzip
+// yapılandırılmışsa çift sıkıştırma olmaz (Content-Encoding varsa atlanır).
+app.use(compression());
 app.use(express.json({
   limit: process.env.JSON_BODY_LIMIT || '1mb',
   verify: (req: any, _res, buf) => {
     req.rawBody = Buffer.from(buf);
   },
 }));
+
+// Health check (load balancer / uptime monitörü için; auth'suz, detay sızdırmaz).
+// DB probe'u 3 sn ile sınırlı — havuz doluysa health endpoint'i askıda kalmasın.
+app.get('/api/health', async (_req, res) => {
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('db timeout')), 3_000)),
+    ]);
+    res.json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'degraded' });
+  }
+});
 
 // Unprotected routes
 app.use('/api/auth', authRoutes);
@@ -224,9 +244,34 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
   res.status(status).json({ error: status >= 500 ? 'Internal server error' : 'Invalid request' });
 });
 
-app.listen(port, host, () => {
+const server = app.listen(port, host, () => {
   console.log(`Server is running on ${host}:${port}`);
   startReminderJobs();
   startMetaTemplateSyncJob();
   startDataRetentionCleanupJob();
+  startInboundEventRetryJob();
 });
+
+// Graceful shutdown: deploy/restart sırasında uçuştaki istekler tamamlanır,
+// yeni bağlantı kabul edilmez, DB havuzu düzgün kapanır. 10 sn içinde
+// bitmezse zorla çıkılır (docs/45 Faz 2 #8).
+let shuttingDown = false;
+function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} received, closing server...`);
+  server.close(() => {
+    prisma.$disconnect()
+      .catch(() => {})
+      .finally(() => {
+        console.log('[shutdown] Clean exit.');
+        process.exit(0);
+      });
+  });
+  setTimeout(() => {
+    console.error('[shutdown] Forced exit after 10s timeout.');
+    process.exit(1);
+  }, 10_000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

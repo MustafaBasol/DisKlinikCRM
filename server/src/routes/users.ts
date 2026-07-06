@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
-import { authorize, AuthRequest } from '../middleware/auth.js';
+import { authorize, invalidateAuthUserCache, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { sendMail } from '../services/emailService.js';
 import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';
@@ -295,6 +295,8 @@ router.put('/users/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), as
         phone: true, role: true, isActive: true, lastLoginAt: true, createdAt: true,
       },
     });
+    // Rol/isActive/şifre değişikliği auth cache'inde 15 sn beklemesin
+    invalidateAuthUserCache(id);
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'user', entityId: user.id,

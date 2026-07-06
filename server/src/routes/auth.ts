@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
-import { authenticate, generateToken, AuthRequest } from '../middleware/auth.js';
+import { authenticate, generateToken, invalidateAuthUserCache, AuthRequest } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { logActivity } from '../utils/activity.js';
 import {
@@ -235,6 +235,8 @@ router.post(
         where: { id: user.id },
         data: { passwordHash: await bcrypt.hash(newPassword, 12), passwordChangedAt: new Date() },
       });
+      // Eski token'ların passwordChangedAt kontrolüne cache'siz taze veriyle girmesi için
+      invalidateAuthUserCache(user.id);
 
       await logActivity({
         clinicId: user.clinicId,
@@ -451,6 +453,7 @@ router.post('/reset-password', async (req, res) => {
         data: { usedAt: new Date() },
       }),
     ]);
+    invalidateAuthUserCache(resetToken.userId);
 
     try {
       await logActivity({
