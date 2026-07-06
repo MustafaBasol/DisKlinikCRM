@@ -10,6 +10,9 @@
  *     imaging route, clinic-scope helpers used, no public/static file URLs,
  *     originals immutable (no binary update endpoint), no PII in audit metadata
  *  5. Clinic isolation (mock-based, mirrors labOrders.test.ts)
+ *  6. Bridge agent contract (PR 2) — token shown once / hash-only storage,
+ *     revoked & invalid tokens blocked from heartbeat, rate limiter wired,
+ *     heartbeat is bridge-token authenticated (not user-authenticated)
  *
  * Run with: tsx src/tests/imaging.test.ts
  */
@@ -33,7 +36,10 @@ import {
   imagingRequestUpdateSchema,
   imagingStudyUploadSchema,
   imagingStudyLinkSchema,
+  imagingBridgeSchema,
+  imagingBridgeHeartbeatSchema,
 } from '../schemas/index.js';
+import { generateBridgeToken, hashBridgeToken } from '../services/imaging/bridgeTokens.js';
 
 // ─── Test harness ─────────────────────────────────────────────────────────────
 
@@ -316,6 +322,149 @@ async function main() {
   await test('zero clinic access sees nothing', () => {
     assert.deepEqual(simulateUnlinkedQueue([]), []);
     assert.equal(simulateGetStudy('study-A-2', []), null);
+  });
+
+  // ── Bridge agent contract (PR 2) ─────────────────────────────────────────
+  section('Bridge agent tokens');
+
+  await test('generated token is strong, prefixed and hash differs from plaintext', () => {
+    const { token, tokenHash } = generateBridgeToken();
+    assert.ok(token.startsWith('nmb_'), 'token must carry the nmb_ prefix');
+    assert.ok(/^nmb_[0-9a-f]{64}$/.test(token), 'token must contain 32 bytes of hex entropy');
+    assert.ok(/^[0-9a-f]{64}$/.test(tokenHash), 'tokenHash must be a sha256 hex digest');
+    assert.notEqual(token, tokenHash);
+    assert.equal(hashBridgeToken(token), tokenHash, 'stored hash must match hash of the plaintext');
+  });
+
+  await test('two generated tokens never collide', () => {
+    const a = generateBridgeToken();
+    const b = generateBridgeToken();
+    assert.notEqual(a.token, b.token);
+    assert.notEqual(a.tokenHash, b.tokenHash);
+  });
+
+  await test('bridge schema requires name; heartbeat body accepts only agentVersion', () => {
+    assert.equal(imagingBridgeSchema.safeParse({ name: 'Reception PC' }).success, true);
+    assert.equal(imagingBridgeSchema.safeParse({ name: '' }).success, false);
+    assert.equal(imagingBridgeHeartbeatSchema.safeParse({}).success, true);
+    assert.equal(imagingBridgeHeartbeatSchema.safeParse({ agentVersion: '1.2.3' }).success, true);
+    const parsed = imagingBridgeHeartbeatSchema.safeParse({ agentVersion: '1.0.0', patientName: 'X' });
+    assert.equal(parsed.success && 'patientName' in parsed.data, false, 'unknown fields must be stripped');
+  });
+
+  section('Bridge heartbeat behaviour (mock, mirrors route logic)');
+
+  type BridgeRow = {
+    id: string; clinicId: string; tokenHash: string; status: string;
+    lastSeenAt: Date | null; agentVersion: string | null;
+  };
+
+  function simulateHeartbeat(bridges: BridgeRow[], rawToken: string | undefined, agentVersion?: string) {
+    if (!rawToken) return { httpStatus: 401 };
+    const tokenHash = hashBridgeToken(rawToken);
+    const agent = bridges.find(b => b.tokenHash === tokenHash);
+    if (!agent || agent.status === 'revoked') return { httpStatus: 401 };
+    agent.status = 'online';
+    agent.lastSeenAt = new Date();
+    if (agentVersion) agent.agentVersion = agentVersion;
+    return { httpStatus: 200 };
+  }
+
+  const goodBridge = generateBridgeToken();
+  const revokedBridge = generateBridgeToken();
+  const mockBridges: BridgeRow[] = [
+    { id: 'bridge-1', clinicId: 'clinic-A', tokenHash: goodBridge.tokenHash, status: 'pending', lastSeenAt: null, agentVersion: null },
+    { id: 'bridge-2', clinicId: 'clinic-A', tokenHash: revokedBridge.tokenHash, status: 'revoked', lastSeenAt: null, agentVersion: null },
+  ];
+
+  await test('valid token heartbeat updates lastSeenAt/status/agentVersion', () => {
+    const result = simulateHeartbeat(mockBridges, goodBridge.token, '1.2.3');
+    assert.equal(result.httpStatus, 200);
+    const agent = mockBridges[0];
+    assert.equal(agent.status, 'online');
+    assert.ok(agent.lastSeenAt instanceof Date);
+    assert.equal(agent.agentVersion, '1.2.3');
+  });
+
+  await test('missing or invalid token cannot heartbeat', () => {
+    assert.equal(simulateHeartbeat(mockBridges, undefined).httpStatus, 401);
+    assert.equal(simulateHeartbeat(mockBridges, 'nmb_' + '0'.repeat(64)).httpStatus, 401);
+  });
+
+  await test('revoked bridge cannot heartbeat and stays revoked', () => {
+    assert.equal(simulateHeartbeat(mockBridges, revokedBridge.token).httpStatus, 401);
+    assert.equal(mockBridges[1].status, 'revoked');
+    assert.equal(mockBridges[1].lastSeenAt, null);
+  });
+
+  section('Bridge source regression checks');
+
+  const hbSrc = src('../routes/imagingBridgePublic.ts');
+  const indexSrc = src('../index.ts');
+  const bridgeTokenSrc = src('../services/imaging/bridgeTokens.ts');
+
+  await test('tokenHash is never selected into an API response', () => {
+    assert.equal(/tokenHash:\s*true/.test(routeSrc), false, 'bridge selects must exclude tokenHash');
+    assert.equal(routeSrc.includes('bridgeAgentSelect'), true, 'bridge responses must go through the shared safe select');
+  });
+
+  await test('plaintext token is returned exactly once (creation response only)', () => {
+    const tokenResponses = routeSrc.match(/json\(\{ \.\.\.agent, token \}\)/g) ?? [];
+    assert.equal(tokenResponses.length, 1, 'plaintext token must appear in exactly one response');
+    assert.equal(routeSrc.includes('data: { clinicId, name: validation.data.name, tokenHash'), true,
+      'only the hash may be persisted');
+    assert.equal(/data:[^}]*[^n]\btoken\b\s*[,}]/.test(routeSrc), false, 'plaintext token must never be persisted');
+  });
+
+  await test('plaintext token never flows into audit/activity/console', () => {
+    for (const source of [routeSrc, hbSrc]) {
+      assert.equal(/auditImaging\([^;]*\btoken\b[^;]*\)/s.test(source), false);
+      assert.equal(/writeAuditLog\([^;]*rawToken[^;]*\)/s.test(source), false);
+      assert.equal(/console\.(log|warn|error)\([^)]*(rawToken|tokenHash|token)\b/.test(source), false);
+    }
+    assert.equal(/console\./.test(bridgeTokenSrc), false, 'token service must not log');
+  });
+
+  await test('bridge management uses MANAGE roles and audits register/revoke', () => {
+    const bridgeRoutes = routeSrc.match(/router\.(get|post)\('\/imaging\/bridges[^']*',\s*authorize\(\[\.\.\.IMAGING_MANAGE_ROLES\]\)/g) ?? [];
+    assert.equal(bridgeRoutes.length, 3, 'all three bridge management routes must require IMAGING_MANAGE_ROLES');
+    assert.ok(routeSrc.includes("'imaging_bridge_registered'"));
+    assert.ok(routeSrc.includes("'imaging_bridge_revoked'"));
+  });
+
+  await test('heartbeat is bridge-token authenticated, not user-authenticated', () => {
+    assert.equal(hbSrc.includes('middleware/auth'), false, 'heartbeat must not import user auth middleware');
+    assert.equal(hbSrc.includes('authorize('), false);
+    assert.ok(hbSrc.includes("authorization"), 'heartbeat reads the Bearer token itself');
+    assert.ok(hbSrc.includes('hashBridgeToken('), 'lookup must go through the sha256 hash');
+  });
+
+  await test('heartbeat is registered under /api/public before the global authenticate', () => {
+    const publicMount = indexSrc.indexOf("app.use('/api/public', imagingBridgePublicRoutes)");
+    const authMount = indexSrc.indexOf('authenticate as express.RequestHandler');
+    assert.ok(publicMount > -1, 'public heartbeat router must be mounted');
+    assert.ok(authMount > -1);
+    assert.ok(publicMount < authMount, 'heartbeat must be mounted before the auth middleware');
+  });
+
+  await test('heartbeat is rate-limited (IP + token) via createRateLimiter', () => {
+    const limiters = hbSrc.match(/createRateLimiter\(/g) ?? [];
+    assert.ok(limiters.length >= 2, 'expect both an IP limiter and a token limiter');
+    assert.ok(hbSrc.includes('.check('), 'limiters must be checked before processing');
+  });
+
+  await test('heartbeat rejects revoked tokens and returns a minimal response', () => {
+    assert.ok(hbSrc.includes("agent.status === 'revoked'"));
+    assert.ok(hbSrc.includes('{ ok: true }'), 'success response must stay minimal');
+    assert.equal(/res\.json\([^)]*(patient|firstName|lastName|clinicId)/.test(hbSrc), false,
+      'heartbeat must not return clinic/patient data');
+  });
+
+  await test('schema.prisma: ImagingBridgeAgent stores hash only, unique, status pending', () => {
+    assert.ok(/model ImagingBridgeAgent \{[\s\S]*?tokenHash\s+String\s+@unique/.test(schemaSrc));
+    assert.ok(/model ImagingBridgeAgent \{[\s\S]*?status\s+String\s+@default\("pending"\)/.test(schemaSrc));
+    assert.equal(/model ImagingBridgeAgent \{[\s\S]*?\btoken\s+String/.test(schemaSrc), false,
+      'no plaintext token column may exist');
   });
 
   // ── Summary ──────────────────────────────────────────────────────────────

@@ -92,6 +92,7 @@ model Clinic {
   imagingRequests               ImagingRequest[]
   imagingStudies                ImagingStudy[]
   imagingImages                 ImagingImage[]
+  imagingBridgeAgents           ImagingBridgeAgent[]
 
   @@unique([organizationId, slug])
 }
@@ -161,6 +162,7 @@ model User {
   imagingDevicesCreated       ImagingDevice[]                @relation("ImagingDeviceCreator")
   imagingRequestsRequested    ImagingRequest[]               @relation("ImagingRequestRequester")
   imagingStudiesCreated       ImagingStudy[]                 @relation("ImagingStudyCreator")
+  imagingBridgeAgentsCreated  ImagingBridgeAgent[]           @relation("ImagingBridgeAgentCreator")
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -2199,6 +2201,28 @@ model ImagingStudy {
 
   @@index([clinicId, patientId])
   @@index([clinicId, status])
+}
+
+// Yerel klinik köprü ajanı (bridge/agent) kayıt + heartbeat sözleşmesi.
+// Phase 2'de yalnızca kayıt/iptal/heartbeat vardır; iş çekme (job polling)
+// ve görüntü yükleme gelecek fazların işidir (docs/47).
+// tokenHash: köprü token'ının sha256 hex özeti — düz metin token yalnızca
+// oluşturma yanıtında BİR KEZ gösterilir, asla saklanmaz/loglanmaz.
+model ImagingBridgeAgent {
+  id           String    @id @default(uuid())
+  clinicId     String
+  clinic       Clinic    @relation(fields: [clinicId], references: [id])
+  name         String
+  tokenHash    String    @unique
+  status       String    @default("pending") // pending | online | offline | revoked
+  lastSeenAt   DateTime?
+  agentVersion String?
+  createdById  String
+  createdBy    User      @relation("ImagingBridgeAgentCreator", fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([clinicId])
 }
 
 model ImagingImage {
