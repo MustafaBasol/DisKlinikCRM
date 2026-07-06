@@ -82,6 +82,7 @@
   "attachments": {
     "title": "Dosya Ekleri",
     "upload": "Dosya yükle",
+    "view": "Görüntüle",
     "empty": "Henüz dosya eklenmedi."
   },
   "empty": {
@@ -96,6 +97,7 @@
   },
   "errors": {
     "loadFailed": "Veriler yüklenirken bir hata oluştu.",
-    "actionFailed": "İşlem başarısız oldu."
+    "actionFailed": "İşlem başarısız oldu.",
+    "partialUploadFailure": "Laboratuvar işi oluşturuldu, ancak bazı dosyalar yüklenemedi."
   }
 }

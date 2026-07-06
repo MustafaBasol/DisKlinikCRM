@@ -82,6 +82,7 @@
   "attachments": {
     "title": "Anhänge",
     "upload": "Datei hochladen",
+    "view": "Anzeigen",
     "empty": "Noch keine Anhänge."
   },
   "empty": {
@@ -96,6 +97,7 @@
   },
   "errors": {
     "loadFailed": "Beim Laden der Daten ist ein Fehler aufgetreten.",
-    "actionFailed": "Aktion fehlgeschlagen."
+    "actionFailed": "Aktion fehlgeschlagen.",
+    "partialUploadFailure": "Der Laborauftrag wurde erstellt, aber einige Dateien konnten nicht hochgeladen werden."
   }
 }

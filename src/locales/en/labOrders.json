@@ -82,6 +82,7 @@
   "attachments": {
     "title": "Attachments",
     "upload": "Upload file",
+    "view": "View",
     "empty": "No attachments yet."
   },
   "empty": {
@@ -96,6 +97,7 @@
   },
   "errors": {
     "loadFailed": "An error occurred while loading data.",
-    "actionFailed": "Action failed."
+    "actionFailed": "Action failed.",
+    "partialUploadFailure": "Lab order was created, but some files could not be uploaded."
   }
 }

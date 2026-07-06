@@ -298,6 +298,23 @@ export const attachmentService = {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   },
+  // Object URL for in-app preview (img/iframe src) — caller must URL.revokeObjectURL when done.
+  loadPreviewObjectUrl: async (patientId: string, attachmentId: string) => {
+    const response = await api.get(
+      `/patients/${patientId}/attachments/${attachmentId}/preview`,
+      { responseType: 'blob' },
+    );
+    return URL.createObjectURL(response.data);
+  },
+  // Object URL from the download endpoint (used as "open in new tab" fallback for
+  // non-previewable mime types, since the preview endpoint 415s on those).
+  loadDownloadObjectUrl: async (patientId: string, attachmentId: string) => {
+    const response = await api.get(
+      `/patients/${patientId}/attachments/${attachmentId}/download`,
+      { responseType: 'blob' },
+    );
+    return URL.createObjectURL(response.data);
+  },
 };
 
 export const dashboardService = {
@@ -579,6 +596,17 @@ export const labOrderService = {
   deleteAttachment: (id: string, attId: string) => api.delete(`/lab-orders/${id}/attachments/${attId}`),
   downloadAttachment: (id: string, attId: string) =>
     api.get(`/lab-orders/${id}/attachments/${attId}/download`, { responseType: 'blob' }),
+  // Object URL for in-app preview (img/iframe src) — caller must URL.revokeObjectURL when done.
+  loadPreviewObjectUrl: async (id: string, attId: string) => {
+    const response = await api.get(`/lab-orders/${id}/attachments/${attId}/preview`, { responseType: 'blob' });
+    return URL.createObjectURL(response.data);
+  },
+  // Object URL from the download endpoint (used as "open in new tab" fallback for
+  // non-previewable mime types, since the preview endpoint 415s on those).
+  loadDownloadObjectUrl: async (id: string, attId: string) => {
+    const response = await api.get(`/lab-orders/${id}/attachments/${attId}/download`, { responseType: 'blob' });
+    return URL.createObjectURL(response.data);
+  },
 };
 
 // ── Instagram Connection Services ──────────────────────────────────────────────

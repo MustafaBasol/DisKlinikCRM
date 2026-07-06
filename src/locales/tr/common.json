@@ -91,6 +91,9 @@
   "errorGeneric": "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
   "unassigned": "Atanmamış",
   "files": "Dosyalar",
+  "download": "İndir",
+  "openInNewTab": "Yeni sekmede aç",
+  "previewUnsupported": "Bu dosya türü tarayıcıda önizlenemez. Dosyayı indirebilirsiniz.",
   "dental": "Diş Haritası",
   "roles": {
     "admin": "Yönetici",

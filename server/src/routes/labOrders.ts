@@ -2,6 +2,7 @@ import express, { Response, NextFunction } from 'express';
 import multer from 'multer';
 import prisma from '../db.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
+import { isInlinePreviewable } from '../utils/filePreview.js';
 import { buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
@@ -430,6 +431,40 @@ router.get('/lab-orders/:id/attachments/:attId/download', authorize([...LAB_ORDE
     stream.pipe(res as any);
   } catch {
     res.status(500).json({ error: 'Failed to download attachment' });
+  }
+});
+
+// GET /api/lab-orders/:id/attachments/:attId/preview
+router.get('/lab-orders/:id/attachments/:attId/preview', authorize([...LAB_ORDER_READ_ROLES]), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const attId = String(req.params.attId);
+
+  try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const order = await prisma.labWorkOrder.findFirst({ where: { id, clinicId: { in: accessibleIds }, deletedAt: null } });
+    if (!order) return res.status(404).json({ error: 'Lab work order not found' });
+
+    const attachment = await prisma.labOrderAttachment.findFirst({ where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId } });
+    if (!attachment) return res.status(404).json({ error: 'Not found' });
+
+    if (!isInlinePreviewable(attachment.mimeType)) {
+      return res.status(415).json({ error: 'Bu dosya türü tarayıcıda önizlenemez' });
+    }
+
+    const stream = await openFileStream(attachment.filePath);
+    if (!stream) return res.status(404).json({ error: 'File missing in storage' });
+
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.originalName)}"`);
+    res.setHeader('Content-Type', attachment.mimeType);
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to preview attachment' });
+      else res.destroy();
+    });
+    stream.pipe(res as any);
+  } catch {
+    res.status(500).json({ error: 'Failed to preview attachment' });
   }
 });
 

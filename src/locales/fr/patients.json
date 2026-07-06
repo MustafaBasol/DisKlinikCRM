@@ -71,6 +71,7 @@
       "empty": "Aucun fichier ajouté pour le moment",
       "uploadFailed": "Le fichier n'a pas pu être chargé",
       "download": "Télécharger",
+      "view": "Afficher",
       "deleteConfirm": "Voulez-vous vraiment supprimer ce fichier ?"
     },
     "whatsappTab": "WhatsApp",

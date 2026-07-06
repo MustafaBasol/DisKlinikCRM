@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import prisma from '../db.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
+import { isInlinePreviewable } from '../utils/filePreview.js';
 import {
   buildStorageKey,
   deleteFile,
@@ -194,6 +195,43 @@ router.get(
     } catch (err: any) {
       console.error('[attachments] download error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to download attachment' });
+    }
+  },
+);
+
+// ── GET /api/patients/:patientId/attachments/:id/preview ──────────────
+router.get(
+  '/patients/:patientId/attachments/:id/preview',
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
+  async (req: AuthRequest, res: Response) => {
+    const patientId = String(req.params.patientId);
+    const id = String(req.params.id);
+    const clinicId = req.user!.clinicId;
+
+    try {
+      const attachment = await prisma.patientAttachment.findFirst({
+        where: { id, patientId, clinicId },
+      });
+      if (!attachment) return res.status(404).json({ error: 'Not found' });
+
+      if (!isInlinePreviewable(attachment.mimeType)) {
+        return res.status(415).json({ error: 'Bu dosya türü tarayıcıda önizlenemez' });
+      }
+
+      const stream = await openFileStream(attachment.filePath);
+      if (!stream) return res.status(404).json({ error: 'File missing in storage' });
+
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.originalName)}"`);
+      res.setHeader('Content-Type', attachment.mimeType);
+      stream.on('error', (streamErr) => {
+        console.error('[attachments] preview stream error:', streamErr?.message ?? streamErr);
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to preview attachment' });
+        else res.destroy();
+      });
+      stream.pipe(res as any);
+    } catch (err: any) {
+      console.error('[attachments] preview error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to preview attachment' });
     }
   },
 );

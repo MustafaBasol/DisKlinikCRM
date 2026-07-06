@@ -91,6 +91,9 @@
   "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
   "unassigned": "Nicht zugewiesen",
   "files": "Dateien",
+  "download": "Herunterladen",
+  "openInNewTab": "In neuem Tab öffnen",
+  "previewUnsupported": "Dieser Dateityp kann im Browser nicht angezeigt werden. Sie können die Datei herunterladen.",
   "dental": "Zahnstatus",
   "roles": {
     "admin": "Administrator",
