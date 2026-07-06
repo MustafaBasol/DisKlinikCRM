@@ -91,6 +91,9 @@
   "errorGeneric": "Something went wrong. Please try again.",
   "unassigned": "Unassigned",
   "files": "Files",
+  "download": "Download",
+  "openInNewTab": "Open in new tab",
+  "previewUnsupported": "This file type cannot be previewed in the browser. You can download it.",
   "dental": "Dental Chart",
   "roles": {
     "admin": "Admin",

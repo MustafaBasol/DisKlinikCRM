@@ -71,6 +71,7 @@
       "empty": "No files added yet",
       "uploadFailed": "File could not be uploaded",
       "download": "Download",
+      "view": "View",
       "deleteConfirm": "Are you sure you want to delete this file?"
     },
     "whatsappTab": "WhatsApp",

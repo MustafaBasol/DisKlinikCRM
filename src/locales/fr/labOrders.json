@@ -82,6 +82,7 @@
   "attachments": {
     "title": "Pièces jointes",
     "upload": "Téléverser un fichier",
+    "view": "Afficher",
     "empty": "Aucune pièce jointe pour le moment."
   },
   "empty": {
@@ -96,6 +97,7 @@
   },
   "errors": {
     "loadFailed": "Une erreur s'est produite lors du chargement des données.",
-    "actionFailed": "L'action a échoué."
+    "actionFailed": "L'action a échoué.",
+    "partialUploadFailure": "Le travail de laboratoire a été créé, mais certains fichiers n'ont pas pu être téléversés."
   }
 }

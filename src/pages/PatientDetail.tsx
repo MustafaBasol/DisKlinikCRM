@@ -27,7 +27,9 @@ import {
   TrendingUp,
   Activity,
   Layers,
-  AlertTriangle
+  AlertTriangle,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -42,6 +44,7 @@ import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PaymentForm from '../components/PaymentForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
+import FilePreviewModal, { isInlinePreviewable } from '../components/FilePreviewModal';
 import { normalizeRole, canViewPatients } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
@@ -63,6 +66,7 @@ const PatientDetail: React.FC = () => {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<any | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [whatsappSearch, setWhatsappSearch] = useState('');
   const [whatsappDirection, setWhatsappDirection] = useState<'all' | 'incoming' | 'outgoing'>('all');
@@ -1199,11 +1203,23 @@ const PatientDetail: React.FC = () => {
                       {att.mimeType.startsWith('image/') ? <Image size={20} /> : <FileText size={20} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{att.originalName}</p>
+                      <button
+                        onClick={() => setPreviewAttachment(att)}
+                        className="text-sm font-medium truncate text-left hover:text-primary-600 hover:underline"
+                      >
+                        {att.originalName}
+                      </button>
                       <p className="text-xs text-gray-400">
                         {(att.fileSize / 1024).toFixed(1)} KB &bull; {formatDate(att.createdAt)} &bull; {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
                       </p>
                     </div>
+                    <button
+                      onClick={() => setPreviewAttachment(att)}
+                      className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
+                      title={t('patients:detail.files.view') as string}
+                    >
+                      <Eye size={16} />
+                    </button>
                     <button
                       onClick={() => attachmentService.download(id!, att.id, att.originalName)}
                       className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
@@ -1358,6 +1374,22 @@ const PatientDetail: React.FC = () => {
             setIsMessageModalOpen(false);
             fetchPatient();
           }}
+        />
+      )}
+
+      {previewAttachment && (
+        <FilePreviewModal
+          fileName={previewAttachment.originalName}
+          mimeType={previewAttachment.mimeType}
+          loadPreviewUrl={() => attachmentService.loadPreviewObjectUrl(id!, previewAttachment.id)}
+          onDownload={() => attachmentService.download(id!, previewAttachment.id, previewAttachment.originalName)}
+          onOpenInNewTab={async () => {
+            const url = isInlinePreviewable(previewAttachment.mimeType)
+              ? await attachmentService.loadPreviewObjectUrl(id!, previewAttachment.id)
+              : await attachmentService.loadDownloadObjectUrl(id!, previewAttachment.id);
+            window.open(url, '_blank');
+          }}
+          onClose={() => setPreviewAttachment(null)}
         />
       )}
     </div>

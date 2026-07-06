@@ -11,11 +11,15 @@ import {
   Paperclip,
   Trash2,
   History,
+  Eye,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { labOrderService, laboratoryService, patientService, userService } from '../services/api';
+import FilePreviewModal, { isInlinePreviewable } from '../components/FilePreviewModal';
 import { canViewLabOrders, canManageLabOrders } from '../utils/permissions';
 import {
   LAB_WORK_TYPES,
@@ -467,6 +471,7 @@ function LabOrderFormModal({
   const [currency, setCurrency] = useState(order?.currency ?? '');
   const [notesForLab, setNotesForLab] = useState(order?.notesForLab ?? '');
   const [saving, setSaving] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -487,8 +492,24 @@ function LabOrderFormModal({
         await labOrderService.update(order!.id, payload);
         showToast(t('labOrders:success.updated'));
       } else {
-        await labOrderService.create(payload);
+        const { data: created } = await labOrderService.create(payload);
         showToast(t('labOrders:success.created'));
+
+        if (pendingFiles.length > 0) {
+          let anyUploadFailed = false;
+          for (const file of pendingFiles) {
+            try {
+              const fd = new FormData();
+              fd.append('file', file);
+              await labOrderService.uploadAttachment(created.id, fd);
+            } catch {
+              anyUploadFailed = true;
+            }
+          }
+          if (anyUploadFailed) {
+            showToast(t('labOrders:errors.partialUploadFailure'), 'error');
+          }
+        }
       }
       onSaved();
     } catch (err: any) {
@@ -645,6 +666,42 @@ function LabOrderFormModal({
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300"
               />
             </div>
+
+            {!isEdit && (
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('labOrders:attachments.title')}</label>
+                <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <Paperclip className="w-3.5 h-3.5" />
+                  {t('labOrders:attachments.upload')}
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={e => {
+                      const files = Array.from(e.target.files ?? []);
+                      setPendingFiles(prev => [...prev, ...files]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {pendingFiles.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {pendingFiles.map((file, idx) => (
+                      <li key={`${file.name}-${idx}`} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-700/40 text-gray-600 dark:text-gray-300">
+                        <span className="truncate">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPendingFiles(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-gray-400 hover:text-red-500 flex-shrink-0 ml-2"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -684,6 +741,23 @@ function LabOrderDetailModal({
   const { t } = useTranslation(['labOrders', 'common']);
   const { formatDate, formatCurrency } = useClinicPreferences();
   const [uploading, setUploading] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<any | null>(null);
+
+  const handleDownloadAttachment = async (att: any) => {
+    try {
+      const response = await labOrderService.downloadAttachment(order.id, att.id);
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = att.originalName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast(t('labOrders:errors.actionFailed'), 'error');
+    }
+  };
 
   const handleUpload = async (file: File) => {
     setUploading(true);
@@ -764,12 +838,25 @@ function LabOrderDetailModal({
             <div className="space-y-1.5">
               {(order.attachments ?? []).map((att: any) => (
                 <div key={att.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/40">
-                  <span className="truncate text-gray-700 dark:text-gray-300">{att.originalName}</span>
-                  {canManage && (
-                    <button onClick={() => handleDeleteAttachment(att.id)} className="text-gray-400 hover:text-red-500">
-                      <Trash2 className="w-3.5 h-3.5" />
+                  <button
+                    onClick={() => setPreviewAttachment(att)}
+                    className="truncate text-left text-gray-700 dark:text-gray-300 hover:text-primary-600 hover:underline"
+                  >
+                    {att.originalName}
+                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0 pl-2">
+                    <button onClick={() => setPreviewAttachment(att)} className="text-gray-400 hover:text-primary-600" title={t('labOrders:attachments.view')}>
+                      <Eye className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                    <button onClick={() => handleDownloadAttachment(att)} className="text-gray-400 hover:text-primary-600" title={t('common:download')}>
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    {canManage && (
+                      <button onClick={() => handleDeleteAttachment(att.id)} className="text-gray-400 hover:text-red-500" title={t('common:delete')}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
               {(order.attachments ?? []).length === 0 && (
@@ -809,6 +896,22 @@ function LabOrderDetailModal({
           </div>
         </div>
       </div>
+
+      {previewAttachment && (
+        <FilePreviewModal
+          fileName={previewAttachment.originalName}
+          mimeType={previewAttachment.mimeType}
+          loadPreviewUrl={() => labOrderService.loadPreviewObjectUrl(order.id, previewAttachment.id)}
+          onDownload={() => handleDownloadAttachment(previewAttachment)}
+          onOpenInNewTab={async () => {
+            const url = isInlinePreviewable(previewAttachment.mimeType)
+              ? await labOrderService.loadPreviewObjectUrl(order.id, previewAttachment.id)
+              : await labOrderService.loadDownloadObjectUrl(order.id, previewAttachment.id);
+            window.open(url, '_blank');
+          }}
+          onClose={() => setPreviewAttachment(null)}
+        />
+      )}
     </div>
   );
 }

@@ -91,6 +91,9 @@
   "errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
   "unassigned": "Non assigné",
   "files": "Fichiers",
+  "download": "Télécharger",
+  "openInNewTab": "Ouvrir dans un nouvel onglet",
+  "previewUnsupported": "Ce type de fichier ne peut pas être prévisualisé dans le navigateur. Vous pouvez le télécharger.",
   "dental": "Schéma dentaire",
   "roles": {
     "admin": "Administrateur",
