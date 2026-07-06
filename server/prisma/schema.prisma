@@ -324,6 +324,12 @@ model Appointment {
   recallActions    RecallAction[]
   sourceRequests   AppointmentRequest[] @relation("ConvertedAppointment")
   smsMessages      SmsMessage[]
+
+  // Postgres'te Prisma FK kolonlarına otomatik indeks koymaz; takvim ve
+  // uygunluk (available-slots) sorguları bu indeksler olmadan tablo taraması yapar.
+  @@index([clinicId, startTime])
+  @@index([practitionerId, startTime])
+  @@index([patientId])
 }
 
 model AppointmentRequest {
@@ -654,6 +660,8 @@ model Task {
   updatedAt       DateTime       @updatedAt
 
   recallActions RecallAction[]
+
+  @@index([clinicId, status])
 }
 
 model Payment {
@@ -678,6 +686,9 @@ model Payment {
   installment          PaymentPlanInstallment?
   practitionerEarnings PractitionerEarning[]
   recallCandidates     RecallCandidate[]
+
+  @@index([clinicId, createdAt])
+  @@index([patientId])
 }
 
 model MessageTemplate {
@@ -757,6 +768,12 @@ model SentMessage {
   createdAt            DateTime            @default(now())
 
   recallActions RecallAction[]
+
+  // Reminder job'ın randevu başına dedup kontrolü (clinicId+appointmentId) ve
+  // taksit hatırlatması dedup anahtarı (clinicId+subject) bu indeksleri kullanır.
+  @@index([clinicId, appointmentId, createdAt])
+  @@index([clinicId, subject])
+  @@index([patientId])
 }
 
 model ActivityLog {
@@ -782,6 +799,9 @@ model ActivityLog {
   appointment        Appointment?        @relation(fields: [appointmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   treatmentCase      TreatmentCase?      @relation(fields: [treatmentCaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   insuranceProvision InsuranceProvision? @relation(fields: [insuranceProvisionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinicId, createdAt])
+  @@index([patientId])
 }
 
 model Setting {
