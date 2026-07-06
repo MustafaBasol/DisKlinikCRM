@@ -11,12 +11,12 @@ const LandingFooter = () => {
         <div className="max-w-sm">
           <div className="flex items-center">
             <img
-              src="/assets/brand/noramedi/logo-horizontal-light.svg"
+              src="/assets/brand/noramedi/logo-horizontal-light@2x.png"
               alt={t('brand.name')}
               className="h-8 w-auto dark:hidden"
             />
             <img
-              src="/assets/brand/noramedi/logo-horizontal-dark.svg"
+              src="/assets/brand/noramedi/logo-horizontal-dark@2x.png"
               alt={t('brand.name')}
               className="h-8 w-auto hidden dark:block"
             />
