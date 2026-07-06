@@ -335,7 +335,9 @@ const MainLayoutInner: React.FC = () => {
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [location.pathname, selectedClinicId, user]);
+    // location.pathname bilinçli olarak dependency değil: her sayfa geçişinde
+    // yeniden fetch etmek gereksiz arka plan isteği üretiyor (60 sn interval yeterli)
+  }, [selectedClinicId, user]);
 
   // Fetch pending appointment request count for sidebar badge
   // (only when the role can actually see the Appointment Requests module — avoids 403s)
@@ -356,7 +358,8 @@ const MainLayoutInner: React.FC = () => {
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [location.pathname, selectedClinicId, user]);
+    // location.pathname bilinçli olarak dependency değil (bkz. yukarıdaki not)
+  }, [selectedClinicId, user]);
 
   // Close sidebar when navigating on mobile
   const handleNavClick = () => {

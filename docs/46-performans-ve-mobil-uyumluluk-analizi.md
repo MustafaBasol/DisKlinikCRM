@@ -109,6 +109,13 @@ riski.
 **Çözüm:** Offset veya cursor pagination + üst sınır; frontend'de sayfalı liste ya da
 sanal (virtualized) liste. Arama zaten server-side olduğundan geçiş düşük riskli.
 
+**Durum:** ✅ Çözüldü (`perf/speed-quick-wins`). Backend artık `limit` (1-500'e
+sıkıştırılır) ve `offset` parametrelerini tanıyor — frontend'in zaten gönderdiği ama
+sunucunun yok saydığı `limit` değerleri (GlobalSearch 5, PaymentForm/TaskForm 20,
+LabOrders 200) artık gerçekten uygulanıyor. Hastalar sayfası 200'lük partilerle
+"Daha fazla yükle" düğmesiyle yüklüyor. `limit` göndermeyen eski çağrılar geriye
+dönük uyumlu şekilde tam liste almaya devam ediyor (picker'lar için ayrı iş).
+
 ### B2. Dashboard stats her istekte sıfırdan hesaplanıyor
 
 `server/src/routes/dashboard.ts:33-256`: dashboard açılışında ~13 count/aggregate
@@ -119,6 +126,12 @@ her klinik değişimi tam yeniden hesap.
 
 **Çözüm:** (1) Grafik verilerini Prisma `groupBy`/SQL tarih agregasyonuna çevir;
 (2) klinik başına 30-60 sn TTL'li bellek-içi cache (mevcut auth cache deseni gibi).
+
+**Durum:** ✅ Çözüldü (`perf/speed-quick-wins`). Aylık hizmet dağılımı tam satır
+çekmek yerine `appointment.groupBy(appointmentTypeId)` ile DB'de sayılıyor; grafik
+verisinin tamamı klinik kapsamı başına 60 sn TTL'li bellek-içi cache arkasına alındı
+(`getChartDataCached`). Haftalık trend (≤7 gün, tek kolon) küçük olduğu için olduğu
+gibi bırakıldı; 6 aylık ödeme satırları cache sayesinde dakikada bir kez taşınıyor.
 
 ### B3. `GET /api/notifications` GET içinde yazıyor ve 60 sn'de bir poll ediliyor
 
@@ -139,6 +152,10 @@ birlikte gezinme başına 3 arka plan isteği.
 
 **Çözüm:** `location.pathname`'i dependency'den çıkar; yalnızca interval + klinik
 değişiminde fetch et.
+
+**Durum:** ✅ Çözüldü (`perf/speed-quick-wins`). İki badge effect'inden
+`location.pathname` dependency'si kaldırıldı; sayaçlar yalnızca mount, klinik/kullanıcı
+değişimi ve 60 sn interval ile yenileniyor.
 
 ### B5. Randevu listesi include'ları şişkin
 
@@ -240,12 +257,12 @@ yoğun yatay kaydırma gerektiriyor.
 | **P0** | ✅ A1 favicon değişimi (`perf/page-load-assets`) | ~30 dk | Her sayfa yüklemesinden 1.2 MB kalkar |
 | **P0** | ✅ A2 marka SVG optimizasyonu (`perf/page-load-assets`) | saatler | Logo kullanan sayfalarda MB'larca kazanç |
 | **P0** | C1 form grid toplu düzeltmesi (`grid-cols-1 sm:grid-cols-2`) | saatler | En görünür mobil kusur kapanır |
-| **P1** | B1 patients pagination | 1 gün | Büyük klinikte Hastalar sayfası sabit hızda |
-| **P1** | B2 dashboard `groupBy` + kısa TTL cache | 1-2 gün | Dashboard açılışı ve DB yükü düşer |
+| **P1** | ✅ B1 patients pagination (`perf/speed-quick-wins`) | 1 gün | Büyük klinikte Hastalar sayfası sabit hızda |
+| **P1** | ✅ B2 dashboard `groupBy` + kısa TTL cache (`perf/speed-quick-wins`) | 1-2 gün | Dashboard açılışı ve DB yükü düşer |
 | **P1** | A3 bundle analizi + 662 KB chunk'ı küçültme | 0.5-1 gün | İlk yükleme JS'i ~%30 azalır |
 | **P1** | C2-C3 bağlantı sayfaları + `p-4 sm:p-6` | 0.5-1 gün | Mobil cila |
 | **P2** | B3 notifications compute'u worker'a taşıma | 1 gün | Sürekli arka plan DB yükü kalkar |
-| **P2** | B4 badge refetch düzeltmesi | ~1 saat | Gezinme başına 3 istek kalkar |
+| **P2** | ✅ B4 badge refetch düzeltmesi (`perf/speed-quick-wins`) | ~1 saat | Gezinme başına 3 istek kalkar |
 | **P2** | B5 randevu listesi dar select | ~2 saat | Takvim/liste payload'u küçülür |
 | **P2** | B6 referans endpoint'lere Cache-Control | ~yarım gün | Tekrarlı turlar kalkar |
 | **P2** | A4 font self-host, A5 react-query, C4-C6 | parça parça | Algılanan hız + mobil UX |

@@ -6,6 +6,24 @@ import { getClinicOperatingPreferences } from '../services/clinicOperatingPrefer
 
 const router = express.Router();
 
+// Grafik verileri klinik başına kısa TTL ile cache'lenir: dashboard her mount'ta
+// tam satır taraması yapmasın diye (auth cache'indeki desenle aynı yaklaşım).
+const CHART_CACHE_TTL_MS = 60_000;
+const chartCache = new Map<string, { data: any; expires: number }>();
+
+async function getChartDataCached(clinicIdWhere: Record<string, any>, today: Date, tomorrow: Date, firstDayOfMonth: Date, clinicId: string) {
+  const key = `${JSON.stringify(clinicIdWhere)}|${clinicId}`;
+  const cached = chartCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.data;
+
+  const data = await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth, clinicId);
+  if (chartCache.size > 1000) {
+    for (const [k, v] of chartCache) { if (v.expires <= Date.now()) chartCache.delete(k); }
+  }
+  chartCache.set(key, { data, expires: Date.now() + CHART_CACHE_TTL_MS });
+  return data;
+}
+
 // GET /api/dashboard/stats
 router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const { normalizedRole, id: userId } = req.user!;
@@ -247,7 +265,7 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
       alerts,
       activities,
       doctorExtras,
-      charts: normalizedRole !== 'DENTIST' ? await buildChartData(prisma, clinicIdWhere, today, tomorrow, firstDayOfMonth, chartPreferenceClinicId) : null,
+      charts: normalizedRole !== 'DENTIST' ? await getChartDataCached(clinicIdWhere, today, tomorrow, firstDayOfMonth, chartPreferenceClinicId) : null,
     });
   } catch (error: any) {
     console.error('[dashboard] stats error:', error?.message ?? error);
@@ -324,17 +342,30 @@ async function buildChartData(prisma: any, clinicIdWhere: Record<string, any>, t
   }));
 
   // ── 2) Bu ay hizmet bazlı randevu dağılımı ────────────────────────
-  const monthAppts = await prisma.appointment.findMany({
+  // groupBy: satır başına tam kayıt çekmek yerine DB'de tip bazında sayım
+  const typeCounts = await prisma.appointment.groupBy({
+    by: ['appointmentTypeId'],
     where: { ...clinicIdWhere, startTime: { gte: firstDayOfMonth }, status: { not: 'cancelled' } },
-    select: { appointmentType: { select: { name: true, color: true } } },
+    _count: { _all: true },
   });
 
+  const typeIds = typeCounts.map((t: any) => t.appointmentTypeId).filter(Boolean);
+  const types = typeIds.length
+    ? await prisma.appointmentType.findMany({
+        where: { id: { in: typeIds } },
+        select: { id: true, name: true, color: true },
+      })
+    : [];
+  const typeMeta: Record<string, { name: string; color: string | null }> = {};
+  types.forEach((t: any) => { typeMeta[t.id] = { name: t.name, color: t.color }; });
+
+  // Aynı isimli tipler (ör. şubeler arası) eski davranışla uyumlu şekilde birleştirilir
   const typeMap: Record<string, { name: string; color: string; value: number }> = {};
-  monthAppts.forEach((a: { appointmentType: { name: string; color: string | null } | null }) => {
-    if (!a.appointmentType) return; // null-safe: data inconsistency guard
-    const key = a.appointmentType.name;
-    if (!typeMap[key]) typeMap[key] = { name: key, color: a.appointmentType.color || '#6366f1', value: 0 };
-    typeMap[key].value++;
+  typeCounts.forEach((tc: any) => {
+    const meta = typeMeta[tc.appointmentTypeId];
+    if (!meta) return; // null-safe: data inconsistency guard
+    if (!typeMap[meta.name]) typeMap[meta.name] = { name: meta.name, color: meta.color || '#6366f1', value: 0 };
+    typeMap[meta.name].value += tc._count._all;
   });
   const appointmentsByType = Object.values(typeMap).sort((a, b) => b.value - a.value).slice(0, 6);
 
