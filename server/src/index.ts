@@ -57,6 +57,7 @@ import publicClinicKvkkRoutes from './routes/publicClinicKvkk.js';
 import smsRoutes from './routes/sms.js';
 import laboratoriesRoutes from './routes/laboratories.js';
 import labOrdersRoutes from './routes/labOrders.js';
+import imagingRoutes from './routes/imaging.js';
 import { startBackgroundJobs } from './jobs/startBackgroundJobs.js';
 import { closeRedis } from './utils/redis.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
@@ -230,6 +231,7 @@ app.use('/api', clinicLegalProfileRoutes);
 app.use('/api', smsRoutes);
 app.use('/api', laboratoriesRoutes);
 app.use('/api', labOrdersRoutes);
+app.use('/api', imagingRoutes);
 
 // Global error handler — without this, unhandled errors fall through to
 // Express's default handler, which writes the stack trace into the response

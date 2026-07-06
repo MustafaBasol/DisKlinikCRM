@@ -13,6 +13,12 @@ function hasMagic(bytes: Buffer, magic: number[]) {
 }
 
 export function detectMimeFromBuffer(buffer: Buffer): string | null {
+  // DICOM Part-10: 128 baytlık preamble + offset 128'de 'DICM' işareti.
+  // Bilinçli olarak yalnızca Part-10 kabul edilir; preamble'sız (raw) DICOM
+  // ve derin DICOM ayrıştırma gelecek fazların işidir (görüntüleme köprüsü).
+  if (buffer.length >= 132 && buffer.subarray(128, 132).toString('ascii') === 'DICM') {
+    return 'application/dicom';
+  }
   const bytes = buffer.subarray(0, 16);
   if (hasMagic(bytes, [0xff, 0xd8, 0xff])) return 'image/jpeg';
   if (hasMagic(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
