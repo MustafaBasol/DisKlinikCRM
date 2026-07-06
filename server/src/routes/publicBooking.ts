@@ -12,7 +12,7 @@ import { createRateLimiter } from '../utils/helpers.js';
 const router = express.Router();
 
 // Unauthenticated write endpoint — throttle per IP to limit spam requests.
-const bookingSubmitLimiter = createRateLimiter(10, 15 * 60 * 1000);
+const bookingSubmitLimiter = createRateLimiter(10, 15 * 60 * 1000, 'public-booking');
 
 // GET /api/public/booking/:clinicId — clinic info + active services + active doctors
 router.get('/booking/:clinicId', async (req: Request, res: Response) => {
@@ -90,10 +90,10 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
   const clinicId = req.params.clinicId as string;
 
   const clientIp = req.ip || 'unknown';
-  if (!bookingSubmitLimiter.check(clientIp)) {
+  if (!(await bookingSubmitLimiter.check(clientIp))) {
     return res.status(429).json({ error: 'Too many requests. Please try again later.' });
   }
-  bookingSubmitLimiter.record(clientIp);
+  await bookingSubmitLimiter.record(clientIp);
 
   const {
     patientName,

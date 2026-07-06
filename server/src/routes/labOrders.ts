@@ -1,8 +1,8 @@
 import express, { Response, NextFunction } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 import prisma from '../db.js';
+import { isAllowedFileSignature } from '../utils/fileSignature.js';
+import { buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
@@ -278,17 +278,11 @@ router.delete('/lab-orders/:id', authorize([...LAB_ORDER_DELETE_ROLES]), async (
 });
 
 // ── Attachments ───────────────────────────────────────────────────────────
-// Same storage/MIME-verification approach as attachments.ts (patient attachments),
-// scoped under uploads/{clinicId}/ and re-checked by magic-byte signature.
-
-const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(BASE_UPLOAD_DIR)) fs.mkdirSync(BASE_UPLOAD_DIR, { recursive: true });
-
-// req.user.clinicId is only the uploader's *default* clinic, not necessarily the lab order's
-// clinic (a user can have access to multiple clinics). Files are written here first, then moved
-// into uploads/{order.clinicId}/ once the order has been loaded and authorized below.
-const TEMP_UPLOAD_DIR = path.join(BASE_UPLOAD_DIR, '_tmp');
-if (!fs.existsSync(TEMP_UPLOAD_DIR)) fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
+// Same MIME-verification approach as attachments.ts (patient attachments):
+// magic-byte signature check on the in-memory buffer, then handed to
+// services/fileStorage.ts (yerel disk veya S3 — docs/45 Faz 3 #11). The file
+// only ever lands under the *order's* clinic key, never req.user.clinicId
+// (the uploader's default clinic is not necessarily the order's clinic).
 
 const ALLOWED_MIME = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -303,39 +297,8 @@ const ALLOWED_EXTENSIONS_BY_MIME: Record<string, string[]> = {
   'application/pdf': ['.pdf'],
 };
 
-function hasMagic(bytes: Buffer, magic: number[]) {
-  return magic.every((value, index) => bytes[index] === value);
-}
-
-function detectMimeFromSignature(filePath: string): string | null {
-  const bytes = fs.readFileSync(filePath).subarray(0, 16);
-  if (hasMagic(bytes, [0xff, 0xd8, 0xff])) return 'image/jpeg';
-  if (hasMagic(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
-  if (bytes.subarray(0, 6).toString('ascii') === 'GIF87a' || bytes.subarray(0, 6).toString('ascii') === 'GIF89a') return 'image/gif';
-  if (bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
-  if (bytes.subarray(0, 5).toString('ascii') === '%PDF-') return 'application/pdf';
-  return null;
-}
-
-function isAllowedFileSignature(filePath: string, declaredMime: string, originalName: string) {
-  const ext = path.extname(originalName).toLowerCase();
-  const allowedExts = ALLOWED_EXTENSIONS_BY_MIME[declaredMime] ?? [];
-  if (!allowedExts.includes(ext)) return false;
-  return detectMimeFromSignature(filePath) === declaredMime;
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, TEMP_UPLOAD_DIR);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) cb(null, true);
@@ -369,41 +332,36 @@ router.post(
       return res.status(400).json({ error: 'Dosya alınamadı', detail: 'İstek Content-Type başlığında boundary eksik olabilir' });
     }
 
+    let storageKey: string | null = null;
     try {
       const accessibleIds = await getAccessibleClinicIds(req.user!);
       if (accessibleIds.length === 0) {
-        fs.unlinkSync(req.file.path);
         return res.status(403).json({ error: 'No clinic access' });
       }
 
       const order = await prisma.labWorkOrder.findFirst({ where: { id, clinicId: { in: accessibleIds }, deletedAt: null } });
       if (!order) {
-        fs.unlinkSync(req.file.path);
         return res.status(404).json({ error: 'Lab work order not found' });
       }
 
-      // Move out of the shared temp dir into the order's actual clinic directory now that it's
-      // been authorized — never trust req.user.clinicId for where the file ends up on disk.
-      const clinicDir = path.join(BASE_UPLOAD_DIR, order.clinicId);
-      fs.mkdirSync(clinicDir, { recursive: true });
-      const finalPath = path.join(clinicDir, req.file.filename);
-      fs.renameSync(req.file.path, finalPath);
-      req.file.path = finalPath;
-
-      if (!isAllowedFileSignature(req.file.path, req.file.mimetype, req.file.originalname)) {
-        fs.unlinkSync(req.file.path);
+      if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {
         return res.status(400).json({ error: 'Dosya içeriği doğrulanamadı', detail: 'Dosya uzantısı, MIME tipi veya dosya imzası desteklenen türlerle eşleşmiyor' });
       }
+
+      // Depolama anahtarı order'ın gerçek kliniğinden türetilir — dosyanın
+      // nereye yazılacağı konusunda req.user.clinicId'ye asla güvenilmez.
+      storageKey = buildStorageKey(order.clinicId, req.file.originalname);
+      await saveFile(storageKey, req.file.buffer, req.file.mimetype);
 
       const attachment = await prisma.labOrderAttachment.create({
         data: {
           clinicId: order.clinicId,
           labWorkOrderId: id,
-          fileName: req.file.filename,
+          fileName: fileNameFromKey(storageKey),
           originalName: req.file.originalname,
           fileSize: req.file.size,
           mimeType: req.file.mimetype,
-          filePath: req.file.path,
+          filePath: storageKey,
           uploadedById: req.user!.id,
         },
         include: { uploadedBy: { select: { firstName: true, lastName: true } } },
@@ -416,7 +374,8 @@ router.post(
 
       res.status(201).json(attachment);
     } catch {
-      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      // Depoya yazıldıktan sonra DB kaydı başarısız olduysa dosyayı geri sil.
+      if (storageKey) await deleteFile(storageKey).catch(() => {});
       res.status(500).json({ error: 'Failed to upload attachment' });
     }
   },
@@ -458,11 +417,17 @@ router.get('/lab-orders/:id/attachments/:attId/download', authorize([...LAB_ORDE
 
     const attachment = await prisma.labOrderAttachment.findFirst({ where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId } });
     if (!attachment) return res.status(404).json({ error: 'Not found' });
-    if (!fs.existsSync(attachment.filePath)) return res.status(404).json({ error: 'File missing on disk' });
+
+    const stream = await openFileStream(attachment.filePath);
+    if (!stream) return res.status(404).json({ error: 'File missing in storage' });
 
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.originalName)}"`);
     res.setHeader('Content-Type', attachment.mimeType);
-    fs.createReadStream(attachment.filePath).pipe(res as any);
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to download attachment' });
+      else res.destroy();
+    });
+    stream.pipe(res as any);
   } catch {
     res.status(500).json({ error: 'Failed to download attachment' });
   }
@@ -484,7 +449,7 @@ router.delete('/lab-orders/:id/attachments/:attId', authorize([...LAB_ORDER_MANA
     if (!attachment) return res.status(404).json({ error: 'Not found' });
 
     await prisma.labOrderAttachment.delete({ where: { id: attId } });
-    if (fs.existsSync(attachment.filePath)) fs.unlinkSync(attachment.filePath);
+    await deleteFile(attachment.filePath).catch(() => {});
 
     await logActivity({
       clinicId: order.clinicId, userId: req.user!.id, entityType: 'lab_work_order', entityId: id, patientId: order.patientId,

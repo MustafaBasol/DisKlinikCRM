@@ -2543,7 +2543,7 @@ export const processMetaWhatsAppIncomingMessage = async (
   if (!args.clinicId?.trim()) return { status: 'skipped', reason: 'clinic_unresolved' };
 
   // Rate limiting: 8 messages per 60 seconds per sender per connection.
-  if (!checkInboundRateLimit('meta_whatsapp', args.connectionId, args.phone)) {
+  if (!(await checkInboundRateLimit('meta_whatsapp', args.connectionId, args.phone))) {
     return { status: 'skipped', reason: 'empty_text' };
   }
 

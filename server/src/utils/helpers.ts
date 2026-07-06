@@ -1,5 +1,6 @@
 import { AuthRequest } from '../middleware/auth.js';
 import prisma from '../db.js';
+import { createCounterStore } from './counterStore.js';
 
 // --- Generic Helpers ---
 
@@ -118,152 +119,60 @@ export const validatePassword = (password: string): { valid: boolean; errors: st
 };
 
 // --- Security: Generic Rate Limiter Factory ---
-// NOTE: state is in-memory — it resets on process restart and is NOT shared
-// across instances. Move to a shared store (Redis/DB counter) before running
-// multiple replicas behind a load balancer.
+// Sayaçlar paylaşımlı store'da tutulur (REDIS_URL varsa Redis, yoksa bellek —
+// bkz. utils/counterStore.ts). Redis ile birden fazla replika aynı limitleri
+// paylaşır (docs/45 Faz 3 #9); bu yüzden API async'tir.
 
 export interface RateLimiter {
-  check: (key: string) => boolean;
-  record: (key: string) => void;
-  reset: (key: string) => void;
+  check: (key: string) => Promise<boolean>;
+  record: (key: string) => Promise<void>;
+  reset: (key: string) => Promise<void>;
 }
 
-// Süresi dolan girdiler yalnızca aynı key tekrar okunursa siliniyordu; tek
-// seferlik key'ler (IP, e-posta) Map'te sonsuza dek kalır ve bellek sızıntısına
-// dönerdi (docs/45 orta-8). Periyodik süpürme ile üst sınır konur.
-const sweepExpiredEntries = (
-  map: Map<string, { count: number; timestamp: number }>,
-  windowMs: number,
-): void => {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [key, attempt] of map) {
-      if (now - attempt.timestamp > windowMs) map.delete(key);
-    }
-  }, Math.max(windowMs, 60_000)).unref();
-};
-
-export const createRateLimiter = (max: number, windowMs: number): RateLimiter => {
-  const attempts = new Map<string, { count: number; timestamp: number }>();
-  sweepExpiredEntries(attempts, windowMs);
+// namespace: Redis key öneki — limiter başına sabit ve benzersiz olmalı.
+export const createRateLimiter = (max: number, windowMs: number, namespace: string): RateLimiter => {
+  const store = createCounterStore(namespace);
   return {
-    check(key: string): boolean {
-      const now = Date.now();
-      const attempt = attempts.get(key);
-      if (!attempt) return true;
-      if (now - attempt.timestamp > windowMs) {
-        attempts.delete(key);
-        return true;
-      }
-      return attempt.count < max;
+    async check(key: string): Promise<boolean> {
+      return (await store.get(key, windowMs)) < max;
     },
-    record(key: string): void {
-      const now = Date.now();
-      const attempt = attempts.get(key);
-      if (!attempt || now - attempt.timestamp > windowMs) {
-        attempts.set(key, { count: 1, timestamp: now });
-      } else {
-        attempt.count++;
-      }
+    async record(key: string): Promise<void> {
+      await store.increment(key, windowMs);
     },
-    reset(key: string): void {
-      attempts.delete(key);
+    async reset(key: string): Promise<void> {
+      await store.reset(key);
     },
   };
 };
 
 // --- Security: Rate Limiting (Login Attempts) ---
+// Max 5 attempts per email per 15 minutes
 
-const loginAttempts = new Map<string, { count: number; timestamp: number }>();
-sweepExpiredEntries(loginAttempts, 15 * 60 * 1000);
+const loginLimiter = createRateLimiter(5, 15 * 60 * 1000, 'login-email');
 
-export const checkLoginAttempt = (email: string): boolean => {
-  const now = Date.now();
-  const attempt = loginAttempts.get(email);
-  if (!attempt) return true;
-  if (now - attempt.timestamp > 15 * 60 * 1000) {
-    loginAttempts.delete(email);
-    return true;
-  }
-  return attempt.count < 5;
-};
-
-export const recordLoginAttempt = (email: string): void => {
-  const now = Date.now();
-  const attempt = loginAttempts.get(email);
-  if (!attempt) {
-    loginAttempts.set(email, { count: 1, timestamp: now });
-  } else if (now - attempt.timestamp > 15 * 60 * 1000) {
-    loginAttempts.set(email, { count: 1, timestamp: now });
-  } else {
-    attempt.count++;
-  }
-};
-
-export const resetLoginAttempts = (email: string): void => {
-  loginAttempts.delete(email);
-};
+export const checkLoginAttempt = (email: string): Promise<boolean> => loginLimiter.check(email);
+export const recordLoginAttempt = (email: string): Promise<void> => loginLimiter.record(email);
+export const resetLoginAttempts = (email: string): Promise<void> => loginLimiter.reset(email);
 
 // --- Security: Rate Limiting (Forgot Password) ---
 // Max 3 attempts per email per 60 minutes
 
-const forgotPasswordAttempts = new Map<string, { count: number; timestamp: number }>();
-const FORGOT_PASSWORD_MAX = 3;
-const FORGOT_PASSWORD_WINDOW_MS = 60 * 60 * 1000;
-sweepExpiredEntries(forgotPasswordAttempts, FORGOT_PASSWORD_WINDOW_MS);
+const forgotPasswordLimiter = createRateLimiter(3, 60 * 60 * 1000, 'forgot-password');
 
-export const checkForgotPasswordAttempt = (key: string): boolean => {
-  const now = Date.now();
-  const attempt = forgotPasswordAttempts.get(key);
-  if (!attempt) return true;
-  if (now - attempt.timestamp > FORGOT_PASSWORD_WINDOW_MS) {
-    forgotPasswordAttempts.delete(key);
-    return true;
-  }
-  return attempt.count < FORGOT_PASSWORD_MAX;
-};
-
-export const recordForgotPasswordAttempt = (key: string): void => {
-  const now = Date.now();
-  const attempt = forgotPasswordAttempts.get(key);
-  if (!attempt) {
-    forgotPasswordAttempts.set(key, { count: 1, timestamp: now });
-  } else if (now - attempt.timestamp > FORGOT_PASSWORD_WINDOW_MS) {
-    forgotPasswordAttempts.set(key, { count: 1, timestamp: now });
-  } else {
-    attempt.count++;
-  }
-};
+export const checkForgotPasswordAttempt = (key: string): Promise<boolean> =>
+  forgotPasswordLimiter.check(key);
+export const recordForgotPasswordAttempt = (key: string): Promise<void> =>
+  forgotPasswordLimiter.record(key);
 
 // --- Security: Rate Limiting (Resend Email Verification) ---
 // Max 3 attempts per email/IP per 60 minutes
 
-const resendVerificationAttempts = new Map<string, { count: number; timestamp: number }>();
-const RESEND_VERIFICATION_MAX = 3;
-const RESEND_VERIFICATION_WINDOW_MS = 60 * 60 * 1000;
+const resendVerificationLimiter = createRateLimiter(3, 60 * 60 * 1000, 'resend-verification');
 
-export const checkResendVerificationAttempt = (key: string): boolean => {
-  const now = Date.now();
-  const attempt = resendVerificationAttempts.get(key);
-  if (!attempt) return true;
-  if (now - attempt.timestamp > RESEND_VERIFICATION_WINDOW_MS) {
-    resendVerificationAttempts.delete(key);
-    return true;
-  }
-  return attempt.count < RESEND_VERIFICATION_MAX;
-};
-
-export const recordResendVerificationAttempt = (key: string): void => {
-  const now = Date.now();
-  const attempt = resendVerificationAttempts.get(key);
-  if (!attempt) {
-    resendVerificationAttempts.set(key, { count: 1, timestamp: now });
-  } else if (now - attempt.timestamp > RESEND_VERIFICATION_WINDOW_MS) {
-    resendVerificationAttempts.set(key, { count: 1, timestamp: now });
-  } else {
-    attempt.count++;
-  }
-};
+export const checkResendVerificationAttempt = (key: string): Promise<boolean> =>
+  resendVerificationLimiter.check(key);
+export const recordResendVerificationAttempt = (key: string): Promise<void> =>
+  resendVerificationLimiter.record(key);
 
 // --- Practitioner Availability Check ---
 

@@ -93,17 +93,17 @@ await test('backfill sets emailVerifiedAt to a non-null date', () => {
 
 // ── Resend rate limiting ──────────────────────────────────────────────────────
 
-await test('resend verification: first attempt allowed', () => {
+await test('resend verification: first attempt allowed', async () => {
   const key = `test:resend:${Date.now()}`;
-  assert.ok(checkResendVerificationAttempt(key));
+  assert.ok(await checkResendVerificationAttempt(key));
 });
 
-await test('resend verification: exceeds max attempts is blocked', () => {
+await test('resend verification: exceeds max attempts is blocked', async () => {
   const key = `test:resend:exceed:${Date.now()}`;
   for (let i = 0; i < 3; i++) {
-    recordResendVerificationAttempt(key);
+    await recordResendVerificationAttempt(key);
   }
-  assert.ok(!checkResendVerificationAttempt(key));
+  assert.ok(!(await checkResendVerificationAttempt(key)));
 });
 
 // ── Login check order: wrong password must not expose unverified status ───────

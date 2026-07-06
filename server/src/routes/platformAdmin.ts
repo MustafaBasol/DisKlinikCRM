@@ -27,8 +27,8 @@ const router = express.Router();
 
 // Brute-force protection for the most privileged credential in the system:
 // 5 attempts per email and 20 per IP, both over 15 minutes.
-const platformLoginEmailLimiter = createRateLimiter(5, 15 * 60 * 1000);
-const platformLoginIpLimiter = createRateLimiter(20, 15 * 60 * 1000);
+const platformLoginEmailLimiter = createRateLimiter(5, 15 * 60 * 1000, 'platform-login-email');
+const platformLoginIpLimiter = createRateLimiter(20, 15 * 60 * 1000, 'platform-login-ip');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -53,22 +53,22 @@ router.post('/auth/login', async (req, res) => {
   const normalizedEmail = String(email).trim().toLowerCase();
   const clientIp = req.ip || 'unknown';
 
-  if (!platformLoginEmailLimiter.check(normalizedEmail) || !platformLoginIpLimiter.check(clientIp)) {
+  if (!(await platformLoginEmailLimiter.check(normalizedEmail)) || !(await platformLoginIpLimiter.check(clientIp))) {
     return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
   }
 
   try {
     const admin = await prisma.platformAdmin.findUnique({ where: { email } });
     if (!admin || !admin.isActive) {
-      platformLoginEmailLimiter.record(normalizedEmail);
-      platformLoginIpLimiter.record(clientIp);
+      await platformLoginEmailLimiter.record(normalizedEmail);
+      await platformLoginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const valid = await bcrypt.compare(password, admin.passwordHash);
     if (!valid) {
-      platformLoginEmailLimiter.record(normalizedEmail);
-      platformLoginIpLimiter.record(clientIp);
+      await platformLoginEmailLimiter.record(normalizedEmail);
+      await platformLoginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -81,13 +81,13 @@ router.post('/auth/login', async (req, res) => {
       }
       const totpSecret = decryptSecretTagged(admin.totpSecretEncrypted);
       if (!totpSecret || !verifyTotp(totpSecret, totpCode)) {
-        platformLoginEmailLimiter.record(normalizedEmail);
-        platformLoginIpLimiter.record(clientIp);
+        await platformLoginEmailLimiter.record(normalizedEmail);
+        await platformLoginIpLimiter.record(clientIp);
         return res.status(401).json({ error: 'Invalid MFA code', code: 'MFA_INVALID' });
       }
     }
 
-    platformLoginEmailLimiter.reset(normalizedEmail);
+    await platformLoginEmailLimiter.reset(normalizedEmail);
 
     const sessionId = createSessionId();
     const token = generatePlatformToken({

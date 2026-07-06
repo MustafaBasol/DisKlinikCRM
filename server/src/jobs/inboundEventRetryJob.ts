@@ -24,6 +24,7 @@ import {
   markInboundEventFailed,
   markInboundEventProcessed,
 } from '../services/messagingInboundIdempotency.js';
+import { withJobLock } from '../utils/jobLock.js';
 
 const MAX_ATTEMPTS = 3;
 const RETRY_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 saat: bayat AI yanıtı göndermeyi önler
@@ -124,7 +125,9 @@ export function startInboundEventRetryJob(): void {
       return;
     }
     retryJobRunning = true;
-    runInboundEventRetryJob()
+    // Paylaşımlı kilit: birden fazla replika/worker aynı failed event'leri
+    // aynı anda yeniden işlemesin (docs/45 Faz 3 #9-10).
+    withJobLock('inbound-event-retry', 10 * 60 * 1000, runInboundEventRetryJob)
       .catch(error => console.error('[inbound-retry] Job run failed:', error))
       .finally(() => {
         retryJobRunning = false;

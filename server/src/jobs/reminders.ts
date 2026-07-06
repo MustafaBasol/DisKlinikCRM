@@ -15,6 +15,8 @@ import { sendProactiveWhatsAppMessage } from '../services/whatsapp/whatsappOutbo
 import { logActivity } from '../utils/activity.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { processScheduledPostTreatmentMessages } from '../services/postTreatmentMessaging.js';
+import { withJobLock } from '../utils/jobLock.js';
+import { mapWithConcurrency } from '../utils/concurrency.js';
 
 type ClinicForReminder = {
   id: string;
@@ -512,12 +514,20 @@ async function runPaymentRemindersForClinic(
   }
 }
 
+// Klinikler arası sınırlı paralellik: tek kliniğin mesajları sıralı kalır ama
+// yüzlerce klinik tek tek beklenmez (docs/45 Faz 3 #10). Limit, WhatsApp API
+// ve DB havuzunu boğmayacak kadar küçük tutulur.
+const CLINIC_CONCURRENCY = (() => {
+  const parsed = parseInt(process.env.REMINDER_CLINIC_CONCURRENCY ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+})();
+
 async function runDailyReminderJob(): Promise<void> {
   console.log('[reminders] Starting notification reminder job...');
 
   const clinics = await prisma.clinic.findMany();
 
-  for (const clinic of clinics) {
+  await mapWithConcurrency(clinics, CLINIC_CONCURRENCY, async (clinic) => {
     try {
       const [preferences, operatingPreferences] = await Promise.all([
         getNotificationPreferences(clinic.id),
@@ -563,7 +573,7 @@ async function runDailyReminderJob(): Promise<void> {
     } catch (clinicErr: any) {
       console.error(`[reminders] Error processing clinic ${clinic.id}: ${clinicErr.message}`);
     }
-  }
+  });
 
   console.log('[reminders] Notification reminder job complete.');
 }
@@ -571,10 +581,13 @@ async function runDailyReminderJob(): Promise<void> {
 // Overlap kilidi: klinik sayısı arttıkça tek koşu 5 dakikayı aşabilir.
 // Kilit olmadan koşular üst üste biner ve dedup kontrolündeki
 // "kontrol et → gönder" yarış penceresi mükerrer hasta mesajına yol açar.
-// Not: process-içi kilittir; birden fazla replika çalıştırılacaksa DB-tabanlı
-// (advisory lock) kilide taşınmalıdır.
+// Süreç-içi bayrak aynı süreçteki tick'leri, withJobLock (JobLock tablosu)
+// ise diğer replikaları/worker'ı engeller (docs/45 Faz 3 #9-10).
 let reminderJobRunning = false;
 let postTreatmentJobRunning = false;
+
+// Lease, beklenen en uzun koşudan büyük olmalı; koşu bitince kilit hemen düşer.
+const REMINDER_LOCK_TTL_MS = 30 * 60 * 1000;
 
 export function startReminderJobs(): void {
   cron.schedule('*/5 * * * *', () => {
@@ -582,7 +595,7 @@ export function startReminderJobs(): void {
       console.warn('[reminders] Previous notification reminder run still in progress, skipping this tick.');
     } else {
       reminderJobRunning = true;
-      runDailyReminderJob()
+      withJobLock('reminders:notification', REMINDER_LOCK_TTL_MS, runDailyReminderJob)
         .catch((err) =>
           console.error('[reminders] Unhandled error in notification reminder job:', err),
         )
@@ -595,7 +608,7 @@ export function startReminderJobs(): void {
       console.warn('[reminders] Previous post-treatment messaging run still in progress, skipping this tick.');
     } else {
       postTreatmentJobRunning = true;
-      processScheduledPostTreatmentMessages()
+      withJobLock('reminders:post-treatment', REMINDER_LOCK_TTL_MS, processScheduledPostTreatmentMessages)
         .catch((err) =>
           console.error('[reminders] Unhandled error in post-treatment messaging job:', err),
         )

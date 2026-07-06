@@ -33,7 +33,7 @@ const router = express.Router();
 
 // IP-keyed login limit alongside the per-email one: without it, spraying one
 // password across many accounts is never throttled.
-const loginIpLimiter = createRateLimiter(20, 15 * 60 * 1000);
+const loginIpLimiter = createRateLimiter(20, 15 * 60 * 1000, 'login-ip');
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -47,7 +47,7 @@ router.post('/login', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (!checkLoginAttempt(normalizedEmail) || !loginIpLimiter.check(clientIp)) {
+    if (!(await checkLoginAttempt(normalizedEmail)) || !(await loginIpLimiter.check(clientIp))) {
       return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
     }
 
@@ -56,8 +56,8 @@ router.post('/login', async (req, res) => {
     });
     if (matchCount > 1) {
       console.warn(`[login] Duplicate email detected (${matchCount} accounts). Blocking login for safety.`);
-      recordLoginAttempt(normalizedEmail);
-      loginIpLimiter.record(clientIp);
+      await recordLoginAttempt(normalizedEmail);
+      await loginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -75,14 +75,14 @@ router.post('/login', async (req, res) => {
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      recordLoginAttempt(normalizedEmail);
-      loginIpLimiter.record(clientIp);
+      await recordLoginAttempt(normalizedEmail);
+      await loginIpLimiter.record(clientIp);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     if (!user.isActive) {
-      recordLoginAttempt(normalizedEmail);
-      loginIpLimiter.record(clientIp);
+      await recordLoginAttempt(normalizedEmail);
+      await loginIpLimiter.record(clientIp);
       return res.status(403).json({ error: 'User account is inactive' });
     }
 
@@ -93,7 +93,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    resetLoginAttempts(normalizedEmail);
+    await resetLoginAttempts(normalizedEmail);
 
     // Gerçek klinik erişim listesini UserClinic tablosundan al
     const allowedClinicIds = user.userClinics.map(uc => uc.clinicId);
@@ -349,12 +349,12 @@ router.post('/forgot-password', async (req, res) => {
   const emailKey = `email:${normalizedEmail}`;
   const ipKey = `ip:${ip}`;
 
-  if (!checkForgotPasswordAttempt(emailKey) || !checkForgotPasswordAttempt(ipKey)) {
+  if (!(await checkForgotPasswordAttempt(emailKey)) || !(await checkForgotPasswordAttempt(ipKey))) {
     return res.json(GENERIC_RESET_RESPONSE);
   }
 
-  recordForgotPasswordAttempt(emailKey);
-  recordForgotPasswordAttempt(ipKey);
+  await recordForgotPasswordAttempt(emailKey);
+  await recordForgotPasswordAttempt(ipKey);
 
   try {
     const user = await prisma.user.findFirst({
@@ -543,12 +543,12 @@ router.post('/resend-verification', async (req, res) => {
   const emailKey = `email:${normalizedEmail}`;
   const ipKey = `ip:${ip}`;
 
-  if (!checkResendVerificationAttempt(emailKey) || !checkResendVerificationAttempt(ipKey)) {
+  if (!(await checkResendVerificationAttempt(emailKey)) || !(await checkResendVerificationAttempt(ipKey))) {
     return res.json(GENERIC_RESEND_RESPONSE);
   }
 
-  recordResendVerificationAttempt(emailKey);
-  recordResendVerificationAttempt(ipKey);
+  await recordResendVerificationAttempt(emailKey);
+  await recordResendVerificationAttempt(ipKey);
 
   try {
     const user = await prisma.user.findFirst({

@@ -2524,7 +2524,7 @@ export const processInstagramIncomingMessage = async (
   }
 
   // Rate limiting: 8 messages per 60 seconds per sender per connection.
-  if (!checkInboundRateLimit('instagram', args.instagramConnectionId, args.externalSenderId)) {
+  if (!(await checkInboundRateLimit('instagram', args.instagramConnectionId, args.externalSenderId))) {
     return { status: 'skipped', reason: 'empty_text' };
   }
 

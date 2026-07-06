@@ -1550,6 +1550,17 @@ model MessagingInboundEvent {
   @@index([status, updatedAt])
 }
 
+/// Cron job'lar için paylaşımlı lease kilidi (docs/45 Faz 3 #9-10).
+/// Birden fazla API/worker replikası çalışırken aynı job'un aynı anda iki kez
+/// koşmasını engeller: lease süresi (lockedUntil) dolmadan başka süreç kilidi
+/// alamaz. Süreç çökerse lease kendiliğinden düşer, yenisi devralır.
+model JobLock {
+  name        String   @id
+  lockedUntil DateTime
+  lockedBy    String
+  updatedAt   DateTime @updatedAt
+}
+
 /// Organization-level Instagram DM connection. One connection can be shared by multiple branches.
 /// Architecture: dedicated InstagramConnection model (Option B) to avoid disrupting WhatsApp.
 model InstagramConnection {

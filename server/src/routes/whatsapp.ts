@@ -3718,7 +3718,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
             }
 
             // Rate limiting: 8 messages per 60 seconds per sender per connection.
-            if (!checkInboundRateLimit('evolution', dbConnection.id, incomingMessage.phone)) {
+            if (!(await checkInboundRateLimit('evolution', dbConnection.id, incomingMessage.phone))) {
               await markInboundEventProcessed(inboundEventId);
               return res.status(200).json({ ignored: true, reason: 'rate_limited' });
             }
