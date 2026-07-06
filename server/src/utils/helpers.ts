@@ -128,8 +128,24 @@ export interface RateLimiter {
   reset: (key: string) => void;
 }
 
+// Süresi dolan girdiler yalnızca aynı key tekrar okunursa siliniyordu; tek
+// seferlik key'ler (IP, e-posta) Map'te sonsuza dek kalır ve bellek sızıntısına
+// dönerdi (docs/45 orta-8). Periyodik süpürme ile üst sınır konur.
+const sweepExpiredEntries = (
+  map: Map<string, { count: number; timestamp: number }>,
+  windowMs: number,
+): void => {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, attempt] of map) {
+      if (now - attempt.timestamp > windowMs) map.delete(key);
+    }
+  }, Math.max(windowMs, 60_000)).unref();
+};
+
 export const createRateLimiter = (max: number, windowMs: number): RateLimiter => {
   const attempts = new Map<string, { count: number; timestamp: number }>();
+  sweepExpiredEntries(attempts, windowMs);
   return {
     check(key: string): boolean {
       const now = Date.now();
@@ -159,6 +175,7 @@ export const createRateLimiter = (max: number, windowMs: number): RateLimiter =>
 // --- Security: Rate Limiting (Login Attempts) ---
 
 const loginAttempts = new Map<string, { count: number; timestamp: number }>();
+sweepExpiredEntries(loginAttempts, 15 * 60 * 1000);
 
 export const checkLoginAttempt = (email: string): boolean => {
   const now = Date.now();
@@ -193,6 +210,7 @@ export const resetLoginAttempts = (email: string): void => {
 const forgotPasswordAttempts = new Map<string, { count: number; timestamp: number }>();
 const FORGOT_PASSWORD_MAX = 3;
 const FORGOT_PASSWORD_WINDOW_MS = 60 * 60 * 1000;
+sweepExpiredEntries(forgotPasswordAttempts, FORGOT_PASSWORD_WINDOW_MS);
 
 export const checkForgotPasswordAttempt = (key: string): boolean => {
   const now = Date.now();

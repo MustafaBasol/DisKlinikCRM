@@ -1535,6 +1535,8 @@ model MessagingInboundEvent {
   eventType              String    @default("message")
   direction              String    @default("inbound")
   status                 String    @default("received")
+  /// Retry job'un kaç kez yeniden işlemeyi denediği (docs/45 Faz 2 #6)
+  attempts               Int       @default(0)
   rawPayload             Json?
   errorMessage           String?
   processedAt            DateTime?
@@ -1545,6 +1547,7 @@ model MessagingInboundEvent {
   @@index([organizationId, status, createdAt])
   @@index([clinicId, status, createdAt])
   @@index([channel, provider, providerMessageId])
+  @@index([status, updatedAt])
 }
 
 /// Organization-level Instagram DM connection. One connection can be shared by multiple branches.

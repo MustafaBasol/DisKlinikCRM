@@ -12,6 +12,70 @@ const JWT_SECRET = getSecret('JWT_SECRET', 'health-crm-secret-key-change-this');
 const clinicStatusCache = new Map<string, { status: string; organizationId: string; expiresAt: number }>();
 const CACHE_TTL_MS = 60_000; // 60 saniye
 
+// Auth kullanıcı cache'i: her istekte prisma.user.findUnique çalıştırmak, yüzlerce
+// klinik aynı anda online olduğunda DB'ye istek başına 1 sorgu demek (docs/45 #2).
+// TTL kısa tutulur (15 sn) ve şifre değişikliği / kullanıcı güncellemesi
+// invalidateAuthUserCache ile anında düşürülür; passwordChangedAt kontrolü cache'li
+// veri üzerinde her istekte çalışmaya devam eder. Süreç-yerelidir — çok replika
+// senaryosunda TTL üst sınırı geçerlidir.
+type AuthUserRecord = {
+  id: string;
+  clinicId: string;
+  defaultClinicId: string | null;
+  role: string;
+  isActive: boolean;
+  organizationId: string;
+  canAccessAllClinics: boolean | null;
+  passwordChangedAt: Date | null;
+  userClinics: { clinicId: string }[];
+};
+const authUserCache = new Map<string, { user: AuthUserRecord | null; expiresAt: number }>();
+const AUTH_USER_CACHE_TTL_MS = 15_000;
+const AUTH_USER_CACHE_MAX_ENTRIES = 20_000;
+
+export function invalidateAuthUserCache(userId: string): void {
+  authUserCache.delete(userId);
+}
+
+async function getAuthUser(userId: string): Promise<AuthUserRecord | null> {
+  const cached = authUserCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.user;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      clinicId: true,
+      defaultClinicId: true,
+      role: true,
+      isActive: true,
+      organizationId: true,
+      canAccessAllClinics: true,
+      passwordChangedAt: true,
+      userClinics: {
+        where: { isActive: true },
+        select: { clinicId: true },
+      },
+    },
+  });
+
+  if (authUserCache.size >= AUTH_USER_CACHE_MAX_ENTRIES) authUserCache.clear();
+  authUserCache.set(userId, { user: dbUser, expiresAt: Date.now() + AUTH_USER_CACHE_TTL_MS });
+  return dbUser;
+}
+
+// Süresi geçen girdiler sadece okunduklarında silinirdi; hiç okunmayan girdiler
+// Map'te kalıcı olurdu. Periyodik süpürme bunu sınırlar (docs/45 orta-8).
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of authUserCache) {
+    if (entry.expiresAt <= now) authUserCache.delete(key);
+  }
+  for (const [key, entry] of clinicStatusCache) {
+    if (entry.expiresAt <= now) clinicStatusCache.delete(key);
+  }
+}, 60_000).unref();
+
 async function getClinicInfo(clinicId: string): Promise<{ status: string; organizationId: string } | null> {
   const cached = clinicStatusCache.get(clinicId);
   if (cached && cached.expiresAt > Date.now()) return { status: cached.status, organizationId: cached.organizationId };
@@ -68,24 +132,8 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       console.warn('[auth] Bearer token fallback used for clinic auth');
     }
 
-    // Klinik erişim kontrolü
-    const dbUser = await prisma.user.findUnique({
-      where: { id: decoded.sub || decoded.id },
-      select: {
-        id: true,
-        clinicId: true,
-        defaultClinicId: true,
-        role: true,
-        isActive: true,
-        organizationId: true,
-        canAccessAllClinics: true,
-        passwordChangedAt: true,
-        userClinics: {
-          where: { isActive: true },
-          select: { clinicId: true },
-        },
-      },
-    });
+    // Klinik erişim kontrolü (15 sn TTL'li cache — bkz. getAuthUser)
+    const dbUser = await getAuthUser(decoded.sub || decoded.id);
 
     if (!dbUser || !dbUser.isActive) {
       return res.status(401).json({ error: 'Unauthorized: User is inactive' });

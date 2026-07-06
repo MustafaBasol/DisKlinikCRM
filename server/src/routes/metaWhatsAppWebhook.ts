@@ -23,10 +23,8 @@ import express, { Request, Response } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 import prisma from '../db.js';
 import { MetaCloudWhatsAppProvider } from '../services/whatsapp/MetaCloudWhatsAppProvider.js';
-import {
-  resolveClinicForIncomingMessage,
-  upsertInboxEntry,
-} from '../services/whatsapp/clinicResolver.js';
+import { resolveClinicForIncomingMessage } from '../services/whatsapp/clinicResolver.js';
+import { deliverIncomingMetaMessage } from '../services/whatsapp/metaInboundDelivery.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
 import { decryptSecretTagged } from '../utils/encryption.js';
@@ -37,7 +35,6 @@ import {
   markInboundEventFailed,
   markInboundEventProcessed,
 } from '../services/messagingInboundIdempotency.js';
-import { processMetaWhatsAppIncomingMessage } from '../services/whatsapp/metaWhatsAppAiProcessor.js';
 
 const router = express.Router();
 
@@ -151,49 +148,8 @@ async function routeIncomingMetaMessage(
   }
 
   try {
-    if (resolution.clinicId) {
-      // Priority A/B/C resolved — clinic known: write inbox then run AI processor.
-      await upsertInboxEntry({
-        organizationId: connection.organizationId,
-        whatsappConnectionId: connection.id,
-        clinicId: resolution.clinicId,
-        needsClinicResolution: false,
-        phone,
-        lastMessageText: text,
-        externalMessageId: messageId,
-      });
-
-      if (text.trim()) {
-        await processMetaWhatsAppIncomingMessage({
-          organizationId: connection.organizationId,
-          clinicId: resolution.clinicId,
-          connectionId: connection.id,
-          phone,
-          messageId,
-          text,
-          rawPayload: asJsonRecord(rawPayload),
-        });
-      }
-    } else if (resolution.needsClinicResolution) {
-      // Priority D — unresolved shared-line: inbox only, no AI.
-      await upsertInboxEntry({
-        organizationId: connection.organizationId,
-        whatsappConnectionId: connection.id,
-        clinicId: null,
-        needsClinicResolution: true,
-        phone,
-        lastMessageText: text,
-        externalMessageId: messageId,
-      });
-    } else {
-      logWebhookEvent(
-        connection.organizationId,
-        connection.id,
-        'meta_webhook_no_clinic_links',
-        'Meta webhook received for a WhatsApp connection with no clinic assignments',
-        { phone: summarizeProviderId(phone) },
-      );
-    }
+    // Klinik çözümü + inbox + AI işleme çekirdeği retry job ile paylaşılır.
+    await deliverIncomingMetaMessage(connection, phone, text, messageId, rawPayload, resolution);
 
     if (inboundEvent.status === 'created') {
       await markInboundEventProcessed(inboundEvent.eventId);
