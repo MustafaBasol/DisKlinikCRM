@@ -98,6 +98,13 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
       };
     }
 
+    // Tarih aralığı verilmeden yapılan çağrılar kliniğin tüm randevu geçmişini
+    // dönerdi; büyük kliniklerde bu megabaytlarca JSON ve tam tablo okuması
+    // demek. Aralıksız çağrılarda en güncel kayıtlarla sınırla (çıktı yine
+    // startTime artan sırada döner).
+    const hasDateRange = Boolean(start || end);
+    const UNBOUNDED_QUERY_CAP = 2000;
+
     const appointments = await prisma.appointment.findMany({
       where,
       include: {
@@ -106,9 +113,10 @@ const { start, end, status, practitionerId, patientId, search, treatmentCaseId, 
         appointmentType: true,
         treatmentCase: { select: { id: true, title: true } },
       },
-      orderBy: { startTime: 'asc' },
+      orderBy: { startTime: hasDateRange ? 'asc' : 'desc' },
+      ...(hasDateRange ? {} : { take: UNBOUNDED_QUERY_CAP }),
     });
-    res.json(appointments);
+    res.json(hasDateRange ? appointments : appointments.reverse());
   } catch {
     res.status(500).json({ error: 'Failed to fetch appointments' });
   }

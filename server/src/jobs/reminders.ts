@@ -568,14 +568,41 @@ async function runDailyReminderJob(): Promise<void> {
   console.log('[reminders] Notification reminder job complete.');
 }
 
+// Overlap kilidi: klinik sayısı arttıkça tek koşu 5 dakikayı aşabilir.
+// Kilit olmadan koşular üst üste biner ve dedup kontrolündeki
+// "kontrol et → gönder" yarış penceresi mükerrer hasta mesajına yol açar.
+// Not: process-içi kilittir; birden fazla replika çalıştırılacaksa DB-tabanlı
+// (advisory lock) kilide taşınmalıdır.
+let reminderJobRunning = false;
+let postTreatmentJobRunning = false;
+
 export function startReminderJobs(): void {
   cron.schedule('*/5 * * * *', () => {
-    runDailyReminderJob().catch((err) =>
-      console.error('[reminders] Unhandled error in notification reminder job:', err),
-    );
-    processScheduledPostTreatmentMessages().catch((err) =>
-      console.error('[reminders] Unhandled error in post-treatment messaging job:', err),
-    );
+    if (reminderJobRunning) {
+      console.warn('[reminders] Previous notification reminder run still in progress, skipping this tick.');
+    } else {
+      reminderJobRunning = true;
+      runDailyReminderJob()
+        .catch((err) =>
+          console.error('[reminders] Unhandled error in notification reminder job:', err),
+        )
+        .finally(() => {
+          reminderJobRunning = false;
+        });
+    }
+
+    if (postTreatmentJobRunning) {
+      console.warn('[reminders] Previous post-treatment messaging run still in progress, skipping this tick.');
+    } else {
+      postTreatmentJobRunning = true;
+      processScheduledPostTreatmentMessages()
+        .catch((err) =>
+          console.error('[reminders] Unhandled error in post-treatment messaging job:', err),
+        )
+        .finally(() => {
+          postTreatmentJobRunning = false;
+        });
+    }
   });
 
   console.log('[reminders] Scheduled notification reminder job every 5 minutes.');
