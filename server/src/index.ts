@@ -57,10 +57,8 @@ import publicClinicKvkkRoutes from './routes/publicClinicKvkk.js';
 import smsRoutes from './routes/sms.js';
 import laboratoriesRoutes from './routes/laboratories.js';
 import labOrdersRoutes from './routes/labOrders.js';
-import { startReminderJobs } from './jobs/reminders.js';
-import { startMetaTemplateSyncJob } from './jobs/metaTemplateSyncJob.js';
-import { startDataRetentionCleanupJob } from './jobs/dataRetentionCleanupJob.js';
-import { startInboundEventRetryJob } from './jobs/inboundEventRetryJob.js';
+import { startBackgroundJobs } from './jobs/startBackgroundJobs.js';
+import { closeRedis } from './utils/redis.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
 import { getBearerFallbackWarnings } from './utils/authFallback.js';
@@ -246,10 +244,15 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 
 const server = app.listen(port, host, () => {
   console.log(`Server is running on ${host}:${port}`);
-  startReminderJobs();
-  startMetaTemplateSyncJob();
-  startDataRetentionCleanupJob();
-  startInboundEventRetryJob();
+  // Cron job'lar ayrı worker sürecine taşınabilir (docs/45 Faz 3 #10):
+  // API replikalarında RUN_BACKGROUND_JOBS=false verilir, job'ları yalnızca
+  // `npm run start:worker` süreci koşturur. Bayrak ayarlanmazsa tek süreçli
+  // kurulumdaki mevcut davranış korunur.
+  if (process.env.RUN_BACKGROUND_JOBS !== 'false') {
+    startBackgroundJobs();
+  } else {
+    console.log('[jobs] RUN_BACKGROUND_JOBS=false — background jobs delegated to the worker process.');
+  }
 });
 
 // Graceful shutdown: deploy/restart sırasında uçuştaki istekler tamamlanır,
@@ -261,12 +264,10 @@ function shutdown(signal: string): void {
   shuttingDown = true;
   console.log(`[shutdown] ${signal} received, closing server...`);
   server.close(() => {
-    prisma.$disconnect()
-      .catch(() => {})
-      .finally(() => {
-        console.log('[shutdown] Clean exit.');
-        process.exit(0);
-      });
+    Promise.allSettled([prisma.$disconnect(), closeRedis()]).finally(() => {
+      console.log('[shutdown] Clean exit.');
+      process.exit(0);
+    });
   });
   setTimeout(() => {
     console.error('[shutdown] Forced exit after 10s timeout.');

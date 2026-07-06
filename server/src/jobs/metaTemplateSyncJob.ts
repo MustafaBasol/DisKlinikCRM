@@ -20,6 +20,7 @@ import {
 import { resolveConnectionForClinic } from '../services/whatsapp/whatsappService.js';
 import { evaluateTemplateBinding } from '../services/whatsapp/templateBinding.js';
 import type { WhatsAppConnectionRecord } from '../services/whatsapp/WhatsAppProvider.js';
+import { withJobLock } from '../utils/jobLock.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -214,17 +215,18 @@ export function startMetaTemplateSyncJob(): void {
   }
 
   cron.schedule('*/15 * * * *', () => {
-    syncPendingMetaTemplateStatuses()
-      .then((summary) => {
-        if (summary.checked > 0) {
-          console.log('[meta-template-sync] run-complete', summary);
-        }
-      })
-      .catch((err: unknown) => {
-        console.error('[meta-template-sync] unhandled-error', {
-          error: err instanceof Error ? err.message.slice(0, 200) : String(err),
-        });
+    // Paylaşımlı kilit: birden fazla replika/worker Meta API'sine aynı
+    // template'ler için mükerrer sorgu atmasın (docs/45 Faz 3 #9-10).
+    withJobLock('meta-template-sync', 15 * 60 * 1000, async () => {
+      const summary = await syncPendingMetaTemplateStatuses();
+      if (summary.checked > 0) {
+        console.log('[meta-template-sync] run-complete', summary);
+      }
+    }).catch((err: unknown) => {
+      console.error('[meta-template-sync] unhandled-error', {
+        error: err instanceof Error ? err.message.slice(0, 200) : String(err),
       });
+    });
   });
 
   console.log(

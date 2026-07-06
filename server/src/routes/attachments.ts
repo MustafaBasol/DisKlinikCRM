@@ -1,15 +1,17 @@
 import express, { Response, NextFunction } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import prisma from '../db.js';
+import { isAllowedFileSignature } from '../utils/fileSignature.js';
+import {
+  buildStorageKey,
+  deleteFile,
+  fileNameFromKey,
+  openFileStream,
+  saveFile,
+} from '../services/fileStorage.js';
 
 const router = express.Router();
-
-// ── Yükleme dizini (klinik bazında izole) ─────────────────────────────
-const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(BASE_UPLOAD_DIR)) fs.mkdirSync(BASE_UPLOAD_DIR, { recursive: true });
 
 // ── İzin verilen MIME tipleri ─────────────────────────────────────────
 const ALLOWED_MIME = new Set([
@@ -29,47 +31,11 @@ const ALLOWED_EXTENSIONS_BY_MIME: Record<string, string[]> = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
 };
 
-function hasMagic(bytes: Buffer, magic: number[]) {
-  return magic.every((value, index) => bytes[index] === value);
-}
-
-function detectMimeFromSignature(filePath: string): string | null {
-  const bytes = fs.readFileSync(filePath).subarray(0, 16);
-  if (hasMagic(bytes, [0xff, 0xd8, 0xff])) return 'image/jpeg';
-  if (hasMagic(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
-  if (bytes.subarray(0, 6).toString('ascii') === 'GIF87a' || bytes.subarray(0, 6).toString('ascii') === 'GIF89a') return 'image/gif';
-  if (bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
-  if (bytes.subarray(0, 5).toString('ascii') === '%PDF-') return 'application/pdf';
-  if (hasMagic(bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return 'application/msword';
-  if (hasMagic(bytes, [0x50, 0x4b, 0x03, 0x04])) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  return null;
-}
-
-function isAllowedFileSignature(filePath: string, declaredMime: string, originalName: string) {
-  const ext = path.extname(originalName).toLowerCase();
-  const allowedExts = ALLOWED_EXTENSIONS_BY_MIME[declaredMime] ?? [];
-  if (!allowedExts.includes(ext)) return false;
-
-  const detectedMime = detectMimeFromSignature(filePath);
-  return detectedMime === declaredMime;
-}
-
-const storage = multer.diskStorage({
-  destination: (req: any, _file, cb) => {
-    // req.user is populated by authenticate middleware before this point
-    const clinicId = req.user?.clinicId ?? 'unknown';
-    const clinicDir = path.join(BASE_UPLOAD_DIR, clinicId);
-    fs.mkdirSync(clinicDir, { recursive: true });
-    cb(null, clinicDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-
+// Dosya bellekte tutulur (10 MB sınırıyla) ve doğrulama sonrası fileStorage'a
+// yazılır: yerel disk veya S3_BUCKET tanımlıysa S3-uyumlu depo
+// (docs/45 Faz 3 #11). Diske geçici dosya hiç yazılmaz.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) {
@@ -122,33 +88,35 @@ router.post(
       });
     }
 
+    let storageKey: string | null = null;
     try {
       // Verify patient belongs to clinic
       const patient = await prisma.patient.findFirst({
         where: { id: patientId, clinicId, deletedAt: null },
       });
       if (!patient) {
-        fs.unlinkSync(req.file.path);
         return res.status(404).json({ error: 'Patient not found' });
       }
 
-      if (!isAllowedFileSignature(req.file.path, req.file.mimetype, req.file.originalname)) {
-        fs.unlinkSync(req.file.path);
+      if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {
         return res.status(400).json({
           error: 'Dosya içeriği doğrulanamadı',
           detail: 'Dosya uzantısı, MIME tipi veya dosya imzası desteklenen türlerle eşleşmiyor',
         });
       }
 
+      storageKey = buildStorageKey(clinicId, req.file.originalname);
+      await saveFile(storageKey, req.file.buffer, req.file.mimetype);
+
       const attachment = await prisma.patientAttachment.create({
         data: {
           clinicId,
           patientId,
-          fileName: req.file.filename,
+          fileName: fileNameFromKey(storageKey),
           originalName: req.file.originalname,
           fileSize: req.file.size,
           mimeType: req.file.mimetype,
-          filePath: req.file.path,
+          filePath: storageKey,
           uploadedById: req.user!.id,
         },
         include: { uploadedBy: { select: { firstName: true, lastName: true } } },
@@ -167,7 +135,8 @@ router.post(
 
       res.status(201).json(attachment);
     } catch (err: any) {
-      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      // Depoya yazıldıktan sonra DB kaydı başarısız olduysa dosyayı geri sil.
+      if (storageKey) await deleteFile(storageKey).catch(() => {});
       console.error('[attachments] upload error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to upload attachment' });
     }
@@ -210,11 +179,18 @@ router.get(
         where: { id, patientId, clinicId },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
-      if (!fs.existsSync(attachment.filePath)) return res.status(404).json({ error: 'File missing on disk' });
+
+      const stream = await openFileStream(attachment.filePath);
+      if (!stream) return res.status(404).json({ error: 'File missing in storage' });
 
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.originalName)}"`);
       res.setHeader('Content-Type', attachment.mimeType);
-      fs.createReadStream(attachment.filePath).pipe(res as any);
+      stream.on('error', (streamErr) => {
+        console.error('[attachments] download stream error:', streamErr?.message ?? streamErr);
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to download attachment' });
+        else res.destroy();
+      });
+      stream.pipe(res as any);
     } catch (err: any) {
       console.error('[attachments] download error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to download attachment' });
@@ -239,9 +215,10 @@ router.delete(
 
       await prisma.patientAttachment.delete({ where: { id } });
 
-      if (fs.existsSync(attachment.filePath)) {
-        fs.unlinkSync(attachment.filePath);
-      }
+      await deleteFile(attachment.filePath).catch((deleteErr) => {
+        // DB kaydı silindi; depo silme hatası indirmeyi bozmaz, logla ve devam et.
+        console.error('[attachments] storage delete error:', deleteErr?.message ?? deleteErr);
+      });
 
       await prisma.activityLog.create({
         data: {

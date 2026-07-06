@@ -45,15 +45,15 @@ await test('different raw tokens produce different hashes', () => {
 
 // ── Rate limiter ──────────────────────────────────────────────────────────────
 
-await test('allows first 3 forgot-password attempts per key', () => {
+await test('allows first 3 forgot-password attempts per key', async () => {
   const key = `test-key-${Date.now()}-${Math.random()}`;
-  assert.equal(checkForgotPasswordAttempt(key), true);
-  recordForgotPasswordAttempt(key);
-  assert.equal(checkForgotPasswordAttempt(key), true);
-  recordForgotPasswordAttempt(key);
-  assert.equal(checkForgotPasswordAttempt(key), true);
-  recordForgotPasswordAttempt(key);
-  assert.equal(checkForgotPasswordAttempt(key), false, 'should block after 3 attempts');
+  assert.equal(await checkForgotPasswordAttempt(key), true);
+  await recordForgotPasswordAttempt(key);
+  assert.equal(await checkForgotPasswordAttempt(key), true);
+  await recordForgotPasswordAttempt(key);
+  assert.equal(await checkForgotPasswordAttempt(key), true);
+  await recordForgotPasswordAttempt(key);
+  assert.equal(await checkForgotPasswordAttempt(key), false, 'should block after 3 attempts');
 });
 
 // ── Password validation ───────────────────────────────────────────────────────

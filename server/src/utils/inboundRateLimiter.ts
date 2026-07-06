@@ -1,32 +1,26 @@
 /**
- * inboundRateLimiter.ts — Simple in-memory rate limiter for inbound AI message processing.
+ * inboundRateLimiter.ts — Rate limiter for inbound AI message processing.
  *
  * Keyed by:  channel + connectionId + sender (phone or fromExternalId)
  * Limit:     8 messages per 60 seconds
  *
- * WARNING: This store is per-process only. For multi-instance / horizontally-scaled
- * deployments, replace the in-memory Map with a Redis-backed counter (e.g. INCR +
- * EXPIRE or a sliding-window Lua script). TODO: Add Redis rate limiting when deploying
- * to multi-instance infrastructure.
+ * Sayaçlar paylaşımlı store'da tutulur (REDIS_URL varsa Redis, yoksa süreç-içi
+ * bellek — bkz. utils/counterStore.ts). Redis ile birden fazla replika aynı
+ * limitleri paylaşır (docs/45 Faz 3 #9).
  */
+
+import { createCounterStore } from './counterStore.js';
 
 const WINDOW_MS = 60_000; // 60 seconds
 const MAX_MESSAGES = 8;
 
-type BucketKey = string;
-
-interface Bucket {
-  count: number;
-  windowStart: number;
-}
-
-const store = new Map<BucketKey, Bucket>();
+const store = createCounterStore('inbound-ai');
 
 /**
  * Build a composite rate-limit key.
  * Never uses sender alone — always scoped to channel + connection.
  */
-function buildKey(channel: string, connectionId: string, sender: string): BucketKey {
+function buildKey(channel: string, connectionId: string, sender: string): string {
   return `${channel}:${connectionId}:${sender}`;
 }
 
@@ -36,32 +30,20 @@ function buildKey(channel: string, connectionId: string, sender: string): Bucket
  *
  * @returns true if the message should be processed, false if rate-limited.
  */
-export function checkInboundRateLimit(
+export async function checkInboundRateLimit(
   channel: string,
   connectionId: string,
   sender: string,
-): boolean {
+): Promise<boolean> {
   const key = buildKey(channel, connectionId, sender);
-  const now = Date.now();
+  const count = await store.increment(key, WINDOW_MS);
 
-  let bucket = store.get(key);
-
-  if (!bucket || now - bucket.windowStart >= WINDOW_MS) {
-    // New window
-    bucket = { count: 1, windowStart: now };
-    store.set(key, bucket);
-    return true;
-  }
-
-  bucket.count += 1;
-
-  if (bucket.count > MAX_MESSAGES) {
+  if (count > MAX_MESSAGES) {
     console.warn('[rate-limiter] inbound AI message rate-limited', {
       channel,
       connectionId,
       sender,
-      count: bucket.count,
-      windowStart: new Date(bucket.windowStart).toISOString(),
+      count,
     });
     return false;
   }
@@ -76,7 +58,7 @@ export const RATE_LIMIT_WINDOW_MS = WINDOW_MS;
 export const RATE_LIMIT_MAX_MESSAGES = MAX_MESSAGES;
 
 /**
- * Reset the store — for unit tests only.
+ * Reset the store — for unit tests only (in-memory backend).
  */
 export function _resetRateLimitStore(): void {
   store.clear();

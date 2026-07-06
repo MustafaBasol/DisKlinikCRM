@@ -267,39 +267,40 @@ async function main() {
   // ── Attachment upload clinic isolation ───────────────────────────────────
   section('Attachment upload path isolation');
 
-  await test('multer disk storage writes to a shared temp dir, not uploads/{req.user.clinicId}', () => {
-    assert.ok(labOrdersRouteSrc.includes('TEMP_UPLOAD_DIR'), 'expected a TEMP_UPLOAD_DIR staging directory');
-    assert.ok(!/req\.user\?\.clinicId/.test(labOrdersRouteSrc), 'multer destination should no longer branch on req.user.clinicId');
-    const destinationMatch = labOrdersRouteSrc.match(/destination:\s*\([^)]*\)\s*=>\s*{\s*cb\(null,\s*([A-Za-z_]+)\);/);
-    assert.ok(destinationMatch, 'multer destination callback not found');
-    assert.equal(destinationMatch![1], 'TEMP_UPLOAD_DIR');
+  await test('multer uses in-memory storage; nothing on disk depends on req.user.clinicId', () => {
+    assert.ok(labOrdersRouteSrc.includes('multer.memoryStorage()'), 'expected multer.memoryStorage() — file is validated in memory before hitting storage');
+    assert.ok(!/req\.user\?\.clinicId/.test(labOrdersRouteSrc), 'upload flow should never branch on req.user.clinicId');
+    assert.ok(!labOrdersRouteSrc.includes('multer.diskStorage'), 'disk staging was replaced by memory storage + fileStorage service');
   });
 
-  await test('attachment upload moves the file into uploads/{order.clinicId} after loading the order', () => {
+  await test('attachment upload stores the file under the order clinic key, after authorization', () => {
     const uploadRouteMatch = labOrdersRouteSrc.match(/router\.post\(\s*'\/lab-orders\/:id\/attachments'[\s\S]*?(?=router\.get\('\/lab-orders\/:id\/attachments')/);
     assert.ok(uploadRouteMatch, 'POST /lab-orders/:id/attachments handler not found');
     const uploadRouteSrc = uploadRouteMatch![0];
 
     const orderLookupIndex = uploadRouteSrc.indexOf('prisma.labWorkOrder.findFirst');
-    const moveIndex = uploadRouteSrc.indexOf('fs.renameSync(req.file.path, finalPath)');
-    const signatureCheckIndex = uploadRouteSrc.indexOf('isAllowedFileSignature(req.file.path');
+    const signatureCheckIndex = uploadRouteSrc.indexOf('isAllowedFileSignature(req.file.buffer');
+    const keyIndex = uploadRouteSrc.indexOf('buildStorageKey(order.clinicId');
+    const saveIndex = uploadRouteSrc.indexOf('await saveFile(storageKey');
     const dbInsertIndex = uploadRouteSrc.indexOf('prisma.labOrderAttachment.create');
 
-    assert.ok(orderLookupIndex !== -1 && moveIndex !== -1 && signatureCheckIndex !== -1 && dbInsertIndex !== -1, 'expected order lookup, file move, signature check and DB insert to all be present');
-    assert.ok(orderLookupIndex < moveIndex, 'file should be moved only after the lab order has been loaded/authorized');
-    assert.ok(moveIndex < signatureCheckIndex, 'file signature must be re-checked at its final path, after the move');
-    assert.ok(signatureCheckIndex < dbInsertIndex, 'signature must be validated before the DB row is created');
-
-    assert.ok(uploadRouteSrc.includes('path.join(BASE_UPLOAD_DIR, order.clinicId)'), 'final directory should be derived from order.clinicId, not req.user.clinicId');
-    assert.ok(uploadRouteSrc.includes('req.file.path = finalPath'), 'req.file.path must be updated to the final path before later use');
+    assert.ok(
+      orderLookupIndex !== -1 && signatureCheckIndex !== -1 && keyIndex !== -1 && saveIndex !== -1 && dbInsertIndex !== -1,
+      'expected order lookup, buffer signature check, storage key build, saveFile and DB insert to all be present',
+    );
+    assert.ok(orderLookupIndex < signatureCheckIndex, 'signature is checked only after the lab order has been loaded/authorized');
+    assert.ok(signatureCheckIndex < keyIndex, 'storage key is built only for a validated file');
+    assert.ok(keyIndex < saveIndex, 'file is saved under the key derived from order.clinicId, not req.user.clinicId');
+    assert.ok(saveIndex < dbInsertIndex, 'DB row is created only after the file has been persisted');
   });
 
-  await test('every early-return in the upload handler cleans up the temp/final file', () => {
+  await test('failed upload after saveFile deletes the stored file', () => {
     const uploadRouteMatch = labOrdersRouteSrc.match(/router\.post\(\s*'\/lab-orders\/:id\/attachments'[\s\S]*?(?=router\.get\('\/lab-orders\/:id\/attachments')/);
     const uploadRouteSrc = uploadRouteMatch![0];
-    const unlinkCalls = uploadRouteSrc.match(/fs\.unlinkSync\(/g) ?? [];
-    // no-clinic-access, order-not-found, bad-signature, and the catch-all failure path
-    assert.ok(unlinkCalls.length >= 4, `expected at least 4 cleanup unlink calls, found ${unlinkCalls.length}`);
+    assert.ok(
+      /if \(storageKey\) await deleteFile\(storageKey\)/.test(uploadRouteSrc),
+      'catch path must delete the already-persisted file when the DB insert fails',
+    );
   });
 
   // ── Frontend edit form preserves existing values ─────────────────────────

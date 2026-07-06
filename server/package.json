@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:worker": "tsx watch src/worker.ts",
     "start": "npx prisma generate && tsx src/index.ts",
+    "start:worker": "npx prisma generate && tsx src/worker.ts",
     "typecheck": "npx prisma generate && tsc --noEmit",
     "test:password-reset": "tsx src/tests/passwordReset.test.ts",
     "test": "npm run test:fixtures && npm run test:agent && npm run test:safety && npm run test:msg-safety && npm run test:auth && npm run test:password-reset && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:user-import-onboarding && npm run test:staff-onboarding && npm run test:email-verification && npm run test:instagram && npm run test:meta-wa && npm run test:overlap-safety && npm run test:availability-service && npm run test:public-booking && npm run test:purpose && npm run test:contact-requests && npm run test:post-treatment && npm run test:meta-template-sync && npm run test:template-waba-binding && npm run test:data-retention && npm run test:patient-privacy && npm run test:patient-name && npm run test:billing-patient-access && npm run test:treatment-case-scope && npm run test:billing-financial-select && npm run test:payment-validation && npm run test:payment-billing-edit && npm run test:appointment-update-validation && npm run test:sms && npm run test:lab-orders && npm run test:totp && npm run test:wa-persistence",
@@ -62,6 +64,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1079.0",
     "@prisma/adapter-pg": "7.8.0",
     "@prisma/client": "7.8.0",
     "@types/exceljs": "^0.5.3",
@@ -71,6 +74,7 @@
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "node-cron": "^4.5.0",

@@ -25,6 +25,7 @@ import {
   type DataRetentionConfig,
 } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting } from '../services/platformSettings.js';
+import { withJobLock } from '../utils/jobLock.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -379,7 +380,12 @@ export function startDataRetentionCleanupJob(overrides?: DataRetentionJobOverrid
         console.log('[data-retention] Skipping scheduled cleanup: runtime toggle is disabled.');
         return;
       }
-      await runDataRetentionCleanup({ config });
+      // Paylaşımlı kilit: birden fazla replika/worker temizliği aynı anda
+      // koşturmasın (docs/45 Faz 3 #9-10). Lease 2 saat — büyük temizlikler
+      // uzun sürebilir.
+      await withJobLock('data-retention-cleanup', 2 * 60 * 60 * 1000, async () => {
+        await runDataRetentionCleanup({ config });
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[data-retention] Unhandled error in cleanup job: ${msg}`);

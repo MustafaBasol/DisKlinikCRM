@@ -10,16 +10,16 @@ const router = express.Router();
 
 // Unauthenticated endpoints — throttle per IP to prevent mass tenant creation
 // and slug/email probing.
-const registrationLimiter = createRateLimiter(5, 60 * 60 * 1000);
-const slugCheckLimiter = createRateLimiter(60, 15 * 60 * 1000);
+const registrationLimiter = createRateLimiter(5, 60 * 60 * 1000, 'clinic-registration');
+const slugCheckLimiter = createRateLimiter(60, 15 * 60 * 1000, 'slug-check');
 
 // GET /api/register/check-slug/:slug — Slug müsait mi?
 router.get('/check-slug/:slug', async (req: Request, res: Response) => {
   const clientIp = req.ip || 'unknown';
-  if (!slugCheckLimiter.check(clientIp)) {
+  if (!(await slugCheckLimiter.check(clientIp))) {
     return res.status(429).json({ error: 'Too many requests. Please try again later.' });
   }
-  slugCheckLimiter.record(clientIp);
+  await slugCheckLimiter.record(clientIp);
 
   const raw = req.params.slug as string;
   const slug = raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -39,10 +39,10 @@ router.get('/check-slug/:slug', async (req: Request, res: Response) => {
 // POST /api/register/clinic — Self-service klinik kaydı
 router.post('/clinic', async (req: Request, res: Response) => {
   const clientIp = req.ip || 'unknown';
-  if (!registrationLimiter.check(clientIp)) {
+  if (!(await registrationLimiter.check(clientIp))) {
     return res.status(429).json({ error: 'Too many registration attempts. Please try again later.' });
   }
-  registrationLimiter.record(clientIp);
+  await registrationLimiter.record(clientIp);
 
   const { clinicName, slug, adminFirstName, adminLastName, adminEmail, adminPassword, currency, timezone } = req.body;
 

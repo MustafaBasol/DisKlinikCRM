@@ -216,44 +216,44 @@ await test('prompt scopes assistant to clinic services and handoff', () => {
 
 section('6. In-memory rate limiting');
 
-await test('normal traffic within limit is allowed', () => {
+await test('normal traffic within limit is allowed', async () => {
   _resetRateLimitStore();
   for (let i = 0; i < RATE_LIMIT_MAX_MESSAGES; i++) {
-    const allowed = checkInboundRateLimit('whatsapp', 'conn-1', 'sender-normal');
+    const allowed = await checkInboundRateLimit('whatsapp', 'conn-1', 'sender-normal');
     assert.ok(allowed, `Message ${i + 1} should be allowed`);
   }
 });
 
-await test('sender over limit within window is blocked', () => {
+await test('sender over limit within window is blocked', async () => {
   _resetRateLimitStore();
   // Exhaust the allowance
   for (let i = 0; i < RATE_LIMIT_MAX_MESSAGES; i++) {
-    checkInboundRateLimit('evolution', 'conn-2', 'sender-spam');
+    await checkInboundRateLimit('evolution', 'conn-2', 'sender-spam');
   }
   // Next message should be blocked
-  const blocked = checkInboundRateLimit('evolution', 'conn-2', 'sender-spam');
+  const blocked = await checkInboundRateLimit('evolution', 'conn-2', 'sender-spam');
   assert.strictEqual(blocked, false, 'Message over limit must be blocked');
 });
 
-await test('different senders on same connection are independent', () => {
+await test('different senders on same connection are independent', async () => {
   _resetRateLimitStore();
   // Exhaust sender-a
   for (let i = 0; i < RATE_LIMIT_MAX_MESSAGES; i++) {
-    checkInboundRateLimit('instagram', 'conn-3', 'sender-a');
+    await checkInboundRateLimit('instagram', 'conn-3', 'sender-a');
   }
   // sender-b on the same connection should still be allowed
-  const allowed = checkInboundRateLimit('instagram', 'conn-3', 'sender-b');
+  const allowed = await checkInboundRateLimit('instagram', 'conn-3', 'sender-b');
   assert.ok(allowed, 'A different sender must not be affected by another sender\'s limit');
 });
 
-await test('same sender on different connections is independent', () => {
+await test('same sender on different connections is independent', async () => {
   _resetRateLimitStore();
   // Exhaust on conn-4
   for (let i = 0; i < RATE_LIMIT_MAX_MESSAGES; i++) {
-    checkInboundRateLimit('meta_whatsapp', 'conn-4', 'sender-shared');
+    await checkInboundRateLimit('meta_whatsapp', 'conn-4', 'sender-shared');
   }
   // Same sender on conn-5 should still be allowed
-  const allowed = checkInboundRateLimit('meta_whatsapp', 'conn-5', 'sender-shared');
+  const allowed = await checkInboundRateLimit('meta_whatsapp', 'conn-5', 'sender-shared');
   assert.ok(allowed, 'Sender must not be blocked across different connections');
 });
 
@@ -265,17 +265,17 @@ await test('window resets after WINDOW_MS elapses', async () => {
   _resetRateLimitStore();
   // Fill the bucket to the limit
   for (let i = 0; i < RATE_LIMIT_MAX_MESSAGES; i++) {
-    checkInboundRateLimit('evolution', 'conn-6', 'sender-reset');
+    await checkInboundRateLimit('evolution', 'conn-6', 'sender-reset');
   }
   assert.strictEqual(
-    checkInboundRateLimit('evolution', 'conn-6', 'sender-reset'),
+    await checkInboundRateLimit('evolution', 'conn-6', 'sender-reset'),
     false,
     'Should be blocked before reset',
   );
   // Reset simulates a new deployment / store flush
   _resetRateLimitStore();
   assert.ok(
-    checkInboundRateLimit('evolution', 'conn-6', 'sender-reset'),
+    await checkInboundRateLimit('evolution', 'conn-6', 'sender-reset'),
     'Should be allowed after store reset (simulates window expiry)',
   );
 });
@@ -308,11 +308,11 @@ await test('buildWhatsAppAgentPrompt still returns a non-empty string for normal
   assert.ok(prompt.includes('Randevu almak istiyorum'), 'Prompt must include the latest message');
 });
 
-await test('rate limiter allows evolution, meta, and instagram independently', () => {
+await test('rate limiter allows evolution, meta, and instagram independently', async () => {
   _resetRateLimitStore();
-  assert.ok(checkInboundRateLimit('evolution', 'c1', 's1'), 'evolution allowed');
-  assert.ok(checkInboundRateLimit('meta_whatsapp', 'c1', 's1'), 'meta_whatsapp allowed');
-  assert.ok(checkInboundRateLimit('instagram', 'c1', 's1'), 'instagram allowed');
+  assert.ok(await checkInboundRateLimit('evolution', 'c1', 's1'), 'evolution allowed');
+  assert.ok(await checkInboundRateLimit('meta_whatsapp', 'c1', 's1'), 'meta_whatsapp allowed');
+  assert.ok(await checkInboundRateLimit('instagram', 'c1', 's1'), 'instagram allowed');
 });
 
 // ─── 8: Off-topic abuse guard — schema ───────────────────────────────────────
