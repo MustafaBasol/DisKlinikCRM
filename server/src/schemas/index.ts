@@ -619,3 +619,15 @@ export const imagingStudyLinkSchema = z.object({
   appointmentId: optionalId,
   treatmentCaseId: optionalId,
 });
+
+// Köprü (bridge) ajanı kaydı — token istemciden gelmez, sunucu üretir.
+export const imagingBridgeSchema = z.object({
+  name: z.string().min(1, 'Bridge name is required').max(200),
+  clinicId: optionalId,
+});
+
+// Public heartbeat gövdesi — bilinçli olarak minimal: yalnızca ajan sürümü.
+// PHI/PII veya serbest metin alanı kabul edilmez.
+export const imagingBridgeHeartbeatSchema = z.object({
+  agentVersion: z.string().max(100).optional(),
+});

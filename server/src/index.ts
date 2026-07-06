@@ -58,6 +58,7 @@ import smsRoutes from './routes/sms.js';
 import laboratoriesRoutes from './routes/laboratories.js';
 import labOrdersRoutes from './routes/labOrders.js';
 import imagingRoutes from './routes/imaging.js';
+import imagingBridgePublicRoutes from './routes/imagingBridgePublic.js';
 import { startBackgroundJobs } from './jobs/startBackgroundJobs.js';
 import { closeRedis } from './utils/redis.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
@@ -174,6 +175,7 @@ app.use('/api/public', metaWhatsAppWebhookRoutes);
 app.use('/api/public', instagramWebhookRoutes);
 app.use('/api/public', publicBookingRoutes);
 app.use('/api/public', publicClinicKvkkRoutes);
+app.use('/api/public', imagingBridgePublicRoutes); // köprü heartbeat — Bearer köprü token'ı ile, kullanıcı oturumu değil
 
 // Platform admin routes (kendi JWT'si var, global auth dışında)
 app.use('/api/platform', platformAdminRoutes);

@@ -39,7 +39,9 @@ import {
   imagingRequestUpdateSchema,
   imagingStudyUploadSchema,
   imagingStudyLinkSchema,
+  imagingBridgeSchema,
 } from '../schemas/index.js';
+import { generateBridgeToken } from '../services/imaging/bridgeTokens.js';
 import {
   validateRequestTransition,
   canAttachStudyToRequest,
@@ -847,5 +849,106 @@ router.patch('/imaging/studies/:id/archive', authorize([...IMAGING_CLINICAL_ROLE
 // PATCH /api/imaging/studies/:id/unarchive
 router.patch('/imaging/studies/:id/unarchive', authorize([...IMAGING_CLINICAL_ROLES]), (req: AuthRequest, res: Response) =>
   setStudyStatus(req, res, 'active'));
+
+// ═══ Köprü ajanları (Bridge Agents) ════════════════════════════════════
+// Yalnızca kayıt/listeleme/iptal (Phase 2 sözleşmesi). Heartbeat public
+// endpoint'i routes/imagingBridgePublic.ts dosyasındadır; köprüden görüntü
+// yükleme bilinçli olarak İLERİDE — bkz. docs/47-imaging-bridge-contract.md.
+// tokenHash hiçbir API yanıtında yer almaz; düz metin token yalnızca
+// oluşturma yanıtında bir kez döner ve asla saklanmaz/loglanmaz.
+
+const bridgeAgentSelect = {
+  id: true,
+  clinicId: true,
+  name: true,
+  status: true,
+  lastSeenAt: true,
+  agentVersion: true,
+  createdAt: true,
+  updatedAt: true,
+  createdBy: { select: { id: true, firstName: true, lastName: true } },
+};
+
+// GET /api/imaging/bridges
+router.get('/imaging/bridges', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  try {
+    const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const bridges = await prisma.imagingBridgeAgent.findMany({
+      where: { ...scope },
+      select: bridgeAgentSelect,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(bridges);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch bridge agents' });
+  }
+});
+
+// POST /api/imaging/bridges — düz metin token YALNIZCA bu yanıtta döner.
+router.post('/imaging/bridges', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  const validation = imagingBridgeSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+
+  const clinicId = await resolveEffectiveClinicId(req.user!, validation.data.clinicId ?? (req.query.clinicId as string | undefined));
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
+  try {
+    const { token, tokenHash } = generateBridgeToken();
+    const agent = await prisma.imagingBridgeAgent.create({
+      data: { clinicId, name: validation.data.name, tokenHash, createdById: req.user!.id },
+      select: bridgeAgentSelect,
+    });
+
+    await auditImaging(req, clinicId, 'imaging_bridge_registered', 'imaging_bridge_agent', agent.id);
+    await logActivity({
+      clinicId,
+      userId: req.user!.id,
+      entityType: 'imaging_bridge',
+      entityId: agent.id,
+      action: 'create',
+      description: 'Görüntüleme köprü ajanı kaydedildi',
+    });
+
+    res.status(201).json({ ...agent, token });
+  } catch {
+    res.status(500).json({ error: 'Failed to register bridge agent' });
+  }
+});
+
+// POST /api/imaging/bridges/:id/revoke — heartbeat anında engellenir.
+router.post('/imaging/bridges/:id/revoke', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+
+  try {
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
+
+    const existing = await prisma.imagingBridgeAgent.findFirst({ where: { id, ...scope } });
+    if (!existing) return res.status(404).json({ error: 'Bridge agent not found' });
+    if (existing.status === 'revoked') return res.status(409).json({ error: 'Bridge agent already revoked' });
+
+    const agent = await prisma.imagingBridgeAgent.update({
+      where: { id },
+      data: { status: 'revoked' },
+      select: bridgeAgentSelect,
+    });
+
+    await auditImaging(req, existing.clinicId, 'imaging_bridge_revoked', 'imaging_bridge_agent', id);
+    await logActivity({
+      clinicId: existing.clinicId,
+      userId: req.user!.id,
+      entityType: 'imaging_bridge',
+      entityId: id,
+      action: 'revoke',
+      description: 'Görüntüleme köprü ajanı iptal edildi',
+    });
+
+    res.json(agent);
+  } catch {
+    res.status(500).json({ error: 'Failed to revoke bridge agent' });
+  }
+});
 
 export default router;
