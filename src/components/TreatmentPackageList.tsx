@@ -314,7 +314,7 @@ const TreatmentPackageModal: React.FC<{
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} />{error}</div>}
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -344,7 +344,7 @@ const TreatmentPackageModal: React.FC<{
                 <option value="SERVICE_SUM">{t('services:packages.pricing.serviceSum')}</option>
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('services:packages.fields.price')}</label>
                 <input type="number" min="0" step="0.01" className="input-field w-full" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} />

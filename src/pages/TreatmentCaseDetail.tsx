@@ -1300,7 +1300,7 @@ const TreatmentCaseDetail: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">{t('treatmentCases:procedures.fields.toothFdi')} <span className="text-gray-400 font-normal">- {t('treatmentCases:procedures.optional')}</span></label>
                   <input
@@ -1338,7 +1338,7 @@ const TreatmentCaseDetail: React.FC = () => {
 
               <div>
                 <label className="label">{t('treatmentCases:procedures.fields.status')}</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {(Object.entries(PROC_STATUS) as [string, typeof PROC_STATUS[keyof typeof PROC_STATUS]][]).map(([s, cfg]) => (
                     <button
                       key={s}

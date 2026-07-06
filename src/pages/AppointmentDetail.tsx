@@ -297,7 +297,7 @@ const AppointmentDetail: React.FC = () => {
               <History size={20} className="text-gray-400" />
               <h3 className="font-bold">{t('patients:detail.activityTimeline')}</h3>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-100">
                 {appointment.activityLogs?.map((log: any, idx: number) => (
                   <div key={idx} className="relative pl-10">

@@ -132,7 +132,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm">
               <AlertCircle size={18} />
@@ -164,7 +164,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Assignee */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -202,7 +202,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onClose, onSuccess, initialData, pa
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Due Date */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">

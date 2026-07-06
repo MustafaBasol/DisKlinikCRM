@@ -214,7 +214,7 @@ const Register: React.FC = () => {
                 {t('register.adminAccount')}
               </label>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                     <input

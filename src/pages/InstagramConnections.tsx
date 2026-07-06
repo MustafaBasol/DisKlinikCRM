@@ -551,7 +551,7 @@ export default function InstagramConnections() {
                   </div>
 
                   {/* Connection details */}
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
                     {conn.instagramAccountId && (
                       <div>
                         <span className="font-medium text-gray-500 dark:text-gray-400">{t('instagram:connections.fields.instagramAccountId')}:</span>

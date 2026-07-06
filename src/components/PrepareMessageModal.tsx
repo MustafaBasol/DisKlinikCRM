@@ -109,7 +109,7 @@ const PrepareMessageModal: React.FC<PrepareMessageModalProps> = ({
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">{t('messages:prepareModal.selectTemplate')}</label>
             <select 

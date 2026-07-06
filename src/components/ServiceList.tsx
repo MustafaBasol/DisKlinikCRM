@@ -290,7 +290,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} />{error}</div>}
 
           <div>
@@ -308,7 +308,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
             <textarea className="input-field w-full min-h-[72px]" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder={t('services:placeholders.description')} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('services:fields.durationMinutes')} *</label>
               <input required type="number" min="5" step="5" className="input-field w-full" value={formData.durationMinutes} onChange={e => setFormData({ ...formData, durationMinutes: Number(e.target.value) })} />
@@ -319,7 +319,7 @@ const ServiceModal: React.FC<{ service: any, onClose: () => void, onSuccess: () 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('services:fields.basePrice')}</label>
               <input type="number" min="0" step="0.01" className="input-field w-full" value={formData.basePrice} onChange={e => setFormData({ ...formData, basePrice: e.target.value })} placeholder="0.00" />

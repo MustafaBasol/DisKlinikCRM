@@ -70,7 +70,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ paymentId, onClose }) => {
           </div>
 
           {/* Content */}
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {loading && (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={32} className="animate-spin text-primary-500" />

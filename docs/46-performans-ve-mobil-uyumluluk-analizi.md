@@ -206,6 +206,11 @@ yerler: `components/TreatmentCaseForm.tsx` (4×), `components/PaymentForm.tsx`,
 **Çözüm:** `grid-cols-2` → `grid-cols-1 sm:grid-cols-2` toplu düzeltmesi. Mekanik,
 düşük riskli, tek oturumluk iş.
 
+**Durum:** ✅ Çözüldü (`fix/mobile-responsive-p0`). 15 dosyada 29 form/bilgi grid'i
+`grid-cols-1 sm:grid-cols-2` desenine çevrildi. KPI/istatistik kartı grid'leri
+(zaten `md:`/`lg:` varyantlı, mobilde bilinçli 2 sütun) ve DentalChart hızlı-durum
+butonları bilinçli olarak olduğu gibi bırakıldı.
+
 ### C2. WhatsApp/Instagram bağlantı sayfaları sıfır responsive
 
 `pages/WhatsAppConnections.tsx` (70 KB) ve `pages/InstagramConnections.tsx` (37 KB)
@@ -215,6 +220,10 @@ hiç breakpoint içermiyor; yoğun config kartları ve sabit `grid-cols-2` bilgi
 **Çözüm:** Kart grid'lerine ve bilgi bloklarına `grid-cols-1 sm:grid-cols-2` /
 `md:` geçişleri ekle.
 
+**Durum:** ✅ Çözüldü (`fix/mobile-responsive-p0`). WA sayfasındaki 3 sabit
+`grid-cols-2` bloğu (774/1039/1209) ve IG'deki bilgi bloğu (554) responsive'e
+çevrildi; sayfa kökleri ve modal gövdeleri `p-4 sm:p-6` oldu.
+
 ### C3. Sayfa konteynerlerinde sabit `p-6`
 
 Birçok sayfa kabı `p-6` (24px) padding'i mobilde de koruyor — telefonda ~48px yatay
@@ -222,6 +231,11 @@ alan kaybı. Örnekler: `pages/WhatsAppInbox.tsx:346`, `pages/ClinicSchedule.tsx
 `pages/Reports.tsx:346` ve benzeri sayfa kökleri.
 
 **Çözüm:** `p-4 sm:p-6` desenine geçiş.
+
+**Durum:** ✅ Çözüldü (`fix/mobile-responsive-p0`). 21 dosyadaki sabit `p-6` sayfa
+kökü ve modal form gövdesi `p-4 sm:p-6` desenine çevrildi (WhatsAppInbox,
+ClinicSchedule, Branches, LabOrders, NoShows, Operations, FinanceDashboard,
+AppointmentDetail + form/modal bileşenleri).
 
 ### C4. Çoklu doktor takvim görünümü mobilde zorlayıcı
 
@@ -248,6 +262,9 @@ yoğun yatay kaydırma gerektiriyor.
 
 **Çözüm:** C1/C3 desenleriyle aynı geçiş.
 
+**Durum:** ✅ Büyük ölçüde çözüldü (`fix/mobile-responsive-p0`). ClinicSchedule
+padding'i ve UserList form grid'leri C1/C3 kapsamında düzeltildi.
+
 ---
 
 ## D. Öncelikli Yol Haritası
@@ -256,11 +273,11 @@ yoğun yatay kaydırma gerektiriyor.
 |---------|-----|------|----------------|
 | **P0** | ✅ A1 favicon değişimi (`perf/page-load-assets`) | ~30 dk | Her sayfa yüklemesinden 1.2 MB kalkar |
 | **P0** | ✅ A2 marka SVG optimizasyonu (`perf/page-load-assets`) | saatler | Logo kullanan sayfalarda MB'larca kazanç |
-| **P0** | C1 form grid toplu düzeltmesi (`grid-cols-1 sm:grid-cols-2`) | saatler | En görünür mobil kusur kapanır |
+| **P0** | ✅ C1 form grid toplu düzeltmesi (`fix/mobile-responsive-p0`) | saatler | En görünür mobil kusur kapanır |
 | **P1** | ✅ B1 patients pagination (`perf/speed-quick-wins`) | 1 gün | Büyük klinikte Hastalar sayfası sabit hızda |
 | **P1** | ✅ B2 dashboard `groupBy` + kısa TTL cache (`perf/speed-quick-wins`) | 1-2 gün | Dashboard açılışı ve DB yükü düşer |
 | **P1** | A3 bundle analizi + 662 KB chunk'ı küçültme | 0.5-1 gün | İlk yükleme JS'i ~%30 azalır |
-| **P1** | C2-C3 bağlantı sayfaları + `p-4 sm:p-6` | 0.5-1 gün | Mobil cila |
+| **P1** | ✅ C2-C3 bağlantı sayfaları + `p-4 sm:p-6` (`fix/mobile-responsive-p0`) | 0.5-1 gün | Mobil cila |
 | **P2** | B3 notifications compute'u worker'a taşıma | 1 gün | Sürekli arka plan DB yükü kalkar |
 | **P2** | ✅ B4 badge refetch düzeltmesi (`perf/speed-quick-wins`) | ~1 saat | Gezinme başına 3 istek kalkar |
 | **P2** | B5 randevu listesi dar select | ~2 saat | Takvim/liste payload'u küçülür |

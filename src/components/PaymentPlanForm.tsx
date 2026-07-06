@@ -102,7 +102,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
           {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
           {/* Patient */}
@@ -126,7 +126,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
           </div>
 
           {/* Amount + Currency */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">{t('payments:planForm.totalAmount')} *</label>
               <div className="relative">
@@ -149,7 +149,7 @@ const PaymentPlanForm: React.FC<PaymentPlanFormProps> = ({ patientId: initPatien
           </div>
 
           {/* Installment Count + First Due Date */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">{t('payments:planForm.installmentCount')} *</label>
               <input type="number" min={1} max={60} className="input-field"

@@ -466,7 +466,7 @@ const PayoutsTab: React.FC<{ practitioners: any[]; selectedClinicId: string }> =
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-lg my-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('earnings:payouts.recordPayment')}</h3>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">{t('earnings:columns.doctor')} <span className="text-red-500">*</span></label>
                   <select value={form.practitionerId} onChange={e => handlePractitionerChange(e.target.value)} className="input-field">
@@ -479,7 +479,7 @@ const PayoutsTab: React.FC<{ practitioners: any[]; selectedClinicId: string }> =
                   <input type="number" min="0" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="input-field" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">{t('earnings:payouts.periodMonth')}</label>
                   <select value={form.periodMonth} onChange={e => { setForm(f => ({ ...f, periodMonth: e.target.value })); loadApprovedEarnings(form.practitionerId, Number(e.target.value), Number(form.periodYear)); }} className="input-field">
@@ -493,7 +493,7 @@ const PayoutsTab: React.FC<{ practitioners: any[]; selectedClinicId: string }> =
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">{t('earnings:payouts.paymentDate')} <span className="text-red-500">*</span></label>
                   <input type="date" value={form.paymentDate} onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))} className="input-field" />
@@ -775,7 +775,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[]; selectedCli
                   {practitioners.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">{t('earnings:settings.commissionType')}</label>
                   <select value={ruleForm.compensationType} onChange={e => setRuleForm(f => ({ ...f, compensationType: e.target.value }))} className="input-field">
@@ -801,7 +801,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[]; selectedCli
                   <input type="number" min="0" step="0.01" value={ruleForm.fixedMonthlyAmount} onChange={e => setRuleForm(f => ({ ...f, fixedMonthlyAmount: e.target.value }))} className="input-field" />
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">{t('earnings:settings.startDate')}</label>
                   <input type="date" value={ruleForm.startDate} onChange={e => setRuleForm(f => ({ ...f, startDate: e.target.value }))} className="input-field" />
@@ -844,7 +844,7 @@ const SettingsTab: React.FC<{ practitioners: any[]; services: any[]; selectedCli
                   {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">{t('earnings:settings.percentage')}</label>
                   <input type="number" min="0" max="100" step="0.01" value={serviceRuleForm.percentage} onChange={e => setServiceRuleForm(f => ({ ...f, percentage: e.target.value }))} className="input-field" />

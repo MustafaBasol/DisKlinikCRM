@@ -343,7 +343,7 @@ export default function WhatsAppInbox() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Inbox className="text-green-600" size={28} />
         <h1 className="text-2xl font-bold text-gray-800">{t('whatsapp:inbox.title')}</h1>

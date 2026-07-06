@@ -251,7 +251,7 @@ export default function NoShows() {
   const summary = data?.summary;
 
   return (
-    <div className="p-6 max-w-screen-xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto space-y-6">
       {/* Toast */}
       {toast && (
         <div

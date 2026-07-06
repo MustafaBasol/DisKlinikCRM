@@ -119,7 +119,7 @@ const InsuranceProvisionForm: React.FC<InsuranceProvisionFormProps> = ({
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg"><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} />{error}</div>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

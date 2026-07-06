@@ -166,7 +166,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm">
               <AlertCircle size={18} />
@@ -284,7 +284,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
             </div>
 
             {/* Amount & Currency */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <DollarSign size={16} className="text-gray-400" />
@@ -318,7 +318,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, onSuccess, initialDa
             </div>
 
             {/* Method & Status */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <CreditCard size={16} className="text-gray-400" />

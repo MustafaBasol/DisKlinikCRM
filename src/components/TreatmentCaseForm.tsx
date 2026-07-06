@@ -106,7 +106,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600 text-sm">
               <AlertCircle size={18} />
@@ -116,7 +116,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
 
           <div className="space-y-4">
             {/* Clinic Service / Title */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <Briefcase size={16} className="text-gray-400" />
@@ -163,7 +163,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
             </div>
 
             {/* Patient & Practitioner */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <User size={16} className="text-gray-400" />
@@ -216,7 +216,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
             </div>
 
             {/* Amounts */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <DollarSign size={16} className="text-gray-400" />
@@ -250,7 +250,7 @@ const TreatmentCaseForm: React.FC<TreatmentCaseFormProps> = ({ onClose, onSucces
             </div>
 
             {/* Currency & Date */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700">{t('treatmentCases:form.currency')}</label>
                 <select
