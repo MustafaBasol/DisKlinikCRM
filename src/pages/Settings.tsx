@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw, Send, ShieldCheck } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw, Send, ShieldCheck, ScanLine } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import { CLINIC_OPERATING_PREFERENCES_UPDATED_EVENT } from '../context/ClinicPreferencesContext';
-import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole, canManageClinicLegalProfile } from '../utils/permissions';
+import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole, canManageClinicLegalProfile, canManageImagingDevices } from '../utils/permissions';
 import { clinicOperatingPreferencesService, notificationPreferencesService } from '../services/api';
 import ClinicKvkkSection from '../components/settings/ClinicKvkkSection';
+import ImagingSettingsPanel from '../components/imaging/ImagingSettingsPanel';
 import SmsSettingsSection from '../components/settings/SmsSettingsSection';
 import {
   ClinicOperatingPreferences,
@@ -56,7 +57,7 @@ type NotificationPreferences = {
   };
 };
 
-type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations' | 'sms' | 'kvkk';
+type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations' | 'sms' | 'imaging' | 'kvkk';
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   whatsapp: {
@@ -239,7 +240,7 @@ const SimplePreferenceRow: React.FC<SimplePreferenceRowProps> = ({
 );
 
 const Settings: React.FC = () => {
-  const { t, i18n } = useTranslation(['common', 'settings', 'recall', 'sms']);
+  const { t, i18n } = useTranslation(['common', 'settings', 'recall', 'sms', 'imaging']);
   const { user } = useAuth();
   const { availableClinics, selectedClinicId } = useClinic();
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
@@ -257,6 +258,8 @@ const Settings: React.FC = () => {
   const canSeeKvkk = canManageClinicLegalProfile(user);
   // SMS settings/provider management is restricted to admin/manager roles
   const canSeeSms = !isDentist && canManageUsers(user);
+  // Görüntüleme cihaz/köprü yönetimi: yalnızca OWNER/ORG_ADMIN/CLINIC_MANAGER
+  const canSeeImaging = canManageImagingDevices(user);
   const firstAllowedTab: SettingsTab = canSeeGeneral
     ? 'general'
     : canSeeAvailability
@@ -302,6 +305,7 @@ const Settings: React.FC = () => {
       (activeTab === 'integrations' && canSeeIntegrationsTab) ||
       (activeTab === 'availability' && canSeeAvailability) ||
       (activeTab === 'sms' && canSeeSms) ||
+      (activeTab === 'imaging' && canSeeImaging) ||
       (activeTab === 'kvkk' && canSeeKvkk);
 
     if (!activeTabAllowed) {
@@ -311,6 +315,7 @@ const Settings: React.FC = () => {
     activeTab,
     canSeeAvailability,
     canSeeGeneral,
+    canSeeImaging,
     canSeeRecall,
     canSeeIntegrationsTab,
     canSeeKvkk,
@@ -582,6 +587,17 @@ const Settings: React.FC = () => {
               >
                 <MessageSquare size={18} />
                 {t('sms:nav')}
+              </button>
+            )}
+            {canSeeImaging && (
+              <button
+                onClick={() => setActiveTab('imaging')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'imaging' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <ScanLine size={18} />
+                {t('imaging:settings.nav')}
               </button>
             )}
             {canSeeKvkk && (
@@ -1183,6 +1199,9 @@ const Settings: React.FC = () => {
             <SmsSettingsSection clinicId={selectedClinic?.id} />
           )}
 
+          {canSeeImaging && activeTab === 'imaging' && (
+            <ImagingSettingsPanel />
+          )}
           {canSeeKvkk && activeTab === 'kvkk' && (
             <ClinicKvkkSection
               clinicId={selectedClinic?.id}

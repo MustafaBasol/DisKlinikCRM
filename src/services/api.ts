@@ -317,6 +317,78 @@ export const attachmentService = {
   },
 };
 
+export const imagingService = {
+  // ── Cihazlar ──
+  getDevices: (params?: { onlyActive?: boolean }) =>
+    api.get('/imaging/devices', { params: params?.onlyActive ? { onlyActive: 'true' } : undefined }),
+  createDevice: (data: any) => api.post('/imaging/devices', data),
+  updateDevice: (id: string, data: any) => api.put(`/imaging/devices/${id}`, data),
+  // Çalışma/istem referansı varsa backend pasifleştirir, yoksa siler.
+  deleteDevice: (id: string) => api.delete(`/imaging/devices/${id}`),
+
+  // ── Çekim istemleri ──
+  getRequests: (params?: { status?: string; patientId?: string }) =>
+    api.get('/imaging/requests', { params }),
+  createRequest: (data: any) => api.post('/imaging/requests', data),
+  updateRequest: (id: string, data: any) => api.patch(`/imaging/requests/${id}`, data),
+  cancelRequest: (id: string) => api.patch(`/imaging/requests/${id}/cancel`),
+
+  // ── Çalışmalar ──
+  getPatientStudies: (patientId: string, includeArchived = false) =>
+    api.get(`/patients/${patientId}/imaging`, {
+      params: includeArchived ? { includeArchived: 'true' } : undefined,
+    }),
+  getStudy: (id: string) => api.get(`/imaging/studies/${id}`),
+  getUnlinked: () => api.get('/imaging/unlinked'),
+  uploadStudy: (formData: FormData) =>
+    // Content-Type must be undefined so Axios auto-sets multipart/form-data with boundary
+    api.post('/imaging/studies', formData, { headers: { 'Content-Type': undefined } }),
+  linkStudy: (id: string, data: { patientId: string; appointmentId?: string; treatmentCaseId?: string }) =>
+    api.patch(`/imaging/studies/${id}/link`, data),
+  unlinkStudy: (id: string) => api.patch(`/imaging/studies/${id}/unlink`),
+  archiveStudy: (id: string) => api.patch(`/imaging/studies/${id}/archive`),
+  unarchiveStudy: (id: string) => api.patch(`/imaging/studies/${id}/unarchive`),
+
+  // ── Görüntü stream'leri (kimlik doğrulamalı blob; public URL asla yok) ──
+  downloadImage: async (studyId: string, imageId: string, fileName: string) => {
+    const response = await api.get(
+      `/imaging/studies/${studyId}/images/${imageId}/download`,
+      { responseType: 'blob' },
+    );
+    const url = URL.createObjectURL(response.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+  // Object URL for in-app preview (img/iframe src) — caller must URL.revokeObjectURL when done.
+  loadPreviewObjectUrl: async (studyId: string, imageId: string) => {
+    const response = await api.get(
+      `/imaging/studies/${studyId}/images/${imageId}/preview`,
+      { responseType: 'blob' },
+    );
+    return URL.createObjectURL(response.data);
+  },
+  // Object URL from the download endpoint (used as "open in new tab" fallback for
+  // non-previewable mime types, since the preview endpoint 415s on those).
+  loadDownloadObjectUrl: async (studyId: string, imageId: string) => {
+    const response = await api.get(
+      `/imaging/studies/${studyId}/images/${imageId}/download`,
+      { responseType: 'blob' },
+    );
+    return URL.createObjectURL(response.data);
+  },
+
+  // ── Köprü ajanları (yanıt tokenHash içermez; düz metin token yalnızca
+  //    createBridge yanıtında bir kez döner) ──
+  getBridges: () => api.get('/imaging/bridges'),
+  createBridge: (data: { name: string; clinicId?: string }) => api.post('/imaging/bridges', data),
+  revokeBridge: (id: string) => api.post(`/imaging/bridges/${id}/revoke`),
+};
+
 export const dashboardService = {
   getStats: () => api.get('/dashboard/stats'),
 };

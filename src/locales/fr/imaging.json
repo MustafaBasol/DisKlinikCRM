@@ -1,0 +1,137 @@
+{
+  "tab": "Imagerie",
+  "modalities": {
+    "IO": "Radio intra-orale",
+    "PX": "Panoramique",
+    "CT": "CBCT",
+    "CEPH": "Céphalométrique",
+    "IO_CAMERA": "Caméra intra-orale",
+    "SCANNER": "Scanner",
+    "OTHER": "Autre"
+  },
+  "sources": {
+    "manual_upload": "Téléversement manuel",
+    "bridge": "Agent passerelle",
+    "import": "Importation"
+  },
+  "study": {
+    "date": "Date de l'examen",
+    "modality": "Modalité",
+    "description": "Description",
+    "device": "Appareil",
+    "source": "Source",
+    "images": "{{count}} image(s)",
+    "archivedBadge": "Archivé",
+    "noDescription": "Aucune description",
+    "uploadedBy": "Téléversé par"
+  },
+  "actions": {
+    "upload": "Téléverser une image",
+    "preview": "Aperçu",
+    "download": "Télécharger",
+    "archive": "Archiver",
+    "unarchive": "Désarchiver",
+    "unlink": "Dissocier",
+    "link": "Associer au patient"
+  },
+  "confirm": {
+    "unlink": "Cet examen sera détaché du patient et renvoyé dans la file non associée. Continuer ?",
+    "archive": "Cet examen sera archivé. Les images originales ne sont jamais supprimées. Continuer ?"
+  },
+  "upload": {
+    "title": "Téléverser une image",
+    "file": "Fichier",
+    "fileHint": "JPEG, PNG, WebP ou DICOM (.dcm) — jusqu'à {{max}} Mo",
+    "noFile": "Aucun fichier sélectionné",
+    "modality": "Modalité",
+    "description": "Description (optionnel)",
+    "device": "Appareil (optionnel)",
+    "deviceNone": "Aucun appareil sélectionné",
+    "submit": "Téléverser",
+    "uploading": "Téléversement...",
+    "success": "Image téléversée",
+    "failed": "Échec du téléversement. Vérifiez le type et la taille du fichier."
+  },
+  "patient": {
+    "empty": "Aucun examen d'imagerie pour ce patient",
+    "emptyDescription": "Utilisez le bouton « Téléverser une image » pour ajouter une radio, une panoramique ou un CBCT.",
+    "includeArchived": "Afficher les archivés"
+  },
+  "queue": {
+    "nav": "File d'imagerie",
+    "title": "Images non associées",
+    "subtitle": "Examens d'imagerie pas encore associés à un patient",
+    "empty": "Aucune image non associée",
+    "emptyDescription": "Les examens téléversés sans patient ou reçus via la passerelle apparaissent ici.",
+    "linkModal": {
+      "title": "Associer au patient",
+      "searchPlaceholder": "Rechercher par nom ou téléphone...",
+      "noResults": "Aucun patient trouvé",
+      "confirm": "Cet examen sera associé à {{name}}. Continuer ?",
+      "submit": "Associer",
+      "success": "Examen associé au patient",
+      "failed": "Échec de l'association"
+    }
+  },
+  "settings": {
+    "nav": "Imagerie",
+    "devices": {
+      "title": "Appareils d'imagerie",
+      "description": "Capteurs radio, appareils panoramiques/CBCT et scanners de la clinique",
+      "add": "Ajouter un appareil",
+      "edit": "Modifier l'appareil",
+      "name": "Nom de l'appareil",
+      "modality": "Modalité",
+      "manufacturer": "Fabricant (optionnel)",
+      "modelName": "Modèle (optionnel)",
+      "connectionType": "Type de connexion",
+      "connections": {
+        "manual": "Téléversement manuel",
+        "bridge": "Agent passerelle (à venir)",
+        "dicomweb": "DICOMweb / PACS (à venir)"
+      },
+      "notes": "Notes (optionnel)",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "deactivate": "Désactiver",
+      "deactivateConfirm": "Cet appareil sera désactivé, ou supprimé s'il n'a jamais été utilisé. Continuer ?",
+      "usage": "{{studies}} examens · {{requests}} demandes",
+      "empty": "Aucun appareil enregistré",
+      "emptyDescription": "Ajoutez d'abord un appareil pour pouvoir y associer des images.",
+      "saveFailed": "Échec de l'enregistrement de l'appareil"
+    },
+    "bridges": {
+      "title": "Agents passerelle",
+      "description": "Agents locaux reliant le logiciel d'imagerie de la clinique à NoraMedi",
+      "register": "Enregistrer un agent",
+      "name": "Nom de l'agent",
+      "namePlaceholder": "ex. Passerelle PC accueil",
+      "status": {
+        "pending": "En attente",
+        "online": "En ligne",
+        "offline": "Hors ligne",
+        "revoked": "Révoqué"
+      },
+      "lastSeen": "Dernière connexion",
+      "never": "Jamais connecté",
+      "version": "Version",
+      "revoke": "Révoquer",
+      "revokeConfirm": "Le jeton de cet agent sera immédiatement invalidé et l'agent ne pourra plus se connecter. Continuer ?",
+      "empty": "Aucun agent passerelle enregistré",
+      "emptyDescription": "Enregistrez un agent pour configurer la passerelle d'imagerie locale.",
+      "registerFailed": "Échec de l'enregistrement de l'agent",
+      "revokeFailed": "Échec de la révocation de l'agent",
+      "token": {
+        "title": "Jeton de passerelle",
+        "warning": "Ce jeton n'est visible que MAINTENANT. Une fois cette fenêtre fermée, il ne pourra plus jamais être affiché — en cas de perte, révoquez l'agent et enregistrez-en un nouveau.",
+        "copy": "Copier",
+        "copied": "Copié",
+        "done": "J'ai enregistré le jeton, fermer"
+      }
+    }
+  },
+  "errors": {
+    "loadFailed": "Échec du chargement des données d'imagerie",
+    "actionFailed": "Échec de l'opération"
+  }
+}

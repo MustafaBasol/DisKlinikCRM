@@ -1,0 +1,137 @@
+{
+  "tab": "Görüntüleme",
+  "modalities": {
+    "IO": "Ağız İçi Röntgen",
+    "PX": "Panoramik",
+    "CT": "CBCT",
+    "CEPH": "Sefalometrik",
+    "IO_CAMERA": "Ağız İçi Kamera",
+    "SCANNER": "Tarayıcı",
+    "OTHER": "Diğer"
+  },
+  "sources": {
+    "manual_upload": "Manuel yükleme",
+    "bridge": "Köprü ajanı",
+    "import": "İçe aktarma"
+  },
+  "study": {
+    "date": "Çekim Tarihi",
+    "modality": "Modalite",
+    "description": "Açıklama",
+    "device": "Cihaz",
+    "source": "Kaynak",
+    "images": "{{count}} görüntü",
+    "archivedBadge": "Arşivlendi",
+    "noDescription": "Açıklama yok",
+    "uploadedBy": "Yükleyen"
+  },
+  "actions": {
+    "upload": "Görüntü Yükle",
+    "preview": "Önizle",
+    "download": "İndir",
+    "archive": "Arşivle",
+    "unarchive": "Arşivden Çıkar",
+    "unlink": "Bağlantıyı Kaldır",
+    "link": "Hastaya Bağla"
+  },
+  "confirm": {
+    "unlink": "Bu çalışma hastadan ayrılacak ve bağlanmamış kuyruğuna dönecek. Devam edilsin mi?",
+    "archive": "Bu çalışma arşivlenecek. Orijinal görüntüler silinmez. Devam edilsin mi?"
+  },
+  "upload": {
+    "title": "Görüntü Yükle",
+    "file": "Dosya",
+    "fileHint": "JPEG, PNG, WebP veya DICOM (.dcm) — en fazla {{max}} MB",
+    "noFile": "Dosya seçilmedi",
+    "modality": "Modalite",
+    "description": "Açıklama (opsiyonel)",
+    "device": "Cihaz (opsiyonel)",
+    "deviceNone": "Cihaz seçilmedi",
+    "submit": "Yükle",
+    "uploading": "Yükleniyor...",
+    "success": "Görüntü yüklendi",
+    "failed": "Yükleme başarısız oldu. Dosya türünü ve boyutunu kontrol edin."
+  },
+  "patient": {
+    "empty": "Bu hastaya ait görüntüleme çalışması yok",
+    "emptyDescription": "Röntgen, panoramik veya CBCT görüntüsü yüklemek için \"Görüntü Yükle\" düğmesini kullanın.",
+    "includeArchived": "Arşivlenenleri göster"
+  },
+  "queue": {
+    "nav": "Görüntüleme Kuyruğu",
+    "title": "Bağlanmamış Görüntüler",
+    "subtitle": "Henüz bir hastaya bağlanmamış görüntüleme çalışmaları",
+    "empty": "Bağlanmamış görüntü yok",
+    "emptyDescription": "Hastasız yüklenen veya köprüden gelen çalışmalar burada görünür.",
+    "linkModal": {
+      "title": "Hastaya Bağla",
+      "searchPlaceholder": "Hasta adı veya telefon ile ara...",
+      "noResults": "Hasta bulunamadı",
+      "confirm": "Bu çalışma {{name}} adlı hastaya bağlanacak. Devam edilsin mi?",
+      "submit": "Bağla",
+      "success": "Çalışma hastaya bağlandı",
+      "failed": "Bağlama başarısız oldu"
+    }
+  },
+  "settings": {
+    "nav": "Görüntüleme",
+    "devices": {
+      "title": "Görüntüleme Cihazları",
+      "description": "Klinikteki röntgen sensörleri, panoramik/CBCT cihazları ve tarayıcılar",
+      "add": "Cihaz Ekle",
+      "edit": "Cihazı Düzenle",
+      "name": "Cihaz Adı",
+      "modality": "Modalite",
+      "manufacturer": "Üretici (opsiyonel)",
+      "modelName": "Model (opsiyonel)",
+      "connectionType": "Bağlantı Türü",
+      "connections": {
+        "manual": "Manuel yükleme",
+        "bridge": "Köprü ajanı (gelecek)",
+        "dicomweb": "DICOMweb / PACS (gelecek)"
+      },
+      "notes": "Notlar (opsiyonel)",
+      "active": "Aktif",
+      "inactive": "Pasif",
+      "deactivate": "Pasifleştir",
+      "deactivateConfirm": "Bu cihaz pasifleştirilecek veya (hiç kullanılmadıysa) silinecek. Devam edilsin mi?",
+      "usage": "{{studies}} çalışma · {{requests}} istem",
+      "empty": "Kayıtlı cihaz yok",
+      "emptyDescription": "Görüntüleri cihazla ilişkilendirebilmek için önce bir cihaz ekleyin.",
+      "saveFailed": "Cihaz kaydedilemedi"
+    },
+    "bridges": {
+      "title": "Köprü Ajanları",
+      "description": "Klinikteki görüntüleme yazılımını NoraMedi'ye bağlayan yerel ajanlar",
+      "register": "Ajan Kaydet",
+      "name": "Ajan Adı",
+      "namePlaceholder": "örn. Resepsiyon PC köprüsü",
+      "status": {
+        "pending": "Bekliyor",
+        "online": "Çevrimiçi",
+        "offline": "Çevrimdışı",
+        "revoked": "İptal edildi"
+      },
+      "lastSeen": "Son görülme",
+      "never": "Henüz bağlanmadı",
+      "version": "Sürüm",
+      "revoke": "İptal Et",
+      "revokeConfirm": "Bu ajanın token'ı anında geçersiz olacak ve ajan bir daha bağlanamayacak. Devam edilsin mi?",
+      "empty": "Kayıtlı köprü ajanı yok",
+      "emptyDescription": "Yerel görüntüleme köprüsünü kurmak için bir ajan kaydedin.",
+      "registerFailed": "Ajan kaydedilemedi",
+      "revokeFailed": "Ajan iptal edilemedi",
+      "token": {
+        "title": "Köprü Token'ı",
+        "warning": "Bu token yalnızca ŞİMDİ görüntülenebilir. Bu pencereyi kapattıktan sonra token bir daha gösterilemez — kaybederseniz ajanı iptal edip yeniden kaydetmeniz gerekir.",
+        "copy": "Kopyala",
+        "copied": "Kopyalandı",
+        "done": "Token'ı kaydettim, kapat"
+      }
+    }
+  },
+  "errors": {
+    "loadFailed": "Görüntüleme verileri yüklenemedi",
+    "actionFailed": "İşlem başarısız oldu"
+  }
+}

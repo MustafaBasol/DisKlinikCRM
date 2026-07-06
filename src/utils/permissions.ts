@@ -635,3 +635,31 @@ export function canManageLabOrders(user: UserForPermission | null | undefined): 
     role === 'ASSISTANT'
   );
 }
+
+// ── Görüntüleme (Imaging) ─────────────────────────────────────────────────────
+
+/**
+ * Klinik görüntüleme erişimi (hasta görüntüleme sekmesi, bağlanmamış kuyruk,
+ * çalışma önizleme/indirme).
+ * server/src/routes/imaging.ts IMAGING_CLINICAL_ROLES ile senkron:
+ * BILLING ve ASSISTANT tıbbi görüntülere erişemez.
+ */
+export function canViewImaging(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'DENTIST' ||
+    role === 'RECEPTIONIST'
+  );
+}
+
+/**
+ * Görüntüleme cihazı ve köprü (bridge) ajanı yönetimi (Ayarlar → Görüntüleme).
+ * server/src/routes/imaging.ts IMAGING_MANAGE_ROLES ile senkron.
+ */
+export function canManageImagingDevices(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}

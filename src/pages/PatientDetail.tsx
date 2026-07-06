@@ -45,12 +45,13 @@ import PaymentForm from '../components/PaymentForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
 import FilePreviewModal, { isInlinePreviewable } from '../components/FilePreviewModal';
-import { normalizeRole, canViewPatients } from '../utils/permissions';
+import PatientImagingTab from '../components/imaging/PatientImagingTab';
+import { normalizeRole, canViewPatients, canViewImaging } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases', 'appointments', 'postTreatment']);
+  const { t } = useTranslation(['patients', 'tasks', 'common', 'messages', 'insurance', 'payments', 'treatmentCases', 'appointments', 'postTreatment', 'imaging']);
   const { user } = useAuth();
   const { defaultCurrency, locale, timezone, formatCurrency, formatNumber, formatDate, formatTime, formatDateTime } = useClinicPreferences();
   const userCanonicalRole = normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false);
@@ -62,7 +63,10 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'dental' | 'privacy'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'imaging' | 'dental' | 'privacy'>('overview');
+  // Klinik görüntüler tıbbi kayıttır: BILLING ve ASSISTANT sekmeyi hiç görmez
+  // (server/src/routes/imaging.ts IMAGING_CLINICAL_ROLES ile senkron).
+  const canSeeImaging = canViewImaging(user);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -321,14 +325,14 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="flex gap-1 sm:gap-4 border-b border-gray-200 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'dental', 'activity', 'privacy'] as const).map(tab => (
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'imaging', 'dental', 'activity', 'privacy'] as const).filter(tab => tab !== 'imaging' || canSeeImaging).map(tab => (
           <button 
             key={tab}
             data-tab={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'dental' ? t('patients:dentalChart.title') : tab === 'privacy' ? 'Gizlilik' : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'imaging' ? t('imaging:tab') : tab === 'dental' ? t('patients:dentalChart.title') : tab === 'privacy' ? 'Gizlilik' : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -1245,6 +1249,10 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
           </div>
+        )}
+        {/* Imaging Tab — BILLING/ASSISTANT için render edilmez */}
+        {activeTab === 'imaging' && canSeeImaging && (
+          <PatientImagingTab patientId={id!} />
         )}
         {/* Dental Chart Tab */}
         {activeTab === 'dental' && (
