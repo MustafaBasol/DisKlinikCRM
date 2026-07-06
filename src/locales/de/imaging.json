@@ -1,0 +1,137 @@
+{
+  "tab": "Bildgebung",
+  "modalities": {
+    "IO": "Intraorales Röntgen",
+    "PX": "Panorama",
+    "CT": "DVT (CBCT)",
+    "CEPH": "Fernröntgen",
+    "IO_CAMERA": "Intraoralkamera",
+    "SCANNER": "Scanner",
+    "OTHER": "Sonstige"
+  },
+  "sources": {
+    "manual_upload": "Manueller Upload",
+    "bridge": "Bridge-Agent",
+    "import": "Import"
+  },
+  "study": {
+    "date": "Aufnahmedatum",
+    "modality": "Modalität",
+    "description": "Beschreibung",
+    "device": "Gerät",
+    "source": "Quelle",
+    "images": "{{count}} Bild(er)",
+    "archivedBadge": "Archiviert",
+    "noDescription": "Keine Beschreibung",
+    "uploadedBy": "Hochgeladen von"
+  },
+  "actions": {
+    "upload": "Bild hochladen",
+    "preview": "Vorschau",
+    "download": "Herunterladen",
+    "archive": "Archivieren",
+    "unarchive": "Wiederherstellen",
+    "unlink": "Verknüpfung lösen",
+    "link": "Mit Patient verknüpfen"
+  },
+  "confirm": {
+    "unlink": "Diese Aufnahme wird vom Patienten getrennt und in die unverknüpfte Warteschlange zurückgelegt. Fortfahren?",
+    "archive": "Diese Aufnahme wird archiviert. Originalbilder werden nie gelöscht. Fortfahren?"
+  },
+  "upload": {
+    "title": "Bild hochladen",
+    "file": "Datei",
+    "fileHint": "JPEG, PNG, WebP oder DICOM (.dcm) — bis zu {{max}} MB",
+    "noFile": "Keine Datei ausgewählt",
+    "modality": "Modalität",
+    "description": "Beschreibung (optional)",
+    "device": "Gerät (optional)",
+    "deviceNone": "Kein Gerät ausgewählt",
+    "submit": "Hochladen",
+    "uploading": "Wird hochgeladen...",
+    "success": "Bild hochgeladen",
+    "failed": "Upload fehlgeschlagen. Prüfen Sie Dateityp und -größe."
+  },
+  "patient": {
+    "empty": "Keine Bildgebungsaufnahmen für diesen Patienten",
+    "emptyDescription": "Verwenden Sie „Bild hochladen“, um ein Röntgen-, Panorama- oder DVT-Bild hinzuzufügen.",
+    "includeArchived": "Archivierte anzeigen"
+  },
+  "queue": {
+    "nav": "Bildgebungs-Warteschlange",
+    "title": "Unverknüpfte Aufnahmen",
+    "subtitle": "Aufnahmen, die noch keinem Patienten zugeordnet sind",
+    "empty": "Keine unverknüpften Aufnahmen",
+    "emptyDescription": "Aufnahmen ohne Patient oder von der Bridge erscheinen hier.",
+    "linkModal": {
+      "title": "Mit Patient verknüpfen",
+      "searchPlaceholder": "Nach Name oder Telefon suchen...",
+      "noResults": "Keine Patienten gefunden",
+      "confirm": "Diese Aufnahme wird mit {{name}} verknüpft. Fortfahren?",
+      "submit": "Verknüpfen",
+      "success": "Aufnahme mit Patient verknüpft",
+      "failed": "Verknüpfung fehlgeschlagen"
+    }
+  },
+  "settings": {
+    "nav": "Bildgebung",
+    "devices": {
+      "title": "Bildgebungsgeräte",
+      "description": "Röntgensensoren, Panorama-/DVT-Geräte und Scanner der Praxis",
+      "add": "Gerät hinzufügen",
+      "edit": "Gerät bearbeiten",
+      "name": "Gerätename",
+      "modality": "Modalität",
+      "manufacturer": "Hersteller (optional)",
+      "modelName": "Modell (optional)",
+      "connectionType": "Verbindungstyp",
+      "connections": {
+        "manual": "Manueller Upload",
+        "bridge": "Bridge-Agent (zukünftig)",
+        "dicomweb": "DICOMweb / PACS (zukünftig)"
+      },
+      "notes": "Notizen (optional)",
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "deactivate": "Deaktivieren",
+      "deactivateConfirm": "Dieses Gerät wird deaktiviert oder gelöscht, falls es nie verwendet wurde. Fortfahren?",
+      "usage": "{{studies}} Aufnahmen · {{requests}} Anforderungen",
+      "empty": "Keine Geräte registriert",
+      "emptyDescription": "Fügen Sie zuerst ein Gerät hinzu, um Bilder zuordnen zu können.",
+      "saveFailed": "Gerät konnte nicht gespeichert werden"
+    },
+    "bridges": {
+      "title": "Bridge-Agenten",
+      "description": "Lokale Agenten, die die Bildgebungssoftware der Praxis mit NoraMedi verbinden",
+      "register": "Agent registrieren",
+      "name": "Agentname",
+      "namePlaceholder": "z. B. Empfangs-PC-Bridge",
+      "status": {
+        "pending": "Ausstehend",
+        "online": "Online",
+        "offline": "Offline",
+        "revoked": "Widerrufen"
+      },
+      "lastSeen": "Zuletzt gesehen",
+      "never": "Nie verbunden",
+      "version": "Version",
+      "revoke": "Widerrufen",
+      "revokeConfirm": "Das Token dieses Agenten wird sofort ungültig und der Agent kann sich nicht mehr verbinden. Fortfahren?",
+      "empty": "Keine Bridge-Agenten registriert",
+      "emptyDescription": "Registrieren Sie einen Agenten, um die lokale Bildgebungs-Bridge einzurichten.",
+      "registerFailed": "Agent konnte nicht registriert werden",
+      "revokeFailed": "Agent konnte nicht widerrufen werden",
+      "token": {
+        "title": "Bridge-Token",
+        "warning": "Dieses Token ist nur JETZT sichtbar. Nach dem Schließen dieses Fensters kann es nie wieder angezeigt werden — bei Verlust widerrufen Sie den Agenten und registrieren einen neuen.",
+        "copy": "Kopieren",
+        "copied": "Kopiert",
+        "done": "Token gespeichert, schließen"
+      }
+    }
+  },
+  "errors": {
+    "loadFailed": "Bildgebungsdaten konnten nicht geladen werden",
+    "actionFailed": "Aktion fehlgeschlagen"
+  }
+}

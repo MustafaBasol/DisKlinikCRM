@@ -1,0 +1,137 @@
+{
+  "tab": "Imaging",
+  "modalities": {
+    "IO": "Intraoral X-ray",
+    "PX": "Panoramic",
+    "CT": "CBCT",
+    "CEPH": "Cephalometric",
+    "IO_CAMERA": "Intraoral Camera",
+    "SCANNER": "Scanner",
+    "OTHER": "Other"
+  },
+  "sources": {
+    "manual_upload": "Manual upload",
+    "bridge": "Bridge agent",
+    "import": "Import"
+  },
+  "study": {
+    "date": "Study Date",
+    "modality": "Modality",
+    "description": "Description",
+    "device": "Device",
+    "source": "Source",
+    "images": "{{count}} image(s)",
+    "archivedBadge": "Archived",
+    "noDescription": "No description",
+    "uploadedBy": "Uploaded by"
+  },
+  "actions": {
+    "upload": "Upload Image",
+    "preview": "Preview",
+    "download": "Download",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "unlink": "Unlink",
+    "link": "Link to Patient"
+  },
+  "confirm": {
+    "unlink": "This study will be detached from the patient and returned to the unlinked queue. Continue?",
+    "archive": "This study will be archived. Original images are never deleted. Continue?"
+  },
+  "upload": {
+    "title": "Upload Image",
+    "file": "File",
+    "fileHint": "JPEG, PNG, WebP or DICOM (.dcm) — up to {{max}} MB",
+    "noFile": "No file selected",
+    "modality": "Modality",
+    "description": "Description (optional)",
+    "device": "Device (optional)",
+    "deviceNone": "No device selected",
+    "submit": "Upload",
+    "uploading": "Uploading...",
+    "success": "Image uploaded",
+    "failed": "Upload failed. Check the file type and size."
+  },
+  "patient": {
+    "empty": "No imaging studies for this patient",
+    "emptyDescription": "Use the \"Upload Image\" button to add an X-ray, panoramic or CBCT image.",
+    "includeArchived": "Show archived"
+  },
+  "queue": {
+    "nav": "Imaging Queue",
+    "title": "Unlinked Images",
+    "subtitle": "Imaging studies not yet linked to a patient",
+    "empty": "No unlinked images",
+    "emptyDescription": "Studies uploaded without a patient or received from the bridge appear here.",
+    "linkModal": {
+      "title": "Link to Patient",
+      "searchPlaceholder": "Search by patient name or phone...",
+      "noResults": "No patients found",
+      "confirm": "This study will be linked to {{name}}. Continue?",
+      "submit": "Link",
+      "success": "Study linked to patient",
+      "failed": "Linking failed"
+    }
+  },
+  "settings": {
+    "nav": "Imaging",
+    "devices": {
+      "title": "Imaging Devices",
+      "description": "X-ray sensors, panoramic/CBCT units and scanners in the clinic",
+      "add": "Add Device",
+      "edit": "Edit Device",
+      "name": "Device Name",
+      "modality": "Modality",
+      "manufacturer": "Manufacturer (optional)",
+      "modelName": "Model (optional)",
+      "connectionType": "Connection Type",
+      "connections": {
+        "manual": "Manual upload",
+        "bridge": "Bridge agent (future)",
+        "dicomweb": "DICOMweb / PACS (future)"
+      },
+      "notes": "Notes (optional)",
+      "active": "Active",
+      "inactive": "Inactive",
+      "deactivate": "Deactivate",
+      "deactivateConfirm": "This device will be deactivated, or deleted if it was never used. Continue?",
+      "usage": "{{studies}} studies · {{requests}} requests",
+      "empty": "No devices registered",
+      "emptyDescription": "Add a device first so images can be associated with it.",
+      "saveFailed": "Failed to save device"
+    },
+    "bridges": {
+      "title": "Bridge Agents",
+      "description": "Local agents connecting the clinic's imaging software to NoraMedi",
+      "register": "Register Agent",
+      "name": "Agent Name",
+      "namePlaceholder": "e.g. Reception PC bridge",
+      "status": {
+        "pending": "Pending",
+        "online": "Online",
+        "offline": "Offline",
+        "revoked": "Revoked"
+      },
+      "lastSeen": "Last seen",
+      "never": "Never connected",
+      "version": "Version",
+      "revoke": "Revoke",
+      "revokeConfirm": "This agent's token will be invalidated immediately and the agent will no longer be able to connect. Continue?",
+      "empty": "No bridge agents registered",
+      "emptyDescription": "Register an agent to set up the local imaging bridge.",
+      "registerFailed": "Failed to register agent",
+      "revokeFailed": "Failed to revoke agent",
+      "token": {
+        "title": "Bridge Token",
+        "warning": "This token is visible only NOW. After closing this window it can never be shown again — if you lose it, revoke the agent and register a new one.",
+        "copy": "Copy",
+        "copied": "Copied",
+        "done": "I saved the token, close"
+      }
+    }
+  },
+  "errors": {
+    "loadFailed": "Failed to load imaging data",
+    "actionFailed": "Action failed"
+  }
+}
