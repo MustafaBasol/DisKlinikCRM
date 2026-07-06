@@ -643,7 +643,7 @@ export default function WhatsAppConnections() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -771,7 +771,7 @@ export default function WhatsAppConnections() {
                         <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
                           {t('whatsapp:connections.legacy.description')}
                         </p>
-                        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-amber-700 dark:text-amber-300">
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-amber-700 dark:text-amber-300">
                           {conn.evolutionApiUrl && (
                             <>
                               <span className="font-medium">{t('whatsapp:connections.modal.apiUrl')}</span>
@@ -1036,7 +1036,7 @@ export default function WhatsAppConnections() {
                 {/* Expanded details */}
                 {expandedId === conn.id && (
                   <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
                       {conn.provider === 'evolution_api' && (
                         <>
                           {conn.evolutionApiUrl && (
@@ -1136,7 +1136,7 @@ export default function WhatsAppConnections() {
                 {t('whatsapp:connections.deleteModal.title')}
               </h2>
             </div>
-            <div className="p-6 space-y-3">
+            <div className="p-4 sm:p-6 space-y-3">
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 {t('whatsapp:connections.deleteModal.confirm', { name: confirmDeleteConn.name })}
               </p>
@@ -1173,7 +1173,7 @@ export default function WhatsAppConnections() {
                 {editingId ? t('whatsapp:connections.modal.editTitle') : t('whatsapp:connections.modal.createTitle')}
               </h2>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {formError && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
                   {formError}
@@ -1206,7 +1206,7 @@ export default function WhatsAppConnections() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     {t('whatsapp:connections.modal.phoneNumber')}

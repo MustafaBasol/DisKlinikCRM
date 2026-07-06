@@ -257,11 +257,11 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2"><AlertCircle size={16} />{error}</div>}
           {successMsg && <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm flex items-center gap-2"><CheckCircle2 size={16} />{successMsg}</div>}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings:users.fields.firstName')} *</label>
               <input required className="input-field w-full" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} />
@@ -282,7 +282,7 @@ const UserModal: React.FC<{ user: any, onClose: () => void, onSuccess: () => voi
             <input className="input-field w-full" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings:users.fields.role')} *</label>
               <select className="input-field w-full" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>

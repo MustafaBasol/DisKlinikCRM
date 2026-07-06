@@ -227,7 +227,7 @@ export default function LabOrders() {
   if (!canViewLabOrders(user)) return null;
 
   return (
-    <div className="p-6 max-w-screen-xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto space-y-6">
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg border text-sm font-medium flex items-center gap-2 ${
@@ -514,7 +514,7 @@ function LabOrderFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('labOrders:form.patient')}</label>
               <select
@@ -749,7 +749,7 @@ function LabOrderDetailModal({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div><span className="text-gray-400">{t('labOrders:table.expectedReturnDate')}: </span>{order.expectedReturnDate ? formatDate(order.expectedReturnDate) : '-'}</div>
             <div><span className="text-gray-400">{t('labOrders:table.cost')}: </span>{order.labCost != null ? formatCurrency(order.labCost, order.currency ?? undefined) : '-'}</div>
             {order.toothFdi && <div><span className="text-gray-400">{t('labOrders:form.toothFdi')}: </span>{order.toothFdi}</div>}
@@ -886,7 +886,7 @@ function LaboratoriesModal({
             {laboratories.length === 0 && <p className="text-xs text-gray-400">{t('labOrders:laboratory.empty')}</p>}
           </div>
 
-          <form onSubmit={handleAdd} className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
+          <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
             <input
               placeholder={t('labOrders:laboratory.name') as string}
               value={name}
