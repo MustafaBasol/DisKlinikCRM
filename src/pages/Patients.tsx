@@ -10,6 +10,9 @@ import { useAuth } from '../context/AuthContext';
 import { canImportPatients, canViewPatients } from '../utils/permissions';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
+// Sunucudan tek seferde istenen hasta sayısı (backend 500 ile sınırlar).
+const PAGE_SIZE = 200;
+
 // Parses URL values like "30d" into a day count for the createdWithin filter.
 function parseCreatedWithinDays(value: string | null): number | undefined {
   if (!value) return undefined;
@@ -34,20 +37,28 @@ const Patients: React.FC = () => {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [createdWithinDays] = useState(() => parseCreatedWithinDays(searchParams.get('createdWithin')));
 
-  const fetchPatients = async () => {
-    setLoading(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchPatients = async (offset = 0) => {
+    if (offset === 0) setLoading(true); else setLoadingMore(true);
     try {
       const response = await patientService.getAll({
         search: search || undefined,
         status: status || undefined,
         includeArchived,
         createdWithinDays,
+        limit: PAGE_SIZE,
+        offset: offset || undefined,
       });
-      setPatients(response.data);
+      const rows = response.data ?? [];
+      setPatients(prev => (offset === 0 ? rows : [...prev, ...rows]));
+      setHasMore(rows.length === PAGE_SIZE);
     } catch (error) {
       console.error('Failed to fetch patients:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -203,6 +214,18 @@ const Patients: React.FC = () => {
                 )}
               </tbody>
             </table>
+            {hasMore && (
+              <div className="flex justify-center py-4 border-t border-gray-100">
+                <button
+                  onClick={() => fetchPatients(patients.length)}
+                  disabled={loadingMore}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {loadingMore && <Loader2 className="animate-spin" size={16} />}
+                  {t('common:loadMore', { defaultValue: 'Daha fazla yükle' })}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -135,5 +135,6 @@
     "finance": "Finance",
     "stock": "Stock",
     "management": "Management"
-  }
+  },
+  "loadMore": "Load more"
 }

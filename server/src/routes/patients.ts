@@ -48,8 +48,15 @@ router.get('/patients/check-phone-duplicate', authorize(['OWNER', 'ORG_ADMIN', '
 // GET /api/patients
 // BILLING dahil — yalnızca patientListSelect (kimlik + iletişim) alanları döner, klinik veri içermez.
 router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const { search, status, source, includeArchived, clinicId: selectedClinicId, createdWithinDays } = req.query;
+  const { search, status, source, includeArchived, clinicId: selectedClinicId, createdWithinDays, limit, offset } = req.query;
   const { normalizedRole, id: userId } = req.user!;
+
+  // limit gönderilmediğinde geriye dönük uyumluluk için tüm liste döner;
+  // gönderildiğinde 1..500 aralığına sıkıştırılır (frontend picker'ları 5-200 kullanıyor)
+  const parsedLimit = Number(limit);
+  const take = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(Math.floor(parsedLimit), 500) : undefined;
+  const parsedOffset = Number(offset);
+  const skip = Number.isFinite(parsedOffset) && parsedOffset > 0 ? Math.floor(parsedOffset) : undefined;
 
   try {
     const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
@@ -96,7 +103,13 @@ router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
       ];
     }
 
-    const patients = await prisma.patient.findMany({ where, select: patientListSelect, orderBy: { createdAt: 'desc' } });
+    const patients = await prisma.patient.findMany({
+      where,
+      select: patientListSelect,
+      orderBy: { createdAt: 'desc' },
+      ...(take !== undefined ? { take } : {}),
+      ...(skip !== undefined ? { skip } : {}),
+    });
     res.json(patients);
   } catch (err: any) {
     console.error('[patients] list error:', err?.message ?? err);
