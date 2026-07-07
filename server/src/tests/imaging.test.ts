@@ -711,6 +711,175 @@ async function main() {
     assert.equal(bridgePublicSrc.includes('authorize('), false, 'bridge public routes must never use user-role authorize()');
   });
 
+  // ── Device/bridge permanent-delete lifecycle (PR: imaging-device-agent-lifecycle) ──
+  section('Device/bridge lifecycle: eligibility rules (mock, mirrors route logic)');
+
+  type LifecycleDevice = { id: string; clinicId: string; studyCount: number; requestCount: number };
+  type LifecycleBridge = { id: string; clinicId: string; lastSeenAt: Date | null; studyCount: number; status: string };
+
+  function simulateDeviceDelete(devices: LifecycleDevice[], id: string, accessibleClinicIds: string[]) {
+    const device = devices.find(d => d.id === id && accessibleClinicIds.includes(d.clinicId));
+    if (!device) return { httpStatus: 404 as const };
+    if (device.studyCount + device.requestCount > 0) {
+      return { httpStatus: 409 as const, code: 'IMAGING_DEVICE_IN_USE', usage: { studyCount: device.studyCount, requestCount: device.requestCount } };
+    }
+    devices.splice(devices.indexOf(device), 1);
+    return { httpStatus: 200 as const, deleted: true };
+  }
+
+  function simulateBridgeDelete(bridges: LifecycleBridge[], id: string, accessibleClinicIds: string[]) {
+    const bridge = bridges.find(b => b.id === id && accessibleClinicIds.includes(b.clinicId));
+    if (!bridge) return { httpStatus: 404 as const };
+    const hasConnected = bridge.lastSeenAt !== null || bridge.studyCount > 0;
+    if (hasConnected) {
+      return { httpStatus: 409 as const, code: 'IMAGING_BRIDGE_IN_USE', usage: { studyCount: bridge.studyCount, hasConnected } };
+    }
+    bridges.splice(bridges.indexOf(bridge), 1);
+    return { httpStatus: 200 as const, deleted: true };
+  }
+
+  await test('unused device (no studies, no requests) is deletable', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 0, requestCount: 0 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 200);
+    assert.equal(devices.length, 0, 'device row must be removed');
+  });
+
+  await test('nonexistent device returns 404', () => {
+    const devices: LifecycleDevice[] = [];
+    assert.equal(simulateDeviceDelete(devices, 'missing', ['clinic-A']).httpStatus, 404);
+  });
+
+  await test('cross-clinic device deletion is blocked as 404 (never reveals existence)', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-B', studyCount: 0, requestCount: 0 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 404);
+    assert.equal(devices.length, 1, 'inaccessible device must not be touched');
+  });
+
+  await test('device with ImagingStudy usage returns 409 IMAGING_DEVICE_IN_USE and is not deleted', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 3, requestCount: 0 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+    assert.equal((result as any).code, 'IMAGING_DEVICE_IN_USE');
+    assert.equal(devices.length, 1, 'blocked deletion must not remove the device');
+  });
+
+  await test('device with ImagingRequest usage returns 409 IMAGING_DEVICE_IN_USE', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 0, requestCount: 1 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+    assert.equal((result as any).code, 'IMAGING_DEVICE_IN_USE');
+  });
+
+  await test('agent with no heartbeat, no studies is deletable', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: null, studyCount: 0, status: 'pending' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 200);
+    assert.equal(bridges.length, 0);
+  });
+
+  await test('nonexistent bridge returns 404', () => {
+    assert.equal(simulateBridgeDelete([], 'missing', ['clinic-A']).httpStatus, 404);
+  });
+
+  await test('cross-clinic bridge deletion is blocked as 404', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-B', lastSeenAt: null, studyCount: 0, status: 'pending' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 404);
+    assert.equal(bridges.length, 1);
+  });
+
+  await test('agent with lastSeenAt (ever heartbeated) returns 409 IMAGING_BRIDGE_IN_USE', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: new Date(), studyCount: 0, status: 'online' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+    assert.equal((result as any).code, 'IMAGING_BRIDGE_IN_USE');
+    assert.equal(bridges.length, 1);
+  });
+
+  await test('agent referenced by an ImagingStudy returns 409 IMAGING_BRIDGE_IN_USE', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: null, studyCount: 2, status: 'pending' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+  });
+
+  await test('revoked but historically connected agent remains non-deletable', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: new Date(), studyCount: 0, status: 'revoked' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409, 'revoked status alone must not make a connected agent deletable');
+  });
+
+  await test('revoked and never-connected/unused agent is deletable', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: null, studyCount: 0, status: 'revoked' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 200);
+    assert.equal(bridges.length, 0);
+  });
+
+  await test('race safety: historical usage inserted before deletion prevents the delete', () => {
+    // Simulates a study being created for a device between eligibility-check and delete —
+    // the real route re-counts usage inside the same $transaction, so this can never race in production.
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 0, requestCount: 0 }];
+    // A concurrent upload lands a study referencing the device just before the delete transaction commits.
+    devices[0].studyCount = 1;
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409, 'usage inserted before the delete transaction must block it');
+    assert.equal(devices.length, 1);
+  });
+
+  section('Device/bridge lifecycle: source regression checks');
+
+  await test('device and bridge DELETE routes exist and require IMAGING_MANAGE_ROLES', () => {
+    assert.ok(/router\.delete\('\/imaging\/devices\/:id',\s*authorize\(\[\.\.\.IMAGING_MANAGE_ROLES\]\)/.test(routeSrc));
+    assert.ok(/router\.delete\('\/imaging\/bridges\/:id',\s*authorize\(\[\.\.\.IMAGING_MANAGE_ROLES\]\)/.test(routeSrc));
+  });
+
+  await test('device delete uses a transaction to check usage and delete atomically', () => {
+    const deviceDeleteBlock = routeSrc.slice(
+      routeSrc.indexOf("router.delete('/imaging/devices/:id'"),
+      routeSrc.indexOf("// ═══ Çekim istemleri"),
+    );
+    assert.ok(deviceDeleteBlock.includes('$transaction'), 'eligibility check + delete must be transactional');
+    assert.ok(deviceDeleteBlock.includes("code: 'IMAGING_DEVICE_IN_USE'"));
+    assert.ok(deviceDeleteBlock.includes('status(409)'));
+  });
+
+  await test('bridge delete uses a transaction and never selects tokenHash', () => {
+    const bridgeDeleteBlock = routeSrc.slice(routeSrc.indexOf("router.delete('/imaging/bridges/:id'"));
+    assert.ok(bridgeDeleteBlock.includes('$transaction'));
+    assert.ok(bridgeDeleteBlock.includes("code: 'IMAGING_BRIDGE_IN_USE'"));
+    assert.equal(/tokenHash/.test(bridgeDeleteBlock), false, 'delete response must never include tokenHash');
+  });
+
+  await test('no study/request/image is ever hard-deleted by the device or bridge delete routes', () => {
+    assert.equal(routeSrc.includes('imagingStudy.delete'), false);
+    assert.equal(routeSrc.includes('imagingImage.delete'), false);
+    assert.equal(routeSrc.includes('imagingRequest.delete'), false);
+  });
+
+  await test('device/bridge delete actions are audited with safe metadata only', () => {
+    assert.ok(routeSrc.includes("'imaging_device_deleted'"));
+    assert.ok(routeSrc.includes("'imaging_bridge_deleted'"));
+    const deleteAuditCalls = routeSrc.match(/auditImaging\(req, existing\.clinicId, '(imaging_device_deleted|imaging_bridge_deleted)'[^;]*?\);/gs) ?? [];
+    assert.ok(deleteAuditCalls.length >= 2);
+    for (const call of deleteAuditCalls) {
+      assert.equal(/tokenHash|originalName|fileName|patientId/.test(call), false);
+    }
+  });
+
+  await test('list endpoints expose canDelete without exposing tokenHash', () => {
+    assert.ok(routeSrc.includes('canDelete:'), 'devices/bridges lists must expose canDelete for advisory UI');
+    assert.equal(/canDelete:[^,}]*tokenHash/.test(routeSrc), false);
+  });
+
+  await test('existing deactivate (PUT isActive) and revoke flows are unchanged', () => {
+    assert.ok(/router\.put\('\/imaging\/devices\/:id'/.test(routeSrc), 'device activation still goes through PUT');
+    assert.ok(routeSrc.includes("'imaging_device_updated'"));
+    assert.ok(routeSrc.includes("'imaging_bridge_revoked'"));
+    assert.ok(routeSrc.includes("if (existing.status === 'revoked') return res.status(409)"));
+  });
+
   // ── Summary ──────────────────────────────────────────────────────────────
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

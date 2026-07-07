@@ -10,11 +10,14 @@ import {
   Plus,
   Radio,
   ShieldOff,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useClinicPreferences } from '../../context/ClinicPreferencesContext';
 import { imagingService } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { IMAGING_MODALITIES, IMAGING_DEVICE_CONNECTION_TYPES } from './constants';
 import { deriveBridgeStatus, generateBridgeWatchConfig, type BridgeWatchConfig } from './bridgeHelpers';
 
@@ -28,6 +31,7 @@ interface DeviceRow {
   isActive: boolean;
   notes?: string | null;
   _count?: { imagingStudies: number; imagingRequests: number };
+  canDelete?: boolean;
 }
 
 interface BridgeRow {
@@ -38,6 +42,8 @@ interface BridgeRow {
   agentVersion?: string | null;
   createdAt: string;
   createdBy?: { id: string; firstName: string; lastName: string } | null;
+  canDelete?: boolean;
+  hasConnected?: boolean;
 }
 
 const emptyDeviceForm = {
@@ -85,6 +91,13 @@ const ImagingSettingsPanel: React.FC = () => {
   // Kısa ömürlü kopyalama geri bildirimi: "device:<id>" veya "config:<id>"
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [bridgeConfigPreview, setBridgeConfigPreview] = useState<{ device: DeviceRow; config: BridgeWatchConfig } | null>(null);
+
+  // Onay diyalogları (silme + iptal/pasifleştirme — window.confirm() kullanılmaz)
+  const [deviceToDelete, setDeviceToDelete] = useState<DeviceRow | null>(null);
+  const [bridgeToDelete, setBridgeToDelete] = useState<BridgeRow | null>(null);
+  const [bridgeToRevoke, setBridgeToRevoke] = useState<BridgeRow | null>(null);
+  const [deviceToDeactivate, setDeviceToDeactivate] = useState<DeviceRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -173,16 +186,54 @@ const ImagingSettingsPanel: React.FC = () => {
     }
   };
 
-  const deactivateDevice = async (device: DeviceRow) => {
-    if (!confirm(t('imaging:settings.devices.deactivateConfirm') as string)) return;
+  const toggleDeviceActive = async (device: DeviceRow) => {
+    if (device.isActive) {
+      setDeviceToDeactivate(device);
+      return;
+    }
     setBusyId(device.id);
     try {
-      await imagingService.deleteDevice(device.id);
+      await imagingService.setDeviceActive(device.id, true);
       await fetchAll();
     } catch {
       showToast(t('imaging:errors.actionFailed'), 'error');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const confirmDeactivateDevice = async () => {
+    if (!deviceToDeactivate || deleting) return;
+    setDeleting(true);
+    try {
+      await imagingService.setDeviceActive(deviceToDeactivate.id, false);
+      setDeviceToDeactivate(null);
+      await fetchAll();
+    } catch {
+      showToast(t('imaging:errors.actionFailed'), 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmDeleteDevice = async () => {
+    if (!deviceToDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await imagingService.deleteDevice(deviceToDelete.id);
+      setDeviceToDelete(null);
+      showToast(t('imaging:settings.devices.deleteSuccess'), 'success');
+      await fetchAll();
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      if (code === 'IMAGING_DEVICE_IN_USE') {
+        showToast(t('imaging:settings.devices.deleteBlockedInUse'), 'error');
+      } else {
+        showToast(getErrorMessage(err, t('imaging:settings.devices.deleteFailed') as string), 'error');
+      }
+      await fetchAll();
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -203,16 +254,38 @@ const ImagingSettingsPanel: React.FC = () => {
     }
   };
 
-  const revokeBridge = async (bridge: BridgeRow) => {
-    if (!confirm(t('imaging:settings.bridges.revokeConfirm') as string)) return;
-    setBusyId(bridge.id);
+  const confirmRevokeBridge = async () => {
+    if (!bridgeToRevoke || deleting) return;
+    setDeleting(true);
     try {
-      await imagingService.revokeBridge(bridge.id);
+      await imagingService.revokeBridge(bridgeToRevoke.id);
+      setBridgeToRevoke(null);
       await fetchAll();
     } catch {
       showToast(t('imaging:settings.bridges.revokeFailed'), 'error');
     } finally {
-      setBusyId(null);
+      setDeleting(false);
+    }
+  };
+
+  const confirmDeleteBridge = async () => {
+    if (!bridgeToDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await imagingService.deleteBridge(bridgeToDelete.id);
+      setBridgeToDelete(null);
+      showToast(t('imaging:settings.bridges.deleteSuccess'), 'success');
+      await fetchAll();
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      if (code === 'IMAGING_BRIDGE_IN_USE') {
+        showToast(t('imaging:settings.bridges.deleteBlockedInUse'), 'error');
+      } else {
+        showToast(getErrorMessage(err, t('imaging:settings.bridges.deleteFailed') as string), 'error');
+      }
+      await fetchAll();
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -331,15 +404,22 @@ const ImagingSettingsPanel: React.FC = () => {
                   >
                     {t('common:edit', { defaultValue: 'Düzenle' })}
                   </button>
-                  {device.isActive && (
-                    <button
-                      onClick={() => deactivateDevice(device)}
-                      disabled={busyId === device.id}
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      {t('imaging:settings.devices.deactivate')}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => toggleDeviceActive(device)}
+                    disabled={busyId === device.id}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {device.isActive ? t('imaging:settings.devices.deactivate') : t('imaging:settings.devices.activate')}
+                  </button>
+                  <button
+                    onClick={() => setDeviceToDelete(device)}
+                    disabled={device.canDelete === false || busyId === device.id}
+                    title={device.canDelete === false ? t('imaging:settings.devices.deleteBlockedInUse') as string : undefined}
+                    className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={13} />
+                    {t('imaging:settings.devices.deletePermanently')}
+                  </button>
                 </div>
               </div>
             ))}
@@ -420,13 +500,21 @@ const ImagingSettingsPanel: React.FC = () => {
                   </div>
                   {bridge.status !== 'revoked' && (
                     <button
-                      onClick={() => revokeBridge(bridge)}
+                      onClick={() => setBridgeToRevoke(bridge)}
                       disabled={busyId === bridge.id}
                       className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                     >
                       <ShieldOff size={14} /> {t('imaging:settings.bridges.revoke')}
                     </button>
                   )}
+                  <button
+                    onClick={() => setBridgeToDelete(bridge)}
+                    disabled={bridge.canDelete === false || busyId === bridge.id}
+                    title={bridge.canDelete === false ? t('imaging:settings.bridges.deleteBlockedInUse') as string : undefined}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={14} /> {t('imaging:settings.bridges.deletePermanently')}
+                  </button>
                 </div>
               );
             })}
@@ -618,6 +706,58 @@ const ImagingSettingsPanel: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Cihaz kalıcı silme onayı ── */}
+      <ConfirmDialog
+        open={!!deviceToDelete}
+        title={t('imaging:settings.devices.deletePermanentlyTitle')}
+        body={deviceToDelete ? t('imaging:settings.devices.deletePermanentlyBody', { name: deviceToDelete.name }) : ''}
+        warnings={[t('imaging:settings.devices.deletePermanentlyWarningBridgeConfig') as string]}
+        confirmLabel={t('imaging:settings.devices.deletePermanently') as string}
+        cancelLabel={t('common:cancel') as string}
+        loading={deleting}
+        onConfirm={confirmDeleteDevice}
+        onCancel={() => !deleting && setDeviceToDelete(null)}
+      />
+
+      {/* ── Cihaz pasifleştirme onayı ── */}
+      <ConfirmDialog
+        open={!!deviceToDeactivate}
+        variant="default"
+        title={t('imaging:settings.devices.deactivateTitle')}
+        body={deviceToDeactivate ? t('imaging:settings.devices.deactivateBody', { name: deviceToDeactivate.name }) : ''}
+        confirmLabel={t('imaging:settings.devices.deactivate') as string}
+        cancelLabel={t('common:cancel') as string}
+        loading={deleting}
+        onConfirm={confirmDeactivateDevice}
+        onCancel={() => !deleting && setDeviceToDeactivate(null)}
+      />
+
+      {/* ── Köprü ajanı kalıcı silme onayı ── */}
+      <ConfirmDialog
+        open={!!bridgeToDelete}
+        title={t('imaging:settings.bridges.deletePermanentlyTitle')}
+        body={bridgeToDelete ? t('imaging:settings.bridges.deletePermanentlyBody', { name: bridgeToDelete.name }) : ''}
+        warnings={[t('imaging:settings.bridges.deletePermanentlyWarningToken') as string]}
+        confirmLabel={t('imaging:settings.bridges.deletePermanently') as string}
+        cancelLabel={t('common:cancel') as string}
+        loading={deleting}
+        onConfirm={confirmDeleteBridge}
+        onCancel={() => !deleting && setBridgeToDelete(null)}
+      />
+
+      {/* ── Köprü ajanı iptal onayı ── */}
+      <ConfirmDialog
+        open={!!bridgeToRevoke}
+        variant="default"
+        title={t('imaging:settings.bridges.revokeTitle')}
+        body={bridgeToRevoke ? t('imaging:settings.bridges.revokeBody', { name: bridgeToRevoke.name }) : ''}
+        confirmLabel={t('imaging:settings.bridges.revoke') as string}
+        cancelLabel={t('common:cancel') as string}
+        loading={deleting}
+        onConfirm={confirmRevokeBridge}
+        onCancel={() => !deleting && setBridgeToRevoke(null)}
+      />
     </div>
   );
 };

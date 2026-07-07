@@ -223,7 +223,10 @@ router.get('/imaging/devices', authorize([...IMAGING_CLINICAL_ROLES]), async (re
       include: { _count: { select: { imagingStudies: true, imagingRequests: true } } },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     });
-    res.json(devices);
+    res.json(devices.map(d => ({
+      ...d,
+      canDelete: d._count.imagingStudies === 0 && d._count.imagingRequests === 0,
+    })));
   } catch {
     res.status(500).json({ error: 'Failed to fetch imaging devices' });
   }
@@ -280,8 +283,10 @@ router.put('/imaging/devices/:id', authorize([...IMAGING_MANAGE_ROLES]), async (
   }
 });
 
-// DELETE /api/imaging/devices/:id — çalışma/istem referansı varsa pasifleştirir,
-// yoksa siler (görüntü kayıtlarının cihaz izi korunur).
+// DELETE /api/imaging/devices/:id — yalnızca hiç kullanılmamış cihazlar kalıcı
+// olarak silinir; herhangi bir çalışma/istem referansı varsa 409 döner
+// (kullanıcı bunun yerine pasifleştirmelidir). Uygunluk kontrolü + silme aynı
+// transaction içinde yapılır (yarışa dayanıklı).
 router.delete('/imaging/devices/:id', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
@@ -289,25 +294,33 @@ router.delete('/imaging/devices/:id', authorize([...IMAGING_MANAGE_ROLES]), asyn
     const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
     if (scope === false) return;
 
-    const existing = await prisma.imagingDevice.findFirst({
-      where: { id, ...scope },
-      include: { _count: { select: { imagingStudies: true, imagingRequests: true } } },
-    });
+    const existing = await prisma.imagingDevice.findFirst({ where: { id, ...scope } });
     if (!existing) return res.status(404).json({ error: 'Imaging device not found' });
 
-    const referenced = existing._count.imagingStudies + existing._count.imagingRequests > 0;
-    if (referenced) {
-      await prisma.imagingDevice.update({ where: { id }, data: { isActive: false } });
-      await auditImaging(req, existing.clinicId, 'imaging_device_deactivated', 'imaging_device', id, {
-        studyCount: existing._count.imagingStudies,
-        requestCount: existing._count.imagingRequests,
+    const result = await prisma.$transaction(async (tx) => {
+      const [studyCount, requestCount] = await Promise.all([
+        tx.imagingStudy.count({ where: { deviceId: id } }),
+        tx.imagingRequest.count({ where: { requestedDeviceId: id } }),
+      ]);
+      if (studyCount + requestCount > 0) {
+        return { blocked: true as const, studyCount, requestCount };
+      }
+      await tx.imagingDevice.delete({ where: { id } });
+      return { blocked: false as const };
+    });
+
+    if (result.blocked) {
+      return res.status(409).json({
+        error: 'Imaging device is in use',
+        code: 'IMAGING_DEVICE_IN_USE',
+        usage: { studyCount: result.studyCount, requestCount: result.requestCount },
       });
-      return res.json({ deactivated: true });
     }
 
-    await prisma.imagingDevice.delete({ where: { id } });
-    await auditImaging(req, existing.clinicId, 'imaging_device_deleted', 'imaging_device', id);
-    res.json({ deleted: true });
+    await auditImaging(req, existing.clinicId, 'imaging_device_deleted', 'imaging_device', id, {
+      name: existing.name,
+    });
+    res.status(200).json({ deleted: true });
   } catch {
     res.status(500).json({ error: 'Failed to delete imaging device' });
   }
@@ -852,10 +865,14 @@ router.get('/imaging/bridges', authorize([...IMAGING_MANAGE_ROLES]), async (req:
 
     const bridges = await prisma.imagingBridgeAgent.findMany({
       where: { ...scope },
-      select: bridgeAgentSelect,
+      select: { ...bridgeAgentSelect, _count: { select: { imagingStudies: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(bridges);
+    res.json(bridges.map(({ _count, ...b }) => ({
+      ...b,
+      hasConnected: b.lastSeenAt !== null || _count.imagingStudies > 0,
+      canDelete: b.lastSeenAt === null && _count.imagingStudies === 0,
+    })));
   } catch {
     res.status(500).json({ error: 'Failed to fetch bridge agents' });
   }
@@ -923,6 +940,46 @@ router.post('/imaging/bridges/:id/revoke', authorize([...IMAGING_MANAGE_ROLES]),
     res.json(agent);
   } catch {
     res.status(500).json({ error: 'Failed to revoke bridge agent' });
+  }
+});
+
+// DELETE /api/imaging/bridges/:id — yalnızca hiç heartbeat göndermemiş ve hiçbir
+// çalışmaya bağlı olmayan ajanlar kalıcı olarak silinir; aksi halde 409 döner.
+// revoked durumu tek başına silinebilirlik sağlamaz (bkz. docs/48).
+router.delete('/imaging/bridges/:id', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+
+  try {
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
+
+    const existing = await prisma.imagingBridgeAgent.findFirst({ where: { id, ...scope } });
+    if (!existing) return res.status(404).json({ error: 'Bridge agent not found' });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const studyCount = await tx.imagingStudy.count({ where: { bridgeAgentId: id } });
+      const hasConnected = existing.lastSeenAt !== null || studyCount > 0;
+      if (hasConnected) {
+        return { blocked: true as const, studyCount, hasConnected };
+      }
+      await tx.imagingBridgeAgent.delete({ where: { id } });
+      return { blocked: false as const };
+    });
+
+    if (result.blocked) {
+      return res.status(409).json({
+        error: 'Imaging bridge agent has historical activity',
+        code: 'IMAGING_BRIDGE_IN_USE',
+        usage: { studyCount: result.studyCount, hasConnected: result.hasConnected },
+      });
+    }
+
+    await auditImaging(req, existing.clinicId, 'imaging_bridge_deleted', 'imaging_bridge_agent', id, {
+      name: existing.name,
+    });
+    res.status(200).json({ deleted: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete bridge agent' });
   }
 });
 

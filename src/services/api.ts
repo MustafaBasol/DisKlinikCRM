@@ -323,7 +323,8 @@ export const imagingService = {
     api.get('/imaging/devices', { params: params?.onlyActive ? { onlyActive: 'true' } : undefined }),
   createDevice: (data: any) => api.post('/imaging/devices', data),
   updateDevice: (id: string, data: any) => api.put(`/imaging/devices/${id}`, data),
-  // Çalışma/istem referansı varsa backend pasifleştirir, yoksa siler.
+  setDeviceActive: (id: string, isActive: boolean) => api.put(`/imaging/devices/${id}`, { isActive }),
+  // Kalıcı silme — kullanım varsa backend 409 IMAGING_DEVICE_IN_USE döner.
   deleteDevice: (id: string) => api.delete(`/imaging/devices/${id}`),
 
   // ── Çekim istemleri ──
@@ -387,6 +388,8 @@ export const imagingService = {
   getBridges: () => api.get('/imaging/bridges'),
   createBridge: (data: { name: string; clinicId?: string }) => api.post('/imaging/bridges', data),
   revokeBridge: (id: string) => api.post(`/imaging/bridges/${id}/revoke`),
+  // Kalıcı silme — kullanım varsa backend 409 IMAGING_BRIDGE_IN_USE döner.
+  deleteBridge: (id: string) => api.delete(`/imaging/bridges/${id}`),
 };
 
 export const dashboardService = {
