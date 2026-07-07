@@ -817,18 +817,89 @@ async function main() {
     assert.equal(bridges.length, 0);
   });
 
-  await test('race safety: historical usage inserted before deletion prevents the delete', () => {
-    // Simulates a study being created for a device between eligibility-check and delete —
-    // the real route re-counts usage inside the same $transaction, so this can never race in production.
+  await test('mock model: usage present at count-time blocks deletion (not a proof of DB concurrency safety)', () => {
+    // This mock only proves the eligibility function's logic is correct when the count
+    // reflects current state. It does NOT prove race safety under READ COMMITTED — that
+    // requires the real route to take an explicit row lock (SELECT ... FOR UPDATE) before
+    // reading any eligibility field, which is verified by the source-regression checks below.
     const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 0, requestCount: 0 }];
-    // A concurrent upload lands a study referencing the device just before the delete transaction commits.
     devices[0].studyCount = 1;
     const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
-    assert.equal(result.httpStatus, 409, 'usage inserted before the delete transaction must block it');
+    assert.equal(result.httpStatus, 409, 'usage present at count-time must block it');
     assert.equal(devices.length, 1);
   });
 
-  section('Device/bridge lifecycle: source regression checks');
+  section('Device/bridge lifecycle: source regression checks (race-safety proof)');
+
+  function block(startMarker: string, endMarker?: string) {
+    const start = routeSrc.indexOf(startMarker);
+    assert.ok(start >= 0, `marker not found: ${startMarker}`);
+    const end = endMarker ? routeSrc.indexOf(endMarker, start) : routeSrc.indexOf('\n});', start) + 4;
+    return routeSrc.slice(start, end > start ? end : undefined);
+  }
+
+  const deviceDeleteBlock2 = block("router.delete('/imaging/devices/:id'", "// ═══ Çekim istemleri");
+  const bridgeDeleteBlock2 = block("router.delete('/imaging/bridges/:id'");
+
+  await test('device delete acquires an explicit row lock (SELECT ... FOR UPDATE) before any eligibility read', () => {
+    assert.match(deviceDeleteBlock2, /SELECT[^`]*FOR UPDATE/s, 'device delete must lock the row with FOR UPDATE');
+    const lockIdx = deviceDeleteBlock2.search(/FOR UPDATE/);
+    const countIdx = deviceDeleteBlock2.indexOf('imagingStudy.count');
+    assert.ok(lockIdx >= 0 && countIdx > lockIdx, 'usage counts must be read AFTER the row lock is acquired');
+  });
+
+  await test('bridge delete acquires an explicit row lock (SELECT ... FOR UPDATE) and reads lastSeenAt only from the locked row', () => {
+    assert.match(bridgeDeleteBlock2, /SELECT[^`]*"lastSeenAt"[^`]*FOR UPDATE/s, 'bridge delete must lock the row and select lastSeenAt in the same statement');
+    // The stale-read bug being fixed used a pre-transaction `existing.lastSeenAt`. The corrected
+    // route must derive hasConnected from the locked row variable, never from a value fetched
+    // before the transaction/lock.
+    assert.equal(/existing\.lastSeenAt/.test(bridgeDeleteBlock2), false, 'must not use a pre-lock lastSeenAt value');
+    assert.ok(/bridge\.lastSeenAt/.test(bridgeDeleteBlock2), 'hasConnected must be derived from the row read after locking');
+    const lockIdx = bridgeDeleteBlock2.search(/FOR UPDATE/);
+    const countIdx = bridgeDeleteBlock2.indexOf('imagingStudy.count');
+    assert.ok(lockIdx >= 0 && countIdx > lockIdx, 'study usage count must be read AFTER the row lock is acquired');
+  });
+
+  await test('device/bridge delete no longer fetch the record with a plain findFirst before the transaction', () => {
+    // A pre-transaction findFirst (as the original implementation did) re-introduces the
+    // TOCTOU gap the lock is meant to close — eligibility fields must only come from the
+    // locked row inside $transaction.
+    assert.equal(/const existing = await prisma\.imagingDevice\.findFirst/.test(deviceDeleteBlock2), false);
+    assert.equal(/const existing = await prisma\.imagingBridgeAgent\.findFirst/.test(bridgeDeleteBlock2), false);
+  });
+
+  await test('row-lock queries use tagged Prisma.sql parameterization, never raw string interpolation or $queryRawUnsafe', () => {
+    assert.equal(routeSrc.includes('$queryRawUnsafe'), false, 'must never use $queryRawUnsafe');
+    assert.equal(/\$queryRaw`[^`]*\$\{/.test(routeSrc), false, 'must not use a bare template-literal query (bypasses Prisma.sql tagging)');
+    assert.ok(deviceDeleteBlock2.includes('Prisma.sql`'), 'device lock query must use Prisma.sql tagged template');
+    assert.ok(bridgeDeleteBlock2.includes('Prisma.sql`'), 'bridge lock query must use Prisma.sql tagged template');
+  });
+
+  await test('clinic scope is applied inside the same lock query, before/while locking', () => {
+    assert.ok(deviceDeleteBlock2.includes('clinicScopeSql(scope)'));
+    assert.ok(bridgeDeleteBlock2.includes('clinicScopeSql(scope)'));
+    // The clinic filter fragment must appear inside the same SQL statement as FOR UPDATE.
+    assert.match(deviceDeleteBlock2, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
+    assert.match(bridgeDeleteBlock2, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
+  });
+
+  await test('P2025 (locked row deleted/not found concurrently) maps to a safe 404, not a raw Prisma error', () => {
+    assert.ok(deviceDeleteBlock2.includes("isPrismaKnownError(err, 'P2025')"));
+    assert.ok(bridgeDeleteBlock2.includes("isPrismaKnownError(err, 'P2025')"));
+  });
+
+  await test('P2003 (concurrent FK reference during delete) maps to a safe 409 with the stable code, not a raw Prisma error', () => {
+    assert.ok(deviceDeleteBlock2.includes("isPrismaKnownError(err, 'P2003')"));
+    assert.ok(deviceDeleteBlock2.includes("code: 'IMAGING_DEVICE_IN_USE'"));
+    assert.ok(bridgeDeleteBlock2.includes("isPrismaKnownError(err, 'P2003')"));
+    assert.ok(bridgeDeleteBlock2.includes("code: 'IMAGING_BRIDGE_IN_USE'"));
+  });
+
+  await test('clinicScopeSql never joins an empty "in" list (avoids Prisma.join([]) throwing) and falls back to an impossible match', () => {
+    const fnSrc = routeSrc.slice(routeSrc.indexOf('function clinicScopeSql'), routeSrc.indexOf('function isPrismaKnownError'));
+    assert.ok(fnSrc.includes('1 = 0'), 'empty scope must resolve to an always-false predicate, not Prisma.join([])');
+    assert.match(fnSrc, /ids\.length === 0/);
+  });
 
   await test('device and bridge DELETE routes exist and require IMAGING_MANAGE_ROLES', () => {
     assert.ok(/router\.delete\('\/imaging\/devices\/:id',\s*authorize\(\[\.\.\.IMAGING_MANAGE_ROLES\]\)/.test(routeSrc));
@@ -861,7 +932,7 @@ async function main() {
   await test('device/bridge delete actions are audited with safe metadata only', () => {
     assert.ok(routeSrc.includes("'imaging_device_deleted'"));
     assert.ok(routeSrc.includes("'imaging_bridge_deleted'"));
-    const deleteAuditCalls = routeSrc.match(/auditImaging\(req, existing\.clinicId, '(imaging_device_deleted|imaging_bridge_deleted)'[^;]*?\);/gs) ?? [];
+    const deleteAuditCalls = routeSrc.match(/auditImaging\(req, result\.clinicId, '(imaging_device_deleted|imaging_bridge_deleted)'[^;]*?\);/gs) ?? [];
     assert.ok(deleteAuditCalls.length >= 2);
     for (const call of deleteAuditCalls) {
       assert.equal(/tokenHash|originalName|fileName|patientId/.test(call), false);
