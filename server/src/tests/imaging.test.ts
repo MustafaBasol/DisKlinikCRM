@@ -972,6 +972,46 @@ async function main() {
     assert.ok(routeSrc.includes("if (existing.status === 'revoked') return res.status(409)"));
   });
 
+  // ── DICOM viewer: preview endpoint allowlist + secure headers ─────────────
+  section('DICOM viewer: preview endpoint allowlist + secure headers (source regression)');
+
+  const streamFnStart = routeSrc.indexOf('async function streamStudyImage(');
+  assert.ok(streamFnStart >= 0, 'streamStudyImage function not found');
+  const streamFnEnd = routeSrc.indexOf("// GET /api/imaging/studies/:id/images/:imageId/preview", streamFnStart);
+  assert.ok(streamFnEnd > streamFnStart, 'end marker for streamStudyImage not found');
+  const streamFnSrc = routeSrc.slice(streamFnStart, streamFnEnd);
+
+  await test('preview mode allows application/dicom through without the generic inline-previewable check', () => {
+    assert.ok(/const isDicom = image\.mimeType === 'application\/dicom';/.test(streamFnSrc));
+    assert.ok(/mode === 'preview' && !isInlinePreviewable\(image\.mimeType\) && !isDicom/.test(streamFnSrc),
+      'DICOM must bypass the 415 gate that still applies to other non-previewable types');
+  });
+
+  await test('every raw image response sets Cache-Control: private, no-store and X-Content-Type-Options: nosniff', () => {
+    assert.ok(streamFnSrc.includes("res.setHeader('Cache-Control', 'private, no-store')"));
+    assert.ok(streamFnSrc.includes("res.setHeader('X-Content-Type-Options', 'nosniff')"));
+  });
+
+  await test('Content-Type still echoes the stored mimeType (application/dicom for DICOM images)', () => {
+    assert.ok(streamFnSrc.includes("res.setHeader('Content-Type', image.mimeType)"));
+  });
+
+  await test('non-DICOM unsupported types (e.g. application/msword) are still 415-blocked on preview', () => {
+    // isDicom is only true for application/dicom, so anything else still falls
+    // through to the pre-existing isInlinePreviewable() gate unchanged.
+    const gate = streamFnSrc.match(/if \(mode === 'preview'[\s\S]*?\n\s*\}/)![0];
+    assert.ok(gate.includes('res.status(415)'));
+  });
+
+  await test('DICOM preview/download is still clinic-scoped and audited identically to standard images', () => {
+    assert.ok(streamFnSrc.includes('validateAndGetClinicIdScope('));
+    assert.ok(streamFnSrc.includes("auditImaging(req, image.clinicId, 'imaging_study_viewed'"));
+  });
+
+  await test('download disposition (attachment) and preview disposition (inline) are unchanged for DICOM', () => {
+    assert.ok(streamFnSrc.includes("const disposition = mode === 'preview' ? 'inline' : 'attachment';"));
+  });
+
   // ── Summary ──────────────────────────────────────────────────────────────
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

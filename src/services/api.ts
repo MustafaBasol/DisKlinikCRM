@@ -382,6 +382,15 @@ export const imagingService = {
     );
     return URL.createObjectURL(response.data);
   },
+  // Raw DICOM bytes for DicomViewer — kept in memory only, never a public URL,
+  // supports cancellation when the viewer closes/switches image mid-load.
+  loadDicomBlob: async (studyId: string, imageId: string, signal?: AbortSignal): Promise<Blob> => {
+    const response = await api.get(
+      `/imaging/studies/${studyId}/images/${imageId}/preview`,
+      { responseType: 'blob', signal },
+    );
+    return response.data;
+  },
 
   // ── Köprü ajanları (yanıt tokenHash içermez; düz metin token yalnızca
   //    createBridge yanıtında bir kez döner) ──

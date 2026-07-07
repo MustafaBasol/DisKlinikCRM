@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext ts,tsx"
+    "lint": "eslint . --ext ts,tsx",
+    "test:dicom-helpers": "tsx src/components/imaging/__tests__/dicomHelpers.test.ts"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.21",
@@ -15,6 +16,9 @@
     "@fullcalendar/react": "^6.1.21",
     "@fullcalendar/timegrid": "^6.1.21",
     "axios": "^1.18.1",
+    "cornerstone-core": "2.6.1",
+    "cornerstone-wado-image-loader": "4.13.2",
+    "dicom-parser": "1.8.21",
     "i18next": "^23.15.1",
     "i18next-browser-languagedetector": "^8.0.0",
     "i18next-http-backend": "^3.0.5",
@@ -26,13 +30,21 @@
     "recharts": "^3.9.0"
   },
   "devDependencies": {
+    "@types/cornerstone-core": "2.3.3",
+    "@types/node": "20.19.43",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.5.2",
     "postcss": "^8.5.16",
     "tailwindcss": "^3.4.13",
+    "tsx": "4.22.4",
     "typescript": "^5.5.3",
     "vite": "^5.4.8"
+  },
+  "overrides": {
+    "cornerstone-wado-image-loader": {
+      "uuid": "^11.1.1"
+    }
   }
 }

@@ -162,5 +162,31 @@
   "errors": {
     "loadFailed": "Bildgebungsdaten konnten nicht geladen werden",
     "actionFailed": "Aktion fehlgeschlagen"
+  },
+  "viewer": {
+    "title": "DICOM-Betrachter",
+    "loading": "DICOM-Bild wird geladen...",
+    "windowLevel": "Fenster/Ebene",
+    "pan": "Verschieben",
+    "zoom": "Zoom",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "fitToView": "An Ansicht anpassen",
+    "invert": "Invertieren",
+    "reset": "Zurücksetzen",
+    "retry": "Erneut versuchen",
+    "secureDownload": "Sicherer Download",
+    "imageInformation": "Bildinformationen",
+    "dimensions": "Abmessungen",
+    "bitDepth": "Bittiefe",
+    "photometricInterpretation": "Photometrische Interpretation",
+    "numberOfFrames": "Anzahl der Frames",
+    "unsupportedDicom": "Nicht unterstütztes DICOM",
+    "unsupportedTransferSyntax": "Diese DICOM-Datei verwendet eine nicht unterstützte Transfersyntax (Komprimierung) und kann im Browser nicht angezeigt werden. Sie können sie dennoch sicher herunterladen.",
+    "multiFrameUnsupported": "Die Anzeige von Multi-Frame-DICOM wird in dieser Version nicht unterstützt. Sie können die Datei dennoch sicher herunterladen.",
+    "loadFailed": "Bild konnte nicht geladen werden. Bitte erneut versuchen.",
+    "fileNotFound": "Datei nicht gefunden.",
+    "accessDenied": "Zugriff verweigert.",
+    "initFailed": "Initialisierung des Betrachters fehlgeschlagen."
   }
 }

@@ -728,7 +728,11 @@ async function streamStudyImage(req: AuthRequest, res: Response, mode: 'preview'
     });
     if (!image) return res.status(404).json({ error: 'Imaging image not found' });
 
-    if (mode === 'preview' && !isInlinePreviewable(image.mimeType)) {
+    // DICOM'un tarayıcı içi göründürmesi FilePreviewModal'ın img/iframe kalıbı
+    // yerine ayrı DicomViewer tarafından blob olarak alınır; bu yüzden
+    // isInlinePreviewable allowlist'ine eklenmeden burada özel olarak izin verilir.
+    const isDicom = image.mimeType === 'application/dicom';
+    if (mode === 'preview' && !isInlinePreviewable(image.mimeType) && !isDicom) {
       return res.status(415).json({ error: 'Bu dosya türü tarayıcıda önizlenemez; indirerek görüntüleyin' });
     }
 
@@ -744,6 +748,8 @@ async function streamStudyImage(req: AuthRequest, res: Response, mode: 'preview'
     res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(image.originalName)}"`);
     res.setHeader('Content-Type', image.mimeType);
     res.setHeader('Content-Length', String(image.fileSize));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     stream.on('error', (streamErr: any) => {
       console.error(`[imaging] ${mode} stream error:`, streamErr?.message ?? streamErr);
       if (!res.headersSent) res.status(500).json({ error: `Failed to ${mode} imaging image` });

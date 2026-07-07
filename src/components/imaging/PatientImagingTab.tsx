@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { useClinicPreferences } from '../../context/ClinicPreferencesContext';
 import { imagingService } from '../../services/api';
 import FilePreviewModal from '../FilePreviewModal';
+import DicomViewer from './DicomViewer';
+import { isDicomImage } from './dicomHelpers';
 import { IMAGING_MODALITIES, IMAGING_MAX_FILE_MB } from './constants';
 
 export interface ImagingImageRow {
@@ -330,7 +332,17 @@ const PatientImagingTab: React.FC<PatientImagingTabProps> = ({ patientId }) => {
 
       {/* Onizleme kimlik dogrulamali blob endpoint'inden gelir; DICOM gibi
           onizlenemeyen turlerde modal indirme secenegi gosterir (backend 415). */}
-      {previewImage && (
+      {previewImage && isDicomImage(previewImage.image.mimeType) && (
+        <DicomViewer
+          fileName={previewImage.image.originalName}
+          modality={previewImage.study.modality}
+          studyDate={previewImage.study.studyDate}
+          loadDicomBlob={signal => imagingService.loadDicomBlob(previewImage.study.id, previewImage.image.id, signal)}
+          onDownload={() => imagingService.downloadImage(previewImage.study.id, previewImage.image.id, previewImage.image.originalName)}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
+      {previewImage && !isDicomImage(previewImage.image.mimeType) && (
         <FilePreviewModal
           fileName={previewImage.image.originalName}
           mimeType={previewImage.image.mimeType}
