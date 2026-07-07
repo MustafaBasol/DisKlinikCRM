@@ -12,10 +12,12 @@ import { startReminderJobs } from './reminders.js';
 import { startMetaTemplateSyncJob } from './metaTemplateSyncJob.js';
 import { startDataRetentionCleanupJob } from './dataRetentionCleanupJob.js';
 import { startInboundEventRetryJob } from './inboundEventRetryJob.js';
+import { startImagingBridgeOfflineJob } from './imagingBridgeOfflineJob.js';
 
 export function startBackgroundJobs(): void {
   startReminderJobs();
   startMetaTemplateSyncJob();
   startDataRetentionCleanupJob();
   startInboundEventRetryJob();
+  startImagingBridgeOfflineJob();
 }
