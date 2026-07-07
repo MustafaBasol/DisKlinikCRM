@@ -86,20 +86,36 @@ değildir, yalnızca provenance).
 `pending` durumlarına asla dokunmaz. `withJobLock` ile birden fazla API
 replikası/worker aynı anda çalışsa da job yalnızca bir kez koşar.
 
+## Bugün uygulanmış olan (PR B: feature/imaging-bridge-agent)
+
+Windows köprü ajanının kendisi — `bridge-agent/` (bu depoda, ayrı ve
+bağımsız bir npm projesi olarak; root/server build'lerinden hiçbiri onu
+kurmaz/derlemez/deploy etmez). Detaylı operatör dokümantasyonu:
+[`48-imaging-bridge-agent.md`](./48-imaging-bridge-agent.md).
+
+- **Klasör izleme (ajan tarafı):** chokidar tabanlı, çoklu klasör, dosya
+  kararlılık bekleme, `importExisting=false` varsayılanı, geçici/kısmi/
+  gizli/desteklenmeyen dosyaların elenmesi.
+- **Heartbeat tüketimi:** ajan periyodik olarak yukarıdaki heartbeat uç
+  noktasını çağırır; 401'de duraklar, token dosyası değişince otomatik
+  kurtarır.
+- **Kalıcı çevrimdışı kuyruk:** diskte dizin-başına-öğe kuyruk
+  (`pending/processing/failed`), atomik dizin taşıma, başlangıç kurtarma
+  (yetim dosya/metadata karantinası — hiçbir görüntü sessizce silinmez),
+  üstel geri çekilme (60 sn → 15 dk tavan, ~24 saat toplam deneme).
+- **Multipart ingest kullanımı:** ajan, dosyayı `<ingestKey><safeExtension>`
+  adıyla gönderir (orijinal/hasta türevi dosya adı ASLA gönderilmez),
+  `studyDate` bilerek göndermez (dosya mtime'ı klinik tarih olarak
+  KULLANILMAZ — sunucu kendi zaman damgasını atar).
+- **Tekrar koruması:** sunucu tarafı `(clinicId, ingestKey)` dedupe'ı ajan
+  tarafından tüketilir; `duplicate:true` yanıtı başarı sayılır.
+
 ## Bilinçli olarak HENÜZ uygulanmayanlar (gelecek fazlar)
 
 - **İş çekme (job polling):** Ajanın açık `ImagingRequest` kayıtlarını
   sorgulayıp cihaza iş göndermesi (`GET /bridge/jobs` benzeri, token-auth).
   Bağlanmamış kuyruk + link modalı ilişkilendirmeyi zaten karşıladığından
   ertelendi.
-- **Native Windows ajanının kendisi:** Bu depo backend sözleşmesini ve
-  (ayrı bir PR'da) `bridge-agent/` klasörü altında ajanı içerecek; bu PR
-  yalnızca sunucu tarafını kapsar.
-- **Çevrimdışı kuyruk (ajan tarafı):** Ajanın internet kesintisinde
-  biriktirmesi ve idempotent yeniden gönderimi — sunucu tarafı idempotency
-  (ingestKey) zaten hazır, ajan bunu tüketecek.
-- **Klasör izleme (ajan tarafı):** Vendor yazılımının export klasörünü izleyip
-  yeni dosyaları otomatik yükleme — ajan implementasyonunun işi.
 - **DICOM viewer:** Tarayıcıda DICOM görüntüleme (şu an yalnızca indirme).
 - **DICOM / router entegrasyonu:** C-STORE alıcısı veya DICOMweb (STOW-RS)
   uç noktası; `studyInstanceUid`/`sopInstanceUid` alanları bu amaçla şimdiden
@@ -107,6 +123,10 @@ replikası/worker aynı anda çalışsa da job yalnızca bir kez koşar.
   yalnızca Part-10 kabul edilir.
 - **Vendor SDK adaptörleri:** Sensör/tarayıcı SDK'ları için ajan içi eklenti
   arayüzü.
+- **TWAIN/WIA entegrasyonu.**
+- **Standalone .exe/MSI paketleme:** bu fazda ajan Node.js 20+ çalışma
+  zamanı gerektirir (bkz. docs/48) — bundled-runtime/MSI kurulum sonraki
+  bir sertleştirme fazının konusudur.
 
 ## Güvenlik değişmezleri
 

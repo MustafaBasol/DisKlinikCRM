@@ -1,0 +1,23 @@
+{
+  "serverUrl": "https://api.noramedi.com",
+  "tokenFile": "C:\\ProgramData\\NoraMediBridge\\bridge-token.txt",
+  "queueDir": "C:\\ProgramData\\NoraMediBridge\\queue",
+  "logDir": "C:\\ProgramData\\NoraMediBridge\\logs",
+  "statusDir": "C:\\ProgramData\\NoraMediBridge\\status",
+  "heartbeatIntervalSeconds": 60,
+  "stabilityMs": 5000,
+  "importExisting": false,
+  "maxAttempts": 100,
+  "backoffBaseMs": 60000,
+  "backoffCapMs": 900000,
+  "tokenPollIntervalMs": 15000,
+  "watches": [
+    {
+      "id": "io-sensor-1",
+      "path": "C:\\DentalSoftware\\Export",
+      "deviceId": "REPLACE_WITH_IMAGING_DEVICE_ID",
+      "modality": "IO",
+      "patterns": [".jpg", ".jpeg", ".png", ".webp", ".dcm", ".dicom"]
+    }
+  ]
+}
