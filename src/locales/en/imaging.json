@@ -98,7 +98,16 @@
       "usage": "{{studies}} studies · {{requests}} requests",
       "empty": "No devices registered",
       "emptyDescription": "Add a device first so images can be associated with it.",
-      "saveFailed": "Failed to save device"
+      "saveFailed": "Failed to save device",
+      "deviceId": "Device ID",
+      "copyId": "Copy Device ID",
+      "copySuccess": "Device ID copied",
+      "copyFailed": "Unable to copy. Select the text manually to copy it.",
+      "copyBridgeConfig": "Copy Bridge Config",
+      "bridgeConfigCopied": "Bridge config copied",
+      "bridgeConfigHelp": "Paste this object into the \"watches\" array of the bridge agent's config.json. Update the \"path\" to the clinic PC's real export folder — it is only a placeholder here.",
+      "availableBridgeDevices": "Available Bridge Devices",
+      "availableBridgeDevicesDescription": "Devices that can be used in this clinic's Bridge Agent configuration. No agent is automatically linked to a device."
     },
     "bridges": {
       "title": "Bridge Agents",
@@ -112,6 +121,7 @@
         "offline": "Offline",
         "revoked": "Revoked"
       },
+      "createdAt": "Created at",
       "lastSeen": "Last seen",
       "never": "Never connected",
       "version": "Version",

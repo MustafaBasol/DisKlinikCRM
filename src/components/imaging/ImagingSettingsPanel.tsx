@@ -3,7 +3,9 @@ import {
   AlertTriangle,
   Check,
   Copy,
+  FileJson,
   HardDrive,
+  IdCard,
   Loader2,
   Plus,
   Radio,
@@ -13,7 +15,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useClinicPreferences } from '../../context/ClinicPreferencesContext';
 import { imagingService } from '../../services/api';
-import { IMAGING_MODALITIES, IMAGING_DEVICE_CONNECTION_TYPES, BRIDGE_ONLINE_THRESHOLD_MS } from './constants';
+import { IMAGING_MODALITIES, IMAGING_DEVICE_CONNECTION_TYPES } from './constants';
+import { deriveBridgeStatus, generateBridgeWatchConfig, type BridgeWatchConfig } from './bridgeHelpers';
 
 interface DeviceRow {
   id: string;
@@ -45,17 +48,6 @@ const emptyDeviceForm = {
   connectionType: 'manual',
   notes: '',
 };
-
-/**
- * Köprü durumu: revoked kalıcıdır; aksi halde tazelik lastSeenAt'ten türetilir
- * (backend 'offline' durumunu otomatik işaretlemez — docs/47).
- */
-function deriveBridgeStatus(bridge: BridgeRow): 'pending' | 'online' | 'offline' | 'revoked' {
-  if (bridge.status === 'revoked') return 'revoked';
-  if (!bridge.lastSeenAt) return 'pending';
-  const fresh = Date.now() - new Date(bridge.lastSeenAt).getTime() < BRIDGE_ONLINE_THRESHOLD_MS;
-  return fresh ? 'online' : 'offline';
-}
 
 const BRIDGE_STATUS_STYLES: Record<string, string> = {
   pending: 'badge-yellow',
@@ -90,10 +82,38 @@ const ImagingSettingsPanel: React.FC = () => {
   const [tokenCopied, setTokenCopied] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // Kısa ömürlü kopyalama geri bildirimi: "device:<id>" veya "config:<id>"
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [bridgeConfigPreview, setBridgeConfigPreview] = useState<{ device: DeviceRow; config: BridgeWatchConfig } | null>(null);
+
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  const copyText = useCallback(async (text: string, key: string, successMessage: string) => {
+    try {
+      if (!navigator.clipboard || !window.isSecureContext) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      showToast(successMessage, 'success');
+      setTimeout(() => setCopiedKey(current => (current === key ? null : current)), 2500);
+    } catch {
+      showToast(t('imaging:settings.devices.copyFailed'), 'error');
+    }
+  }, [t]);
+
+  const copyDeviceId = (device: DeviceRow) =>
+    copyText(device.id, `device:${device.id}`, t('imaging:settings.devices.copySuccess'));
+
+  const openBridgeConfigPreview = (device: DeviceRow) => {
+    setBridgeConfigPreview({ device, config: generateBridgeWatchConfig(device) });
+  };
+
+  const copyBridgeConfig = (device: DeviceRow, config: BridgeWatchConfig) =>
+    copyText(JSON.stringify(config, null, 2), `config:${device.id}`, t('imaging:settings.devices.bridgeConfigCopied'));
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -221,6 +241,11 @@ const ImagingSettingsPanel: React.FC = () => {
     );
   }
 
+  // Bridge Agent henüz cihazlara kalıcı olarak bağlanmıyor (yalnızca upload
+  // başına deviceId gönderiliyor) — bu yüzden "bağlı" değil "kullanılabilir"
+  // cihazları listeliyoruz.
+  const bridgeCapableDevices = devices.filter(d => d.isActive && d.connectionType === 'bridge');
+
   return (
     <div className="space-y-6">
       {toast && (
@@ -272,6 +297,32 @@ const ImagingSettingsPanel: React.FC = () => {
                       })}</>
                     )}
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-gray-400">{t('imaging:settings.devices.deviceId')}:</span>
+                    <code className="select-all break-all rounded bg-gray-50 px-2 py-0.5 text-xs font-mono text-gray-600">
+                      {device.id}
+                    </code>
+                    <button
+                      onClick={() => copyDeviceId(device)}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                    >
+                      {copiedKey === `device:${device.id}` ? (
+                        <Check size={13} className="text-green-600" />
+                      ) : (
+                        <IdCard size={13} />
+                      )}
+                      {t('imaging:settings.devices.copyId')}
+                    </button>
+                    {device.isActive && device.connectionType === 'bridge' && (
+                      <button
+                        onClick={() => openBridgeConfigPreview(device)}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50"
+                      >
+                        <FileJson size={13} />
+                        {t('imaging:settings.devices.copyBridgeConfig')}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -295,6 +346,34 @@ const ImagingSettingsPanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ── Köprü için uygun cihazlar (ajan-cihaz ilişkisi kalıcı olarak saklanmaz) ── */}
+      {bridgeCapableDevices.length > 0 && (
+        <div className="card p-6">
+          <h2 className="text-lg font-bold flex items-center gap-2 mb-1">
+            <FileJson size={20} className="text-gray-400" /> {t('imaging:settings.devices.availableBridgeDevices')}
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">{t('imaging:settings.devices.availableBridgeDevicesDescription')}</p>
+          <div className="divide-y divide-gray-100">
+            {bridgeCapableDevices.map(device => (
+              <div key={device.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <span className="font-medium text-sm text-gray-900">{device.name}</span>
+                  <span className="ml-2 badge badge-blue">
+                    {t(`imaging:modalities.${device.modality}`, { defaultValue: device.modality })}
+                  </span>
+                </div>
+                <button
+                  onClick={() => openBridgeConfigPreview(device)}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
+                >
+                  <FileJson size={14} /> {t('imaging:settings.devices.copyBridgeConfig')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Köprü ajanları ── */}
       <div className="card p-6">
@@ -334,6 +413,8 @@ const ImagingSettingsPanel: React.FC = () => {
                       )}
                     </div>
                     <p className="text-xs text-gray-400 mt-1">
+                      {t('imaging:settings.bridges.createdAt')}: {formatDateTime(bridge.createdAt)}
+                      {' · '}
                       {t('imaging:settings.bridges.lastSeen')}: {bridge.lastSeenAt ? formatDateTime(bridge.lastSeenAt) : t('imaging:settings.bridges.never')}
                     </p>
                   </div>
@@ -438,6 +519,36 @@ const ImagingSettingsPanel: React.FC = () => {
               <button onClick={saveDevice} disabled={!deviceForm.name.trim() || deviceSaving} className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50">
                 {deviceSaving && <Loader2 size={16} className="animate-spin" />}
                 {t('common:save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Köprü config önizleme ── */}
+      {bridgeConfigPreview && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setBridgeConfigPreview(null)}>
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">{t('imaging:settings.devices.copyBridgeConfig')} — {bridgeConfigPreview.device.name}</h3>
+              <button onClick={() => setBridgeConfigPreview(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-3">{t('imaging:settings.devices.bridgeConfigHelp')}</p>
+            <pre className="max-h-72 overflow-auto rounded-lg bg-gray-100 px-3 py-2 text-xs font-mono select-all whitespace-pre-wrap break-all">
+              {JSON.stringify(bridgeConfigPreview.config, null, 2)}
+            </pre>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setBridgeConfigPreview(null)} className="btn-secondary text-sm">
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={() => copyBridgeConfig(bridgeConfigPreview.device, bridgeConfigPreview.config)}
+                className="btn-primary flex items-center gap-2 text-sm"
+              >
+                {copiedKey === `config:${bridgeConfigPreview.device.id}` ? <Check size={15} /> : <Copy size={15} />}
+                {t('imaging:settings.devices.copyBridgeConfig')}
               </button>
             </div>
           </div>

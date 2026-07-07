@@ -98,7 +98,16 @@
       "usage": "{{studies}} Aufnahmen · {{requests}} Anforderungen",
       "empty": "Keine Geräte registriert",
       "emptyDescription": "Fügen Sie zuerst ein Gerät hinzu, um Bilder zuordnen zu können.",
-      "saveFailed": "Gerät konnte nicht gespeichert werden"
+      "saveFailed": "Gerät konnte nicht gespeichert werden",
+      "deviceId": "Geräte-ID",
+      "copyId": "Geräte-ID kopieren",
+      "copySuccess": "Geräte-ID kopiert",
+      "copyFailed": "Kopieren nicht möglich. Wählen Sie den Text manuell aus, um ihn zu kopieren.",
+      "copyBridgeConfig": "Bridge-Konfiguration kopieren",
+      "bridgeConfigCopied": "Bridge-Konfiguration kopiert",
+      "bridgeConfigHelp": "Fügen Sie dieses Objekt in das Array \"watches\" der config.json des Bridge-Agenten ein. Aktualisieren Sie \"path\" mit dem tatsächlichen Exportordner des Praxis-PCs — hier ist es nur ein Platzhalter.",
+      "availableBridgeDevices": "Verfügbare Bridge-Geräte",
+      "availableBridgeDevicesDescription": "Geräte, die in der Bridge-Agent-Konfiguration dieser Praxis verwendet werden können. Kein Agent ist automatisch mit einem Gerät verknüpft."
     },
     "bridges": {
       "title": "Bridge-Agenten",
@@ -112,6 +121,7 @@
         "offline": "Offline",
         "revoked": "Widerrufen"
       },
+      "createdAt": "Erstellt am",
       "lastSeen": "Zuletzt gesehen",
       "never": "Nie verbunden",
       "version": "Version",

@@ -98,7 +98,16 @@
       "usage": "{{studies}} examens · {{requests}} demandes",
       "empty": "Aucun appareil enregistré",
       "emptyDescription": "Ajoutez d'abord un appareil pour pouvoir y associer des images.",
-      "saveFailed": "Échec de l'enregistrement de l'appareil"
+      "saveFailed": "Échec de l'enregistrement de l'appareil",
+      "deviceId": "ID de l'appareil",
+      "copyId": "Copier l'ID de l'appareil",
+      "copySuccess": "ID de l'appareil copié",
+      "copyFailed": "Impossible de copier. Sélectionnez le texte manuellement pour le copier.",
+      "copyBridgeConfig": "Copier la config passerelle",
+      "bridgeConfigCopied": "Configuration passerelle copiée",
+      "bridgeConfigHelp": "Collez cet objet dans le tableau \"watches\" du fichier config.json de l'agent passerelle. Mettez à jour le champ \"path\" avec le vrai dossier d'export du PC de la clinique — ici, ce n'est qu'un espace réservé.",
+      "availableBridgeDevices": "Appareils disponibles pour la passerelle",
+      "availableBridgeDevicesDescription": "Appareils utilisables dans la configuration de l'agent passerelle de cette clinique. Aucun agent n'est automatiquement lié à un appareil."
     },
     "bridges": {
       "title": "Agents passerelle",
@@ -112,6 +121,7 @@
         "offline": "Hors ligne",
         "revoked": "Révoqué"
       },
+      "createdAt": "Créé le",
       "lastSeen": "Dernière connexion",
       "never": "Jamais connecté",
       "version": "Version",

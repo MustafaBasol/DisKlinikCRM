@@ -98,7 +98,16 @@
       "usage": "{{studies}} çalışma · {{requests}} istem",
       "empty": "Kayıtlı cihaz yok",
       "emptyDescription": "Görüntüleri cihazla ilişkilendirebilmek için önce bir cihaz ekleyin.",
-      "saveFailed": "Cihaz kaydedilemedi"
+      "saveFailed": "Cihaz kaydedilemedi",
+      "deviceId": "Cihaz ID",
+      "copyId": "Cihaz ID'sini Kopyala",
+      "copySuccess": "Cihaz ID'si kopyalandı",
+      "copyFailed": "Kopyalanamadı. Metni elle seçerek kopyalayabilirsiniz.",
+      "copyBridgeConfig": "Köprü Yapılandırmasını Kopyala",
+      "bridgeConfigCopied": "Köprü yapılandırması kopyalandı",
+      "bridgeConfigHelp": "Bu nesneyi köprü ajanının config.json dosyasındaki \"watches\" dizisine ekleyin. \"path\" alanını klinik bilgisayarının gerçek dışa aktarma klasörüyle güncelleyin — burada yalnızca bir yer tutucudur.",
+      "availableBridgeDevices": "Kullanılabilir Köprü Cihazları",
+      "availableBridgeDevicesDescription": "Bu kliniğin Köprü Ajanı yapılandırmasında kullanılabilecek cihazlar. Herhangi bir ajan otomatik olarak bir cihaza bağlanmaz."
     },
     "bridges": {
       "title": "Köprü Ajanları",
@@ -112,6 +121,7 @@
         "offline": "Çevrimdışı",
         "revoked": "İptal edildi"
       },
+      "createdAt": "Oluşturulma tarihi",
       "lastSeen": "Son görülme",
       "never": "Henüz bağlanmadı",
       "version": "Sürüm",
