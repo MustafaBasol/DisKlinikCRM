@@ -18,6 +18,7 @@
  */
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +39,7 @@ import {
   imagingStudyLinkSchema,
   imagingBridgeSchema,
   imagingBridgeHeartbeatSchema,
+  imagingBridgeStudyUploadSchema,
 } from '../schemas/index.js';
 import { generateBridgeToken, hashBridgeToken } from '../services/imaging/bridgeTokens.js';
 
@@ -465,6 +467,248 @@ async function main() {
     assert.ok(/model ImagingBridgeAgent \{[\s\S]*?status\s+String\s+@default\("pending"\)/.test(schemaSrc));
     assert.equal(/model ImagingBridgeAgent \{[\s\S]*?\btoken\s+String/.test(schemaSrc), false,
       'no plaintext token column may exist');
+  });
+
+  // ── Bridge ingest API (PR A) ──────────────────────────────────────────────
+  section('Bridge ingest: schema validation');
+
+  await test('ingestKey must be exactly 64 lowercase hex chars', () => {
+    const sha = crypto.createHash('sha256').update('x').digest('hex');
+    assert.equal(imagingBridgeStudyUploadSchema.safeParse({ ingestKey: sha }).success, true);
+    assert.equal(imagingBridgeStudyUploadSchema.safeParse({ ingestKey: sha.toUpperCase() }).success, false, 'uppercase hex rejected');
+    assert.equal(imagingBridgeStudyUploadSchema.safeParse({ ingestKey: sha.slice(0, 63) }).success, false, 'short key rejected');
+    assert.equal(imagingBridgeStudyUploadSchema.safeParse({ ingestKey: `${sha.slice(0, 63)}g` }).success, false, 'non-hex char rejected');
+    assert.equal(imagingBridgeStudyUploadSchema.safeParse({}).success, false, 'ingestKey is required');
+  });
+
+  await test('bridge upload schema accepts no patient/free-text fields', () => {
+    const sha = crypto.createHash('sha256').update('y').digest('hex');
+    const parsed = imagingBridgeStudyUploadSchema.safeParse({
+      ingestKey: sha,
+      deviceId: 'device-1',
+      modality: 'PX',
+      patientName: 'Should be stripped',
+      description: 'Should be stripped',
+    });
+    assert.equal(parsed.success, true);
+    if (parsed.success) {
+      assert.equal('patientName' in parsed.data, false, 'unknown/PII-shaped fields must be stripped by Zod');
+      assert.equal('description' in parsed.data, false);
+    }
+  });
+
+  section('Bridge ingest: server-verified idempotency (mock, mirrors route logic)');
+
+  type BridgeStudyRow = {
+    id: string;
+    clinicId: string;
+    bridgeAgentId: string;
+    ingestKey: string;
+    createdById: string | null;
+  };
+
+  function simulateBridgeIngest(
+    studies: BridgeStudyRow[],
+    args: { clinicId: string; bridgeAgentId: string; buffer: Buffer; claimedIngestKey: string },
+  ): { httpStatus: number; studyId?: string; duplicate?: boolean; error?: string } {
+    const computedHash = crypto.createHash('sha256').update(args.buffer).digest('hex');
+    if (computedHash !== args.claimedIngestKey) {
+      return { httpStatus: 400, error: 'ingestKey does not match uploaded file content' };
+    }
+    // Dedupe is clinic-scoped, NOT bridgeAgentId-scoped.
+    const existing = studies.find(s => s.clinicId === args.clinicId && s.ingestKey === computedHash);
+    if (existing) {
+      return { httpStatus: 200, studyId: existing.id, duplicate: true };
+    }
+    const created: BridgeStudyRow = {
+      id: `study-${studies.length + 1}`,
+      clinicId: args.clinicId,
+      bridgeAgentId: args.bridgeAgentId,
+      ingestKey: computedHash,
+      createdById: null,
+    };
+    studies.push(created);
+    return { httpStatus: 201, studyId: created.id, duplicate: false };
+  }
+
+  await test('server recomputes sha256 and rejects a mismatched ingestKey', () => {
+    const studies: BridgeStudyRow[] = [];
+    const buffer = Buffer.from('real file bytes');
+    const wrongKey = crypto.createHash('sha256').update('different bytes').digest('hex');
+    const result = simulateBridgeIngest(studies, { clinicId: 'clinic-A', bridgeAgentId: 'bridge-1', buffer, claimedIngestKey: wrongKey });
+    assert.equal(result.httpStatus, 400);
+    assert.equal(studies.length, 0, 'no study must be created on hash mismatch');
+  });
+
+  await test('clinic-level duplicate prevention: same file from a different agent in the same clinic dedupes', () => {
+    const studies: BridgeStudyRow[] = [];
+    const buffer = Buffer.from('shared export file');
+    const ingestKey = crypto.createHash('sha256').update(buffer).digest('hex');
+
+    const first = simulateBridgeIngest(studies, { clinicId: 'clinic-A', bridgeAgentId: 'bridge-1', buffer, claimedIngestKey: ingestKey });
+    assert.equal(first.httpStatus, 201);
+    assert.equal(first.duplicate, false);
+
+    // A DIFFERENT bridge agent in the SAME clinic uploads the identical bytes.
+    const second = simulateBridgeIngest(studies, { clinicId: 'clinic-A', bridgeAgentId: 'bridge-2', buffer, claimedIngestKey: ingestKey });
+    assert.equal(second.httpStatus, 200);
+    assert.equal(second.duplicate, true);
+    assert.equal(second.studyId, first.studyId, 'duplicate retry must return the original studyId');
+    assert.equal(studies.length, 1, 'only one study row must exist for the clinic');
+  });
+
+  await test('the same file in a different clinic is not deduped (dedupe is clinic-scoped)', () => {
+    const studies: BridgeStudyRow[] = [];
+    const buffer = Buffer.from('cross-clinic same bytes');
+    const ingestKey = crypto.createHash('sha256').update(buffer).digest('hex');
+
+    simulateBridgeIngest(studies, { clinicId: 'clinic-A', bridgeAgentId: 'bridge-1', buffer, claimedIngestKey: ingestKey });
+    const otherClinic = simulateBridgeIngest(studies, { clinicId: 'clinic-B', bridgeAgentId: 'bridge-2', buffer, claimedIngestKey: ingestKey });
+    assert.equal(otherClinic.duplicate, false);
+    assert.equal(studies.length, 2);
+  });
+
+  await test('bridge-created studies carry no user actor (createdById null)', () => {
+    const studies: BridgeStudyRow[] = [];
+    const buffer = Buffer.from('no actor');
+    const ingestKey = crypto.createHash('sha256').update(buffer).digest('hex');
+    simulateBridgeIngest(studies, { clinicId: 'clinic-A', bridgeAgentId: 'bridge-1', buffer, claimedIngestKey: ingestKey });
+    assert.equal(studies[0].createdById, null);
+  });
+
+  section('Bridge ingest: auth (revoked/invalid tokens)');
+
+  await test('revoked or invalid bridge token cannot reach the upload handler', () => {
+    const mockBridges: { tokenHash: string; status: string }[] = [
+      { tokenHash: hashBridgeToken('nmb_valid'), status: 'online' },
+      { tokenHash: hashBridgeToken('nmb_revoked'), status: 'revoked' },
+    ];
+    function simulateAuth(rawToken: string | undefined) {
+      if (!rawToken) return null;
+      const tokenHash = hashBridgeToken(rawToken);
+      const agent = mockBridges.find(b => b.tokenHash === tokenHash);
+      if (!agent || agent.status === 'revoked') return null;
+      return agent;
+    }
+    assert.equal(simulateAuth(undefined), null);
+    assert.equal(simulateAuth('nmb_unknown'), null);
+    assert.equal(simulateAuth('nmb_revoked'), null, 'revoked agent must be rejected identically to unknown token');
+    assert.notEqual(simulateAuth('nmb_valid'), null);
+  });
+
+  section('Bridge ingest: offline job (stale online agents only)');
+
+  type OfflineJobAgentRow = { id: string; status: string; lastSeenAt: Date | null };
+
+  function simulateOfflineJob(agents: OfflineJobAgentRow[], cutoff: Date) {
+    for (const agent of agents) {
+      if (agent.status === 'online' && agent.lastSeenAt && agent.lastSeenAt < cutoff) {
+        agent.status = 'offline';
+      }
+    }
+  }
+
+  await test('offline job flips only stale online agents; revoked/pending untouched', () => {
+    const now = Date.now();
+    const stale = new Date(now - 10 * 60 * 1000);
+    const fresh = new Date(now - 30 * 1000);
+    const agents: OfflineJobAgentRow[] = [
+      { id: 'a-online-stale', status: 'online', lastSeenAt: stale },
+      { id: 'a-online-fresh', status: 'online', lastSeenAt: fresh },
+      { id: 'a-revoked-stale', status: 'revoked', lastSeenAt: stale },
+      { id: 'a-pending-null', status: 'pending', lastSeenAt: null },
+    ];
+    simulateOfflineJob(agents, new Date(now - 5 * 60 * 1000));
+
+    assert.equal(agents.find(a => a.id === 'a-online-stale')!.status, 'offline');
+    assert.equal(agents.find(a => a.id === 'a-online-fresh')!.status, 'online', 'fresh heartbeat must stay online');
+    assert.equal(agents.find(a => a.id === 'a-revoked-stale')!.status, 'revoked', 'revoked must never change');
+    assert.equal(agents.find(a => a.id === 'a-pending-null')!.status, 'pending', 'pending must never change');
+  });
+
+  section('Bridge ingest: source regression checks');
+
+  const bridgePublicSrc = hbSrc; // alias — same file, read once above
+  const jobSrc = src('../jobs/imagingBridgeOfflineJob.ts');
+
+  await test('upload endpoint recomputes sha256 server-side instead of trusting the client hash', () => {
+    assert.ok(bridgePublicSrc.includes("crypto.createHash('sha256').update(req.file.buffer).digest('hex')"),
+      'server must independently hash the uploaded buffer');
+    assert.ok(bridgePublicSrc.includes('computedHash !== v.ingestKey'), 'mismatched hash must be rejected');
+  });
+
+  await test('dedupe query is scoped to clinicId + ingestKey, not bridgeAgentId', () => {
+    const dedupeQueries = bridgePublicSrc.match(/imagingStudy\.findFirst\(\{\s*where:\s*\{[^}]*\}/gs) ?? [];
+    assert.ok(dedupeQueries.length > 0, 'expected at least one dedupe lookup');
+    for (const q of dedupeQueries) {
+      assert.ok(q.includes('clinicId') && q.includes('ingestKey'), 'dedupe lookup must key on clinicId+ingestKey');
+    }
+    assert.equal(/findFirst\(\{\s*where:\s*\{\s*bridgeAgentId,\s*ingestKey/.test(bridgePublicSrc), false,
+      'dedupe must never be scoped to bridgeAgentId alone');
+  });
+
+  await test('schema.prisma: uniqueness is [clinicId, ingestKey], not bridgeAgentId-scoped', () => {
+    assert.ok(/model ImagingStudy \{[\s\S]*?@@unique\(\[clinicId,\s*ingestKey\]\)/.test(schemaSrc));
+    assert.equal(/@@unique\(\[bridgeAgentId,\s*ingestKey\]\)/.test(schemaSrc), false);
+  });
+
+  await test('schema.prisma: ImagingStudy.createdById is nullable (bridge uploads have no user actor)', () => {
+    assert.ok(/model ImagingStudy \{[\s\S]*?createdById\s+String\?/.test(schemaSrc));
+    assert.ok(/model ImagingStudy \{[\s\S]*?createdBy\s+User\?/.test(schemaSrc));
+  });
+
+  await test('failed transaction cleans up the just-saved file', () => {
+    // Both the generic catch and the P2002 duplicate-race branch must call deleteFile.
+    const deleteCalls = bridgePublicSrc.match(/deleteFile\(storageKey\)/g) ?? [];
+    assert.ok(deleteCalls.length >= 2, 'expected cleanup on both the generic failure path and the P2002 race path');
+  });
+
+  await test('upload is rate-limited by IP and by token, distinct from heartbeat limiters', () => {
+    assert.ok(bridgePublicSrc.includes('uploadIpLimiter'));
+    assert.ok(bridgePublicSrc.includes('uploadTokenLimiter'));
+    assert.notEqual(bridgePublicSrc.indexOf('uploadIpLimiter'), bridgePublicSrc.indexOf('heartbeatIpLimiter'));
+  });
+
+  await test('upload enforces the same MAX_FILE_MB / magic-byte checks as manual upload', () => {
+    assert.ok(bridgePublicSrc.includes('MAX_FILE_MB'));
+    assert.ok(bridgePublicSrc.includes('isAllowedFileSignature('));
+  });
+
+  await test('no filename, token, tokenHash, or PHI enters the bridge audit metadata', () => {
+    const auditCalls = bridgePublicSrc.match(/writeAuditLog\(\{[\s\S]*?\}\);/g) ?? [];
+    assert.ok(auditCalls.length > 0, 'expected at least one writeAuditLog call');
+    for (const call of auditCalls) {
+      assert.equal(/originalName|fileName|firstName|lastName|rawToken|tokenHash|patientId/.test(call), false,
+        'bridge audit metadata must contain only safe identifiers/counters');
+    }
+  });
+
+  await test('bridge routes never log plaintext token, tokenHash, or filenames', () => {
+    assert.equal(/console\.(log|warn|error)\([^)]*(rawToken|tokenHash|originalname|originalName)\b/.test(bridgePublicSrc), false);
+  });
+
+  await test('successful heartbeat or upload marks the agent online and refreshes lastSeenAt', () => {
+    const onlineUpdates = bridgePublicSrc.match(/data:\s*\{\s*status:\s*'online',\s*lastSeenAt:\s*new Date\(\)/g) ?? [];
+    assert.ok(onlineUpdates.length >= 2, 'expected both heartbeat and upload to refresh lastSeenAt/online');
+  });
+
+  await test('offline job only targets status=online and uses the shared job lock', () => {
+    assert.ok(jobSrc.includes("status: 'online'"), 'offline job must filter by status=online');
+    assert.equal(jobSrc.includes("status: 'revoked'"), false, 'offline job must never touch revoked agents');
+    assert.ok(jobSrc.includes('withJobLock('), 'offline job must use the shared distributed lock');
+    assert.ok(jobSrc.includes('IMAGING_BRIDGE_OFFLINE_MINUTES'), 'threshold must be configurable');
+  });
+
+  await test('offline job is registered in startBackgroundJobs', () => {
+    const startSrc = src('../jobs/startBackgroundJobs.ts');
+    assert.ok(startSrc.includes('startImagingBridgeOfflineJob'));
+  });
+
+  await test('BILLING/ASSISTANT restrictions on the authenticated imaging routes are unchanged', () => {
+    assert.equal(routeSrc.includes("'BILLING'"), false);
+    assert.equal(routeSrc.includes("'ASSISTANT'"), false);
+    // The public bridge router is agent-authenticated, not role-authenticated — it must not use authorize() at all.
+    assert.equal(bridgePublicSrc.includes('authorize('), false, 'bridge public routes must never use user-role authorize()');
   });
 
   // ── Summary ──────────────────────────────────────────────────────────────

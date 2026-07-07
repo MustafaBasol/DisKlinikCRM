@@ -631,3 +631,15 @@ export const imagingBridgeSchema = z.object({
 export const imagingBridgeHeartbeatSchema = z.object({
   agentVersion: z.string().max(100).optional(),
 });
+
+// Köprü (bridge) çalışma yükleme gövdesi — bilinçli olarak minimal: hasta
+// adı/telefonu/serbest metin YOK. ingestKey sunucuda yeniden hesaplanan
+// sha256 ile karşılaştırılır (routes/imagingBridgePublic.ts); burada yalnızca
+// biçim (tam 64 küçük harf hex) doğrulanır.
+export const imagingBridgeStudyUploadSchema = z.object({
+  ingestKey: z.string().regex(/^[a-f0-9]{64}$/, 'ingestKey must be a 64-character lowercase hex sha256 digest'),
+  deviceId: optionalId,
+  modality: z.enum(IMAGING_MODALITIES).optional(),
+  studyDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+  imagingRequestId: optionalId,
+});

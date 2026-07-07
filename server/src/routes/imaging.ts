@@ -21,7 +21,6 @@
 
 import express, { Response, NextFunction } from 'express';
 import multer from 'multer';
-import path from 'path';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
@@ -47,42 +46,18 @@ import {
   canAttachStudyToRequest,
   type ImagingRequestStatus,
 } from '../services/imaging/imagingRequestTransitions.js';
+import {
+  IMAGING_ALLOWED_MIME,
+  IMAGING_EXTENSIONS_BY_MIME,
+  MAX_FILE_MB,
+  normalizeDeclaredMime,
+} from '../services/imaging/imagingUploadValidation.js';
 
 const router = express.Router();
 
 // Klinik görüntüler tıbbi kayıttır: BILLING ve ASSISTANT hiçbir listede yok.
 const IMAGING_CLINICAL_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST'] as const;
 const IMAGING_MANAGE_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'] as const;
-
-// ── Dosya doğrulama ────────────────────────────────────────────────────
-const IMAGING_ALLOWED_MIME = new Set([
-  'image/jpeg', 'image/png', 'image/webp',
-  'application/dicom',
-]);
-
-const IMAGING_EXTENSIONS_BY_MIME: Record<string, string[]> = {
-  'image/jpeg': ['.jpg', '.jpeg'],
-  'image/png': ['.png'],
-  'image/webp': ['.webp'],
-  'application/dicom': ['.dcm', '.dicom'],
-};
-
-const DICOM_EXTENSIONS = ['.dcm', '.dicom'];
-
-const MAX_FILE_MB = Math.max(1, Number(process.env.IMAGING_MAX_FILE_MB) || 50);
-
-/**
- * Tarayıcılar .dcm dosyalarını çoğunlukla application/octet-stream olarak
- * beyan eder; uzantı DICOM ise beyan edilen tipi application/dicom'a
- * normalize ederiz. İçerik yine de magic-byte (DICM @128) ile doğrulanır.
- */
-function normalizeDeclaredMime(mimetype: string, originalName: string): string {
-  const ext = path.extname(originalName).toLowerCase();
-  if (DICOM_EXTENSIONS.includes(ext) && (mimetype === 'application/dicom' || mimetype === 'application/octet-stream')) {
-    return 'application/dicom';
-  }
-  return mimetype;
-}
 
 const upload = multer({
   storage: multer.memoryStorage(),

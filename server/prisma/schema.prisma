@@ -2173,32 +2173,42 @@ model ImagingRequest {
 }
 
 model ImagingStudy {
-  id               String          @id @default(uuid())
+  id               String              @id @default(uuid())
   clinicId         String
-  clinic           Clinic          @relation(fields: [clinicId], references: [id])
+  clinic           Clinic              @relation(fields: [clinicId], references: [id])
   patientId        String? // NULL ⇒ bağlanmamış kuyruğu (unlinked queue)
-  patient          Patient?        @relation(fields: [patientId], references: [id])
+  patient          Patient?            @relation(fields: [patientId], references: [id])
   appointmentId    String?
-  appointment      Appointment?    @relation(fields: [appointmentId], references: [id])
+  appointment      Appointment?        @relation(fields: [appointmentId], references: [id])
   treatmentCaseId  String?
-  treatmentCase    TreatmentCase?  @relation(fields: [treatmentCaseId], references: [id])
+  treatmentCase    TreatmentCase?      @relation(fields: [treatmentCaseId], references: [id])
   deviceId         String?
-  device           ImagingDevice?  @relation(fields: [deviceId], references: [id])
+  device           ImagingDevice?      @relation(fields: [deviceId], references: [id])
   imagingRequestId String?
-  imagingRequest   ImagingRequest? @relation(fields: [imagingRequestId], references: [id])
+  imagingRequest   ImagingRequest?     @relation(fields: [imagingRequestId], references: [id])
   modality         String // IO | PX | CT | CEPH | IO_CAMERA | SCANNER | OTHER
-  studyDate        DateTime        @default(now())
+  studyDate        DateTime            @default(now())
   description      String?
-  source           String          @default("manual_upload") // manual_upload | bridge | import
-  status           String          @default("active") // active | archived — tanısal veri hiç hard-delete edilmez
+  source           String              @default("manual_upload") // manual_upload | bridge | import
+  status           String              @default("active") // active | archived — tanısal veri hiç hard-delete edilmez
   studyInstanceUid String? // DICOMweb-uyumluluk için; manuel yüklemede boş kalır
-  createdById      String
-  createdBy        User            @relation("ImagingStudyCreator", fields: [createdById], references: [id])
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  // Bridge yüklemelerinin kullanıcı aktörü yoktur — createdById bu yüzden nullable.
+  createdById      String?
+  createdBy        User?               @relation("ImagingStudyCreator", fields: [createdById], references: [id])
+  bridgeAgentId    String? // source: 'bridge' olan çalışmalarda provenance; unique constraint'in parçası DEĞİL
+  bridgeAgent      ImagingBridgeAgent? @relation(fields: [bridgeAgentId], references: [id])
+  // Bridge ingest idempotency: ajanın gönderdiği sha256, sunucuda yeniden
+  // hesaplanıp doğrulanır (bkz. routes/imagingBridgePublic.ts). clinicId ile
+  // birlikte tekilleştirilir — bridgeAgentId ile DEĞİL, böylece ajan
+  // değişse/çoğalsa bile aynı dosya iki kez yüklenemez. Manuel yüklemelerde
+  // NULL kalır (Postgres NULL'ları unique constraint'te çakıştırmaz).
+  ingestKey        String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   images ImagingImage[]
 
+  @@unique([clinicId, ingestKey])
   @@index([clinicId, patientId])
   @@index([clinicId, status])
 }
@@ -2221,6 +2231,8 @@ model ImagingBridgeAgent {
   createdBy    User      @relation("ImagingBridgeAgentCreator", fields: [createdById], references: [id])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  imagingStudies ImagingStudy[]
 
   @@index([clinicId])
 }
