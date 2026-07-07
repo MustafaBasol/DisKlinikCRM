@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts --config config/config.example.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/config.test.ts && tsx tests/hash.test.ts && tsx tests/queue.test.ts && tsx tests/watcher.test.ts && tsx tests/uploader.test.ts && tsx tests/lifecycle.test.ts && tsx tests/archiveStrategy.test.ts",
+    "test": "tsx tests/config.test.ts && tsx tests/hash.test.ts && tsx tests/queue.test.ts && tsx tests/watcher.test.ts && tsx tests/uploader.test.ts && tsx tests/lifecycle.test.ts && tsx tests/archiveStrategy.test.ts && tsx tests/textEncoding.test.ts && tsx tests/installServiceAcl.test.ts",
     "build": "node scripts/build.mjs",
     "package": "node scripts/package.mjs"
   },

@@ -103,12 +103,27 @@ if (-not (Test-Path $tokenFile)) {
   Write-Host "Existing token file found at $tokenFile — left untouched. Use replace-token.ps1 (see docs/48) to rotate it."
 }
 
-# 4. ACL: token file readable only by the account that will run the service, plus Administrators.
-$serviceIdentity = if ($ServiceAccount) { $ServiceAccount } else { "SYSTEM" }
-icacls $tokenFile /inheritance:r | Out-Null
-icacls $tokenFile /grant:r "${serviceIdentity}:(R)" | Out-Null
-icacls $tokenFile /grant:r "Administrators:(F)" | Out-Null
-Write-Host "Token file ACL restricted to '$serviceIdentity' (read) and Administrators (full control)."
+# 4. ACL: token file readable only by the account that will run the service, plus
+# built-in Administrators. Well-known SIDs are used instead of localized account/
+# group names — "Administrators" does not exist on non-English Windows (e.g. French
+# Windows uses "Administrateurs"), which previously made icacls fail with
+# "No mapping between account names and security IDs was done."
+$SYSTEM_SID = "*S-1-5-18"
+$ADMINISTRATORS_SID = "*S-1-5-32-544"
+$serviceIdentity = if ($ServiceAccount) { $ServiceAccount } else { $SYSTEM_SID }
+
+function Invoke-IcaclsOrFail {
+  param([string[]]$IcaclsArgs, [string]$Description)
+  $output = & icacls @IcaclsArgs 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to $Description on the token file (icacls exit code $LASTEXITCODE): $output"
+  }
+}
+
+Invoke-IcaclsOrFail -IcaclsArgs @($tokenFile, "/inheritance:r") -Description "reset ACL inheritance"
+Invoke-IcaclsOrFail -IcaclsArgs @($tokenFile, "/grant:r", "${serviceIdentity}:(R)") -Description "grant read access to the service identity"
+Invoke-IcaclsOrFail -IcaclsArgs @($tokenFile, "/grant:r", "${ADMINISTRATORS_SID}:(F)") -Description "grant full control to built-in Administrators"
+Write-Host "Token file ACL restricted via well-known SIDs: service identity (read) and built-in Administrators S-1-5-32-544 (full control)."
 
 # 5. Register the service
 $distEntry = Join-Path $AgentDir "dist\agent.cjs"

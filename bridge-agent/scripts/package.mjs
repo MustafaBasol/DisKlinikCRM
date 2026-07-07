@@ -20,6 +20,7 @@ import {
   buildPosixUnzipListArgs,
   buildPosixTarListArgs,
 } from './archiveStrategy.mjs';
+import { ensureUtf8Bom } from './textEncoding.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -46,7 +47,11 @@ if (fs.existsSync(path.join(root, 'dist/agent.cjs.map'))) {
 fs.mkdirSync(path.join(stageDir, 'scripts'));
 for (const file of fs.readdirSync(path.join(root, 'scripts'))) {
   if (file.endsWith('.ps1')) {
-    fs.copyFileSync(path.join(root, 'scripts', file), path.join(stageDir, 'scripts', file));
+    // Windows PowerShell 5.1 misreads BOM-less script files under a
+    // non-English system codepage (mangles this repo's em-dashes and can
+    // fail to parse) — force a UTF-8 BOM on every packaged script.
+    const content = fs.readFileSync(path.join(root, 'scripts', file));
+    fs.writeFileSync(path.join(stageDir, 'scripts', file), ensureUtf8Bom(content));
   }
 }
 
