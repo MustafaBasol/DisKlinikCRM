@@ -711,6 +711,267 @@ async function main() {
     assert.equal(bridgePublicSrc.includes('authorize('), false, 'bridge public routes must never use user-role authorize()');
   });
 
+  // ── Device/bridge permanent-delete lifecycle (PR: imaging-device-agent-lifecycle) ──
+  section('Device/bridge lifecycle: eligibility rules (mock, mirrors route logic)');
+
+  type LifecycleDevice = { id: string; clinicId: string; studyCount: number; requestCount: number };
+  type LifecycleBridge = { id: string; clinicId: string; lastSeenAt: Date | null; studyCount: number; status: string };
+
+  function simulateDeviceDelete(devices: LifecycleDevice[], id: string, accessibleClinicIds: string[]) {
+    const device = devices.find(d => d.id === id && accessibleClinicIds.includes(d.clinicId));
+    if (!device) return { httpStatus: 404 as const };
+    if (device.studyCount + device.requestCount > 0) {
+      return { httpStatus: 409 as const, code: 'IMAGING_DEVICE_IN_USE', usage: { studyCount: device.studyCount, requestCount: device.requestCount } };
+    }
+    devices.splice(devices.indexOf(device), 1);
+    return { httpStatus: 200 as const, deleted: true };
+  }
+
+  function simulateBridgeDelete(bridges: LifecycleBridge[], id: string, accessibleClinicIds: string[]) {
+    const bridge = bridges.find(b => b.id === id && accessibleClinicIds.includes(b.clinicId));
+    if (!bridge) return { httpStatus: 404 as const };
+    const hasConnected = bridge.lastSeenAt !== null || bridge.studyCount > 0;
+    if (hasConnected) {
+      return { httpStatus: 409 as const, code: 'IMAGING_BRIDGE_IN_USE', usage: { studyCount: bridge.studyCount, hasConnected } };
+    }
+    bridges.splice(bridges.indexOf(bridge), 1);
+    return { httpStatus: 200 as const, deleted: true };
+  }
+
+  await test('unused device (no studies, no requests) is deletable', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 0, requestCount: 0 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 200);
+    assert.equal(devices.length, 0, 'device row must be removed');
+  });
+
+  await test('nonexistent device returns 404', () => {
+    const devices: LifecycleDevice[] = [];
+    assert.equal(simulateDeviceDelete(devices, 'missing', ['clinic-A']).httpStatus, 404);
+  });
+
+  await test('cross-clinic device deletion is blocked as 404 (never reveals existence)', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-B', studyCount: 0, requestCount: 0 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 404);
+    assert.equal(devices.length, 1, 'inaccessible device must not be touched');
+  });
+
+  await test('device with ImagingStudy usage returns 409 IMAGING_DEVICE_IN_USE and is not deleted', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 3, requestCount: 0 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+    assert.equal((result as any).code, 'IMAGING_DEVICE_IN_USE');
+    assert.equal(devices.length, 1, 'blocked deletion must not remove the device');
+  });
+
+  await test('device with ImagingRequest usage returns 409 IMAGING_DEVICE_IN_USE', () => {
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 0, requestCount: 1 }];
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+    assert.equal((result as any).code, 'IMAGING_DEVICE_IN_USE');
+  });
+
+  await test('agent with no heartbeat, no studies is deletable', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: null, studyCount: 0, status: 'pending' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 200);
+    assert.equal(bridges.length, 0);
+  });
+
+  await test('nonexistent bridge returns 404', () => {
+    assert.equal(simulateBridgeDelete([], 'missing', ['clinic-A']).httpStatus, 404);
+  });
+
+  await test('cross-clinic bridge deletion is blocked as 404', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-B', lastSeenAt: null, studyCount: 0, status: 'pending' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 404);
+    assert.equal(bridges.length, 1);
+  });
+
+  await test('agent with lastSeenAt (ever heartbeated) returns 409 IMAGING_BRIDGE_IN_USE', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: new Date(), studyCount: 0, status: 'online' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+    assert.equal((result as any).code, 'IMAGING_BRIDGE_IN_USE');
+    assert.equal(bridges.length, 1);
+  });
+
+  await test('agent referenced by an ImagingStudy returns 409 IMAGING_BRIDGE_IN_USE', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: null, studyCount: 2, status: 'pending' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409);
+  });
+
+  await test('revoked but historically connected agent remains non-deletable', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: new Date(), studyCount: 0, status: 'revoked' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409, 'revoked status alone must not make a connected agent deletable');
+  });
+
+  await test('revoked and never-connected/unused agent is deletable', () => {
+    const bridges: LifecycleBridge[] = [{ id: 'b1', clinicId: 'clinic-A', lastSeenAt: null, studyCount: 0, status: 'revoked' }];
+    const result = simulateBridgeDelete(bridges, 'b1', ['clinic-A']);
+    assert.equal(result.httpStatus, 200);
+    assert.equal(bridges.length, 0);
+  });
+
+  await test('mock model: usage present at count-time blocks deletion (not a proof of DB concurrency safety)', () => {
+    // This mock only proves the eligibility function's logic is correct when the count
+    // reflects current state. It does NOT prove race safety under READ COMMITTED — that
+    // requires the real route to take an explicit row lock (SELECT ... FOR UPDATE) before
+    // reading any eligibility field, which is verified by the source-regression checks below.
+    const devices: LifecycleDevice[] = [{ id: 'd1', clinicId: 'clinic-A', studyCount: 0, requestCount: 0 }];
+    devices[0].studyCount = 1;
+    const result = simulateDeviceDelete(devices, 'd1', ['clinic-A']);
+    assert.equal(result.httpStatus, 409, 'usage present at count-time must block it');
+    assert.equal(devices.length, 1);
+  });
+
+  section('Device/bridge lifecycle: source regression checks (race-safety proof)');
+
+  /**
+   * Extracts one route handler's source using stable code boundaries only:
+   * starts at the exact `router.<method>(...)` signature and ends at the next
+   * top-level `router.<method>(` declaration, or at `export default router`
+   * when the given route is the last one in the file. Does not depend on any
+   * human-readable section comment.
+   */
+  function routeBlock(startMarker: string) {
+    const start = routeSrc.indexOf(startMarker);
+    assert.ok(start >= 0, `route marker not found: ${startMarker}`);
+    const searchFrom = start + startMarker.length;
+    const nextRouterOffset = routeSrc.slice(searchFrom).search(/\nrouter\.(get|post|put|patch|delete)\(/);
+    if (nextRouterOffset >= 0) {
+      return routeSrc.slice(start, searchFrom + nextRouterOffset);
+    }
+    const exportIdx = routeSrc.indexOf('export default router', searchFrom);
+    assert.ok(exportIdx >= 0, `no next router declaration and no export default router found after: ${startMarker}`);
+    return routeSrc.slice(start, exportIdx);
+  }
+
+  const deviceDeleteBlock = routeBlock("router.delete('/imaging/devices/:id'");
+  const bridgeDeleteBlock = routeBlock("router.delete('/imaging/bridges/:id'");
+
+  await test('route block extraction works via code boundaries, not the Turkish section-comment text', () => {
+    const helperSrc = routeBlock.toString();
+    assert.equal(/Çekim|istemleri|Köprü|Cihazlar/.test(helperSrc), false,
+      'extraction helper must not reference any Turkish section-comment text');
+    // Sanity: both extracted blocks contain their own handler and stop before the next route.
+    assert.ok(deviceDeleteBlock.includes("router.delete('/imaging/devices/:id'"));
+    assert.equal(deviceDeleteBlock.includes("router.get('/imaging/requests'"), false,
+      'device delete block must stop before the next router declaration');
+    assert.ok(bridgeDeleteBlock.includes("router.delete('/imaging/bridges/:id'"));
+    assert.equal(bridgeDeleteBlock.includes('export default router'), false,
+      'the fallback boundary (export default router) must not be included in the extracted block');
+  });
+
+  await test('device delete acquires an explicit row lock (SELECT ... FOR UPDATE) before any eligibility read', () => {
+    assert.match(deviceDeleteBlock, /SELECT[^`]*FOR UPDATE/s, 'device delete must lock the row with FOR UPDATE');
+    const lockIdx = deviceDeleteBlock.search(/FOR UPDATE/);
+    const countIdx = deviceDeleteBlock.indexOf('imagingStudy.count');
+    assert.ok(lockIdx >= 0 && countIdx > lockIdx, 'usage counts must be read AFTER the row lock is acquired');
+  });
+
+  await test('bridge delete acquires an explicit row lock (SELECT ... FOR UPDATE) and reads lastSeenAt only from the locked row', () => {
+    assert.match(bridgeDeleteBlock, /SELECT[^`]*"lastSeenAt"[^`]*FOR UPDATE/s, 'bridge delete must lock the row and select lastSeenAt in the same statement');
+    // The stale-read bug being fixed used a pre-transaction `existing.lastSeenAt`. The corrected
+    // route must derive hasConnected from the locked row variable, never from a value fetched
+    // before the transaction/lock.
+    assert.equal(/existing\.lastSeenAt/.test(bridgeDeleteBlock), false, 'must not use a pre-lock lastSeenAt value');
+    assert.ok(/bridge\.lastSeenAt/.test(bridgeDeleteBlock), 'hasConnected must be derived from the row read after locking');
+    const lockIdx = bridgeDeleteBlock.search(/FOR UPDATE/);
+    const countIdx = bridgeDeleteBlock.indexOf('imagingStudy.count');
+    assert.ok(lockIdx >= 0 && countIdx > lockIdx, 'study usage count must be read AFTER the row lock is acquired');
+  });
+
+  await test('device/bridge delete no longer fetch the record with a plain findFirst before the transaction', () => {
+    // A pre-transaction findFirst (as the original implementation did) re-introduces the
+    // TOCTOU gap the lock is meant to close — eligibility fields must only come from the
+    // locked row inside $transaction.
+    assert.equal(/const existing = await prisma\.imagingDevice\.findFirst/.test(deviceDeleteBlock), false);
+    assert.equal(/const existing = await prisma\.imagingBridgeAgent\.findFirst/.test(bridgeDeleteBlock), false);
+  });
+
+  await test('row-lock queries use tagged Prisma.sql parameterization, never raw string interpolation or $queryRawUnsafe', () => {
+    assert.equal(routeSrc.includes('$queryRawUnsafe'), false, 'must never use $queryRawUnsafe');
+    assert.equal(/\$queryRaw`[^`]*\$\{/.test(routeSrc), false, 'must not use a bare template-literal query (bypasses Prisma.sql tagging)');
+    assert.ok(deviceDeleteBlock.includes('Prisma.sql`'), 'device lock query must use Prisma.sql tagged template');
+    assert.ok(bridgeDeleteBlock.includes('Prisma.sql`'), 'bridge lock query must use Prisma.sql tagged template');
+  });
+
+  await test('clinic scope is applied inside the same lock query, before/while locking', () => {
+    assert.ok(deviceDeleteBlock.includes('clinicScopeSql(scope)'));
+    assert.ok(bridgeDeleteBlock.includes('clinicScopeSql(scope)'));
+    // The clinic filter fragment must appear inside the same SQL statement as FOR UPDATE.
+    assert.match(deviceDeleteBlock, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
+    assert.match(bridgeDeleteBlock, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
+  });
+
+  await test('P2025 (locked row deleted/not found concurrently) maps to a safe 404, not a raw Prisma error', () => {
+    assert.ok(deviceDeleteBlock.includes("isPrismaKnownError(err, 'P2025')"));
+    assert.ok(bridgeDeleteBlock.includes("isPrismaKnownError(err, 'P2025')"));
+  });
+
+  await test('P2003 (concurrent FK reference during delete) maps to a safe 409 with the stable code, not a raw Prisma error', () => {
+    assert.ok(deviceDeleteBlock.includes("isPrismaKnownError(err, 'P2003')"));
+    assert.ok(deviceDeleteBlock.includes("code: 'IMAGING_DEVICE_IN_USE'"));
+    assert.ok(bridgeDeleteBlock.includes("isPrismaKnownError(err, 'P2003')"));
+    assert.ok(bridgeDeleteBlock.includes("code: 'IMAGING_BRIDGE_IN_USE'"));
+  });
+
+  await test('clinicScopeSql never joins an empty "in" list (avoids Prisma.join([]) throwing) and falls back to an impossible match', () => {
+    const fnSrc = routeSrc.slice(routeSrc.indexOf('function clinicScopeSql'), routeSrc.indexOf('function isPrismaKnownError'));
+    assert.ok(fnSrc.includes('1 = 0'), 'empty scope must resolve to an always-false predicate, not Prisma.join([])');
+    assert.match(fnSrc, /ids\.length === 0/);
+  });
+
+  await test('device and bridge DELETE routes exist and require IMAGING_MANAGE_ROLES', () => {
+    assert.ok(/router\.delete\('\/imaging\/devices\/:id',\s*authorize\(\[\.\.\.IMAGING_MANAGE_ROLES\]\)/.test(routeSrc));
+    assert.ok(/router\.delete\('\/imaging\/bridges\/:id',\s*authorize\(\[\.\.\.IMAGING_MANAGE_ROLES\]\)/.test(routeSrc));
+  });
+
+  await test('device delete uses a transaction to check usage and delete atomically', () => {
+    assert.ok(deviceDeleteBlock.includes('$transaction'), 'eligibility check + delete must be transactional');
+    assert.ok(deviceDeleteBlock.includes("code: 'IMAGING_DEVICE_IN_USE'"));
+    assert.ok(deviceDeleteBlock.includes('status(409)'));
+  });
+
+  await test('bridge delete uses a transaction and never selects tokenHash', () => {
+    assert.ok(bridgeDeleteBlock.includes('$transaction'));
+    assert.ok(bridgeDeleteBlock.includes("code: 'IMAGING_BRIDGE_IN_USE'"));
+    assert.equal(/tokenHash/.test(bridgeDeleteBlock), false, 'delete response must never include tokenHash');
+  });
+
+  await test('no study/request/image is ever hard-deleted by the device or bridge delete routes', () => {
+    assert.equal(routeSrc.includes('imagingStudy.delete'), false);
+    assert.equal(routeSrc.includes('imagingImage.delete'), false);
+    assert.equal(routeSrc.includes('imagingRequest.delete'), false);
+  });
+
+  await test('device/bridge delete actions are audited with safe metadata only', () => {
+    assert.ok(routeSrc.includes("'imaging_device_deleted'"));
+    assert.ok(routeSrc.includes("'imaging_bridge_deleted'"));
+    const deleteAuditCalls = routeSrc.match(/auditImaging\(req, result\.clinicId, '(imaging_device_deleted|imaging_bridge_deleted)'[^;]*?\);/gs) ?? [];
+    assert.ok(deleteAuditCalls.length >= 2);
+    for (const call of deleteAuditCalls) {
+      assert.equal(/tokenHash|originalName|fileName|patientId/.test(call), false);
+    }
+  });
+
+  await test('list endpoints expose canDelete without exposing tokenHash', () => {
+    assert.ok(routeSrc.includes('canDelete:'), 'devices/bridges lists must expose canDelete for advisory UI');
+    assert.equal(/canDelete:[^,}]*tokenHash/.test(routeSrc), false);
+  });
+
+  await test('existing deactivate (PUT isActive) and revoke flows are unchanged', () => {
+    assert.ok(/router\.put\('\/imaging\/devices\/:id'/.test(routeSrc), 'device activation still goes through PUT');
+    assert.ok(routeSrc.includes("'imaging_device_updated'"));
+    assert.ok(routeSrc.includes("'imaging_bridge_revoked'"));
+    assert.ok(routeSrc.includes("if (existing.status === 'revoked') return res.status(409)"));
+  });
+
   // ── Summary ──────────────────────────────────────────────────────────────
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

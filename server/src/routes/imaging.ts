@@ -21,6 +21,7 @@
 
 import express, { Response, NextFunction } from 'express';
 import multer from 'multer';
+import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
@@ -109,6 +110,25 @@ async function auditImaging(
     entityId,
     metadata: metadata ?? null,
   });
+}
+
+/**
+ * Klinik kapsamını ("clinicId" = X veya IN (...)) parametreli bir SQL
+ * fragmanına çevirir. Boş "in" listesi eşleşmesi imkansız bir koşula
+ * (1=0) düşer — Prisma.join([]) çağrılmaz.
+ */
+function clinicScopeSql(scope: Awaited<ReturnType<typeof validateAndGetClinicIdScope>>): Prisma.Sql {
+  if (scope === false) return Prisma.sql`1 = 0`;
+  if (typeof scope.clinicId === 'string') {
+    return Prisma.sql`"clinicId" = ${scope.clinicId}`;
+  }
+  const ids = scope.clinicId.in;
+  if (ids.length === 0) return Prisma.sql`1 = 0`;
+  return Prisma.sql`"clinicId" IN (${Prisma.join(ids)})`;
+}
+
+function isPrismaKnownError(err: unknown, code: string): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === code;
 }
 
 const studyImageSelect = {
@@ -223,7 +243,10 @@ router.get('/imaging/devices', authorize([...IMAGING_CLINICAL_ROLES]), async (re
       include: { _count: { select: { imagingStudies: true, imagingRequests: true } } },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     });
-    res.json(devices);
+    res.json(devices.map(d => ({
+      ...d,
+      canDelete: d._count.imagingStudies === 0 && d._count.imagingRequests === 0,
+    })));
   } catch {
     res.status(500).json({ error: 'Failed to fetch imaging devices' });
   }
@@ -280,8 +303,10 @@ router.put('/imaging/devices/:id', authorize([...IMAGING_MANAGE_ROLES]), async (
   }
 });
 
-// DELETE /api/imaging/devices/:id — çalışma/istem referansı varsa pasifleştirir,
-// yoksa siler (görüntü kayıtlarının cihaz izi korunur).
+// DELETE /api/imaging/devices/:id — yalnızca hiç kullanılmamış cihazlar kalıcı
+// olarak silinir; herhangi bir çalışma/istem referansı varsa 409 döner
+// (kullanıcı bunun yerine pasifleştirmelidir). Uygunluk kontrolü + silme aynı
+// transaction içinde yapılır (yarışa dayanıklı).
 router.delete('/imaging/devices/:id', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
@@ -289,26 +314,58 @@ router.delete('/imaging/devices/:id', authorize([...IMAGING_MANAGE_ROLES]), asyn
     const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
     if (scope === false) return;
 
-    const existing = await prisma.imagingDevice.findFirst({
-      where: { id, ...scope },
-      include: { _count: { select: { imagingStudies: true, imagingRequests: true } } },
-    });
-    if (!existing) return res.status(404).json({ error: 'Imaging device not found' });
+    const clinicFilter = clinicScopeSql(scope);
 
-    const referenced = existing._count.imagingStudies + existing._count.imagingRequests > 0;
-    if (referenced) {
-      await prisma.imagingDevice.update({ where: { id }, data: { isActive: false } });
-      await auditImaging(req, existing.clinicId, 'imaging_device_deactivated', 'imaging_device', id, {
-        studyCount: existing._count.imagingStudies,
-        requestCount: existing._count.imagingRequests,
+    const result = await prisma.$transaction(async (tx) => {
+      // Satırı FOR UPDATE ile kilitle — yalnızca transaction sarmalamak
+      // READ COMMITTED altında yarış durumunu önlemek için yeterli değildir.
+      // Kilit alınmadan önce okunan hiçbir alan (isim, ilişki sayacı vb.)
+      // uygunluk kararı için kullanılmaz.
+      const locked = await tx.$queryRaw<{ id: string; clinicId: string; name: string }[]>(
+        Prisma.sql`SELECT id, "clinicId", name FROM "ImagingDevice" WHERE id = ${id} AND ${clinicFilter} FOR UPDATE`
+      );
+      const device = locked[0];
+      if (!device) return { status: 'not_found' as const };
+
+      // Sayaçlar yalnızca kilit alındıktan SONRA okunur.
+      const [studyCount, requestCount] = await Promise.all([
+        tx.imagingStudy.count({ where: { deviceId: id } }),
+        tx.imagingRequest.count({ where: { requestedDeviceId: id } }),
+      ]);
+      if (studyCount + requestCount > 0) {
+        return { status: 'blocked' as const, studyCount, requestCount };
+      }
+
+      await tx.imagingDevice.delete({ where: { id } });
+      return { status: 'deleted' as const, name: device.name, clinicId: device.clinicId };
+    });
+
+    if (result.status === 'not_found') {
+      return res.status(404).json({ error: 'Imaging device not found' });
+    }
+    if (result.status === 'blocked') {
+      return res.status(409).json({
+        error: 'Imaging device is in use',
+        code: 'IMAGING_DEVICE_IN_USE',
+        usage: { studyCount: result.studyCount, requestCount: result.requestCount },
       });
-      return res.json({ deactivated: true });
     }
 
-    await prisma.imagingDevice.delete({ where: { id } });
-    await auditImaging(req, existing.clinicId, 'imaging_device_deleted', 'imaging_device', id);
-    res.json({ deleted: true });
-  } catch {
+    await auditImaging(req, result.clinicId, 'imaging_device_deleted', 'imaging_device', id, {
+      name: result.name,
+    });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    if (isPrismaKnownError(err, 'P2025')) {
+      return res.status(404).json({ error: 'Imaging device not found' });
+    }
+    if (isPrismaKnownError(err, 'P2003')) {
+      return res.status(409).json({
+        error: 'Imaging device is in use',
+        code: 'IMAGING_DEVICE_IN_USE',
+        usage: { studyCount: 0, requestCount: 0 },
+      });
+    }
     res.status(500).json({ error: 'Failed to delete imaging device' });
   }
 });
@@ -852,10 +909,14 @@ router.get('/imaging/bridges', authorize([...IMAGING_MANAGE_ROLES]), async (req:
 
     const bridges = await prisma.imagingBridgeAgent.findMany({
       where: { ...scope },
-      select: bridgeAgentSelect,
+      select: { ...bridgeAgentSelect, _count: { select: { imagingStudies: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(bridges);
+    res.json(bridges.map(({ _count, ...b }) => ({
+      ...b,
+      hasConnected: b.lastSeenAt !== null || _count.imagingStudies > 0,
+      canDelete: b.lastSeenAt === null && _count.imagingStudies === 0,
+    })));
   } catch {
     res.status(500).json({ error: 'Failed to fetch bridge agents' });
   }
@@ -923,6 +984,71 @@ router.post('/imaging/bridges/:id/revoke', authorize([...IMAGING_MANAGE_ROLES]),
     res.json(agent);
   } catch {
     res.status(500).json({ error: 'Failed to revoke bridge agent' });
+  }
+});
+
+// DELETE /api/imaging/bridges/:id — yalnızca hiç heartbeat göndermemiş ve hiçbir
+// çalışmaya bağlı olmayan ajanlar kalıcı olarak silinir; aksi halde 409 döner.
+// revoked durumu tek başına silinebilirlik sağlamaz (bkz. docs/48).
+router.delete('/imaging/bridges/:id', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+
+  try {
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
+
+    const clinicFilter = clinicScopeSql(scope);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Satırı FOR UPDATE ile kilitle. lastSeenAt SADECE bu kilit alındıktan
+      // sonra okunur — eşzamanlı bir heartbeat, kilit alınmadan önce görülen
+      // "hiç bağlanmadı" durumunu geçersiz kılamaz.
+      const locked = await tx.$queryRaw<
+        { id: string; clinicId: string; name: string; lastSeenAt: Date | null }[]
+      >(
+        Prisma.sql`SELECT id, "clinicId", name, "lastSeenAt" FROM "ImagingBridgeAgent" WHERE id = ${id} AND ${clinicFilter} FOR UPDATE`
+      );
+      const bridge = locked[0];
+      if (!bridge) return { status: 'not_found' as const };
+
+      // Sayaç ve lastSeenAt değerlendirmesi yalnızca kilit alındıktan SONRA.
+      const studyCount = await tx.imagingStudy.count({ where: { bridgeAgentId: id } });
+      const hasConnected = bridge.lastSeenAt !== null || studyCount > 0;
+      if (hasConnected) {
+        return { status: 'blocked' as const, studyCount, hasConnected };
+      }
+
+      await tx.imagingBridgeAgent.delete({ where: { id } });
+      return { status: 'deleted' as const, name: bridge.name, clinicId: bridge.clinicId };
+    });
+
+    if (result.status === 'not_found') {
+      return res.status(404).json({ error: 'Bridge agent not found' });
+    }
+    if (result.status === 'blocked') {
+      return res.status(409).json({
+        error: 'Imaging bridge agent has historical activity',
+        code: 'IMAGING_BRIDGE_IN_USE',
+        usage: { studyCount: result.studyCount, hasConnected: result.hasConnected },
+      });
+    }
+
+    await auditImaging(req, result.clinicId, 'imaging_bridge_deleted', 'imaging_bridge_agent', id, {
+      name: result.name,
+    });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    if (isPrismaKnownError(err, 'P2025')) {
+      return res.status(404).json({ error: 'Bridge agent not found' });
+    }
+    if (isPrismaKnownError(err, 'P2003')) {
+      return res.status(409).json({
+        error: 'Imaging bridge agent has historical activity',
+        code: 'IMAGING_BRIDGE_IN_USE',
+        usage: { studyCount: 0, hasConnected: true },
+      });
+    }
+    res.status(500).json({ error: 'Failed to delete bridge agent' });
   }
 });
 
