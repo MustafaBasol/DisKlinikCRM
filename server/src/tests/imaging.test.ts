@@ -831,32 +831,58 @@ async function main() {
 
   section('Device/bridge lifecycle: source regression checks (race-safety proof)');
 
-  function block(startMarker: string, endMarker?: string) {
+  /**
+   * Extracts one route handler's source using stable code boundaries only:
+   * starts at the exact `router.<method>(...)` signature and ends at the next
+   * top-level `router.<method>(` declaration, or at `export default router`
+   * when the given route is the last one in the file. Does not depend on any
+   * human-readable section comment.
+   */
+  function routeBlock(startMarker: string) {
     const start = routeSrc.indexOf(startMarker);
-    assert.ok(start >= 0, `marker not found: ${startMarker}`);
-    const end = endMarker ? routeSrc.indexOf(endMarker, start) : routeSrc.indexOf('\n});', start) + 4;
-    return routeSrc.slice(start, end > start ? end : undefined);
+    assert.ok(start >= 0, `route marker not found: ${startMarker}`);
+    const searchFrom = start + startMarker.length;
+    const nextRouterOffset = routeSrc.slice(searchFrom).search(/\nrouter\.(get|post|put|patch|delete)\(/);
+    if (nextRouterOffset >= 0) {
+      return routeSrc.slice(start, searchFrom + nextRouterOffset);
+    }
+    const exportIdx = routeSrc.indexOf('export default router', searchFrom);
+    assert.ok(exportIdx >= 0, `no next router declaration and no export default router found after: ${startMarker}`);
+    return routeSrc.slice(start, exportIdx);
   }
 
-  const deviceDeleteBlock2 = block("router.delete('/imaging/devices/:id'", "// ═══ Çekim istemleri");
-  const bridgeDeleteBlock2 = block("router.delete('/imaging/bridges/:id'");
+  const deviceDeleteBlock = routeBlock("router.delete('/imaging/devices/:id'");
+  const bridgeDeleteBlock = routeBlock("router.delete('/imaging/bridges/:id'");
+
+  await test('route block extraction works via code boundaries, not the Turkish section-comment text', () => {
+    const helperSrc = routeBlock.toString();
+    assert.equal(/Çekim|istemleri|Köprü|Cihazlar/.test(helperSrc), false,
+      'extraction helper must not reference any Turkish section-comment text');
+    // Sanity: both extracted blocks contain their own handler and stop before the next route.
+    assert.ok(deviceDeleteBlock.includes("router.delete('/imaging/devices/:id'"));
+    assert.equal(deviceDeleteBlock.includes("router.get('/imaging/requests'"), false,
+      'device delete block must stop before the next router declaration');
+    assert.ok(bridgeDeleteBlock.includes("router.delete('/imaging/bridges/:id'"));
+    assert.equal(bridgeDeleteBlock.includes('export default router'), false,
+      'the fallback boundary (export default router) must not be included in the extracted block');
+  });
 
   await test('device delete acquires an explicit row lock (SELECT ... FOR UPDATE) before any eligibility read', () => {
-    assert.match(deviceDeleteBlock2, /SELECT[^`]*FOR UPDATE/s, 'device delete must lock the row with FOR UPDATE');
-    const lockIdx = deviceDeleteBlock2.search(/FOR UPDATE/);
-    const countIdx = deviceDeleteBlock2.indexOf('imagingStudy.count');
+    assert.match(deviceDeleteBlock, /SELECT[^`]*FOR UPDATE/s, 'device delete must lock the row with FOR UPDATE');
+    const lockIdx = deviceDeleteBlock.search(/FOR UPDATE/);
+    const countIdx = deviceDeleteBlock.indexOf('imagingStudy.count');
     assert.ok(lockIdx >= 0 && countIdx > lockIdx, 'usage counts must be read AFTER the row lock is acquired');
   });
 
   await test('bridge delete acquires an explicit row lock (SELECT ... FOR UPDATE) and reads lastSeenAt only from the locked row', () => {
-    assert.match(bridgeDeleteBlock2, /SELECT[^`]*"lastSeenAt"[^`]*FOR UPDATE/s, 'bridge delete must lock the row and select lastSeenAt in the same statement');
+    assert.match(bridgeDeleteBlock, /SELECT[^`]*"lastSeenAt"[^`]*FOR UPDATE/s, 'bridge delete must lock the row and select lastSeenAt in the same statement');
     // The stale-read bug being fixed used a pre-transaction `existing.lastSeenAt`. The corrected
     // route must derive hasConnected from the locked row variable, never from a value fetched
     // before the transaction/lock.
-    assert.equal(/existing\.lastSeenAt/.test(bridgeDeleteBlock2), false, 'must not use a pre-lock lastSeenAt value');
-    assert.ok(/bridge\.lastSeenAt/.test(bridgeDeleteBlock2), 'hasConnected must be derived from the row read after locking');
-    const lockIdx = bridgeDeleteBlock2.search(/FOR UPDATE/);
-    const countIdx = bridgeDeleteBlock2.indexOf('imagingStudy.count');
+    assert.equal(/existing\.lastSeenAt/.test(bridgeDeleteBlock), false, 'must not use a pre-lock lastSeenAt value');
+    assert.ok(/bridge\.lastSeenAt/.test(bridgeDeleteBlock), 'hasConnected must be derived from the row read after locking');
+    const lockIdx = bridgeDeleteBlock.search(/FOR UPDATE/);
+    const countIdx = bridgeDeleteBlock.indexOf('imagingStudy.count');
     assert.ok(lockIdx >= 0 && countIdx > lockIdx, 'study usage count must be read AFTER the row lock is acquired');
   });
 
@@ -864,35 +890,35 @@ async function main() {
     // A pre-transaction findFirst (as the original implementation did) re-introduces the
     // TOCTOU gap the lock is meant to close — eligibility fields must only come from the
     // locked row inside $transaction.
-    assert.equal(/const existing = await prisma\.imagingDevice\.findFirst/.test(deviceDeleteBlock2), false);
-    assert.equal(/const existing = await prisma\.imagingBridgeAgent\.findFirst/.test(bridgeDeleteBlock2), false);
+    assert.equal(/const existing = await prisma\.imagingDevice\.findFirst/.test(deviceDeleteBlock), false);
+    assert.equal(/const existing = await prisma\.imagingBridgeAgent\.findFirst/.test(bridgeDeleteBlock), false);
   });
 
   await test('row-lock queries use tagged Prisma.sql parameterization, never raw string interpolation or $queryRawUnsafe', () => {
     assert.equal(routeSrc.includes('$queryRawUnsafe'), false, 'must never use $queryRawUnsafe');
     assert.equal(/\$queryRaw`[^`]*\$\{/.test(routeSrc), false, 'must not use a bare template-literal query (bypasses Prisma.sql tagging)');
-    assert.ok(deviceDeleteBlock2.includes('Prisma.sql`'), 'device lock query must use Prisma.sql tagged template');
-    assert.ok(bridgeDeleteBlock2.includes('Prisma.sql`'), 'bridge lock query must use Prisma.sql tagged template');
+    assert.ok(deviceDeleteBlock.includes('Prisma.sql`'), 'device lock query must use Prisma.sql tagged template');
+    assert.ok(bridgeDeleteBlock.includes('Prisma.sql`'), 'bridge lock query must use Prisma.sql tagged template');
   });
 
   await test('clinic scope is applied inside the same lock query, before/while locking', () => {
-    assert.ok(deviceDeleteBlock2.includes('clinicScopeSql(scope)'));
-    assert.ok(bridgeDeleteBlock2.includes('clinicScopeSql(scope)'));
+    assert.ok(deviceDeleteBlock.includes('clinicScopeSql(scope)'));
+    assert.ok(bridgeDeleteBlock.includes('clinicScopeSql(scope)'));
     // The clinic filter fragment must appear inside the same SQL statement as FOR UPDATE.
-    assert.match(deviceDeleteBlock2, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
-    assert.match(bridgeDeleteBlock2, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
+    assert.match(deviceDeleteBlock, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
+    assert.match(bridgeDeleteBlock, /WHERE id = \$\{id\} AND \$\{clinicFilter\}[^`]*FOR UPDATE/s);
   });
 
   await test('P2025 (locked row deleted/not found concurrently) maps to a safe 404, not a raw Prisma error', () => {
-    assert.ok(deviceDeleteBlock2.includes("isPrismaKnownError(err, 'P2025')"));
-    assert.ok(bridgeDeleteBlock2.includes("isPrismaKnownError(err, 'P2025')"));
+    assert.ok(deviceDeleteBlock.includes("isPrismaKnownError(err, 'P2025')"));
+    assert.ok(bridgeDeleteBlock.includes("isPrismaKnownError(err, 'P2025')"));
   });
 
   await test('P2003 (concurrent FK reference during delete) maps to a safe 409 with the stable code, not a raw Prisma error', () => {
-    assert.ok(deviceDeleteBlock2.includes("isPrismaKnownError(err, 'P2003')"));
-    assert.ok(deviceDeleteBlock2.includes("code: 'IMAGING_DEVICE_IN_USE'"));
-    assert.ok(bridgeDeleteBlock2.includes("isPrismaKnownError(err, 'P2003')"));
-    assert.ok(bridgeDeleteBlock2.includes("code: 'IMAGING_BRIDGE_IN_USE'"));
+    assert.ok(deviceDeleteBlock.includes("isPrismaKnownError(err, 'P2003')"));
+    assert.ok(deviceDeleteBlock.includes("code: 'IMAGING_DEVICE_IN_USE'"));
+    assert.ok(bridgeDeleteBlock.includes("isPrismaKnownError(err, 'P2003')"));
+    assert.ok(bridgeDeleteBlock.includes("code: 'IMAGING_BRIDGE_IN_USE'"));
   });
 
   await test('clinicScopeSql never joins an empty "in" list (avoids Prisma.join([]) throwing) and falls back to an impossible match', () => {
@@ -907,17 +933,12 @@ async function main() {
   });
 
   await test('device delete uses a transaction to check usage and delete atomically', () => {
-    const deviceDeleteBlock = routeSrc.slice(
-      routeSrc.indexOf("router.delete('/imaging/devices/:id'"),
-      routeSrc.indexOf("// ═══ Çekim istemleri"),
-    );
     assert.ok(deviceDeleteBlock.includes('$transaction'), 'eligibility check + delete must be transactional');
     assert.ok(deviceDeleteBlock.includes("code: 'IMAGING_DEVICE_IN_USE'"));
     assert.ok(deviceDeleteBlock.includes('status(409)'));
   });
 
   await test('bridge delete uses a transaction and never selects tokenHash', () => {
-    const bridgeDeleteBlock = routeSrc.slice(routeSrc.indexOf("router.delete('/imaging/bridges/:id'"));
     assert.ok(bridgeDeleteBlock.includes('$transaction'));
     assert.ok(bridgeDeleteBlock.includes("code: 'IMAGING_BRIDGE_IN_USE'"));
     assert.equal(/tokenHash/.test(bridgeDeleteBlock), false, 'delete response must never include tokenHash');

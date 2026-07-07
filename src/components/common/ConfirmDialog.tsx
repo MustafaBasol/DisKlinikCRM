@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -34,6 +34,36 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusTarget = dialogRef.current?.querySelector<HTMLElement>(
+      '[data-autofocus]',
+    ) ?? dialogRef.current;
+    focusTarget?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !loading) onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocusedRef.current?.focus?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, loading]);
+
   if (!open) return null;
 
   const confirmButtonClasses = variant === 'danger'
@@ -46,11 +76,16 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       onClick={() => !loading && onCancel()}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-2xl"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-2xl outline-none"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h2 id={titleId} className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             {variant === 'danger' && <Trash2 size={18} className="text-red-500" />}
             {title}
           </h2>
