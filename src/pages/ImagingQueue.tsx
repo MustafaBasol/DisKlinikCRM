@@ -16,6 +16,8 @@ import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { imagingService, patientService } from '../services/api';
 import { canViewImaging } from '../utils/permissions';
 import FilePreviewModal from '../components/FilePreviewModal';
+import DicomViewer from '../components/imaging/DicomViewer';
+import { isDicomImage } from '../components/imaging/dicomHelpers';
 import type { ImagingImageRow, ImagingStudyRow } from '../components/imaging/PatientImagingTab';
 
 interface PatientOption {
@@ -264,7 +266,17 @@ const ImagingQueue: React.FC = () => {
         </div>
       )}
 
-      {previewImage && (
+      {previewImage && isDicomImage(previewImage.image.mimeType) && (
+        <DicomViewer
+          fileName={previewImage.image.originalName}
+          modality={previewImage.study.modality}
+          studyDate={previewImage.study.studyDate}
+          loadDicomBlob={signal => imagingService.loadDicomBlob(previewImage.study.id, previewImage.image.id, signal)}
+          onDownload={() => imagingService.downloadImage(previewImage.study.id, previewImage.image.id, previewImage.image.originalName)}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
+      {previewImage && !isDicomImage(previewImage.image.mimeType) && (
         <FilePreviewModal
           fileName={previewImage.image.originalName}
           mimeType={previewImage.image.mimeType}

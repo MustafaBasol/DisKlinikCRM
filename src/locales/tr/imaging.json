@@ -162,5 +162,31 @@
   "errors": {
     "loadFailed": "Görüntüleme verileri yüklenemedi",
     "actionFailed": "İşlem başarısız oldu"
+  },
+  "viewer": {
+    "title": "DICOM Görüntüleyici",
+    "loading": "DICOM görüntüsü yükleniyor...",
+    "windowLevel": "Pencere/Seviye",
+    "pan": "Kaydır",
+    "zoom": "Yakınlaştır",
+    "zoomIn": "Yakınlaştır",
+    "zoomOut": "Uzaklaştır",
+    "fitToView": "Ekrana Sığdır",
+    "invert": "Ters Çevir",
+    "reset": "Sıfırla",
+    "retry": "Tekrar Dene",
+    "secureDownload": "Güvenli indirme",
+    "imageInformation": "Görüntü bilgisi",
+    "dimensions": "Boyutlar",
+    "bitDepth": "Bit derinliği",
+    "photometricInterpretation": "Fotometrik yorum",
+    "numberOfFrames": "Kare sayısı",
+    "unsupportedDicom": "Desteklenmeyen DICOM",
+    "unsupportedTransferSyntax": "Bu DICOM dosyası desteklenmeyen bir aktarım söz dizimi (sıkıştırma) kullanıyor ve tarayıcıda önizlenemiyor. Yine de güvenli şekilde indirebilirsiniz.",
+    "multiFrameUnsupported": "Çok kareli DICOM görüntüleme bu sürümde desteklenmiyor. Dosyayı yine de güvenli şekilde indirebilirsiniz.",
+    "loadFailed": "Görüntü yüklenemedi. Lütfen tekrar deneyin.",
+    "fileNotFound": "Dosya bulunamadı.",
+    "accessDenied": "Erişim reddedildi.",
+    "initFailed": "Görüntüleyici başlatılamadı."
   }
 }

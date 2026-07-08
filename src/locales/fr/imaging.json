@@ -162,5 +162,31 @@
   "errors": {
     "loadFailed": "Échec du chargement des données d'imagerie",
     "actionFailed": "Échec de l'opération"
+  },
+  "viewer": {
+    "title": "Visionneuse DICOM",
+    "loading": "Chargement de l'image DICOM...",
+    "windowLevel": "Fenêtre/Niveau",
+    "pan": "Déplacer",
+    "zoom": "Zoom",
+    "zoomIn": "Zoomer",
+    "zoomOut": "Dézoomer",
+    "fitToView": "Ajuster à la vue",
+    "invert": "Inverser",
+    "reset": "Réinitialiser",
+    "retry": "Réessayer",
+    "secureDownload": "Téléchargement sécurisé",
+    "imageInformation": "Informations sur l'image",
+    "dimensions": "Dimensions",
+    "bitDepth": "Profondeur de bits",
+    "photometricInterpretation": "Interprétation photométrique",
+    "numberOfFrames": "Nombre d'images",
+    "unsupportedDicom": "DICOM non pris en charge",
+    "unsupportedTransferSyntax": "Ce fichier DICOM utilise une syntaxe de transfert (compression) non prise en charge et ne peut pas être prévisualisé dans le navigateur. Vous pouvez toujours le télécharger en toute sécurité.",
+    "multiFrameUnsupported": "La visualisation DICOM multi-images n'est pas prise en charge dans cette version. Vous pouvez toujours télécharger le fichier en toute sécurité.",
+    "loadFailed": "Impossible de charger l'image. Veuillez réessayer.",
+    "fileNotFound": "Fichier introuvable.",
+    "accessDenied": "Accès refusé.",
+    "initFailed": "Échec de l'initialisation de la visionneuse."
   }
 }

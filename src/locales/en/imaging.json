@@ -162,5 +162,31 @@
   "errors": {
     "loadFailed": "Failed to load imaging data",
     "actionFailed": "Action failed"
+  },
+  "viewer": {
+    "title": "DICOM Viewer",
+    "loading": "Loading DICOM image...",
+    "windowLevel": "Window/Level",
+    "pan": "Pan",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "fitToView": "Fit to View",
+    "invert": "Invert",
+    "reset": "Reset",
+    "retry": "Retry",
+    "secureDownload": "Secure download",
+    "imageInformation": "Image information",
+    "dimensions": "Dimensions",
+    "bitDepth": "Bit depth",
+    "photometricInterpretation": "Photometric interpretation",
+    "numberOfFrames": "Number of frames",
+    "unsupportedDicom": "Unsupported DICOM",
+    "unsupportedTransferSyntax": "This DICOM file uses an unsupported transfer syntax (compression) and cannot be previewed in the browser. You can still download it securely.",
+    "multiFrameUnsupported": "Multi-frame DICOM viewing is not supported in this version. You can still download the file securely.",
+    "loadFailed": "Unable to load the image. Please try again.",
+    "fileNotFound": "File not found.",
+    "accessDenied": "Access denied.",
+    "initFailed": "Viewer initialization failed."
   }
 }
