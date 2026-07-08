@@ -168,7 +168,9 @@ async function main() {
   await test('never returns or embeds the raw error message/stack', () => {
     const raw = new Error('Sensitive stack trace with /var/data/patient123.dcm path');
     const kind = mapViewerError(raw);
-    assert.ok(!['unauthorized', 'not-found', 'network'].includes(kind) || true);
+    // A generic Error (no HTTP status, not a recognized network error) must
+    // map to the documented 'failed' fallback — not silently pass through.
+    assert.equal(kind, 'failed');
     // The return value is always one of a fixed enum, never the message itself.
     assert.ok(!String(kind).includes('Sensitive'));
     assert.ok(!String(kind).includes('/var/data'));
@@ -241,6 +243,36 @@ async function main() {
   await test('both call sites route DICOM images to DicomViewer instead', () => {
     assert.ok(patientImagingSrc.includes('<DicomViewer'));
     assert.ok(imagingQueueSrc.includes('<DicomViewer'));
+  });
+
+  // ── Image-switch remount regression ───────────────────────────────────────
+  section('DicomViewer image-switch remount');
+
+  const imageSpecificKeyPattern = /<DicomViewer\s+key=\{`\$\{previewImage\.study\.id\}:\$\{previewImage\.image\.id\}`\}/;
+
+  await test('PatientImagingTab keys DicomViewer by study+image id so switching remounts it', () => {
+    assert.ok(
+      imageSpecificKeyPattern.test(patientImagingSrc),
+      'DicomViewer must have a key combining study.id and image.id to force a remount on image switch',
+    );
+  });
+
+  await test('ImagingQueue keys DicomViewer by study+image id so switching remounts it', () => {
+    assert.ok(
+      imageSpecificKeyPattern.test(imagingQueueSrc),
+      'DicomViewer must have a key combining study.id and image.id to force a remount on image switch',
+    );
+  });
+
+  // ── Test-suite integrity ────────────────────────────────────────────────────
+  section('Test-suite integrity');
+
+  await test('this test file contains no boolean-or-true assertion bypass', () => {
+    // Built from parts so this check doesn't itself contain the banned
+    // literal (which would make the assertion match its own source).
+    const bypassPattern = ['|', '|', ' true'].join('');
+    const selfSrc = src('./dicomHelpers.test.ts');
+    assert.ok(!selfSrc.includes(bypassPattern), 'assertions must not be neutralized with an always-true fallback');
   });
 
   // ── Result ────────────────────────────────────────────────────────────────

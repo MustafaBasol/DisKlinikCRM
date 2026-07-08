@@ -334,6 +334,7 @@ const PatientImagingTab: React.FC<PatientImagingTabProps> = ({ patientId }) => {
           onizlenemeyen turlerde modal indirme secenegi gosterir (backend 415). */}
       {previewImage && isDicomImage(previewImage.image.mimeType) && (
         <DicomViewer
+          key={`${previewImage.study.id}:${previewImage.image.id}`}
           fileName={previewImage.image.originalName}
           modality={previewImage.study.modality}
           studyDate={previewImage.study.studyDate}
