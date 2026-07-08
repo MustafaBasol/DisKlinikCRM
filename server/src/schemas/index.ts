@@ -626,10 +626,37 @@ export const imagingBridgeSchema = z.object({
   clinicId: optionalId,
 });
 
-// Public heartbeat gövdesi — bilinçli olarak minimal: yalnızca ajan sürümü.
-// PHI/PII veya serbest metin alanı kabul edilmez.
+// Public heartbeat gövdesi — bilinçli olarak minimal: cihaz/istemci teşhis
+// alanları kabul edilir, PHI/PII veya serbest metin alanı kabul edilmez.
 export const imagingBridgeHeartbeatSchema = z.object({
   agentVersion: z.string().max(100).optional(),
+  osVersion: z.string().max(200).optional(),
+  architecture: z.string().max(50).optional(),
+  capabilities: z.record(z.string(), z.unknown()).optional(),
+  pendingCount: z.number().int().min(0).max(1_000_000).optional(),
+  failedCount: z.number().int().min(0).max(1_000_000).optional(),
+  lastSuccessfulUploadAt: z.string().trim().min(1).max(64).datetime({ offset: true }).optional().nullable(),
+  lastErrorCategory: z.string().max(100).optional().nullable(),
+});
+
+// Eşleştirme (pairing) oturumu oluşturma — Ayarlar > Görüntüleme > Cihaz Bağla.
+export const imagingBridgePairingCreateSchema = z.object({
+  bridgeName: z.string().min(1, 'Bridge name is required').max(200),
+  deviceIds: z.array(z.string().min(1)).min(1, 'At least one device is required').max(50),
+  clinicId: optionalId,
+});
+
+// Public eşleştirme kodu çözümleme (Windows Manager uygulaması). Serbest metin
+// veya PHI/PII alanı YOK — yalnızca istemci/işletim sistemi teşhis bilgisi.
+export const imagingBridgePublicPairSchema = z.object({
+  code: z.string().min(1).max(32),
+  installationId: z.string().min(1).max(200),
+  machineIdHash: z.string().max(200).optional().nullable(),
+  computerDisplayName: z.string().max(200).optional().nullable(),
+  agentVersion: z.string().min(1).max(100),
+  osVersion: z.string().max(200).optional().nullable(),
+  architecture: z.string().max(50).optional().nullable(),
+  capabilities: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Köprü (bridge) çalışma yükleme gövdesi — bilinçli olarak minimal: hasta

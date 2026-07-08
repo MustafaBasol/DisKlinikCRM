@@ -93,6 +93,8 @@ model Clinic {
   imagingStudies                ImagingStudy[]
   imagingImages                 ImagingImage[]
   imagingBridgeAgents           ImagingBridgeAgent[]
+  imagingBridgePairings         ImagingBridgePairing[]
+  imagingBridgeBindings         ImagingBridgeBinding[]
 
   @@unique([organizationId, slug])
 }
@@ -121,48 +123,49 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  tasksCreated                Task[]                         @relation("TaskCreator")
-  tasksAssigned               Task[]                         @relation("TaskAssignee")
-  appointments                Appointment[]                  @relation("Practitioner")
-  appointmentRequests         AppointmentRequest[]           @relation("AppointmentRequestPractitioner")
-  contactRequestsAssigned     ContactRequest[]               @relation("ContactRequestAssignee")
-  contactRequestsResolved     ContactRequest[]               @relation("ContactRequestResolver")
-  availabilities              DoctorAvailability[]           @relation("DoctorAvailability")
-  offDays                     DoctorOffDay[]                 @relation("DoctorOffDays")
-  treatmentCases              TreatmentCase[]                @relation("Practitioner")
-  insuranceAssigned           InsuranceProvision[]           @relation("InsuranceAssignedTo")
-  insuranceCreated            InsuranceProvision[]           @relation("InsuranceCreatedBy")
-  sentMessages                SentMessage[]
-  createdTemplates            MessageTemplate[]              @relation("TemplateCreator")
-  activityLogs                ActivityLog[]
-  uploadedAttachments         PatientAttachment[]            @relation("AttachmentUploader")
-  toothRecordsCreated         ToothRecord[]                  @relation("ToothRecordCreator")
-  paymentPlans                PaymentPlan[]
-  compensationRules           PractitionerCompensationRule[] @relation("PractitionerCompRules")
-  serviceCompRules            ServiceCompensationRule[]      @relation("ServiceCompRules")
-  practitionerEarnings        PractitionerEarning[]          @relation("PractitionerEarnings")
-  practitionerPayouts         PractitionerPayout[]           @relation("PractitionerPayouts")
-  payoutsCreated              PractitionerPayout[]           @relation("PayoutCreator")
-  inventoryTransactions       InventoryTransaction[]         @relation("InventoryPerformedBy")
-  proceduresCreated           TreatmentPlanProcedure[]       @relation("ProcedureCreator")
-  packageApplicationsCreated  TreatmentPackageApplication[]  @relation("TreatmentPackageApplicationCreator")
-  userClinics                 UserClinic[]
-  resolvedInboxEntries        WhatsAppInboxEntry[]           @relation("InboxEntryResolver")
-  resolvedInstagramEntries    InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
-  assignedRecallCandidates    RecallCandidate[]              @relation("RecallCandidateAssignee")
-  performedRecallActions      RecallAction[]                 @relation("RecallActionPerformer")
-  passwordResetTokens         PasswordResetToken[]
-  emailVerificationTokens     EmailVerificationToken[]
-  smsMessagesCreated          SmsMessage[]                   @relation("SmsMessageCreator")
-  laboratoriesCreated         Laboratory[]                   @relation("LaboratoryCreator")
-  labWorkOrdersCreated        LabWorkOrder[]                 @relation("LabWorkOrderCreator")
-  labWorkOrdersAsPractitioner LabWorkOrder[]                 @relation("LabWorkOrderPractitioner")
-  labWorkOrderStatusChanges   LabWorkOrderStatusHistory[]    @relation("LabWorkOrderStatusChanger")
-  labOrderAttachmentsUploaded LabOrderAttachment[]           @relation("LabOrderAttachmentUploader")
-  imagingDevicesCreated       ImagingDevice[]                @relation("ImagingDeviceCreator")
-  imagingRequestsRequested    ImagingRequest[]               @relation("ImagingRequestRequester")
-  imagingStudiesCreated       ImagingStudy[]                 @relation("ImagingStudyCreator")
-  imagingBridgeAgentsCreated  ImagingBridgeAgent[]           @relation("ImagingBridgeAgentCreator")
+  tasksCreated                 Task[]                         @relation("TaskCreator")
+  tasksAssigned                Task[]                         @relation("TaskAssignee")
+  appointments                 Appointment[]                  @relation("Practitioner")
+  appointmentRequests          AppointmentRequest[]           @relation("AppointmentRequestPractitioner")
+  contactRequestsAssigned      ContactRequest[]               @relation("ContactRequestAssignee")
+  contactRequestsResolved      ContactRequest[]               @relation("ContactRequestResolver")
+  availabilities               DoctorAvailability[]           @relation("DoctorAvailability")
+  offDays                      DoctorOffDay[]                 @relation("DoctorOffDays")
+  treatmentCases               TreatmentCase[]                @relation("Practitioner")
+  insuranceAssigned            InsuranceProvision[]           @relation("InsuranceAssignedTo")
+  insuranceCreated             InsuranceProvision[]           @relation("InsuranceCreatedBy")
+  sentMessages                 SentMessage[]
+  createdTemplates             MessageTemplate[]              @relation("TemplateCreator")
+  activityLogs                 ActivityLog[]
+  uploadedAttachments          PatientAttachment[]            @relation("AttachmentUploader")
+  toothRecordsCreated          ToothRecord[]                  @relation("ToothRecordCreator")
+  paymentPlans                 PaymentPlan[]
+  compensationRules            PractitionerCompensationRule[] @relation("PractitionerCompRules")
+  serviceCompRules             ServiceCompensationRule[]      @relation("ServiceCompRules")
+  practitionerEarnings         PractitionerEarning[]          @relation("PractitionerEarnings")
+  practitionerPayouts          PractitionerPayout[]           @relation("PractitionerPayouts")
+  payoutsCreated               PractitionerPayout[]           @relation("PayoutCreator")
+  inventoryTransactions        InventoryTransaction[]         @relation("InventoryPerformedBy")
+  proceduresCreated            TreatmentPlanProcedure[]       @relation("ProcedureCreator")
+  packageApplicationsCreated   TreatmentPackageApplication[]  @relation("TreatmentPackageApplicationCreator")
+  userClinics                  UserClinic[]
+  resolvedInboxEntries         WhatsAppInboxEntry[]           @relation("InboxEntryResolver")
+  resolvedInstagramEntries     InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
+  assignedRecallCandidates     RecallCandidate[]              @relation("RecallCandidateAssignee")
+  performedRecallActions       RecallAction[]                 @relation("RecallActionPerformer")
+  passwordResetTokens          PasswordResetToken[]
+  emailVerificationTokens      EmailVerificationToken[]
+  smsMessagesCreated           SmsMessage[]                   @relation("SmsMessageCreator")
+  laboratoriesCreated          Laboratory[]                   @relation("LaboratoryCreator")
+  labWorkOrdersCreated         LabWorkOrder[]                 @relation("LabWorkOrderCreator")
+  labWorkOrdersAsPractitioner  LabWorkOrder[]                 @relation("LabWorkOrderPractitioner")
+  labWorkOrderStatusChanges    LabWorkOrderStatusHistory[]    @relation("LabWorkOrderStatusChanger")
+  labOrderAttachmentsUploaded  LabOrderAttachment[]           @relation("LabOrderAttachmentUploader")
+  imagingDevicesCreated        ImagingDevice[]                @relation("ImagingDeviceCreator")
+  imagingRequestsRequested     ImagingRequest[]               @relation("ImagingRequestRequester")
+  imagingStudiesCreated        ImagingStudy[]                 @relation("ImagingStudyCreator")
+  imagingBridgeAgentsCreated   ImagingBridgeAgent[]           @relation("ImagingBridgeAgentCreator")
+  imagingBridgePairingsCreated ImagingBridgePairing[]         @relation("ImagingBridgePairingCreator")
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -2232,8 +2235,88 @@ model ImagingBridgeAgent {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  imagingStudies ImagingStudy[]
+  // Windows self-service bridge metadata (docs/spec: self-service imaging bridge).
+  // Never store: Windows username, raw hardware serial, MAC address, full local
+  // paths, original file names, patient identity.
+  installationId         String?   @unique
+  machineIdHash          String? // risk/diagnostic signal only — never an auth mechanism
+  computerDisplayName    String?
+  osVersion              String?
+  architecture           String?
+  capabilities           Json?
+  pendingCount           Int       @default(0)
+  failedCount            Int       @default(0)
+  lastSuccessfulUploadAt DateTime?
+  lastErrorCategory      String?
+  updateChannel          String    @default("stable")
+  lastUpdateCheckAt      DateTime?
+  createdWithPairingId   String?   @unique
 
+  imagingStudies     ImagingStudy[]
+  bindings           ImagingBridgeBinding[]
+  createdWithPairing ImagingBridgePairing?  @relation("PairingCreatedAgent", fields: [createdWithPairingId], references: [id])
+
+  @@index([clinicId])
+}
+
+// Short-lived, single-use pairing session created from the authenticated web
+// app and redeemed once by the Windows Manager app. Plaintext code is never
+// stored — only an HMAC-SHA256 hash (server-side pepper, see codeHash below).
+model ImagingBridgePairing {
+  id            String    @id @default(uuid())
+  clinicId      String
+  clinic        Clinic    @relation(fields: [clinicId], references: [id])
+  createdById   String
+  createdBy     User      @relation("ImagingBridgePairingCreator", fields: [createdById], references: [id])
+  codeHash      String    @unique // HMAC-SHA256(code, IMAGING_BRIDGE_PAIRING_PEPPER)
+  status        String    @default("pending") // pending | redeemed | expired | cancelled | locked
+  expiresAt     DateTime
+  usedAt        DateTime?
+  cancelledAt   DateTime?
+  attemptCount  Int       @default(0)
+  maxAttempts   Int       @default(5)
+  bridgeName    String
+  bridgeAgentId String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  devices      ImagingBridgePairingDevice[]
+  createdAgent ImagingBridgeAgent?          @relation("PairingCreatedAgent")
+
+  @@index([clinicId])
+  @@index([expiresAt])
+}
+
+model ImagingBridgePairingDevice {
+  id        String               @id @default(uuid())
+  pairingId String
+  pairing   ImagingBridgePairing @relation(fields: [pairingId], references: [id], onDelete: Cascade)
+  deviceId  String
+  modality  String
+  createdAt DateTime             @default(now())
+
+  @@unique([pairingId, deviceId])
+}
+
+// Represents one imaging device connected through an installed bridge agent.
+// Local folder paths are intentionally NOT stored server-side.
+model ImagingBridgeBinding {
+  id                String             @id @default(uuid())
+  clinicId          String
+  clinic            Clinic             @relation(fields: [clinicId], references: [id])
+  bridgeAgentId     String
+  bridgeAgent       ImagingBridgeAgent @relation(fields: [bridgeAgentId], references: [id])
+  deviceId          String
+  modality          String
+  displayName       String
+  acquisitionType   String             @default("folder_watch")
+  status            String             @default("pending") // pending | active | error | disabled
+  lastValidatedAt   DateTime?
+  lastErrorCategory String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([bridgeAgentId, deviceId])
   @@index([clinicId])
 }
 

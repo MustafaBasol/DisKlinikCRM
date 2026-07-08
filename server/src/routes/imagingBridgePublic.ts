@@ -23,10 +23,12 @@
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import multer from 'multer';
+import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import { writeAuditLog } from '../utils/auditLog.js';
-import { hashBridgeToken } from '../services/imaging/bridgeTokens.js';
+import { generateBridgeToken, hashBridgeToken } from '../services/imaging/bridgeTokens.js';
+import { hashPairingCode, normalizePairingCodeInput } from '../services/imaging/bridgePairing.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { buildStorageKey, deleteFile, fileNameFromKey, saveFile } from '../services/fileStorage.js';
 import {
@@ -36,7 +38,11 @@ import {
   normalizeDeclaredMime,
 } from '../services/imaging/imagingUploadValidation.js';
 import { canAttachStudyToRequest, type ImagingRequestStatus } from '../services/imaging/imagingRequestTransitions.js';
-import { imagingBridgeHeartbeatSchema, imagingBridgeStudyUploadSchema } from '../schemas/index.js';
+import {
+  imagingBridgeHeartbeatSchema,
+  imagingBridgeStudyUploadSchema,
+  imagingBridgePublicPairSchema,
+} from '../schemas/index.js';
 
 const router = express.Router();
 
@@ -48,6 +54,12 @@ const heartbeatTokenLimiter = createRateLimiter(6, 60 * 1000, 'imaging-bridge-hb
 // edilebilir); heartbeat'in tavanından belirgin biçimde yüksek tutulur.
 const uploadIpLimiter = createRateLimiter(120, 60 * 1000, 'imaging-bridge-upload-ip');
 const uploadTokenLimiter = createRateLimiter(30, 60 * 1000, 'imaging-bridge-upload-token');
+
+// Eşleştirme kodu çözümleme (redemption): IP ve kod özeti (hash) bazında ayrı
+// tavanlar — 8 haneli alan küçük olsa da HMAC pepper olmadan tahmin edilemez;
+// bu limitler yalnızca ek savunma katmanıdır (defense in depth).
+const pairIpLimiter = createRateLimiter(20, 60 * 1000, 'imaging-bridge-pair-ip');
+const pairCodeLimiter = createRateLimiter(10, 60 * 60 * 1000, 'imaging-bridge-pair-code');
 
 // Eşzamanlı yükleme sınırı: bellek-tabanlı upload'ları (multer memoryStorage)
 // tek bir ajanın onlarca dosyayı aynı anda paralel göndermesinden korur.
@@ -138,12 +150,25 @@ router.post('/imaging/bridge/heartbeat', async (req: Request, res: Response) => 
     const { agent } = authResult;
 
     const firstSeen = agent.status === 'pending';
+    const hb = validation.data;
     await prisma.imagingBridgeAgent.update({
       where: { id: agent.id },
       data: {
         status: 'online',
         lastSeenAt: new Date(),
-        ...(validation.data.agentVersion ? { agentVersion: validation.data.agentVersion } : {}),
+        lastUpdateCheckAt: new Date(),
+        ...(hb.agentVersion ? { agentVersion: hb.agentVersion } : {}),
+        ...(hb.osVersion !== undefined ? { osVersion: hb.osVersion } : {}),
+        ...(hb.architecture !== undefined ? { architecture: hb.architecture } : {}),
+        ...(hb.capabilities !== undefined ? { capabilities: hb.capabilities as Prisma.InputJsonValue } : {}),
+        ...(hb.pendingCount !== undefined ? { pendingCount: hb.pendingCount } : {}),
+        ...(hb.failedCount !== undefined ? { failedCount: hb.failedCount } : {}),
+        // Şema zaten geçerli ISO 8601 tarihini doğrular (bkz. schemas/index.ts);
+        // undefined = alanı güncelleme, null = açıkça temizle, string = güncelle.
+        ...(hb.lastSuccessfulUploadAt === undefined
+          ? {}
+          : { lastSuccessfulUploadAt: hb.lastSuccessfulUploadAt === null ? null : new Date(hb.lastSuccessfulUploadAt) }),
+        ...(hb.lastErrorCategory !== undefined ? { lastErrorCategory: hb.lastErrorCategory } : {}),
       },
     });
 
@@ -358,6 +383,198 @@ router.post('/imaging/bridge/studies', (req: Request, res: Response, next) => {
     if (!res.headersSent) res.status(500).json({ error: 'Failed to ingest imaging study' });
   } finally {
     if (tokenHashForSlot) releaseUploadSlot(tokenHashForSlot);
+  }
+});
+
+// POST /api/public/imaging/bridge/pair — Windows Manager uygulaması eşleştirme
+// kodunu çözümler. Başarı yanıtı bridgeCredential'ı YALNIZCA BİR KEZ döner;
+// sunucuda yalnızca hash saklanır. Tüm ret yolları jenerik 401 döner — geçersiz
+// kod, süresi dolmuş, iptal edilmiş, kilitlenmiş ya da zaten kullanılmış
+// pairing'ler istemciye ayrıştırılamaz biçimde aynı görünür.
+router.post('/imaging/bridge/pair', async (req: Request, res: Response) => {
+  try {
+    const ipKey = req.ip ?? 'unknown';
+    if (!(await pairIpLimiter.check(ipKey))) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+    await pairIpLimiter.record(ipKey);
+
+    const validation = imagingBridgePublicPairSchema.safeParse(req.body ?? {});
+    if (!validation.success) return res.status(400).json({ error: 'Invalid payload' });
+    const v = validation.data;
+
+    const normalizedCode = normalizePairingCodeInput(v.code);
+    if (!normalizedCode) return res.status(401).json({ error: 'Invalid or expired code' });
+
+    const codeHash = hashPairingCode(normalizedCode);
+
+    if (!(await pairCodeLimiter.check(codeHash))) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+    await pairCodeLimiter.record(codeHash);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Satırı FOR UPDATE ile kilitle — eşzamanlı çift redemption'ı önler.
+      const locked = await tx.$queryRaw<
+        {
+          id: string;
+          clinicId: string;
+          bridgeName: string;
+          status: string;
+          expiresAt: Date;
+          attemptCount: number;
+          maxAttempts: number;
+          createdById: string;
+        }[]
+      >(Prisma.sql`SELECT id, "clinicId", "bridgeName", status, "expiresAt", "attemptCount", "maxAttempts", "createdById" FROM "ImagingBridgePairing" WHERE "codeHash" = ${codeHash} FOR UPDATE`);
+      const pairing = locked[0];
+      if (!pairing) return { ok: false as const };
+
+      const now = new Date();
+      if (pairing.status !== 'pending') return { ok: false as const };
+
+      if (pairing.expiresAt <= now) {
+        await tx.imagingBridgePairing.update({ where: { id: pairing.id }, data: { status: 'expired' } });
+        return { ok: false as const };
+      }
+
+      if (pairing.attemptCount >= pairing.maxAttempts) {
+        await tx.imagingBridgePairing.update({ where: { id: pairing.id }, data: { status: 'locked' } });
+        return { ok: false as const };
+      }
+
+      try {
+        const pairingDevices = await tx.imagingBridgePairingDevice.findMany({
+          where: { pairingId: pairing.id },
+          select: { deviceId: true, modality: true },
+        });
+        const devices = await tx.imagingDevice.findMany({
+          where: { id: { in: pairingDevices.map(d => d.deviceId) } },
+          select: { id: true, name: true },
+        });
+        const deviceNameById = new Map(devices.map(d => [d.id, d.name]));
+
+        const { token, tokenHash } = generateBridgeToken();
+
+        const agent = await tx.imagingBridgeAgent.create({
+          data: {
+            clinicId: pairing.clinicId,
+            name: pairing.bridgeName,
+            tokenHash,
+            createdById: pairing.createdById,
+            installationId: v.installationId,
+            machineIdHash: v.machineIdHash ?? null,
+            computerDisplayName: v.computerDisplayName ?? null,
+            agentVersion: v.agentVersion,
+            osVersion: v.osVersion ?? null,
+            architecture: v.architecture ?? null,
+            capabilities: v.capabilities as Prisma.InputJsonValue | undefined,
+            createdWithPairingId: pairing.id,
+          },
+        });
+
+        const bindings = await Promise.all(
+          pairingDevices.map(d =>
+            tx.imagingBridgeBinding.create({
+              data: {
+                clinicId: pairing.clinicId,
+                bridgeAgentId: agent.id,
+                deviceId: d.deviceId,
+                modality: d.modality,
+                displayName: deviceNameById.get(d.deviceId) ?? d.modality,
+                acquisitionType: 'folder_watch',
+                status: 'pending',
+              },
+              select: { id: true, deviceId: true, modality: true, displayName: true, status: true },
+            })
+          )
+        );
+
+        await tx.imagingBridgePairing.update({
+          where: { id: pairing.id },
+          data: { status: 'redeemed', usedAt: now },
+        });
+
+        const clinic = await tx.clinic.findUnique({ where: { id: pairing.clinicId }, select: { name: true, organizationId: true } });
+
+        return {
+          ok: true as const,
+          token,
+          agentId: agent.id,
+          clinicId: pairing.clinicId,
+          organizationId: clinic?.organizationId ?? '',
+          clinicName: clinic?.name ?? '',
+          bindings,
+        };
+      } catch {
+        // Beklenmeyen bir hata ile redemption başarısız oldu — bu köprüye
+        // özgü deneme sayacını güvenle artır (sonsuz yeniden deneme olmasın).
+        const newAttemptCount = pairing.attemptCount + 1;
+        await tx.imagingBridgePairing.update({
+          where: { id: pairing.id },
+          data: {
+            attemptCount: newAttemptCount,
+            ...(newAttemptCount >= pairing.maxAttempts ? { status: 'locked' } : {}),
+          },
+        });
+        return { ok: false as const };
+      }
+    });
+
+    if (!result.ok) {
+      return res.status(401).json({ error: 'Invalid or expired code' });
+    }
+
+    // Audit: düz metin kod veya kimlik bilgisi ASLA yazılmaz — yalnızca ID.
+    await writeAuditLog({
+      organizationId: result.organizationId,
+      clinicId: result.clinicId,
+      action: 'imaging_bridge_pairing_redeemed',
+      entityType: 'imaging_bridge_agent',
+      entityId: result.agentId,
+      metadata: { bindingCount: result.bindings.length },
+    });
+
+    res.status(201).json({
+      bridgeCredential: result.token,
+      bridgeAgentId: result.agentId,
+      clinicName: result.clinicName,
+      bindings: result.bindings,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[imaging-bridge] pair error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'Failed to redeem pairing code' });
+  }
+});
+
+// GET /api/public/imaging/bridge/bootstrap — köprü token'ı ile kimlik
+// doğrulanır; yanıt yalnızca çağıran ajanın kendi klinik/binding'lerini içerir.
+router.get('/imaging/bridge/bootstrap', async (req: Request, res: Response) => {
+  try {
+    const authResult = await authenticateBridgeAgent(req);
+    if (!authResult) return res.status(401).json({ error: 'Unauthorized' });
+    const { agent } = authResult;
+
+    const [clinic, bindings] = await Promise.all([
+      prisma.clinic.findUnique({ where: { id: agent.clinicId }, select: { name: true } }),
+      prisma.imagingBridgeBinding.findMany({
+        where: { bridgeAgentId: agent.id },
+        select: { id: true, deviceId: true, modality: true, displayName: true, status: true, acquisitionType: true },
+      }),
+    ]);
+
+    res.json({
+      bridgeAgentId: agent.id,
+      clinicName: clinic?.name ?? '',
+      bindings,
+      supportedFileTypes: [...IMAGING_ALLOWED_MIME],
+      maxUploadSizeMb: MAX_FILE_MB,
+      serverTime: new Date().toISOString(),
+      updatePolicy: { channel: 'stable', mandatory: false },
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch bootstrap information' });
   }
 });
 

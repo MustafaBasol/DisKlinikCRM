@@ -27,7 +27,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
 import { buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
-import { getParam } from '../utils/helpers.js';
+import { getParam, createRateLimiter } from '../utils/helpers.js';
 import { logActivity } from '../utils/activity.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { validateAndGetClinicIdScope, resolveEffectiveClinicId } from '../utils/clinicScope.js';
@@ -40,8 +40,15 @@ import {
   imagingStudyUploadSchema,
   imagingStudyLinkSchema,
   imagingBridgeSchema,
+  imagingBridgePairingCreateSchema,
 } from '../schemas/index.js';
 import { generateBridgeToken } from '../services/imaging/bridgeTokens.js';
+import {
+  generatePairingCode,
+  formatPairingCodeForDisplay,
+  hashPairingCode,
+  PAIRING_CODE_TTL_MS,
+} from '../services/imaging/bridgePairing.js';
 import {
   validateRequestTransition,
   canAttachStudyToRequest,
@@ -1055,6 +1062,157 @@ router.delete('/imaging/bridges/:id', authorize([...IMAGING_MANAGE_ROLES]), asyn
       });
     }
     res.status(500).json({ error: 'Failed to delete bridge agent' });
+  }
+});
+
+// ═══ Eşleştirme (Pairing) Oturumları ════════════════════════════════════
+// Self-service Windows köprü kurulumu: kullanıcı 8 haneli kodu görür, Windows
+// Manager uygulaması bunu routes/imagingBridgePublic.ts /pair uç noktasında
+// çözümler. Düz metin kod yalnızca bu POST yanıtında bir kez döner ve
+// veritabanında/logda ASLA saklanmaz — yalnızca HMAC-SHA256 özeti (codeHash).
+
+const pairingCreateLimiter = createRateLimiter(20, 60 * 60 * 1000, 'imaging-bridge-pairing-create');
+
+const pairingStatusSelect = {
+  id: true,
+  status: true,
+  expiresAt: true,
+  usedAt: true,
+  cancelledAt: true,
+  bridgeName: true,
+  createdAt: true,
+  createdAgent: {
+    select: {
+      id: true,
+      status: true,
+      lastSeenAt: true,
+      bindings: {
+        select: {
+          id: true,
+          deviceId: true,
+          modality: true,
+          displayName: true,
+          status: true,
+          lastValidatedAt: true,
+        },
+      },
+    },
+  },
+};
+
+// POST /api/imaging/bridge-pairings — düz metin kod YALNIZCA bu yanıtta döner.
+router.post('/imaging/bridge-pairings', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  const validation = imagingBridgePairingCreateSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+  const { bridgeName, deviceIds } = validation.data;
+
+  // Limit tüketimi, klinik/cihaz doğrulaması gibi maliyetli DB işlemlerinden
+  // ÖNCE yapılır — geçersiz deviceId veya yetkisiz clinicId denemeleri de
+  // limiti tüketir, aksi halde sınırsız DB yükü oluşturmak için kullanılabilir.
+  const rateKey = req.user!.organizationId;
+  if (!(await pairingCreateLimiter.check(rateKey))) {
+    return res.status(429).json({ error: 'Too many pairing sessions created, please try again later' });
+  }
+  await pairingCreateLimiter.record(rateKey);
+
+  const clinicId = await resolveEffectiveClinicId(req.user!, validation.data.clinicId ?? (req.query.clinicId as string | undefined));
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
+  try {
+    // Tüm cihazlar bu klinige ait ve aktif olmalı — yoksa jenerik 400.
+    const uniqueDeviceIds = [...new Set(deviceIds)];
+    const devices = await prisma.imagingDevice.findMany({
+      where: { id: { in: uniqueDeviceIds }, clinicId, isActive: true },
+      select: { id: true, modality: true },
+    });
+    if (devices.length !== uniqueDeviceIds.length) {
+      return res.status(400).json({ error: 'One or more devices are invalid or inactive for this clinic' });
+    }
+
+    const code = generatePairingCode();
+    const codeHash = hashPairingCode(code);
+    const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS);
+
+    const pairing = await prisma.imagingBridgePairing.create({
+      data: {
+        clinicId,
+        createdById: req.user!.id,
+        codeHash,
+        expiresAt,
+        bridgeName,
+        devices: {
+          create: devices.map(d => ({ deviceId: d.id, modality: d.modality })),
+        },
+      },
+      select: { id: true, expiresAt: true },
+    });
+
+    // Audit: düz metin kod veya hash ASLA yazılmaz — yalnızca pairingId/sayaç.
+    await auditImaging(req, clinicId, 'imaging_bridge_pairing_created', 'imaging_bridge_pairing', pairing.id, {
+      deviceCount: devices.length,
+    });
+    await logActivity({
+      clinicId,
+      userId: req.user!.id,
+      entityType: 'imaging_bridge_pairing',
+      entityId: pairing.id,
+      action: 'create',
+      description: 'Görüntüleme köprüsü eşleştirme kodu oluşturuldu',
+    });
+
+    res.status(201).json({
+      pairingId: pairing.id,
+      code: formatPairingCodeForDisplay(code),
+      expiresAt: pairing.expiresAt,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to create bridge pairing' });
+  }
+});
+
+// GET /api/imaging/bridge-pairings/:id — kod BİR DAHA döndürülmez.
+router.get('/imaging/bridge-pairings/:id', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+
+  try {
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
+
+    const pairing = await prisma.imagingBridgePairing.findFirst({
+      where: { id, ...scope },
+      select: pairingStatusSelect,
+    });
+    if (!pairing) return res.status(404).json({ error: 'Pairing session not found' });
+
+    res.json(pairing);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch pairing session' });
+  }
+});
+
+// DELETE /api/imaging/bridge-pairings/:id — yalnızca kullanılmamış (pending) oturum iptal edilebilir.
+router.delete('/imaging/bridge-pairings/:id', authorize([...IMAGING_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+
+  try {
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
+
+    const existing = await prisma.imagingBridgePairing.findFirst({ where: { id, ...scope } });
+    if (!existing) return res.status(404).json({ error: 'Pairing session not found' });
+    if (existing.status !== 'pending') {
+      return res.status(409).json({ error: 'Only a pending pairing session can be cancelled' });
+    }
+
+    await prisma.imagingBridgePairing.update({
+      where: { id },
+      data: { status: 'cancelled', cancelledAt: new Date() },
+    });
+
+    await auditImaging(req, existing.clinicId, 'imaging_bridge_pairing_cancelled', 'imaging_bridge_pairing', id);
+    res.json({ cancelled: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to cancel pairing session' });
   }
 });
 
