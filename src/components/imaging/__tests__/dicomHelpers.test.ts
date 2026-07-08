@@ -248,7 +248,7 @@ async function main() {
   // ── Image-switch remount regression ───────────────────────────────────────
   section('DicomViewer image-switch remount');
 
-  const imageSpecificKeyPattern = /<DicomViewer\s+key=\{`\$\{previewImage\.study\.id\}:\$\{previewImage\.image\.id\}`\}/;
+  const imageSpecificKeyPattern = /<DicomViewer\b[\s\S]*?\bkey=\{`\$\{previewImage\.study\.id\}:\$\{previewImage\.image\.id\}`\}/;
 
   await test('PatientImagingTab keys DicomViewer by study+image id so switching remounts it', () => {
     assert.ok(
