@@ -97,22 +97,44 @@ const DicomViewer: React.FC<DicomViewerProps> = ({ fileName, modality, studyDate
   const cornerstoneRef = useRef<CornerstoneModules['cornerstone'] | null>(null);
   const wadoLoaderRef = useRef<CornerstoneModules['wadoImageLoader'] | null>(null);
 
+  // Idempotent: safe to call more than once (e.g. Escape + unmount racing,
+  // or a remount cleanup firing after a failed/aborted load). Each external
+  // call is isolated so one throwing library call can't skip the rest.
   const cleanupCornerstone = useCallback(() => {
     const element = elementRef.current;
     const cornerstone = cornerstoneRef.current;
     const wadoImageLoader = wadoLoaderRef.current;
-    if (dicomImageIdRef.current) {
-      wadoImageLoader?.wadouri.fileManager.remove(dicomImageIdRef.current);
-      cornerstone?.imageCache.removeImageLoadObject(dicomImageIdRef.current);
-      dicomImageIdRef.current = null;
-    }
-    if (cornerstoneEnabledRef.current && element && cornerstone) {
+
+    // Capture-then-null first so a re-entrant/second call can't act on the
+    // same imageId again, even if one of the calls below throws.
+    const imageId = dicomImageIdRef.current;
+    dicomImageIdRef.current = null;
+
+    if (imageId) {
       try {
-        cornerstone.disable(element);
+        wadoImageLoader?.wadouri.fileManager.remove(imageId);
+      } catch {
+        // already removed / never registered — nothing to clean up
+      }
+      try {
+        // Only release from imageCache if it's actually still cached —
+        // removeImageLoadObject throws when the id isn't present.
+        const stillCached = cornerstone?.imageCache.getImageLoadObject(imageId);
+        if (stillCached) {
+          cornerstone?.imageCache.removeImageLoadObject(imageId);
+        }
+      } catch {
+        // already released — nothing to clean up
+      }
+    }
+
+    if (cornerstoneEnabledRef.current) {
+      cornerstoneEnabledRef.current = false;
+      try {
+        if (element && cornerstone) cornerstone.disable(element);
       } catch {
         // element may already be disabled/unmounted — nothing to clean up
       }
-      cornerstoneEnabledRef.current = false;
     }
   }, []);
 
@@ -367,11 +389,31 @@ const DicomViewer: React.FC<DicomViewerProps> = ({ fileName, modality, studyDate
     }
   }, []);
 
-  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    if (state !== 'ready') return;
-    event.preventDefault();
-    zoomBy(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
-  }, [state, zoomBy]);
+  // React's onWheel is attached as a passive listener by the DOM (React 17+
+  // delegates wheel to the root as passive), so preventDefault() there logs a
+  // console warning and doesn't actually stop page scroll. A native listener
+  // registered with { passive: false } is required to zoom without scrolling
+  // the page underneath the modal.
+  const zoomByRef = useRef(zoomBy);
+  zoomByRef.current = zoomBy;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (stateRef.current !== 'ready') return;
+      event.preventDefault();
+      zoomByRef.current(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+    };
+
+    element.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      element.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
 
   const handleRetry = useCallback(() => setRetryToken(v => v + 1), []);
 
@@ -462,7 +504,6 @@ const DicomViewer: React.FC<DicomViewerProps> = ({ fileName, modality, studyDate
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
-            onWheel={handleWheel}
           />
 
           {state === 'loading' && (
