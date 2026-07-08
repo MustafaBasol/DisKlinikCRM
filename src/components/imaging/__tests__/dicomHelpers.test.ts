@@ -264,6 +264,97 @@ async function main() {
     );
   });
 
+  // ── cleanupCornerstone: idempotent, non-throwing cleanup ──────────────────
+  section('DicomViewer cleanup crash hardening');
+
+  await test('cleanup captures and nulls dicomImageIdRef before any external release call', () => {
+    const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch![0];
+    const captureIdx = fnSrc.indexOf('dicomImageIdRef.current = null');
+    const fileManagerIdx = fnSrc.indexOf('fileManager.remove');
+    const imageCacheIdx = fnSrc.indexOf('removeImageLoadObject');
+    assert.ok(captureIdx !== -1, 'must null dicomImageIdRef.current');
+    assert.ok(captureIdx < fileManagerIdx, 'must null the ref before releasing fileManager');
+    assert.ok(captureIdx < imageCacheIdx, 'must null the ref before releasing imageCache');
+  });
+
+  await test('imageCache release cannot throw out of cleanupCornerstone', () => {
+    const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
+    assert.ok(
+      /try\s*\{[\s\S]*?removeImageLoadObject[\s\S]*?\}\s*catch/.test(fnSrc),
+      'imageCache.removeImageLoadObject must be wrapped in its own try/catch',
+    );
+    assert.ok(fnSrc.includes('getImageLoadObject'), 'must check imageCache presence before removing');
+  });
+
+  await test('fileManager release cannot throw out of cleanupCornerstone', () => {
+    const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
+    assert.ok(
+      /try\s*\{[\s\S]*?fileManager\.remove[\s\S]*?\}\s*catch/.test(fnSrc),
+      'fileManager.remove must be wrapped in its own try/catch',
+    );
+  });
+
+  await test('cornerstone.disable cannot throw out of cleanupCornerstone', () => {
+    const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
+    assert.ok(
+      /try\s*\{[\s\S]*?cornerstone\.disable[\s\S]*?\}\s*catch/.test(fnSrc),
+      'cornerstone.disable must be wrapped in its own try/catch',
+    );
+  });
+
+  await test('cleanupCornerstone remains idempotent (guards re-entrant calls via nulled/flag refs)', () => {
+    const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
+    // A second invocation must see imageId === null and cornerstoneEnabledRef
+    // === false, so it takes neither branch.
+    assert.ok(/if\s*\(imageId\)/.test(fnSrc), 'external release calls must be gated on the captured imageId');
+    assert.ok(
+      /cornerstoneEnabledRef\.current\s*=\s*false/.test(fnSrc),
+      'must flip cornerstoneEnabledRef to false so a second call skips disable()',
+    );
+  });
+
+  // ── Native passive:false wheel zoom ────────────────────────────────────────
+  section('DicomViewer wheel zoom (passive:false)');
+
+  await test('JSX no longer attaches React onWheel to the cornerstone element', () => {
+    assert.ok(!viewerSrc.includes('onWheel={handleWheel}'), 'onWheel must not be a JSX prop (React attaches wheel as passive)');
+    assert.ok(!/onWheel=\{/.test(viewerSrc), 'no onWheel JSX prop should remain at all');
+  });
+
+  await test('a native wheel listener is registered with passive: false', () => {
+    assert.ok(
+      /addEventListener\(\s*'wheel'\s*,\s*\w+\s*,\s*\{\s*passive:\s*false\s*\}\s*\)/.test(viewerSrc),
+      'must call addEventListener("wheel", handler, { passive: false })',
+    );
+  });
+
+  await test('the wheel listener is not attached at window/document scope', () => {
+    assert.ok(!/window\.addEventListener\(\s*'wheel'/.test(viewerSrc), 'must not be a window-level listener');
+    assert.ok(!/document\.addEventListener\(\s*'wheel'/.test(viewerSrc), 'must not be a document-level listener');
+  });
+
+  await test('the wheel listener is removed in its effect cleanup', () => {
+    const effectMatch = viewerSrc.match(/useEffect\(\(\) => \{[\s\S]*?addEventListener\('wheel'[\s\S]*?\n  \}, \[\]\);/);
+    assert.ok(effectMatch, 'wheel-listener effect not found');
+    assert.ok(effectMatch![0].includes("removeEventListener('wheel'"), 'must remove the exact wheel listener on cleanup');
+  });
+
+  await test('wheel zoom preserves MIN_SCALE/MAX_SCALE clamping via zoomBy', () => {
+    assert.ok(viewerSrc.includes('const MIN_SCALE = 0.05'));
+    assert.ok(viewerSrc.includes('const MAX_SCALE = 32'));
+    assert.ok(/zoomByRef\.current\(event\.deltaY < 0 \? ZOOM_STEP : 1 \/ ZOOM_STEP\)/.test(viewerSrc));
+  });
+
   // ── Test-suite integrity ────────────────────────────────────────────────────
   section('Test-suite integrity');
 
