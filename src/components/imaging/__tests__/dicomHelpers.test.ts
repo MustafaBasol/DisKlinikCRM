@@ -281,7 +281,8 @@ async function main() {
 
   await test('imageCache release cannot throw out of cleanupCornerstone', () => {
     const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
-    const fnSrc = fnMatch![0];
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
     assert.ok(
       /try\s*\{[\s\S]*?removeImageLoadObject[\s\S]*?\}\s*catch/.test(fnSrc),
       'imageCache.removeImageLoadObject must be wrapped in its own try/catch',
@@ -291,7 +292,8 @@ async function main() {
 
   await test('fileManager release cannot throw out of cleanupCornerstone', () => {
     const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
-    const fnSrc = fnMatch![0];
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
     assert.ok(
       /try\s*\{[\s\S]*?fileManager\.remove[\s\S]*?\}\s*catch/.test(fnSrc),
       'fileManager.remove must be wrapped in its own try/catch',
@@ -300,7 +302,8 @@ async function main() {
 
   await test('cornerstone.disable cannot throw out of cleanupCornerstone', () => {
     const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
-    const fnSrc = fnMatch![0];
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
     assert.ok(
       /try\s*\{[\s\S]*?cornerstone\.disable[\s\S]*?\}\s*catch/.test(fnSrc),
       'cornerstone.disable must be wrapped in its own try/catch',
@@ -309,7 +312,8 @@ async function main() {
 
   await test('cleanupCornerstone remains idempotent (guards re-entrant calls via nulled/flag refs)', () => {
     const fnMatch = viewerSrc.match(/const cleanupCornerstone = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[\]\);/);
-    const fnSrc = fnMatch![0];
+    assert.ok(fnMatch, 'cleanupCornerstone definition not found');
+    const fnSrc = fnMatch[0];
     // A second invocation must see imageId === null and cornerstoneEnabledRef
     // === false, so it takes neither branch.
     assert.ok(/if\s*\(imageId\)/.test(fnSrc), 'external release calls must be gated on the captured imageId');
