@@ -1106,10 +1106,14 @@ router.post('/imaging/bridge-pairings', authorize([...IMAGING_MANAGE_ROLES]), as
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   const { bridgeName, deviceIds } = validation.data;
 
+  // Limit tüketimi, klinik/cihaz doğrulaması gibi maliyetli DB işlemlerinden
+  // ÖNCE yapılır — geçersiz deviceId veya yetkisiz clinicId denemeleri de
+  // limiti tüketir, aksi halde sınırsız DB yükü oluşturmak için kullanılabilir.
   const rateKey = req.user!.organizationId;
   if (!(await pairingCreateLimiter.check(rateKey))) {
     return res.status(429).json({ error: 'Too many pairing sessions created, please try again later' });
   }
+  await pairingCreateLimiter.record(rateKey);
 
   const clinicId = await resolveEffectiveClinicId(req.user!, validation.data.clinicId ?? (req.query.clinicId as string | undefined));
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
@@ -1124,8 +1128,6 @@ router.post('/imaging/bridge-pairings', authorize([...IMAGING_MANAGE_ROLES]), as
     if (devices.length !== uniqueDeviceIds.length) {
       return res.status(400).json({ error: 'One or more devices are invalid or inactive for this clinic' });
     }
-
-    await pairingCreateLimiter.record(rateKey);
 
     const code = generatePairingCode();
     const codeHash = hashPairingCode(code);

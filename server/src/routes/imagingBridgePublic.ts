@@ -163,7 +163,11 @@ router.post('/imaging/bridge/heartbeat', async (req: Request, res: Response) => 
         ...(hb.capabilities !== undefined ? { capabilities: hb.capabilities as Prisma.InputJsonValue } : {}),
         ...(hb.pendingCount !== undefined ? { pendingCount: hb.pendingCount } : {}),
         ...(hb.failedCount !== undefined ? { failedCount: hb.failedCount } : {}),
-        ...(hb.lastSuccessfulUploadAt ? { lastSuccessfulUploadAt: new Date(hb.lastSuccessfulUploadAt) } : {}),
+        // Şema zaten geçerli ISO 8601 tarihini doğrular (bkz. schemas/index.ts);
+        // undefined = alanı güncelleme, null = açıkça temizle, string = güncelle.
+        ...(hb.lastSuccessfulUploadAt === undefined
+          ? {}
+          : { lastSuccessfulUploadAt: hb.lastSuccessfulUploadAt === null ? null : new Date(hb.lastSuccessfulUploadAt) }),
         ...(hb.lastErrorCategory !== undefined ? { lastErrorCategory: hb.lastErrorCategory } : {}),
       },
     });

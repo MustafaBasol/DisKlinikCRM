@@ -635,7 +635,7 @@ export const imagingBridgeHeartbeatSchema = z.object({
   capabilities: z.record(z.string(), z.unknown()).optional(),
   pendingCount: z.number().int().min(0).max(1_000_000).optional(),
   failedCount: z.number().int().min(0).max(1_000_000).optional(),
-  lastSuccessfulUploadAt: z.string().optional().nullable(),
+  lastSuccessfulUploadAt: z.string().trim().min(1).max(64).datetime({ offset: true }).optional().nullable(),
   lastErrorCategory: z.string().max(100).optional().nullable(),
 });
 

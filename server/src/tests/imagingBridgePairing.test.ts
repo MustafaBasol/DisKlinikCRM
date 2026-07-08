@@ -195,6 +195,38 @@ async function main() {
     assert.ok(imagingBridgeHeartbeatSchema.safeParse({}).success);
   });
 
+  await test('imagingBridgeHeartbeatSchema accepts a valid ISO 8601 datetime for lastSuccessfulUploadAt', () => {
+    const result = imagingBridgeHeartbeatSchema.safeParse({ lastSuccessfulUploadAt: '2026-07-08T12:34:56.000Z' });
+    assert.ok(result.success);
+  });
+
+  await test('imagingBridgeHeartbeatSchema accepts null for lastSuccessfulUploadAt (explicit clear)', () => {
+    const result = imagingBridgeHeartbeatSchema.safeParse({ lastSuccessfulUploadAt: null });
+    assert.ok(result.success);
+    assert.equal(result.success && result.data.lastSuccessfulUploadAt, null);
+  });
+
+  await test('imagingBridgeHeartbeatSchema treats an omitted lastSuccessfulUploadAt as undefined', () => {
+    const result = imagingBridgeHeartbeatSchema.safeParse({});
+    assert.ok(result.success);
+    assert.equal(result.success && result.data.lastSuccessfulUploadAt, undefined);
+  });
+
+  await test('imagingBridgeHeartbeatSchema rejects an arbitrary non-date string for lastSuccessfulUploadAt', () => {
+    const result = imagingBridgeHeartbeatSchema.safeParse({ lastSuccessfulUploadAt: 'not-a-date' });
+    assert.ok(!result.success);
+  });
+
+  await test('imagingBridgeHeartbeatSchema rejects a date-only string without time (must be full ISO datetime)', () => {
+    const result = imagingBridgeHeartbeatSchema.safeParse({ lastSuccessfulUploadAt: '2026-07-08' });
+    assert.ok(!result.success);
+  });
+
+  await test('imagingBridgeHeartbeatSchema rejects an excessively long lastSuccessfulUploadAt value', () => {
+    const result = imagingBridgeHeartbeatSchema.safeParse({ lastSuccessfulUploadAt: `2026-07-08T12:00:00.000Z${'x'.repeat(100)}` });
+    assert.ok(!result.success);
+  });
+
   // ── Source regression checks ────────────────────────────────────────────
   const imagingRouteSrc = src('../routes/imaging.ts');
   const bridgePublicSrc = src('../routes/imagingBridgePublic.ts');
@@ -210,6 +242,22 @@ async function main() {
 
   await test('pairing creation validates devices belong to the resolved clinic and are active', () => {
     assert.ok(imagingRouteSrc.includes('id: { in: uniqueDeviceIds }, clinicId, isActive: true'));
+  });
+
+  await test('pairing creation consumes the rate limiter before clinic-scope resolution and device lookup (no unlimited DB work on invalid input)', () => {
+    const block = imagingRouteSrc.slice(
+      imagingRouteSrc.indexOf("router.post('/imaging/bridge-pairings'"),
+      imagingRouteSrc.indexOf("router.get('/imaging/bridge-pairings/:id'")
+    );
+    const recordIdx = block.indexOf('pairingCreateLimiter.record(rateKey)');
+    const clinicScopeIdx = block.indexOf('resolveEffectiveClinicId(');
+    const deviceLookupIdx = block.indexOf('prisma.imagingDevice.findMany(');
+    assert.ok(recordIdx >= 0, 'expected pairingCreateLimiter.record to be called');
+    assert.ok(clinicScopeIdx >= 0 && deviceLookupIdx >= 0);
+    assert.ok(recordIdx < clinicScopeIdx,
+      'the rate limiter must be consumed before resolving clinic scope, so unauthorized clinic attempts cannot bypass it');
+    assert.ok(recordIdx < deviceLookupIdx,
+      'the rate limiter must be consumed before the device lookup, so invalid deviceIds still consume the limit');
   });
 
   await test('pairing creation response never includes codeHash, only the plaintext code once', () => {
@@ -263,9 +311,31 @@ async function main() {
 
   await test('successful redemption returns the bridge credential exactly once and never logs it', () => {
     assert.ok(bridgePublicSrc.includes('bridgeCredential: result.token'));
-    assert.ok(!/console\.(log|info|error)\([^)]*result\.token/.test(bridgePublicSrc));
-    assert.ok(!/console\.(log|info|error)\([^)]*\btoken\b(?!Hash)/.test(bridgePublicSrc.replace(/tokenHash/g, '')) ||
-      true /* generic Bearer token logging already covered by imaging.test.ts */);
+
+    const pairBlock = bridgePublicSrc.slice(
+      bridgePublicSrc.indexOf("router.post('/imaging/bridge/pair'"),
+      bridgePublicSrc.indexOf("router.get('/imaging/bridge/bootstrap'")
+    );
+
+    // No console.* call in the /pair handler may reference the raw bridge
+    // token or the raw/normalized pairing code (codeHash/tokenHash are fine).
+    const consoleCalls = pairBlock.match(/console\.(log|info|warn|error)\([\s\S]*?\);/g) ?? [];
+    for (const call of consoleCalls) {
+      assert.ok(!/\btoken\b(?!Hash)/.test(call.replace(/tokenHash/g, '')),
+        `console call must not reference the plaintext bridge token: ${call}`);
+      assert.ok(!/\bnormalizedCode\b|\bv\.code\b|\breq\.body\b/.test(call),
+        `console call must not reference the plaintext pairing code: ${call}`);
+    }
+
+    // Audit logging must carry only IDs/counts — never the token or the code.
+    const auditCalls = pairBlock.match(/writeAuditLog\(\{[\s\S]*?\}\);/g) ?? [];
+    assert.ok(auditCalls.length >= 1, 'expected at least one audit log call in the /pair handler');
+    for (const call of auditCalls) {
+      assert.ok(!/\btoken\b(?!Hash)/.test(call.replace(/tokenHash/g, '')),
+        `audit call must not include the plaintext bridge token: ${call}`);
+      assert.ok(!/\bnormalizedCode\b|\bcodeHash\b|\bv\.code\b/.test(call),
+        `audit call must not include the pairing code or its hash: ${call}`);
+    }
   });
 
   await test('bootstrap endpoint reuses authenticateBridgeAgent (revoked agents get the same generic 401)', () => {
@@ -279,6 +349,26 @@ async function main() {
     assert.ok(block.includes('agent.clinicId'));
     assert.ok(block.includes('bridgeAgentId: agent.id'));
     assert.ok(!block.includes('req.query'));
+  });
+
+  section('Source regression — heartbeat lastSuccessfulUploadAt tri-state persistence');
+
+  const heartbeatBlock = bridgePublicSrc.slice(
+    bridgePublicSrc.indexOf("router.post('/imaging/bridge/heartbeat'"),
+    bridgePublicSrc.indexOf("router.post('/imaging/bridge/studies'")
+  );
+
+  await test('heartbeat distinguishes omitted (no update) from explicit null (clear) for lastSuccessfulUploadAt', () => {
+    assert.ok(heartbeatBlock.includes('hb.lastSuccessfulUploadAt === undefined'),
+      'expected an explicit undefined check so omission does not update the field');
+    assert.ok(heartbeatBlock.includes('hb.lastSuccessfulUploadAt === null ? null'),
+      'expected explicit null to be persisted as null (clear), not skipped');
+  });
+
+  await test('heartbeat never passes the raw unvalidated string straight to `new Date(...)`', () => {
+    assert.ok(!/new Date\(hb\.lastSuccessfulUploadAt\)/.test(heartbeatBlock) ||
+      /hb\.lastSuccessfulUploadAt === null \? null : new Date\(hb\.lastSuccessfulUploadAt\)/.test(heartbeatBlock),
+      'new Date(...) must only run after the null/undefined branches are handled, on an already-schema-validated ISO string');
   });
 
   section('Source regression — pairing pepper (fail-secure in production)');
