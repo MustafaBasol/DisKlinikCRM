@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Microsoft.Extensions.Logging.Abstractions;
 using NoraMedi.Bridge.Core.Http;
 using NoraMedi.Bridge.Core.Ipc;
@@ -10,6 +12,14 @@ public class BridgeOrchestratorTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("nmb-orch-").FullName;
     private readonly List<BridgeOrchestrator> _created = [];
+    private string? _lastProgramDataRoot;
+
+    // BridgeOrchestrator now ACL-protects ProgramDataRoot to LocalSystem +
+    // Administrators only (see ProgramDataAcl). The test process is neither,
+    // so — exactly like a real deployment running as a dedicated, non-Admin
+    // service account — every test configures ServiceAccountSid with its own
+    // identity so it retains access to the directories it just created.
+    private static readonly string CurrentUserSid = WindowsIdentity.GetCurrent().User!.Value;
 
     private BridgeOrchestrator NewOrchestrator(ScriptedHttpMessageHandler? handler = null, bool enabled = true)
     {
@@ -17,13 +27,14 @@ public class BridgeOrchestratorTests : IDisposable
         {
             Enabled = enabled,
             ServerUrl = "https://api.example.com",
-            ProgramDataRoot = Path.Combine(_root, Guid.NewGuid().ToString("N")),
+            ProgramDataRoot = _lastProgramDataRoot = Path.Combine(_root, Guid.NewGuid().ToString("N")),
             HeartbeatIntervalSeconds = 1,
             StabilityMs = 30,
             DrainPollMs = 50,
             MaxAttempts = 3,
             BackoffBaseMs = 10,
             BackoffCapMs = 50,
+            ServiceAccountSid = CurrentUserSid,
         };
         var apiClient = new BridgeApiClient(new HttpClient(handler ?? new ScriptedHttpMessageHandler()), options.ServerUrl);
         var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", NullLogger<BridgeOrchestrator>.Instance);
@@ -212,12 +223,106 @@ public class BridgeOrchestratorTests : IDisposable
         Assert.False(result.Reachable);
     }
 
+    [Fact]
+    public async Task Construction_LocksDownProgramDataRoot_BeforeAnyFileIsWritten()
+    {
+        var handler = new ScriptedHttpMessageHandler().Enqueue(
+            "/bridge/pair", HttpStatusCode.Created,
+            """{"bridgeCredential":"nmb_acl_test_token","bridgeAgentId":"agent-1","clinicName":"Demo Clinic","bindings":[],"serverTime":"2026-07-08T00:00:00.000Z"}""");
+        var orchestrator = NewOrchestrator(handler);
+
+        AssertLockedDown(_lastProgramDataRoot!);
+
+        var provisionResult = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+        Assert.True(provisionResult.Ok);
+        AssertLockedDown(Path.Combine(_lastProgramDataRoot!, "credential.bin"), isDirectory: false);
+
+        var watchDir = Directory.CreateTempSubdirectory("nmb-orch-acl-").FullName;
+        await orchestrator.AddOrUpdateFolderBindingAsync(new AddOrUpdateFolderBindingRequest(null, watchDir, "device-1", "IO"), default);
+        AssertLockedDown(Path.Combine(_lastProgramDataRoot!, "bindings.json"), isDirectory: false);
+        AssertLockedDown(Path.Combine(_lastProgramDataRoot!, "spool"));
+        AssertLockedDown(Path.Combine(_lastProgramDataRoot!, "queue.db"), isDirectory: false);
+        AssertLockedDown(Path.Combine(_lastProgramDataRoot!, "installation-id.txt"), isDirectory: false);
+    }
+
+    [Fact]
+    public async Task OnFileAcquired_ExceedsMaxAcquiredFileSize_IsNeverEnqueued()
+    {
+        var options = new BridgeOptions
+        {
+            Enabled = true,
+            ServerUrl = "https://api.example.com",
+            ProgramDataRoot = _lastProgramDataRoot = Path.Combine(_root, Guid.NewGuid().ToString("N")),
+            HeartbeatIntervalSeconds = 1,
+            StabilityMs = 30,
+            DrainPollMs = 50,
+            MaxAcquiredFileSizeBytes = 4,
+            ServiceAccountSid = CurrentUserSid,
+        };
+        var apiClient = new BridgeApiClient(new HttpClient(new ScriptedHttpMessageHandler()), options.ServerUrl);
+        var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", NullLogger<BridgeOrchestrator>.Instance);
+        _created.Add(orchestrator);
+
+        var watchDir = Directory.CreateTempSubdirectory("nmb-orch-maxsize-").FullName;
+        await orchestrator.AddOrUpdateFolderBindingAsync(new AddOrUpdateFolderBindingRequest(null, watchDir, "device-1", "IO"), default);
+        orchestrator.Start();
+
+        File.WriteAllBytes(Path.Combine(watchDir, "scan.jpg"), [0xFF, 0xD8, 0xFF, 0x01, 0x02, 0x03]); // 6 bytes > 4-byte cap
+        await Task.Delay(500);
+
+        var summary = await orchestrator.GetQueueSummaryAsync(default);
+        Assert.Equal(0, summary.Pending + summary.Processing + summary.Failed + summary.Completed);
+    }
+
+    [Fact]
+    public async Task OnFileAcquired_SpoolCapacityExceeded_IsNeverEnqueued()
+    {
+        var options = new BridgeOptions
+        {
+            Enabled = true,
+            ServerUrl = "https://api.example.com",
+            ProgramDataRoot = _lastProgramDataRoot = Path.Combine(_root, Guid.NewGuid().ToString("N")),
+            HeartbeatIntervalSeconds = 1,
+            StabilityMs = 30,
+            DrainPollMs = 50,
+            MaxSpoolBytes = 2, // strictly smaller than even a single minimal (3-byte) acquisition
+            ServiceAccountSid = CurrentUserSid,
+        };
+        var apiClient = new BridgeApiClient(new HttpClient(new ScriptedHttpMessageHandler()), options.ServerUrl);
+        var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", NullLogger<BridgeOrchestrator>.Instance);
+        _created.Add(orchestrator);
+
+        var watchDir = Directory.CreateTempSubdirectory("nmb-orch-spoolcap-").FullName;
+        await orchestrator.AddOrUpdateFolderBindingAsync(new AddOrUpdateFolderBindingRequest(null, watchDir, "device-1", "IO"), default);
+        orchestrator.Start();
+
+        File.WriteAllBytes(Path.Combine(watchDir, "scan.jpg"), [0xFF, 0xD8, 0xFF]);
+        await Task.Delay(500);
+
+        var summary = await orchestrator.GetQueueSummaryAsync(default);
+        Assert.Equal(0, summary.Pending + summary.Processing + summary.Failed + summary.Completed);
+    }
+
+    private static void AssertLockedDown(string path, bool isDirectory = true)
+    {
+        var rules = isDirectory
+            ? new DirectoryInfo(path).GetAccessControl(AccessControlSections.Access).GetAccessRules(true, false, typeof(SecurityIdentifier))
+            : new FileInfo(path).GetAccessControl(AccessControlSections.Access).GetAccessRules(true, false, typeof(SecurityIdentifier));
+        var sids = rules.Cast<FileSystemAccessRule>().Select(r => (SecurityIdentifier)r.IdentityReference).ToList();
+
+        Assert.Contains(sids, sid => sid.IsWellKnown(WellKnownSidType.LocalSystemSid));
+        Assert.Contains(sids, sid => sid.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid));
+        Assert.DoesNotContain(sids, sid => sid.IsWellKnown(WellKnownSidType.WorldSid));
+        Assert.DoesNotContain(sids, sid => sid.IsWellKnown(WellKnownSidType.BuiltinUsersSid));
+        Assert.DoesNotContain(sids, sid => sid.IsWellKnown(WellKnownSidType.AuthenticatedUserSid));
+    }
+
     public void Dispose()
     {
         foreach (var orchestrator in _created)
         {
             orchestrator.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+        TestSupport.AclCleanup.UnlockAndDelete(_root);
     }
 }

@@ -22,12 +22,25 @@ public class FullPipelineTests : IAsyncLifetime
     private readonly string _root = Directory.CreateTempSubdirectory("nmb-integration-").FullName;
     private readonly List<Worker> _workers = [];
 
+    // BridgeOrchestrator ACL-protects ProgramDataRoot to LocalSystem +
+    // Administrators only. The test process is neither, so — exactly like a
+    // real deployment running as a dedicated, non-Admin service account —
+    // ServiceAccountSid is set to the test process's own identity below.
+    private static readonly string CurrentUserSid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+
+    // Pairing/binding IPC operations are Administrator-only (see
+    // PipeOperationPolicy.IsPrivileged). This suite drives the pipe as the
+    // test process's own real identity, which is not guaranteed to be an
+    // Administrator, so it supplies a fixed admin identity — pipe-layer
+    // authorization itself is covered by PipeAuthorizationTests, not here.
+    private static readonly PipeClientIdentity AdminIdentity = new("TEST\\admin-user", IsAdministrator: true);
+
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
     {
         foreach (var worker in _workers) await worker.StopAsync(default);
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+        AclCleanup.UnlockAndDelete(_root);
     }
 
     private Worker StartWorker(ScriptedHandler handler, out string pipeName, bool enabled = true)
@@ -45,10 +58,11 @@ public class FullPipelineTests : IAsyncLifetime
             MaxAttempts = 3,
             BackoffBaseMs = 10,
             BackoffCapMs = 50,
+            ServiceAccountSid = CurrentUserSid,
         };
         var apiClient = new BridgeApiClient(new HttpClient(handler), options.ServerUrl);
         var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-it", NullLogger<BridgeOrchestrator>.Instance);
-        var worker = new Worker(orchestrator, options, NullLogger<Worker>.Instance);
+        var worker = new Worker(orchestrator, options, NullLogger<Worker>.Instance, _ => AdminIdentity);
         _workers.Add(worker);
         worker.StartAsync(default).GetAwaiter().GetResult();
         return worker;
@@ -129,6 +143,7 @@ public class FullPipelineTests : IAsyncLifetime
             MaxAttempts = 3,
             BackoffBaseMs = 10,
             BackoffCapMs = 50,
+            ServiceAccountSid = CurrentUserSid,
         };
 
         // First run: pair, bind, enqueue a file, but the server never answers
@@ -144,7 +159,7 @@ public class FullPipelineTests : IAsyncLifetime
         var firstOptions = MakeOptions() with { DrainPollMs = 60_000 };
         var firstApiClient = new BridgeApiClient(new HttpClient(firstHandler), firstOptions.ServerUrl);
         var firstOrchestrator = new BridgeOrchestrator(firstOptions, firstApiClient, "1.0.0-it", NullLogger<BridgeOrchestrator>.Instance);
-        var firstWorker = new Worker(firstOrchestrator, firstOptions, NullLogger<Worker>.Instance);
+        var firstWorker = new Worker(firstOrchestrator, firstOptions, NullLogger<Worker>.Instance, _ => AdminIdentity);
         await firstWorker.StartAsync(default);
 
         await BridgePipeClient.SendAsync(pipeName, PipeOperation.ProvisionWithPairingCode, new ProvisionWithPairingCodeRequest("12345678"));
@@ -169,7 +184,7 @@ public class FullPipelineTests : IAsyncLifetime
         var secondOptions = MakeOptions();
         var secondApiClient = new BridgeApiClient(new HttpClient(secondHandler), secondOptions.ServerUrl);
         var secondOrchestrator = new BridgeOrchestrator(secondOptions, secondApiClient, "1.0.0-it", NullLogger<BridgeOrchestrator>.Instance);
-        var secondWorker = new Worker(secondOrchestrator, secondOptions, NullLogger<Worker>.Instance);
+        var secondWorker = new Worker(secondOrchestrator, secondOptions, NullLogger<Worker>.Instance, _ => AdminIdentity);
         _workers.Add(secondWorker);
         await secondWorker.StartAsync(default);
 

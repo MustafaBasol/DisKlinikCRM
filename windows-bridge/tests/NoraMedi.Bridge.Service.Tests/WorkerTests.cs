@@ -17,6 +17,12 @@ public class WorkerTests : IAsyncLifetime
     private readonly string _root = Directory.CreateTempSubdirectory("nmb-worker-").FullName;
     private readonly List<Worker> _workers = [];
 
+    // BridgeOrchestrator ACL-protects ProgramDataRoot to LocalSystem +
+    // Administrators only. The test process is neither, so — exactly like a
+    // real deployment running as a dedicated, non-Admin service account —
+    // ServiceAccountSid is set to the test process's own identity below.
+    private static readonly string CurrentUserSid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
@@ -25,7 +31,7 @@ public class WorkerTests : IAsyncLifetime
         {
             await worker.StopAsync(default);
         }
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+        AclCleanup.UnlockAndDelete(_root);
     }
 
     private Worker NewWorker(bool enabled, out string pipeName)
@@ -39,6 +45,7 @@ public class WorkerTests : IAsyncLifetime
             PipeName = pipeName,
             HeartbeatIntervalSeconds = 60,
             DrainPollMs = 5000,
+            ServiceAccountSid = CurrentUserSid,
         };
         var apiClient = new BridgeApiClient(new HttpClient(new NeverRespondingHandler()), options.ServerUrl);
         var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", NullLogger<BridgeOrchestrator>.Instance);

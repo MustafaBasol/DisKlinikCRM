@@ -144,17 +144,48 @@ public sealed class BridgeApiClient
                     return new UploadOutcome(category, body?.StudyId, body?.Duplicate ?? false);
                 case ResponseCategory.Permanent:
                     return new UploadOutcome(category, ErrorCategory: PermanentErrorCategoryFor((int)response.StatusCode));
+                case ResponseCategory.Retryable when response.StatusCode == System.Net.HttpStatusCode.TooManyRequests:
+                    return new UploadOutcome(category, RetryAfter: TryGetRetryAfter(response));
                 default:
                     return new UploadOutcome(category);
             }
         }
     }
 
+    /// <summary>
+    /// Honors a server-supplied <c>Retry-After</c> (delta-seconds or HTTP-date
+    /// form) on 429 responses. Returns null for a missing/zero/negative value
+    /// so the caller falls back to its own exponential backoff.
+    /// </summary>
+    private static TimeSpan? TryGetRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter is null) return null;
+
+        if (retryAfter.Delta is { } delta) return delta > TimeSpan.Zero ? delta : null;
+
+        if (retryAfter.Date is { } date)
+        {
+            var delay = date - DateTimeOffset.UtcNow;
+            return delay > TimeSpan.Zero ? delay : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Mirrors bridge-agent/src/uploader.ts classifyStatus: 200/201 success,
+    /// 401 pauses the whole agent (AuthFailure — invalid/revoked credential is
+    /// treated as action-required, never silently retried), 429 is retried
+    /// honoring Retry-After, every other 4xx is a permanent client error that
+    /// will never succeed on retry, and 5xx/anything unexpected is transient.
+    /// </summary>
     public static ResponseCategory ClassifyStatus(int status) => status switch
     {
         200 or 201 => ResponseCategory.Success,
         401 => ResponseCategory.AuthFailure,
-        400 or 404 or 413 => ResponseCategory.Permanent,
+        429 => ResponseCategory.Retryable,
+        >= 400 and < 500 => ResponseCategory.Permanent,
         _ => ResponseCategory.Retryable,
     };
 

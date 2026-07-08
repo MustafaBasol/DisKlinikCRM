@@ -5,7 +5,8 @@ namespace NoraMedi.Bridge.Core.Tests.Security;
 public class BridgeAuthStateTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("nmb-authstate-").FullName;
-    private DpapiCredentialStore NewStore() => new(Path.Combine(_root, "credential.bin"));
+    private static readonly string CurrentUserSid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+    private DpapiCredentialStore NewStore() => new(Path.Combine(_root, "credential.bin"), extraAccountSid: CurrentUserSid);
 
     [Fact]
     public void NewState_StartsValid()
@@ -73,8 +74,5 @@ public class BridgeAuthStateTests : IDisposable
         Assert.Equal("nmb_token", state.TryGetCredential());
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
-    }
+    public void Dispose() => TestSupport.AclCleanup.UnlockAndDelete(_root);
 }

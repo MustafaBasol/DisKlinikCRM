@@ -7,8 +7,15 @@ public class SqliteBridgeQueueTests : IDisposable
     private readonly string _root = Directory.CreateTempSubdirectory("nmb-queue-").FullName;
     private static readonly byte[] JpegBytes = [0xFF, 0xD8, 0xFF, 0x01, 0x02, 0x03];
 
+    // SqliteBridgeQueue now ACL-protects its spool directory to LocalSystem +
+    // Administrators only (see ProgramDataAcl). The test process is neither,
+    // so — exactly like a real deployment running as a dedicated, non-Admin
+    // service account — it must supply its own SID via the same
+    // extraAccountSid parameter BridgeOptions.ServiceAccountSid feeds in production.
+    private static readonly string CurrentUserSid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+
     private SqliteBridgeQueue NewQueue() =>
-        new(Path.Combine(_root, "spool"), Path.Combine(_root, "queue.db"));
+        new(Path.Combine(_root, "spool"), Path.Combine(_root, "queue.db"), CurrentUserSid);
 
     [Fact]
     public void Enqueue_ValidFile_CreatesPendingRowAndSpoolFile()
@@ -110,14 +117,14 @@ public class SqliteBridgeQueueTests : IDisposable
         var spoolRoot = Path.Combine(_root, "spool");
         var dbPath = Path.Combine(_root, "queue.db");
         string ingestKey;
-        using (var queue = new SqliteBridgeQueue(spoolRoot, dbPath))
+        using (var queue = new SqliteBridgeQueue(spoolRoot, dbPath, CurrentUserSid))
         {
             var item = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!;
             ingestKey = item.IngestKey;
             queue.MoveToProcessing(ingestKey); // simulates a crash mid-upload: no Complete()/Fail() call follows
         }
 
-        using var recovered = new SqliteBridgeQueue(spoolRoot, dbPath);
+        using var recovered = new SqliteBridgeQueue(spoolRoot, dbPath, CurrentUserSid);
         recovered.RecoverOnStartup();
 
         Assert.Equal(QueueItemState.Pending, recovered.Find(ingestKey)!.State);
@@ -133,7 +140,7 @@ public class SqliteBridgeQueueTests : IDisposable
         Directory.CreateDirectory(orphanStaging);
         File.WriteAllBytes(Path.Combine(orphanStaging, "file.jpg"), JpegBytes);
 
-        using var queue = new SqliteBridgeQueue(spoolRoot, dbPath);
+        using var queue = new SqliteBridgeQueue(spoolRoot, dbPath, CurrentUserSid);
         queue.RecoverOnStartup();
 
         Assert.False(Directory.Exists(orphanStaging));
@@ -145,14 +152,14 @@ public class SqliteBridgeQueueTests : IDisposable
         var spoolRoot = Path.Combine(_root, "spool");
         var dbPath = Path.Combine(_root, "queue.db");
         string ingestKey;
-        using (var queue = new SqliteBridgeQueue(spoolRoot, dbPath))
+        using (var queue = new SqliteBridgeQueue(spoolRoot, dbPath, CurrentUserSid))
         {
             var item = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!;
             ingestKey = item.IngestKey;
             Directory.Delete(Path.GetDirectoryName(item.SpoolFilePath)!, recursive: true);
         }
 
-        using var recovered = new SqliteBridgeQueue(spoolRoot, dbPath);
+        using var recovered = new SqliteBridgeQueue(spoolRoot, dbPath, CurrentUserSid);
         recovered.RecoverOnStartup();
 
         var record = recovered.Find(ingestKey)!;
@@ -169,7 +176,7 @@ public class SqliteBridgeQueueTests : IDisposable
         // Simulate the exact crash window Enqueue leaves: DB row inserted,
         // but the rename from staging to final directory never happened.
         string ingestKey;
-        using (var queue = new SqliteBridgeQueue(spoolRoot, dbPath))
+        using (var queue = new SqliteBridgeQueue(spoolRoot, dbPath, CurrentUserSid))
         {
             var probe = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!;
             ingestKey = probe.IngestKey;
@@ -178,7 +185,7 @@ public class SqliteBridgeQueueTests : IDisposable
             Directory.Move(finalDir, stagingDir);
         }
 
-        using var recovered = new SqliteBridgeQueue(spoolRoot, dbPath);
+        using var recovered = new SqliteBridgeQueue(spoolRoot, dbPath, CurrentUserSid);
         recovered.RecoverOnStartup();
 
         var record = recovered.Find(ingestKey)!;
@@ -209,8 +216,75 @@ public class SqliteBridgeQueueTests : IDisposable
         Assert.Equal(1, counts[QueueItemState.Completed]);
     }
 
-    public void Dispose()
+    [Fact]
+    public void TotalSpoolBytes_SumsPendingProcessingAndFailedButNotCompleted()
     {
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+        using var queue = NewQueue();
+        var pending = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!; // 6 bytes
+        var failed = queue.Enqueue([0xFF, 0xD8, 0xFF, 0x08], "watch-1", "device-1", "IO")!; // 4 bytes
+        var completed = queue.Enqueue([0xFF, 0xD8, 0xFF, 0x07], "watch-1", "device-1", "IO")!; // 4 bytes
+
+        queue.MoveToProcessing(failed.IngestKey);
+        queue.Fail(failed.IngestKey, ErrorCategory.BadRequest);
+        queue.MoveToProcessing(completed.IngestKey);
+        queue.Complete(completed.IngestKey); // spool file deleted — must drop out of the total
+
+        Assert.Equal(pending.SizeBytes + failed.SizeBytes, queue.TotalSpoolBytes());
     }
+
+    [Fact]
+    public void PurgeExpired_OldFailedItem_DeletesRowAndSpoolFile()
+    {
+        using var queue = NewQueue();
+        var item = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!;
+        queue.MoveToProcessing(item.IngestKey);
+        queue.Fail(item.IngestKey, ErrorCategory.BadRequest);
+
+        queue.PurgeExpired(DateTimeOffset.UtcNow.AddDays(31), TimeSpan.FromDays(30), TimeSpan.FromDays(7));
+
+        Assert.Null(queue.Find(item.IngestKey));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(item.SpoolFilePath)));
+    }
+
+    [Fact]
+    public void PurgeExpired_RecentFailedItem_IsKept()
+    {
+        using var queue = NewQueue();
+        var item = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!;
+        queue.MoveToProcessing(item.IngestKey);
+        queue.Fail(item.IngestKey, ErrorCategory.BadRequest);
+
+        queue.PurgeExpired(DateTimeOffset.UtcNow, TimeSpan.FromDays(30), TimeSpan.FromDays(7));
+
+        Assert.NotNull(queue.Find(item.IngestKey));
+    }
+
+    [Fact]
+    public void PurgeExpired_OldCompletedItem_DeletesRow()
+    {
+        using var queue = NewQueue();
+        var item = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!;
+        queue.MoveToProcessing(item.IngestKey);
+        queue.Complete(item.IngestKey);
+
+        queue.PurgeExpired(DateTimeOffset.UtcNow.AddDays(8), TimeSpan.FromDays(30), TimeSpan.FromDays(7));
+
+        Assert.Null(queue.Find(item.IngestKey));
+    }
+
+    [Fact]
+    public void PurgeExpired_NeverDeletesPendingOrProcessingItems()
+    {
+        using var queue = NewQueue();
+        var pending = queue.Enqueue(JpegBytes, "watch-1", "device-1", "IO")!;
+        var processing = queue.Enqueue([0xFF, 0xD8, 0xFF, 0x09], "watch-1", "device-1", "IO")!;
+        queue.MoveToProcessing(processing.IngestKey);
+
+        queue.PurgeExpired(DateTimeOffset.UtcNow.AddYears(1), TimeSpan.Zero, TimeSpan.Zero);
+
+        Assert.NotNull(queue.Find(pending.IngestKey));
+        Assert.NotNull(queue.Find(processing.IngestKey));
+    }
+
+    public void Dispose() => TestSupport.AclCleanup.UnlockAndDelete(_root);
 }

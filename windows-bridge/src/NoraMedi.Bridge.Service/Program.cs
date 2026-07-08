@@ -48,5 +48,10 @@ static BridgeOptions BuildBridgeOptions(IConfiguration configuration)
         BackoffCapMs = section.GetValue<int?>("BackoffCapMs") ?? 900_000,
         DrainPollMs = section.GetValue<int?>("DrainPollMs") ?? 5_000,
         ServiceAccountSid = section["ServiceAccountSid"],
+        MaxAcquiredFileSizeBytes = section.GetValue<long?>("MaxAcquiredFileSizeBytes") ?? 200L * 1024 * 1024,
+        MaxSpoolBytes = section.GetValue<long?>("MaxSpoolBytes") ?? 5L * 1024 * 1024 * 1024,
+        MinFreeDiskBytes = section.GetValue<long?>("MinFreeDiskBytes") ?? 500L * 1024 * 1024,
+        FailedRetentionDays = section.GetValue<int?>("FailedRetentionDays") ?? 30,
+        CompletedRetentionDays = section.GetValue<int?>("CompletedRetentionDays") ?? 7,
     };
 }

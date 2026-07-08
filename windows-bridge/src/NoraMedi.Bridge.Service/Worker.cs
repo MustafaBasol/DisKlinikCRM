@@ -1,3 +1,4 @@
+using System.IO.Pipes;
 using NoraMedi.Bridge.Core.Ipc;
 using NoraMedi.Bridge.Core.Runtime;
 
@@ -10,7 +11,11 @@ namespace NoraMedi.Bridge.Service;
 /// (LocalSystem or a configured -ServiceAccount) or interactively for
 /// development/testing via `dotnet run`.
 /// </summary>
-public sealed class Worker(BridgeOrchestrator orchestrator, BridgeOptions options, ILogger<Worker> logger) : BackgroundService
+public sealed class Worker(
+    BridgeOrchestrator orchestrator,
+    BridgeOptions options,
+    ILogger<Worker> logger,
+    Func<NamedPipeServerStream, PipeClientIdentity?>? pipeIdentityResolver = null) : BackgroundService
 {
     private BridgePipeServer? _pipeServer;
 
@@ -21,7 +26,7 @@ public sealed class Worker(BridgeOrchestrator orchestrator, BridgeOptions option
             options.Enabled, options.PipeName);
 
         orchestrator.Start();
-        _pipeServer = new BridgePipeServer(options.PipeName, orchestrator);
+        _pipeServer = new BridgePipeServer(options.PipeName, orchestrator, identityResolver: pipeIdentityResolver);
         _pipeServer.Start();
 
         return base.StartAsync(cancellationToken);

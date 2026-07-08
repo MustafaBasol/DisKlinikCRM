@@ -14,11 +14,12 @@ public sealed class FolderWatchAdapter : IImagingAcquisitionAdapter
     public FolderWatchAdapter(
         IEnumerable<FolderBinding> bindings,
         TimeSpan stabilityWindow,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        long maxFileSizeBytes = long.MaxValue)
     {
         var interval = pollInterval ?? TimeSpan.FromMilliseconds(500);
         _watchers = bindings
-            .Select(binding => new SingleFolderWatcher(binding, stabilityWindow, interval, RaiseFileAcquired))
+            .Select(binding => new SingleFolderWatcher(binding, stabilityWindow, interval, RaiseFileAcquired, maxFileSizeBytes))
             .ToList();
     }
 

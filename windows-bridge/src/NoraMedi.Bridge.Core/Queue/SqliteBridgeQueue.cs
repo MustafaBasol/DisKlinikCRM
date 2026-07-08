@@ -1,5 +1,6 @@
 using System.Threading;
 using Microsoft.Data.Sqlite;
+using NoraMedi.Bridge.Core.Security;
 using NoraMedi.Bridge.Core.Validation;
 
 namespace NoraMedi.Bridge.Core.Queue;
@@ -18,13 +19,18 @@ namespace NoraMedi.Bridge.Core.Queue;
 public sealed class SqliteBridgeQueue : IDisposable
 {
     private readonly string _spoolRoot;
+    private readonly string? _extraAccountSid;
     private readonly SqliteConnection _connection;
     private readonly Lock _gate = new();
 
-    public SqliteBridgeQueue(string spoolRoot, string databasePath)
+    public SqliteBridgeQueue(string spoolRoot, string databasePath, string? extraAccountSid = null)
     {
         _spoolRoot = spoolRoot;
-        Directory.CreateDirectory(_spoolRoot);
+        _extraAccountSid = extraAccountSid;
+        // Protects the spool tree itself even though BridgeOrchestrator already
+        // locks down ProgramDataRoot before constructing this queue — a second,
+        // explicit layer so this type is safe to use standalone (as the tests do).
+        ProgramDataAcl.ProtectDirectory(_spoolRoot, _extraAccountSid);
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath) ?? _spoolRoot);
 
         // Pooling=False: this connection is held for the queue's entire lifetime
@@ -45,6 +51,7 @@ public sealed class SqliteBridgeQueue : IDisposable
             pragma.ExecuteNonQuery();
         }
         Initialize();
+        ProgramDataAcl.ProtectFile(databasePath, _extraAccountSid);
     }
 
     private void Initialize()
@@ -63,7 +70,8 @@ public sealed class SqliteBridgeQueue : IDisposable
                 attempt_count INTEGER NOT NULL,
                 next_attempt_at TEXT NOT NULL,
                 last_error_category TEXT NULL,
-                spool_file_path TEXT NOT NULL
+                spool_file_path TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_queue_items_state ON queue_items(state, next_attempt_at);
             """;
@@ -99,12 +107,13 @@ public sealed class SqliteBridgeQueue : IDisposable
             var now = DateTimeOffset.UtcNow;
             var finalDir = ItemDir(ingestKey);
             var finalFile = Path.Combine(finalDir, $"file{safeExtension}");
+            var sizeBytes = (long)bytes.Length;
 
-            InsertRow(ingestKey, watchId, deviceId, modality, contentType, safeExtension, now, finalFile);
+            InsertRow(ingestKey, watchId, deviceId, modality, contentType, safeExtension, now, finalFile, sizeBytes);
             Directory.Move(stagingDir, finalDir);
 
             return new QueueItemRecord(ingestKey, watchId, deviceId, modality, contentType, safeExtension,
-                QueueItemState.Pending, now, 0, now, null, finalFile);
+                QueueItemState.Pending, now, 0, now, null, finalFile, sizeBytes);
         }
     }
 
@@ -117,16 +126,16 @@ public sealed class SqliteBridgeQueue : IDisposable
     }
 
     private void InsertRow(string ingestKey, string watchId, string deviceId, string? modality,
-        string contentType, string safeExtension, DateTimeOffset now, string spoolFilePath)
+        string contentType, string safeExtension, DateTimeOffset now, string spoolFilePath, long sizeBytes)
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
             INSERT INTO queue_items
                 (ingest_key, watch_id, device_id, modality, content_type, safe_extension,
-                 state, created_at, attempt_count, next_attempt_at, last_error_category, spool_file_path)
+                 state, created_at, attempt_count, next_attempt_at, last_error_category, spool_file_path, size_bytes)
             VALUES
                 ($key, $watch, $device, $modality, $contentType, $ext,
-                 $state, $createdAt, 0, $nextAttempt, NULL, $spoolPath)
+                 $state, $createdAt, 0, $nextAttempt, NULL, $spoolPath, $size)
             """;
         cmd.Parameters.AddWithValue("$key", ingestKey);
         cmd.Parameters.AddWithValue("$watch", watchId);
@@ -138,6 +147,66 @@ public sealed class SqliteBridgeQueue : IDisposable
         cmd.Parameters.AddWithValue("$createdAt", now.ToString("O"));
         cmd.Parameters.AddWithValue("$nextAttempt", now.ToString("O"));
         cmd.Parameters.AddWithValue("$spoolPath", spoolFilePath);
+        cmd.Parameters.AddWithValue("$size", sizeBytes);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Sum of on-disk bytes for items that still occupy spool storage
+    /// (pending/processing/failed — completed items have already had their
+    /// spool directory deleted by <see cref="Complete"/>). Used as an admission
+    /// check before writing a newly acquired file — see BridgeOrchestrator.
+    /// </summary>
+    public long TotalSpoolBytes()
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT COALESCE(SUM(size_bytes), 0) FROM queue_items
+                WHERE state IN ($pending, $processing, $failed)
+                """;
+            cmd.Parameters.AddWithValue("$pending", QueueItemState.Pending.ToDbValue());
+            cmd.Parameters.AddWithValue("$processing", QueueItemState.Processing.ToDbValue());
+            cmd.Parameters.AddWithValue("$failed", QueueItemState.Failed.ToDbValue());
+            return Convert.ToInt64(cmd.ExecuteScalar());
+        }
+    }
+
+    /// <summary>
+    /// Deletes failed items (row + any remaining spool file) older than
+    /// <paramref name="failedRetention"/> and completed rows (file already
+    /// gone) older than <paramref name="completedRetention"/>, so the queue
+    /// database and spool tree cannot grow unbounded from permanently failed
+    /// or long-completed items. Pending/processing items are never purged.
+    /// </summary>
+    public void PurgeExpired(DateTimeOffset now, TimeSpan failedRetention, TimeSpan completedRetention)
+    {
+        lock (_gate)
+        {
+            PurgeState(QueueItemState.Failed, now - failedRetention, deleteSpoolDir: true);
+            PurgeState(QueueItemState.Completed, now - completedRetention, deleteSpoolDir: false);
+        }
+    }
+
+    private void PurgeState(QueueItemState state, DateTimeOffset cutoff, bool deleteSpoolDir)
+    {
+        if (deleteSpoolDir)
+        {
+            foreach (var record in ListByState(state))
+            {
+                if (record.CreatedAt > cutoff) continue;
+                if (Directory.Exists(ItemDir(record.IngestKey)))
+                {
+                    Directory.Delete(ItemDir(record.IngestKey), recursive: true);
+                }
+            }
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM queue_items WHERE state = $state AND created_at <= $cutoff";
+        cmd.Parameters.AddWithValue("$state", state.ToDbValue());
+        cmd.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
         cmd.ExecuteNonQuery();
     }
 
@@ -367,7 +436,8 @@ public sealed class SqliteBridgeQueue : IDisposable
                 AttemptCount: reader.GetInt32(reader.GetOrdinal("attempt_count")),
                 NextAttemptAt: DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("next_attempt_at"))),
                 LastErrorCategory: reader.IsDBNull(reader.GetOrdinal("last_error_category")) ? null : reader.GetString(reader.GetOrdinal("last_error_category")),
-                SpoolFilePath: reader.GetString(reader.GetOrdinal("spool_file_path"))));
+                SpoolFilePath: reader.GetString(reader.GetOrdinal("spool_file_path")),
+                SizeBytes: reader.GetInt64(reader.GetOrdinal("size_bytes"))));
         }
         return results;
     }

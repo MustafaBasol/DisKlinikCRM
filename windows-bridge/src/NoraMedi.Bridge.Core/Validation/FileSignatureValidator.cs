@@ -56,4 +56,19 @@ public static class FileSignatureValidator
 
     public static string? SafeExtensionFor(string contentType) =>
         SafeExtensionByContentType.TryGetValue(contentType, out var ext) ? ext : null;
+
+    /// <summary>
+    /// The content type a watched file's extension claims to be — used to
+    /// reject an extension/magic-byte mismatch (e.g. a renamed .exe dropped
+    /// in as "scan.jpg") before it is ever queued. Both accepted spellings of
+    /// the JPEG and DICOM extensions map to the same content type.
+    /// </summary>
+    public static string? ExpectedContentTypeForExtension(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        ".dcm" or ".dicom" => "application/dicom",
+        _ => null,
+    };
 }

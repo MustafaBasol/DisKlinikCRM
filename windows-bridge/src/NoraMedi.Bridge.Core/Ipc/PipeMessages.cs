@@ -22,6 +22,7 @@ public static class PipeErrorCodes
     public const string InvalidPayload = "invalid_payload";
     public const string PayloadTooLarge = "payload_too_large";
     public const string Unauthorized = "unauthorized";
+    public const string FeatureDisabled = "feature_disabled";
     public const string NotFound = "not_found";
     public const string InternalError = "internal_error";
 }

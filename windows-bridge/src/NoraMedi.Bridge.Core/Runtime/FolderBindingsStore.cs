@@ -13,11 +13,13 @@ public sealed class FolderBindingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private readonly string _path;
+    private readonly string? _extraAccountSid;
     private readonly Lock _gate = new();
 
-    public FolderBindingsStore(string path)
+    public FolderBindingsStore(string path, string? extraAccountSid = null)
     {
         _path = path;
+        _extraAccountSid = extraAccountSid;
     }
 
     public IReadOnlyList<FolderBinding> Load()
@@ -66,6 +68,7 @@ public sealed class FolderBindingsStore
         var tmp = _path + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(bindings, JsonOptions));
         File.Move(tmp, _path, overwrite: true);
+        Security.ProgramDataAcl.ProtectFile(_path, _extraAccountSid);
     }
 
     private static string DeriveWatchId(string deviceId, int index)

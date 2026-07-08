@@ -8,6 +8,7 @@ internal sealed class FakeBridgePipeRequestHandler : IBridgePipeRequestHandler
 {
     public List<string> Calls { get; } = [];
     public Exception? ThrowOnNextCall { get; set; }
+    public bool FeatureEnabled { get; set; } = true;
 
     private void Record(string name)
     {

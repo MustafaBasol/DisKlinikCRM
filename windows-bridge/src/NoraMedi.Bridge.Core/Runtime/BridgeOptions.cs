@@ -32,6 +32,21 @@ public sealed record BridgeOptions
 
     public string? ServiceAccountSid { get; init; }
 
+    /// <summary>Largest single acquired file the bridge will spool, in bytes. Rejected above this — never read into memory.</summary>
+    public long MaxAcquiredFileSizeBytes { get; init; } = 200L * 1024 * 1024;
+
+    /// <summary>Total on-disk budget for spooled (pending/processing/failed) item bytes, in bytes.</summary>
+    public long MaxSpoolBytes { get; init; } = 5L * 1024 * 1024 * 1024;
+
+    /// <summary>Minimum free space that must remain on the spool volume after admitting a new item.</summary>
+    public long MinFreeDiskBytes { get; init; } = 500L * 1024 * 1024;
+
+    /// <summary>How long a permanently-failed item (row + spool file) is kept for troubleshooting before being purged.</summary>
+    public int FailedRetentionDays { get; init; } = 30;
+
+    /// <summary>How long a completed item's row (file already deleted) is kept before being purged.</summary>
+    public int CompletedRetentionDays { get; init; } = 7;
+
     public string SpoolDirectory => Path.Combine(ProgramDataRoot, "spool");
 
     public string QueueDatabasePath => Path.Combine(ProgramDataRoot, "queue.db");

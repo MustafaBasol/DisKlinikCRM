@@ -9,11 +9,13 @@ public sealed class DpapiCredentialStore : ICredentialStore
 {
     private readonly string _path;
     private readonly byte[]? _entropy;
+    private readonly string? _extraAccountSid;
 
-    public DpapiCredentialStore(string path, byte[]? entropy = null)
+    public DpapiCredentialStore(string path, byte[]? entropy = null, string? extraAccountSid = null)
     {
         _path = path;
         _entropy = entropy;
+        _extraAccountSid = extraAccountSid;
     }
 
     public bool Exists => File.Exists(_path);
@@ -27,6 +29,7 @@ public sealed class DpapiCredentialStore : ICredentialStore
         var tmp = _path + ".tmp";
         File.WriteAllBytes(tmp, protectedBytes);
         File.Move(tmp, _path, overwrite: true);
+        ProgramDataAcl.ProtectFile(_path, _extraAccountSid);
     }
 
     public string? TryRead()

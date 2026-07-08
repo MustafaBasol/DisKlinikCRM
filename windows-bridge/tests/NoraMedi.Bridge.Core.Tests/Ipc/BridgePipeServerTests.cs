@@ -4,13 +4,21 @@ namespace NoraMedi.Bridge.Core.Tests.Ipc;
 
 public class BridgePipeServerTests : IAsyncLifetime
 {
+    private static readonly PipeClientIdentity AdminIdentity = new("TEST\\admin-user", IsAdministrator: true);
+
     private readonly string _pipeName = "nmb-test-" + Guid.NewGuid().ToString("N");
     private readonly FakeBridgePipeRequestHandler _handler = new();
     private BridgePipeServer _server = null!;
 
     public Task InitializeAsync()
     {
-        _server = new BridgePipeServer(_pipeName, _handler, maxInstances: 2);
+        // Every pre-existing behavioral test in this class exercises transport/
+        // dispatch, not identity authorization — stub the identity resolver to
+        // a fixed administrator so those tests are deterministic regardless of
+        // which Windows account actually runs the test process. Authorization
+        // itself is covered by PipeAuthorizationTests below, which supply their
+        // own resolvers.
+        _server = new BridgePipeServer(_pipeName, _handler, maxInstances: 2, identityResolver: _ => AdminIdentity);
         _server.Start();
         return Task.CompletedTask;
     }

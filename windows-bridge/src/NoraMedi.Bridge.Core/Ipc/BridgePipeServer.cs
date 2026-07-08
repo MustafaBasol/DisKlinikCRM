@@ -6,13 +6,30 @@ using System.Text.Json;
 
 namespace NoraMedi.Bridge.Core.Ipc;
 
+/// <summary>Snapshot of the identity that connected to one pipe request, captured under client impersonation. See BridgePipeServer.CaptureClientIdentity.</summary>
+public sealed record PipeClientIdentity(string Name, bool IsAdministrator);
+
 /// <summary>
-/// One request/response per connection over a Named Pipe. Connection ACL is
-/// restricted to LocalSystem, Administrators, and interactive/authenticated
-/// Users — never "Everyone" or anonymous — so only a locally logged-in
-/// account (the future Manager app's normal, non-admin run context) can
-/// reach it at all; Named Pipes opened this way (no leading "\\server\")
-/// are local-machine only regardless.
+/// One request/response per connection over a Named Pipe.
+///
+/// Two layers of defense restrict who can do what:
+///  1. Connection-level ACL (<see cref="CreateServerStream"/>): grants
+///     connect rights to LocalSystem, Administrators, and the well-known
+///     INTERACTIVE SID only — never "Everyone"/"Authenticated Users". A
+///     Network-logon or Anonymous-logon token carries neither the
+///     Administrators nor the INTERACTIVE group SID, so Windows refuses the
+///     client's CreateFile(\\.\pipe\...) before our code ever runs. Because
+///     this pipe is created with a bare name (no "\\server\" prefix) it is
+///     local-machine-only regardless.
+///  2. Per-request identity + operation authorization
+///     (<see cref="HandleConnectionAsync"/>): every connection is
+///     impersonated to confirm it resolved to a real, non-anonymous local
+///     identity (a connection that somehow got through layer 1 without one is
+///     rejected outright), and mutating/sensitive operations
+///     (<see cref="PipeOperationPolicy.IsPrivileged"/> — provisioning,
+///     binding changes, retries, network tests) additionally require that
+///     identity to be a member of Administrators. Plain read-only status
+///     queries only need layer 1 plus a resolved identity.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class BridgePipeServer : IAsyncDisposable
@@ -22,14 +39,20 @@ public sealed class BridgePipeServer : IAsyncDisposable
     private readonly string _pipeName;
     private readonly IBridgePipeRequestHandler _handler;
     private readonly int _maxInstances;
+    private readonly Func<NamedPipeServerStream, PipeClientIdentity?> _identityResolver;
     private CancellationTokenSource? _cts;
     private List<Task>? _acceptLoops;
 
-    public BridgePipeServer(string pipeName, IBridgePipeRequestHandler handler, int maxInstances = 4)
+    public BridgePipeServer(
+        string pipeName,
+        IBridgePipeRequestHandler handler,
+        int maxInstances = 4,
+        Func<NamedPipeServerStream, PipeClientIdentity?>? identityResolver = null)
     {
         _pipeName = pipeName;
         _handler = handler;
         _maxInstances = maxInstances;
+        _identityResolver = identityResolver ?? CaptureClientIdentity;
     }
 
     public void Start()
@@ -94,8 +117,12 @@ public sealed class BridgePipeServer : IAsyncDisposable
             new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(
             new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
+        // INTERACTIVE (S-1-5-4), not BUILTIN\Users — a token only carries this
+        // group for an actual interactive logon session on this console/RDP
+        // session. Network-logon and Anonymous-logon tokens carry neither this
+        // nor Administrators, so they are refused connect access entirely.
         security.AddAccessRule(new PipeAccessRule(
-            new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
+            new SecurityIdentifier(WellKnownSidType.InteractiveSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
 
         return NamedPipeServerStreamAcl.Create(
             _pipeName,
@@ -108,8 +135,35 @@ public sealed class BridgePipeServer : IAsyncDisposable
             pipeSecurity: security);
     }
 
+    /// <summary>
+    /// Impersonates the connected client just long enough to read its
+    /// identity and Administrators membership, then reverts — this thread
+    /// never keeps running as the client. Returns null for anonymous,
+    /// unresolvable, or impersonation-refused connections, which the caller
+    /// treats as unauthorized.
+    /// </summary>
+    private static PipeClientIdentity? CaptureClientIdentity(NamedPipeServerStream server)
+    {
+        PipeClientIdentity? result = null;
+        server.RunAsClient(() =>
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            if (identity is null || identity.IsAnonymous || string.IsNullOrEmpty(identity.Name))
+            {
+                return;
+            }
+
+            var isAdministrator = identity.IsSystem || new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+            result = new PipeClientIdentity(identity.Name, isAdministrator);
+        });
+        return result;
+    }
+
     private async Task HandleConnectionAsync(NamedPipeServerStream server, CancellationToken cancellationToken)
     {
+        // Always drain the client's request before writing anything back —
+        // responding first and reading second is an ordering the transport
+        // was never exercised with and is not needed for correctness here.
         string? requestJson;
         try
         {
@@ -122,6 +176,22 @@ public sealed class BridgePipeServer : IAsyncDisposable
         }
 
         if (requestJson is null) return; // client disconnected before sending anything
+
+        PipeClientIdentity? identity;
+        try
+        {
+            identity = _identityResolver(server);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            identity = null;
+        }
+
+        if (identity is null)
+        {
+            await SafeRespond(server, PipeResponse.Error(PipeErrorCodes.Unauthorized), cancellationToken);
+            return;
+        }
 
         PipeRequest? request;
         try
@@ -137,6 +207,18 @@ public sealed class BridgePipeServer : IAsyncDisposable
         if (request is null || !Enum.TryParse<PipeOperation>(request.Operation, ignoreCase: false, out var operation))
         {
             await SafeRespond(server, PipeResponse.Error(PipeErrorCodes.UnknownOperation), cancellationToken);
+            return;
+        }
+
+        if (!_handler.FeatureEnabled && !PipeOperationPolicy.IsAllowedWhenFeatureDisabled(operation))
+        {
+            await SafeRespond(server, PipeResponse.Error(PipeErrorCodes.FeatureDisabled), cancellationToken);
+            return;
+        }
+
+        if (PipeOperationPolicy.IsPrivileged(operation) && !identity.IsAdministrator)
+        {
+            await SafeRespond(server, PipeResponse.Error(PipeErrorCodes.Unauthorized), cancellationToken);
             return;
         }
 

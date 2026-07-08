@@ -7,7 +7,7 @@ namespace NoraMedi.Bridge.Core.Security;
 /// </summary>
 public static class InstallationIdProvider
 {
-    public static string GetOrCreate(string path)
+    public static string GetOrCreate(string path, string? extraAccountSid = null)
     {
         if (File.Exists(path))
         {
@@ -22,6 +22,7 @@ public static class InstallationIdProvider
         var tmp = path + ".tmp";
         File.WriteAllText(tmp, id);
         File.Move(tmp, path, overwrite: true);
+        ProgramDataAcl.ProtectFile(path, extraAccountSid);
         return id;
     }
 }

@@ -59,45 +59,5 @@ public class ProgramDataAclTests : IDisposable
         Assert.Contains(sids, sid => sid.IsWellKnown(WellKnownSidType.NetworkServiceSid));
     }
 
-    public void Dispose()
-    {
-        // ProtectDirectory/ProtectFile deliberately locks the current (unprivileged
-        // test) user out — restore access before cleanup. Windows always grants the
-        // object's owner implicit WRITE_DAC, so this is safe even though the DACL
-        // above denies the owner every other right.
-        if (Directory.Exists(_root))
-        {
-            RestoreOwnerAccess(_root);
-            Directory.Delete(_root, recursive: true);
-        }
-    }
-
-    private static void RestoreOwnerAccess(string root)
-    {
-        // Non-recursive by design: locked-down subdirectories can't be traversed
-        // INTO until their own ACL is reset first, so only fix up root and its
-        // immediate children (sufficient for how these tests nest paths).
-        var self = WindowsIdentity.GetCurrent().User!;
-        void Grant(string dir)
-        {
-            var security = new DirectorySecurity();
-            security.SetAccessRuleProtection(false, false);
-            security.AddAccessRule(new FileSystemAccessRule(self, FileSystemRights.FullControl,
-                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-            new DirectoryInfo(dir).SetAccessControl(security);
-        }
-
-        Grant(root);
-        foreach (var dir in Directory.GetDirectories(root))
-        {
-            Grant(dir);
-        }
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-        {
-            var security = new FileSecurity();
-            security.SetAccessRuleProtection(false, false);
-            security.AddAccessRule(new FileSystemAccessRule(self, FileSystemRights.FullControl, AccessControlType.Allow));
-            new FileInfo(file).SetAccessControl(security);
-        }
-    }
+    public void Dispose() => TestSupport.AclCleanup.UnlockAndDelete(_root);
 }

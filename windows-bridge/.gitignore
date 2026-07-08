@@ -5,6 +5,9 @@ obj/
 # Publish output
 publish/
 
+# Test run artifacts (blame dumps, sequence files)
+TestResults/
+
 # User-specific files
 *.user
 *.suo

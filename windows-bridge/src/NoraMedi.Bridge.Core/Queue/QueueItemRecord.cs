@@ -12,4 +12,5 @@ public sealed record QueueItemRecord(
     int AttemptCount,
     DateTimeOffset NextAttemptAt,
     string? LastErrorCategory,
-    string SpoolFilePath);
+    string SpoolFilePath,
+    long SizeBytes = 0);

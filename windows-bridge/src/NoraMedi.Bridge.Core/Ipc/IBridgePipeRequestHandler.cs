@@ -10,6 +10,9 @@ namespace NoraMedi.Bridge.Core.Ipc;
 /// </summary>
 public interface IBridgePipeRequestHandler
 {
+    /// <summary>Mirrors BridgeOptions.Enabled — the pipe server consults this to enforce PipeOperationPolicy's feature-flag gate.</summary>
+    bool FeatureEnabled { get; }
+
     Task<ServiceStatusPayload> GetServiceStatusAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<FolderBindingInfo>> GetBindingsAsync(CancellationToken cancellationToken);

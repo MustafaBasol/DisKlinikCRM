@@ -47,12 +47,17 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         _agentVersion = agentVersion;
         _logger = logger;
 
-        Directory.CreateDirectory(_options.ProgramDataRoot);
-        _queue = new SqliteBridgeQueue(_options.SpoolDirectory, _options.QueueDatabasePath);
-        _credentialStore = new DpapiCredentialStore(_options.CredentialPath);
+        // Lock down the whole ProgramData tree BEFORE any subcomponent below
+        // creates the queue database, credential blob, bindings file, spool
+        // directory, or installation-id file — every one of those must be
+        // born under a directory ACL that already excludes broad Users/Everyone
+        // access, not retrofitted afterward.
+        ProgramDataAcl.ProtectDirectory(_options.ProgramDataRoot, _options.ServiceAccountSid);
+        _queue = new SqliteBridgeQueue(_options.SpoolDirectory, _options.QueueDatabasePath, _options.ServiceAccountSid);
+        _credentialStore = new DpapiCredentialStore(_options.CredentialPath, extraAccountSid: _options.ServiceAccountSid);
         _authState = new BridgeAuthState(_credentialStore);
-        _bindingsStore = new FolderBindingsStore(_options.BindingsPath);
-        _installationId = InstallationIdProvider.GetOrCreate(_options.InstallationIdPath);
+        _bindingsStore = new FolderBindingsStore(_options.BindingsPath, _options.ServiceAccountSid);
+        _installationId = InstallationIdProvider.GetOrCreate(_options.InstallationIdPath, _options.ServiceAccountSid);
     }
 
     public void Start()
@@ -78,7 +83,7 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     {
         _watcherAdapter?.Stop();
         var bindings = _bindingsStore.Load();
-        _watcherAdapter = new FolderWatchAdapter(bindings, TimeSpan.FromMilliseconds(_options.StabilityMs));
+        _watcherAdapter = new FolderWatchAdapter(bindings, TimeSpan.FromMilliseconds(_options.StabilityMs), maxFileSizeBytes: _options.MaxAcquiredFileSizeBytes);
         _watcherAdapter.FileAcquired += OnFileAcquired;
         if (_started && _options.Enabled) _watcherAdapter.Start();
     }
@@ -87,6 +92,36 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     {
         try
         {
+            // Admission checks run on FileInfo.Length alone, strictly before any
+            // File.ReadAllBytes — a hostile or misbehaving source folder must
+            // never be able to force an unbounded in-memory allocation.
+            FileInfo info;
+            try
+            {
+                info = new FileInfo(file.SourcePath);
+                if (!info.Exists) return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return;
+            }
+
+            if (info.Length > _options.MaxAcquiredFileSizeBytes)
+            {
+                _logger.LogWarning(
+                    "Rejected acquired file for watch {WatchId}: {Size} bytes exceeds MaxAcquiredFileSizeBytes",
+                    file.Binding.WatchId, info.Length);
+                return;
+            }
+
+            if (!HasSpoolCapacity(info.Length))
+            {
+                _logger.LogWarning(
+                    "Rejected acquired file for watch {WatchId}: spool capacity or minimum free disk space would be exceeded",
+                    file.Binding.WatchId);
+                return;
+            }
+
             var bytes = File.ReadAllBytes(file.SourcePath);
             _queue.Enqueue(bytes, file.Binding.WatchId, file.Binding.DeviceId, file.Binding.Modality);
         }
@@ -94,6 +129,36 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         {
             _logger.LogWarning(ex, "Failed to read acquired file for watch {WatchId}", file.Binding.WatchId);
         }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+        {
+            // The watcher's polling Timer.Dispose() (see FolderWatchAdapter/SingleFolderWatcher)
+            // does not wait for an in-flight callback to finish, so a tick can still be
+            // running here after DisposeAsync has already torn down the queue's SQLite
+            // connection during shutdown. The source file is untouched either way — on
+            // the next start it is observed and acquired again — so dropping this one
+            // in-flight acquisition during shutdown is safe.
+            _logger.LogWarning(ex, "Dropped an in-flight acquisition for watch {WatchId} during shutdown", file.Binding.WatchId);
+        }
+    }
+
+    private bool HasSpoolCapacity(long incomingBytes)
+    {
+        if (_queue.TotalSpoolBytes() + incomingBytes > _options.MaxSpoolBytes) return false;
+
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(_options.SpoolDirectory));
+            if (string.IsNullOrEmpty(root)) return true;
+            var drive = new DriveInfo(root);
+            if (drive.AvailableFreeSpace - incomingBytes < _options.MinFreeDiskBytes) return false;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            // Cannot determine free space — fail safe by rejecting rather than risking disk exhaustion.
+            return false;
+        }
+
+        return true;
     }
 
     private async Task SafeDrainOnceAsync()
@@ -181,7 +246,13 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
                 }
                 else
                 {
-                    var delay = BackoffCalculator.Compute(nextAttempt, TimeSpan.FromMilliseconds(_options.BackoffBaseMs), TimeSpan.FromMilliseconds(_options.BackoffCapMs));
+                    var backoff = BackoffCalculator.Compute(nextAttempt, TimeSpan.FromMilliseconds(_options.BackoffBaseMs), TimeSpan.FromMilliseconds(_options.BackoffCapMs));
+                    // A server-supplied Retry-After (429) can extend the wait beyond our
+                    // own backoff, but never past BackoffCapMs — an external response
+                    // header must never be able to stall an item indefinitely.
+                    var delay = outcome.RetryAfter is { } retryAfter && retryAfter > backoff
+                        ? TimeSpan.FromMilliseconds(Math.Min(retryAfter.TotalMilliseconds, _options.BackoffCapMs))
+                        : backoff;
                     _queue.RetryLater(meta.IngestKey, nextAttempt, DateTimeOffset.UtcNow.Add(delay));
                 }
                 break;
@@ -197,6 +268,13 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     {
         try
         {
+            // Runs unconditionally (even while unpaired) so failed/completed
+            // items never accumulate on disk forever regardless of pairing state.
+            _queue.PurgeExpired(
+                DateTimeOffset.UtcNow,
+                TimeSpan.FromDays(_options.FailedRetentionDays),
+                TimeSpan.FromDays(_options.CompletedRetentionDays));
+
             await HeartbeatTickAsync();
         }
         catch (Exception ex)
@@ -231,6 +309,8 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
             _authState.MarkInvalid();
         }
     }
+
+    public bool FeatureEnabled => _options.Enabled;
 
     public Task<ServiceStatusPayload> GetServiceStatusAsync(CancellationToken cancellationToken)
     {

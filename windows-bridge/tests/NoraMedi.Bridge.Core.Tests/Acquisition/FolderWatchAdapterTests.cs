@@ -94,6 +94,140 @@ public class FolderWatchAdapterTests : IDisposable
     }
 
     [Fact]
+    public void TickAll_HiddenFile_NeverRaisesFileAcquiredEvenAfterBecomingStable()
+    {
+        var binding = FolderBinding.Create("watch-1", _root, "device-1", "IO");
+        var adapter = new FolderWatchAdapter([binding], TimeSpan.FromMilliseconds(1));
+        var acquired = new List<AcquiredFile>();
+        adapter.FileAcquired += (_, file) => acquired.Add(file);
+
+        var path = Path.Combine(_root, "scan.jpg");
+        File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF]);
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.Hidden);
+
+        adapter.TickAll();
+        Thread.Sleep(10);
+        adapter.TickAll();
+
+        Assert.Empty(acquired);
+    }
+
+    [Fact]
+    public void TickAll_ExtensionMagicByteMismatch_IsRejectedNotEmitted()
+    {
+        var binding = FolderBinding.Create("watch-1", _root, "device-1", "IO");
+        var adapter = new FolderWatchAdapter([binding], TimeSpan.FromMilliseconds(1));
+        var acquired = new List<AcquiredFile>();
+        adapter.FileAcquired += (_, file) => acquired.Add(file);
+
+        // PNG magic bytes under a .jpg extension — extension/content mismatch.
+        var path = Path.Combine(_root, "scan.jpg");
+        File.WriteAllBytes(path, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+        adapter.TickAll();
+        Thread.Sleep(10);
+        adapter.TickAll();
+        Thread.Sleep(10);
+        adapter.TickAll();
+
+        Assert.Empty(acquired);
+    }
+
+    [Fact]
+    public void TickAll_FileExceedingMaxSize_IsNeverAcquired()
+    {
+        var binding = FolderBinding.Create("watch-1", _root, "device-1", "IO");
+        var adapter = new FolderWatchAdapter([binding], TimeSpan.FromMilliseconds(1), maxFileSizeBytes: 4);
+        var acquired = new List<AcquiredFile>();
+        adapter.FileAcquired += (_, file) => acquired.Add(file);
+
+        var path = Path.Combine(_root, "scan.jpg");
+        File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF, 0x01, 0x02, 0x03]); // 6 bytes > 4-byte cap
+
+        adapter.TickAll();
+        Thread.Sleep(10);
+        adapter.TickAll();
+
+        Assert.Empty(acquired);
+    }
+
+    [Fact]
+    public void TickAll_FileWithinMaxSize_IsAcquiredNormally()
+    {
+        var binding = FolderBinding.Create("watch-1", _root, "device-1", "IO");
+        var adapter = new FolderWatchAdapter([binding], TimeSpan.FromMilliseconds(1), maxFileSizeBytes: 1024);
+        var acquired = new List<AcquiredFile>();
+        adapter.FileAcquired += (_, file) => acquired.Add(file);
+
+        var path = Path.Combine(_root, "scan.jpg");
+        File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF]);
+
+        adapter.TickAll();
+        Thread.Sleep(10);
+        adapter.TickAll();
+
+        Assert.Single(acquired);
+    }
+
+    [Fact]
+    public void TickAll_LastWriteTimeChangesWithoutSizeChange_ResetsStabilityWindow()
+    {
+        var binding = FolderBinding.Create("watch-1", _root, "device-1", "IO");
+        var adapter = new FolderWatchAdapter([binding], TimeSpan.FromMilliseconds(30));
+        var acquired = new List<AcquiredFile>();
+        adapter.FileAcquired += (_, file) => acquired.Add(file);
+
+        var path = Path.Combine(_root, "scan.jpg");
+        var bytes = new byte[] { 0xFF, 0xD8, 0xFF, 0x01 };
+        File.WriteAllBytes(path, bytes);
+        adapter.TickAll();
+
+        // Same byte length, but the writer re-touched the file (e.g. rewrote in place) —
+        // last-write timestamp changing alone must reset the stability window.
+        Thread.Sleep(15);
+        File.WriteAllBytes(path, bytes);
+        adapter.TickAll();
+        Assert.Empty(acquired);
+
+        Thread.Sleep(40);
+        adapter.TickAll();
+        Assert.Single(acquired);
+    }
+
+    [Fact]
+    public void TickAll_ReparsePointFile_NeverRaisesFileAcquired()
+    {
+        var realPath = Path.Combine(_root, "real-scan.jpg");
+        File.WriteAllBytes(realPath, [0xFF, 0xD8, 0xFF]);
+        var linkPath = Path.Combine(_root, "scan.jpg");
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, realPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Creating a symlink requires either Administrator or Developer Mode
+            // enabled on the host — not guaranteed in every build environment.
+            // FileAttributes.ReparsePoint is still asserted directly below.
+            return;
+        }
+
+        Assert.True(new FileInfo(linkPath).Attributes.HasFlag(FileAttributes.ReparsePoint));
+
+        var binding = FolderBinding.Create("watch-1", _root, "device-1", "IO");
+        var adapter = new FolderWatchAdapter([binding], TimeSpan.FromMilliseconds(1));
+        var acquired = new List<AcquiredFile>();
+        adapter.FileAcquired += (_, file) => acquired.Add(file);
+
+        adapter.TickAll();
+        Thread.Sleep(10);
+        adapter.TickAll();
+
+        Assert.DoesNotContain(acquired, f => f.SourcePath.Equals(linkPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void TickAll_NeverModifiesOrRenamesSourceFile()
     {
         var binding = FolderBinding.Create("watch-1", _root, "device-1", "IO");

@@ -6,12 +6,13 @@ namespace NoraMedi.Bridge.Core.Tests.Security;
 public class DpapiCredentialStoreTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("nmb-cred-").FullName;
+    private static readonly string CurrentUserSid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
     private string CredentialPath => Path.Combine(_root, "credential.bin");
 
     [Fact]
     public void Save_ThenTryRead_RoundTripsPlaintext()
     {
-        var store = new DpapiCredentialStore(CredentialPath);
+        var store = new DpapiCredentialStore(CredentialPath, extraAccountSid: CurrentUserSid);
         store.Save("nmb_super_secret_token");
 
         Assert.Equal("nmb_super_secret_token", store.TryRead());
@@ -20,7 +21,7 @@ public class DpapiCredentialStoreTests : IDisposable
     [Fact]
     public void OnDiskBytes_AreNeverThePlaintextCredential()
     {
-        var store = new DpapiCredentialStore(CredentialPath);
+        var store = new DpapiCredentialStore(CredentialPath, extraAccountSid: CurrentUserSid);
         const string secret = "nmb_super_secret_token";
         store.Save(secret);
 
@@ -32,7 +33,7 @@ public class DpapiCredentialStoreTests : IDisposable
     [Fact]
     public void TryRead_MissingFile_ReturnsNullWithoutThrowing()
     {
-        var store = new DpapiCredentialStore(CredentialPath);
+        var store = new DpapiCredentialStore(CredentialPath, extraAccountSid: CurrentUserSid);
         Assert.Null(store.TryRead());
         Assert.False(store.Exists);
     }
@@ -40,7 +41,7 @@ public class DpapiCredentialStoreTests : IDisposable
     [Fact]
     public void TryRead_CorruptedBlob_ReturnsNullWithoutThrowing()
     {
-        var store = new DpapiCredentialStore(CredentialPath);
+        var store = new DpapiCredentialStore(CredentialPath, extraAccountSid: CurrentUserSid);
         store.Save("nmb_token");
         // Simulate corruption/tampering/revocation of the encrypted blob.
         var bytes = File.ReadAllBytes(CredentialPath);
@@ -53,7 +54,7 @@ public class DpapiCredentialStoreTests : IDisposable
     [Fact]
     public void Fingerprint_ChangesWhenCredentialRotates()
     {
-        var store = new DpapiCredentialStore(CredentialPath);
+        var store = new DpapiCredentialStore(CredentialPath, extraAccountSid: CurrentUserSid);
         store.Save("nmb_token_v1");
         var fingerprint1 = store.Fingerprint();
 
@@ -68,14 +69,14 @@ public class DpapiCredentialStoreTests : IDisposable
     [Fact]
     public void Fingerprint_MissingFile_ReturnsNull()
     {
-        var store = new DpapiCredentialStore(CredentialPath);
+        var store = new DpapiCredentialStore(CredentialPath, extraAccountSid: CurrentUserSid);
         Assert.Null(store.Fingerprint());
     }
 
     [Fact]
     public void Delete_RemovesCredentialFile()
     {
-        var store = new DpapiCredentialStore(CredentialPath);
+        var store = new DpapiCredentialStore(CredentialPath, extraAccountSid: CurrentUserSid);
         store.Save("nmb_token");
         Assert.True(store.Exists);
 
@@ -87,15 +88,12 @@ public class DpapiCredentialStoreTests : IDisposable
     [Fact]
     public void Entropy_MismatchedEntropy_FailsToDecrypt()
     {
-        var storeA = new DpapiCredentialStore(CredentialPath, "entropy-a"u8.ToArray());
+        var storeA = new DpapiCredentialStore(CredentialPath, "entropy-a"u8.ToArray(), CurrentUserSid);
         storeA.Save("nmb_token");
 
-        var storeB = new DpapiCredentialStore(CredentialPath, "entropy-b"u8.ToArray());
+        var storeB = new DpapiCredentialStore(CredentialPath, "entropy-b"u8.ToArray(), CurrentUserSid);
         Assert.Null(storeB.TryRead());
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
-    }
+    public void Dispose() => TestSupport.AclCleanup.UnlockAndDelete(_root);
 }

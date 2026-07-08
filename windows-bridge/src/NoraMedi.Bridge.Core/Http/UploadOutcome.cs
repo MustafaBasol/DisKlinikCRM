@@ -19,6 +19,7 @@ public sealed record UploadOutcome(
     string? StudyId = null,
     bool Duplicate = false,
     string? ErrorCategory = null,
-    bool NetworkError = false);
+    bool NetworkError = false,
+    TimeSpan? RetryAfter = null);
 
 public sealed record HeartbeatOutcome(bool Ok, int? StatusCode = null);

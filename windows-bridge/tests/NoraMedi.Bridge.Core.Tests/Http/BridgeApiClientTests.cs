@@ -175,6 +175,58 @@ public class BridgeApiClientTests
         Assert.Equal(50, result.MaxUploadSizeMb);
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.Conflict)]
+    [InlineData(HttpStatusCode.UnprocessableEntity)]
+    [InlineData(HttpStatusCode.Gone)]
+    public void ClassifyStatus_OtherClientErrors_ArePermanentNotEndlesslyRetried(HttpStatusCode status)
+    {
+        Assert.Equal(ResponseCategory.Permanent, BridgeApiClient.ClassifyStatus((int)status));
+    }
+
+    [Fact]
+    public async Task UploadStudyAsync_TooManyRequestsWithRetryAfterSeconds_IsHonored()
+    {
+        var handler = new FakeHttpMessageHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
+            return Task.FromResult(response);
+        });
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var outcome = await client.UploadStudyAsync("nmb_token", SampleItem(), [0xFF, 0xD8, 0xFF]);
+
+        Assert.Equal(ResponseCategory.Retryable, outcome.Category);
+        Assert.NotNull(outcome.RetryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(30), outcome.RetryAfter!.Value);
+    }
+
+    [Fact]
+    public async Task UploadStudyAsync_TooManyRequestsWithoutRetryAfter_FallsBackToNullRetryAfter()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.TooManyRequests);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var outcome = await client.UploadStudyAsync("nmb_token", SampleItem(), [0xFF, 0xD8, 0xFF]);
+
+        Assert.Equal(ResponseCategory.Retryable, outcome.Category);
+        Assert.Null(outcome.RetryAfter);
+    }
+
+    [Fact]
+    public async Task UploadStudyAsync_ServerError_IsRetryableWithoutRetryAfter()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.InternalServerError);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var outcome = await client.UploadStudyAsync("nmb_token", SampleItem(), [0xFF, 0xD8, 0xFF]);
+
+        Assert.Equal(ResponseCategory.Retryable, outcome.Category);
+        Assert.Null(outcome.RetryAfter);
+    }
+
     [Fact]
     public async Task BootstrapAsync_Unauthorized_ReturnsNull()
     {
