@@ -19,6 +19,7 @@ import { authorize } from '../middleware/auth.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import { normalizeRole } from '../utils/roles.js';
 import { getDateRange } from './organizationDashboard.js';
+import { overdueReceivablesAmount } from '../utils/overdueReceivables.js';
 
 const router = express.Router();
 
@@ -113,6 +114,7 @@ router.get(
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
+    const now = new Date();
 
     // ── Parallel data fetch ──────────────────────────────────────────────────
     try {
@@ -121,9 +123,8 @@ router.get(
         collectedInRangeAgg,
         outstandingAgg,
         cancelledAgg,
-        overdueInstallmentsAgg,
+        overdueReceivables,
         pendingInstallmentsCount,
-        overdueInstallmentsCount,
         earningsDueAgg,
         earningsPaidAgg,
         collectionsByMethod,
@@ -154,20 +155,13 @@ router.get(
           _sum: { amount: true },
         }),
 
-        // overdueAmount: sum of overdue installments
-        prisma.paymentPlanInstallment.aggregate({
-          where: { status: 'overdue', plan: { clinicId: { in: clinicIds } } },
-          _sum: { amount: true },
-        }),
+        // overdueReceivables: shared rule — pending/overdue installments past due
+        // (paymentId null) + standalone pending payments not linked to an installment
+        overdueReceivablesAmount(prisma, clinicIds, now),
 
         // pendingInstallments count
         prisma.paymentPlanInstallment.count({
           where: { status: 'pending', plan: { clinicId: { in: clinicIds } } },
-        }),
-
-        // overdueInstallments count
-        prisma.paymentPlanInstallment.count({
-          where: { status: 'overdue', plan: { clinicId: { in: clinicIds } } },
         }),
 
         // practitionerPayoutsDue: earnings pending/approved
@@ -224,7 +218,7 @@ router.get(
       // ── Branch breakdown ─────────────────────────────────────────────────
       const branchBreakdown = await Promise.all(
         clinicIds.map(async (cid) => {
-          const [collected, outstanding, overdueAmt, pendingCount] = await Promise.all([
+          const [collected, outstanding, branchOverdue, pendingCount] = await Promise.all([
             prisma.payment.aggregate({
               where: { clinicId: cid, paymentStatus: 'paid', paidAt: { gte: dateRange.from, lte: dateRange.to } },
               _sum: { amount: true },
@@ -233,10 +227,7 @@ router.get(
               where: { clinicId: cid, paymentStatus: { in: ['pending', 'partial'] } },
               _sum: { amount: true },
             }),
-            prisma.paymentPlanInstallment.aggregate({
-              where: { status: 'overdue', plan: { clinicId: cid } },
-              _sum: { amount: true },
-            }),
+            overdueReceivablesAmount(prisma, [cid], now),
             prisma.paymentPlanInstallment.count({
               where: { status: 'pending', plan: { clinicId: cid } },
             }),
@@ -246,20 +237,25 @@ router.get(
             clinicName: clinicMap.get(cid) ?? cid,
             collected: collected._sum.amount ?? 0,
             outstanding: outstanding._sum.amount ?? 0,
-            overdue: overdueAmt._sum.amount ?? 0,
+            overdue: branchOverdue.total,
             pendingInstallments: pendingCount,
           };
         }),
       );
 
       // ── Build response ───────────────────────────────────────────────────
+      // overdueAmount: total overdue receivables (installments + standalone payments).
+      // overdueInstallments: monetary total of overdue installments only (Σ amount) —
+      // the "Gecikmiş Taksit" card must show the amount owed, not a row count.
+      // overdueInstallmentsCount carries the row count for any consumer that needs it.
       const summary = {
         collectedToday: safeSum(collectedTodayAgg),
         collectedInRange: safeSum(collectedInRangeAgg),
         outstandingBalance: safeSum(outstandingAgg),
-        overdueAmount: overdueInstallmentsAgg._sum.amount ?? 0,
+        overdueAmount: overdueReceivables.total,
         pendingInstallments: pendingInstallmentsCount,
-        overdueInstallments: overdueInstallmentsCount,
+        overdueInstallments: overdueReceivables.installmentAmount,
+        overdueInstallmentsCount: overdueReceivables.installmentCount,
         cancelledPayments: safeSum(cancelledAgg),
         practitionerPayoutsDue: earningsDueAgg._sum.earningAmount ?? 0,
         practitionerPayoutsPaid: earningsPaidAgg._sum.earningAmount ?? 0,
@@ -317,6 +313,7 @@ const EMPTY_RESPONSE = {
     overdueAmount: 0,
     pendingInstallments: 0,
     overdueInstallments: 0,
+    overdueInstallmentsCount: 0,
     cancelledPayments: 0,
     practitionerPayoutsDue: 0,
     practitionerPayoutsPaid: 0,

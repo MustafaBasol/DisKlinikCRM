@@ -40,6 +40,7 @@ function section(title: string) {
 
 import { canViewFinanceDashboard } from '../utils/roles.js';
 import { getDateRange } from '../routes/organizationDashboard.js';
+import { overdueInstallmentWhere } from '../utils/overdueInstallments.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ tests.push(test('empty response has all required summary fields as zero', () => 
     overdueAmount: 0,
     pendingInstallments: 0,
     overdueInstallments: 0,
+    overdueInstallmentsCount: 0,
     cancelledPayments: 0,
     practitionerPayoutsDue: 0,
     practitionerPayoutsPaid: 0,
@@ -173,6 +175,7 @@ tests.push(test('empty response has all required summary fields as zero', () => 
     'overdueAmount',
     'pendingInstallments',
     'overdueInstallments',
+    'overdueInstallmentsCount',
     'cancelledPayments',
     'practitionerPayoutsDue',
     'practitionerPayoutsPaid',
@@ -180,6 +183,26 @@ tests.push(test('empty response has all required summary fields as zero', () => 
   for (const key of requiredKeys) {
     assert.equal(emptySummary[key], 0, `${key} should be 0`);
   }
+}));
+
+tests.push(test('overdueInstallments field represents the installment monetary total, not a row count', () => {
+  // ₺4,500 legacy status='overdue' installment + ₺1,500 standalone pending payment
+  const overdueReceivables = { installmentAmount: 4500, installmentCount: 1, paymentAmount: 1500, total: 6000 };
+  const summary = {
+    overdueAmount: overdueReceivables.total,
+    overdueInstallments: overdueReceivables.installmentAmount,
+    overdueInstallmentsCount: overdueReceivables.installmentCount,
+  };
+  assert.equal(summary.overdueInstallments, 4500, 'kart tutar göstermeli, satır sayısı değil');
+  assert.notEqual(summary.overdueInstallments, summary.overdueInstallmentsCount);
+  assert.equal(summary.overdueAmount, 6000);
+}));
+
+tests.push(test('overdueInstallmentWhere rule includes legacy overdue status and excludes paid installments', () => {
+  const where = overdueInstallmentWhere(new Date('2026-07-09'));
+  assert.deepEqual(where.status.in, ['pending', 'overdue']);
+  assert.equal(where.paymentId, null);
+  assert.ok(where.dueDate.lt instanceof Date);
 }));
 
 tests.push(test('collectedInRange does not include cancelled payments', () => {

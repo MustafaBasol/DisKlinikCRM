@@ -24,8 +24,10 @@ const PLAN_STATUS_STYLES: Record<string, string> = {
 
 const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'cheque', 'other'] as const;
 
+// Shared rule: an installment is overdue if it's flagged pending or the legacy
+// 'overdue' status and its due date has passed (see server/src/utils/overdueInstallments.ts).
 function isOverdue(dueDate: string, status: string) {
-  return status === 'pending' && new Date(dueDate) < new Date();
+  return (status === 'pending' || status === 'overdue') && new Date(dueDate) < new Date();
 }
 
 const PaymentPlans: React.FC = () => {
