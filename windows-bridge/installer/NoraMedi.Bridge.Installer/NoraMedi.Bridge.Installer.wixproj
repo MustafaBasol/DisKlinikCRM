@@ -1,0 +1,38 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputName>NoraMediBridge</OutputName>
+    <OutputType>Package</OutputType>
+    <Platform>x64</Platform>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <DefineConstants>PublishServiceDir=$(PublishServiceDir);PublishManagerDir=$(PublishManagerDir);ProductVersion=$(ProductVersion)</DefineConstants>
+    <SuppressPdbOutput>true</SuppressPdbOutput>
+    <IceValidationSuppressions>@(IceValidationSuppressions);ICE61</IceValidationSuppressions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" />
+    <PackageReference Include="WixToolset.Util.wixext" />
+  </ItemGroup>
+
+  <!--
+    Copilot review (PR #146): the build depends on external MSBuild
+    properties. If one is missing, empty, or points at the wrong output,
+    `wix build`'s file harvesting can fail in non-obvious ways or silently
+    package the wrong files. Fail fast, before compilation, with a message
+    that names exactly which property or file is the problem.
+  -->
+  <Target Name="ValidateInstallerBuildInputs" BeforeTargets="BeforeBuild;CoreCompile">
+    <Error Condition="'$(PublishServiceDir)' == ''" Text="PublishServiceDir is not set. Pass -p:PublishServiceDir=&lt;path to Service self-contained win-x64 publish output&gt;." />
+    <Error Condition="'$(PublishServiceDir)' != '' AND !Exists('$(PublishServiceDir)')" Text="PublishServiceDir '$(PublishServiceDir)' does not exist. Run 'dotnet publish' for NoraMedi.Bridge.Service first." />
+    <Error Condition="'$(PublishServiceDir)' != '' AND Exists('$(PublishServiceDir)') AND !Exists('$(PublishServiceDir)\NoraMediBridge.Service.exe')" Text="PublishServiceDir '$(PublishServiceDir)' does not contain NoraMediBridge.Service.exe. Verify the Service was published self-contained win-x64." />
+
+    <Error Condition="'$(PublishManagerDir)' == ''" Text="PublishManagerDir is not set. Pass -p:PublishManagerDir=&lt;path to Manager self-contained win-x64 publish output&gt;." />
+    <Error Condition="'$(PublishManagerDir)' != '' AND !Exists('$(PublishManagerDir)')" Text="PublishManagerDir '$(PublishManagerDir)' does not exist. Run 'dotnet publish' for NoraMedi.Bridge.Manager first." />
+    <Error Condition="'$(PublishManagerDir)' != '' AND Exists('$(PublishManagerDir)') AND !Exists('$(PublishManagerDir)\NoraMediBridge.Manager.exe')" Text="PublishManagerDir '$(PublishManagerDir)' does not contain NoraMediBridge.Manager.exe. Verify the Manager was published self-contained win-x64." />
+
+    <Error Condition="'$(ProductVersion)' == ''" Text="ProductVersion is not set. Pass -p:ProductVersion=&lt;Major.Minor.Build&gt;, e.g. -p:ProductVersion=0.4.0." />
+    <Error Condition="'$(ProductVersion)' != '' AND !$([System.Text.RegularExpressions.Regex]::IsMatch('$(ProductVersion)', '^\d{1,3}\.\d{1,3}\.\d{1,3}$'))" Text="ProductVersion '$(ProductVersion)' is not a valid MSI version. Expected Major.Minor.Build with each field 0-255, e.g. 0.4.0." />
+  </Target>
+
+</Project>

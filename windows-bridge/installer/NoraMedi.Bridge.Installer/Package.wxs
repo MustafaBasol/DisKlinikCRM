@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NoraMedi Bridge — MSI package (PR 4/7).
+
+  Ships the two self-contained win-x64 publish outputs (Service + Manager)
+  produced by `dotnet publish` — no .NET/Node/NSSM/PowerShell runtime is
+  required on the clinic machine. This MSI is normally not run directly;
+  it is chained by the Burn bundle (Bundle.wxs) that produces the single
+  NoraMediBridgeSetup.exe deliverable, which is what requests UAC.
+
+  ProgramData (credentials, folder bindings, queue, logs) is deliberately
+  NEVER a WiX-owned component: the Service itself creates and ACLs
+  %ProgramData%\NoraMediBridge on first start (see
+  NoraMedi.Bridge.Core.Runtime.BridgeOrchestrator ->
+  Security.ProgramDataAcl.ProtectDirectory). Because MSI only ever removes
+  what it installed, that directory — and everything under it — survives
+  upgrade, repair, and uninstall untouched. Full local-data removal is an
+  explicit opt-in (see RemoveLocalDataComponent below), never the
+  default uninstall behavior.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="NoraMedi Bridge"
+           Manufacturer="NoraMedi"
+           Version="$(ProductVersion)"
+           UpgradeCode="12BB6A03-A76B-40B2-828E-7DAF6FB4A61E"
+           Language="1033"
+           Codepage="UTF-8"
+           Scope="perMachine"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="NoraMedi Bridge — self-service imaging bridge installer" Manufacturer="NoraMedi" />
+
+    <!--
+      Same-version reinstalls are handled as a Repair (msiexec /fa), not a
+      major upgrade — MajorUpgrade below only fires for a version bump.
+      AllowDowngrades is intentionally "no": downgrading over a newer
+      installation is refused with a clear message rather than silently
+      corrupting state.
+
+      Schedule is deliberately the WiX default (afterInstallExecute), NOT
+      afterInstallInitialize: testing an actual upgrade on real hardware
+      (0.4.0 -> 0.4.1) showed the early schedule left NoraMediBridge
+      completely unregistered afterward — with RemoveExistingProducts run
+      before the new product's InstallServices, MSI's component-sharing
+      logic (same fixed Component Guid, same Service Name, across product
+      versions) computed Action=Null for ServiceInstallComponent in the
+      new product's session, so InstallServices had nothing to do. Late
+      scheduling removes the old product only after the new one is fully
+      installed and running, which is the documented-safe choice for
+      Windows Service components specifically.
+    -->
+    <MajorUpgrade
+      AllowSameVersionUpgrades="no"
+      AllowDowngrades="no"
+      DowngradeErrorMessage="A newer version of NoraMedi Bridge is already installed. Uninstall it first if you need to downgrade." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!--
+      Real-hardware install on a supported, current Windows machine failed
+      with error 1603 / MSI event 10005 against `VersionNT >= 1000`: Windows
+      Installer does not reliably surface Windows 10/11 as numeric VersionNT
+      1000 in every servicing/branch configuration, so that condition is not
+      a trustworthy OS gate. Fixed by reading the actual OS build number
+      directly out of the registry (the same value Settings > About shows)
+      instead of relying on VersionNT/VersionNT64's OS-version encoding:
+      HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentBuildNumber,
+      64-bit view, required to resolve to a number >= 10240 (Windows 10
+      RTM's build number; Windows Server 2016 is 14393, Windows 11 is
+      22000+). Windows 8.1 (build 9600) is correctly rejected;
+      "Installed OR ..." on both conditions keeps repair/upgrade/uninstall
+      working on an already-installed machine even if a future Windows
+      release changes this registry value's shape.
+    -->
+    <Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+      <RegistrySearch Id="WindowsBuildNumberSearch"
+                       Root="HKLM"
+                       Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                       Name="CurrentBuildNumber"
+                       Type="raw"
+                       Bitness="always64" />
+    </Property>
+
+    <Launch Condition="Installed OR VersionNT64" Message="NoraMedi Bridge requires a 64-bit edition of Windows." />
+    <Launch Condition="Installed OR (WINDOWSBUILDNUMBER AND WINDOWSBUILDNUMBER &gt;= 10240)" Message="NoraMedi Bridge requires Windows 10 (build 10240) / Windows Server 2016 or later." />
+    <Launch Condition="REMOVE_LOCAL_DATA &lt;&gt; 1 OR Installed" Message="REMOVE_LOCAL_DATA is only valid on uninstall." />
+
+    <Property Id="REMOVE_LOCAL_DATA" Value="0" Secure="yes" />
+    <Property Id="ARPPRODUCTICON" Value="NoraMediIcon" />
+    <Property Id="ARPHELPLINK" Value="https://noramedi.com" />
+    <Property Id="ARPNOREPAIR" Value="0" />
+    <!-- ARPNOMODIFY is set by WixUI_Minimal itself (no Modify dialog in this UI). -->
+    <Icon Id="NoraMediIcon" SourceFile="$(PublishManagerDir)\NoraMediBridge.Manager.exe" />
+
+    <!--
+      The LocalSystem service binaries must always land under
+      %ProgramFiles%\NoraMedi\Bridge — a directory picker would let a
+      non-admin-writable location be chosen for a LocalSystem service,
+      which is a privilege-escalation risk (Copilot review, PR #146).
+      WixUI_Minimal keeps license/progress/finish (including the
+      "Launch Manager after setup" checkbox hook) with no directory
+      selection dialog; INSTALLFOLDER is fixed by the StandardDirectory
+      tree below and is never exposed as a settable property.
+    -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <!-- "Launch Manager after setup" checkbox on the exit dialog (standard WixUI_Minimal hook). -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch NoraMedi Bridge Manager" />
+    <Property Id="WixShellExecTarget" Value="[#NoraMediBridge.Manager.exe]" />
+    <CustomAction Id="LaunchManagerAfterSetup"
+                  BinaryRef="Wix4UtilCA_X64"
+                  DllEntry="WixShellExec"
+                  Impersonate="yes" />
+
+    <!--
+      Desktop shortcut is on by default and can be skipped with a silent
+      property (msiexec ... INSTALLDESKTOPSHORTCUT=0) — it isn't a separate
+      Feature because the shortcut's Target must reference
+      ManagerExeComponent's File row, and ICE69 forbids a Shortcut in one
+      Feature pointing at a File owned by a different Feature (even when,
+      as here, that other Feature is always-installed/AllowAbsent="no").
+
+      Persistence across repair/upgrade (Copilot review, PR #146): a plain
+      `Property Value="1" Secure="yes"` resets to 1 on every maintenance
+      run unless the caller repeats INSTALLDESKTOPSHORTCUT=0 on the command
+      line, silently re-adding a shortcut the user opted out of. Instead
+      the property is left unset here and given a RegistrySearch child that
+      reads the install-time choice recorded by
+      StartMenuShortcutComponent's DesktopShortcutChoice value (below) —
+      AppSearch (which runs RegistrySearch) never overwrites a property
+      that already has a value, so an explicit command-line
+      INSTALLDESKTOPSHORTCUT=0/1 always wins over the persisted registry
+      value, which in turn always wins over the SetProperty fallback below,
+      which only fires ("1") for a genuinely first-ever install where
+      neither the command line nor the registry has an answer yet.
+    -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Secure="yes">
+      <RegistrySearch Id="DesktopShortcutChoiceSearch"
+                       Root="HKCU"
+                       Key="Software\NoraMedi\Bridge"
+                       Name="DesktopShortcutChoice"
+                       Type="raw" />
+    </Property>
+    <SetProperty Id="INSTALLDESKTOPSHORTCUT" Value="1" Before="CostFinalize" Condition="NOT INSTALLDESKTOPSHORTCUT" Sequence="both" />
+
+    <ui:WixUI Id="WixUI_Minimal" />
+
+    <UI>
+      <!-- Fires only when the user leaves the "Launch Manager" checkbox checked (default WixUI_Minimal wiring, restated explicitly for clarity). -->
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchManagerAfterSetup" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="NoraMediCompanyFolder" Name="NoraMedi">
+        <Directory Id="INSTALLFOLDER" Name="Bridge">
+          <!--
+            Service and Manager are self-contained publishes that each carry
+            their own copy of the shared .NET runtime and NoraMedi.Bridge.Core,
+            so many filenames (and, for Manager, WPF's 13 satellite-resource
+            folders) are byte-identical across the two trees. Separate
+            subdirectories keep every harvested File/Component identifier
+            unique — mounting both trees at the same directory produces
+            colliding auto-generated ids.
+          -->
+          <Directory Id="SERVICEFOLDER" Name="Service" />
+          <Directory Id="MANAGERFOLDER" Name="Manager" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="StartMenuNoraMediFolder" Name="NoraMedi Bridge" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="MainFeature" Title="NoraMedi Bridge" Level="1" AllowAbsent="no" AllowAdvertise="no">
+      <ComponentGroupRef Id="ServiceFiles" />
+      <ComponentGroupRef Id="ManagerFiles" />
+      <ComponentRef Id="ServiceInstallComponent" />
+      <ComponentRef Id="ManagerExeComponent" />
+      <ComponentRef Id="StartMenuShortcutComponent" />
+      <ComponentRef Id="DesktopShortcutComponent" />
+      <ComponentRef Id="RemoveLocalDataComponent" />
+    </Feature>
+
+    <!--
+      Service files (self-contained win-x64 publish output; no external
+      .NET runtime needed). NoraMediBridge.Service.exe itself is excluded
+      here and declared explicitly below as ServiceInstallComponent's
+      KeyPath, so ServiceInstall/ServiceControl/the delayed-autostart
+      registry value travel with the exact same File row the service is
+      registered against.
+    -->
+    <ComponentGroup Id="ServiceFiles" Directory="SERVICEFOLDER">
+      <Files Include="$(PublishServiceDir)\**">
+        <Exclude Files="$(PublishServiceDir)\NoraMediBridge.Service.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <!--
+      Manager files (self-contained win-x64 publish output).
+      NoraMediBridge.Manager.exe is excluded here and declared explicitly
+      as ManagerExeComponent's KeyPath so the Start Menu/Desktop shortcuts
+      and the "Launch Manager after setup" action have a stable File id
+      ([#NoraMediBridge.Manager.exe]) to target — harvested Files ids are
+      opaque generated hashes, not usable from a Shortcut/CustomAction.
+    -->
+    <ComponentGroup Id="ManagerFiles" Directory="MANAGERFOLDER">
+      <Files Include="$(PublishManagerDir)\**">
+        <Exclude Files="$(PublishManagerDir)\NoraMediBridge.Manager.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="ManagerExeComponent" Directory="MANAGERFOLDER" Guid="5B6C3F7B-5EAF-416D-AD99-AE0F0D2F8A55">
+      <File Id="NoraMediBridge.Manager.exe" Source="$(PublishManagerDir)\NoraMediBridge.Manager.exe" KeyPath="yes" />
+    </Component>
+
+    <!--
+      Windows Service registration: LocalSystem, automatic-delayed start,
+      started at the end of install (not on repair-without-change and not
+      before rollback can still cleanly undo file placement). Stopped
+      before file replacement on both upgrade and uninstall so binaries are
+      never overwritten while the process has them open, and restarted
+      afterward on a repair/upgrade (Start="install" — re-evaluated by the
+      InstallServices standard action after every reinstall, not just a
+      first-time install).
+    -->
+    <Component Id="ServiceInstallComponent" Directory="SERVICEFOLDER" Guid="1B2D9B7C-9C3E-4C7C-8B0A-2E7B7B6E9A11">
+      <File Id="NoraMediBridge.Service.exe" Source="$(PublishServiceDir)\NoraMediBridge.Service.exe" KeyPath="yes" />
+      <ServiceInstall Id="NoraMediBridgeServiceInstall"
+                       Name="NoraMediBridge"
+                       DisplayName="NoraMedi Bridge"
+                       Description="Uploads clinic imaging files acquired from watched folders to NoraMedi. Disabled until paired from the NoraMedi Bridge Manager."
+                       Start="auto"
+                       Type="ownProcess"
+                       ErrorControl="normal"
+                       Account="LocalSystem" />
+      <!--
+        Windows Installer's ServiceInstall table has no native "delayed
+        auto-start" bit (only StartType=auto/demand/disabled). The
+        documented workaround (used by WiX itself pre-util:ServiceConfig
+        removal) is this registry value, which is exactly what
+        `sc config NoraMediBridge start=delayed-auto` writes under the
+        hood.
+      -->
+      <RegistryValue Root="HKLM"
+                      Key="SYSTEM\CurrentControlSet\Services\NoraMediBridge"
+                      Name="DelayedAutostart"
+                      Type="integer"
+                      Value="1" />
+      <ServiceControl Id="NoraMediBridgeServiceControl"
+                       Name="NoraMediBridge"
+                       Start="install"
+                       Stop="both"
+                       Remove="uninstall"
+                       Wait="yes" />
+    </Component>
+
+    <!--
+      Start Menu/Desktop are user-profile-resolving directories even in a
+      perMachine install (ALLUSERS governs which physical folder they
+      resolve to, but MSI's own validation (ICE38/43/57) still requires a
+      non-advertised shortcut's component KeyPath to be an HKCU registry
+      value, never a file or an HKLM value) — this is standard WiX
+      authoring for per-machine Start Menu/Desktop shortcuts, not a
+      per-user data leak: nothing else in this component is user-specific.
+    -->
+    <Component Id="StartMenuShortcutComponent" Directory="StartMenuNoraMediFolder" Guid="2E6F0C6E-2B7C-4E4A-9A66-7B7E7A9D5A22">
+      <Shortcut Id="StartMenuManagerShortcut"
+                Name="NoraMedi Bridge Manager"
+                Description="Manage the NoraMedi imaging bridge"
+                Target="[#NoraMediBridge.Manager.exe]"
+                WorkingDirectory="MANAGERFOLDER" />
+      <RemoveFolder Id="RemoveStartMenuNoraMediFolder" Directory="StartMenuNoraMediFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\NoraMedi\Bridge" Name="StartMenuShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
+      <!--
+        Always-installed component (Start Menu is not conditional), so this
+        row is rewritten with the *current* session's resolved
+        INSTALLDESKTOPSHORTCUT value on every install AND repair/
+        maintenance run — this is what INSTALLDESKTOPSHORTCUT's own
+        RegistrySearch (see the Property declaration above) reads back on
+        the next repair/upgrade to restore the user's original opt-out/
+        opt-in choice. Recorded unconditionally, unlike
+        DesktopShortcutInstalled on DesktopShortcutComponent below, precisely
+        because it must still be readable when the choice was "off".
+      -->
+      <RegistryValue Root="HKCU" Key="Software\NoraMedi\Bridge" Name="DesktopShortcutChoice" Type="integer" Value="[INSTALLDESKTOPSHORTCUT]" />
+    </Component>
+
+    <Component Id="DesktopShortcutComponent" Directory="DesktopFolder" Guid="3F4A1D5F-3C8D-4F5B-8B77-8C8F8B0E6A33" Condition="INSTALLDESKTOPSHORTCUT = 1">
+      <Shortcut Id="DesktopManagerShortcut"
+                Name="NoraMedi Bridge Manager"
+                Description="Manage the NoraMedi imaging bridge"
+                Target="[#NoraMediBridge.Manager.exe]"
+                WorkingDirectory="MANAGERFOLDER" />
+      <RegistryValue Root="HKCU" Key="Software\NoraMedi\Bridge" Name="DesktopShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!--
+      Explicit opt-in full local-data removal. Disabled by default
+      (REMOVE_LOCAL_DATA=0) — a normal `msiexec /x` or Bundle-driven
+      uninstall never touches %ProgramData%\NoraMediBridge. An operator who
+      wants a truly clean machine (decommissioning, wipe-and-reissue) runs:
+        msiexec /x NoraMediBridge.msi REMOVE_LOCAL_DATA=1 /quiet
+      (or the Bundle equivalent documented in docs/installer.md).
+    -->
+    <Component Id="RemoveLocalDataComponent" Directory="INSTALLFOLDER" Guid="4A5B2E6A-4D9E-405C-9C88-9D9F9C1F7A44">
+      <RegistryValue Root="HKLM" Key="Software\NoraMedi\Bridge" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+      <util:RemoveFolderEx On="uninstall" Property="PROGRAMDATA_BRIDGE_FOLDER" Condition="REMOVE_LOCAL_DATA=1" />
+    </Component>
+
+    <!--
+      util:RemoveFolderEx's own immediate action (Wix4RemoveFoldersEx_X64,
+      confirmed via the built MSI's InstallExecuteSequence table) is
+      scheduled at sequence 799 — before CostInitialize/CostFinalize, not
+      after. Two earlier attempts (Before="InstallFinalize", then
+      Before="CostFinalize") both left this property unset by the time
+      RemoveFolderEx read it, so REMOVE_LOCAL_DATA=1 silently removed
+      nothing; verified end to end on real hardware only after pinning
+      this ahead of the actual action name.
+    -->
+    <SetProperty Id="PROGRAMDATA_BRIDGE_FOLDER" Value="[CommonAppDataFolder]NoraMediBridge" Before="Wix4RemoveFoldersEx_X64" Sequence="execute" Condition="REMOVE_LOCAL_DATA=1" />
+
+  </Package>
+</Wix>

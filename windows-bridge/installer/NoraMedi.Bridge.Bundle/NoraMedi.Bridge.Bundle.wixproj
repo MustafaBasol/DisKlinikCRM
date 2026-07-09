@@ -1,0 +1,32 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputName>NoraMediBridgeSetup</OutputName>
+    <OutputType>Bundle</OutputType>
+    <Platform>x64</Platform>
+    <DefineConstants>MsiSourceFile=$(MsiSourceFile);ProductVersion=$(ProductVersion)</DefineConstants>
+    <SuppressPdbOutput>true</SuppressPdbOutput>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" />
+    <PackageReference Include="WixToolset.BootstrapperApplications.wixext" />
+  </ItemGroup>
+
+  <!--
+    Copilot review (PR #146): the bundle build depends on external MSBuild
+    properties. If one is missing or points at the wrong MSI, Burn can
+    chain a stale/wrong package into NoraMediBridgeSetup.exe with no build
+    error. Fail fast with a message naming exactly which property or file
+    is the problem.
+  -->
+  <Target Name="ValidateBundleBuildInputs" BeforeTargets="BeforeBuild;CoreCompile">
+    <Error Condition="'$(MsiSourceFile)' == ''" Text="MsiSourceFile is not set. Pass -p:MsiSourceFile=&lt;path to the built NoraMediBridge.msi&gt;." />
+    <Error Condition="'$(MsiSourceFile)' != '' AND !Exists('$(MsiSourceFile)')" Text="MsiSourceFile '$(MsiSourceFile)' does not exist. Build NoraMedi.Bridge.Installer first." />
+    <Error Condition="'$(MsiSourceFile)' != '' AND !$([System.String]::new('$(MsiSourceFile)').ToLowerInvariant().EndsWith('.msi'))" Text="MsiSourceFile '$(MsiSourceFile)' does not point at an .msi file." />
+
+    <Error Condition="'$(ProductVersion)' == ''" Text="ProductVersion is not set. Pass -p:ProductVersion=&lt;Major.Minor.Build&gt;, e.g. -p:ProductVersion=0.4.0. It must match the MSI build's ProductVersion." />
+    <Error Condition="'$(ProductVersion)' != '' AND !$([System.Text.RegularExpressions.Regex]::IsMatch('$(ProductVersion)', '^\d{1,3}\.\d{1,3}\.\d{1,3}$'))" Text="ProductVersion '$(ProductVersion)' is not a valid MSI version. Expected Major.Minor.Build with each field 0-255, e.g. 0.4.0." />
+  </Target>
+
+</Project>

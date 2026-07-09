@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NoraMedi Bridge — Burn bundle (PR 4/7).
+
+  Wraps NoraMedi.Bridge.Installer's MSI into the single deliverable the
+  spec asks for: NoraMediBridgeSetup.exe. This is what a clinic user
+  actually runs — it is what requests UAC exactly once (the chained MSI is
+  invoked elevated by Burn, never separately), shows a normal
+  license/progress/finish UI, and drives repair/upgrade/uninstall through
+  the same engine that manages Add/Remove Programs.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+
+  <!-- No IconSourceFile: Bundle requires a real .ico file (unlike the MSI's Icon table, which can extract from an .exe); we don't have one for this pilot build, so the default WiX bootstrapper icon is used. -->
+  <Bundle Name="NoraMedi Bridge"
+          Manufacturer="NoraMedi"
+          Version="$(ProductVersion)"
+          UpgradeCode="7C3D8E1A-9A2A-4F5D-9C41-2F3E1B7C6D42">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        LicenseFile="..\NoraMedi.Bridge.Installer\License.rtf"
+        Theme="rtfLicense"
+        SuppressOptionsUI="yes" />
+    </BootstrapperApplication>
+
+    <!--
+      Bundle-level pass-throughs for the MSI's own opt-in properties, so
+      the single documented silent command line
+      (NoraMediBridgeSetup.exe /quiet REMOVE_LOCAL_DATA=1) works without
+      the caller needing to know an MSI is chained underneath at all.
+    -->
+    <Variable Name="REMOVE_LOCAL_DATA" Type="numeric" Value="0" bal:Overridable="yes" />
+    <Variable Name="INSTALLDESKTOPSHORTCUT" Type="numeric" Value="1" bal:Overridable="yes" />
+
+    <!--
+      Not signed in this PR (see docs/installer.md — Authenticode signing
+      is deliberately deferred, no production credentials exist yet), so a
+      SmartScreen/UAC prompt naming an unverified publisher is expected on
+      a clean machine. This is documented, not hidden.
+    -->
+    <Chain>
+      <MsiPackage Id="NoraMediBridgeMsi" SourceFile="$(MsiSourceFile)" Vital="yes">
+        <MsiProperty Name="REMOVE_LOCAL_DATA" Value="[REMOVE_LOCAL_DATA]" />
+        <MsiProperty Name="INSTALLDESKTOPSHORTCUT" Value="[INSTALLDESKTOPSHORTCUT]" />
+      </MsiPackage>
+    </Chain>
+
+  </Bundle>
+</Wix>

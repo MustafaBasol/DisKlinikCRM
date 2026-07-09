@@ -1,0 +1,8 @@
+<Project>
+  <!--
+    Intentionally empty and non-importing: stops MSBuild's upward search
+    before it reaches ..\Directory.Build.props, which sets C#-only
+    properties (TargetFramework net10.0-windows, Nullable, analyzers) that
+    do not apply to the WiX Toolset SDK projects under this folder.
+  -->
+</Project>
