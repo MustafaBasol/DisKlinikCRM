@@ -24,6 +24,7 @@ import {
 import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { noShowFollowUpDateRange } from '../utils/noShowFollowUp.js';
 
 const router = express.Router();
 
@@ -653,10 +654,9 @@ function buildDateFilter(range?: string, from?: string, to?: string): Record<str
     }
     case 'last_30_days':
     default: {
-      const start = new Date(now);
-      start.setDate(now.getDate() - 30);
-      start.setHours(0, 0, 0, 0);
-      return { gte: start, lte: now };
+      // Aynı 30 günlük pencere, dashboard'daki "Aranacak Randevular" kartıyla
+      // (countUnresolvedNoShows) paylaşılır — bkz. utils/noShowFollowUp.ts.
+      return noShowFollowUpDateRange(now);
     }
   }
 }

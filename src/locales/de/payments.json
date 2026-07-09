@@ -167,7 +167,9 @@
       "overdueInstallments": "Überfällige Raten"
     },
     "filters": {
-      "allStatuses": "Alle Status"
+      "allStatuses": "Alle Status",
+      "overdueOnlyActive": "Es werden nur Pläne mit überfälligen Raten angezeigt",
+      "clear": "Filter zurücksetzen"
     },
     "planStatus": {
       "active": "Aktiv",

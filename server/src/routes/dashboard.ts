@@ -3,6 +3,8 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { validateAndGetScope, toClinicOnlyScope } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { countUnresolvedNoShows } from '../utils/noShowFollowUp.js';
+import { overdueInstallmentWhere } from '../utils/overdueInstallments.js';
 
 const router = express.Router();
 
@@ -64,12 +66,10 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
       newPatientsMonth: prisma.patient.count({
         where: { ...clinicWhere, createdAt: { gte: firstDayOfMonth }, deletedAt: null },
       }),
-      noShowsMonth: prisma.appointment.count({
-        where: {
-          ...clinicIdWhere, status: 'no_show', startTime: { gte: firstDayOfMonth },
-          ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
-        },
-      }),
+      // NOT: alan adı "noShowsMonth" ama artık "bu ay" değil — No-show Takibi
+      // sayfasının varsayılan görünümüyle (unresolved, son 30 gün) birebir
+      // eşleşsin diye paylaşılan countUnresolvedNoShows() kullanılıyor.
+      noShowsMonth: countUnresolvedNoShows(clinicIdWhere, normalizedRole === 'DENTIST' ? userId : undefined),
       pendingTasks: prisma.task.count({
         where: {
           ...clinicIdWhere, status: { in: ['open', 'in_progress'] },
@@ -101,6 +101,12 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
       }),
       pendingPayments: prisma.payment.aggregate({
         where: { ...clinicIdWhere, paymentStatus: 'pending' },
+        _sum: { amount: true },
+      }),
+      // "Gecikmiş Tahsilatlar" kartı: yalnızca vadesi geçmiş, ödenmemiş taksitlerin
+      // toplamı — /payment-plans?overdueOnly=true sayfasıyla aynı tanımı kullanır.
+      overdueInstallments: prisma.paymentPlanInstallment.aggregate({
+        where: overdueInstallmentWhere(clinicIdWhere),
         _sum: { amount: true },
       }),
       preparedMessagesWeek: prisma.sentMessage.count({
@@ -258,6 +264,7 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         acceptedValue: stats.treatmentValues?._sum?.acceptedAmount ?? 0,
         monthlyRevenue: stats.monthlyRevenue?._sum?.amount ?? 0,
         pendingAmount: stats.pendingPayments?._sum?.amount ?? 0,
+        overdueAmount: stats.overdueInstallments?._sum?.amount ?? 0,
         preparedMessages: stats.preparedMessagesWeek ?? 0,
         pendingAppointmentRequests: stats.pendingAppointmentRequests ?? 0,
       },
@@ -291,6 +298,7 @@ export function buildSafeStats(raw: {
   treatmentValues?: { _sum?: { estimatedAmount?: number | null; acceptedAmount?: number | null } } | null;
   monthlyRevenue?: { _sum?: { amount?: number | null } } | null;
   pendingPayments?: { _sum?: { amount?: number | null } } | null;
+  overdueInstallments?: { _sum?: { amount?: number | null } } | null;
   preparedMessagesWeek?: number | null;
   pendingAppointmentRequests?: number | null;
 }) {
@@ -306,6 +314,7 @@ export function buildSafeStats(raw: {
     acceptedValue: raw.treatmentValues?._sum?.acceptedAmount ?? 0,
     monthlyRevenue: raw.monthlyRevenue?._sum?.amount ?? 0,
     pendingAmount: raw.pendingPayments?._sum?.amount ?? 0,
+    overdueAmount: raw.overdueInstallments?._sum?.amount ?? 0,
     preparedMessages: raw.preparedMessagesWeek ?? 0,
     pendingAppointmentRequests: raw.pendingAppointmentRequests ?? 0,
   };

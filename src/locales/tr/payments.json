@@ -167,7 +167,9 @@
       "overdueInstallments": "Gecikmiş Taksit"
     },
     "filters": {
-      "allStatuses": "Tüm Durumlar"
+      "allStatuses": "Tüm Durumlar",
+      "overdueOnlyActive": "Yalnızca gecikmiş taksidi olan planlar gösteriliyor",
+      "clear": "Filtreyi temizle"
     },
     "planStatus": {
       "active": "Aktif",

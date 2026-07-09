@@ -5,6 +5,7 @@
   "newPatients": "New Patients (30d)",
   "monthlyRevenue": "Revenue This Month",
   "pendingCollections": "Pending Collections",
+  "overdueCollections": "Overdue Collections",
   "todayAgenda": "Today's Agenda",
   "activityFeed": "Recent Activity",
   "viewFullLogs": "View full activity logs",
