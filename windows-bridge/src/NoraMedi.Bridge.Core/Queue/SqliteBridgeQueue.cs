@@ -10,10 +10,12 @@ namespace NoraMedi.Bridge.Core.Queue;
 /// directory (one subfolder per ingestKey, ACL-protected by the caller —
 /// see Security.ProgramDataAcl); item metadata and state machine live in a
 /// SQLite database in the same root. The pairing of "file on disk" +
-/// "row in the database" is made crash-safe by writing the file to a
-/// `.staging-&lt;ingestKey&gt;` directory first and only recording the DB row
-/// pointing at the final path afterward — <see cref="RecoverOnStartup"/>
-/// reconciles any inconsistency left by a mid-operation crash, and NEVER
+/// "row in the database" is made crash-safe by writing the file into a
+/// `.staging-&lt;ingestKey&gt;` directory first, then recording the DB row
+/// pointing at the final (not-yet-existing) path, and only then moving the
+/// staging directory into place at that final path — <see cref="RecoverOnStartup"/>
+/// reconciles the window between the DB insert and the directory move (and any
+/// staging directory left behind by a crash before the insert), and NEVER
 /// silently deletes an acquired image.
 /// </summary>
 public sealed class SqliteBridgeQueue : IDisposable

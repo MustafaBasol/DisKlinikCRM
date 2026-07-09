@@ -224,6 +224,36 @@ public class BridgeOrchestratorTests : IDisposable
     }
 
     [Fact]
+    public async Task TestConnection_WhileDisabled_ReturnsDisabledResponseAndMakesNoHttpRequest()
+    {
+        var handler = new ScriptedHttpMessageHandler().Enqueue(
+            "/bridge/bootstrap", HttpStatusCode.OK, """{"ok":true}""");
+        var orchestrator = NewOrchestrator(handler, enabled: false);
+
+        var result = await orchestrator.TestConnectionAsync(default);
+
+        Assert.False(result.Reachable);
+        Assert.Empty(handler.RequestedPaths);
+    }
+
+    [Fact]
+    public async Task ProvisionWithPairingCode_WhileDisabled_ReturnsDisabledResponseAndMakesNoHttpRequest()
+    {
+        var handler = new ScriptedHttpMessageHandler().Enqueue(
+            "/bridge/pair", HttpStatusCode.Created,
+            """{"bridgeCredential":"nmb_test_token","bridgeAgentId":"agent-1","clinicName":"Demo Clinic","bindings":[],"serverTime":"2026-07-08T00:00:00.000Z"}""");
+        var orchestrator = NewOrchestrator(handler, enabled: false);
+
+        var response = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+
+        Assert.False(response.Ok);
+        Assert.Null(response.BridgeAgentId);
+        Assert.Empty(handler.RequestedPaths);
+        var status = await orchestrator.GetServiceStatusAsync(default);
+        Assert.False(status.Paired);
+    }
+
+    [Fact]
     public async Task Construction_LocksDownProgramDataRoot_BeforeAnyFileIsWritten()
     {
         var handler = new ScriptedHttpMessageHandler().Enqueue(

@@ -375,6 +375,11 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
 
     public async Task<TestConnectionResponse> TestConnectionAsync(CancellationToken cancellationToken)
     {
+        if (!_options.Enabled)
+        {
+            return new TestConnectionResponse(false, null, "Bridge self-service is disabled.");
+        }
+
         var credential = _authState.TryGetCredential();
         if (credential is null)
         {
@@ -433,6 +438,11 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
 
     public async Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken)
     {
+        if (!_options.Enabled)
+        {
+            return new ProvisionWithPairingCodeResponse(false, null, null, null, "Bridge self-service is disabled.");
+        }
+
         var pairRequest = new PairRequest(
             Code: request.PairingCode,
             InstallationId: _installationId,
