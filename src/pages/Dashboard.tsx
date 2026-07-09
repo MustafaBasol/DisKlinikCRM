@@ -402,15 +402,6 @@ const Dashboard: React.FC = () => {
       trendType: "warning",
       link: '/payment-plans?overdueOnly=true',
     },
-    {
-      label: t('dashboard:overdueCollections'),
-      value: formatCurrency(data?.stats?.overdueAmount || 0),
-      icon: <AlertCircle size={24} />,
-      color: "bg-red-500",
-      trend: t('dashboard:stats.actionRequired'),
-      trendType: "warning",
-      link: '/payment-plans?overdueOnly=true',
-    },
   ];
 
   // Fixed operational cards shown to the right of the "Unpaid Balances" alert —

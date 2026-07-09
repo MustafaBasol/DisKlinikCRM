@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CreditCard, Plus, Loader2, CheckCircle2, Clock, AlertCircle,
   ChevronDown, ChevronRight, XCircle, Search, Calendar, X, ArrowLeft, Receipt,
@@ -57,6 +57,7 @@ function isOverdue(dueDate: string, status: string, paymentId?: string | null) {
 
 const PaymentPlans: React.FC = () => {
   const { t } = useTranslation(['payments', 'common']);
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { defaultCurrency, formatCurrency, formatDate } = useClinicPreferences();
   const isAdmin = canManagePayments(user);
@@ -188,7 +189,28 @@ const PaymentPlans: React.FC = () => {
     setOverdueOnly(false);
     const next = new URLSearchParams(searchParams);
     next.delete('overdueOnly');
+    next.delete('clinicId');
     setSearchParams(next);
+  };
+
+  const openPaymentPlan = (planId: string | null) => {
+    if (!planId) return;
+
+    setOverdueOnly(false);
+    setExpandedPlan(planId);
+
+    const next = new URLSearchParams();
+    next.set('planId', planId);
+    setSearchParams(next);
+  };
+
+  const openPayment = (patientId: string | null) => {
+    if (!patientId) {
+      navigate('/payments?status=pending');
+      return;
+    }
+
+    navigate(`/payments?patientId=${encodeURIComponent(patientId)}`);
   };
 
   // ── Unified overdue collections view (/payment-plans?overdueOnly=true) ─────
@@ -200,9 +222,13 @@ const PaymentPlans: React.FC = () => {
       <div className="space-y-6 animate-in fade-in duration-500">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <Link to="/payment-plans" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-1">
+            <button
+              type="button"
+              onClick={clearOverdueFilter}
+              className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-1"
+            >
               <ArrowLeft size={14} /> {t('payments:overdueCollections.backToPlans')}
-            </Link>
+            </button>
             <h1 className="text-2xl font-bold text-gray-900">{t('payments:overdueCollections.title')}</h1>
             <p className="text-gray-500 mt-1">{t('payments:overdueCollections.subtitle')}</p>
           </div>
@@ -286,13 +312,21 @@ const PaymentPlans: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         {item.type === 'installment' ? (
-                          <Link to={`/payment-plans?planId=${item.planId}`} className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => openPaymentPlan(item.planId)}
+                            className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors"
+                          >
                             {t('payments:overdueCollections.viewPlan')}
-                          </Link>
+                          </button>
                         ) : (
-                          <Link to={`/payments?patientId=${item.patientId}`} className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => openPayment(item.patientId)}
+                            className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors"
+                          >
                             {t('payments:overdueCollections.viewPayment')}
-                          </Link>
+                          </button>
                         )}
                       </td>
                     </tr>
