@@ -61,7 +61,10 @@
     "validate:instagram-token": "tsx src/scripts/validate-instagram-login-token.ts",
     "test:email-verification": "tsx src/tests/emailVerification.test.ts",
     "test:staff-onboarding": "tsx src/tests/staffOnboarding.test.ts",
-    "test:user-import-onboarding": "tsx src/tests/userImportOnboarding.test.ts"
+    "test:user-import-onboarding": "tsx src/tests/userImportOnboarding.test.ts",
+    "test:no-show-follow-up-parity": "tsx src/tests/noShowFollowUpParity.test.ts",
+    "test:overdue-installments": "tsx src/tests/overdueInstallments.test.ts",
+    "test:overdue-receivables": "tsx src/tests/overdueReceivables.test.ts"
   },
   "keywords": [],
   "author": "",

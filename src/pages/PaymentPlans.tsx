@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CreditCard, Plus, Loader2, CheckCircle2, Clock, AlertCircle,
-  ChevronDown, ChevronRight, XCircle, Search, Calendar,
+  ChevronDown, ChevronRight, XCircle, Search, Calendar, X, ArrowLeft, Receipt,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { paymentPlanService } from '../services/api';
+import { paymentPlanService, paymentService } from '../services/api';
 import PaymentPlanForm from '../components/PaymentPlanForm';
 import { useAuth } from '../context/AuthContext';
 import { canManagePayments } from '../utils/permissions';
@@ -24,12 +25,39 @@ const PLAN_STATUS_STYLES: Record<string, string> = {
 
 const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'cheque', 'other'] as const;
 
-function isOverdue(dueDate: string, status: string) {
-  return status === 'pending' && new Date(dueDate) < new Date();
+interface OverdueSummary {
+  total: number;
+  installmentAmount: number;
+  installmentCount: number;
+  paymentAmount: number;
+  paymentCount: number;
+}
+
+interface OverdueItem {
+  id: string;
+  type: 'installment' | 'standalone';
+  patientId: string;
+  patientName: string;
+  amount: number;
+  currency: string;
+  dueDate: string;
+  status: string;
+  planId: string | null;
+  installmentId: string | null;
+  paymentId: string | null;
+}
+
+function isOverdue(dueDate: string, status: string, paymentId?: string | null) {
+  return (
+    ['pending', 'overdue'].includes(status) &&
+    !paymentId &&
+    new Date(dueDate) < new Date()
+  );
 }
 
 const PaymentPlans: React.FC = () => {
   const { t } = useTranslation(['payments', 'common']);
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { defaultCurrency, formatCurrency, formatDate } = useClinicPreferences();
   const isAdmin = canManagePayments(user);
@@ -38,15 +66,42 @@ const PaymentPlans: React.FC = () => {
   const installmentStatusLabel = (status: string) => t(`payments:plansPage.installmentStatus.${status}`, { defaultValue: status });
   const planStatusLabel = (status: string) => t(`payments:plansPage.planStatus.${status}`, { defaultValue: status });
   const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(() => searchParams.get('planId'));
   const [payingInstallment, setPayingInstallment] = useState<{ planId: string; installmentId: string } | null>(null);
   const [payMethod, setPayMethod] = useState('cash');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  // Read from URL so the dashboard "Gecikmiş Tahsilatlar" card link
+  // (/payment-plans?overdueOnly=true) applies immediately and survives a refresh.
+  const [overdueOnly, setOverdueOnly] = useState<boolean>(() => searchParams.get('overdueOnly') === 'true');
+
+  // Standalone (non-installment) overdue payments — a Payment record is only ever
+  // created for an installment once it's PAID, so any pending Payment is inherently
+  // non-installment. Fetched only for the unified overdue view so this page's total
+  // matches the dashboard "Gecikmiş Tahsilatlar" card, which sums both sources.
+  const [overduePayments, setOverduePayments] = useState<any[]>([]);
+
+  const fetchOverduePayments = async () => {
+    try {
+      const res = await paymentService.getAll({ paymentStatus: 'pending' });
+      setOverduePayments(res.data || []);
+    } catch {
+      console.error('Failed to fetch overdue (non-installment) payments');
+    }
+  };
+
+  useEffect(() => {
+    if (overdueOnly) fetchOverduePayments();
+  }, [overdueOnly]);
+
+  const [overdueData, setOverdueData] = useState<{ summary: OverdueSummary; items: OverdueItem[] } | null>(null);
+  const [overdueLoading, setOverdueLoading] = useState(true);
+  const [overdueError, setOverdueError] = useState('');
 
   const fetchPlans = async () => {
     setLoading(true);
@@ -62,7 +117,28 @@ const PaymentPlans: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchPlans(); }, [statusFilter]); // eslint-disable-line
+  const fetchOverdueCollections = async () => {
+    setOverdueLoading(true);
+    setOverdueError('');
+    try {
+      const clinicId = searchParams.get('clinicId');
+      const res = await paymentPlanService.getOverdueCollections(clinicId ? { clinicId } : undefined);
+      setOverdueData(res.data);
+    } catch {
+      setOverdueError(t('payments:overdueCollections.loadFailed'));
+    } finally {
+      setOverdueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (overdueOnly) {
+      fetchOverdueCollections();
+    } else {
+      fetchPlans();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, overdueOnly]);
 
   const handleCreatePlan = async (data: any) => {
     await paymentPlanService.create(data);
@@ -89,7 +165,19 @@ const PaymentPlans: React.FC = () => {
     }
   };
 
+  const paidCount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').length || 0;
+  const overdueCount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status, i.paymentId)).length || 0;
+  const overdueAmount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status, i.paymentId)).reduce((s: number, i: any) => s + i.amount, 0) || 0;
+  const paidAmount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + i.amount, 0) || 0;
+
+  const totalOverdueAmount = plans.reduce((s, p) => s + overdueAmount(p), 0);
+  const totalOverduePaymentsAmount = overduePayments.reduce((s, p) => s + p.amount, 0);
+  // Grand total shown in the overdue-only banner — must match the dashboard card
+  // (server/src/utils/overdueReceivables.ts sums the exact same two sources).
+  const totalOverdueGrandTotal = totalOverdueAmount + totalOverduePaymentsAmount;
+
   const filteredPlans = plans.filter(p => {
+    if (overdueOnly && overdueCount(p) === 0) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return `${p.patient?.firstName} ${p.patient?.lastName}`.toLowerCase().includes(q) ||
@@ -97,9 +185,160 @@ const PaymentPlans: React.FC = () => {
       (p.description || '').toLowerCase().includes(q);
   });
 
-  const paidCount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').length || 0;
-  const overdueCount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status)).length || 0;
-  const paidAmount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + i.amount, 0) || 0;
+  const clearOverdueFilter = () => {
+    setOverdueOnly(false);
+    const next = new URLSearchParams(searchParams);
+    next.delete('overdueOnly');
+    next.delete('clinicId');
+    setSearchParams(next);
+  };
+
+  const openPaymentPlan = (planId: string | null) => {
+    if (!planId) return;
+
+    setOverdueOnly(false);
+    setExpandedPlan(planId);
+
+    const next = new URLSearchParams();
+    next.set('planId', planId);
+    setSearchParams(next);
+  };
+
+  const openPayment = (patientId: string | null) => {
+    if (!patientId) {
+      navigate('/payments?status=pending');
+      return;
+    }
+
+    navigate(`/payments?patientId=${encodeURIComponent(patientId)}`);
+  };
+
+  // ── Unified overdue collections view (/payment-plans?overdueOnly=true) ─────
+  if (overdueOnly) {
+    const items = overdueData?.items || [];
+    const summary = overdueData?.summary;
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <button
+              type="button"
+              onClick={clearOverdueFilter}
+              className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-1"
+            >
+              <ArrowLeft size={14} /> {t('payments:overdueCollections.backToPlans')}
+            </button>
+            <h1 className="text-2xl font-bold text-gray-900">{t('payments:overdueCollections.title')}</h1>
+            <p className="text-gray-500 mt-1">{t('payments:overdueCollections.subtitle')}</p>
+          </div>
+        </div>
+
+        {overdueError && (
+          <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm">{overdueError}</div>
+        )}
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">{t('payments:overdueCollections.summary.totalOverdue')}</p>
+              <AlertCircle size={20} className="text-red-600" />
+            </div>
+            <p className="text-2xl font-bold text-red-600">{money(summary?.total || 0)}</p>
+          </div>
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">{t('payments:overdueCollections.summary.overdueInstallments')}</p>
+              <CreditCard size={20} className="text-orange-500" />
+            </div>
+            <p className="text-2xl font-bold text-orange-500">{money(summary?.installmentAmount || 0)}</p>
+            <p className="text-xs text-gray-400 mt-1">{t('payments:overdueCollections.recordCount', { count: summary?.installmentCount || 0 })}</p>
+          </div>
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">{t('payments:overdueCollections.summary.standalonePayments')}</p>
+              <Receipt size={20} className="text-amber-500" />
+            </div>
+            <p className="text-2xl font-bold text-amber-500">{money(summary?.paymentAmount || 0)}</p>
+            <p className="text-xs text-gray-400 mt-1">{t('payments:overdueCollections.recordCount', { count: summary?.paymentCount || 0 })}</p>
+          </div>
+        </div>
+
+        {/* Unified Table */}
+        {overdueLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 size={32} className="animate-spin text-primary-500" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="card p-12 text-center text-gray-400">
+            <CheckCircle2 size={40} className="mx-auto mb-3 opacity-30 text-green-400" />
+            <p className="font-medium">{t('payments:overdueCollections.empty')}</p>
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:overdueCollections.table.patient')}</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:overdueCollections.table.type')}</th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-500">{t('payments:overdueCollections.table.amount')}</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:overdueCollections.table.dueDate')}</th>
+                    <th className="px-4 py-3 text-center font-medium text-gray-500">{t('payments:overdueCollections.table.status')}</th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-500">{t('payments:overdueCollections.table.action')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {items.map(item => (
+                    <tr key={`${item.type}-${item.id}`} className="bg-red-50/30 dark:bg-red-900/10 hover:bg-red-50/60">
+                      <td className="px-4 py-3 font-medium text-gray-900">{item.patientName}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${item.type === 'installment' ? 'bg-orange-50 text-orange-600' : 'bg-amber-50 text-amber-600'}`}>
+                          {t(`payments:overdueCollections.types.${item.type}`)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{money(item.amount, item.currency)}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        <div className="flex items-center gap-1">
+                          <Calendar size={14} className="text-gray-400" />
+                          {date(item.dueDate)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-xs px-2 py-1 rounded-full font-medium text-red-600 bg-red-50">
+                          {installmentStatusLabel('overdue')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {item.type === 'installment' ? (
+                          <button
+                            type="button"
+                            onClick={() => openPaymentPlan(item.planId)}
+                            className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors"
+                          >
+                            {t('payments:overdueCollections.viewPlan')}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openPayment(item.patientId)}
+                            className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors"
+                          >
+                            {t('payments:overdueCollections.viewPayment')}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -119,7 +358,13 @@ const PaymentPlans: React.FC = () => {
         {[
           { label: t('payments:plansPage.summary.totalPlans'), value: plans.length, color: 'text-blue-600', icon: CreditCard },
           { label: t('payments:plansPage.planStatus.active'), value: plans.filter(p => p.status === 'active').length, color: 'text-green-600', icon: Clock },
-          { label: t('payments:plansPage.summary.overdueInstallments'), value: plans.reduce((s, p) => s + overdueCount(p), 0), color: 'text-red-600', icon: AlertCircle },
+          {
+            label: t('payments:plansPage.summary.overdueInstallments'),
+            value: plans.reduce((s, p) => s + overdueCount(p), 0),
+            subtitle: totalOverdueAmount > 0 ? money(totalOverdueAmount) : undefined,
+            color: 'text-red-600',
+            icon: AlertCircle,
+          },
           { label: t('payments:plansPage.planStatus.completed'), value: plans.filter(p => p.status === 'completed').length, color: 'text-purple-600', icon: CheckCircle2 },
         ].map(card => (
           <div key={card.label} className="card p-5">
@@ -128,9 +373,28 @@ const PaymentPlans: React.FC = () => {
               <card.icon size={20} className={card.color} />
             </div>
             <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+            {card.subtitle && <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>}
           </div>
         ))}
       </div>
+
+      {/* Overdue-only filter banner (from dashboard "Gecikmiş Tahsilatlar" card link) */}
+      {overdueOnly && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">
+          <span className="flex items-center gap-2">
+            <AlertCircle size={16} />
+            {t('payments:plansPage.filters.overdueOnlyActive')}
+          </span>
+          <div className="flex items-center gap-4">
+            <span className="font-bold">
+              {t('payments:plansPage.filters.overdueGrandTotal')}: {money(totalOverdueGrandTotal)}
+            </span>
+            <button onClick={clearOverdueFilter} className="flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+              <X size={14} /> {t('payments:plansPage.filters.clear')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -233,7 +497,7 @@ const PaymentPlans: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                           {(plan.installments || []).map((inst: any) => {
-                            const overdue = isOverdue(inst.dueDate, inst.status);
+                            const overdue = isOverdue(inst.dueDate, inst.status, inst.paymentId);
                             const statusKey = overdue ? 'overdue' : inst.status;
                             const statusClass = INSTALLMENT_STATUS_STYLES[statusKey] || INSTALLMENT_STATUS_STYLES.pending;
                             const isPaying = payingInstallment?.planId === plan.id && payingInstallment?.installmentId === inst.id;
@@ -257,7 +521,7 @@ const PaymentPlans: React.FC = () => {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  {inst.status === 'pending' && plan.status !== 'cancelled' && (
+                                  {['pending', 'overdue'].includes(inst.status) && !inst.paymentId && plan.status !== 'cancelled' && (
                                     <>
                                       {isPaying ? (
                                         <div className="flex items-center gap-2 justify-end">
@@ -307,6 +571,45 @@ const PaymentPlans: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Unified overdue view: standalone (non-installment) overdue payments — the
+          other half of the dashboard "Gecikmiş Tahsilatlar" total, alongside the
+          overdue installment plans listed above. */}
+      {overdueOnly && overduePayments.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="p-5 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900">{t('payments:plansPage.overduePaymentsSection.title')}</h3>
+            <p className="text-sm text-gray-500 mt-1">{t('payments:plansPage.overduePaymentsSection.subtitle')}</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:list.patient')}</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500">{t('payments:list.amount')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:list.method')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:list.date')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {overduePayments.map((p) => (
+                  <tr key={p.id} className="bg-red-50/30 dark:bg-red-900/10 hover:bg-gray-50/50">
+                    <td className="px-4 py-3 text-gray-900 font-medium">{p.patient?.firstName} {p.patient?.lastName}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{money(p.amount, p.currency)}</td>
+                    <td className="px-4 py-3 text-gray-600">{methodLabel(p.paymentMethod)}</td>
+                    <td className="px-4 py-3 text-gray-600">{date(p.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 text-right">
+            <Link to="/payments?status=pending" className="text-sm text-primary-600 hover:underline font-medium">
+              {t('payments:plansPage.overduePaymentsSection.viewInPayments')}
+            </Link>
+          </div>
         </div>
       )}
 

@@ -162,6 +162,7 @@ tests.push(test('empty response has all required summary fields as zero', () => 
     overdueAmount: 0,
     pendingInstallments: 0,
     overdueInstallments: 0,
+    overdueInstallmentsCount: 0,
     cancelledPayments: 0,
     practitionerPayoutsDue: 0,
     practitionerPayoutsPaid: 0,
@@ -173,6 +174,7 @@ tests.push(test('empty response has all required summary fields as zero', () => 
     'overdueAmount',
     'pendingInstallments',
     'overdueInstallments',
+    'overdueInstallmentsCount',
     'cancelledPayments',
     'practitionerPayoutsDue',
     'practitionerPayoutsPaid',
@@ -180,6 +182,23 @@ tests.push(test('empty response has all required summary fields as zero', () => 
   for (const key of requiredKeys) {
     assert.equal(emptySummary[key], 0, `${key} should be 0`);
   }
+}));
+
+tests.push(test('overdueInstallments field represents the installment monetary total, not a row count', () => {
+  // Regression: "Gecikmiş Taksit" previously bound to a row COUNT
+  // (paymentPlanInstallment.count), showing e.g. "1" instead of "₺4.500".
+  // financeDashboard.ts now assigns overdueReceivablesAmount().installmentAmount
+  // to summary.overdueInstallments, and the row count moved to a separate
+  // overdueInstallmentsCount field.
+  const oneOverdueInstallmentOfAmount4500 = { installmentAmount: 4500, paymentAmount: 1500, total: 6000 };
+  const summary = {
+    overdueAmount: oneOverdueInstallmentOfAmount4500.total,
+    overdueInstallments: oneOverdueInstallmentOfAmount4500.installmentAmount,
+    overdueInstallmentsCount: 1,
+  };
+  assert.equal(summary.overdueInstallments, 4500, 'kart tutar göstermeli, satır sayısı değil');
+  assert.notEqual(summary.overdueInstallments, summary.overdueInstallmentsCount);
+  assert.equal(summary.overdueAmount, 6000);
 }));
 
 tests.push(test('collectedInRange does not include cancelled payments', () => {

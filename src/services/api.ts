@@ -485,6 +485,7 @@ export const paymentPlanService = {
   cancel: (id: string) => api.patch(`/payment-plans/${id}/cancel`),
   payInstallment: (planId: string, installmentId: string, data: any) =>
     api.post(`/payment-plans/${planId}/installments/${installmentId}/pay`, data),
+  getOverdueCollections: (params?: any) => api.get('/payment-plans/overdue-collections', { params }),
 };
 
 export const compensationRuleService = {

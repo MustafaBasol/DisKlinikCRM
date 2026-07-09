@@ -167,7 +167,15 @@
       "overdueInstallments": "Überfällige Raten"
     },
     "filters": {
-      "allStatuses": "Alle Status"
+      "allStatuses": "Alle Status",
+      "overdueOnlyActive": "Es werden nur Pläne mit überfälligen Raten angezeigt",
+      "overdueGrandTotal": "Gesamte überfällige Zahlungen",
+      "clear": "Filter zurücksetzen"
+    },
+    "overduePaymentsSection": {
+      "title": "Überfällige Zahlungen ohne Ratenplan",
+      "subtitle": "Unbezahlte Zahlungen, die keinem Ratenplan zugeordnet sind",
+      "viewInPayments": "In Zahlungen anzeigen"
     },
     "planStatus": {
       "active": "Aktiv",
@@ -183,6 +191,33 @@
       "paymentSaveFailed": "Zahlung konnte nicht gespeichert werden.",
       "cancelFailed": "Plan konnte nicht storniert werden."
     }
+  },
+  "overdueCollections": {
+    "title": "Überfällige Zahlungen",
+    "subtitle": "Einheitliche Ansicht überfälliger Raten und Zahlungen",
+    "backToPlans": "Zurück zu Zahlungsplänen",
+    "summary": {
+      "totalOverdue": "Gesamt überfällig",
+      "overdueInstallments": "Überfällige Raten",
+      "standalonePayments": "Überfällige Einzelzahlungen"
+    },
+    "recordCount": "{{count}} Einträge",
+    "table": {
+      "patient": "Patient",
+      "type": "Typ",
+      "amount": "Betrag",
+      "dueDate": "Fälligkeitsdatum",
+      "status": "Status",
+      "action": "Aktion"
+    },
+    "types": {
+      "installment": "Rate",
+      "standalone": "Einzelzahlung"
+    },
+    "empty": "Keine überfälligen Zahlungen.",
+    "viewPlan": "Plan ansehen",
+    "viewPayment": "Zahlung ansehen",
+    "loadFailed": "Überfällige Zahlungen konnten nicht geladen werden."
   },
   "receipt": {
     "title": "Quittung / Zahlungsbeleg",

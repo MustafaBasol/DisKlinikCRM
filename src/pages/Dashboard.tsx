@@ -394,13 +394,13 @@ const Dashboard: React.FC = () => {
       link: '/finance?period=this_month',
     },
     {
-      label: t('dashboard:pendingCollections'),
-      value: formatCurrency(data?.stats?.pendingAmount || 0),
-      icon: <DollarSign size={24} />,
-      color: "bg-amber-500",
+      label: t('dashboard:overdueCollections'),
+      value: formatCurrency(data?.stats?.overdueAmount || 0),
+      icon: <AlertCircle size={24} />,
+      color: "bg-red-500",
       trend: t('dashboard:stats.actionRequired'),
       trendType: "warning",
-      link: '/payments?status=pending',
+      link: '/payment-plans?overdueOnly=true',
     },
   ];
 

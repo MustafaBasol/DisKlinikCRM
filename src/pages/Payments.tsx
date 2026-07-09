@@ -42,7 +42,7 @@ const Payments: React.FC = () => {
 
   // Filters — initialized from URL so links like /payments?status=pending apply immediately
   // and survive a page refresh.
-  const [patientId, setPatientId] = useState('');
+  const [patientId, setPatientId] = useState(() => searchParams.get('patientId') || '');
   const [status, setStatus] = useState(() => {
     const fromUrl = searchParams.get('status');
     return fromUrl && PAYMENT_STATUSES.includes(fromUrl) ? fromUrl : '';

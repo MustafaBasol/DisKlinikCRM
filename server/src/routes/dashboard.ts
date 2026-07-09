@@ -1,8 +1,10 @@
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
-import { validateAndGetScope, toClinicOnlyScope } from '../utils/clinicScope.js';
+import { validateAndGetScope, toClinicOnlyScope, clinicIdsFromScope } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { countUnresolvedNoShows } from '../utils/noShowFollowUp.js';
+import { overdueReceivablesAmount } from '../utils/overdueReceivables.js';
 
 const router = express.Router();
 
@@ -64,12 +66,10 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
       newPatientsMonth: prisma.patient.count({
         where: { ...clinicWhere, createdAt: { gte: firstDayOfMonth }, deletedAt: null },
       }),
-      noShowsMonth: prisma.appointment.count({
-        where: {
-          ...clinicIdWhere, status: 'no_show', startTime: { gte: firstDayOfMonth },
-          ...(normalizedRole === 'DENTIST' ? { practitionerId: userId } : {}),
-        },
-      }),
+      // NOT: alan adı "noShowsMonth" ama artık "bu ay" değil — No-show Takibi
+      // sayfasının varsayılan görünümüyle (unresolved, son 30 gün) birebir
+      // eşleşsin diye paylaşılan countUnresolvedNoShows() kullanılıyor.
+      noShowsMonth: countUnresolvedNoShows(clinicIdWhere, normalizedRole === 'DENTIST' ? userId : undefined),
       pendingTasks: prisma.task.count({
         where: {
           ...clinicIdWhere, status: { in: ['open', 'in_progress'] },
@@ -111,6 +111,9 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
             where: { ...clinicIdWhere, status: 'pending', requestType: { not: 'info' } },
           })
         : Promise.resolve(0),
+      // overdueAmount: shared overdue-receivables rule (see server/src/utils/overdueReceivables.ts) —
+      // overdue installments (pending/legacy-overdue, dueDate<now, unpaid) + standalone pending payments.
+      overdueReceivables: overdueReceivablesAmount(prisma, clinicIdsFromScope(clinicIdWhere), new Date()),
     };
 
     const results = await Promise.all(Object.values(statsPromises));
@@ -258,6 +261,7 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         acceptedValue: stats.treatmentValues?._sum?.acceptedAmount ?? 0,
         monthlyRevenue: stats.monthlyRevenue?._sum?.amount ?? 0,
         pendingAmount: stats.pendingPayments?._sum?.amount ?? 0,
+        overdueAmount: stats.overdueReceivables?.total ?? 0,
         preparedMessages: stats.preparedMessagesWeek ?? 0,
         pendingAppointmentRequests: stats.pendingAppointmentRequests ?? 0,
       },
@@ -291,6 +295,7 @@ export function buildSafeStats(raw: {
   treatmentValues?: { _sum?: { estimatedAmount?: number | null; acceptedAmount?: number | null } } | null;
   monthlyRevenue?: { _sum?: { amount?: number | null } } | null;
   pendingPayments?: { _sum?: { amount?: number | null } } | null;
+  overdueReceivables?: { installmentAmount?: number | null; paymentAmount?: number | null; total?: number | null } | null;
   preparedMessagesWeek?: number | null;
   pendingAppointmentRequests?: number | null;
 }) {
@@ -306,6 +311,7 @@ export function buildSafeStats(raw: {
     acceptedValue: raw.treatmentValues?._sum?.acceptedAmount ?? 0,
     monthlyRevenue: raw.monthlyRevenue?._sum?.amount ?? 0,
     pendingAmount: raw.pendingPayments?._sum?.amount ?? 0,
+    overdueAmount: raw.overdueReceivables?.total ?? 0,
     preparedMessages: raw.preparedMessagesWeek ?? 0,
     pendingAppointmentRequests: raw.pendingAppointmentRequests ?? 0,
   };

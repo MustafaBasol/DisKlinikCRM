@@ -167,7 +167,15 @@
       "overdueInstallments": "Gecikmiş Taksit"
     },
     "filters": {
-      "allStatuses": "Tüm Durumlar"
+      "allStatuses": "Tüm Durumlar",
+      "overdueOnlyActive": "Yalnızca gecikmiş taksidi olan planlar gösteriliyor",
+      "overdueGrandTotal": "Toplam gecikmiş tahsilat",
+      "clear": "Filtreyi temizle"
+    },
+    "overduePaymentsSection": {
+      "title": "Taksitsiz Gecikmiş Ödemeler",
+      "subtitle": "Bir taksit planına bağlı olmayan, tahsil edilmemiş ödemeler",
+      "viewInPayments": "Ödemeler sayfasında görüntüle"
     },
     "planStatus": {
       "active": "Aktif",
@@ -183,6 +191,33 @@
       "paymentSaveFailed": "Ödeme kaydedilemedi.",
       "cancelFailed": "Plan iptal edilemedi."
     }
+  },
+  "overdueCollections": {
+    "title": "Gecikmiş Tahsilatlar",
+    "subtitle": "Vadesi geçmiş taksit ve ödemelerin birleşik görünümü",
+    "backToPlans": "Taksit Planlarına Dön",
+    "summary": {
+      "totalOverdue": "Toplam Gecikmiş",
+      "overdueInstallments": "Gecikmiş Taksitler",
+      "standalonePayments": "Taksitsiz Gecikmiş"
+    },
+    "recordCount": "{{count}} kayıt",
+    "table": {
+      "patient": "Hasta",
+      "type": "Tür",
+      "amount": "Tutar",
+      "dueDate": "Vade Tarihi",
+      "status": "Durum",
+      "action": "İşlem"
+    },
+    "types": {
+      "installment": "Taksit",
+      "standalone": "Taksitsiz"
+    },
+    "empty": "Gecikmiş tahsilat bulunmuyor.",
+    "viewPlan": "Planı Gör",
+    "viewPayment": "Ödemeyi Gör",
+    "loadFailed": "Gecikmiş tahsilatlar yüklenemedi."
   },
   "receipt": {
     "title": "Makbuz / Ödeme Belgesi",

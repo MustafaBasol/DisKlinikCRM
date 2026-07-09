@@ -3,8 +3,9 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
-import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope, clinicIdsFromScope } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { overdueReceivablesAmount, overdueReceivablesList } from '../utils/overdueReceivables.js';
 
 const router = express.Router();
 
@@ -53,6 +54,49 @@ router.get('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
     res.status(500).json({ error: 'Failed to fetch payment plans' });
   }
 });
+
+// GET /api/payment-plans/overdue-collections
+// Unified overdue collections view: overdue installments + standalone overdue
+// payments, sharing the rule in server/src/utils/overdueReceivables.ts. Must be
+// registered before /payment-plans/:id so 'overdue-collections' isn't captured
+// as a plan id.
+router.get(
+  '/payment-plans/overdue-collections',
+  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']),
+  async (req: AuthRequest, res: Response) => {
+    const selectedClinicId = req.query.clinicId as string | undefined;
+
+    try {
+      const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId, res);
+      if (clinicScope === false) return;
+
+      const clinicIds = clinicIdsFromScope(clinicScope);
+      if (clinicIds.length === 0) {
+        return res.json({ summary: { total: 0, installmentAmount: 0, installmentCount: 0, paymentAmount: 0, paymentCount: 0 }, items: [] });
+      }
+
+      const now = new Date();
+      const [summary, items] = await Promise.all([
+        overdueReceivablesAmount(prisma, clinicIds, now),
+        overdueReceivablesList(prisma, clinicIds, now),
+      ]);
+
+      res.json({
+        summary: {
+          total: summary.total,
+          installmentAmount: summary.installmentAmount,
+          installmentCount: summary.installmentCount,
+          paymentAmount: summary.paymentAmount,
+          paymentCount: items.filter(i => i.type === 'standalone').length,
+        },
+        items,
+      });
+    } catch (err) {
+      console.error('Overdue collections error:', err);
+      res.status(500).json({ error: 'Failed to fetch overdue collections' });
+    }
+  },
+);
 
 // GET /api/payment-plans/:id
 router.get('/payment-plans/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {

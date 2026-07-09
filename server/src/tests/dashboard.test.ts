@@ -147,8 +147,10 @@ tests.push(
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
     assert.equal(result.preparedMessages, 0);
     assert.equal(result.pendingAppointmentRequests, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -183,11 +185,13 @@ tests.push(
       treatmentValues: { _sum: { estimatedAmount: null, acceptedAmount: null } },
       monthlyRevenue: { _sum: { amount: null } },
       pendingPayments: { _sum: { amount: null } },
+      overdueReceivables: { total: null },
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -197,11 +201,13 @@ tests.push(
       treatmentValues: null,
       monthlyRevenue: null,
       pendingPayments: null,
+      overdueReceivables: null,
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -211,11 +217,13 @@ tests.push(
       treatmentValues: {},
       monthlyRevenue: {},
       pendingPayments: {},
+      overdueReceivables: {},
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -252,11 +260,39 @@ tests.push(
       treatmentValues: { _sum: { estimatedAmount: 5000, acceptedAmount: 3200 } },
       monthlyRevenue: { _sum: { amount: 8500 } },
       pendingPayments: { _sum: { amount: 1200 } },
+      overdueReceivables: { total: 450 },
     });
     assert.equal(result.estimatedValue, 5000);
     assert.equal(result.acceptedValue, 3200);
     assert.equal(result.monthlyRevenue, 8500);
     assert.equal(result.pendingAmount, 1200);
+    assert.equal(result.overdueAmount, 450);
+  }),
+);
+
+tests.push(
+  test('overdueAmount, pendingAmount’dan bağımsız hesaplanır (farklı kaynaklar)', () => {
+    // Regression: "Gecikmiş Tahsilatlar" kartı artık tüm pending Payment
+    // toplamını değil, yalnızca vadesi geçmiş PaymentPlanInstallment
+    // toplamını yansıtır — ikisi farklı sayılar olabilir.
+    const result = buildSafeStats({
+      pendingPayments: { _sum: { amount: 5000 } },
+      overdueReceivables: { total: 450 },
+    });
+    assert.equal(result.pendingAmount, 5000);
+    assert.equal(result.overdueAmount, 450);
+    assert.notEqual(result.pendingAmount, result.overdueAmount);
+  }),
+);
+
+tests.push(
+  test('overdueAmount, gecikmiş taksit + taksitsiz gecikmiş ödeme toplamını yansıtır', () => {
+    // Regression: "Gecikmiş Tahsilatlar" kartı yalnızca taksit bazlı gecikmeleri
+    // değil, taksitsiz (doğrudan) bekleyen ödemeleri de kapsamalı.
+    const result = buildSafeStats({
+      overdueReceivables: { installmentAmount: 450, paymentAmount: 300, total: 750 },
+    });
+    assert.equal(result.overdueAmount, 750);
   }),
 );
 
@@ -275,12 +311,39 @@ tests.push(
       'acceptedValue',
       'monthlyRevenue',
       'pendingAmount',
+      'overdueAmount',
       'preparedMessages',
       'pendingAppointmentRequests',
+      'overdueAmount',
     ];
     for (const key of expectedKeys) {
       assert.ok(key in result, `Eksik alan: ${key}`);
     }
+  }),
+);
+
+section('buildSafeStats — overdueAmount (shared overdue-receivables rule)');
+
+tests.push(
+  test('overdueReceivables eksikse overdueAmount 0 döner', () => {
+    const result = buildSafeStats({});
+    assert.equal(result.overdueAmount, 0);
+  }),
+);
+
+tests.push(
+  test('overdueReceivables.total null ise overdueAmount 0 döner', () => {
+    const result = buildSafeStats({ overdueReceivables: { total: null } });
+    assert.equal(result.overdueAmount, 0);
+  }),
+);
+
+tests.push(
+  test('Fixture: Burak Çelik ₺4.500 gecikmiş taksit + Can Aksoy ₺1.500 taksitsiz bekleyen ödeme → overdueAmount ₺6.000', () => {
+    // Prod fixture: overdueReceivablesAmount() bu değerleri üretir (bkz. overdueReceivables.test.ts).
+    const overdueReceivables = { total: 6000, installmentAmount: 4500, installmentCount: 1, paymentAmount: 1500 };
+    const result = buildSafeStats({ overdueReceivables });
+    assert.equal(result.overdueAmount, 6000, 'Main Dashboard "Gecikmiş Tahsilatlar" ₺6.000 göstermeli');
   }),
 );
 
