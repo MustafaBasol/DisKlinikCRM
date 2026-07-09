@@ -192,6 +192,33 @@
       "cancelFailed": "Plan iptal edilemedi."
     }
   },
+  "overdueCollections": {
+    "title": "Gecikmiş Tahsilatlar",
+    "subtitle": "Vadesi geçmiş taksit ve ödemelerin birleşik görünümü",
+    "backToPlans": "Taksit Planlarına Dön",
+    "summary": {
+      "totalOverdue": "Toplam Gecikmiş",
+      "overdueInstallments": "Gecikmiş Taksitler",
+      "standalonePayments": "Taksitsiz Gecikmiş"
+    },
+    "recordCount": "{{count}} kayıt",
+    "table": {
+      "patient": "Hasta",
+      "type": "Tür",
+      "amount": "Tutar",
+      "dueDate": "Vade Tarihi",
+      "status": "Durum",
+      "action": "İşlem"
+    },
+    "types": {
+      "installment": "Taksit",
+      "standalone": "Taksitsiz"
+    },
+    "empty": "Gecikmiş tahsilat bulunmuyor.",
+    "viewPlan": "Planı Gör",
+    "viewPayment": "Ödemeyi Gör",
+    "loadFailed": "Gecikmiş tahsilatlar yüklenemedi."
+  },
   "receipt": {
     "title": "Makbuz / Ödeme Belgesi",
     "print": "Yazdır / PDF",

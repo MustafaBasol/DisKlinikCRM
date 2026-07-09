@@ -150,6 +150,7 @@ tests.push(
     assert.equal(result.overdueAmount, 0);
     assert.equal(result.preparedMessages, 0);
     assert.equal(result.pendingAppointmentRequests, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -313,10 +314,36 @@ tests.push(
       'overdueAmount',
       'preparedMessages',
       'pendingAppointmentRequests',
+      'overdueAmount',
     ];
     for (const key of expectedKeys) {
       assert.ok(key in result, `Eksik alan: ${key}`);
     }
+  }),
+);
+
+section('buildSafeStats — overdueAmount (shared overdue-receivables rule)');
+
+tests.push(
+  test('overdueReceivables eksikse overdueAmount 0 döner', () => {
+    const result = buildSafeStats({});
+    assert.equal(result.overdueAmount, 0);
+  }),
+);
+
+tests.push(
+  test('overdueReceivables.total null ise overdueAmount 0 döner', () => {
+    const result = buildSafeStats({ overdueReceivables: { total: null } });
+    assert.equal(result.overdueAmount, 0);
+  }),
+);
+
+tests.push(
+  test('Fixture: Burak Çelik ₺4.500 gecikmiş taksit + Can Aksoy ₺1.500 taksitsiz bekleyen ödeme → overdueAmount ₺6.000', () => {
+    // Prod fixture: overdueReceivablesAmount() bu değerleri üretir (bkz. overdueReceivables.test.ts).
+    const overdueReceivables = { total: 6000, installmentAmount: 4500, installmentCount: 1, paymentAmount: 1500 };
+    const result = buildSafeStats({ overdueReceivables });
+    assert.equal(result.overdueAmount, 6000, 'Main Dashboard "Gecikmiş Tahsilatlar" ₺6.000 göstermeli');
   }),
 );
 

@@ -192,6 +192,33 @@
       "cancelFailed": "Le plan n'a pas pu être annulé."
     }
   },
+  "overdueCollections": {
+    "title": "Recouvrements en retard",
+    "subtitle": "Vue unifiée des échéances et paiements en retard",
+    "backToPlans": "Retour aux plans de paiement",
+    "summary": {
+      "totalOverdue": "Total en retard",
+      "overdueInstallments": "Échéances en retard",
+      "standalonePayments": "Paiements isolés en retard"
+    },
+    "recordCount": "{{count}} enregistrements",
+    "table": {
+      "patient": "Patient",
+      "type": "Type",
+      "amount": "Montant",
+      "dueDate": "Date d'échéance",
+      "status": "Statut",
+      "action": "Action"
+    },
+    "types": {
+      "installment": "Échéance",
+      "standalone": "Isolé"
+    },
+    "empty": "Aucun recouvrement en retard.",
+    "viewPlan": "Voir le plan",
+    "viewPayment": "Voir le paiement",
+    "loadFailed": "Impossible de charger les recouvrements en retard."
+  },
   "receipt": {
     "title": "Reçu / document de paiement",
     "print": "Imprimer / PDF",

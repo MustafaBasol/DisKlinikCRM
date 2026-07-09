@@ -189,3 +189,11 @@ export async function validateAndGetClinicIdScope(
   }
   return scope;
 }
+
+/**
+ * ClinicIdScopeWhere'i overdueReceivablesAmount gibi clinicId dizisi bekleyen
+ * yardımcılara aktarmak için düz bir string[]'e çevirir.
+ */
+export function clinicIdsFromScope(scope: ClinicIdScopeWhere): string[] {
+  return typeof scope.clinicId === 'string' ? [scope.clinicId] : scope.clinicId.in;
+}

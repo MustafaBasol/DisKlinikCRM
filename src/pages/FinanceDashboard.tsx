@@ -239,24 +239,28 @@ export default function FinanceDashboard() {
               icon={<Clock size={18} className="text-yellow-600" />}
               color="bg-yellow-50"
             />
-            <SummaryCard
-              title={t('payments:financeDashboard.cards.overdueAmount')}
-              value={money(s!.overdueAmount)}
-              icon={<AlertTriangle size={18} className="text-red-500" />}
-              color="bg-red-50"
-            />
+            <Link to="/payment-plans?overdueOnly=true" className="block">
+              <SummaryCard
+                title={t('payments:financeDashboard.cards.overdueAmount')}
+                value={money(s!.overdueAmount)}
+                icon={<AlertTriangle size={18} className="text-red-500" />}
+                color="bg-red-50"
+              />
+            </Link>
             <SummaryCard
               title={t('payments:financeDashboard.cards.pendingInstallments')}
               value={String(s!.pendingInstallments)}
               icon={<Calendar size={18} className="text-indigo-600" />}
               color="bg-indigo-50"
             />
-            <SummaryCard
-              title={t('payments:financeDashboard.cards.overdueInstallments')}
-              value={money(s!.overdueInstallments)}
-              icon={<AlertTriangle size={18} className="text-orange-500" />}
-              color="bg-orange-50"
-            />
+            <Link to="/payment-plans?overdueOnly=true" className="block">
+              <SummaryCard
+                title={t('payments:financeDashboard.cards.overdueInstallments')}
+                value={money(s!.overdueInstallments)}
+                icon={<AlertTriangle size={18} className="text-orange-500" />}
+                color="bg-orange-50"
+              />
+            </Link>
             <SummaryCard
               title={t('payments:financeDashboard.cards.practitionerPayoutsDue')}
               value={money(s!.practitionerPayoutsDue)}
@@ -387,7 +391,7 @@ export default function FinanceDashboard() {
                               {t('common:payments')}
                             </Link>
                             <Link
-                              to={`/payment-plans?clinicId=${b.clinicId}`}
+                              to={`/payment-plans?clinicId=${b.clinicId}&overdueOnly=true`}
                               className="text-xs text-blue-600 hover:underline"
                             >
                               {t('payments:financeDashboard.actions.installments')}

@@ -1,21 +1,20 @@
 /**
- * overdueReceivables.test.ts — Regression tests for the unified "overdue
- * receivables" definition (server/src/utils/overdueReceivables.ts), which
- * combines overdue payment-plan installments with standalone (non-installment)
- * pending payments.
+ * overdueReceivables.test.ts — regression tests for the shared overdue-installment
+ * rule and total-overdue-receivables computation.
  *
- * Bug this guards against: the dashboard's "Gecikmiş Tahsilatlar" card only
- * summed overdue PaymentPlanInstallment rows, so a clinic with overdue
- * standalone (non-installment) Payment records showed a card total lower than
- * the Finance Dashboard's real outstanding/overdue picture, and linked to a
- * destination page (Payment Plans) that couldn't show those payments at all.
+ * Production fixture: Burak Çelik has a ₺4,500 installment with
+ * status='overdue', dueDate='2026-06-29', paymentId=null; Can Aksoy has a
+ * ₺1,500 standalone pending payment. Expected: total overdue ₺6,000, overdue
+ * installment amount ₺4,500, overdue installment count 1.
  *
  * Run with: tsx src/tests/overdueReceivables.test.ts
  */
 
 import assert from 'node:assert/strict';
-import { overdueReceivablesAmount, overduePaymentWhere } from '../utils/overdueReceivables.js';
 import { overdueInstallmentWhere, isInstallmentOverdue } from '../utils/overdueInstallments.js';
+import { overdueReceivablesAmount, overdueReceivablesList } from '../utils/overdueReceivables.js';
+
+// ─── Test harness ─────────────────────────────────────────────────────────────
 
 let passed = 0;
 let failed = 0;
@@ -29,7 +28,7 @@ function test(name: string, fn: () => void | Promise<void>) {
     })
     .catch((err: unknown) => {
       console.error(`  ✗ ${name}`);
-      console.error(`    ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`      ${err instanceof Error ? err.message : String(err)}`);
       failed++;
     });
 }
@@ -38,286 +37,277 @@ function section(title: string) {
   console.log(`\n${title}`);
 }
 
-const tests: Promise<void>[] = [];
+// ─── Fake Prisma harness ──────────────────────────────────────────────────────
 
-// ─── Fake prisma client: in-memory aggregate over fixed installment/payment lists ──
+interface FakeInstallment {
+  id?: string;
+  planId?: string;
+  amount: number;
+  dueDate: Date;
+  status: string;
+  clinicId: string;
+  paymentId?: string | null;
+  patient?: { id: string; firstName: string; lastName: string } | null;
+  currency?: string;
+}
 
-type FakeInstallment = { amount: number; dueDate: Date; status: string; clinicId: string };
-type FakePayment = { amount: number; paymentStatus: string; clinicId: string; installment: null | { id: string } };
+interface FakePayment {
+  id?: string;
+  amount: number;
+  paymentStatus: string;
+  clinicId: string;
+  installment?: null | { id: string };
+  patient?: { id: string; firstName: string; lastName: string } | null;
+  currency?: string;
+  createdAt?: Date;
+}
+
+function matchesInstallmentWhere(inst: FakeInstallment, where: any): boolean {
+  if (!where.status.in.includes(inst.status)) return false;
+  if (!(inst.dueDate < where.dueDate.lt)) return false;
+  if ((inst.paymentId ?? null) !== null) return false;
+  const clinicIds: string[] = where.plan.clinicId.in;
+  if (!clinicIds.includes(inst.clinicId)) return false;
+  return true;
+}
 
 function makeFakePrisma(installments: FakeInstallment[], payments: FakePayment[]) {
   return {
     paymentPlanInstallment: {
-      aggregate: async ({ where }: { where: any }) => {
-        const now: Date = where.dueDate.lt;
-        const clinicId = where.plan.clinicId;
-        const matches = installments.filter(
-          (i) => i.status === where.status && i.dueDate < now && matchesClinic(i.clinicId, clinicId),
-        );
-        return { _sum: { amount: matches.length ? matches.reduce((s, i) => s + i.amount, 0) : null } };
+      aggregate: async ({ where }: any) => {
+        const matched = installments.filter(i => matchesInstallmentWhere(i, where));
+        const sum = matched.reduce((s, i) => s + i.amount, 0);
+        return { _sum: { amount: matched.length ? sum : null } };
       },
+      count: async ({ where }: any) => installments.filter(i => matchesInstallmentWhere(i, where)).length,
+      findMany: async ({ where }: any) =>
+        installments.filter(i => matchesInstallmentWhere(i, where)).map((i, idx) => ({
+          id: i.id ?? `inst-${idx}`,
+          planId: i.planId ?? `plan-${idx}`,
+          amount: i.amount,
+          dueDate: i.dueDate,
+          status: i.status,
+          plan: { patient: i.patient ?? null, currency: i.currency ?? 'TRY' },
+        })),
     },
     payment: {
-      aggregate: async ({ where }: { where: any }) => {
-        const matches = payments.filter(
-          (p) => p.paymentStatus === where.paymentStatus && p.installment === where.installment && matchesClinic(p.clinicId, where.clinicId),
+      aggregate: async ({ where }: any) => {
+        const clinicIds: string[] = where.clinicId.in;
+        const matched = payments.filter(
+          p =>
+            clinicIds.includes(p.clinicId) &&
+            p.paymentStatus === where.paymentStatus &&
+            (p.installment ?? null) === null,
         );
-        return { _sum: { amount: matches.length ? matches.reduce((s, p) => s + p.amount, 0) : null } };
+        const sum = matched.reduce((s, p) => s + p.amount, 0);
+        return { _sum: { amount: matched.length ? sum : null } };
+      },
+      findMany: async ({ where }: any) => {
+        const clinicIds: string[] = where.clinicId.in;
+        return payments
+          .filter(
+            p =>
+              clinicIds.includes(p.clinicId) &&
+              p.paymentStatus === where.paymentStatus &&
+              (p.installment ?? null) === null,
+          )
+          .map((p, idx) => ({
+            id: p.id ?? `pay-${idx}`,
+            amount: p.amount,
+            paymentStatus: p.paymentStatus,
+            currency: p.currency ?? 'TRY',
+            createdAt: p.createdAt ?? new Date('2026-01-01'),
+            patient: p.patient ?? null,
+          }));
       },
     },
   };
 }
 
-function matchesClinic(rowClinicId: string, whereClinicId: any): boolean {
-  if (typeof whereClinicId === 'string') return rowClinicId === whereClinicId;
-  if (whereClinicId && Array.isArray(whereClinicId.in)) return whereClinicId.in.includes(rowClinicId);
-  return false;
-}
+// ─── Tests ────────────────────────────────────────────────────────────────────
 
-// ─── 1. Overdue non-installment receivable only ──────────────────────────────
+const tests: Promise<void>[] = [];
 
-section('1. Yalnızca taksitsiz gecikmiş ödeme');
+section('1. overdueInstallmentWhere / isInstallmentOverdue — shared rule shape');
 
 tests.push(
-  test('yalnızca pending Payment varsa toplam yalnızca paymentAmount içerir', async () => {
-    const prisma = makeFakePrisma(
-      [],
-      [{ amount: 500, paymentStatus: 'pending', clinicId: 'clinic-A', installment: null }],
+  test('overdueInstallmentWhere matches both pending and legacy overdue statuses', () => {
+    const where = overdueInstallmentWhere(new Date('2026-07-09'));
+    assert.deepEqual(where.status.in, ['pending', 'overdue']);
+    assert.equal(where.paymentId, null);
+  }),
+);
+
+tests.push(
+  test('isInstallmentOverdue: legacy status=overdue, past due, no paymentId → true', () => {
+    assert.equal(
+      isInstallmentOverdue('overdue', new Date('2026-06-29'), new Date('2026-07-09'), null),
+      true,
     );
-    const result = await overdueReceivablesAmount(prisma as any, { clinicId: 'clinic-A' }, new Date('2026-07-09'));
-    assert.equal(result.installmentAmount, 0);
-    assert.equal(result.paymentAmount, 500);
-    assert.equal(result.total, 500);
   }),
 );
 
-// ─── 2. Overdue installment only ──────────────────────────────────────────────
-
-section('2. Yalnızca gecikmiş taksit');
-
 tests.push(
-  test('yalnızca vadesi geçmiş pending taksit varsa toplam yalnızca installmentAmount içerir', async () => {
-    const prisma = makeFakePrisma(
-      [{ amount: 300, dueDate: new Date('2026-07-01'), status: 'pending', clinicId: 'clinic-A' }],
-      [],
+  test('isInstallmentOverdue: status=pending, past due, no paymentId → true', () => {
+    assert.equal(
+      isInstallmentOverdue('pending', new Date('2026-06-15'), new Date('2026-07-09'), null),
+      true,
     );
-    const result = await overdueReceivablesAmount(prisma as any, { clinicId: 'clinic-A' }, new Date('2026-07-09'));
-    assert.equal(result.installmentAmount, 300);
-    assert.equal(result.paymentAmount, 0);
-    assert.equal(result.total, 300);
   }),
 );
 
-// ─── 3. Both together — no double counting ────────────────────────────────────
-
-section('3. İkisi birlikte — çifte sayım yok');
-
 tests.push(
-  test('gecikmiş taksit + taksitsiz gecikmiş ödeme toplamı ayrı ayrı toplanır', async () => {
-    const prisma = makeFakePrisma(
-      [{ amount: 300, dueDate: new Date('2026-07-01'), status: 'pending', clinicId: 'clinic-A' }],
-      [{ amount: 500, paymentStatus: 'pending', clinicId: 'clinic-A', installment: null }],
+  test('isInstallmentOverdue: paid (paymentId present) → false regardless of status/date', () => {
+    assert.equal(
+      isInstallmentOverdue('overdue', new Date('2026-06-01'), new Date('2026-07-09'), 'payment-1'),
+      false,
     );
-    const result = await overdueReceivablesAmount(prisma as any, { clinicId: 'clinic-A' }, new Date('2026-07-09'));
-    assert.equal(result.installmentAmount, 300);
-    assert.equal(result.paymentAmount, 500);
-    assert.equal(result.total, 800, 'toplam iki kaynağın basit toplamı olmalı, çakışma olmamalı');
   }),
 );
 
 tests.push(
-  test('overduePaymentWhere yalnızca installment=null taksitsiz ödemeleri hedefler (yapısal ayrıklık)', () => {
-    const where = overduePaymentWhere({ clinicId: 'clinic-A' });
-    assert.equal(where.paymentStatus, 'pending');
-    assert.equal(where.installment, null, 'taksite bağlı ödemeler asla bu filtreye dahil olmaz');
-  }),
-);
-
-tests.push(
-  test('overdueInstallmentWhere ayrı bir modeli (plan.clinicId altında) hedefler', () => {
-    const where = overdueInstallmentWhere({ clinicId: 'clinic-A' });
-    assert.deepEqual(where.plan, { clinicId: 'clinic-A' });
-    assert.ok(!('installment' in where), 'installment where Payment modeline özgüdür, PaymentPlanInstallment where içinde olmamalı');
-  }),
-);
-
-// ─── 4. Paid / future items excluded ──────────────────────────────────────────
-
-section('4. Ödenmiş / vadesi henüz gelmemiş kalemler hariç tutulur');
-
-tests.push(
-  test('paid Payment toplamına dahil edilmez', async () => {
-    const prisma = makeFakePrisma(
-      [],
-      [{ amount: 500, paymentStatus: 'paid', clinicId: 'clinic-A', installment: null }],
+  test('isInstallmentOverdue: future due date → false', () => {
+    assert.equal(
+      isInstallmentOverdue('pending', new Date('2026-12-01'), new Date('2026-07-09'), null),
+      false,
     );
-    const result = await overdueReceivablesAmount(prisma as any, { clinicId: 'clinic-A' }, new Date('2026-07-09'));
-    assert.equal(result.paymentAmount, 0);
-    assert.equal(result.total, 0);
   }),
 );
 
 tests.push(
-  test('vadesi gelecekte olan pending taksit toplamına dahil edilmez', async () => {
-    const prisma = makeFakePrisma(
-      [{ amount: 300, dueDate: new Date('2026-08-01'), status: 'pending', clinicId: 'clinic-A' }],
-      [],
+  test('isInstallmentOverdue: paid status → false even if past due', () => {
+    assert.equal(
+      isInstallmentOverdue('paid', new Date('2026-06-01'), new Date('2026-07-09'), null),
+      false,
     );
-    const result = await overdueReceivablesAmount(prisma as any, { clinicId: 'clinic-A' }, new Date('2026-07-09'));
-    assert.equal(result.installmentAmount, 0);
-    assert.equal(result.total, 0);
   }),
 );
 
-tests.push(
-  test('paid taksit (vadesi geçmiş olsa bile) toplamına dahil edilmez', () => {
-    assert.equal(isInstallmentOverdue('2026-06-01', 'paid', new Date('2026-07-09')), false);
-  }),
-);
-
-// ─── 5. Dashboard total equals destination total ──────────────────────────────
-
-section('5. Regression — dashboard kart toplamı, hedef sayfa toplamıyla birebir eşleşir');
+section('2. overdueReceivablesAmount — installment-only');
 
 tests.push(
-  test('dashboard.ts (aggregate bazlı) ve PaymentPlans.tsx (liste filtre+reduce bazlı) aynı toplamı üretir', async () => {
-    const now = new Date('2026-07-09T00:00:00Z');
-    const clinicId = 'clinic-A';
-
-    // "Dashboard" tarafı: overdueReceivablesAmount aggregate sonucu.
-    const prisma = makeFakePrisma(
-      [
-        { amount: 100, dueDate: new Date('2026-07-01'), status: 'pending', clinicId }, // overdue
-        { amount: 200, dueDate: new Date('2026-08-01'), status: 'pending', clinicId }, // future — excluded
-        { amount: 300, dueDate: new Date('2026-06-01'), status: 'paid', clinicId },    // paid — excluded
-      ],
-      [
-        { amount: 500, paymentStatus: 'pending', clinicId, installment: null }, // overdue (no due date concept)
-        { amount: 999, paymentStatus: 'paid', clinicId, installment: null },    // paid — excluded
-      ],
-    );
-    const dashboardTotal = (await overdueReceivablesAmount(prisma as any, { clinicId }, now)).total;
-
-    // "Hedef sayfa" tarafı: PaymentPlans.tsx'in yaptığı gibi listeleri
-    // filtreleyip elle topluyoruz (isInstallmentOverdue ile aynı mantık +
-    // taksitsiz pending ödemelerin doğrudan toplamı).
-    const installments = [
-      { amount: 100, dueDate: '2026-07-01', status: 'pending' },
-      { amount: 200, dueDate: '2026-08-01', status: 'pending' },
-      { amount: 300, dueDate: '2026-06-01', status: 'paid' },
-    ];
-    const standalonePayments = [
-      { amount: 500, paymentStatus: 'pending' },
-      { amount: 999, paymentStatus: 'paid' },
-    ];
-    const pageInstallmentTotal = installments
-      .filter((i) => isInstallmentOverdue(i.dueDate, i.status, now))
-      .reduce((s, i) => s + i.amount, 0);
-    const pagePaymentTotal = standalonePayments
-      .filter((p) => p.paymentStatus === 'pending')
-      .reduce((s, p) => s + p.amount, 0);
-    const pageTotal = pageInstallmentTotal + pagePaymentTotal;
-
-    assert.equal(dashboardTotal, 600);
-    assert.equal(pageTotal, 600);
-    assert.equal(dashboardTotal, pageTotal, 'dashboard kartı ve hedef sayfa toplamı birebir eşleşmeli');
-  }),
-);
-
-// ─── 6. Regression — exact production fixture (Burak Çelik / Can Aksoy) ───────
-//
-// Reported bug: Finance Dashboard showed "Gecikmiş Tutar" = 1.500 (only the
-// standalone payment) and "Gecikmiş Taksit" = 0 (dead literal status='overdue'
-// filter). Correct values: Gecikmiş Tutar = 6.000, Gecikmiş Taksit (amount,
-// not a row count) = 4.500. financeDashboard.ts now sets
-// summary.overdueAmount = overdueReceivablesAmount().total and
-// summary.overdueInstallments = overdueReceivablesAmount().installmentAmount.
-
-section('6. Regression — üretim fikstürü (Burak Çelik taksit + Can Aksoy taksitsiz)');
-
-tests.push(
-  test('Burak Çelik ₺4.500 gecikmiş taksit + Can Aksoy ₺1.500 gecikmiş taksitsiz ödeme = ₺6.000 toplam', async () => {
+  test('sums only pending/overdue installments past due, excludes paid/future', async () => {
     const now = new Date('2026-07-09');
     const prisma = makeFakePrisma(
       [
-        // Burak Çelik: one overdue installment
-        { amount: 4500, dueDate: new Date('2026-06-15'), status: 'pending', clinicId: 'clinic-A' },
+        { amount: 4500, dueDate: new Date('2026-06-29'), status: 'overdue', clinicId: 'clinic-A', paymentId: null },
+        { amount: 500, dueDate: new Date('2026-06-01'), status: 'paid', clinicId: 'clinic-A', paymentId: 'p-1' },
+        { amount: 900, dueDate: new Date('2026-12-01'), status: 'pending', clinicId: 'clinic-A', paymentId: null },
       ],
+      [],
+    );
+    const result = await overdueReceivablesAmount(prisma as any, ['clinic-A'], now);
+    assert.equal(result.installmentAmount, 4500);
+    assert.equal(result.installmentCount, 1);
+    assert.equal(result.paymentAmount, 0);
+    assert.equal(result.total, 4500);
+  }),
+);
+
+section('3. overdueReceivablesAmount — standalone payment-only');
+
+tests.push(
+  test('sums standalone pending payments not linked to an installment', async () => {
+    const now = new Date('2026-07-09');
+    const prisma = makeFakePrisma([], [{ amount: 1500, paymentStatus: 'pending', clinicId: 'clinic-A', installment: null }]);
+    const result = await overdueReceivablesAmount(prisma as any, ['clinic-A'], now);
+    assert.equal(result.installmentAmount, 0);
+    assert.equal(result.paymentAmount, 1500);
+    assert.equal(result.total, 1500);
+  }),
+);
+
+section('4. overdueReceivablesAmount — combined, no double-counting');
+
+tests.push(
+  test('installment-linked payment (installment != null) is excluded from the standalone sum', async () => {
+    const now = new Date('2026-07-09');
+    const prisma = makeFakePrisma(
+      [],
       [
-        // Can Aksoy: one overdue standalone (non-installment) receivable
         { amount: 1500, paymentStatus: 'pending', clinicId: 'clinic-A', installment: null },
+        { amount: 4500, paymentStatus: 'paid', clinicId: 'clinic-A', installment: { id: 'inst-1' } },
       ],
     );
-    const result = await overdueReceivablesAmount(prisma as any, { clinicId: 'clinic-A' }, now);
+    const result = await overdueReceivablesAmount(prisma as any, ['clinic-A'], now);
+    assert.equal(result.paymentAmount, 1500, 'paid, installment-linked payment must not be counted');
+    assert.equal(result.total, 1500);
+  }),
+);
 
-    // "Gecikmiş Taksit" card — must be the installment MONETARY total, not a count
+section('5. Production fixture — Burak Çelik (₺4,500) + Can Aksoy (₺1,500) = ₺6,000');
+
+tests.push(
+  test('legacy status=overdue installment + standalone pending payment combine correctly', async () => {
+    const now = new Date('2026-07-09');
+    const prisma = makeFakePrisma(
+      [{ amount: 4500, dueDate: new Date('2026-06-29'), status: 'overdue', clinicId: 'clinic-A', paymentId: null }],
+      [{ amount: 1500, paymentStatus: 'pending', clinicId: 'clinic-A', installment: null }],
+    );
+    const result = await overdueReceivablesAmount(prisma as any, ['clinic-A'], now);
     assert.equal(result.installmentAmount, 4500, 'Gecikmiş Taksit tutarı 4.500 olmalı');
-    // "Gecikmiş Tutar" card — combined total across both sources
-    assert.equal(result.total, 6000, 'Gecikmiş Tutar toplamı 6.000 olmalı');
-    // Standalone receivable sums separately, proving no double-count with the installment
+    assert.equal(result.installmentCount, 1, 'Gecikmiş Taksit adedi 1 olmalı');
     assert.equal(result.paymentAmount, 1500);
+    assert.equal(result.total, 6000, 'Gecikmiş Tutar toplamı 6.000 olmalı');
     assert.equal(result.installmentAmount + result.paymentAmount, result.total);
   }),
 );
 
-
-// ─── Production regression — legacy overdue status ───────────────────────────
-
-section('Production regression — legacy overdue installment status');
+section('6. overdueReceivablesList — unified overdue collections table rows');
 
 tests.push(
-  test("legacy status='overdue', past due and unpaid is included", () => {
-    const now = new Date('2026-07-09T12:00:00Z');
-    const where = overdueInstallmentWhere(
-      { clinicId: 'clinic-A' },
-      now,
+  test('production fixture: one installment item + one standalone item, sorted oldest due date first', async () => {
+    const now = new Date('2026-07-09');
+    const prisma = makeFakePrisma(
+      [
+        {
+          id: 'inst-1', planId: 'plan-1', amount: 4500, dueDate: new Date('2026-06-29'),
+          status: 'overdue', clinicId: 'clinic-A', paymentId: null,
+          patient: { id: 'patient-burak', firstName: 'Burak', lastName: 'Çelik' }, currency: 'TRY',
+        },
+      ],
+      [
+        {
+          id: 'pay-1', amount: 1500, paymentStatus: 'pending', clinicId: 'clinic-A', installment: null,
+          patient: { id: 'patient-can', firstName: 'Can', lastName: 'Aksoy' }, currency: 'TRY',
+          createdAt: new Date('2026-06-01'),
+        },
+      ],
     );
-
-    assert.deepEqual(where.status, { in: ['pending', 'overdue'] });
-    assert.equal(where.paymentId, null);
-    assert.equal(
-      isInstallmentOverdue('2026-06-29T00:00:00Z', 'overdue', now, null),
-      true,
-    );
+    const items = await overdueReceivablesList(prisma as any, ['clinic-A'], now);
+    assert.equal(items.length, 2);
+    // Can Aksoy's standalone payment (createdAt 2026-06-01) is older than Burak's
+    // installment due date (2026-06-29) → standalone item sorts first.
+    assert.equal(items[0].type, 'standalone');
+    assert.equal(items[0].patientName, 'Can Aksoy');
+    assert.equal(items[0].amount, 1500);
+    assert.equal(items[1].type, 'installment');
+    assert.equal(items[1].patientName, 'Burak Çelik');
+    assert.equal(items[1].amount, 4500);
+    assert.equal(items[1].planId, 'plan-1');
+    assert.equal(items[1].installmentId, 'inst-1');
   }),
 );
 
 tests.push(
-  test("pending past-due unpaid installment is included", () => {
-    const now = new Date('2026-07-09T12:00:00Z');
-    assert.equal(
-      isInstallmentOverdue('2026-06-29T00:00:00Z', 'pending', now, null),
-      true,
+  test('excludes paid installments and non-overdue standalone payments from the list', async () => {
+    const now = new Date('2026-07-09');
+    const prisma = makeFakePrisma(
+      [
+        { amount: 500, dueDate: new Date('2026-06-01'), status: 'paid', clinicId: 'clinic-A', paymentId: 'p-1' },
+        { amount: 900, dueDate: new Date('2026-12-01'), status: 'pending', clinicId: 'clinic-A', paymentId: null },
+      ],
+      [{ amount: 200, paymentStatus: 'paid', clinicId: 'clinic-A', installment: null }],
     );
+    const items = await overdueReceivablesList(prisma as any, ['clinic-A'], now);
+    assert.equal(items.length, 0, 'paid installment, future installment, and paid payment must all be excluded');
   }),
 );
 
-tests.push(
-  test("installment linked to a payment is excluded", () => {
-    const now = new Date('2026-07-09T12:00:00Z');
-    assert.equal(
-      isInstallmentOverdue('2026-06-29T00:00:00Z', 'overdue', now, 'payment-1'),
-      false,
-    );
-  }),
-);
-
-tests.push(
-  test("future installment is excluded", () => {
-    const now = new Date('2026-07-09T12:00:00Z');
-    assert.equal(
-      isInstallmentOverdue('2026-07-29T00:00:00Z', 'pending', now, null),
-      false,
-    );
-  }),
-);
-
-// ─── Sonuç ────────────────────────────────────────────────────────────────────
+// ─── Summary ──────────────────────────────────────────────────────────────────
 
 Promise.all(tests).then(() => {
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`Total: ${passed + failed}  Passed: ${passed}  Failed: ${failed}`);
-  console.log('─'.repeat(60));
-
+  console.log(`\n${'─'.repeat(50)}`);
+  console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 });

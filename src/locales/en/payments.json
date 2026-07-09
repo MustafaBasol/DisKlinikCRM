@@ -192,6 +192,33 @@
       "cancelFailed": "Plan could not be cancelled."
     }
   },
+  "overdueCollections": {
+    "title": "Overdue Collections",
+    "subtitle": "Unified view of overdue installments and payments",
+    "backToPlans": "Back to Payment Plans",
+    "summary": {
+      "totalOverdue": "Total Overdue",
+      "overdueInstallments": "Overdue Installments",
+      "standalonePayments": "Overdue Standalone Payments"
+    },
+    "recordCount": "{{count}} records",
+    "table": {
+      "patient": "Patient",
+      "type": "Type",
+      "amount": "Amount",
+      "dueDate": "Due Date",
+      "status": "Status",
+      "action": "Action"
+    },
+    "types": {
+      "installment": "Installment",
+      "standalone": "Standalone"
+    },
+    "empty": "No overdue collections.",
+    "viewPlan": "View Plan",
+    "viewPayment": "View Payment",
+    "loadFailed": "Failed to load overdue collections."
+  },
   "receipt": {
     "title": "Receipt / Payment Document",
     "print": "Print / PDF",

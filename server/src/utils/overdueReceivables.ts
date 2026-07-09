@@ -52,3 +52,81 @@ export async function overdueReceivablesAmount(
   const paymentAmount = paymentAgg._sum.amount ?? 0;
   return { installmentAmount, paymentAmount, total: installmentAmount + paymentAmount };
 }
+
+export interface OverdueReceivableItem {
+  id: string;
+  type: 'installment' | 'standalone';
+  patientId: string;
+  patientName: string;
+  amount: number;
+  currency: string;
+  dueDate: Date;
+  status: string;
+  planId: string | null;
+  installmentId: string | null;
+  paymentId: string | null;
+}
+
+/**
+ * Row-level list backing the unified overdue collections view — one entry per
+ * overdue installment plus one per standalone overdue payment, sorted oldest
+ * due date first. Standalone payments have no due date of their own, so
+ * createdAt is used as the closest available proxy for "how long overdue".
+ */
+export async function overdueReceivablesList(
+  prisma: any,
+  clinicIds: string[],
+  now: Date = new Date(),
+): Promise<OverdueReceivableItem[]> {
+  const installmentWhere = {
+    ...overdueInstallmentWhere(now),
+    plan: { clinicId: { in: clinicIds } },
+  };
+
+  const [installments, payments] = await Promise.all([
+    prisma.paymentPlanInstallment.findMany({
+      where: installmentWhere,
+      include: {
+        plan: {
+          include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+        },
+      },
+    }),
+    prisma.payment.findMany({
+      where: { clinicId: { in: clinicIds }, paymentStatus: 'pending', installment: null },
+      include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+    }),
+  ]);
+
+  const installmentItems: OverdueReceivableItem[] = installments.map((inst: any) => ({
+    id: inst.id,
+    type: 'installment' as const,
+    patientId: inst.plan.patient?.id ?? '',
+    patientName: inst.plan.patient ? `${inst.plan.patient.firstName} ${inst.plan.patient.lastName}` : '—',
+    amount: inst.amount,
+    currency: inst.plan.currency,
+    dueDate: inst.dueDate,
+    status: inst.status,
+    planId: inst.planId,
+    installmentId: inst.id,
+    paymentId: null,
+  }));
+
+  const paymentItems: OverdueReceivableItem[] = payments.map((p: any) => ({
+    id: p.id,
+    type: 'standalone' as const,
+    patientId: p.patient?.id ?? '',
+    patientName: p.patient ? `${p.patient.firstName} ${p.patient.lastName}` : '—',
+    amount: p.amount,
+    currency: p.currency,
+    dueDate: p.createdAt,
+    status: p.paymentStatus,
+    planId: null,
+    installmentId: null,
+    paymentId: p.id,
+  }));
+
+  return [...installmentItems, ...paymentItems].sort(
+    (a, b) => a.dueDate.getTime() - b.dueDate.getTime(),
+  );
+}

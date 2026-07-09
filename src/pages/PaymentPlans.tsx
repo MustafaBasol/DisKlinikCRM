@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   CreditCard, Plus, Loader2, CheckCircle2, Clock, AlertCircle,
-  ChevronDown, ChevronRight, XCircle, Search, Calendar, X,
+  ChevronDown, ChevronRight, XCircle, Search, Calendar, X, ArrowLeft, Receipt,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { paymentPlanService, paymentService } from '../services/api';
@@ -24,6 +24,28 @@ const PLAN_STATUS_STYLES: Record<string, string> = {
 };
 
 const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'cheque', 'other'] as const;
+
+interface OverdueSummary {
+  total: number;
+  installmentAmount: number;
+  installmentCount: number;
+  paymentAmount: number;
+  paymentCount: number;
+}
+
+interface OverdueItem {
+  id: string;
+  type: 'installment' | 'standalone';
+  patientId: string;
+  patientName: string;
+  amount: number;
+  currency: string;
+  dueDate: string;
+  status: string;
+  planId: string | null;
+  installmentId: string | null;
+  paymentId: string | null;
+}
 
 function isOverdue(dueDate: string, status: string, paymentId?: string | null) {
   return (
@@ -48,7 +70,7 @@ const PaymentPlans: React.FC = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(() => searchParams.get('planId'));
   const [payingInstallment, setPayingInstallment] = useState<{ planId: string; installmentId: string } | null>(null);
   const [payMethod, setPayMethod] = useState('cash');
   const [search, setSearch] = useState('');
@@ -76,6 +98,10 @@ const PaymentPlans: React.FC = () => {
     if (overdueOnly) fetchOverduePayments();
   }, [overdueOnly]);
 
+  const [overdueData, setOverdueData] = useState<{ summary: OverdueSummary; items: OverdueItem[] } | null>(null);
+  const [overdueLoading, setOverdueLoading] = useState(true);
+  const [overdueError, setOverdueError] = useState('');
+
   const fetchPlans = async () => {
     setLoading(true);
     try {
@@ -90,7 +116,28 @@ const PaymentPlans: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchPlans(); }, [statusFilter]); // eslint-disable-line
+  const fetchOverdueCollections = async () => {
+    setOverdueLoading(true);
+    setOverdueError('');
+    try {
+      const clinicId = searchParams.get('clinicId');
+      const res = await paymentPlanService.getOverdueCollections(clinicId ? { clinicId } : undefined);
+      setOverdueData(res.data);
+    } catch {
+      setOverdueError(t('payments:overdueCollections.loadFailed'));
+    } finally {
+      setOverdueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (overdueOnly) {
+      fetchOverdueCollections();
+    } else {
+      fetchPlans();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, overdueOnly]);
 
   const handleCreatePlan = async (data: any) => {
     await paymentPlanService.create(data);
@@ -143,6 +190,121 @@ const PaymentPlans: React.FC = () => {
     next.delete('overdueOnly');
     setSearchParams(next);
   };
+
+  // ── Unified overdue collections view (/payment-plans?overdueOnly=true) ─────
+  if (overdueOnly) {
+    const items = overdueData?.items || [];
+    const summary = overdueData?.summary;
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <Link to="/payment-plans" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-1">
+              <ArrowLeft size={14} /> {t('payments:overdueCollections.backToPlans')}
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900">{t('payments:overdueCollections.title')}</h1>
+            <p className="text-gray-500 mt-1">{t('payments:overdueCollections.subtitle')}</p>
+          </div>
+        </div>
+
+        {overdueError && (
+          <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm">{overdueError}</div>
+        )}
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">{t('payments:overdueCollections.summary.totalOverdue')}</p>
+              <AlertCircle size={20} className="text-red-600" />
+            </div>
+            <p className="text-2xl font-bold text-red-600">{money(summary?.total || 0)}</p>
+          </div>
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">{t('payments:overdueCollections.summary.overdueInstallments')}</p>
+              <CreditCard size={20} className="text-orange-500" />
+            </div>
+            <p className="text-2xl font-bold text-orange-500">{money(summary?.installmentAmount || 0)}</p>
+            <p className="text-xs text-gray-400 mt-1">{t('payments:overdueCollections.recordCount', { count: summary?.installmentCount || 0 })}</p>
+          </div>
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-500">{t('payments:overdueCollections.summary.standalonePayments')}</p>
+              <Receipt size={20} className="text-amber-500" />
+            </div>
+            <p className="text-2xl font-bold text-amber-500">{money(summary?.paymentAmount || 0)}</p>
+            <p className="text-xs text-gray-400 mt-1">{t('payments:overdueCollections.recordCount', { count: summary?.paymentCount || 0 })}</p>
+          </div>
+        </div>
+
+        {/* Unified Table */}
+        {overdueLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 size={32} className="animate-spin text-primary-500" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="card p-12 text-center text-gray-400">
+            <CheckCircle2 size={40} className="mx-auto mb-3 opacity-30 text-green-400" />
+            <p className="font-medium">{t('payments:overdueCollections.empty')}</p>
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:overdueCollections.table.patient')}</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:overdueCollections.table.type')}</th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-500">{t('payments:overdueCollections.table.amount')}</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:overdueCollections.table.dueDate')}</th>
+                    <th className="px-4 py-3 text-center font-medium text-gray-500">{t('payments:overdueCollections.table.status')}</th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-500">{t('payments:overdueCollections.table.action')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {items.map(item => (
+                    <tr key={`${item.type}-${item.id}`} className="bg-red-50/30 dark:bg-red-900/10 hover:bg-red-50/60">
+                      <td className="px-4 py-3 font-medium text-gray-900">{item.patientName}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${item.type === 'installment' ? 'bg-orange-50 text-orange-600' : 'bg-amber-50 text-amber-600'}`}>
+                          {t(`payments:overdueCollections.types.${item.type}`)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{money(item.amount, item.currency)}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        <div className="flex items-center gap-1">
+                          <Calendar size={14} className="text-gray-400" />
+                          {date(item.dueDate)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-xs px-2 py-1 rounded-full font-medium text-red-600 bg-red-50">
+                          {installmentStatusLabel('overdue')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {item.type === 'installment' ? (
+                          <Link to={`/payment-plans?planId=${item.planId}`} className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors">
+                            {t('payments:overdueCollections.viewPlan')}
+                          </Link>
+                        ) : (
+                          <Link to={`/payments?patientId=${item.patientId}`} className="text-xs bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-1 rounded-lg font-medium transition-colors">
+                            {t('payments:overdueCollections.viewPayment')}
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">

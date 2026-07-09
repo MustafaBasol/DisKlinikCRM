@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
-import { validateAndGetScope, toClinicOnlyScope } from '../utils/clinicScope.js';
+import { validateAndGetScope, toClinicOnlyScope, clinicIdsFromScope } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { countUnresolvedNoShows } from '../utils/noShowFollowUp.js';
 import { overdueReceivablesAmount } from '../utils/overdueReceivables.js';
@@ -116,6 +116,9 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
             where: { ...clinicIdWhere, status: 'pending', requestType: { not: 'info' } },
           })
         : Promise.resolve(0),
+      // overdueAmount: shared overdue-receivables rule (see server/src/utils/overdueReceivables.ts) —
+      // overdue installments (pending/legacy-overdue, dueDate<now, unpaid) + standalone pending payments.
+      overdueReceivables: overdueReceivablesAmount(prisma, clinicIdsFromScope(clinicIdWhere), new Date()),
     };
 
     const results = await Promise.all(Object.values(statsPromises));
@@ -266,6 +269,7 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         overdueAmount: stats.overdueReceivables?.total ?? 0,
         preparedMessages: stats.preparedMessagesWeek ?? 0,
         pendingAppointmentRequests: stats.pendingAppointmentRequests ?? 0,
+        overdueAmount: stats.overdueReceivables?.total ?? 0,
       },
       agenda,
       alerts,
@@ -300,6 +304,7 @@ export function buildSafeStats(raw: {
   overdueReceivables?: { installmentAmount?: number | null; paymentAmount?: number | null; total?: number | null } | null;
   preparedMessagesWeek?: number | null;
   pendingAppointmentRequests?: number | null;
+  overdueReceivables?: { total?: number | null } | null;
 }) {
   return {
     todayAppointments: raw.todayAppointments ?? 0,
@@ -316,6 +321,7 @@ export function buildSafeStats(raw: {
     overdueAmount: raw.overdueReceivables?.total ?? 0,
     preparedMessages: raw.preparedMessagesWeek ?? 0,
     pendingAppointmentRequests: raw.pendingAppointmentRequests ?? 0,
+    overdueAmount: raw.overdueReceivables?.total ?? 0,
   };
 }
 
