@@ -59,8 +59,14 @@
 
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <!-- Fails the install cleanly instead of silently proceeding on an unsupported OS/architecture. -->
-    <Launch Condition="Installed OR VersionNT >= 603" Message="NoraMedi Bridge requires Windows 8.1 / Windows Server 2012 R2 or later." />
+    <!--
+      Fails the install cleanly instead of silently proceeding on an
+      unsupported OS/architecture. VersionNT is MajorVersion*100 +
+      MinorVersion, so Windows 10 / Server 2016 (10.0) is 1000 — the
+      previous >= 603 threshold (Windows 8.1 / Server 2012 R2) let the
+      installer proceed on an OS .NET 10 does not support.
+    -->
+    <Launch Condition="Installed OR VersionNT >= 1000" Message="NoraMedi Bridge requires Windows 10 / Windows Server 2016 or later." />
     <Launch Condition="Installed OR VersionNT64" Message="NoraMedi Bridge requires a 64-bit edition of Windows." />
     <Launch Condition="REMOVE_LOCAL_DATA &lt;&gt; 1 OR Installed" Message="REMOVE_LOCAL_DATA is only valid on uninstall." />
 
@@ -68,14 +74,22 @@
     <Property Id="ARPPRODUCTICON" Value="NoraMediIcon" />
     <Property Id="ARPHELPLINK" Value="https://noramedi.com" />
     <Property Id="ARPNOREPAIR" Value="0" />
-    <!-- ARPNOMODIFY is set by WixUI_InstallDir itself (no Modify button in this UI). -->
+    <!-- ARPNOMODIFY is set by WixUI_Minimal itself (no Modify dialog in this UI). -->
     <Icon Id="NoraMediIcon" SourceFile="$(PublishManagerDir)\NoraMediBridge.Manager.exe" />
 
-    <!-- WIXUI_INSTALLDIR is the directory picker's target, consumed by WixUI_InstallDir. -->
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <!--
+      The LocalSystem service binaries must always land under
+      %ProgramFiles%\NoraMedi\Bridge — a directory picker would let a
+      non-admin-writable location be chosen for a LocalSystem service,
+      which is a privilege-escalation risk (Copilot review, PR #146).
+      WixUI_Minimal keeps license/progress/finish (including the
+      "Launch Manager after setup" checkbox hook) with no directory
+      selection dialog; INSTALLFOLDER is fixed by the StandardDirectory
+      tree below and is never exposed as a settable property.
+    -->
     <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
 
-    <!-- "Launch Manager after setup" checkbox on the exit dialog (standard WixUI_InstallDir hook). -->
+    <!-- "Launch Manager after setup" checkbox on the exit dialog (standard WixUI_Minimal hook). -->
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch NoraMedi Bridge Manager" />
     <Property Id="WixShellExecTarget" Value="[#NoraMediBridge.Manager.exe]" />
     <CustomAction Id="LaunchManagerAfterSetup"
@@ -90,12 +104,34 @@
       ManagerExeComponent's File row, and ICE69 forbids a Shortcut in one
       Feature pointing at a File owned by a different Feature (even when,
       as here, that other Feature is always-installed/AllowAbsent="no").
+
+      Persistence across repair/upgrade (Copilot review, PR #146): a plain
+      `Property Value="1" Secure="yes"` resets to 1 on every maintenance
+      run unless the caller repeats INSTALLDESKTOPSHORTCUT=0 on the command
+      line, silently re-adding a shortcut the user opted out of. Instead
+      the property is left unset here and given a RegistrySearch child that
+      reads the install-time choice recorded by
+      StartMenuShortcutComponent's DesktopShortcutChoice value (below) —
+      AppSearch (which runs RegistrySearch) never overwrites a property
+      that already has a value, so an explicit command-line
+      INSTALLDESKTOPSHORTCUT=0/1 always wins over the persisted registry
+      value, which in turn always wins over the SetProperty fallback below,
+      which only fires ("1") for a genuinely first-ever install where
+      neither the command line nor the registry has an answer yet.
     -->
-    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" Secure="yes" />
-    <ui:WixUI Id="WixUI_InstallDir" />
+    <Property Id="INSTALLDESKTOPSHORTCUT" Secure="yes">
+      <RegistrySearch Id="DesktopShortcutChoiceSearch"
+                       Root="HKCU"
+                       Key="Software\NoraMedi\Bridge"
+                       Name="DesktopShortcutChoice"
+                       Type="raw" />
+    </Property>
+    <SetProperty Id="INSTALLDESKTOPSHORTCUT" Value="1" Before="CostFinalize" Condition="NOT INSTALLDESKTOPSHORTCUT" Sequence="both" />
+
+    <ui:WixUI Id="WixUI_Minimal" />
 
     <UI>
-      <!-- Fires only when the user leaves the "Launch Manager" checkbox checked (default WixUI_InstallDir wiring, restated explicitly for clarity). -->
+      <!-- Fires only when the user leaves the "Launch Manager" checkbox checked (default WixUI_Minimal wiring, restated explicitly for clarity). -->
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchManagerAfterSetup" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
     </UI>
 
@@ -223,6 +259,18 @@
                 WorkingDirectory="MANAGERFOLDER" />
       <RemoveFolder Id="RemoveStartMenuNoraMediFolder" Directory="StartMenuNoraMediFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\NoraMedi\Bridge" Name="StartMenuShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
+      <!--
+        Always-installed component (Start Menu is not conditional), so this
+        row is rewritten with the *current* session's resolved
+        INSTALLDESKTOPSHORTCUT value on every install AND repair/
+        maintenance run — this is what INSTALLDESKTOPSHORTCUT's own
+        RegistrySearch (see the Property declaration above) reads back on
+        the next repair/upgrade to restore the user's original opt-out/
+        opt-in choice. Recorded unconditionally, unlike
+        DesktopShortcutInstalled on DesktopShortcutComponent below, precisely
+        because it must still be readable when the choice was "off".
+      -->
+      <RegistryValue Root="HKCU" Key="Software\NoraMedi\Bridge" Name="DesktopShortcutChoice" Type="integer" Value="[INSTALLDESKTOPSHORTCUT]" />
     </Component>
 
     <Component Id="DesktopShortcutComponent" Directory="DesktopFolder" Guid="3F4A1D5F-3C8D-4F5B-8B77-8C8F8B0E6A33" Condition="INSTALLDESKTOPSHORTCUT = 1">

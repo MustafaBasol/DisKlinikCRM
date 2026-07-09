@@ -50,6 +50,16 @@ dotnet build windows-bridge\installer\NoraMedi.Bridge.Bundle -c Release `
 release. `PublishServiceDir`/`PublishManagerDir` must point at the *outputs*
 of step 1, not the project directories.
 
+Both `.wixproj` files run a pre-build validation target
+(`ValidateInstallerBuildInputs`/`ValidateBundleBuildInputs`) that fails the
+build with a specific `MSBuild` error — naming exactly which property or
+file is the problem — if `PublishServiceDir`/`PublishManagerDir`/
+`MsiSourceFile` is missing, empty, doesn't exist, doesn't contain the
+expected executable/MSI, or if `ProductVersion` is missing or not a valid
+`Major.Minor.Build` version. This turns what used to be a silent
+wrong-files-harvested or wrong-MSI-chained failure into an immediate,
+readable build error.
+
 ## Layout on disk
 
 | What | Where |
@@ -58,8 +68,15 @@ of step 1, not the project directories.
 | Manager binaries | `%ProgramFiles%\NoraMedi\Bridge\Manager\` |
 | Windows Service | `NoraMediBridge` (LocalSystem, automatic-delayed start) |
 | Start Menu shortcut | `NoraMedi Bridge\NoraMedi Bridge Manager` (always installed) |
-| Desktop shortcut | `NoraMedi Bridge Manager.lnk` (on by default; silent opt-out below) |
+| Desktop shortcut | `NoraMedi Bridge Manager.lnk` (on by default; silent opt-out below; choice persists across repair/upgrade) |
 | Runtime data (unmanaged by the installer) | `%ProgramData%\NoraMediBridge\` |
+
+The install location is **fixed** at `%ProgramFiles%\NoraMedi\Bridge` — the
+installer UI (`WixUI_Minimal`) has no directory-picker dialog. A LocalSystem
+service must not be installable to an arbitrary, potentially
+non-admin-writable path (privilege-escalation risk, flagged in Copilot
+review of PR #146), so `INSTALLFOLDER` is never exposed as a settable UI or
+command-line property.
 
 Service and Manager are self-contained publishes that each carry their own
 copy of the .NET runtime and `NoraMedi.Bridge.Core`, so many filenames (and,
@@ -106,10 +123,29 @@ msiexec /x NoraMediBridge.msi REMOVE_LOCAL_DATA=1 /quiet
 ```
 
 This is a silent-install property today, not a GUI checkbox — the stock
-`WixUI_InstallDir` dialog set has no uninstall-time custom dialog without
+`WixUI_Minimal` dialog set has no uninstall-time custom dialog without
 substantially more UI authoring than this PR's scope justified. A future PR
 can add a proper "Remove local data" checkbox to the maintenance/uninstall
 flow; until then this is the documented, supported mechanism.
+
+## Desktop shortcut choice persists across repair/upgrade
+
+`INSTALLDESKTOPSHORTCUT` is resolved in this order, so a user's original
+choice survives future maintenance without needing to be repeated:
+
+1. **Command line**, if passed on that specific invocation (e.g.
+   `INSTALLDESKTOPSHORTCUT=0` on a repair) — always wins.
+2. **The previous session's choice**, read back via a `RegistrySearch` on
+   `HKCU\Software\NoraMedi\Bridge\DesktopShortcutChoice`. That value is
+   rewritten on every install/repair/upgrade by the (always-installed)
+   Start Menu shortcut component, specifically so it is still readable even
+   when the desktop shortcut itself was declined.
+3. **`1` (on)**, only when neither of the above applies — i.e. a genuinely
+   first-ever install.
+
+Windows Installer's `AppSearch` action never overwrites a property that
+already has a value, which is what makes step 1 take priority over step 2
+without any extra authoring.
 
 ## Silent install / uninstall
 
@@ -166,8 +202,20 @@ turned out to be scheduled at sequence 799 — before `CostInitialize`, far
 earlier than intuition suggests. The property-setting `<SetProperty>` now
 runs `Before="Wix4RemoveFoldersEx_X64"` explicitly.
 
+## Supported Windows versions
+
+The installer's `Launch` condition requires **Windows 10 / Windows Server
+2016 (`VersionNT >= 1000`) or later**, 64-bit only. An earlier version of
+this condition (`VersionNT >= 603`) incorrectly permitted Windows 8.1 /
+Server 2012 R2, which .NET 10 (the Service/Manager's target framework) does
+not support; installing on Windows 8.1 now fails cleanly with a clear
+message instead of installing binaries that cannot run.
+
 ## Security
 
+- The install directory is fixed at `%ProgramFiles%\NoraMedi\Bridge` — there
+  is no directory-picker UI, so a LocalSystem service binary can never end
+  up in a custom, potentially non-admin-writable location.
 - Program Files install location inherits the standard non-user-writable
   ACL (`BUILTIN\Users` get `RX` only) — verified with `icacls` on real
   hardware after install.
