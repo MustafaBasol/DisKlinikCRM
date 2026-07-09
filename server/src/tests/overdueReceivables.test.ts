@@ -224,6 +224,42 @@ tests.push(
   }),
 );
 
+// ─── 6. Regression — exact production fixture (Burak Çelik / Can Aksoy) ───────
+//
+// Reported bug: Finance Dashboard showed "Gecikmiş Tutar" = 1.500 (only the
+// standalone payment) and "Gecikmiş Taksit" = 0 (dead literal status='overdue'
+// filter). Correct values: Gecikmiş Tutar = 6.000, Gecikmiş Taksit (amount,
+// not a row count) = 4.500. financeDashboard.ts now sets
+// summary.overdueAmount = overdueReceivablesAmount().total and
+// summary.overdueInstallments = overdueReceivablesAmount().installmentAmount.
+
+section('6. Regression — üretim fikstürü (Burak Çelik taksit + Can Aksoy taksitsiz)');
+
+tests.push(
+  test('Burak Çelik ₺4.500 gecikmiş taksit + Can Aksoy ₺1.500 gecikmiş taksitsiz ödeme = ₺6.000 toplam', async () => {
+    const now = new Date('2026-07-09');
+    const prisma = makeFakePrisma(
+      [
+        // Burak Çelik: one overdue installment
+        { amount: 4500, dueDate: new Date('2026-06-15'), status: 'pending', clinicId: 'clinic-A' },
+      ],
+      [
+        // Can Aksoy: one overdue standalone (non-installment) receivable
+        { amount: 1500, paymentStatus: 'pending', clinicId: 'clinic-A', installment: null },
+      ],
+    );
+    const result = await overdueReceivablesAmount(prisma as any, { clinicId: 'clinic-A' }, now);
+
+    // "Gecikmiş Taksit" card — must be the installment MONETARY total, not a count
+    assert.equal(result.installmentAmount, 4500, 'Gecikmiş Taksit tutarı 4.500 olmalı');
+    // "Gecikmiş Tutar" card — combined total across both sources
+    assert.equal(result.total, 6000, 'Gecikmiş Tutar toplamı 6.000 olmalı');
+    // Standalone receivable sums separately, proving no double-count with the installment
+    assert.equal(result.paymentAmount, 1500);
+    assert.equal(result.installmentAmount + result.paymentAmount, result.total);
+  }),
+);
+
 // ─── Sonuç ────────────────────────────────────────────────────────────────────
 
 Promise.all(tests).then(() => {

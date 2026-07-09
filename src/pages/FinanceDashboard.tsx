@@ -27,6 +27,7 @@ interface FinanceSummary {
   overdueAmount: number;
   pendingInstallments: number;
   overdueInstallments: number;
+  overdueInstallmentsCount: number;
   cancelledPayments: number;
   practitionerPayoutsDue: number;
   practitionerPayoutsPaid: number;
@@ -252,7 +253,7 @@ export default function FinanceDashboard() {
             />
             <SummaryCard
               title={t('payments:financeDashboard.cards.overdueInstallments')}
-              value={String(s!.overdueInstallments)}
+              value={money(s!.overdueInstallments)}
               icon={<AlertTriangle size={18} className="text-orange-500" />}
               color="bg-orange-50"
             />
