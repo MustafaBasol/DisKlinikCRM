@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CreditCard, Plus, Loader2, CheckCircle2, Clock, AlertCircle,
-  ChevronDown, ChevronRight, XCircle, Search, Calendar,
+  ChevronDown, ChevronRight, XCircle, Search, Calendar, X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { paymentPlanService } from '../services/api';
@@ -38,6 +39,7 @@ const PaymentPlans: React.FC = () => {
   const installmentStatusLabel = (status: string) => t(`payments:plansPage.installmentStatus.${status}`, { defaultValue: status });
   const planStatusLabel = (status: string) => t(`payments:plansPage.planStatus.${status}`, { defaultValue: status });
   const methodLabel = (method: string) => t(`payments:methods.${method}`, { defaultValue: method });
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,9 @@ const PaymentPlans: React.FC = () => {
   const [payMethod, setPayMethod] = useState('cash');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  // Read from URL so the dashboard "Gecikmiş Tahsilatlar" card link
+  // (/payment-plans?overdueOnly=true) applies immediately and survives a refresh.
+  const [overdueOnly, setOverdueOnly] = useState<boolean>(() => searchParams.get('overdueOnly') === 'true');
 
   const fetchPlans = async () => {
     setLoading(true);
@@ -89,7 +94,15 @@ const PaymentPlans: React.FC = () => {
     }
   };
 
+  const paidCount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').length || 0;
+  const overdueCount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status)).length || 0;
+  const overdueAmount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status)).reduce((s: number, i: any) => s + i.amount, 0) || 0;
+  const paidAmount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + i.amount, 0) || 0;
+
+  const totalOverdueAmount = plans.reduce((s, p) => s + overdueAmount(p), 0);
+
   const filteredPlans = plans.filter(p => {
+    if (overdueOnly && overdueCount(p) === 0) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return `${p.patient?.firstName} ${p.patient?.lastName}`.toLowerCase().includes(q) ||
@@ -97,9 +110,12 @@ const PaymentPlans: React.FC = () => {
       (p.description || '').toLowerCase().includes(q);
   });
 
-  const paidCount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').length || 0;
-  const overdueCount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status)).length || 0;
-  const paidAmount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + i.amount, 0) || 0;
+  const clearOverdueFilter = () => {
+    setOverdueOnly(false);
+    const next = new URLSearchParams(searchParams);
+    next.delete('overdueOnly');
+    setSearchParams(next);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -119,7 +135,13 @@ const PaymentPlans: React.FC = () => {
         {[
           { label: t('payments:plansPage.summary.totalPlans'), value: plans.length, color: 'text-blue-600', icon: CreditCard },
           { label: t('payments:plansPage.planStatus.active'), value: plans.filter(p => p.status === 'active').length, color: 'text-green-600', icon: Clock },
-          { label: t('payments:plansPage.summary.overdueInstallments'), value: plans.reduce((s, p) => s + overdueCount(p), 0), color: 'text-red-600', icon: AlertCircle },
+          {
+            label: t('payments:plansPage.summary.overdueInstallments'),
+            value: plans.reduce((s, p) => s + overdueCount(p), 0),
+            subtitle: totalOverdueAmount > 0 ? money(totalOverdueAmount) : undefined,
+            color: 'text-red-600',
+            icon: AlertCircle,
+          },
           { label: t('payments:plansPage.planStatus.completed'), value: plans.filter(p => p.status === 'completed').length, color: 'text-purple-600', icon: CheckCircle2 },
         ].map(card => (
           <div key={card.label} className="card p-5">
@@ -128,9 +150,23 @@ const PaymentPlans: React.FC = () => {
               <card.icon size={20} className={card.color} />
             </div>
             <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+            {card.subtitle && <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>}
           </div>
         ))}
       </div>
+
+      {/* Overdue-only filter banner (from dashboard "Gecikmiş Tahsilatlar" card link) */}
+      {overdueOnly && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">
+          <span className="flex items-center gap-2">
+            <AlertCircle size={16} />
+            {t('payments:plansPage.filters.overdueOnlyActive')}
+          </span>
+          <button onClick={clearOverdueFilter} className="flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+            <X size={14} /> {t('payments:plansPage.filters.clear')}
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

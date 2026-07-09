@@ -147,6 +147,7 @@ tests.push(
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
     assert.equal(result.preparedMessages, 0);
     assert.equal(result.pendingAppointmentRequests, 0);
   }),
@@ -183,11 +184,13 @@ tests.push(
       treatmentValues: { _sum: { estimatedAmount: null, acceptedAmount: null } },
       monthlyRevenue: { _sum: { amount: null } },
       pendingPayments: { _sum: { amount: null } },
+      overdueInstallments: { _sum: { amount: null } },
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -197,11 +200,13 @@ tests.push(
       treatmentValues: null,
       monthlyRevenue: null,
       pendingPayments: null,
+      overdueInstallments: null,
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -211,11 +216,13 @@ tests.push(
       treatmentValues: {},
       monthlyRevenue: {},
       pendingPayments: {},
+      overdueInstallments: {},
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
     assert.equal(result.monthlyRevenue, 0);
     assert.equal(result.pendingAmount, 0);
+    assert.equal(result.overdueAmount, 0);
   }),
 );
 
@@ -252,11 +259,28 @@ tests.push(
       treatmentValues: { _sum: { estimatedAmount: 5000, acceptedAmount: 3200 } },
       monthlyRevenue: { _sum: { amount: 8500 } },
       pendingPayments: { _sum: { amount: 1200 } },
+      overdueInstallments: { _sum: { amount: 450 } },
     });
     assert.equal(result.estimatedValue, 5000);
     assert.equal(result.acceptedValue, 3200);
     assert.equal(result.monthlyRevenue, 8500);
     assert.equal(result.pendingAmount, 1200);
+    assert.equal(result.overdueAmount, 450);
+  }),
+);
+
+tests.push(
+  test('overdueAmount, pendingAmount’dan bağımsız hesaplanır (farklı kaynaklar)', () => {
+    // Regression: "Gecikmiş Tahsilatlar" kartı artık tüm pending Payment
+    // toplamını değil, yalnızca vadesi geçmiş PaymentPlanInstallment
+    // toplamını yansıtır — ikisi farklı sayılar olabilir.
+    const result = buildSafeStats({
+      pendingPayments: { _sum: { amount: 5000 } },
+      overdueInstallments: { _sum: { amount: 450 } },
+    });
+    assert.equal(result.pendingAmount, 5000);
+    assert.equal(result.overdueAmount, 450);
+    assert.notEqual(result.pendingAmount, result.overdueAmount);
   }),
 );
 
@@ -275,6 +299,7 @@ tests.push(
       'acceptedValue',
       'monthlyRevenue',
       'pendingAmount',
+      'overdueAmount',
       'preparedMessages',
       'pendingAppointmentRequests',
     ];

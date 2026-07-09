@@ -167,7 +167,9 @@
       "overdueInstallments": "Échéances en retard"
     },
     "filters": {
-      "allStatuses": "Tous les statuts"
+      "allStatuses": "Tous les statuts",
+      "overdueOnlyActive": "Affichage des plans avec des échéances en retard uniquement",
+      "clear": "Effacer le filtre"
     },
     "planStatus": {
       "active": "Actif",

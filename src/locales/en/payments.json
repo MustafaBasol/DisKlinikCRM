@@ -167,7 +167,9 @@
       "overdueInstallments": "Overdue Installments"
     },
     "filters": {
-      "allStatuses": "All Statuses"
+      "allStatuses": "All Statuses",
+      "overdueOnlyActive": "Showing only plans with overdue installments",
+      "clear": "Clear filter"
     },
     "planStatus": {
       "active": "Active",
