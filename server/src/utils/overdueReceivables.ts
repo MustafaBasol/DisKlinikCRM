@@ -29,28 +29,50 @@ export function overduePaymentWhere(clinicIdWhere: Record<string, any>): Record<
 
 export interface OverdueReceivablesTotal {
   installmentAmount: number;
+  installmentCount: number;
   paymentAmount: number;
   total: number;
 }
 
+function normalizeClinicScope(
+  scope: Record<string, any> | string[],
+): Record<string, any> {
+  if (Array.isArray(scope)) {
+    return { clinicId: { in: scope } };
+  }
+  return scope;
+}
+
 export async function overdueReceivablesAmount(
   prisma: any,
-  clinicIdWhere: Record<string, any>,
+  clinicScope: Record<string, any> | string[],
   now: Date = new Date(),
 ): Promise<OverdueReceivablesTotal> {
-  const [installmentAgg, paymentAgg] = await Promise.all([
+  const clinicIdWhere = normalizeClinicScope(clinicScope);
+
+  const [installmentAgg, installmentCount, paymentAgg] = await Promise.all([
     prisma.paymentPlanInstallment.aggregate({
       where: overdueInstallmentWhere(clinicIdWhere, now),
       _sum: { amount: true },
+    }),
+    prisma.paymentPlanInstallment.count({
+      where: overdueInstallmentWhere(clinicIdWhere, now),
     }),
     prisma.payment.aggregate({
       where: overduePaymentWhere(clinicIdWhere),
       _sum: { amount: true },
     }),
   ]);
+
   const installmentAmount = installmentAgg._sum.amount ?? 0;
   const paymentAmount = paymentAgg._sum.amount ?? 0;
-  return { installmentAmount, paymentAmount, total: installmentAmount + paymentAmount };
+
+  return {
+    installmentAmount,
+    installmentCount,
+    paymentAmount,
+    total: installmentAmount + paymentAmount,
+  };
 }
 
 export interface OverdueReceivableItem {
@@ -78,10 +100,8 @@ export async function overdueReceivablesList(
   clinicIds: string[],
   now: Date = new Date(),
 ): Promise<OverdueReceivableItem[]> {
-  const installmentWhere = {
-    ...overdueInstallmentWhere(now),
-    plan: { clinicId: { in: clinicIds } },
-  };
+  const clinicIdWhere = { clinicId: { in: clinicIds } };
+  const installmentWhere = overdueInstallmentWhere(clinicIdWhere, now);
 
   const [installments, payments] = await Promise.all([
     prisma.paymentPlanInstallment.findMany({

@@ -132,7 +132,7 @@ section('1. overdueInstallmentWhere / isInstallmentOverdue — shared rule shape
 
 tests.push(
   test('overdueInstallmentWhere matches both pending and legacy overdue statuses', () => {
-    const where = overdueInstallmentWhere(new Date('2026-07-09'));
+    const where = overdueInstallmentWhere({ clinicId: { in: ['clinic-A'] } }, new Date('2026-07-09'));
     assert.deepEqual(where.status.in, ['pending', 'overdue']);
     assert.equal(where.paymentId, null);
   }),
@@ -141,7 +141,7 @@ tests.push(
 tests.push(
   test('isInstallmentOverdue: legacy status=overdue, past due, no paymentId → true', () => {
     assert.equal(
-      isInstallmentOverdue('overdue', new Date('2026-06-29'), new Date('2026-07-09'), null),
+      isInstallmentOverdue(new Date('2026-06-29'), 'overdue', new Date('2026-07-09'), null),
       true,
     );
   }),
@@ -150,7 +150,7 @@ tests.push(
 tests.push(
   test('isInstallmentOverdue: status=pending, past due, no paymentId → true', () => {
     assert.equal(
-      isInstallmentOverdue('pending', new Date('2026-06-15'), new Date('2026-07-09'), null),
+      isInstallmentOverdue(new Date('2026-06-15'), 'pending', new Date('2026-07-09'), null),
       true,
     );
   }),
@@ -159,7 +159,7 @@ tests.push(
 tests.push(
   test('isInstallmentOverdue: paid (paymentId present) → false regardless of status/date', () => {
     assert.equal(
-      isInstallmentOverdue('overdue', new Date('2026-06-01'), new Date('2026-07-09'), 'payment-1'),
+      isInstallmentOverdue(new Date('2026-06-01'), 'overdue', new Date('2026-07-09'), 'payment-1'),
       false,
     );
   }),
@@ -168,7 +168,7 @@ tests.push(
 tests.push(
   test('isInstallmentOverdue: future due date → false', () => {
     assert.equal(
-      isInstallmentOverdue('pending', new Date('2026-12-01'), new Date('2026-07-09'), null),
+      isInstallmentOverdue(new Date('2026-12-01'), 'pending', new Date('2026-07-09'), null),
       false,
     );
   }),
@@ -177,7 +177,7 @@ tests.push(
 tests.push(
   test('isInstallmentOverdue: paid status → false even if past due', () => {
     assert.equal(
-      isInstallmentOverdue('paid', new Date('2026-06-01'), new Date('2026-07-09'), null),
+      isInstallmentOverdue(new Date('2026-06-01'), 'paid', new Date('2026-07-09'), null),
       false,
     );
   }),

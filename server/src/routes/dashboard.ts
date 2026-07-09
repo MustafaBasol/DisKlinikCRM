@@ -103,11 +103,6 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         where: { ...clinicIdWhere, paymentStatus: 'pending' },
         _sum: { amount: true },
       }),
-      // "Gecikmiş Tahsilatlar" kartı: vadesi geçmiş taksitler + taksitsiz bekleyen
-      // ödemelerin toplamı — /payment-plans?overdueOnly=true sayfasıyla (taksit +
-      // taksitsiz gecikmiş ödemeler bölümü) aynı tanımı kullanır. İki kaynak da
-      // ayrık (bkz. overdueReceivables.ts), bu yüzden çifte sayım olmaz.
-      overdueReceivables: overdueReceivablesAmount(prisma, clinicIdWhere),
       preparedMessagesWeek: prisma.sentMessage.count({
         where: { ...clinicIdWhere, status: 'prepared', createdAt: { gte: weekStart } },
       }),
@@ -269,7 +264,6 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         overdueAmount: stats.overdueReceivables?.total ?? 0,
         preparedMessages: stats.preparedMessagesWeek ?? 0,
         pendingAppointmentRequests: stats.pendingAppointmentRequests ?? 0,
-        overdueAmount: stats.overdueReceivables?.total ?? 0,
       },
       agenda,
       alerts,
@@ -304,7 +298,6 @@ export function buildSafeStats(raw: {
   overdueReceivables?: { installmentAmount?: number | null; paymentAmount?: number | null; total?: number | null } | null;
   preparedMessagesWeek?: number | null;
   pendingAppointmentRequests?: number | null;
-  overdueReceivables?: { total?: number | null } | null;
 }) {
   return {
     todayAppointments: raw.todayAppointments ?? 0,
@@ -321,7 +314,6 @@ export function buildSafeStats(raw: {
     overdueAmount: raw.overdueReceivables?.total ?? 0,
     preparedMessages: raw.preparedMessagesWeek ?? 0,
     pendingAppointmentRequests: raw.pendingAppointmentRequests ?? 0,
-    overdueAmount: raw.overdueReceivables?.total ?? 0,
   };
 }
 
