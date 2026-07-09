@@ -184,7 +184,7 @@ tests.push(
       treatmentValues: { _sum: { estimatedAmount: null, acceptedAmount: null } },
       monthlyRevenue: { _sum: { amount: null } },
       pendingPayments: { _sum: { amount: null } },
-      overdueInstallments: { _sum: { amount: null } },
+      overdueReceivables: { total: null },
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
@@ -200,7 +200,7 @@ tests.push(
       treatmentValues: null,
       monthlyRevenue: null,
       pendingPayments: null,
-      overdueInstallments: null,
+      overdueReceivables: null,
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
@@ -216,7 +216,7 @@ tests.push(
       treatmentValues: {},
       monthlyRevenue: {},
       pendingPayments: {},
-      overdueInstallments: {},
+      overdueReceivables: {},
     });
     assert.equal(result.estimatedValue, 0);
     assert.equal(result.acceptedValue, 0);
@@ -259,7 +259,7 @@ tests.push(
       treatmentValues: { _sum: { estimatedAmount: 5000, acceptedAmount: 3200 } },
       monthlyRevenue: { _sum: { amount: 8500 } },
       pendingPayments: { _sum: { amount: 1200 } },
-      overdueInstallments: { _sum: { amount: 450 } },
+      overdueReceivables: { total: 450 },
     });
     assert.equal(result.estimatedValue, 5000);
     assert.equal(result.acceptedValue, 3200);
@@ -276,11 +276,22 @@ tests.push(
     // toplamını yansıtır — ikisi farklı sayılar olabilir.
     const result = buildSafeStats({
       pendingPayments: { _sum: { amount: 5000 } },
-      overdueInstallments: { _sum: { amount: 450 } },
+      overdueReceivables: { total: 450 },
     });
     assert.equal(result.pendingAmount, 5000);
     assert.equal(result.overdueAmount, 450);
     assert.notEqual(result.pendingAmount, result.overdueAmount);
+  }),
+);
+
+tests.push(
+  test('overdueAmount, gecikmiş taksit + taksitsiz gecikmiş ödeme toplamını yansıtır', () => {
+    // Regression: "Gecikmiş Tahsilatlar" kartı yalnızca taksit bazlı gecikmeleri
+    // değil, taksitsiz (doğrudan) bekleyen ödemeleri de kapsamalı.
+    const result = buildSafeStats({
+      overdueReceivables: { installmentAmount: 450, paymentAmount: 300, total: 750 },
+    });
+    assert.equal(result.overdueAmount, 750);
   }),
 );
 

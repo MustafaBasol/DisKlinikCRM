@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import {
   CreditCard, Plus, Loader2, CheckCircle2, Clock, AlertCircle,
   ChevronDown, ChevronRight, XCircle, Search, Calendar, X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { paymentPlanService } from '../services/api';
+import { paymentPlanService, paymentService } from '../services/api';
 import PaymentPlanForm from '../components/PaymentPlanForm';
 import { useAuth } from '../context/AuthContext';
 import { canManagePayments } from '../utils/permissions';
@@ -52,6 +52,25 @@ const PaymentPlans: React.FC = () => {
   // Read from URL so the dashboard "Gecikmiş Tahsilatlar" card link
   // (/payment-plans?overdueOnly=true) applies immediately and survives a refresh.
   const [overdueOnly, setOverdueOnly] = useState<boolean>(() => searchParams.get('overdueOnly') === 'true');
+
+  // Standalone (non-installment) overdue payments — a Payment record is only ever
+  // created for an installment once it's PAID, so any pending Payment is inherently
+  // non-installment. Fetched only for the unified overdue view so this page's total
+  // matches the dashboard "Gecikmiş Tahsilatlar" card, which sums both sources.
+  const [overduePayments, setOverduePayments] = useState<any[]>([]);
+
+  const fetchOverduePayments = async () => {
+    try {
+      const res = await paymentService.getAll({ paymentStatus: 'pending' });
+      setOverduePayments(res.data || []);
+    } catch {
+      console.error('Failed to fetch overdue (non-installment) payments');
+    }
+  };
+
+  useEffect(() => {
+    if (overdueOnly) fetchOverduePayments();
+  }, [overdueOnly]);
 
   const fetchPlans = async () => {
     setLoading(true);
@@ -100,6 +119,10 @@ const PaymentPlans: React.FC = () => {
   const paidAmount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + i.amount, 0) || 0;
 
   const totalOverdueAmount = plans.reduce((s, p) => s + overdueAmount(p), 0);
+  const totalOverduePaymentsAmount = overduePayments.reduce((s, p) => s + p.amount, 0);
+  // Grand total shown in the overdue-only banner — must match the dashboard card
+  // (server/src/utils/overdueReceivables.ts sums the exact same two sources).
+  const totalOverdueGrandTotal = totalOverdueAmount + totalOverduePaymentsAmount;
 
   const filteredPlans = plans.filter(p => {
     if (overdueOnly && overdueCount(p) === 0) return false;
@@ -162,9 +185,14 @@ const PaymentPlans: React.FC = () => {
             <AlertCircle size={16} />
             {t('payments:plansPage.filters.overdueOnlyActive')}
           </span>
-          <button onClick={clearOverdueFilter} className="flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
-            <X size={14} /> {t('payments:plansPage.filters.clear')}
-          </button>
+          <div className="flex items-center gap-4">
+            <span className="font-bold">
+              {t('payments:plansPage.filters.overdueGrandTotal')}: {money(totalOverdueGrandTotal)}
+            </span>
+            <button onClick={clearOverdueFilter} className="flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+              <X size={14} /> {t('payments:plansPage.filters.clear')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -343,6 +371,45 @@ const PaymentPlans: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Unified overdue view: standalone (non-installment) overdue payments — the
+          other half of the dashboard "Gecikmiş Tahsilatlar" total, alongside the
+          overdue installment plans listed above. */}
+      {overdueOnly && overduePayments.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="p-5 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900">{t('payments:plansPage.overduePaymentsSection.title')}</h3>
+            <p className="text-sm text-gray-500 mt-1">{t('payments:plansPage.overduePaymentsSection.subtitle')}</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:list.patient')}</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500">{t('payments:list.amount')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:list.method')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">{t('payments:list.date')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {overduePayments.map((p) => (
+                  <tr key={p.id} className="bg-red-50/30 dark:bg-red-900/10 hover:bg-gray-50/50">
+                    <td className="px-4 py-3 text-gray-900 font-medium">{p.patient?.firstName} {p.patient?.lastName}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{money(p.amount, p.currency)}</td>
+                    <td className="px-4 py-3 text-gray-600">{methodLabel(p.paymentMethod)}</td>
+                    <td className="px-4 py-3 text-gray-600">{date(p.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 text-right">
+            <Link to="/payments?status=pending" className="text-sm text-primary-600 hover:underline font-medium">
+              {t('payments:plansPage.overduePaymentsSection.viewInPayments')}
+            </Link>
+          </div>
         </div>
       )}
 

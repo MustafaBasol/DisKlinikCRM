@@ -169,7 +169,13 @@
     "filters": {
       "allStatuses": "Tous les statuts",
       "overdueOnlyActive": "Affichage des plans avec des échéances en retard uniquement",
+      "overdueGrandTotal": "Total des encaissements en retard",
       "clear": "Effacer le filtre"
+    },
+    "overduePaymentsSection": {
+      "title": "Paiements en retard hors échéancier",
+      "subtitle": "Paiements impayés qui ne font pas partie d'un plan d'échéances",
+      "viewInPayments": "Voir dans Paiements"
     },
     "planStatus": {
       "active": "Actif",

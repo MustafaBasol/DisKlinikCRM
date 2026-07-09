@@ -169,7 +169,13 @@
     "filters": {
       "allStatuses": "Alle Status",
       "overdueOnlyActive": "Es werden nur Pläne mit überfälligen Raten angezeigt",
+      "overdueGrandTotal": "Gesamte überfällige Zahlungen",
       "clear": "Filter zurücksetzen"
+    },
+    "overduePaymentsSection": {
+      "title": "Überfällige Zahlungen ohne Ratenplan",
+      "subtitle": "Unbezahlte Zahlungen, die keinem Ratenplan zugeordnet sind",
+      "viewInPayments": "In Zahlungen anzeigen"
     },
     "planStatus": {
       "active": "Aktiv",
