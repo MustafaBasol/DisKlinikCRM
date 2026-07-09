@@ -60,14 +60,32 @@
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <!--
-      Fails the install cleanly instead of silently proceeding on an
-      unsupported OS/architecture. VersionNT is MajorVersion*100 +
-      MinorVersion, so Windows 10 / Server 2016 (10.0) is 1000 — the
-      previous >= 603 threshold (Windows 8.1 / Server 2012 R2) let the
-      installer proceed on an OS .NET 10 does not support.
+      Real-hardware install on a supported, current Windows machine failed
+      with error 1603 / MSI event 10005 against `VersionNT >= 1000`: Windows
+      Installer does not reliably surface Windows 10/11 as numeric VersionNT
+      1000 in every servicing/branch configuration, so that condition is not
+      a trustworthy OS gate. Fixed by reading the actual OS build number
+      directly out of the registry (the same value Settings > About shows)
+      instead of relying on VersionNT/VersionNT64's OS-version encoding:
+      HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentBuildNumber,
+      64-bit view, required to resolve to a number >= 10240 (Windows 10
+      RTM's build number; Windows Server 2016 is 14393, Windows 11 is
+      22000+). Windows 8.1 (build 9600) is correctly rejected;
+      "Installed OR ..." on both conditions keeps repair/upgrade/uninstall
+      working on an already-installed machine even if a future Windows
+      release changes this registry value's shape.
     -->
-    <Launch Condition="Installed OR VersionNT >= 1000" Message="NoraMedi Bridge requires Windows 10 / Windows Server 2016 or later." />
+    <Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+      <RegistrySearch Id="WindowsBuildNumberSearch"
+                       Root="HKLM"
+                       Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                       Name="CurrentBuildNumber"
+                       Type="raw"
+                       Bitness="always64" />
+    </Property>
+
     <Launch Condition="Installed OR VersionNT64" Message="NoraMedi Bridge requires a 64-bit edition of Windows." />
+    <Launch Condition="Installed OR (WINDOWSBUILDNUMBER AND WINDOWSBUILDNUMBER &gt;= 10240)" Message="NoraMedi Bridge requires Windows 10 (build 10240) / Windows Server 2016 or later." />
     <Launch Condition="REMOVE_LOCAL_DATA &lt;&gt; 1 OR Installed" Message="REMOVE_LOCAL_DATA is only valid on uninstall." />
 
     <Property Id="REMOVE_LOCAL_DATA" Value="0" Secure="yes" />

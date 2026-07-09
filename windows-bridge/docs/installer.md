@@ -204,12 +204,37 @@ runs `Before="Wix4RemoveFoldersEx_X64"` explicitly.
 
 ## Supported Windows versions
 
-The installer's `Launch` condition requires **Windows 10 / Windows Server
-2016 (`VersionNT >= 1000`) or later**, 64-bit only. An earlier version of
-this condition (`VersionNT >= 603`) incorrectly permitted Windows 8.1 /
-Server 2012 R2, which .NET 10 (the Service/Manager's target framework) does
-not support; installing on Windows 8.1 now fails cleanly with a clear
-message instead of installing binaries that cannot run.
+The installer's `Launch` conditions require **Windows 10 build 10240 /
+Windows Server 2016 (build 14393) or later**, 64-bit only. Detection reads
+the actual OS build number out of the registry
+(`HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentBuildNumber`,
+64-bit view, via a `RegistrySearch`/`WINDOWSBUILDNUMBER` property) and
+requires it to resolve to a number `>= 10240` — the same number shown in
+Settings > About on the target machine.
+
+Two versions of this check were tried and rejected before landing on the
+registry build number:
+- `VersionNT >= 603` incorrectly permitted Windows 8.1 / Server 2012 R2,
+  which .NET 10 (the Service/Manager's target framework) does not support.
+- `VersionNT >= 1000` (Windows 10/Server 2016's nominal `VersionNT`
+  encoding) looked correct on paper but **failed a real elevated install on
+  a supported, current Windows machine** with MSI error 1603 / event 10005 —
+  Windows Installer does not reliably expose Windows 10/11 as numeric
+  `VersionNT` 1000 in every servicing/branch configuration, so it is not a
+  trustworthy OS gate on its own.
+
+Both the architecture check (`VersionNT64`) and the build-number check keep
+`Installed OR ...` semantics, so an already-installed machine can always be
+repaired, upgraded, or uninstalled even if a future Windows release changes
+how this registry value looks. If the registry value cannot be resolved at
+all, the condition fails closed (install refused) rather than silently
+proceeding on an undetected OS.
+
+Verified against the compiled MSI's `Property`/`AppSearch`/`LaunchCondition`
+tables: the `WindowsBuildNumberSearch` `RegistrySearch` exists targeting
+`CurrentBuildNumber`, and the `LaunchCondition` table no longer contains
+`VersionNT >= 1000` — it contains the `WINDOWSBUILDNUMBER >= 10240` check
+instead.
 
 ## Security
 
