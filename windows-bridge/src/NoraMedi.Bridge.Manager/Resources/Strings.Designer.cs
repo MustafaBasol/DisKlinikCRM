@@ -33,6 +33,7 @@ public static class Strings
     public static string Tab_Updates => Get();
 
     public static string Button_Refresh => Get();
+    public static string Button_RefreshAll => Get();
     public static string Button_TestConnection => Get();
     public static string Button_Submit => Get();
     public static string Button_Browse => Get();
@@ -50,10 +51,22 @@ public static class Strings
     public static string Label_Modality => Get();
     public static string Label_FolderPath => Get();
     public static string Label_IngestKey => Get();
+    public static string Label_AgentVersion => Get();
+    public static string Label_Paired => Get();
+    public static string Label_Pending => Get();
+    public static string Label_Processing => Get();
+    public static string Label_Failed => Get();
+    public static string Label_Completed => Get();
+    public static string Label_SelectDevice => Get();
 
     public static string Msg_FeatureDisabled => Get();
     public static string Msg_ElevationRequired => Get();
     public static string Msg_ServiceUnavailable => Get();
+    public static string Msg_NoAvailableServerBindings => Get();
+
+    public static string Dialog_FolderPickerTitle => Get();
+    public static string Dialog_SaveDiagnosticsTitle => Get();
+    public static string Dialog_SaveDiagnosticsFilter => Get();
 
     private static string Get([System.Runtime.CompilerServices.CallerMemberName] string name = "") =>
         ResourceManager.GetString(name, CultureInfo.CurrentUICulture) ?? name;

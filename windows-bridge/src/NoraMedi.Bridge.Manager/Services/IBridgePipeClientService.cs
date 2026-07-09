@@ -36,4 +36,6 @@ public interface IBridgePipeClientService
 
     Task<PipeCallResult<ProvisionWithPairingCodeResponse>> ProvisionWithPairingCodeAsync(
         string pairingCode, string? computerDisplayName, CancellationToken cancellationToken = default);
+
+    Task<PipeCallResult<GetAvailableServerBindingsResponse>> GetAvailableServerBindingsAsync(CancellationToken cancellationToken = default);
 }

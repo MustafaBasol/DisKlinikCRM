@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows.Input;
 using NoraMedi.Bridge.Core.Diagnostics;
 using NoraMedi.Bridge.Manager.Models;
+using NoraMedi.Bridge.Manager.Resources;
 using NoraMedi.Bridge.Manager.Services;
 
 namespace NoraMedi.Bridge.Manager.ViewModels;
@@ -77,9 +78,9 @@ public sealed class DiagnosticsViewModel : ViewModelBase
             _lastSnapshot = result.Value;
 
             var targetPath = _fileDialog.PickSaveFile(
-                "Save diagnostics",
+                Strings.Dialog_SaveDiagnosticsTitle,
                 $"noramedi-bridge-diagnostics-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json",
-                "JSON files (*.json)|*.json");
+                Strings.Dialog_SaveDiagnosticsFilter);
 
             if (targetPath is null)
             {

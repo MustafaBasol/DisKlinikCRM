@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using NoraMedi.Bridge.Core.Diagnostics;
 using NoraMedi.Bridge.Manager.Models;
+using NoraMedi.Bridge.Manager.Resources;
 using NoraMedi.Bridge.Manager.Tests.TestSupport;
 using NoraMedi.Bridge.Manager.ViewModels;
 
@@ -103,5 +104,22 @@ public class DiagnosticsViewModelTests : IDisposable
         Assert.True(raised);
         Assert.Equal(0, dialog.PickSaveFileCallCount);
         Assert.False(vm.LastExportSucceeded);
+    }
+
+    [Fact]
+    public async Task ExportAsync_UsesResourcedDialogTitleAndFilter_NotHardcodedLiterals()
+    {
+        var savePath = TempFilePath();
+        var fake = new FakeBridgePipeClientService
+        {
+            NextExportDiagnostics = PipeCallResult<DiagnosticsSnapshot>.Ok(MakeSnapshot()),
+        };
+        var dialog = new FakeFileDialogService { NextSavePath = savePath };
+        var vm = new DiagnosticsViewModel(fake, dialog);
+
+        await vm.ExportAsync();
+
+        Assert.Equal(Strings.Dialog_SaveDiagnosticsTitle, dialog.LastPickSaveFileTitle);
+        Assert.Equal(Strings.Dialog_SaveDiagnosticsFilter, dialog.LastPickSaveFileFilter);
     }
 }

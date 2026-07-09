@@ -36,7 +36,12 @@ public sealed class MainViewModel : ViewModelBase
         Queue.UnauthorizedDetected += (_, _) => IsElevationRequired = true;
         Diagnostics.UnauthorizedDetected += (_, _) => IsElevationRequired = true;
 
+        // One-shot refresh after a successful pairing — never a polling
+        // timer, just a single reaction to the event the pairing flow raises.
+        Pairing.PairingSucceeded += async (_, _) => await RefreshAllAsync();
+
         RestartElevatedCommand = new RelayCommand(_elevationService.RestartElevated);
+        RefreshAllCommand = new AsyncRelayCommand(RefreshAllAsync, () => true);
     }
 
     public StatusViewModel Status { get; }
@@ -61,5 +66,23 @@ public sealed class MainViewModel : ViewModelBase
 
     public ICommand RestartElevatedCommand { get; }
 
-    public async Task InitializeAsync() => await Status.RefreshAsync();
+    /// <summary>Always-available manual refresh — the only way status/bindings/catalog are ever re-fetched besides startup and a successful pairing. There is deliberately no background polling/retry timer.</summary>
+    public ICommand RefreshAllCommand { get; }
+
+    /// <summary>
+    /// Startup load: status AND the current folder bindings, then — only if
+    /// already paired — the server's available-device catalog too (it is
+    /// meaningless before pairing).
+    /// </summary>
+    public async Task InitializeAsync() => await RefreshAllAsync();
+
+    private async Task RefreshAllAsync()
+    {
+        await Status.RefreshAsync();
+        await Bindings.RefreshAsync();
+        if (Status.Paired)
+        {
+            await Bindings.RefreshAvailableServerBindingsAsync();
+        }
+    }
 }

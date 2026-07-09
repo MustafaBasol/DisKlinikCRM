@@ -34,4 +34,6 @@ public interface IBridgePipeRequestHandler
     Task<CheckForUpdatesResponse> CheckForUpdatesAsync(CancellationToken cancellationToken);
 
     Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken);
+
+    Task<GetAvailableServerBindingsResponse> GetAvailableServerBindingsAsync(CancellationToken cancellationToken);
 }

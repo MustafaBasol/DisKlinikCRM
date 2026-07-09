@@ -25,6 +25,7 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
     public PipeCallResult<DiagnosticsSnapshot>? NextExportDiagnostics { get; set; }
     public PipeCallResult<CheckForUpdatesResponse>? NextCheckForUpdates { get; set; }
     public PipeCallResult<ProvisionWithPairingCodeResponse>? NextProvisionWithPairingCode { get; set; }
+    public PipeCallResult<GetAvailableServerBindingsResponse>? NextAvailableServerBindings { get; set; }
 
     public int GetServiceStatusCallCount { get; private set; }
     public int GetBindingsCallCount { get; private set; }
@@ -37,6 +38,7 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
     public int ExportDiagnosticsCallCount { get; private set; }
     public int CheckForUpdatesCallCount { get; private set; }
     public int ProvisionWithPairingCodeCallCount { get; private set; }
+    public int GetAvailableServerBindingsCallCount { get; private set; }
 
     public string? LastValidatedPath { get; private set; }
     public string? LastAddOrUpdatePath { get; private set; }
@@ -115,5 +117,11 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
         ProvisionWithPairingCodeCallCount++;
         LastPairingCode = pairingCode;
         return Task.FromResult(NextProvisionWithPairingCode ?? PipeCallResult<ProvisionWithPairingCodeResponse>.Fail(ManagerErrorKind.Internal));
+    }
+
+    public Task<PipeCallResult<GetAvailableServerBindingsResponse>> GetAvailableServerBindingsAsync(CancellationToken cancellationToken = default)
+    {
+        GetAvailableServerBindingsCallCount++;
+        return Task.FromResult(NextAvailableServerBindings ?? PipeCallResult<GetAvailableServerBindingsResponse>.Fail(ManagerErrorKind.Internal));
     }
 }

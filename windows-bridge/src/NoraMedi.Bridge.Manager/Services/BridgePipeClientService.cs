@@ -67,6 +67,9 @@ public sealed class BridgePipeClientService : IBridgePipeClientService
             new ProvisionWithPairingCodeRequest(pairingCode, computerDisplayName),
             cancellationToken);
 
+    public async Task<PipeCallResult<GetAvailableServerBindingsResponse>> GetAvailableServerBindingsAsync(CancellationToken cancellationToken = default) =>
+        await SendAsync<GetAvailableServerBindingsResponse>(PipeOperation.GetAvailableServerBindings, payload: null, cancellationToken);
+
     private async Task<PipeCallResult<T>> SendAsync<T>(PipeOperation operation, object? payload, CancellationToken cancellationToken)
     {
         var raw = await SendRawAsync(operation, payload, cancellationToken);
@@ -111,7 +114,14 @@ public sealed class BridgePipeClientService : IBridgePipeClientService
         }
         catch (UnauthorizedAccessException)
         {
-            return RawResult.Fail(ManagerErrorKind.ServiceUnavailable);
+            // Thrown when Windows refuses the pipe CreateFile connect itself
+            // (access denied) — this means the Service IS running but the
+            // connecting identity isn't allowed to talk to it, not that the
+            // Service is unreachable. Must map to Unauthorized so the
+            // existing "restart as Administrator" elevation UX handles it,
+            // the same path used for a privileged-operation "unauthorized"
+            // pipe error-code response.
+            return RawResult.Fail(ManagerErrorKind.Unauthorized);
         }
 
         if (response.Success)

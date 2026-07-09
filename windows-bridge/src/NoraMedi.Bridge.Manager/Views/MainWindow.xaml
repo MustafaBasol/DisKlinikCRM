@@ -11,6 +11,8 @@
     <Window.Resources>
         <conv:EnumEqualsConverter x:Key="EnumEquals" />
         <conv:NullableBoolToTextConverter x:Key="NullableBoolToText" />
+        <conv:InverseBooleanConverter x:Key="InverseBoolean" />
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </Window.Resources>
 
     <Grid Margin="12">
@@ -20,18 +22,30 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Status pill, always visible -->
-        <Border Grid.Row="0" Style="{StaticResource StatusPill}" HorizontalAlignment="Left">
-            <TextBlock Text="{Binding Status.StatusLabel}" FontWeight="SemiBold" />
-        </Border>
+        <!-- Status pill + always-available manual refresh, both always visible -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource StatusPill}" HorizontalAlignment="Left">
+                <TextBlock Text="{Binding Status.StatusLabel}" FontWeight="SemiBold" />
+            </Border>
+            <Button Grid.Column="2" Content="{x:Static res:Strings.Button_RefreshAll}" Command="{Binding RefreshAllCommand}" HorizontalAlignment="Right" />
+        </Grid>
 
         <!-- Unmissable elevation banner: shown whenever a privileged op comes back unauthorized -->
         <Border Grid.Row="1" Background="#FFF4CE" BorderBrush="#D9A400" BorderThickness="1" Padding="10" Margin="0,8,0,8"
-                Visibility="{Binding IsElevationRequired, Converter={StaticResource EnumEquals}, ConverterParameter=True, FallbackValue=Collapsed}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{x:Static res:Strings.Msg_ElevationRequired}" VerticalAlignment="Center" Width="*" TextWrapping="Wrap" />
-                <Button Content="{x:Static res:Strings.Button_RestartElevated}" Command="{Binding RestartElevatedCommand}" Margin="12,0,0,0" />
-            </StackPanel>
+                Visibility="{Binding IsElevationRequired, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{x:Static res:Strings.Msg_ElevationRequired}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                <Button Grid.Column="1" Content="{x:Static res:Strings.Button_RestartElevated}" Command="{Binding RestartElevatedCommand}" Margin="12,0,0,0" />
+            </Grid>
         </Border>
 
         <!-- Feature-disabled full gate: one clear message, no button-mashing loop -->
@@ -69,16 +83,16 @@
                 <StackPanel Margin="12">
                     <TextBlock Text="{x:Static res:Strings.Tab_Status}" Style="{StaticResource HeadingText}" />
                     <TextBlock>
-                        <Run Text="Agent version: " /><Run Text="{Binding Status.AgentVersion, Mode=OneWay}" />
+                        <Run Text="{x:Static res:Strings.Label_AgentVersion}" /> <Run Text="{Binding Status.AgentVersion, Mode=OneWay}" />
                     </TextBlock>
                     <TextBlock>
-                        <Run Text="Paired: " /><Run Text="{Binding Status.Paired, Mode=OneWay}" />
+                        <Run Text="{x:Static res:Strings.Label_Paired}" /> <Run Text="{Binding Status.Paired, Mode=OneWay}" />
                     </TextBlock>
                     <Button Content="{x:Static res:Strings.Button_Refresh}" Command="{Binding Status.RefreshCommand}"
-                            IsEnabled="{Binding Status.IsBusy, Converter={StaticResource EnumEquals}, ConverterParameter=False}" />
+                            IsEnabled="{Binding Status.IsBusy, Converter={StaticResource InverseBoolean}}" />
                     <Button Content="{x:Static res:Strings.Button_TestConnection}" Command="{Binding Status.TestConnectionCommand}" />
                     <TextBlock Text="{Binding Status.TestConnectionMessage}" />
-                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Status.IsBusy, Converter={StaticResource EnumEquals}, ConverterParameter=True}" />
+                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Status.IsBusy, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </TabItem>
 
@@ -91,7 +105,7 @@
                     <TextBlock Text="{x:Static res:Strings.Label_ComputerName}" />
                     <TextBox Text="{Binding Pairing.ComputerDisplayName, UpdateSourceTrigger=PropertyChanged}" />
                     <Button Content="{x:Static res:Strings.Button_Submit}" Command="{Binding Pairing.SubmitCommand}" IsDefault="True" />
-                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Pairing.IsBusy, Converter={StaticResource EnumEquals}, ConverterParameter=True}" />
+                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Pairing.IsBusy, Converter={StaticResource BoolToVis}}" />
                     <TextBlock Text="{Binding Pairing.ResultMessage}" />
                 </StackPanel>
             </TabItem>
@@ -107,25 +121,36 @@
                     <TextBlock Grid.Row="0" Text="{x:Static res:Strings.Tab_Bindings}" Style="{StaticResource HeadingText}" />
 
                     <DataGrid Grid.Row="1" ItemsSource="{Binding Bindings.Bindings}" AutoGenerateColumns="True"
+                              SelectedItem="{Binding Bindings.SelectedBinding, Mode=TwoWay}"
                               IsReadOnly="True" MinHeight="120" />
 
                     <StackPanel Grid.Row="2" Margin="0,8,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding Bindings.FolderPath, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="220" />
-                            <Button Content="{x:Static res:Strings.Button_Browse}" Command="{Binding Bindings.BrowseFolderCommand}" />
-                        </StackPanel>
-                        <TextBlock Text="{x:Static res:Strings.Label_DeviceId}" />
-                        <TextBox Text="{Binding Bindings.DeviceId, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="{x:Static res:Strings.Label_Modality}" />
-                        <TextBox Text="{Binding Bindings.Modality, UpdateSourceTrigger=PropertyChanged}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding Bindings.FolderPath, UpdateSourceTrigger=PropertyChanged}" MinWidth="220" />
+                            <Button Grid.Column="1" Content="{x:Static res:Strings.Button_Browse}" Command="{Binding Bindings.BrowseFolderCommand}" />
+                        </Grid>
+
+                        <!-- Device selector: the user picks a known server binding here — never types a raw device ID. -->
+                        <TextBlock Text="{x:Static res:Strings.Label_SelectDevice}" />
+                        <ComboBox ItemsSource="{Binding Bindings.AvailableServerBindings}"
+                                  SelectedItem="{Binding Bindings.SelectedAvailableBinding, Mode=TwoWay}"
+                                  Visibility="{Binding Bindings.HasAvailableServerBindings, Converter={StaticResource BoolToVis}}"
+                                  DisplayMemberPath="DisplayName" />
+                        <TextBlock Text="{x:Static res:Strings.Msg_NoAvailableServerBindings}" TextWrapping="Wrap"
+                                   Visibility="{Binding Bindings.HasNoAvailableServerBindings, Converter={StaticResource BoolToVis}}" />
+
                         <StackPanel Orientation="Horizontal">
                             <Button Content="{x:Static res:Strings.Button_Validate}" Command="{Binding Bindings.ValidateFolderCommandInstance}" />
                             <Button Content="{x:Static res:Strings.Button_Save}" Command="{Binding Bindings.SaveCommand}" />
-                            <Button Content="{x:Static res:Strings.Button_Remove}" Command="{Binding Bindings.RemoveCommand}" />
+                            <Button Content="{x:Static res:Strings.Button_Remove}" Command="{Binding Bindings.RemoveSelectedBindingCommand}" />
                         </StackPanel>
                         <TextBlock Text="{Binding Bindings.FolderStatusLabel}" />
                         <TextBlock Text="{Binding Bindings.StatusMessage}" />
-                        <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Bindings.IsBusy, Converter={StaticResource EnumEquals}, ConverterParameter=True}" />
+                        <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Bindings.IsBusy, Converter={StaticResource BoolToVis}}" />
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -135,19 +160,19 @@
                     <TextBlock Text="{x:Static res:Strings.Tab_Queue}" Style="{StaticResource HeadingText}" />
                     <UniformGrid Columns="4">
                         <StackPanel>
-                            <TextBlock Text="Pending" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Static res:Strings.Label_Pending}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Queue.Pending}" />
                         </StackPanel>
                         <StackPanel>
-                            <TextBlock Text="Processing" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Static res:Strings.Label_Processing}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Queue.Processing}" />
                         </StackPanel>
                         <StackPanel>
-                            <TextBlock Text="Failed" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Static res:Strings.Label_Failed}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Queue.Failed}" />
                         </StackPanel>
                         <StackPanel>
-                            <TextBlock Text="Completed" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Static res:Strings.Label_Completed}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Queue.Completed}" />
                         </StackPanel>
                     </UniformGrid>
@@ -157,7 +182,7 @@
                     <Button Content="{x:Static res:Strings.Button_Retry}" Command="{Binding Queue.RetryCommand}" />
                     <TextBlock Text="{Binding Queue.RetryMessage}" />
                     <TextBlock Text="{Binding Queue.StatusMessage}" />
-                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Queue.IsBusy, Converter={StaticResource EnumEquals}, ConverterParameter=True}" />
+                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Queue.IsBusy, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </TabItem>
 
@@ -166,7 +191,7 @@
                     <TextBlock Text="{x:Static res:Strings.Tab_Diagnostics}" Style="{StaticResource HeadingText}" />
                     <Button Content="{x:Static res:Strings.Button_Export}" Command="{Binding Diagnostics.ExportCommand}" />
                     <TextBlock Text="{Binding Diagnostics.StatusMessage}" />
-                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Diagnostics.IsBusy, Converter={StaticResource EnumEquals}, ConverterParameter=True}" />
+                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Diagnostics.IsBusy, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </TabItem>
 
@@ -175,7 +200,7 @@
                     <TextBlock Text="{x:Static res:Strings.Tab_Updates}" Style="{StaticResource HeadingText}" />
                     <Button Content="{x:Static res:Strings.Button_CheckForUpdates}" Command="{Binding Update.CheckForUpdatesCommand}" />
                     <TextBlock Text="{Binding Update.Message}" />
-                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Update.IsBusy, Converter={StaticResource EnumEquals}, ConverterParameter=True}" />
+                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Update.IsBusy, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </TabItem>
         </TabControl>

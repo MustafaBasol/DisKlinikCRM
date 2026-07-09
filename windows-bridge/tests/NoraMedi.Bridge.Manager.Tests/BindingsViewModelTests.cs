@@ -1,5 +1,6 @@
 using NoraMedi.Bridge.Core.Ipc;
 using NoraMedi.Bridge.Manager.Models;
+using NoraMedi.Bridge.Manager.Resources;
 using NoraMedi.Bridge.Manager.Tests.TestSupport;
 using NoraMedi.Bridge.Manager.ViewModels;
 
@@ -34,6 +35,7 @@ public class BindingsViewModelTests
         Assert.Equal(@"D:\Images\Sensor", vm.FolderPath);
         Assert.Null(vm.IsFolderValid);
         Assert.Equal(1, dialog.PickFolderCallCount);
+        Assert.Equal(Strings.Dialog_FolderPickerTitle, dialog.LastPickFolderTitle);
     }
 
     [Fact]
@@ -178,5 +180,137 @@ public class BindingsViewModelTests
 
         Assert.Equal("watch-1", vm.WatchId);
         Assert.Equal(StatusLabels.ConnectionRequired, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task RefreshAvailableServerBindingsAsync_PopulatesCatalogFromResult()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextAvailableServerBindings = PipeCallResult<GetAvailableServerBindingsResponse>.Ok(
+                new GetAvailableServerBindingsResponse(
+                    [new AvailableServerBindingInfo("binding-1", "device-1", "Sensor 1 (Op Room)", "IO", "active", "sensor")])),
+        };
+        var vm = new BindingsViewModel(fake, new FakeFileDialogService());
+
+        await vm.RefreshAvailableServerBindingsAsync();
+
+        Assert.Single(vm.AvailableServerBindings);
+        Assert.Equal("device-1", vm.AvailableServerBindings[0].DeviceId);
+        Assert.True(vm.HasAvailableServerBindings);
+        Assert.False(vm.HasNoAvailableServerBindings);
+        Assert.Equal(1, fake.GetAvailableServerBindingsCallCount);
+    }
+
+    [Fact]
+    public async Task RefreshAvailableServerBindingsAsync_EmptyCatalog_ShowsNoDevicesEmptyState()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextAvailableServerBindings = PipeCallResult<GetAvailableServerBindingsResponse>.Ok(
+                new GetAvailableServerBindingsResponse([])),
+        };
+        var vm = new BindingsViewModel(fake, new FakeFileDialogService());
+
+        await vm.RefreshAvailableServerBindingsAsync();
+
+        Assert.Empty(vm.AvailableServerBindings);
+        Assert.True(vm.HasNoAvailableServerBindings);
+        Assert.False(vm.HasAvailableServerBindings);
+    }
+
+    [Fact]
+    public async Task SelectedAvailableBinding_SetsDeviceIdAndModality_WithoutManualEntry()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextAvailableServerBindings = PipeCallResult<GetAvailableServerBindingsResponse>.Ok(
+                new GetAvailableServerBindingsResponse(
+                    [new AvailableServerBindingInfo("binding-1", "device-42", "Sensor West", "PANO", "active", "sensor")])),
+            NextValidateFolder = PipeCallResult<ValidateFolderResponse>.Ok(new ValidateFolderResponse(true, true, null)),
+            NextAddOrUpdateBinding = PipeCallResult<AddOrUpdateFolderBindingResponse>.Ok(new AddOrUpdateFolderBindingResponse("watch-1")),
+            NextBindings = PipeCallResult<IReadOnlyList<FolderBindingInfo>>.Ok([]),
+        };
+        var vm = new BindingsViewModel(fake, new FakeFileDialogService()) { FolderPath = @"C:\Scans" };
+        await vm.RefreshAvailableServerBindingsAsync();
+
+        vm.SelectedAvailableBinding = vm.AvailableServerBindings[0];
+        await vm.ValidateFolderAsync();
+        await vm.SaveAsync();
+
+        Assert.Equal(@"C:\Scans", fake.LastAddOrUpdatePath);
+        Assert.Equal("device-42", vm.DeviceId);
+        Assert.Equal("PANO", vm.Modality);
+        Assert.Equal(1, fake.AddOrUpdateFolderBindingCallCount);
+    }
+
+    [Fact]
+    public void SelectedBinding_PopulatesEditFormFromExistingBinding()
+    {
+        var fake = new FakeBridgePipeClientService();
+        var vm = new BindingsViewModel(fake, new FakeFileDialogService());
+        var existing = new FolderBindingInfo("watch-5", @"C:\Scans\Pano", "device-7", "PANO", true);
+
+        vm.SelectedBinding = existing;
+
+        Assert.Equal("watch-5", vm.WatchId);
+        Assert.Equal(@"C:\Scans\Pano", vm.FolderPath);
+        Assert.Equal("device-7", vm.DeviceId);
+        Assert.Equal("PANO", vm.Modality);
+        Assert.True(vm.IsFolderValid);
+        Assert.Equal(StatusLabels.Connected, vm.FolderStatusLabel);
+    }
+
+    [Fact]
+    public void SelectedBinding_MatchesCatalogEntryByDeviceId()
+    {
+        var fake = new FakeBridgePipeClientService();
+        var vm = new BindingsViewModel(fake, new FakeFileDialogService());
+        var catalogEntry = new AvailableServerBindingInfo("binding-1", "device-7", "Sensor 1", "PANO", "active", "sensor");
+        vm.AvailableServerBindings.Add(catalogEntry);
+
+        vm.SelectedBinding = new FolderBindingInfo("watch-5", @"C:\Scans\Pano", "device-7", "PANO", true);
+
+        Assert.Same(catalogEntry, vm.SelectedAvailableBinding);
+    }
+
+    [Fact]
+    public async Task UpdateSelectedBindingCommand_UpdatesExistingBindingInPlaceAndRefreshes()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextValidateFolder = PipeCallResult<ValidateFolderResponse>.Ok(new ValidateFolderResponse(true, true, null)),
+            NextAddOrUpdateBinding = PipeCallResult<AddOrUpdateFolderBindingResponse>.Ok(new AddOrUpdateFolderBindingResponse("watch-5")),
+            NextBindings = PipeCallResult<IReadOnlyList<FolderBindingInfo>>.Ok(
+                [new FolderBindingInfo("watch-5", @"C:\Scans\Pano2", "device-7", "PANO", true)]),
+        };
+        var vm = new BindingsViewModel(fake, new FakeFileDialogService());
+        vm.SelectedBinding = new FolderBindingInfo("watch-5", @"C:\Scans\Pano", "device-7", "PANO", true);
+        vm.FolderPath = @"C:\Scans\Pano2";
+        await vm.ValidateFolderAsync();
+
+        await ((AsyncRelayCommand)vm.UpdateSelectedBindingCommand).ExecuteAsync();
+
+        Assert.Equal(1, fake.AddOrUpdateFolderBindingCallCount);
+        Assert.Equal("watch-5", vm.WatchId);
+        Assert.Single(vm.Bindings);
+    }
+
+    [Fact]
+    public async Task RemoveSelectedBindingCommand_RemovesExistingBindingAndRefreshes()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextRemoveBinding = PipeCallResult<bool>.Ok(true),
+            NextBindings = PipeCallResult<IReadOnlyList<FolderBindingInfo>>.Ok([]),
+        };
+        var vm = new BindingsViewModel(fake, new FakeFileDialogService());
+        vm.SelectedBinding = new FolderBindingInfo("watch-5", @"C:\Scans\Pano", "device-7", "PANO", true);
+
+        await ((AsyncRelayCommand)vm.RemoveSelectedBindingCommand).ExecuteAsync();
+
+        Assert.Equal("watch-5", fake.LastRemovedWatchId);
+        Assert.Null(vm.WatchId);
+        Assert.Empty(vm.Bindings);
     }
 }
