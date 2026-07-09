@@ -59,3 +59,27 @@ public sealed record CheckForUpdatesResponse(bool Supported, string Message)
 public sealed record ProvisionWithPairingCodeRequest(string PairingCode, string? ComputerDisplayName = null);
 
 public sealed record ProvisionWithPairingCodeResponse(bool Ok, string? BridgeAgentId, string? ClinicName, int? BindingCount, string? ErrorMessage);
+
+/// <summary>
+/// One device/binding already known to the NoraMedi backend for this clinic
+/// (surfaced via bootstrap/pairing — see <see cref="Http.BootstrapBinding"/>),
+/// offered to the Manager so a non-technical user can pick a device from a
+/// readable list instead of typing a raw device ID. <see cref="BindingId"/>
+/// is the server-side binding identifier; it is distinct from the purely
+/// local <see cref="FolderBindingInfo.WatchId"/>.
+/// </summary>
+public sealed record AvailableServerBindingInfo(
+    string BindingId,
+    string DeviceId,
+    string DisplayName,
+    string? Modality,
+    string Status,
+    string? AcquisitionType);
+
+/// <summary>
+/// Response for <see cref="PipeOperation.GetAvailableServerBindings"/>. May
+/// legitimately be an empty list — e.g. before the Service has any cached
+/// catalog from the backend yet — which the Manager must render as a "no
+/// devices available yet" empty state, never as fabricated/placeholder rows.
+/// </summary>
+public sealed record GetAvailableServerBindingsResponse(IReadOnlyList<AvailableServerBindingInfo> Bindings);

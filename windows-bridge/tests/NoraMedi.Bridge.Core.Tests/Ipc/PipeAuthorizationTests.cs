@@ -113,6 +113,7 @@ public class PipeAuthorizationTests : IAsyncLifetime
     [InlineData(nameof(PipeOperation.RetryFailedItem))]
     [InlineData(nameof(PipeOperation.TestConnection))]
     [InlineData(nameof(PipeOperation.ProvisionWithPairingCode))]
+    [InlineData(nameof(PipeOperation.GetAvailableServerBindings))]
     public async Task FeatureDisabled_BlocksEveryOtherOperation_EvenForAnAdministrator(string operationName)
     {
         _handler.FeatureEnabled = false;

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="0" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="2" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+
+  <data name="AppTitle" xml:space="preserve"><value>NoraMedi Bridge Manager</value></data>
+
+  <data name="Status_NotConnected" xml:space="preserve"><value>Not connected</value></data>
+  <data name="Status_Connected" xml:space="preserve"><value>Connected</value></data>
+  <data name="Status_ServiceUnavailable" xml:space="preserve"><value>Service unavailable</value></data>
+  <data name="Status_FolderInaccessible" xml:space="preserve"><value>Folder inaccessible</value></data>
+  <data name="Status_ConnectionRequired" xml:space="preserve"><value>Connection required</value></data>
+  <data name="Status_ActionRequired" xml:space="preserve"><value>Action required</value></data>
+
+  <data name="Tab_Status" xml:space="preserve"><value>Status</value></data>
+  <data name="Tab_Pairing" xml:space="preserve"><value>Pairing</value></data>
+  <data name="Tab_Bindings" xml:space="preserve"><value>Folder Bindings</value></data>
+  <data name="Tab_Queue" xml:space="preserve"><value>Upload Queue</value></data>
+  <data name="Tab_Diagnostics" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="Tab_Updates" xml:space="preserve"><value>Updates</value></data>
+
+  <data name="Button_Refresh" xml:space="preserve"><value>_Refresh</value></data>
+  <data name="Button_RefreshAll" xml:space="preserve"><value>Re_fresh All</value></data>
+  <data name="Button_TestConnection" xml:space="preserve"><value>_Test Connection</value></data>
+  <data name="Button_Submit" xml:space="preserve"><value>_Submit</value></data>
+  <data name="Button_Browse" xml:space="preserve"><value>_Browse...</value></data>
+  <data name="Button_Validate" xml:space="preserve"><value>_Validate Folder</value></data>
+  <data name="Button_Save" xml:space="preserve"><value>_Save Binding</value></data>
+  <data name="Button_Remove" xml:space="preserve"><value>Re_move Binding</value></data>
+  <data name="Button_Retry" xml:space="preserve"><value>Re_try</value></data>
+  <data name="Button_Export" xml:space="preserve"><value>_Export Diagnostics...</value></data>
+  <data name="Button_CheckForUpdates" xml:space="preserve"><value>_Check for Updates</value></data>
+  <data name="Button_RestartElevated" xml:space="preserve"><value>_Restart as Administrator</value></data>
+
+  <data name="Label_PairingCode" xml:space="preserve"><value>Pairing code</value></data>
+  <data name="Label_ComputerName" xml:space="preserve"><value>Computer name (optional)</value></data>
+  <data name="Label_DeviceId" xml:space="preserve"><value>Device</value></data>
+  <data name="Label_Modality" xml:space="preserve"><value>Modality (optional)</value></data>
+  <data name="Label_FolderPath" xml:space="preserve"><value>Folder path</value></data>
+  <data name="Label_IngestKey" xml:space="preserve"><value>Ingest key</value></data>
+  <data name="Label_AgentVersion" xml:space="preserve"><value>Agent version:</value></data>
+  <data name="Label_Paired" xml:space="preserve"><value>Paired:</value></data>
+  <data name="Label_Pending" xml:space="preserve"><value>Pending</value></data>
+  <data name="Label_Processing" xml:space="preserve"><value>Processing</value></data>
+  <data name="Label_Failed" xml:space="preserve"><value>Failed</value></data>
+  <data name="Label_Completed" xml:space="preserve"><value>Completed</value></data>
+  <data name="Label_SelectDevice" xml:space="preserve"><value>Device</value></data>
+
+  <data name="Msg_FeatureDisabled" xml:space="preserve"><value>Imaging bridge is not yet enabled for this clinic. Contact NoraMedi support to turn it on.</value></data>
+  <data name="Msg_ElevationRequired" xml:space="preserve"><value>This action requires administrator access. Restart the Manager as Administrator to continue.</value></data>
+  <data name="Msg_ServiceUnavailable" xml:space="preserve"><value>The NoraMedi Bridge service isn't reachable. Make sure it is installed and running, then try again.</value></data>
+  <data name="Msg_NoAvailableServerBindings" xml:space="preserve"><value>No devices available yet. Devices registered for this clinic will appear here once the server catalog is available.</value></data>
+
+  <data name="Dialog_FolderPickerTitle" xml:space="preserve"><value>Select the folder this device saves images to</value></data>
+  <data name="Dialog_SaveDiagnosticsTitle" xml:space="preserve"><value>Save diagnostics</value></data>
+  <data name="Dialog_SaveDiagnosticsFilter" xml:space="preserve"><value>JSON files (*.json)|*.json</value></data>
+</root>

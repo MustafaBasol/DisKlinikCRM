@@ -30,6 +30,12 @@ public static class PipeOperationPolicy
         PipeOperation.CheckForUpdates,
     ];
 
+    // GetAvailableServerBindings deliberately appears in neither set above:
+    // it is read-only like GetBindings (not privileged), but — unlike
+    // GetServiceStatus/CheckForUpdates — a device catalog is meaningless
+    // before the clinic is paired/enabled, so it is blocked while the
+    // feature flag is off, same as GetBindings.
+
     /// <summary>Mutating or sensitive operations — provisioning, binding changes, retries, and network tests — require an administrator identity.</summary>
     public static bool IsPrivileged(PipeOperation operation) => PrivilegedOperations.Contains(operation);
 

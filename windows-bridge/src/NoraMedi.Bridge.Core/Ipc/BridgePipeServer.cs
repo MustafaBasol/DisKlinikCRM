@@ -293,6 +293,9 @@ public sealed class BridgePipeServer : IAsyncDisposable
                     return Ok(await _handler.ProvisionWithPairingCodeAsync(req, cancellationToken));
                 }
 
+            case PipeOperation.GetAvailableServerBindings:
+                return Ok(await _handler.GetAvailableServerBindingsAsync(cancellationToken));
+
             default:
                 return PipeResponse.Error(PipeErrorCodes.UnknownOperation);
         }

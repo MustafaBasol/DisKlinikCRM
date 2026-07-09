@@ -86,4 +86,11 @@ internal sealed class FakeBridgePipeRequestHandler : IBridgePipeRequestHandler
         Record(nameof(ProvisionWithPairingCodeAsync));
         return Task.FromResult(new ProvisionWithPairingCodeResponse(true, "agent-1", "Demo Clinic", 1, null));
     }
+
+    public Task<GetAvailableServerBindingsResponse> GetAvailableServerBindingsAsync(CancellationToken cancellationToken)
+    {
+        Record(nameof(GetAvailableServerBindingsAsync));
+        IReadOnlyList<AvailableServerBindingInfo> result = [new AvailableServerBindingInfo("binding-1", "device-1", "Sensor 1 (Op Room)", "IO", "active", "sensor")];
+        return Task.FromResult(new GetAvailableServerBindingsResponse(result));
+    }
 }

@@ -462,6 +462,16 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         return new ProvisionWithPairingCodeResponse(true, result.BridgeAgentId, result.ClinicName, result.Bindings.Count, null);
     }
 
+    /// <summary>
+    /// The device catalog fetched from the backend during bootstrap/pairing
+    /// is not yet cached/persisted anywhere the Service can read it back
+    /// from (that plumbing is a later PR's job) — this deliberately returns
+    /// a truthful empty list rather than fabricating placeholder devices, so
+    /// the Manager shows its "no devices available yet" empty state.
+    /// </summary>
+    public Task<GetAvailableServerBindingsResponse> GetAvailableServerBindingsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new GetAvailableServerBindingsResponse([]));
+
     public async ValueTask DisposeAsync()
     {
         if (_drainTimer is not null) await _drainTimer.DisposeAsync();
