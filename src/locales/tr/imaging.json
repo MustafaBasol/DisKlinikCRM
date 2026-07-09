@@ -163,6 +163,57 @@
     "loadFailed": "Görüntüleme verileri yüklenemedi",
     "actionFailed": "İşlem başarısız oldu"
   },
+  "onboarding": {
+    "card": {
+      "title": "Windows için NoraMedi Bridge",
+      "description": "Klinikteki görüntüleme cihazlarını NoraMedi'ye bağlayan, teknik bilgi gerektirmeyen bir Windows uygulaması.",
+      "supportedSystems": "Desteklenen sistemler: Windows 10/11 (64-bit) veya Windows Server 2016 ve üzeri",
+      "loadFailed": "Kurulum bilgisi yüklenemedi",
+      "notAvailable": "Bu özellik klinikiniz için henüz kullanıma açılmadı.",
+      "installerUnavailable": "Kurulum dosyası şu anda yayınlanmadı. Lütfen daha sonra tekrar deneyin.",
+      "version": "Sürüm {{version}}",
+      "unsignedWarning": "Bu, dijital olarak imzalanmamış bir pilot/test sürümüdür. Kurulum sırasında Windows \"Bilinmeyen yayımcı\" uyarısı gösterebilir.",
+      "download": "İndir",
+      "setup": "Kurulumu Başlat"
+    },
+    "wizard": {
+      "title": "NoraMedi Bridge Kurulumu",
+      "devices": {
+        "description": "Bu bilgisayara bağlanacak görüntüleme cihazlarını seçin. En az bir cihaz seçmelisiniz.",
+        "empty": "Köprüye uygun aktif cihaz yok. Önce bir görüntüleme cihazı ekleyin."
+      },
+      "install": {
+        "description": "Aşağıdaki adımları klinik bilgisayarında (resepsiyon, röntgen odası vb.) uygulayın:",
+        "step1": "\"İndir\" düğmesiyle kurulum dosyasını indirin",
+        "step2": "NoraMediBridgeSetup.exe dosyasını çalıştırın",
+        "step3": "Windows yönetici izni istemini onaylayın",
+        "step4": "NoraMedi Bridge Manager açık kalsın",
+        "unsignedWarning": "Bu pilot sürüm imzalı değildir; Windows \"Bilinmeyen yayımcı\" uyarısı gösterebilir. Devam etmek için \"Yine de çalıştır\" seçeneğini kullanın."
+      },
+      "pairing": {
+        "namePlaceholder": "örn. Resepsiyon PC",
+        "generateCode": "Kod Oluştur",
+        "createFailed": "Eşleştirme kodu oluşturulamadı",
+        "enterInManager": "Bu kodu NoraMedi Bridge Manager'da girin:",
+        "expiresIn": "{{time}} içinde sona erecek",
+        "copyCode": "Kodu Kopyala",
+        "cancel": "İptal Et",
+        "waiting": "Bağlantı bekleniyor...",
+        "generateNew": "Yeni Kod Oluştur",
+        "status": {
+          "used": "Bu kod zaten kullanıldı.",
+          "expired": "Kodun süresi doldu.",
+          "cancelled": "Eşleştirme iptal edildi.",
+          "locked": "Çok fazla hatalı deneme nedeniyle bu kod kilitlendi."
+        }
+      },
+      "success": {
+        "title": "\"{{name}}\" başarıyla bağlandı",
+        "description": "Köprü artık NoraMedi'ye kayıtlı. Yerel klasörleri seçmek için NoraMedi Bridge Manager'ı kullanın.",
+        "nextSteps": "Bağlı cihazlar için izlenecek klasörleri NoraMedi Bridge Manager üzerinden seçebilirsiniz."
+      }
+    }
+  },
   "viewer": {
     "title": "DICOM Görüntüleyici",
     "loading": "DICOM görüntüsü yükleniyor...",

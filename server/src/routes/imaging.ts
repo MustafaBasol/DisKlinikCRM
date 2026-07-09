@@ -43,6 +43,7 @@ import {
   imagingBridgePairingCreateSchema,
 } from '../schemas/index.js';
 import { generateBridgeToken } from '../services/imaging/bridgeTokens.js';
+import { getBridgeOnboardingConfig } from '../services/imaging/bridgeOnboardingConfig.js';
 import {
   generatePairingCode,
   formatPairingCodeForDisplay,
@@ -1214,6 +1215,16 @@ router.delete('/imaging/bridge-pairings/:id', authorize([...IMAGING_MANAGE_ROLES
   } catch {
     res.status(500).json({ error: 'Failed to cancel pairing session' });
   }
+});
+
+// ═══ Self-servis kurulum (Web Onboarding) ═══════════════════════════════════
+// PR 5/7: yalnızca yapılandırma — indirme/kurulum akışının kendisi
+// tamamen istemci tarafında (Windows Manager). Gizli/PHI/PII yok; klinik
+// kapsaması gerekmez (tüm klinikler için aynı genel yayın yapılandırması).
+
+// GET /api/imaging/bridge-onboarding/config
+router.get('/imaging/bridge-onboarding/config', authorize([...IMAGING_MANAGE_ROLES]), (_req: AuthRequest, res: Response) => {
+  res.json(getBridgeOnboardingConfig());
 });
 
 export default router;

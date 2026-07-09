@@ -163,6 +163,57 @@
     "loadFailed": "Bildgebungsdaten konnten nicht geladen werden",
     "actionFailed": "Aktion fehlgeschlagen"
   },
+  "onboarding": {
+    "card": {
+      "title": "NoraMedi Bridge für Windows",
+      "description": "Eine Windows-Anwendung, die die Bildgebungsgeräte der Klinik mit NoraMedi verbindet — keine technischen Kenntnisse erforderlich.",
+      "supportedSystems": "Unterstützte Systeme: Windows 10/11 (64-Bit) oder Windows Server 2016 und höher",
+      "loadFailed": "Einrichtungsinformationen konnten nicht geladen werden",
+      "notAvailable": "Diese Funktion ist für Ihre Klinik noch nicht verfügbar.",
+      "installerUnavailable": "Das Installationsprogramm wurde noch nicht veröffentlicht. Bitte später erneut versuchen.",
+      "version": "Version {{version}}",
+      "unsignedWarning": "Dies ist eine unsignierte Pilot-/Testversion. Windows zeigt beim Installieren möglicherweise die Warnung „Unbekannter Herausgeber“ an.",
+      "download": "Herunterladen",
+      "setup": "Einrichtung starten"
+    },
+    "wizard": {
+      "title": "NoraMedi Bridge-Einrichtung",
+      "devices": {
+        "description": "Wählen Sie die Bildgebungsgeräte aus, die dieser Computer verbinden soll. Sie müssen mindestens ein Gerät auswählen.",
+        "empty": "Noch keine aktiven, brückenfähigen Geräte vorhanden. Fügen Sie zuerst ein Bildgebungsgerät hinzu."
+      },
+      "install": {
+        "description": "Führen Sie Folgendes auf dem Klinikcomputer aus (Empfang, Röntgenraum usw.):",
+        "step1": "Laden Sie das Installationsprogramm über die Schaltfläche unten herunter",
+        "step2": "Führen Sie NoraMediBridgeSetup.exe aus",
+        "step3": "Bestätigen Sie die Windows-Administratoraufforderung",
+        "step4": "Lassen Sie NoraMedi Bridge Manager geöffnet",
+        "unsignedWarning": "Diese Pilotversion ist nicht signiert; Windows zeigt möglicherweise die Warnung „Unbekannter Herausgeber“ an. Wählen Sie „Trotzdem ausführen“, um fortzufahren."
+      },
+      "pairing": {
+        "namePlaceholder": "z. B. Empfangs-PC",
+        "generateCode": "Code generieren",
+        "createFailed": "Kopplungscode konnte nicht erstellt werden",
+        "enterInManager": "Geben Sie diesen Code in NoraMedi Bridge Manager ein:",
+        "expiresIn": "Läuft ab in {{time}}",
+        "copyCode": "Code kopieren",
+        "cancel": "Abbrechen",
+        "waiting": "Warten auf Verbindung...",
+        "generateNew": "Neuen Code generieren",
+        "status": {
+          "used": "Dieser Code wurde bereits verwendet.",
+          "expired": "Dieser Code ist abgelaufen.",
+          "cancelled": "Die Kopplung wurde abgebrochen.",
+          "locked": "Dieser Code wurde nach zu vielen fehlgeschlagenen Versuchen gesperrt."
+        }
+      },
+      "success": {
+        "title": "„{{name}}“ erfolgreich verbunden",
+        "description": "Die Bridge ist jetzt bei NoraMedi registriert. Verwenden Sie NoraMedi Bridge Manager, um lokale Ordner auszuwählen.",
+        "nextSteps": "Sie können jetzt in NoraMedi Bridge Manager die zu überwachenden Ordner für die verbundenen Geräte auswählen."
+      }
+    }
+  },
   "viewer": {
     "title": "DICOM-Betrachter",
     "loading": "DICOM-Bild wird geladen...",

@@ -399,6 +399,15 @@ export const imagingService = {
   revokeBridge: (id: string) => api.post(`/imaging/bridges/${id}/revoke`),
   // Kalıcı silme — kullanım varsa backend 409 IMAGING_BRIDGE_IN_USE döner.
   deleteBridge: (id: string) => api.delete(`/imaging/bridges/${id}`),
+
+  // ── Self-servis kurulum (Web Onboarding, PR 5/7) ──
+  // Düz metin eşleştirme kodu YALNIZCA createPairing yanıtında bir kez döner;
+  // çağıran kodu hiçbir yerde saklamamalı (yalnızca bileşen belleğinde).
+  getBridgeOnboardingConfig: () => api.get('/imaging/bridge-onboarding/config'),
+  createPairing: (data: { bridgeName: string; deviceIds: string[]; clinicId?: string }) =>
+    api.post('/imaging/bridge-pairings', data),
+  getPairing: (id: string) => api.get(`/imaging/bridge-pairings/${id}`),
+  cancelPairing: (id: string) => api.delete(`/imaging/bridge-pairings/${id}`),
 };
 
 export const dashboardService = {
