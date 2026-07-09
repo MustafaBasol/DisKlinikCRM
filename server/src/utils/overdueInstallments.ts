@@ -1,11 +1,12 @@
 /**
- * overdueInstallments.ts — shared "overdue payment plan installment" definition.
+ * Shared overdue payment-plan installment definition.
  *
- * There is no background job that ever writes PaymentPlanInstallment.status = 'overdue';
- * the only place "overdue" is real is status === 'pending' && dueDate < now (see
- * src/pages/PaymentPlans.tsx isOverdue). The dashboard's "Gecikmiş Tahsilatlar" card
- * uses this same definition so its sum matches what /payment-plans shows when filtered
- * to overdue installments.
+ * Production contains both representations:
+ * - pending installments whose dueDate has passed
+ * - legacy/persisted installments explicitly marked overdue
+ *
+ * A linked paymentId means the installment has already been settled and must
+ * never be counted as overdue, even if its status was not updated correctly.
  */
 
 export function overdueInstallmentWhere(
@@ -13,12 +14,22 @@ export function overdueInstallmentWhere(
   now: Date = new Date(),
 ): Record<string, any> {
   return {
-    status: 'pending',
+    status: { in: ['pending', 'overdue'] },
     dueDate: { lt: now },
+    paymentId: null,
     plan: { ...clinicIdWhere },
   };
 }
 
-export function isInstallmentOverdue(dueDate: Date | string, status: string, now: Date = new Date()): boolean {
-  return status === 'pending' && new Date(dueDate) < now;
+export function isInstallmentOverdue(
+  dueDate: Date | string,
+  status: string,
+  now: Date = new Date(),
+  paymentId?: string | null,
+): boolean {
+  return (
+    ['pending', 'overdue'].includes(status) &&
+    !paymentId &&
+    new Date(dueDate) < now
+  );
 }

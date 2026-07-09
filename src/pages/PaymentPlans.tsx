@@ -25,8 +25,12 @@ const PLAN_STATUS_STYLES: Record<string, string> = {
 
 const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'cheque', 'other'] as const;
 
-function isOverdue(dueDate: string, status: string) {
-  return status === 'pending' && new Date(dueDate) < new Date();
+function isOverdue(dueDate: string, status: string, paymentId?: string | null) {
+  return (
+    ['pending', 'overdue'].includes(status) &&
+    !paymentId &&
+    new Date(dueDate) < new Date()
+  );
 }
 
 const PaymentPlans: React.FC = () => {
@@ -114,8 +118,8 @@ const PaymentPlans: React.FC = () => {
   };
 
   const paidCount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').length || 0;
-  const overdueCount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status)).length || 0;
-  const overdueAmount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status)).reduce((s: number, i: any) => s + i.amount, 0) || 0;
+  const overdueCount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status, i.paymentId)).length || 0;
+  const overdueAmount = (plan: any) => plan.installments?.filter((i: any) => isOverdue(i.dueDate, i.status, i.paymentId)).reduce((s: number, i: any) => s + i.amount, 0) || 0;
   const paidAmount = (plan: any) => plan.installments?.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + i.amount, 0) || 0;
 
   const totalOverdueAmount = plans.reduce((s, p) => s + overdueAmount(p), 0);
@@ -297,7 +301,7 @@ const PaymentPlans: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                           {(plan.installments || []).map((inst: any) => {
-                            const overdue = isOverdue(inst.dueDate, inst.status);
+                            const overdue = isOverdue(inst.dueDate, inst.status, inst.paymentId);
                             const statusKey = overdue ? 'overdue' : inst.status;
                             const statusClass = INSTALLMENT_STATUS_STYLES[statusKey] || INSTALLMENT_STATUS_STYLES.pending;
                             const isPaying = payingInstallment?.planId === plan.id && payingInstallment?.installmentId === inst.id;
@@ -321,7 +325,7 @@ const PaymentPlans: React.FC = () => {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  {inst.status === 'pending' && plan.status !== 'cancelled' && (
+                                  {['pending', 'overdue'].includes(inst.status) && !inst.paymentId && plan.status !== 'cancelled' && (
                                     <>
                                       {isPaying ? (
                                         <div className="flex items-center gap-2 justify-end">

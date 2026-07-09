@@ -260,6 +260,58 @@ tests.push(
   }),
 );
 
+
+// ─── Production regression — legacy overdue status ───────────────────────────
+
+section('Production regression — legacy overdue installment status');
+
+tests.push(
+  test("legacy status='overdue', past due and unpaid is included", () => {
+    const now = new Date('2026-07-09T12:00:00Z');
+    const where = overdueInstallmentWhere(
+      { clinicId: 'clinic-A' },
+      now,
+    );
+
+    assert.deepEqual(where.status, { in: ['pending', 'overdue'] });
+    assert.equal(where.paymentId, null);
+    assert.equal(
+      isInstallmentOverdue('2026-06-29T00:00:00Z', 'overdue', now, null),
+      true,
+    );
+  }),
+);
+
+tests.push(
+  test("pending past-due unpaid installment is included", () => {
+    const now = new Date('2026-07-09T12:00:00Z');
+    assert.equal(
+      isInstallmentOverdue('2026-06-29T00:00:00Z', 'pending', now, null),
+      true,
+    );
+  }),
+);
+
+tests.push(
+  test("installment linked to a payment is excluded", () => {
+    const now = new Date('2026-07-09T12:00:00Z');
+    assert.equal(
+      isInstallmentOverdue('2026-06-29T00:00:00Z', 'overdue', now, 'payment-1'),
+      false,
+    );
+  }),
+);
+
+tests.push(
+  test("future installment is excluded", () => {
+    const now = new Date('2026-07-09T12:00:00Z');
+    assert.equal(
+      isInstallmentOverdue('2026-07-29T00:00:00Z', 'pending', now, null),
+      false,
+    );
+  }),
+);
+
 // ─── Sonuç ────────────────────────────────────────────────────────────────────
 
 Promise.all(tests).then(() => {
