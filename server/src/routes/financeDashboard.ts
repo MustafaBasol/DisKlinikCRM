@@ -166,7 +166,8 @@ router.get(
           where: { status: 'pending', plan: { clinicId: { in: clinicIds } } },
         }),
 
-        // overdueInstallments count: pending && dueDate < now
+        // overdueInstallmentsCount: pending && dueDate < now (row count, kept
+        // separately from the monetary overdueInstallments amount below)
         prisma.paymentPlanInstallment.count({
           where: overdueInstallmentWhere({ clinicId: { in: clinicIds } }),
         }),
@@ -251,13 +252,18 @@ router.get(
       );
 
       // ── Build response ───────────────────────────────────────────────────
+      // overdueInstallments: monetary total of overdue installments (Σ amount),
+      // NOT a row count — the "Gecikmiş Taksit" card must show the amount that's
+      // owed, not how many installments are overdue. overdueInstallmentsCount
+      // carries the row count for any consumer that still needs it.
       const summary = {
         collectedToday: safeSum(collectedTodayAgg),
         collectedInRange: safeSum(collectedInRangeAgg),
         outstandingBalance: safeSum(outstandingAgg),
         overdueAmount: overdueReceivables.total,
         pendingInstallments: pendingInstallmentsCount,
-        overdueInstallments: overdueInstallmentsCount,
+        overdueInstallments: overdueReceivables.installmentAmount,
+        overdueInstallmentsCount,
         cancelledPayments: safeSum(cancelledAgg),
         practitionerPayoutsDue: earningsDueAgg._sum.earningAmount ?? 0,
         practitionerPayoutsPaid: earningsPaidAgg._sum.earningAmount ?? 0,
@@ -315,6 +321,7 @@ const EMPTY_RESPONSE = {
     overdueAmount: 0,
     pendingInstallments: 0,
     overdueInstallments: 0,
+    overdueInstallmentsCount: 0,
     cancelledPayments: 0,
     practitionerPayoutsDue: 0,
     practitionerPayoutsPaid: 0,
