@@ -92,8 +92,9 @@ security review) is satisfied.
 
 ## What is deliberately NOT in this PR
 
-WPF Manager (PR 3), WiX installer (PR 4), web onboarding UI (PR 5),
-auto-updater (PR 6), production hardening/E2E (PR 7), DICOM C-STORE/DICOMweb,
-TWAIN/WIA, vendor SDK adapters, CBCT — see the root spec's "Scope
+WPF Manager (PR 3) and the WiX installer (PR 4, see `docs/installer.md`)
+are done. Web onboarding UI (PR 5), auto-updater (PR 6), production
+hardening/E2E (PR 7), DICOM C-STORE/DICOMweb, TWAIN/WIA, vendor SDK
+adapters, CBCT are still out of scope — see the root spec's "Scope
 exclusions." `CheckForUpdates` returns a truthful "not supported" status
 rather than pretending to check.
