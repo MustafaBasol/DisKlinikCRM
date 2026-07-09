@@ -169,7 +169,13 @@
     "filters": {
       "allStatuses": "Tüm Durumlar",
       "overdueOnlyActive": "Yalnızca gecikmiş taksidi olan planlar gösteriliyor",
+      "overdueGrandTotal": "Toplam gecikmiş tahsilat",
       "clear": "Filtreyi temizle"
+    },
+    "overduePaymentsSection": {
+      "title": "Taksitsiz Gecikmiş Ödemeler",
+      "subtitle": "Bir taksit planına bağlı olmayan, tahsil edilmemiş ödemeler",
+      "viewInPayments": "Ödemeler sayfasında görüntüle"
     },
     "planStatus": {
       "active": "Aktif",

@@ -169,7 +169,13 @@
     "filters": {
       "allStatuses": "All Statuses",
       "overdueOnlyActive": "Showing only plans with overdue installments",
+      "overdueGrandTotal": "Total overdue collections",
       "clear": "Clear filter"
+    },
+    "overduePaymentsSection": {
+      "title": "Non-Installment Overdue Payments",
+      "subtitle": "Unpaid payments that aren't part of an installment plan",
+      "viewInPayments": "View in Payments"
     },
     "planStatus": {
       "active": "Active",

@@ -19,6 +19,8 @@ import { authorize } from '../middleware/auth.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import { normalizeRole } from '../utils/roles.js';
 import { getDateRange } from './organizationDashboard.js';
+import { overdueInstallmentWhere } from '../utils/overdueInstallments.js';
+import { overdueReceivablesAmount } from '../utils/overdueReceivables.js';
 
 const router = express.Router();
 
@@ -121,7 +123,7 @@ router.get(
         collectedInRangeAgg,
         outstandingAgg,
         cancelledAgg,
-        overdueInstallmentsAgg,
+        overdueReceivables,
         pendingInstallmentsCount,
         overdueInstallmentsCount,
         earningsDueAgg,
@@ -154,20 +156,19 @@ router.get(
           _sum: { amount: true },
         }),
 
-        // overdueAmount: sum of overdue installments
-        prisma.paymentPlanInstallment.aggregate({
-          where: { status: 'overdue', plan: { clinicId: { in: clinicIds } } },
-          _sum: { amount: true },
-        }),
+        // overdueAmount: overdue installments + standalone (non-installment) pending
+        // payments, combined. Nothing ever writes the literal status 'overdue' — see
+        // overdueReceivables.ts / overdueInstallments.ts for the real definition.
+        overdueReceivablesAmount(prisma, { clinicId: { in: clinicIds } }),
 
         // pendingInstallments count
         prisma.paymentPlanInstallment.count({
           where: { status: 'pending', plan: { clinicId: { in: clinicIds } } },
         }),
 
-        // overdueInstallments count
+        // overdueInstallments count: pending && dueDate < now
         prisma.paymentPlanInstallment.count({
-          where: { status: 'overdue', plan: { clinicId: { in: clinicIds } } },
+          where: overdueInstallmentWhere({ clinicId: { in: clinicIds } }),
         }),
 
         // practitionerPayoutsDue: earnings pending/approved
@@ -224,7 +225,7 @@ router.get(
       // ── Branch breakdown ─────────────────────────────────────────────────
       const branchBreakdown = await Promise.all(
         clinicIds.map(async (cid) => {
-          const [collected, outstanding, overdueAmt, pendingCount] = await Promise.all([
+          const [collected, outstanding, overdueBranch, pendingCount] = await Promise.all([
             prisma.payment.aggregate({
               where: { clinicId: cid, paymentStatus: 'paid', paidAt: { gte: dateRange.from, lte: dateRange.to } },
               _sum: { amount: true },
@@ -233,10 +234,7 @@ router.get(
               where: { clinicId: cid, paymentStatus: { in: ['pending', 'partial'] } },
               _sum: { amount: true },
             }),
-            prisma.paymentPlanInstallment.aggregate({
-              where: { status: 'overdue', plan: { clinicId: cid } },
-              _sum: { amount: true },
-            }),
+            overdueReceivablesAmount(prisma, { clinicId: cid }),
             prisma.paymentPlanInstallment.count({
               where: { status: 'pending', plan: { clinicId: cid } },
             }),
@@ -246,7 +244,7 @@ router.get(
             clinicName: clinicMap.get(cid) ?? cid,
             collected: collected._sum.amount ?? 0,
             outstanding: outstanding._sum.amount ?? 0,
-            overdue: overdueAmt._sum.amount ?? 0,
+            overdue: overdueBranch.total,
             pendingInstallments: pendingCount,
           };
         }),
@@ -257,7 +255,7 @@ router.get(
         collectedToday: safeSum(collectedTodayAgg),
         collectedInRange: safeSum(collectedInRangeAgg),
         outstandingBalance: safeSum(outstandingAgg),
-        overdueAmount: overdueInstallmentsAgg._sum.amount ?? 0,
+        overdueAmount: overdueReceivables.total,
         pendingInstallments: pendingInstallmentsCount,
         overdueInstallments: overdueInstallmentsCount,
         cancelledPayments: safeSum(cancelledAgg),
