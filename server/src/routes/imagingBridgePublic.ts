@@ -485,7 +485,7 @@ router.post('/imaging/bridge/pair', async (req: Request, res: Response) => {
                 acquisitionType: 'folder_watch',
                 status: 'pending',
               },
-              select: { id: true, deviceId: true, modality: true, displayName: true, status: true },
+              select: { id: true, deviceId: true, modality: true, displayName: true, status: true, acquisitionType: true },
             })
           )
         );

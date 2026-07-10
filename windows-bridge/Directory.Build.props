@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- PR sequence version (7 PRs total); bump alongside the installer's ProductVersion. -->
-    <Version>0.4.3</Version>
+    <Version>0.4.4</Version>
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

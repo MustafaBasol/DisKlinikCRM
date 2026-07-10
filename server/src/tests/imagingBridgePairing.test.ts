@@ -171,6 +171,49 @@ async function main() {
     assert.ok(!('notes' in shape));
   });
 
+  await test('imagingBridgePublicPairSchema accepts a payload shaped exactly like the real Windows Bridge Service (capabilities/machineIdHash omitted)', () => {
+    // Mirrors BridgeOrchestrator.ProvisionWithPairingCodeAsync's real
+    // PairRequest after BridgeApiClient serializes it with
+    // PairRequestJsonOptions (null optional fields omitted, not sent as
+    // JSON null) — regression guard for the pairing-failure bug where
+    // "capabilities":null caused every real pairing attempt to be rejected
+    // with 400 before the code was ever looked up.
+    const result = imagingBridgePublicPairSchema.safeParse({
+      code: '12345678',
+      installationId: 'a1b2c3d4-e5f6-4789-90ab-cdef01234567',
+      agentVersion: '0.4.4',
+      computerDisplayName: 'RECEPTION-PC',
+      osVersion: 'Microsoft Windows NT 10.0.19045.0',
+      architecture: 'X64',
+    });
+    assert.ok(result.success, result.success ? undefined : JSON.stringify(result.error.format()));
+  });
+
+  await test('imagingBridgePublicPairSchema rejects an explicit capabilities:null (must be omitted, not nulled)', () => {
+    // capabilities is `.optional()` but deliberately NOT `.nullable()` (see
+    // schemas/index.ts) — this is the exact payload shape that broke real
+    // pairing before the Service-side JSON serialization fix. This test
+    // guards against the schema being loosened back to accepting null,
+    // which would only mask a future regression of the same client bug.
+    const result = imagingBridgePublicPairSchema.safeParse({
+      code: '12345678',
+      installationId: 'inst-abc-123',
+      agentVersion: '1.0.0',
+      capabilities: null,
+    });
+    assert.ok(!result.success);
+  });
+
+  await test('imagingBridgePublicPairSchema accepts capabilities when present as an object', () => {
+    const result = imagingBridgePublicPairSchema.safeParse({
+      code: '12345678',
+      installationId: 'inst-abc-123',
+      agentVersion: '1.0.0',
+      capabilities: { folderWatch: true },
+    });
+    assert.ok(result.success);
+  });
+
   section('Zod schema validation — expanded heartbeat');
 
   await test('imagingBridgeHeartbeatSchema accepts expanded diagnostic fields', () => {
@@ -336,6 +379,37 @@ async function main() {
       assert.ok(!/\bnormalizedCode\b|\bcodeHash\b|\bv\.code\b/.test(call),
         `audit call must not include the pairing code or its hash: ${call}`);
     }
+  });
+
+  await test('/pair response bindings include acquisitionType (required by the Windows Bridge BootstrapBinding contract)', () => {
+    // Regression guard: the pair route's binding `select` previously omitted
+    // acquisitionType while bootstrap's did not, so a freshly-paired Service
+    // deserialized a BootstrapBinding missing a field the C# contract
+    // expects on every binding returned by either endpoint.
+    const pairBlock = bridgePublicSrc.slice(
+      bridgePublicSrc.indexOf("router.post('/imaging/bridge/pair'"),
+      bridgePublicSrc.indexOf("router.get('/imaging/bridge/bootstrap'")
+    );
+    const selectMatch = pairBlock.match(/tx\.imagingBridgeBinding\.create\(\{[\s\S]*?select:\s*\{([^}]*)\}/);
+    assert.ok(selectMatch, 'expected to find the imagingBridgeBinding.create select clause in the /pair handler');
+    assert.ok(selectMatch![1].includes('acquisitionType: true'),
+      'the /pair response binding select must include acquisitionType, matching bootstrap\'s select');
+  });
+
+  await test('/pair and /bootstrap binding selects expose the same field set', () => {
+    const pairBlock = bridgePublicSrc.slice(
+      bridgePublicSrc.indexOf("router.post('/imaging/bridge/pair'"),
+      bridgePublicSrc.indexOf("router.get('/imaging/bridge/bootstrap'")
+    );
+    const bootstrapBlock = bridgePublicSrc.slice(bridgePublicSrc.indexOf("router.get('/imaging/bridge/bootstrap'"));
+
+    const pairSelect = pairBlock.match(/tx\.imagingBridgeBinding\.create\(\{[\s\S]*?select:\s*\{([^}]*)\}/)?.[1];
+    const bootstrapSelect = bootstrapBlock.match(/imagingBridgeBinding\.findMany\(\{[\s\S]*?select:\s*\{([^}]*)\}/)?.[1];
+    assert.ok(pairSelect && bootstrapSelect);
+
+    const fieldsOf = (clause: string) =>
+      new Set((clause.match(/(\w+):\s*true/g) ?? []).map(m => m.replace(/:\s*true/, '')));
+    assert.deepEqual(fieldsOf(pairSelect!), fieldsOf(bootstrapSelect!));
   });
 
   await test('bootstrap endpoint reuses authenticateBridgeAgent (revoked agents get the same generic 401)', () => {

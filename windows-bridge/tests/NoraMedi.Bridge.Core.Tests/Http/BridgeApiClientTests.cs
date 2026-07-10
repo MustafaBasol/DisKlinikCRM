@@ -265,6 +265,35 @@ public class BridgeApiClientTests
     }
 
     [Fact]
+    public async Task RedeemPairingCodeAsync_Success_ParsesBindingsWithAcquisitionType()
+    {
+        // End-to-end contract test: mirrors the real /api/public/imaging/bridge/pair
+        // 201 body (server/src/routes/imagingBridgePublic.ts) after fixing the
+        // response-contract mismatch where the pair route's binding select
+        // omitted acquisitionType while BootstrapBinding requires it.
+        var json = """
+            {
+              "bridgeCredential": "nmb_test_token",
+              "bridgeAgentId": "agent-1",
+              "clinicName": "Demo Clinic",
+              "bindings": [
+                {"id":"b1","deviceId":"d1","modality":"IO","displayName":"Sensor 1","status":"pending","acquisitionType":"folder_watch"}
+              ],
+              "serverTime": "2026-07-08T00:00:00.000Z"
+            }
+            """;
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Created, json);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.Success, result.Category);
+        Assert.NotNull(result.Response);
+        Assert.Single(result.Response!.Bindings);
+        Assert.Equal("folder_watch", result.Response.Bindings[0].AcquisitionType);
+    }
+
+    [Fact]
     public async Task RedeemPairingCodeAsync_SendsCamelCaseJsonBodyWithCodeAndInstallationId()
     {
         var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
@@ -333,6 +362,89 @@ public class BridgeApiClientTests
         Assert.Equal(PairingResultCategory.MalformedResponse, result.Category);
         Assert.Equal(201, result.StatusCode);
         Assert.Null(result.Response);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_NullOptionalCapabilities_IsOmittedNotSentAsJsonNull()
+    {
+        // imagingBridgePublicPairSchema's `capabilities` is optional but NOT
+        // nullable — an explicit "capabilities":null (the default when
+        // PairRequest.Capabilities is unset, as it always is today) is a
+        // schema violation the backend rejects with 400 before the pairing
+        // code is even looked up. The request must omit the key entirely.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.DoesNotContain("capabilities", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_OtherNullOptionalFields_AreOmittedNotSentAsJsonNull()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.DoesNotContain("machineIdHash", handler.LastRequestBody);
+        Assert.DoesNotContain("computerDisplayName", handler.LastRequestBody);
+        Assert.DoesNotContain("osVersion", handler.LastRequestBody);
+        Assert.DoesNotContain("architecture", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_SentFieldsWithValues_AreStillIncluded()
+    {
+        // The omit-nulls option must not accidentally drop populated fields —
+        // only fields that are actually null.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+        var request = SamplePairRequest() with
+        {
+            OsVersion = "Microsoft Windows NT 10.0.19045.0",
+            Architecture = "X64",
+            ComputerDisplayName = "RECEPTION-PC",
+        };
+
+        await client.RedeemPairingCodeAsync(request);
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.Contains("\"osVersion\":\"Microsoft Windows NT 10.0.19045.0\"", handler.LastRequestBody);
+        Assert.Contains("\"architecture\":\"X64\"", handler.LastRequestBody);
+        Assert.Contains("\"computerDisplayName\":\"RECEPTION-PC\"", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_RealServicePayloadShape_ReachesCodeValidationRatherThan400()
+    {
+        // Contract test: a payload shaped exactly like BridgeOrchestrator's
+        // real ProvisionWithPairingCodeAsync call (code + installationId +
+        // agentVersion + computerDisplayName + osVersion + architecture, no
+        // machineIdHash, no capabilities) must never be rejected as a bad
+        // request. We assert the fake server sees no "capabilities" key
+        // (which is what the real backend schema would reject) and that the
+        // client correctly classifies the fake server's 401 as an
+        // invalid/expired code outcome, not a BadRequest outcome — i.e. the
+        // payload got far enough to reach code lookup, not schema rejection.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+        var request = new PairRequest(
+            Code: "12345678",
+            InstallationId: "install-1",
+            AgentVersion: "0.4.4",
+            ComputerDisplayName: "RECEPTION-PC",
+            OsVersion: "Microsoft Windows NT 10.0.19045.0",
+            Architecture: "X64");
+
+        var result = await client.RedeemPairingCodeAsync(request);
+
+        Assert.DoesNotContain("capabilities", handler.LastRequestBody);
+        Assert.DoesNotContain("machineIdHash", handler.LastRequestBody);
+        Assert.Equal(PairingResultCategory.InvalidOrExpiredCode, result.Category);
     }
 
     [Fact]

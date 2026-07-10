@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using NoraMedi.Bridge.Core.Queue;
 
 namespace NoraMedi.Bridge.Core.Http;
@@ -17,6 +18,24 @@ namespace NoraMedi.Bridge.Core.Http;
 public sealed class BridgeApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Used ONLY for serializing the outgoing <see cref="PairRequest"/> body.
+    /// Omits null optional fields (machineIdHash, computerDisplayName,
+    /// osVersion, architecture, capabilities) instead of writing them as
+    /// JSON null — imagingBridgePublicPairSchema's `capabilities` field is
+    /// optional but not nullable, so an explicit `"capabilities":null`
+    /// (the default when Capabilities is unset) is a schema violation and
+    /// the whole request is rejected with 400 before the code is even
+    /// looked up. Deliberately scoped to pairing only: heartbeat's
+    /// lastSuccessfulUploadAt/lastErrorCategory distinguish omitted (no
+    /// update) from explicit null (clear), so <see cref="JsonOptions"/> must
+    /// keep writing nulls there.
+    /// </summary>
+    private static readonly JsonSerializerOptions PairRequestJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 
     private readonly HttpClient _http;
     private readonly string _serverUrl;
@@ -42,7 +61,7 @@ public sealed class BridgeApiClient
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_serverUrl}/api/public/imaging/bridge/pair")
         {
-            Content = JsonContent.Create(pairRequest, options: JsonOptions),
+            Content = JsonContent.Create(pairRequest, options: PairRequestJsonOptions),
         };
 
         HttpResponseMessage response;
