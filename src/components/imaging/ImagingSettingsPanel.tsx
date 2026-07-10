@@ -131,7 +131,8 @@ const ImagingSettingsPanel: React.FC = () => {
     fetchAll(effectiveClinicId);
   }, [effectiveClinicId, fetchAll]);
 
-  // Onboarding devre dışıysa hiçbir istek atılmaz — yalnızca bu tek GET.
+  // Onboarding durumunu öğrenmek için yalnızca bu config GET'i yapılır; devre
+  // dışı olduğunda pairing, polling veya installer istekleri başlatılmaz.
   useEffect(() => {
     let cancelled = false;
     setOnboardingLoading(true);

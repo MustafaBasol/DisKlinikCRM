@@ -169,7 +169,7 @@
       "description": "Klinikteki görüntüleme cihazlarını NoraMedi'ye bağlayan, teknik bilgi gerektirmeyen bir Windows uygulaması.",
       "supportedSystems": "Desteklenen sistemler: Windows 10/11 (64-bit) veya Windows Server 2016 ve üzeri",
       "loadFailed": "Kurulum bilgisi yüklenemedi",
-      "notAvailable": "Bu özellik klinikiniz için henüz kullanıma açılmadı.",
+      "notAvailable": "Bu özellik kliniğiniz için henüz kullanıma açılmadı.",
       "installerUnavailable": "Kurulum dosyası şu anda yayınlanmadı. Lütfen daha sonra tekrar deneyin.",
       "version": "Sürüm {{version}}",
       "unsignedWarning": "Bu, dijital olarak imzalanmamış bir pilot/test sürümüdür. Kurulum sırasında Windows \"Bilinmeyen yayımcı\" uyarısı gösterebilir.",
