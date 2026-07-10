@@ -11,12 +11,15 @@ import assert from 'node:assert/strict';
 
 import {
   MAX_PAIRING_DEVICES,
+  canStartOnboarding,
   computeCountdown,
   derivePairingDisplayStatus,
   filterEligibleDevices,
   formatCountdown,
+  isPairingSuccessStatus,
   isValidDeviceSelection,
   shouldPollPairing,
+  toPairingUiStatus,
 } from '../onboardingHelpers';
 
 let passed = 0;
@@ -86,12 +89,45 @@ async function main() {
     assert.equal(status, 'expired');
   });
 
-  await test('terminal statuses (used/cancelled/locked) pass through unchanged', () => {
-    for (const s of ['used', 'cancelled', 'locked'] as const) {
+  await test('terminal statuses (redeemed/used/cancelled/locked) pass through unchanged', () => {
+    for (const s of ['redeemed', 'used', 'cancelled', 'locked'] as const) {
       assert.equal(derivePairingDisplayStatus({ status: s, expiresAt: '2026-07-09T13:00:00.000Z' }, now), s);
       // Even with a past expiresAt, a terminal status is never overwritten by "expired".
       assert.equal(derivePairingDisplayStatus({ status: s, expiresAt: '2026-07-09T00:00:00.000Z' }, now), s);
     }
+  });
+
+  section('isPairingSuccessStatus()');
+
+  await test("backend 'redeemed' is a success status", () => {
+    assert.equal(isPairingSuccessStatus('redeemed'), true);
+  });
+
+  await test("legacy/test 'used' is also treated as success", () => {
+    assert.equal(isPairingSuccessStatus('used'), true);
+  });
+
+  await test('pending/expired/cancelled/locked are not success statuses', () => {
+    for (const s of ['pending', 'expired', 'cancelled', 'locked']) {
+      assert.equal(isPairingSuccessStatus(s), false);
+    }
+  });
+
+  section('toPairingUiStatus()');
+
+  await test("maps backend 'redeemed' to UI 'success'", () => {
+    assert.equal(toPairingUiStatus({ status: 'redeemed', expiresAt: '2026-07-09T13:00:00.000Z' }, now), 'success');
+  });
+
+  await test("maps legacy 'used' to UI 'success'", () => {
+    assert.equal(toPairingUiStatus({ status: 'used', expiresAt: '2026-07-09T13:00:00.000Z' }, now), 'success');
+  });
+
+  await test('pending/expired/cancelled/locked map to themselves', () => {
+    assert.equal(toPairingUiStatus({ status: 'pending', expiresAt: '2026-07-09T12:05:00.000Z' }, now), 'pending');
+    assert.equal(toPairingUiStatus({ status: 'pending', expiresAt: '2026-07-09T11:00:00.000Z' }, now), 'expired');
+    assert.equal(toPairingUiStatus({ status: 'cancelled', expiresAt: '2026-07-09T13:00:00.000Z' }, now), 'cancelled');
+    assert.equal(toPairingUiStatus({ status: 'locked', expiresAt: '2026-07-09T13:00:00.000Z' }, now), 'locked');
   });
 
   section('shouldPollPairing()');
@@ -99,8 +135,22 @@ async function main() {
   await test('polls only while pending and not yet expired', () => {
     assert.equal(shouldPollPairing({ status: 'pending', expiresAt: '2026-07-09T12:05:00.000Z' }, now), true);
     assert.equal(shouldPollPairing({ status: 'pending', expiresAt: '2026-07-09T11:00:00.000Z' }, now), false);
+    assert.equal(shouldPollPairing({ status: 'redeemed', expiresAt: '2026-07-09T12:05:00.000Z' }, now), false);
     assert.equal(shouldPollPairing({ status: 'used', expiresAt: '2026-07-09T12:05:00.000Z' }, now), false);
     assert.equal(shouldPollPairing({ status: 'cancelled', expiresAt: '2026-07-09T12:05:00.000Z' }, now), false);
+  });
+
+  section('canStartOnboarding()');
+
+  await test('rejects undefined/null/empty and the "all clinics" sentinel', () => {
+    assert.equal(canStartOnboarding(undefined), false);
+    assert.equal(canStartOnboarding(null), false);
+    assert.equal(canStartOnboarding(''), false);
+    assert.equal(canStartOnboarding('all'), false);
+  });
+
+  await test('accepts an explicit clinic id', () => {
+    assert.equal(canStartOnboarding('clinic-123'), true);
   });
 
   section('computeCountdown() / formatCountdown()');

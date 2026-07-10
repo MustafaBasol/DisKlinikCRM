@@ -20,7 +20,13 @@ export function isValidDeviceSelection(selectedIds: string[]): boolean {
   return selectedIds.length >= 1 && selectedIds.length <= MAX_PAIRING_DEVICES;
 }
 
-export type PairingApiStatus = 'pending' | 'used' | 'expired' | 'cancelled' | 'locked';
+// Backend contract (server/src/routes/imaging.ts) sets a successfully
+// consumed pairing to 'redeemed'. 'used' is kept here only as a legacy/test
+// compatibility alias — it is not sent by the current backend — so both map
+// to the same UI success state without ever changing the backend contract.
+export type PairingApiStatus = 'pending' | 'redeemed' | 'used' | 'expired' | 'cancelled' | 'locked';
+
+export type PairingUiStatus = 'pending' | 'success' | 'expired' | 'cancelled' | 'locked';
 
 export interface PairingStatusLike {
   status: string;
@@ -31,13 +37,26 @@ export interface PairingStatusLike {
  * Sunucudan gelen 'pending' durumu, expiresAt geçmişse yerel olarak 'expired'
  * gösterilir — backend durumu heartbeat/poll olmadan otomatik güncellemez,
  * bu yüzden istemci saatine göre bir gösterim düzeltmesi gerekir. Diğer
- * terminal durumlar (used/cancelled/locked) olduğu gibi geçer.
+ * terminal durumlar (redeemed/used/cancelled/locked) olduğu gibi geçer.
  */
 export function derivePairingDisplayStatus(pairing: PairingStatusLike, now: number = Date.now()): PairingApiStatus {
   if (pairing.status === 'pending' && new Date(pairing.expiresAt).getTime() <= now) {
     return 'expired';
   }
   return pairing.status as PairingApiStatus;
+}
+
+/** True for the backend's terminal success status and its legacy/test alias. */
+export function isPairingSuccessStatus(status: string): boolean {
+  return status === 'redeemed' || status === 'used';
+}
+
+/** Normalizes the raw API status into the small set of states the wizard UI renders. */
+export function toPairingUiStatus(pairing: PairingStatusLike, now: number = Date.now()): PairingUiStatus {
+  const status = derivePairingDisplayStatus(pairing, now);
+  if (status === 'pending') return 'pending';
+  if (isPairingSuccessStatus(status)) return 'success';
+  return status as Exclude<PairingApiStatus, 'pending' | 'redeemed' | 'used'>;
 }
 
 /** Yalnızca 'pending' (ve süresi henüz dolmamış) oturumlar için polling sürer. */
@@ -67,4 +86,13 @@ export function computeCountdown(expiresAt: string, now: number = Date.now()): C
 /** "M:SS" gösterim biçimi, örn. 9:05. */
 export function formatCountdown(countdown: Countdown): string {
   return `${countdown.minutes}:${String(countdown.seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Onboarding (pairing oluşturma/polling) yalnızca tek, açık bir klinik
+ * seçiliyken çalışabilir — "Tüm klinikler" (undefined veya 'all') iken
+ * ambiguous clinic context'te pairing oluşturmak/polling yapmak yasak.
+ */
+export function canStartOnboarding(clinicId: string | undefined | null): clinicId is string {
+  return typeof clinicId === 'string' && clinicId.length > 0 && clinicId !== 'all';
 }

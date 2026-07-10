@@ -16,14 +16,19 @@ import { getErrorMessage } from '../../utils/errors';
 import {
   filterEligibleDevices,
   isValidDeviceSelection,
-  derivePairingDisplayStatus,
+  canStartOnboarding,
   shouldPollPairing,
+  toPairingUiStatus,
   computeCountdown,
   formatCountdown,
   type OnboardingDeviceLike,
 } from './onboardingHelpers';
+import { createPairingPoller, type PairingPoller } from './pairingPoller';
 
 const POLL_INTERVAL_MS = 4000;
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 interface WizardDevice extends OnboardingDeviceLike {
   name: string;
@@ -63,7 +68,7 @@ interface BridgeSetupWizardProps {
   onRequestCreateDevice: () => void;
 }
 
-type Step = 'devices' | 'install' | 'pairing' | 'success';
+type Step = 'devices' | 'install' | 'pairing';
 
 const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
   open,
@@ -87,14 +92,21 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
   const [pairing, setPairing] = useState<PairingState | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollInFlightRef = useRef(false);
+  const pollerRef = useRef<PairingPoller | null>(null);
   const pairingRef = useRef<PairingState | null>(null);
   pairingRef.current = pairing;
 
+  // Aynı pairing id için onPaired()/iptal isteğinin yalnızca bir kez
+  // tetiklenmesini garanti eder — StrictMode çift render'ında veya art arda
+  // state güncellemelerinde tekrar çalışmaz.
+  const succeededForIdRef = useRef<string | null>(null);
+  const cancelIssuedForIdRef = useRef<string | null>(null);
+
   const eligibleDevices = filterEligibleDevices(devices);
+  const clinicReady = canStartOnboarding(clinicId);
 
   // ── Reset when (re)opened ──────────────────────────────────────────────
   useEffect(() => {
@@ -103,10 +115,13 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
     setSelectedIds([]);
     setBridgeName('');
     setCreateError(null);
+    setCancelError(null);
     setPairing(null);
+    succeededForIdRef.current = null;
+    cancelIssuedForIdRef.current = null;
   }, [open]);
 
-  // ── Focus management (mirrors ConfirmDialog) ────────────────────────────
+  // ── Focus management + Tab focus trap (mirrors ConfirmDialog) ───────────
   useEffect(() => {
     if (!open) return;
     previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
@@ -115,7 +130,28 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
     dialogRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (event.shiftKey) {
+        if (active === first || !dialog.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !dialog.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -126,82 +162,99 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // ── Countdown ticking (1s) ──────────────────────────────────────────────
+  // ── Countdown ticking (1s) — display-only, never drives polling ─────────
   useEffect(() => {
-    if (!pairing || derivePairingDisplayStatus(pairing) !== 'pending') return;
+    if (!pairing || toPairingUiStatus(pairing) !== 'pending') return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [pairing]);
 
-  // ── Polling: single interval, guarded against overlap, paused when hidden ──
+  // ── Polling ───────────────────────────────────────────────────────────
+  // pollOnce reads pairingRef (not a closed-over `pairing`) and re-checks
+  // freshness with Date.now() at call time, so it never depends on the
+  // countdown's `now` state.
   const pollOnce = useCallback(async () => {
     const current = pairingRef.current;
-    if (!current || pollInFlightRef.current) return;
-    if (!shouldPollPairing(current)) return;
-    if (document.hidden) return;
-    pollInFlightRef.current = true;
+    if (!current || !shouldPollPairing(current)) return;
     try {
       const res = await imagingService.getPairing(current.id);
-      setPairing(prev => (prev ? { ...prev, ...res.data } : prev));
+      setPairing(prev => (prev && prev.id === current.id ? { ...prev, ...res.data } : prev));
     } catch {
       // Ağ hatası: mevcut kodu/durumu ekranda tutmaya devam et, bir sonraki
       // periyotta yeniden dene — kullanıcıya kodu kaybettirme.
-    } finally {
-      pollInFlightRef.current = false;
     }
   }, []);
 
+  // Single interval, independent of the 1s countdown state (see pairingPoller.ts
+  // for why: driving this off `now` previously destroyed/recreated the
+  // interval every second and could starve it before it ever fired).
   useEffect(() => {
-    if (!open || !pairing) return;
-    if (!shouldPollPairing(pairing, now)) return;
+    if (!open || !pairing || !shouldPollPairing(pairing)) return;
 
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    pollTimerRef.current = setInterval(pollOnce, POLL_INTERVAL_MS);
+    const poller = createPairingPoller({ poll: pollOnce, intervalMs: POLL_INTERVAL_MS });
+    pollerRef.current = poller;
+    poller.start();
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
+      poller.stop();
+      if (pollerRef.current === poller) pollerRef.current = null;
     };
-  }, [open, pairing, now, pollOnce]);
+  }, [open, pairing?.id, pairing?.status, pollOnce]);
 
   // Resume promptly when tab becomes visible again instead of waiting a full interval.
   useEffect(() => {
-    const handler = () => { if (!document.hidden) pollOnce(); };
+    const handler = () => { if (!document.hidden) pollerRef.current?.resumeIfVisible(); };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, [pollOnce]);
+  }, []);
 
-  // Success transition
+  const uiStatus = pairing ? toPairingUiStatus(pairing, now) : null;
+  const isSuccess = !!pairing && uiStatus === 'success';
+
+  // Success transition: fires onPaired() exactly once per pairing id.
   useEffect(() => {
-    if (pairing && derivePairingDisplayStatus(pairing, now) === 'used') {
-      setStep('success');
+    if (!pairing) return;
+    if (toPairingUiStatus(pairing) === 'success' && succeededForIdRef.current !== pairing.id) {
+      succeededForIdRef.current = pairing.id;
       onPaired();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pairing, now]);
+  }, [pairing, onPaired]);
+
+  // Best-effort cancellation, deduped per pairing id so the close path and
+  // the unmount path never both issue a DELETE for the same session, and a
+  // pairing that already reached a terminal state (e.g. redeemed) is never
+  // cancelled after the fact.
+  const bestEffortCancelPending = useCallback(() => {
+    const p = pairingRef.current;
+    if (!p) return;
+    if (cancelIssuedForIdRef.current === p.id) return;
+    if (toPairingUiStatus(p) !== 'pending') return;
+    cancelIssuedForIdRef.current = p.id;
+    imagingService.cancelPairing(p.id).catch(() => {});
+  }, []);
 
   // Clinic switched away mid-flow: cancel best-effort and close.
   const clinicIdRef = useRef(clinicId);
   useEffect(() => {
     if (open && clinicIdRef.current !== undefined && clinicIdRef.current !== clinicId && pairingRef.current) {
-      const p = pairingRef.current;
-      if (derivePairingDisplayStatus(p) === 'pending') {
-        imagingService.cancelPairing(p.id).catch(() => {});
-      }
+      bestEffortCancelPending();
       onClose();
     }
     clinicIdRef.current = clinicId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicId]);
 
-  // Best-effort cancel of an orphaned pending session when the wizard is closed/unmounted.
+  // Wizard closed (but component stays mounted — `open` just goes false).
   useEffect(() => {
     if (open) return;
-    const p = pairingRef.current;
-    if (p && derivePairingDisplayStatus(p) === 'pending') {
-      imagingService.cancelPairing(p.id).catch(() => {});
-    }
+    bestEffortCancelPending();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // True component unmount (e.g. navigating away from Settings > Imaging).
+  useEffect(() => {
+    return () => bestEffortCancelPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!open) return null;
 
@@ -210,7 +263,7 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
   };
 
   const generateCode = async () => {
-    if (!isValidDeviceSelection(selectedIds) || !bridgeName.trim() || creating) return;
+    if (!clinicReady || !isValidDeviceSelection(selectedIds) || !bridgeName.trim() || creating) return;
     setCreating(true);
     setCreateError(null);
     try {
@@ -219,6 +272,8 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
         deviceIds: selectedIds,
         clinicId,
       });
+      succeededForIdRef.current = null;
+      cancelIssuedForIdRef.current = null;
       setPairing({
         id: res.data.pairingId,
         code: res.data.code,
@@ -238,13 +293,31 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
 
   const cancelCurrentPairing = async () => {
     if (!pairing || cancelling) return;
+    const pairingId = pairing.id;
     setCancelling(true);
+    setCancelError(null);
     try {
-      await imagingService.cancelPairing(pairing.id);
-    } catch {
-      // Sunucu tarafında zaten süresi dolmuş/kullanılmış olabilir — yine de yerelde iptal say.
+      await imagingService.cancelPairing(pairingId);
+      cancelIssuedForIdRef.current = pairingId;
+      setPairing(prev => (prev && prev.id === pairingId ? { ...prev, status: 'cancelled' } : prev));
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        // Server says it's no longer pending (already redeemed/expired/
+        // cancelled/locked) — fetch the real status instead of assuming
+        // our cancel request is what caused it.
+        try {
+          const res = await imagingService.getPairing(pairingId);
+          cancelIssuedForIdRef.current = pairingId;
+          setPairing(prev => (prev && prev.id === pairingId ? { ...prev, ...res.data } : prev));
+        } catch {
+          setCancelError(getErrorMessage(err, t('imaging:onboarding.wizard.pairing.cancelFailed') as string));
+        }
+      } else {
+        // Network error or 5xx: cancellation is NOT confirmed — keep the
+        // code visible and let the user retry rather than claiming success.
+        setCancelError(getErrorMessage(err, t('imaging:onboarding.wizard.pairing.cancelFailed') as string));
+      }
     } finally {
-      setPairing(prev => (prev ? { ...prev, status: 'cancelled' } : prev));
       setCancelling(false);
     }
   };
@@ -260,7 +333,6 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
     }
   };
 
-  const displayStatus = pairing ? derivePairingDisplayStatus(pairing, now) : null;
   const countdown = pairing ? computeCountdown(pairing.expiresAt, now) : null;
 
   return (
@@ -288,6 +360,13 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {!clinicReady && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+              <span>{t('imaging:onboarding.wizard.clinicRequired')}</span>
+            </div>
+          )}
+
           {step === 'devices' && (
             <div className="space-y-4">
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('imaging:onboarding.wizard.devices.description')}</p>
@@ -345,9 +424,9 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
             </div>
           )}
 
-          {step === 'pairing' && pairing && (
+          {step === 'pairing' && pairing && !isSuccess && (
             <div className="space-y-4">
-              {displayStatus === 'pending' && countdown && (
+              {uiStatus === 'pending' && countdown && (
                 <>
                   <div className="text-center">
                     <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">{t('imaging:onboarding.wizard.pairing.enterInManager')}</p>
@@ -375,6 +454,9 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
                       {t('imaging:onboarding.wizard.pairing.cancel')}
                     </button>
                   </div>
+                  {cancelError && (
+                    <p role="alert" className="text-center text-xs text-red-600 dark:text-red-400">{cancelError}</p>
+                  )}
                   <div aria-live="polite" className="flex items-center justify-center gap-2 text-xs text-gray-400">
                     <Loader2 size={13} className="animate-spin" />
                     {t('imaging:onboarding.wizard.pairing.waiting')}
@@ -382,10 +464,10 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
                 </>
               )}
 
-              {displayStatus !== 'pending' && (
+              {uiStatus !== 'pending' && (
                 <div aria-live="polite" className="space-y-3 text-center">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t(`imaging:onboarding.wizard.pairing.status.${displayStatus}`)}
+                    {t(`imaging:onboarding.wizard.pairing.status.${uiStatus}`)}
                   </p>
                   <button
                     onClick={() => { setPairing(null); setStep('devices'); setSelectedIds([]); }}
@@ -399,7 +481,7 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
             </div>
           )}
 
-          {step === 'success' && pairing && (
+          {isSuccess && pairing && (
             <div aria-live="polite" className="space-y-4 text-center">
               <CheckCircle2 size={40} className="mx-auto text-green-500" />
               <p className="font-semibold text-gray-900 dark:text-white">
@@ -471,7 +553,7 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
                 />
                 <button
                   onClick={generateCode}
-                  disabled={!bridgeName.trim() || creating}
+                  disabled={!clinicReady || !bridgeName.trim() || creating}
                   className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50"
                 >
                   {creating && <Loader2 size={15} className="animate-spin" />}
@@ -480,10 +562,10 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
               </div>
             </>
           )}
-          {step === 'pairing' && pairing && (
+          {step === 'pairing' && pairing && !isSuccess && (
             <div className="flex-1" />
           )}
-          {step === 'success' && (
+          {isSuccess && (
             <button onClick={onClose} className="btn-primary ml-auto text-sm">{t('common:close', { defaultValue: 'Kapat' })}</button>
           )}
         </div>

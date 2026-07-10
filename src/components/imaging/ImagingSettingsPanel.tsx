@@ -16,6 +16,7 @@ import { getErrorMessage } from '../../utils/errors';
 import ConfirmDialog from '../common/ConfirmDialog';
 import { IMAGING_MODALITIES, IMAGING_DEVICE_CONNECTION_TYPES } from './constants';
 import { deriveBridgeStatus } from './bridgeHelpers';
+import { canStartOnboarding } from './onboardingHelpers';
 import BridgeOnboardingCard, { type BridgeOnboardingConfig } from './BridgeOnboardingCard';
 import BridgeSetupWizard from './BridgeSetupWizard';
 
@@ -97,24 +98,38 @@ const ImagingSettingsPanel: React.FC = () => {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const fetchAll = useCallback(async () => {
+  // Klinik değişiminde eski istemin yanıtı yeni klinik state'ini asla
+  // ezmemeli — her fetch bir sıra numarası taşır, yalnızca en güncel istek
+  // sonucu uygulanır (stale-response guard).
+  const fetchRequestIdRef = useRef(0);
+
+  const fetchAll = useCallback(async (clinicId: string | undefined) => {
+    const requestId = ++fetchRequestIdRef.current;
     setLoading(true);
     setLoadError(false);
     try {
       const [devicesRes, bridgesRes] = await Promise.all([
-        imagingService.getDevices(),
-        imagingService.getBridges(),
+        imagingService.getDevices(clinicId ? { clinicId } : undefined),
+        imagingService.getBridges(clinicId ? { clinicId } : undefined),
       ]);
+      if (fetchRequestIdRef.current !== requestId) return; // stale response — a newer clinic switch already superseded this
       setDevices(devicesRes.data ?? []);
       setBridges(bridgesRes.data ?? []);
     } catch {
+      if (fetchRequestIdRef.current !== requestId) return;
       setLoadError(true);
     } finally {
-      setLoading(false);
+      if (fetchRequestIdRef.current === requestId) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  // Klinik değişince önce eski veriyi hemen temizle (bayat cihaz/köprü
+  // listesi asla görünmesin), sonra yeni klinik için yeniden getir.
+  useEffect(() => {
+    setDevices([]);
+    setBridges([]);
+    fetchAll(effectiveClinicId);
+  }, [effectiveClinicId, fetchAll]);
 
   // Onboarding devre dışıysa hiçbir istek atılmaz — yalnızca bu tek GET.
   useEffect(() => {
@@ -169,7 +184,7 @@ const ImagingSettingsPanel: React.FC = () => {
         await imagingService.createDevice(payload);
       }
       setDeviceFormOpen(false);
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } catch {
       showToast(t('imaging:settings.devices.saveFailed'), 'error');
     } finally {
@@ -185,7 +200,7 @@ const ImagingSettingsPanel: React.FC = () => {
     setBusyId(device.id);
     try {
       await imagingService.setDeviceActive(device.id, true);
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } catch {
       showToast(t('imaging:errors.actionFailed'), 'error');
     } finally {
@@ -199,7 +214,7 @@ const ImagingSettingsPanel: React.FC = () => {
     try {
       await imagingService.setDeviceActive(deviceToDeactivate.id, false);
       setDeviceToDeactivate(null);
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } catch {
       showToast(t('imaging:errors.actionFailed'), 'error');
     } finally {
@@ -214,7 +229,7 @@ const ImagingSettingsPanel: React.FC = () => {
       await imagingService.deleteDevice(deviceToDelete.id);
       setDeviceToDelete(null);
       showToast(t('imaging:settings.devices.deleteSuccess'), 'success');
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } catch (err: any) {
       const code = err?.response?.data?.code;
       if (code === 'IMAGING_DEVICE_IN_USE') {
@@ -222,7 +237,7 @@ const ImagingSettingsPanel: React.FC = () => {
       } else {
         showToast(getErrorMessage(err, t('imaging:settings.devices.deleteFailed') as string), 'error');
       }
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } finally {
       setDeleting(false);
     }
@@ -234,7 +249,7 @@ const ImagingSettingsPanel: React.FC = () => {
     try {
       await imagingService.revokeBridge(bridgeToRevoke.id);
       setBridgeToRevoke(null);
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } catch {
       showToast(t('imaging:settings.bridges.revokeFailed'), 'error');
     } finally {
@@ -249,7 +264,7 @@ const ImagingSettingsPanel: React.FC = () => {
       await imagingService.deleteBridge(bridgeToDelete.id);
       setBridgeToDelete(null);
       showToast(t('imaging:settings.bridges.deleteSuccess'), 'success');
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } catch (err: any) {
       const code = err?.response?.data?.code;
       if (code === 'IMAGING_BRIDGE_IN_USE') {
@@ -257,7 +272,7 @@ const ImagingSettingsPanel: React.FC = () => {
       } else {
         showToast(getErrorMessage(err, t('imaging:settings.bridges.deleteFailed') as string), 'error');
       }
-      await fetchAll();
+      await fetchAll(effectiveClinicId);
     } finally {
       setDeleting(false);
     }
@@ -369,7 +384,8 @@ const ImagingSettingsPanel: React.FC = () => {
         loading={onboardingLoading}
         error={onboardingError}
         config={onboardingConfig}
-        onStartSetup={() => setWizardOpen(true)}
+        clinicRequired={!canStartOnboarding(effectiveClinicId)}
+        onStartSetup={() => { if (canStartOnboarding(effectiveClinicId)) setWizardOpen(true); }}
       />
 
       {/* ── Köprü ajanları ── */}
@@ -534,7 +550,7 @@ const ImagingSettingsPanel: React.FC = () => {
         devices={bridgeCapableDevices}
         clinicId={effectiveClinicId}
         installer={onboardingConfig?.installer ?? null}
-        onPaired={fetchAll}
+        onPaired={() => fetchAll(effectiveClinicId)}
         onRequestCreateDevice={() => { setWizardOpen(false); openDeviceForm(); }}
       />
 

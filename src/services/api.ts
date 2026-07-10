@@ -319,8 +319,17 @@ export const attachmentService = {
 
 export const imagingService = {
   // ── Cihazlar ──
-  getDevices: (params?: { onlyActive?: boolean }) =>
-    api.get('/imaging/devices', { params: params?.onlyActive ? { onlyActive: 'true' } : undefined }),
+  // clinicId açıkça geçilir — yalnızca global localStorage interceptor'ına
+  // güvenmek, React state ile localStorage'ın anlık senkron olmadığı klinik
+  // değişimi anında yanlış/eski klinik için istek atılmasına yol açabilir.
+  getDevices: (params?: { onlyActive?: boolean; clinicId?: string }, config?: { signal?: AbortSignal }) =>
+    api.get('/imaging/devices', {
+      params: {
+        ...(params?.onlyActive ? { onlyActive: 'true' } : undefined),
+        ...(params?.clinicId ? { clinicId: params.clinicId } : undefined),
+      },
+      signal: config?.signal,
+    }),
   createDevice: (data: any) => api.post('/imaging/devices', data),
   updateDevice: (id: string, data: any) => api.put(`/imaging/devices/${id}`, data),
   setDeviceActive: (id: string, isActive: boolean) => api.put(`/imaging/devices/${id}`, { isActive }),
@@ -394,7 +403,11 @@ export const imagingService = {
 
   // ── Köprü ajanları (yanıt tokenHash içermez; düz metin token yalnızca
   //    createBridge yanıtında bir kez döner) ──
-  getBridges: () => api.get('/imaging/bridges'),
+  getBridges: (params?: { clinicId?: string }, config?: { signal?: AbortSignal }) =>
+    api.get('/imaging/bridges', {
+      params: params?.clinicId ? { clinicId: params.clinicId } : undefined,
+      signal: config?.signal,
+    }),
   createBridge: (data: { name: string; clinicId?: string }) => api.post('/imaging/bridges', data),
   revokeBridge: (id: string) => api.post(`/imaging/bridges/${id}/revoke`),
   // Kalıcı silme — kullanım varsa backend 409 IMAGING_BRIDGE_IN_USE döner.

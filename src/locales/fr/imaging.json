@@ -174,10 +174,12 @@
       "version": "Version {{version}}",
       "unsignedWarning": "Il s'agit d'une version pilote/test non signée. Windows peut afficher un avertissement « Éditeur inconnu » lors de l'installation.",
       "download": "Télécharger",
-      "setup": "Démarrer la configuration"
+      "setup": "Démarrer la configuration",
+      "clinicRequired": "Sélectionnez une clinique précise (pas « Toutes les cliniques ») pour configurer le pont."
     },
     "wizard": {
       "title": "Configuration de NoraMedi Bridge",
+      "clinicRequired": "Sélectionnez une clinique précise (pas « Toutes les cliniques ») pour configurer le pont.",
       "devices": {
         "description": "Choisissez les appareils d'imagerie que cet ordinateur va connecter. Vous devez sélectionner au moins un appareil.",
         "empty": "Aucun appareil actif éligible au pont pour le moment. Ajoutez d'abord un appareil d'imagerie."
@@ -198,10 +200,10 @@
         "expiresIn": "Expire dans {{time}}",
         "copyCode": "Copier le code",
         "cancel": "Annuler",
+        "cancelFailed": "Impossible d'annuler — le code peut encore être valide. Veuillez réessayer.",
         "waiting": "En attente de connexion...",
         "generateNew": "Générer un nouveau code",
         "status": {
-          "used": "Ce code a déjà été utilisé.",
           "expired": "Ce code a expiré.",
           "cancelled": "Le jumelage a été annulé.",
           "locked": "Ce code a été verrouillé après trop de tentatives échouées."

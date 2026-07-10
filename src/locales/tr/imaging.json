@@ -174,10 +174,12 @@
       "version": "Sürüm {{version}}",
       "unsignedWarning": "Bu, dijital olarak imzalanmamış bir pilot/test sürümüdür. Kurulum sırasında Windows \"Bilinmeyen yayımcı\" uyarısı gösterebilir.",
       "download": "İndir",
-      "setup": "Kurulumu Başlat"
+      "setup": "Kurulumu Başlat",
+      "clinicRequired": "Köprü kurulumu için belirli bir klinik seçin (\"Tüm klinikler\" değil)."
     },
     "wizard": {
       "title": "NoraMedi Bridge Kurulumu",
+      "clinicRequired": "Köprü kurulumu için belirli bir klinik seçin (\"Tüm klinikler\" değil).",
       "devices": {
         "description": "Bu bilgisayara bağlanacak görüntüleme cihazlarını seçin. En az bir cihaz seçmelisiniz.",
         "empty": "Köprüye uygun aktif cihaz yok. Önce bir görüntüleme cihazı ekleyin."
@@ -198,10 +200,10 @@
         "expiresIn": "{{time}} içinde sona erecek",
         "copyCode": "Kodu Kopyala",
         "cancel": "İptal Et",
+        "cancelFailed": "İptal edilemedi — kod hâlâ geçerli olabilir. Lütfen tekrar deneyin.",
         "waiting": "Bağlantı bekleniyor...",
         "generateNew": "Yeni Kod Oluştur",
         "status": {
-          "used": "Bu kod zaten kullanıldı.",
           "expired": "Kodun süresi doldu.",
           "cancelled": "Eşleştirme iptal edildi.",
           "locked": "Çok fazla hatalı deneme nedeniyle bu kod kilitlendi."

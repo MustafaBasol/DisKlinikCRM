@@ -174,10 +174,12 @@
       "version": "Version {{version}}",
       "unsignedWarning": "This is an unsigned pilot/test build. Windows may show an \"Unknown publisher\" warning during install.",
       "download": "Download",
-      "setup": "Start Setup"
+      "setup": "Start Setup",
+      "clinicRequired": "Select a specific clinic (not \"All clinics\") to set up the bridge."
     },
     "wizard": {
       "title": "NoraMedi Bridge Setup",
+      "clinicRequired": "Select a specific clinic (not \"All clinics\") to set up the bridge.",
       "devices": {
         "description": "Choose the imaging devices this computer will connect. You must select at least one device.",
         "empty": "No active bridge-eligible devices yet. Add an imaging device first."
@@ -198,10 +200,10 @@
         "expiresIn": "Expires in {{time}}",
         "copyCode": "Copy Code",
         "cancel": "Cancel",
+        "cancelFailed": "Could not cancel — the code may still be valid. Please try again.",
         "waiting": "Waiting for connection...",
         "generateNew": "Generate New Code",
         "status": {
-          "used": "This code has already been used.",
           "expired": "This code has expired.",
           "cancelled": "Pairing was cancelled.",
           "locked": "This code was locked after too many failed attempts."

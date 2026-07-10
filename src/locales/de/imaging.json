@@ -174,10 +174,12 @@
       "version": "Version {{version}}",
       "unsignedWarning": "Dies ist eine unsignierte Pilot-/Testversion. Windows zeigt beim Installieren möglicherweise die Warnung „Unbekannter Herausgeber“ an.",
       "download": "Herunterladen",
-      "setup": "Einrichtung starten"
+      "setup": "Einrichtung starten",
+      "clinicRequired": "Wählen Sie eine bestimmte Klinik aus (nicht „Alle Kliniken“), um die Bridge einzurichten."
     },
     "wizard": {
       "title": "NoraMedi Bridge-Einrichtung",
+      "clinicRequired": "Wählen Sie eine bestimmte Klinik aus (nicht „Alle Kliniken“), um die Bridge einzurichten.",
       "devices": {
         "description": "Wählen Sie die Bildgebungsgeräte aus, die dieser Computer verbinden soll. Sie müssen mindestens ein Gerät auswählen.",
         "empty": "Noch keine aktiven, brückenfähigen Geräte vorhanden. Fügen Sie zuerst ein Bildgebungsgerät hinzu."
@@ -198,10 +200,10 @@
         "expiresIn": "Läuft ab in {{time}}",
         "copyCode": "Code kopieren",
         "cancel": "Abbrechen",
+        "cancelFailed": "Abbruch fehlgeschlagen — der Code könnte noch gültig sein. Bitte erneut versuchen.",
         "waiting": "Warten auf Verbindung...",
         "generateNew": "Neuen Code generieren",
         "status": {
-          "used": "Dieser Code wurde bereits verwendet.",
           "expired": "Dieser Code ist abgelaufen.",
           "cancelled": "Die Kopplung wurde abgebrochen.",
           "locked": "Dieser Code wurde nach zu vielen fehlgeschlagenen Versuchen gesperrt."
