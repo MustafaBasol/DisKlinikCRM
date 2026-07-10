@@ -58,7 +58,31 @@ public sealed record CheckForUpdatesResponse(bool Supported, string Message)
 /// </summary>
 public sealed record ProvisionWithPairingCodeRequest(string PairingCode, string? ComputerDisplayName = null);
 
-public sealed record ProvisionWithPairingCodeResponse(bool Ok, string? BridgeAgentId, string? ClinicName, int? BindingCount, string? ErrorMessage);
+/// <summary>
+/// Machine-readable reason a pairing attempt did not succeed, distinct
+/// enough that the Manager can show an actionable, localized message
+/// instead of a single generic "connection required" for every failure.
+/// Mirrors <see cref="Http.PairingResultCategory"/> plus the
+/// service-local "feature disabled" case that never reaches the HTTP call.
+/// </summary>
+public enum PairingErrorCategory
+{
+    FeatureDisabled,
+    InvalidOrExpiredCode,
+    RateLimited,
+    InvalidRequest,
+    ServerError,
+    NetworkFailure,
+}
+
+public sealed record ProvisionWithPairingCodeResponse(
+    bool Ok,
+    string? BridgeAgentId,
+    string? ClinicName,
+    int? BindingCount,
+    string? ErrorMessage,
+    PairingErrorCategory? ErrorCategory = null,
+    string? CorrelationId = null);
 
 /// <summary>
 /// One device/binding already known to the NoraMedi backend for this clinic

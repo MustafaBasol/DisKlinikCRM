@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NoraMedi.Bridge.Core.Http;
 using NoraMedi.Bridge.Core.Ipc;
@@ -21,7 +22,7 @@ public class BridgeOrchestratorTests : IDisposable
     // identity so it retains access to the directories it just created.
     private static readonly string CurrentUserSid = WindowsIdentity.GetCurrent().User!.Value;
 
-    private BridgeOrchestrator NewOrchestrator(ScriptedHttpMessageHandler? handler = null, bool enabled = true)
+    private BridgeOrchestrator NewOrchestrator(ScriptedHttpMessageHandler? handler = null, bool enabled = true, ILogger<BridgeOrchestrator>? logger = null)
     {
         var options = new BridgeOptions
         {
@@ -37,7 +38,7 @@ public class BridgeOrchestratorTests : IDisposable
             ServiceAccountSid = CurrentUserSid,
         };
         var apiClient = new BridgeApiClient(new HttpClient(handler ?? new ScriptedHttpMessageHandler()), options.ServerUrl);
-        var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", NullLogger<BridgeOrchestrator>.Instance);
+        var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", logger ?? NullLogger<BridgeOrchestrator>.Instance);
         _created.Add(orchestrator);
         return orchestrator;
     }
@@ -98,8 +99,67 @@ public class BridgeOrchestratorTests : IDisposable
         var response = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("00000000"), default);
 
         Assert.False(response.Ok);
+        Assert.Equal(PairingErrorCategory.InvalidOrExpiredCode, response.ErrorCategory);
+        Assert.NotNull(response.CorrelationId);
         var status = await orchestrator.GetServiceStatusAsync(default);
         Assert.False(status.Paired);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, PairingErrorCategory.InvalidOrExpiredCode)]
+    [InlineData(HttpStatusCode.TooManyRequests, PairingErrorCategory.RateLimited)]
+    [InlineData(HttpStatusCode.BadRequest, PairingErrorCategory.InvalidRequest)]
+    [InlineData(HttpStatusCode.InternalServerError, PairingErrorCategory.ServerError)]
+    public async Task ProvisionWithPairingCode_DistinctHttpFailures_MapToDistinctErrorCategories(HttpStatusCode status, PairingErrorCategory expected)
+    {
+        var handler = new ScriptedHttpMessageHandler().Enqueue("/bridge/pair", status);
+        var orchestrator = NewOrchestrator(handler);
+
+        var response = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+
+        Assert.False(response.Ok);
+        Assert.Equal(expected, response.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task ProvisionWithPairingCode_MalformedSuccessBody_MapsToServerErrorCategory()
+    {
+        var handler = new ScriptedHttpMessageHandler().Enqueue("/bridge/pair", HttpStatusCode.Created, "{ not json");
+        var orchestrator = NewOrchestrator(handler);
+
+        var response = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+
+        Assert.False(response.Ok);
+        Assert.Equal(PairingErrorCategory.ServerError, response.ErrorCategory);
+        var status = await orchestrator.GetServiceStatusAsync(default);
+        Assert.False(status.Paired);
+    }
+
+    [Fact]
+    public async Task ProvisionWithPairingCode_TwoAttempts_GetDistinctCorrelationIds()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .Enqueue("/bridge/pair", HttpStatusCode.Unauthorized)
+            .Enqueue("/bridge/pair", HttpStatusCode.Unauthorized);
+        var orchestrator = NewOrchestrator(handler);
+
+        var first = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+        var second = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("87654321"), default);
+
+        Assert.NotEqual(first.CorrelationId, second.CorrelationId);
+    }
+
+    [Fact]
+    public async Task ProvisionWithPairingCode_NeverLogsPairingCode()
+    {
+        var capturingLogger = new TestSupport.CapturingLogger<BridgeOrchestrator>();
+        var handler = new ScriptedHttpMessageHandler().Enqueue("/bridge/pair", HttpStatusCode.Unauthorized);
+        var orchestrator = NewOrchestrator(handler, logger: capturingLogger);
+
+        await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("19283746"), default);
+
+        Assert.NotEmpty(capturingLogger.Messages);
+        Assert.All(capturingLogger.Messages, m => Assert.DoesNotContain("19283746", m));
     }
 
     [Fact]

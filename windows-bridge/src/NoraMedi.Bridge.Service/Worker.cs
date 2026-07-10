@@ -22,8 +22,8 @@ public sealed class Worker(
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation(
-            "NoraMedi Bridge service starting. Self-service enabled={Enabled}, pipe={PipeName}",
-            options.Enabled, options.PipeName);
+            "NoraMedi Bridge service starting. Self-service enabled={Enabled}, pipe={PipeName}, serverUrl={ServerUrlOrigin}",
+            options.Enabled, options.PipeName, options.SafeServerUrlOrigin);
 
         orchestrator.Start();
         _pipeServer = new BridgePipeServer(options.PipeName, orchestrator, identityResolver: pipeIdentityResolver);

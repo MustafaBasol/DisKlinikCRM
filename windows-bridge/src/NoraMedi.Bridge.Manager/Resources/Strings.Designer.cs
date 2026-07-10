@@ -68,6 +68,12 @@ public static class Strings
     public static string Dialog_SaveDiagnosticsTitle => Get();
     public static string Dialog_SaveDiagnosticsFilter => Get();
 
+    public static string Pairing_InvalidOrExpiredCode => Get();
+    public static string Pairing_RateLimited => Get();
+    public static string Pairing_InvalidRequest => Get();
+    public static string Pairing_ServerError => Get();
+    public static string Pairing_NetworkFailure => Get();
+
     private static string Get([System.Runtime.CompilerServices.CallerMemberName] string name = "") =>
         ResourceManager.GetString(name, CultureInfo.CurrentUICulture) ?? name;
 }

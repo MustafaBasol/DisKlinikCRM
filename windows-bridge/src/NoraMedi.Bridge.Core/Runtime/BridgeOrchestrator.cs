@@ -438,9 +438,11 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
 
     public async Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken)
     {
+        var correlationId = Guid.NewGuid().ToString("N")[..8];
+
         if (!_options.Enabled)
         {
-            return new ProvisionWithPairingCodeResponse(false, null, null, null, "Bridge self-service is disabled.");
+            return new ProvisionWithPairingCodeResponse(false, null, null, null, "Bridge self-service is disabled.", PairingErrorCategory.FeatureDisabled, correlationId);
         }
 
         var pairRequest = new PairRequest(
@@ -451,15 +453,33 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
             OsVersion: RuntimeInformation.OSDescription,
             Architecture: RuntimeInformation.OSArchitecture.ToString());
 
-        var result = await _apiClient.RedeemPairingCodeAsync(pairRequest, cancellationToken);
-        if (result is null)
+        var outcome = await _apiClient.RedeemPairingCodeAsync(pairRequest, cancellationToken);
+
+        // Safe to log: endpoint category, outcome category, HTTP status, code
+        // *length* (never the code itself), correlation id. Never the code,
+        // its hash, or the credential — see docs/security.md.
+        _logger.LogInformation(
+            "pairing.attempt correlationId={CorrelationId} endpoint={Endpoint} serverUrl={ServerUrlOrigin} category={Category} statusCode={StatusCode} codeLength={CodeLength} agentVersion={AgentVersion}",
+            correlationId, "imaging/bridge/pair", _options.SafeServerUrlOrigin, outcome.Category, outcome.StatusCode, request.PairingCode.Length, _agentVersion);
+
+        if (outcome.Category != PairingResultCategory.Success || outcome.Response is null)
         {
-            return new ProvisionWithPairingCodeResponse(false, null, null, null, "Invalid or expired pairing code.");
+            var (errorMessage, errorCategory) = outcome.Category switch
+            {
+                PairingResultCategory.InvalidOrExpiredCode => ("Invalid or expired pairing code.", PairingErrorCategory.InvalidOrExpiredCode),
+                PairingResultCategory.RateLimited => ("Too many pairing attempts. Try again later.", PairingErrorCategory.RateLimited),
+                PairingResultCategory.BadRequest => ("The pairing request was rejected.", PairingErrorCategory.InvalidRequest),
+                PairingResultCategory.ServerError => ("The server could not process the request.", PairingErrorCategory.ServerError),
+                PairingResultCategory.MalformedResponse => ("Received an unexpected response from the server.", PairingErrorCategory.ServerError),
+                PairingResultCategory.NetworkFailure => ("Could not reach the NoraMedi server.", PairingErrorCategory.NetworkFailure),
+                _ => ("Invalid or expired pairing code.", PairingErrorCategory.InvalidOrExpiredCode),
+            };
+            return new ProvisionWithPairingCodeResponse(false, null, null, null, errorMessage, errorCategory, correlationId);
         }
 
-        _credentialStore.Save(result.BridgeCredential);
+        _credentialStore.Save(outcome.Response.BridgeCredential);
         _authState.MarkValid();
-        return new ProvisionWithPairingCodeResponse(true, result.BridgeAgentId, result.ClinicName, result.Bindings.Count, null);
+        return new ProvisionWithPairingCodeResponse(true, outcome.Response.BridgeAgentId, outcome.Response.ClinicName, outcome.Response.Bindings.Count, null, null, correlationId);
     }
 
     /// <summary>

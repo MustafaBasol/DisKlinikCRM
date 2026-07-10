@@ -235,4 +235,118 @@ public class BridgeApiClientTests
 
         Assert.Null(await client.BootstrapAsync("revoked"));
     }
+
+    private static PairRequest SamplePairRequest() => new(
+        Code: "12345678",
+        InstallationId: "install-1",
+        AgentVersion: "1.0.0-test");
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_Success_ReturnsParsedResponse()
+    {
+        var json = """
+            {
+              "bridgeCredential": "nmb_test_token",
+              "bridgeAgentId": "agent-1",
+              "clinicName": "Demo Clinic",
+              "bindings": [],
+              "serverTime": "2026-07-08T00:00:00.000Z"
+            }
+            """;
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Created, json);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.Success, result.Category);
+        Assert.Equal(201, result.StatusCode);
+        Assert.NotNull(result.Response);
+        Assert.Equal("agent-1", result.Response!.BridgeAgentId);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_SendsCamelCaseJsonBodyWithCodeAndInstallationId()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.com/api/public/imaging/bridge/pair", handler.LastRequest.RequestUri!.ToString());
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.Contains("\"code\":\"12345678\"", handler.LastRequestBody);
+        Assert.Contains("\"installationId\":\"install-1\"", handler.LastRequestBody);
+        Assert.Contains("\"agentVersion\":\"1.0.0-test\"", handler.LastRequestBody);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, PairingResultCategory.InvalidOrExpiredCode)]
+    [InlineData(HttpStatusCode.BadRequest, PairingResultCategory.BadRequest)]
+    [InlineData(HttpStatusCode.TooManyRequests, PairingResultCategory.RateLimited)]
+    [InlineData(HttpStatusCode.InternalServerError, PairingResultCategory.ServerError)]
+    [InlineData(HttpStatusCode.BadGateway, PairingResultCategory.ServerError)]
+    public async Task RedeemPairingCodeAsync_MapsStatusCodesToDistinctCategories(HttpStatusCode status, PairingResultCategory expected)
+    {
+        var handler = FakeHttpMessageHandler.Returning(status);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(expected, result.Category);
+        Assert.Equal((int)status, result.StatusCode);
+        Assert.Null(result.Response);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_NetworkFailure_ReturnsNetworkFailureCategory()
+    {
+        var handler = FakeHttpMessageHandler.Throwing(new HttpRequestException("dns failure"));
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.NetworkFailure, result.Category);
+        Assert.Null(result.StatusCode);
+        Assert.Null(result.Response);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_Timeout_ReturnsNetworkFailureCategory()
+    {
+        var handler = FakeHttpMessageHandler.Throwing(new TaskCanceledException("the operation timed out"));
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.NetworkFailure, result.Category);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_MalformedSuccessBody_ReturnsMalformedResponseCategory()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Created, "{ this is not valid json");
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.MalformedResponse, result.Category);
+        Assert.Equal(201, result.StatusCode);
+        Assert.Null(result.Response);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_NeverLeaksPairingCodeOrCredentialInException()
+    {
+        // Guards against a future refactor accidentally including the raw
+        // request/response in a thrown exception's message (which a caller
+        // might log). No exception should ever surface a code or credential.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        var serialized = System.Text.Json.JsonSerializer.Serialize(result);
+        Assert.DoesNotContain("12345678", serialized);
+    }
 }

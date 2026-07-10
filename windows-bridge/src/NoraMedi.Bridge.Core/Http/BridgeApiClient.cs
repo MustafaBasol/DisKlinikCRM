@@ -33,10 +33,12 @@ public sealed class BridgeApiClient
     /// performs this call directly, so the plaintext credential is only ever
     /// received here and immediately handed to <see cref="Security.ICredentialStore"/>;
     /// it never travels across the Named Pipe IPC boundary (see docs/security.md).
-    /// Returns null for any rejection — the server intentionally returns a
-    /// generic 401 for invalid/expired/locked/already-used codes alike.
+    /// Distinguishes network failure, invalid/expired code (401), bad request
+    /// (400/other 4xx), rate limit (429), server error (5xx) and a malformed
+    /// success body, so callers can show/log something more useful than a
+    /// single generic failure. Never logs the code, hash, or credential.
     /// </summary>
-    public async Task<PairResponse?> RedeemPairingCodeAsync(PairRequest pairRequest, CancellationToken cancellationToken = default)
+    public async Task<PairingRedeemResult> RedeemPairingCodeAsync(PairRequest pairRequest, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_serverUrl}/api/public/imaging/bridge/pair")
         {
@@ -50,13 +52,38 @@ public sealed class BridgeApiClient
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            return null;
+            return new PairingRedeemResult(PairingResultCategory.NetworkFailure, null, null);
         }
 
         using (response)
         {
-            if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadFromJsonAsync<PairResponse>(JsonOptions, cancellationToken);
+            var statusCode = (int)response.StatusCode;
+
+            if (response.IsSuccessStatusCode)
+            {
+                PairResponse? body;
+                try
+                {
+                    body = await response.Content.ReadFromJsonAsync<PairResponse>(JsonOptions, cancellationToken);
+                }
+                catch (JsonException)
+                {
+                    return new PairingRedeemResult(PairingResultCategory.MalformedResponse, statusCode, null);
+                }
+
+                return body is null
+                    ? new PairingRedeemResult(PairingResultCategory.MalformedResponse, statusCode, null)
+                    : new PairingRedeemResult(PairingResultCategory.Success, statusCode, body);
+            }
+
+            var category = statusCode switch
+            {
+                401 => PairingResultCategory.InvalidOrExpiredCode,
+                429 => PairingResultCategory.RateLimited,
+                >= 400 and < 500 => PairingResultCategory.BadRequest,
+                _ => PairingResultCategory.ServerError,
+            };
+            return new PairingRedeemResult(category, statusCode, null);
         }
     }
 
