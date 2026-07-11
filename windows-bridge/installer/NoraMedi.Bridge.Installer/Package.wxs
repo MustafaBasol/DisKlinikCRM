@@ -67,19 +67,34 @@
       installation is refused with a clear message rather than silently
       corrupting state.
 
-      Schedule is deliberately the WiX default (afterInstallExecute), NOT
-      afterInstallInitialize: testing an actual upgrade on real hardware
-      (0.4.0 -> 0.4.1) showed the early schedule left NoraMediBridge
-      completely unregistered afterward — with RemoveExistingProducts run
-      before the new product's InstallServices, MSI's component-sharing
-      logic (same fixed Component Guid, same Service Name, across product
-      versions) computed Action=Null for ServiceInstallComponent in the
-      new product's session, so InstallServices had nothing to do. Late
-      scheduling removes the old product only after the new one is fully
-      installed and running, which is the documented-safe choice for
-      Windows Service components specifically.
+      Schedule is explicitly set to afterInstallExecute — WiX 4's actual
+      default is afterInstallValidate, which removes the old product
+      completely before the new product is installed. That default is wrong
+      here for two independent reasons:
+
+      1. MigrateLegacyConfig (see below) runs before InstallFiles and reads
+         the legacy Program Files appsettings.json. If the old product were
+         removed at afterInstallValidate, that file would already be gone
+         by the time MigrateLegacyConfig runs, and migration would silently
+         no-op.
+
+      2. Testing an actual upgrade on real hardware (0.4.0 -> 0.4.1) showed
+         that scheduling RemoveExistingProducts too early left
+         NoraMediBridge completely unregistered afterward — with
+         RemoveExistingProducts run before the new product's InstallServices,
+         MSI's component-sharing logic (same fixed Component Guid, same
+         Service Name, across product versions) computed Action=Null for
+         ServiceInstallComponent in the new product's session, so
+         InstallServices had nothing to do. Late scheduling removes the old
+         product only after the new one is fully installed and running,
+         which is the documented-safe choice for Windows Service components
+         specifically.
+
+      Both of the above rely on the existing stable component GUID/component
+      rules used across product versions.
     -->
     <MajorUpgrade
+      Schedule="afterInstallExecute"
       AllowSameVersionUpgrades="no"
       AllowDowngrades="no"
       DowngradeErrorMessage="A newer version of NoraMedi Bridge is already installed. Uninstall it first if you need to downgrade." />

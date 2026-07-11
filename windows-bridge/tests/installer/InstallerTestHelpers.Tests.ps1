@@ -176,6 +176,37 @@ Add-Result 'Scenario C seeds $sentinelEnabled as a JSON boolean ($false), not a 
 Add-Result 'Scenario C does not seed $sentinelEnabled as the string ''false''' `
     ($orchestratorSource -notmatch "\`$sentinelEnabled\s*=\s*'false'") "expected no `$sentinelEnabled = 'false'"
 
+# --- Test-MsiLogContainsAction: multi-session major-upgrade logs -----------
+# A major-upgrade log contains two MSI sessions (RemoveExistingProducts's
+# uninstall of the old product, then the new product's own install). One
+# session can log "Skipping action: MigrateLegacyConfig" while the other
+# genuinely runs it - requiring "ran AND NOT skipped anywhere in the log"
+# made this a false negative even though the action really executed. The
+# fix: for the normal (non -ExpectSkipped) case, "ran at least once" is
+# sufficient; the caller's follow-up file/content assertions verify the
+# real outcome. -ExpectSkipped stays strict (skipped and never ran).
+
+$multiSessionLog = Join-Path $env:TEMP "multisession-$([guid]::NewGuid()).log"
+@'
+MSI (s) (AB:CD) [12:00:00:001]: Doing action: InstallValidate
+MSI (s) (AB:CD) [12:00:00:050]: Skipping action: MigrateLegacyConfig
+MSI (s) (AB:CD) [12:00:00:100]: Doing action: RemoveExistingProducts
+MSI (s) (EF:12) [12:00:05:001]: Doing action: InstallValidate
+MSI (s) (EF:12) [12:00:05:050]: Doing action: MigrateLegacyConfig
+MSI (s) (EF:12) [12:00:05:100]: Doing action: InstallFiles
+'@ | Set-Content -LiteralPath $multiSessionLog -Encoding UTF8
+
+try {
+    $normalResult = Test-MsiLogContainsAction -LogPath $multiSessionLog -ActionName 'MigrateLegacyConfig'
+    Add-Result 'Test-MsiLogContainsAction: normal case returns true when action ran in any session' ($normalResult -eq $true) "got=$normalResult"
+
+    $expectSkippedResult = Test-MsiLogContainsAction -LogPath $multiSessionLog -ActionName 'MigrateLegacyConfig' -ExpectSkipped
+    Add-Result 'Test-MsiLogContainsAction: -ExpectSkipped returns false when the action also ran' ($expectSkippedResult -eq $false) "got=$expectSkippedResult"
+}
+finally {
+    Remove-Item -LiteralPath $multiSessionLog -Force -ErrorAction SilentlyContinue
+}
+
 $failed = @($results | Where-Object { -not $_.Passed })
 if ($failed.Count -gt 0) {
     Write-Host ""

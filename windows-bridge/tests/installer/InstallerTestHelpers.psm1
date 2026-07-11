@@ -214,7 +214,11 @@ function Test-MsiLogContainsAction {
     if ($ExpectSkipped) {
         return ($wasSkipped -and -not $wasRun)
     }
-    return ($wasRun -and -not $wasSkipped)
+    # A major-upgrade log can contain multiple MSI sessions; one session may
+    # skip the action while the actual upgrade session runs it. Treat the
+    # action as satisfied if it ran in at least one session — the caller's
+    # subsequent file/content assertions verify the real outcome.
+    return $wasRun
 }
 
 function Backup-NoraMediConfigState {
