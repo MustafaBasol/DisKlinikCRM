@@ -17,6 +17,17 @@
   upgrade, repair, and uninstall untouched. Full local-data removal is an
   explicit opt-in (see RemoveLocalDataComponent below), never the
   default uninstall behavior.
+
+  This same guarantee is what preserves an operator's mutable
+  Enabled/ServerUrl/PipeName override across a major upgrade or repair: it
+  lives at %ProgramData%\NoraMediBridge\config\appsettings.json (see
+  NoraMedi.Bridge.Service.ProgramDataConfigOverride), layered on top of the
+  packaged (Program Files) appsettings.json defaults that every
+  upgrade/repair legitimately overwrites. A real-hardware upgrade test
+  found the installed appsettings.json's local edits silently reset to
+  packaged defaults before this override existed — no WiX change was
+  needed to fix it, only somewhere under this already-untouched tree for
+  the override to live.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
