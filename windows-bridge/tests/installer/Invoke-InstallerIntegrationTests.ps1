@@ -183,7 +183,7 @@ function Invoke-ScenarioB {
     param([string]$RunDir)
     $result = New-ScenarioResult -Name 'B: Legacy-layout upgrade preserves customized config'
     $result.LogDir = $RunDir
-    $testEnabled = 'true'
+    $testEnabled = $true
     $testServerUrl = 'http://127.0.0.1:5000'
     $testPipeName = 'NoraMediBridge-Test'
     try {
@@ -225,7 +225,7 @@ function Invoke-ScenarioB {
         $migratedEnabled = Get-JsonConfigValue -Path $ProgramDataConfigPath -Section 'BridgeSelfService' -Key 'Enabled'
         $migratedServerUrl = Get-JsonConfigValue -Path $ProgramDataConfigPath -Section 'BridgeSelfService' -Key 'ServerUrl'
         $migratedPipeName = Get-JsonConfigValue -Path $ProgramDataConfigPath -Section 'BridgeSelfService' -Key 'PipeName'
-        Add-ScenarioAssertion -Result $result -Name 'Migrated Enabled matches hand-edited value' -Condition ("$migratedEnabled" -eq $testEnabled) -Detail "got=$migratedEnabled want=$testEnabled"
+        Add-ScenarioAssertion -Result $result -Name 'Migrated Enabled matches hand-edited value' -Condition ($migratedEnabled -eq $testEnabled) -Detail "got=$migratedEnabled want=$testEnabled"
         Add-ScenarioAssertion -Result $result -Name 'Migrated ServerUrl matches hand-edited value' -Condition ($migratedServerUrl -eq $testServerUrl) -Detail "got=$migratedServerUrl want=$testServerUrl"
         Add-ScenarioAssertion -Result $result -Name 'Migrated PipeName matches hand-edited value' -Condition ($migratedPipeName -eq $testPipeName) -Detail "got=$migratedPipeName want=$testPipeName"
 
@@ -252,7 +252,7 @@ function Invoke-ScenarioC {
     param([string]$RunDir)
     $result = New-ScenarioResult -Name 'C: Existing ProgramData override is never overwritten'
     $result.LogDir = $RunDir
-    $sentinelEnabled = 'false'
+    $sentinelEnabled = $false
     $sentinelServerUrl = 'https://sentinel.invalid.test'
     try {
         # Order-independent: ensures the candidate is installed regardless
@@ -278,7 +278,7 @@ function Invoke-ScenarioC {
 
         $afterEnabled = Get-JsonConfigValue -Path $ProgramDataConfigPath -Section 'BridgeSelfService' -Key 'Enabled'
         $afterServerUrl = Get-JsonConfigValue -Path $ProgramDataConfigPath -Section 'BridgeSelfService' -Key 'ServerUrl'
-        Add-ScenarioAssertion -Result $result -Name 'Sentinel Enabled untouched by repair' -Condition ("$afterEnabled" -eq $sentinelEnabled) -Detail "got=$afterEnabled want=$sentinelEnabled"
+        Add-ScenarioAssertion -Result $result -Name 'Sentinel Enabled untouched by repair' -Condition ($afterEnabled -eq $sentinelEnabled) -Detail "got=$afterEnabled want=$sentinelEnabled"
         Add-ScenarioAssertion -Result $result -Name 'Sentinel ServerUrl untouched by repair' -Condition ($afterServerUrl -eq $sentinelServerUrl) -Detail "got=$afterServerUrl want=$sentinelServerUrl"
 
         Complete-ScenarioResult -Result $result -Status 'Pass' | Out-Null
@@ -375,7 +375,7 @@ function Invoke-ScenarioE {
         # alone, not by a coincidence of run order.
         if (-not (Test-Path $ProgramDataConfigPath)) {
             New-Item -ItemType Directory -Path (Split-Path $ProgramDataConfigPath -Parent) -Force | Out-Null
-            @{ BridgeSelfService = @{ Enabled = 'true'; ServerUrl = 'http://scenario-e-seed.invalid' } } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ProgramDataConfigPath -Encoding utf8
+            @{ BridgeSelfService = @{ Enabled = $true; ServerUrl = 'http://scenario-e-seed.invalid' } } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ProgramDataConfigPath -Encoding utf8
             Write-TestLog "Scenario E: no ProgramData override existed yet; seeded one so this scenario is self-contained." -Level INFO
         }
 
@@ -446,12 +446,46 @@ Assert-FileHash -Path $PreviousMsiPath -Expected $PreviousMsiSha256 -Label 'Prev
 Assert-FileHash -Path $CandidateMsiPath -Expected $CandidateMsiSha256 -Label 'Candidate MSI'
 Write-TestLog "Both MSI hashes verified." -Level PASS -RunLogFile $runLogFile
 
+# Arm machine mutation (msiexec / uninstall / ProgramData deletion) only now
+# that elevation is confirmed, both hashes verified, and only if a
+# non-Preflight scenario was actually requested. A Preflight-only run never
+# arms mutation, so Invoke-MsiProcess/Uninstall-IfPresent/Reset-ScenarioState/
+# Install-CandidateIfNeeded/Remove-NoraMediProgramDataTree all refuse to run
+# below even if a future code path accidentally tried to call them.
+$requestedNonPreflightScenarios = @($Scenario | Where-Object { $_ -ne 'Preflight' })
+if ($requestedNonPreflightScenarios.Count -gt 0) {
+    Enable-HarnessMutation
+    Write-TestLog "Machine mutation ARMED: non-Preflight scenario(s) requested ($($requestedNonPreflightScenarios -join ', '))." -Level WARN -RunLogFile $runLogFile
+}
+else {
+    Write-TestLog "Machine mutation NOT armed: Preflight-only run performs no installs/upgrades/uninstalls." -Level INFO -RunLogFile $runLogFile
+}
+
 Backup-NoraMediConfigState -Destination (Join-Path $runDir 'snapshots\pre-run')
 
 $allResults = New-Object System.Collections.Generic.List[object]
 
 if ($Scenario -contains 'Preflight') {
-    Write-TestLog "Preflight-only run: hashes verified, no installs performed." -Level PASS -RunLogFile $runLogFile
+    Write-TestLog "Preflight-only run: hashes verified, no installs/upgrades/uninstalls performed." -Level PASS -RunLogFile $runLogFile
+
+    $installedProduct = Get-InstalledNoraMediProduct
+    if ($installedProduct) {
+        Write-TestLog "Installed product: NoraMedi Bridge $($installedProduct.DisplayVersion) ($($installedProduct.ProductCode))." -Level INFO -RunLogFile $runLogFile
+    }
+    else {
+        Write-TestLog "Installed product: none." -Level INFO -RunLogFile $runLogFile
+    }
+
+    $svcState = Get-NoraMediServiceState
+    $svcDetail = if ($svcState.Exists) { "exists, Status=$($svcState.Status), StartType=$($svcState.StartType)" } else { 'not registered' }
+    Write-TestLog "Service '$NoraMediServiceName': $svcDetail." -Level INFO -RunLogFile $runLogFile
+
+    $programFilesDetail = if (Test-Path $ProgramFilesInstallDir) { 'present' } else { 'absent' }
+    Write-TestLog "Program Files install directory ($ProgramFilesInstallDir): $programFilesDetail." -Level INFO -RunLogFile $runLogFile
+
+    $programDataDetail = if (Test-Path $ProgramDataRoot) { 'present' } else { 'absent' }
+    Write-TestLog "ProgramData override root ($ProgramDataRoot): $programDataDetail." -Level INFO -RunLogFile $runLogFile
+
     $Scenario = @()
 }
 
@@ -494,8 +528,8 @@ Get-Content -Path $textSummaryPath | Write-Host
 Write-TestLog "JSON summary: $summaryPath" -Level INFO -RunLogFile $runLogFile
 Write-TestLog "Text summary: $textSummaryPath" -Level INFO -RunLogFile $runLogFile
 
-$failed = $allResults | Where-Object { $_.Status -eq 'Fail' }
-if ($failed) {
+$failed = @($allResults | Where-Object { $_.Status -eq 'Fail' })
+if ($failed.Count -gt 0) {
     Write-TestLog "$($failed.Count) scenario(s) FAILED." -Level FAIL -RunLogFile $runLogFile
     exit 1
 }

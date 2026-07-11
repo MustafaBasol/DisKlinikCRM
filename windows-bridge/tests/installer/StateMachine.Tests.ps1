@@ -169,8 +169,8 @@ catch {
 Add-Result 'Case 4: full A,B,C,D,E sequence completes without throwing' (-not $allThrew) "threw=$allThrew $allExceptionMessage"
 Add-Result 'Case 4: sequence ends with the candidate installed (E reset D''s previous-version leftover, then reinstalled)' ($state4.Installed -eq $candidateVersion) "got=$($state4.Installed)"
 
-$failed = $results | Where-Object { -not $_.Passed }
-if ($failed) {
+$failed = @($results | Where-Object { -not $_.Passed })
+if ($failed.Count -gt 0) {
     Write-Host ""
     Write-Host "$($failed.Count) of $($results.Count) case(s) FAILED." -ForegroundColor Red
     exit 1

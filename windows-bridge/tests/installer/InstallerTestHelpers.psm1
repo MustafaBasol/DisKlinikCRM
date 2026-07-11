@@ -83,28 +83,94 @@ function Get-NoraMediServiceState {
     }
 }
 
+function Select-NoraMediProduct {
+    <#
+    Pure selection logic used by Get-InstalledNoraMediProduct, split out so it
+    can be unit-tested (InstallerTestHelpers.Tests.ps1) against synthetic
+    registry-shaped objects without ever writing to or reading the real
+    Uninstall registry key.
+
+    Under Set-StrictMode -Version Latest, reading an optional property that
+    doesn't exist on a PSCustomObject throws, and not every Uninstall subkey
+    has DisplayName/DisplayVersion/PSChildName populated - so every optional
+    property is checked via $_.PSObject.Properties[...] before its value is
+    ever read.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Entries)
+
+    $matches = New-Object System.Collections.Generic.List[object]
+    foreach ($entry in $Entries) {
+        $displayNameProp = $entry.PSObject.Properties['DisplayName']
+        if (-not $displayNameProp -or $displayNameProp.Value -ne 'NoraMedi Bridge') { continue }
+
+        $productCodeProp = $entry.PSObject.Properties['PSChildName']
+        if (-not $productCodeProp -or [string]::IsNullOrWhiteSpace([string]$productCodeProp.Value)) {
+            Write-TestLog "Ignoring a 'NoraMedi Bridge' Uninstall entry with no usable ProductCode (PSChildName)." -Level WARN
+            continue
+        }
+
+        $versionProp = $entry.PSObject.Properties['DisplayVersion']
+        $displayVersion = if ($versionProp) { $versionProp.Value } else { $null }
+
+        $matches.Add([pscustomobject]@{
+                ProductCode    = $productCodeProp.Value
+                DisplayVersion = $displayVersion
+            })
+    }
+
+    if ($matches.Count -eq 0) { return $null }
+    if ($matches.Count -gt 1) {
+        $codes = ($matches | ForEach-Object { "$($_.ProductCode) ($($_.DisplayVersion))" }) -join ', '
+        throw "Found $($matches.Count) 'NoraMedi Bridge' Uninstall registry entries ($codes). Refusing to pick one automatically - resolve the duplicate registration by hand before running the harness."
+    }
+    return $matches[0]
+}
+
 function Get-InstalledNoraMediProduct {
     <#
     Returns the installed MSI ProductCode + DisplayVersion for NoraMedi Bridge
     by reading the Uninstall registry key, or $null if not installed. Reading
     the registry (rather than msiexec /qb enumeration) avoids launching any
     UI and works identically for an interactively- or Burn-installed product.
+    Pure read - never invokes msiexec, never touches the registry beyond
+    reading it, safe to call unarmed (see Assert-HarnessMutationArmed).
     #>
     $roots = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
     )
-    foreach ($root in $roots) {
-        $match = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -eq 'NoraMedi Bridge' }
-        if ($match) {
-            return [pscustomobject]@{
-                ProductCode    = $match.PSChildName
-                DisplayVersion = $match.DisplayVersion
-            }
-        }
+    $entries = @(foreach ($root in $roots) { Get-ItemProperty -Path $root -ErrorAction SilentlyContinue })
+    return Select-NoraMediProduct -Entries $entries
+}
+
+$script:HarnessMutationArmed = $false
+
+function Enable-HarnessMutation {
+    <#
+    Arms this module to allow msiexec / uninstall / ProgramData-deletion
+    calls. Must be called only by the orchestrator
+    (Invoke-InstallerIntegrationTests.ps1), and only after: elevation is
+    confirmed (Assert-Administrator), both MSI hashes have verified
+    (Assert-FileHash), and at least one non-Preflight scenario was actually
+    requested. A Preflight-only run, and every unit/state-machine test, must
+    never call this.
+
+    This exists because a real msiexec /x uninstall was once launched
+    against this machine's actual installed product by an unrelated mocking
+    mistake in a test draft (see StateMachine.Tests.ps1's header comment).
+    Gating every mutating function on an explicit arm-then-check, rather than
+    relying solely on tests mocking those functions correctly, means a bug or
+    accidental call path fails closed instead of silently reaching real
+    msiexec.
+    #>
+    $script:HarnessMutationArmed = $true
+}
+
+function Assert-HarnessMutationArmed {
+    param([Parameter(Mandatory)][string]$Action)
+    if (-not $script:HarnessMutationArmed) {
+        throw "Refusing to run '$Action': machine mutation has not been armed. Enable-HarnessMutation must be called first (orchestrator-only, requires elevation + verified hashes + a non-Preflight scenario)."
     }
-    return $null
 }
 
 function Invoke-MsiProcess {
@@ -112,6 +178,7 @@ function Invoke-MsiProcess {
     Runs msiexec (or the Burn bundle EXE) with verbose logging, waits for
     completion, and returns exit code + log path. Never throws on a non-zero
     exit code - callers decide whether that's expected (e.g. Scenario D).
+    Refuses to run at all unless Enable-HarnessMutation has been called.
     #>
     param(
         [Parameter(Mandatory)][string]$FilePath,
@@ -119,6 +186,7 @@ function Invoke-MsiProcess {
         [Parameter(Mandatory)][string]$LogDirectory,
         [Parameter(Mandatory)][string]$LogName
     )
+    Assert-HarnessMutationArmed -Action "$FilePath $($ArgumentList -join ' ')"
     $msiLog = Join-Path $LogDirectory "$LogName.msi.log"
     $fullArgs = $ArgumentList + @('/l*v', "`"$msiLog`"")
     Write-TestLog "Running: $FilePath $($fullArgs -join ' ')" -Level INFO
@@ -186,6 +254,7 @@ function Confirm-DestructiveStep {
 
 function Uninstall-IfPresent {
     param([string]$LogDir, [string]$LogName)
+    Assert-HarnessMutationArmed -Action 'Uninstall-IfPresent'
     $installed = Get-InstalledNoraMediProduct
     if (-not $installed) { return }
     Write-TestLog "Removing installed NoraMedi Bridge ($($installed.DisplayVersion), $($installed.ProductCode)) before scenario." -Level WARN
@@ -215,6 +284,7 @@ function Reset-ScenarioState {
         [switch]$RemoveProgramData,
         [switch]$Force
     )
+    Assert-HarnessMutationArmed -Action "Reset-ScenarioState ($ScenarioName)"
     $installed = Get-InstalledNoraMediProduct
     $needsProgramDataRemoval = [bool]($RemoveProgramData -and (Test-Path $script:ProgramDataRoot))
     if (-not $installed -and -not $needsProgramDataRemoval) {
@@ -249,6 +319,7 @@ function Install-CandidateIfNeeded {
         [Parameter(Mandatory)][string]$CandidateVersion,
         [switch]$Force
     )
+    Assert-HarnessMutationArmed -Action "Install-CandidateIfNeeded ($ScenarioName)"
     $installed = Get-InstalledNoraMediProduct
     if ($installed -and $installed.DisplayVersion -eq $CandidateVersion) {
         Write-TestLog "${ScenarioName}: candidate $CandidateVersion already installed, reusing it." -Level INFO
@@ -272,6 +343,7 @@ function Remove-NoraMediProgramDataTree {
     in the orchestrator) - this function performs the removal unconditionally
     once called.
     #>
+    Assert-HarnessMutationArmed -Action 'Remove-NoraMediProgramDataTree'
     if (Test-Path $script:ProgramDataRoot) {
         Remove-Item -LiteralPath $script:ProgramDataRoot -Recurse -Force
         Write-TestLog "Removed '$script:ProgramDataRoot' to reset to a known clean state." -Level WARN

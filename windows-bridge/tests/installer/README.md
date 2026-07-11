@@ -62,10 +62,10 @@ etc.), works regardless of what a previous invocation left on the machine.
 - `InstallerTestHelpers.psm1` in the same directory as the orchestrator
   script (copy the whole `tests\installer` directory, not just the `.ps1`).
 
-## Two local, non-mutating tests you can run first
+## Three local, non-mutating tests you can run first
 
-Both of these are safe on any developer machine — no admin rights, no
-msiexec, no service, no ProgramData/Program Files writes:
+All three are safe on any developer machine — no admin rights, no msiexec,
+no service, no ProgramData/Program Files writes:
 
 - `MigrateLegacyConfigCommand.Tests.ps1` extracts the *exact* authored
   `MigrateLegacyConfig` command from `Package.wxs` and runs it through a
@@ -81,10 +81,42 @@ msiexec, no service, no ProgramData/Program Files writes:
   specifically because an earlier attempt to mock the module's own
   functions in-place did not reliably override them and risked invoking a
   real `msiexec /x` against this machine's actual installed product.
+- `InstallerTestHelpers.Tests.ps1` unit-tests `InstallerTestHelpers.psm1`
+  directly under `Set-StrictMode -Version Latest`: safe optional-property
+  handling in `Get-InstalledNoraMediProduct`/`Select-NoraMediProduct`
+  (registry entries missing `DisplayName`/`PSChildName`/`DisplayVersion`,
+  duplicate valid entries), the scalar-vs-array `.Count` bug on
+  zero/one/multiple `Where-Object` results, and the fail-closed
+  `Enable-HarnessMutation`/`Assert-HarnessMutationArmed` guard (importing
+  the module fresh leaves it unarmed, so calling `Invoke-MsiProcess` or
+  `Remove-NoraMediProgramDataTree` must throw before ever reaching a real
+  `msiexec`/file deletion). A real Scenario B run once crashed immediately
+  with `The property 'DisplayName' cannot be found on this object` and then
+  `The property 'Count' cannot be found on this object` in the result
+  summary — this file is the regression test for both.
 
-Run either directly: `powershell -File .\MigrateLegacyConfigCommand.Tests.ps1`
-/ `powershell -File .\StateMachine.Tests.ps1`. Both exit 0 only if every
-case passes.
+Run any of them directly: `powershell -File .\MigrateLegacyConfigCommand.Tests.ps1`
+/ `powershell -File .\StateMachine.Tests.ps1` /
+`powershell -File .\InstallerTestHelpers.Tests.ps1`. All three exit 0 only if
+every case passes.
+
+## Machine mutation is armed explicitly, not assumed
+
+`InstallerTestHelpers.psm1` refuses to run any mutating call — `msiexec`
+(`Invoke-MsiProcess`), `Uninstall-IfPresent`, `Reset-ScenarioState`,
+`Install-CandidateIfNeeded`, `Remove-NoraMediProgramDataTree` — until the
+orchestrator calls `Enable-HarnessMutation`, which only happens after
+elevation is confirmed, both MSI hashes verify, and at least one
+non-Preflight scenario was actually requested. `-Scenario Preflight` never
+arms mutation, so it is guaranteed read-only even if a future code path
+accidentally tried to call one of those functions. This is a second,
+independent layer of protection (fail closed at the function level) on top
+of the existing interactive confirmation prompt — not a replacement for it —
+added after an earlier module-function-mocking technique failed to reliably
+override an already-imported function and came within one step of running a
+real `msiexec /x` against a development machine's genuinely installed
+product (see `StateMachine.Tests.ps1`'s header comment for the full
+incident).
 
 ## Commands
 
@@ -95,8 +127,13 @@ report for the exact 0.4.6 MSI hash).
 
 ### Dry-run / preflight (no installs performed)
 
-Verifies elevation, both MSI hashes, and takes a config snapshot without
-installing, upgrading, or removing anything:
+Verifies elevation and both MSI hashes, takes a config snapshot, and reports
+current machine state — installed NoraMedi Bridge product/version (or none),
+service existence/status, Program Files path existence, and ProgramData
+override existence — without installing, upgrading, removing, starting, or
+stopping anything. Machine mutation is never armed for a Preflight-only run
+(see "Machine mutation is armed explicitly" below), so this is guaranteed
+read-only regardless of what the rest of the script does:
 
 ```powershell
 .\Invoke-InstallerIntegrationTests.ps1 `

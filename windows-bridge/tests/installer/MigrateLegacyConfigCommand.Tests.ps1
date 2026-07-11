@@ -168,8 +168,8 @@ finally {
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-$failed = $results | Where-Object { -not $_.Passed }
-if ($failed) {
+$failed = @($results | Where-Object { -not $_.Passed })
+if ($failed.Count -gt 0) {
     Write-Host ""
     Write-Host "$($failed.Count) of $($results.Count) case(s) FAILED." -ForegroundColor Red
     exit 1
