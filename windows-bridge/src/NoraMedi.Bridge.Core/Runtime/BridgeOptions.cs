@@ -57,6 +57,9 @@ public sealed record BridgeOptions
 
     public string BindingsPath => Path.Combine(ProgramDataRoot, "bindings.json");
 
+    /// <summary>Cached copy of the server's device/binding catalog (see <see cref="Runtime.ServerBindingsCatalogStore"/>) — distinct from <see cref="BindingsPath"/>'s local folder-watch bindings.</summary>
+    public string ServerBindingsCatalogPath => Path.Combine(ProgramDataRoot, "server-bindings-catalog.json");
+
     /// <summary>
     /// Scheme+host+port only — never the path/query — so it's safe to put in
     /// a startup log line. Exists so a support engineer can see, without

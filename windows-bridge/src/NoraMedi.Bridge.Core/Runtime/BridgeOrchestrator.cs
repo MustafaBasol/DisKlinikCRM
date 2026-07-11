@@ -29,6 +29,7 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     private readonly DpapiCredentialStore _credentialStore;
     private readonly BridgeAuthState _authState;
     private readonly FolderBindingsStore _bindingsStore;
+    private readonly ServerBindingsCatalogStore _serverBindingsCatalogStore;
     private readonly string _installationId;
     private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
     private readonly Lock _drainGate = new();
@@ -57,6 +58,7 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         _credentialStore = new DpapiCredentialStore(_options.CredentialPath, extraAccountSid: _options.ServiceAccountSid);
         _authState = new BridgeAuthState(_credentialStore);
         _bindingsStore = new FolderBindingsStore(_options.BindingsPath, _options.ServiceAccountSid);
+        _serverBindingsCatalogStore = new ServerBindingsCatalogStore(_options.ServerBindingsCatalogPath, _options.ServiceAccountSid);
         _installationId = InstallationIdProvider.GetOrCreate(_options.InstallationIdPath, _options.ServiceAccountSid);
     }
 
@@ -77,6 +79,14 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
 
         _drainTimer = new Timer(_ => _ = SafeDrainOnceAsync(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(_options.DrainPollMs));
         _heartbeatTimer = new Timer(_ => _ = SafeHeartbeatTickAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(_options.HeartbeatIntervalSeconds));
+
+        // Re-fetch the server's device/binding catalog on every restart so the
+        // Manager's device selector doesn't rely solely on whatever was cached
+        // at the moment of the last pairing — a device added/renamed/retired
+        // server-side while the Service was stopped must show up on the next
+        // restart. Fire-and-forget: a failed/timed-out refresh just leaves the
+        // existing cache in place (see RefreshServerBindingsCatalogAsync).
+        _ = SafeRefreshServerBindingsCatalogAsync();
     }
 
     private void RebuildWatcher()
@@ -325,6 +335,44 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         }
     }
 
+    private async Task SafeRefreshServerBindingsCatalogAsync()
+    {
+        try
+        {
+            await RefreshServerBindingsCatalogAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled error while refreshing the server binding catalog");
+        }
+    }
+
+    /// <summary>
+    /// Re-fetches the server's device/binding catalog via bootstrap and
+    /// replaces the cached copy. A missing credential, network failure, or
+    /// non-2xx response leaves whatever is already cached untouched — this
+    /// is a best-effort refresh, not the only source of the catalog (pairing
+    /// already seeds it — see <see cref="ProvisionWithPairingCodeAsync"/>).
+    /// </summary>
+    private async Task RefreshServerBindingsCatalogAsync()
+    {
+        var credential = _authState.TryGetCredential();
+        if (credential is null) return;
+
+        var bootstrap = await _apiClient.BootstrapAsync(credential);
+        if (bootstrap is null) return;
+
+        _serverBindingsCatalogStore.Save(bootstrap.Bindings.Select(ToAvailableServerBindingInfo).ToList());
+    }
+
+    private static AvailableServerBindingInfo ToAvailableServerBindingInfo(BootstrapBinding binding) => new(
+        binding.Id,
+        binding.DeviceId,
+        binding.DisplayName,
+        string.IsNullOrEmpty(binding.Modality) ? null : binding.Modality,
+        binding.Status,
+        binding.AcquisitionType);
+
     public bool FeatureEnabled => _options.Enabled;
 
     public Task<ServiceStatusPayload> GetServiceStatusAsync(CancellationToken cancellationToken)
@@ -494,18 +542,28 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
 
         _credentialStore.Save(outcome.Response.BridgeCredential);
         _authState.MarkValid();
+        _serverBindingsCatalogStore.Save(outcome.Response.Bindings.Select(ToAvailableServerBindingInfo).ToList());
         return new ProvisionWithPairingCodeResponse(true, outcome.Response.BridgeAgentId, outcome.Response.ClinicName, outcome.Response.Bindings.Count, null, null, correlationId);
     }
 
     /// <summary>
-    /// The device catalog fetched from the backend during bootstrap/pairing
-    /// is not yet cached/persisted anywhere the Service can read it back
-    /// from (that plumbing is a later PR's job) — this deliberately returns
-    /// a truthful empty list rather than fabricating placeholder devices, so
-    /// the Manager shows its "no devices available yet" empty state.
+    /// Serves the device/binding catalog cached from the last successful
+    /// pairing or bootstrap refresh (see <see cref="ServerBindingsCatalogStore"/>).
+    /// A revoked/invalid credential must never keep surfacing a stale
+    /// catalog it can no longer vouch for — <see cref="BridgeAuthState.IsValid"/>
+    /// being false (401 seen, not yet recovered) returns an empty list
+    /// instead, driving the Manager's truthful "no devices available yet"
+    /// empty state until pairing or a successful heartbeat restores trust.
     /// </summary>
-    public Task<GetAvailableServerBindingsResponse> GetAvailableServerBindingsAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(new GetAvailableServerBindingsResponse([]));
+    public Task<GetAvailableServerBindingsResponse> GetAvailableServerBindingsAsync(CancellationToken cancellationToken)
+    {
+        if (!_authState.IsValid)
+        {
+            return Task.FromResult(new GetAvailableServerBindingsResponse([]));
+        }
+
+        return Task.FromResult(new GetAvailableServerBindingsResponse(_serverBindingsCatalogStore.Load()));
+    }
 
     public async ValueTask DisposeAsync()
     {
