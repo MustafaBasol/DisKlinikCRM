@@ -163,8 +163,21 @@
                   Execute="deferred"
                   Impersonate="no"
                   Return="check" />
+    <!--
+      Kept under the 255-character limit Windows Installer imposes on the
+      CustomAction table's Target column (WiX's ICE03 flags any overflow at
+      build time — a first draft of this command that spelled out
+      [CommonAppDataFolder]NoraMediBridge\config\ and
+      [SERVICEFOLDER]appsettings.json inline four times came to 384
+      characters and failed that check) by `set`-ing each long,
+      MSI-property-substituted path into a short cmd.exe variable once and
+      referencing %D%/%S% thereafter. MSI substitutes [SERVICEFOLDER] and
+      [CommonAppDataFolder] into their resolved absolute paths before
+      cmd.exe ever sees this string, so the `set` assignments capture the
+      real paths, not the literal property names.
+    -->
     <SetProperty Id="MigrateLegacyConfig"
-                 Value="&quot;cmd.exe&quot; /c if not exist &quot;[SERVICEFOLDER]appsettings.json&quot; exit /b 0 &amp; if exist &quot;[CommonAppDataFolder]NoraMediBridge\config\appsettings.json&quot; exit /b 0 &amp; if not exist &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; mkdir &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; &amp; copy /y &quot;[SERVICEFOLDER]appsettings.json&quot; &quot;[CommonAppDataFolder]NoraMediBridge\config\appsettings.json&quot; || exit /b 1"
+                 Value="&quot;cmd.exe&quot; /c set D=[CommonAppDataFolder]NoraMediBridge\config\&amp;set S=[SERVICEFOLDER]appsettings.json&amp;if not exist &quot;%S%&quot; exit /b 0&amp;if exist &quot;%D%appsettings.json&quot; exit /b 0&amp;if not exist &quot;%D%&quot; mkdir &quot;%D%&quot;&amp;copy /y &quot;%S%&quot; &quot;%D%appsettings.json&quot;||exit /b 1"
                  Before="MigrateLegacyConfig"
                  Sequence="execute"
                  Condition="WIX_UPGRADE_DETECTED" />
