@@ -1,6 +1,7 @@
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace NoraMedi.Bridge.Service.Tests;
 
@@ -33,6 +34,10 @@ public class ProgramDataConfigOverrideTests : IDisposable
             Environment.SetEnvironmentVariable(name, null);
         }
         AclCleanup.UnlockAndDelete(_root);
+        foreach (var contentRoot in _contentRootsToClean)
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
     }
 
     private string OverridePath => Path.Combine(_root, "config", "appsettings.json");
@@ -145,5 +150,90 @@ public class ProgramDataConfigOverrideTests : IDisposable
         Assert.True(jsonIndex >= 0 && envVarIndex >= 0);
         Assert.True(jsonIndex < envVarIndex, "ProgramData override must be inserted before the environment-variables source");
         Assert.Equal(envVarSourceCountBefore + 1, builder.Sources.Count);
+    }
+
+    // Real-hardware regression: Host.CreateApplicationBuilder(args) — exactly what
+    // Program.cs calls — registers TWO EnvironmentVariablesConfigurationSource
+    // instances (an early DOTNET_-prefixed bootstrap source added *before*
+    // appsettings.json, and the real unprefixed one added *after* it). The tests
+    // above build a bare ConfigurationBuilder by hand and only ever see the single,
+    // correct source, so they could not catch a bug that only manifests against the
+    // real two-source composition. These tests use the actual
+    // Host.CreateApplicationBuilder pipeline, with ContentRootPath redirected to a
+    // temp directory so a real packaged appsettings.json can be planted, to pin the
+    // full precedence chain end to end.
+    private HostApplicationBuilder NewRealHostBuilder(string packagedPipeName, string[]? args = null)
+    {
+        var contentRoot = Directory.CreateTempSubdirectory("nmb-hostbuilder-").FullName;
+        _contentRootsToClean.Add(contentRoot);
+        File.WriteAllText(
+            Path.Combine(contentRoot, "appsettings.json"),
+            "{\"BridgeSelfService\":{\"PipeName\":\"" + packagedPipeName + "\"}}");
+
+        return Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            ContentRootPath = contentRoot,
+            EnvironmentName = "Production",
+            Args = args ?? [],
+        });
+    }
+
+    private readonly List<string> _contentRootsToClean = [];
+
+    [Fact]
+    public void RealHostBuilder_PackagedJsonVsProgramData_ProgramDataWins()
+    {
+        var builder = NewRealHostBuilder(packagedPipeName: "NoraMediBridge-Test");
+        Directory.CreateDirectory(Path.GetDirectoryName(OverridePath)!);
+        File.WriteAllText(OverridePath, """{"BridgeSelfService":{"PipeName":"NoraMediBridge"}}""");
+
+        ProgramDataConfigOverride.Apply(builder.Configuration, OverridePath, CurrentUserSid);
+
+        Assert.Equal("NoraMediBridge", builder.Configuration["BridgeSelfService:PipeName"]);
+    }
+
+    [Fact]
+    public void RealHostBuilder_ProgramDataVsEnvironmentVariable_EnvironmentWins()
+    {
+        var builder = NewRealHostBuilder(packagedPipeName: "NoraMediBridge-Test");
+        Directory.CreateDirectory(Path.GetDirectoryName(OverridePath)!);
+        File.WriteAllText(OverridePath, """{"BridgeSelfService":{"PipeName":"NoraMediBridge"}}""");
+        SetEnvVar("BridgeSelfService__PipeName", "NoraMediBridge-FromEnv");
+
+        ProgramDataConfigOverride.Apply(builder.Configuration, OverridePath, CurrentUserSid);
+
+        Assert.Equal("NoraMediBridge-FromEnv", builder.Configuration["BridgeSelfService:PipeName"]);
+    }
+
+    [Fact]
+    public void RealHostBuilder_EnvironmentVariableVsCommandLine_CommandLineWins()
+    {
+        var builder = NewRealHostBuilder(
+            packagedPipeName: "NoraMediBridge-Test",
+            args: ["--BridgeSelfService:PipeName=NoraMediBridge-FromCommandLine"]);
+        Directory.CreateDirectory(Path.GetDirectoryName(OverridePath)!);
+        File.WriteAllText(OverridePath, """{"BridgeSelfService":{"PipeName":"NoraMediBridge"}}""");
+        SetEnvVar("BridgeSelfService__PipeName", "NoraMediBridge-FromEnv");
+
+        ProgramDataConfigOverride.Apply(builder.Configuration, OverridePath, CurrentUserSid);
+
+        Assert.Equal("NoraMediBridge-FromCommandLine", builder.Configuration["BridgeSelfService:PipeName"]);
+    }
+
+    [Fact]
+    public void RealHostBuilder_PackagedTestPipeNameVsProgramDataRealPipeName_EffectiveResultIsReal()
+    {
+        // The exact scenario from the physical Scenario B finding: packaged
+        // appsettings.json still says "NoraMediBridge-Test" (a dev/test build
+        // artifact) but the migrated ProgramData override says "NoraMediBridge" —
+        // no environment variables or command-line args are present, so the
+        // effective PipeName must be the ProgramData one.
+        var builder = NewRealHostBuilder(packagedPipeName: "NoraMediBridge-Test");
+        Directory.CreateDirectory(Path.GetDirectoryName(OverridePath)!);
+        File.WriteAllText(OverridePath, """{"BridgeSelfService":{"PipeName":"NoraMediBridge"}}""");
+
+        ProgramDataConfigOverride.Apply(builder.Configuration, OverridePath, CurrentUserSid);
+
+        Assert.Equal("NoraMediBridge", builder.Configuration["BridgeSelfService:PipeName"]);
     }
 }

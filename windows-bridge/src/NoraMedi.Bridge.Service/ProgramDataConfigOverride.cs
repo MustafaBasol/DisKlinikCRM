@@ -77,14 +77,36 @@ public static class ProgramDataConfigOverride
         var source = configurationBuilder.Sources[^1];
         configurationBuilder.Sources.RemoveAt(configurationBuilder.Sources.Count - 1);
 
+        // Host.CreateApplicationBuilder registers TWO EnvironmentVariablesConfigurationSource
+        // instances, not one: an early DOTNET_-prefixed bootstrap source (used only to resolve
+        // ContentRootPath/EnvironmentName, inserted *before* appsettings.json/
+        // appsettings.{Environment}.json) and the real unprefixed one that AddEnvironmentVariables()
+        // appends *after* those JSON files, immediately before AddCommandLine(args) — confirmed by
+        // dumping builder.Configuration.Sources at runtime. Matching the *first* occurrence (as this
+        // used to) grabs the DOTNET_-prefixed bootstrap source and inserts the override before
+        // appsettings.json is even loaded, making the packaged file win over ProgramData — the
+        // opposite of the documented precedence. Matching the *last* unprefixed source targets the
+        // real app env-vars source instead.
         var sources = configurationBuilder.Sources;
         var envVarIndex = -1;
-        for (var i = 0; i < sources.Count; i++)
+        for (var i = sources.Count - 1; i >= 0; i--)
         {
-            if (sources[i] is EnvironmentVariablesConfigurationSource)
+            if (sources[i] is EnvironmentVariablesConfigurationSource { Prefix: null or "" })
             {
                 envVarIndex = i;
                 break;
+            }
+        }
+
+        if (envVarIndex < 0)
+        {
+            for (var i = sources.Count - 1; i >= 0; i--)
+            {
+                if (sources[i] is EnvironmentVariablesConfigurationSource)
+                {
+                    envVarIndex = i;
+                    break;
+                }
             }
         }
 

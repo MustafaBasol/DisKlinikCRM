@@ -237,7 +237,33 @@ function Invoke-ScenarioB {
         $svcState = Get-NoraMediServiceState
         Add-ScenarioAssertion -Result $result -Name 'Service starts successfully after migration' -Condition ($svcState.Status -eq 'Running') -Detail ($svcState | ConvertTo-Json -Compress)
 
-        $result.Notes.Add('Service-resolved-value verification (that the running process itself reports the migrated ServerUrl/PipeName, not just the file on disk) requires a bridge diagnostics/health endpoint or log line to assert against - see README "Manual verification" for the exact command to run by hand against this run.')
+        # Physical proof, not just a JSON-file inspection: the running
+        # process must actually bind the named pipe corresponding to the
+        # migrated ProgramData PipeName, not the packaged appsettings.json's
+        # value. This is the exact real-hardware finding that JSON-only
+        # assertions above missed - ProgramDataConfigOverride.Apply used to
+        # match the *first* EnvironmentVariablesConfigurationSource in
+        # Host.CreateApplicationBuilder's source list, which is an early
+        # DOTNET_-prefixed bootstrap source inserted *before* appsettings.json,
+        # not the real unprefixed one added after it - so the override landed
+        # at the wrong precedence and the packaged "NoraMediBridge-Test" value
+        # won instead of the migrated "NoraMediBridge" value. Poll briefly
+        # since the pipe server starts asynchronously in Worker.StartAsync.
+        $expectedPipe = $migratedPipeName
+        $pipeFound = $false
+        for ($attempt = 0; $attempt -lt 10; $attempt++) {
+            $openPipes = [System.IO.Directory]::GetFiles('\\.\pipe\')
+            if ($openPipes -contains "\\.\pipe\$expectedPipe") { $pipeFound = $true; break }
+            Start-Sleep -Milliseconds 500
+        }
+        Add-ScenarioAssertion -Result $result -Name 'Running service opened the migrated named pipe (not the packaged default)' `
+            -Condition $pipeFound -Detail "expected pipe '\\.\pipe\$expectedPipe' to be open; found: $(([System.IO.Directory]::GetFiles('\\.\pipe\') | Where-Object { $_ -like '*NoraMedi*' }) -join ', ')"
+
+        $packagedPipeName = Get-JsonConfigValue -Path (Join-Path $ProgramFilesInstallDir 'Service\appsettings.json') -Section 'BridgeSelfService' -Key 'PipeName'
+        if ($packagedPipeName -and $packagedPipeName -ne $expectedPipe) {
+            $wrongPipeOpen = ([System.IO.Directory]::GetFiles('\\.\pipe\')) -contains "\\.\pipe\$packagedPipeName"
+            Add-ScenarioAssertion -Result $result -Name 'Service did NOT open the packaged (pre-migration) pipe name' -Condition (-not $wrongPipeOpen) -Detail "packaged PipeName='$packagedPipeName'"
+        }
 
         Complete-ScenarioResult -Result $result -Status 'Pass' | Out-Null
     }
