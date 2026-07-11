@@ -299,14 +299,29 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
             FailedCount: counts[QueueItemState.Failed]);
 
         var result = await _apiClient.HeartbeatAsync(credential, request);
+
+        // Safe to log: outcome/category/status code and the server origin
+        // (never the path, query, credential, or any queue/patient content).
         if (result.Ok)
         {
+            _logger.LogInformation(
+                "heartbeat.ok serverUrl={ServerUrlOrigin} statusCode={StatusCode}",
+                _options.SafeServerUrlOrigin, result.StatusCode);
             _authState.MarkValid();
             _lastHeartbeatAt = DateTimeOffset.UtcNow;
         }
         else if (result.StatusCode == 401)
         {
+            _logger.LogWarning(
+                "heartbeat.failed serverUrl={ServerUrlOrigin} statusCode={StatusCode} category={Category}",
+                _options.SafeServerUrlOrigin, result.StatusCode, result.Category);
             _authState.MarkInvalid();
+        }
+        else
+        {
+            _logger.LogWarning(
+                "heartbeat.failed serverUrl={ServerUrlOrigin} statusCode={StatusCode} category={Category} networkError={NetworkError}",
+                _options.SafeServerUrlOrigin, result.StatusCode, result.Category, result.NetworkError);
         }
     }
 

@@ -137,11 +137,12 @@ public sealed class BridgeApiClient
         try
         {
             using var response = await _http.SendAsync(request, cancellationToken);
-            return new HeartbeatOutcome(response.IsSuccessStatusCode, (int)response.StatusCode);
+            var statusCode = (int)response.StatusCode;
+            return new HeartbeatOutcome(response.IsSuccessStatusCode, statusCode, ClassifyStatus(statusCode));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            return new HeartbeatOutcome(false);
+            return new HeartbeatOutcome(false, NetworkError: true);
         }
     }
 

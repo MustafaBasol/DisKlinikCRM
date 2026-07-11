@@ -229,6 +229,28 @@ async function main() {
     assert.ok(result.success);
   });
 
+  await test('imagingBridgeHeartbeatSchema rejects explicit null for capabilities (optional but not nullable)', () => {
+    // Regression: a real Windows Service heartbeat that leaves Capabilities
+    // unset serialized "capabilities":null under the old JSON options, which
+    // this schema rejects — the 400 was then silently swallowed by
+    // HeartbeatTickAsync, leaving the agent "pending" forever.
+    const result = imagingBridgeHeartbeatSchema.safeParse({ agentVersion: '0.4.5', capabilities: null });
+    assert.ok(!result.success);
+  });
+
+  await test('imagingBridgeHeartbeatSchema accepts the real Service heartbeat payload shape (capabilities omitted)', () => {
+    const result = imagingBridgeHeartbeatSchema.safeParse({
+      agentVersion: '0.4.5',
+      osVersion: 'Microsoft Windows NT 10.0.19045.0',
+      architecture: 'X64',
+      pendingCount: 3,
+      failedCount: 0,
+      lastSuccessfulUploadAt: null,
+      lastErrorCategory: null,
+    });
+    assert.ok(result.success);
+  });
+
   await test('imagingBridgeHeartbeatSchema rejects negative counts', () => {
     const result = imagingBridgeHeartbeatSchema.safeParse({ pendingCount: -1 });
     assert.ok(!result.success);

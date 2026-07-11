@@ -24,14 +24,28 @@ public sealed record UpdatePolicy(
     [property: JsonPropertyName("channel")] string Channel,
     [property: JsonPropertyName("mandatory")] bool Mandatory);
 
-/// <summary>Request body of POST /api/public/imaging/bridge/heartbeat — every field optional per imagingBridgeHeartbeatSchema.</summary>
+/// <summary>
+/// Request body of POST /api/public/imaging/bridge/heartbeat — every field
+/// optional per imagingBridgeHeartbeatSchema. AgentVersion/OsVersion/
+/// Architecture/Capabilities/PendingCount/FailedCount are optional but NOT
+/// nullable in that schema, so each carries [JsonIgnore(WhenWritingNull)] —
+/// an explicit "capabilities":null (the default whenever Capabilities is
+/// unset, as it always is today) is a schema violation the backend rejects
+/// with 400 before the agent is ever looked up, and HeartbeatTickAsync used
+/// to swallow that failure silently, leaving the agent "pending" forever.
+/// LastSuccessfulUploadAt and LastErrorCategory are deliberately excluded
+/// from that treatment: the schema declares them `.optional().nullable()`
+/// and the server treats an explicit null there as "clear this field",
+/// distinct from omitting the key entirely (no update) — so those two must
+/// always be written, null or not.
+/// </summary>
 public sealed record HeartbeatRequest(
-    [property: JsonPropertyName("agentVersion")] string? AgentVersion = null,
-    [property: JsonPropertyName("osVersion")] string? OsVersion = null,
-    [property: JsonPropertyName("architecture")] string? Architecture = null,
-    [property: JsonPropertyName("capabilities")] IReadOnlyDictionary<string, object>? Capabilities = null,
-    [property: JsonPropertyName("pendingCount")] int? PendingCount = null,
-    [property: JsonPropertyName("failedCount")] int? FailedCount = null,
+    [property: JsonPropertyName("agentVersion"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AgentVersion = null,
+    [property: JsonPropertyName("osVersion"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OsVersion = null,
+    [property: JsonPropertyName("architecture"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Architecture = null,
+    [property: JsonPropertyName("capabilities"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, object>? Capabilities = null,
+    [property: JsonPropertyName("pendingCount"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? PendingCount = null,
+    [property: JsonPropertyName("failedCount"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? FailedCount = null,
     [property: JsonPropertyName("lastSuccessfulUploadAt")] string? LastSuccessfulUploadAt = null,
     [property: JsonPropertyName("lastErrorCategory")] string? LastErrorCategory = null);
 

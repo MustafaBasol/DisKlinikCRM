@@ -144,6 +144,71 @@ public class BridgeApiClientTests
         var outcome = await client.HeartbeatAsync("nmb_token", new HeartbeatRequest());
 
         Assert.False(outcome.Ok);
+        Assert.True(outcome.NetworkError);
+        Assert.Null(outcome.Category);
+    }
+
+    [Fact]
+    public async Task HeartbeatAsync_RealServicePayloadShape_OmitsNullCapabilitiesAndOtherOptionalFields()
+    {
+        // Contract test mirroring BridgeOrchestrator.HeartbeatTickAsync's real
+        // call shape: AgentVersion/OsVersion/Architecture/PendingCount/FailedCount
+        // set, Capabilities never set (always null today). imagingBridgeHeartbeatSchema
+        // declares capabilities optional but NOT nullable, so "capabilities":null
+        // would be a 400 the old code silently ignored, leaving the agent
+        // "pending" forever. The request must omit the key entirely.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.OK, """{"ok":true}""");
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+        var request = new HeartbeatRequest(
+            AgentVersion: "0.4.5",
+            OsVersion: "Microsoft Windows NT 10.0.19045.0",
+            Architecture: "X64",
+            PendingCount: 3,
+            FailedCount: 0);
+
+        await client.HeartbeatAsync("nmb_token", request);
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.DoesNotContain("capabilities", handler.LastRequestBody);
+        Assert.Contains("\"agentVersion\":\"0.4.5\"", handler.LastRequestBody);
+        Assert.Contains("\"pendingCount\":3", handler.LastRequestBody);
+        Assert.Contains("\"failedCount\":0", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task HeartbeatAsync_LastSuccessfulUploadAtAndLastErrorCategoryNull_AreStillSentAsExplicitNull()
+    {
+        // Unlike capabilities/agentVersion/etc, these two fields are
+        // `.optional().nullable()` server-side and an explicit null means
+        // "clear this field" — distinct from omitting the key (no update).
+        // The omit-null treatment must not extend to these two.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.OK, """{"ok":true}""");
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.HeartbeatAsync("nmb_token", new HeartbeatRequest(AgentVersion: "0.4.5"));
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.Contains("\"lastSuccessfulUploadAt\":null", handler.LastRequestBody);
+        Assert.Contains("\"lastErrorCategory\":null", handler.LastRequestBody);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK, true, ResponseCategory.Success)]
+    [InlineData(HttpStatusCode.Unauthorized, false, ResponseCategory.AuthFailure)]
+    [InlineData(HttpStatusCode.BadRequest, false, ResponseCategory.Permanent)]
+    [InlineData(HttpStatusCode.TooManyRequests, false, ResponseCategory.Retryable)]
+    [InlineData(HttpStatusCode.InternalServerError, false, ResponseCategory.Retryable)]
+    public async Task HeartbeatAsync_ClassifiesStatusCodesDistinctly(HttpStatusCode status, bool expectedOk, ResponseCategory expectedCategory)
+    {
+        var handler = FakeHttpMessageHandler.Returning(status, status == HttpStatusCode.OK ? """{"ok":true}""" : null);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var outcome = await client.HeartbeatAsync("nmb_token", new HeartbeatRequest());
+
+        Assert.Equal(expectedOk, outcome.Ok);
+        Assert.Equal((int)status, outcome.StatusCode);
+        Assert.Equal(expectedCategory, outcome.Category);
+        Assert.False(outcome.NetworkError);
     }
 
     [Fact]

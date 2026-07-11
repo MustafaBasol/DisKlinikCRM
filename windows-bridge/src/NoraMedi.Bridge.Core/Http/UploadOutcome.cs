@@ -22,4 +22,14 @@ public sealed record UploadOutcome(
     bool NetworkError = false,
     TimeSpan? RetryAfter = null);
 
-public sealed record HeartbeatOutcome(bool Ok, int? StatusCode = null);
+/// <summary>
+/// Result of <see cref="BridgeApiClient.HeartbeatAsync"/>. Category reuses
+/// <see cref="ResponseCategory"/>'s status-code buckets (401 is AuthFailure,
+/// 429/5xx are Retryable, other 4xx are Permanent) so callers can log/branch
+/// on the same vocabulary as uploads without inventing a parallel enum.
+/// Category is null exactly when NetworkError is true (the request itself
+/// never completed, so there is no status to classify). Never carries the
+/// credential, token, or any patient/study data — see BridgeOrchestrator's
+/// heartbeat diagnostics log line for what is safe to persist.
+/// </summary>
+public sealed record HeartbeatOutcome(bool Ok, int? StatusCode = null, ResponseCategory? Category = null, bool NetworkError = false);

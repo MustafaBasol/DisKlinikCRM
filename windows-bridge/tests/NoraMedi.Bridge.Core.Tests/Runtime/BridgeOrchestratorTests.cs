@@ -163,6 +163,41 @@ public class BridgeOrchestratorTests : IDisposable
     }
 
     [Fact]
+    public async Task Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities()
+    {
+        // Regression test for the real-hardware finding: a paired agent stayed
+        // "pending" forever because the heartbeat payload sent an explicit
+        // "capabilities":null the backend schema rejects with 400, and the
+        // old HeartbeatTickAsync silently dropped anything but a 401. This
+        // proves the real Service call shape (Start()'s heartbeat timer, not
+        // a hand-built request) both omits capabilities and flips the
+        // orchestrator's own connection state to online.
+        var handler = new ScriptedHttpMessageHandler()
+            .Enqueue("/bridge/pair", HttpStatusCode.Created,
+                """{"bridgeCredential":"nmb_test_token","bridgeAgentId":"agent-1","clinicName":"Demo","bindings":[],"serverTime":"2026-07-08T00:00:00.000Z"}""")
+            .Enqueue("/bridge/heartbeat", HttpStatusCode.OK, """{"ok":true}""");
+        var orchestrator = NewOrchestrator(handler);
+
+        await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+        var beforeStatus = await orchestrator.GetServiceStatusAsync(default);
+        Assert.Null(beforeStatus.LastHeartbeatAt);
+
+        orchestrator.Start();
+
+        var status = await PollUntil(
+            () => orchestrator.GetServiceStatusAsync(default),
+            s => s.ConnectionState == "online" && s.LastHeartbeatAt is not null,
+            TimeSpan.FromSeconds(10));
+
+        Assert.Equal("online", status.ConnectionState);
+        Assert.NotNull(status.LastHeartbeatAt);
+
+        var heartbeatBody = handler.RequestBodies[^1];
+        Assert.DoesNotContain("capabilities", heartbeatBody);
+        Assert.Contains("\"lastSuccessfulUploadAt\":null", heartbeatBody);
+    }
+
+    [Fact]
     public async Task EndToEnd_FolderDropToServerUpload_CompletesThroughRealQueueAndWatcher()
     {
         var handler = new ScriptedHttpMessageHandler()
