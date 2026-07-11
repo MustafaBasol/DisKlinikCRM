@@ -261,12 +261,39 @@ The legacy file only ever holds `BridgeSelfService` settings — never a
 credential (those are DPAPI-protected separately) — so copying it
 wholesale, and logging the command line that does so, is safe.
 
+A focused review of that first 0.4.6 draft found two further defects, both
+fixed before this shipped:
+
+- The command used `%D%`/`%S%` (immediate cmd.exe variable expansion) on a
+  single compound `a&b&c` line — cmd.exe expands `%VAR%` for the *entire*
+  line once, up front, before any part of it runs, so `%D%`/`%S%` could not
+  reliably see the values the `set` commands earlier on the same line had
+  just assigned. Fixed with `/V:ON` (delayed expansion) and `!D!`/`!S!`.
+- Less obviously: an unparenthesized `if condition action` on a single
+  logical line (exactly what `cmd /c` receives) consumes every subsequent
+  `&`-chained command as part of its own action, in both the true and false
+  branch — so the original `if not exist "!S!" exit /b 0&if exist ...&md
+  ...&copy ...` ran nothing at all when the first condition was false, and
+  nothing but that one exit when it was true; the later checks, `md`, and
+  `copy` were unreachable either way. Fixed by wrapping each `if` statement,
+  and only the `if` statement, in its own parentheses, which restores normal
+  top-level `&` separation from whatever follows.
+
+Both fixes, including the case of a space in the resolved path (the way a
+real "Program Files" path has one), are proven by running the *exact*
+authored command through a real `cmd.exe` against disposable temp
+directories in
+`windows-bridge/tests/installer/MigrateLegacyConfigCommand.Tests.ps1` — no
+MSI or install needed to catch either bug.
+
 This has been verified at the MSI-table level (the sequence, condition, and
 `SetProperty`-populated command line all confirmed via direct query of the
 compiled MSI's `InstallExecuteSequence`/`CustomAction` tables). Real-hardware
 retest of the 0.4.5 → 0.4.6 upgrade is tracked via
 `windows-bridge/tests/installer/Invoke-InstallerIntegrationTests.ps1`
-(scenario B) — see that script's README for exact commands.
+(scenario B) — see that script's README for exact commands, including how
+every scenario now resets its own required state so scenarios can be run in
+any order or combination.
 
 ## Supported Windows versions
 

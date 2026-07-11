@@ -26,6 +26,31 @@ about to do and asks for an explicit `yes` before proceeding, unless you pass
 `-RunDestructiveTests`; without it they are recorded as `Skipped`, not
 silently passed.
 
+## Every scenario is independently reproducible
+
+Each scenario (`Reset-ScenarioState`/`Install-CandidateIfNeeded` in
+`InstallerTestHelpers.psm1`) resets or ensures exactly the product/
+ProgramData state it needs before it runs, rather than assuming a specific
+prior scenario already put the machine in that state:
+
+- **A** resets fully (uninstalls whatever is installed, deletes
+  `%ProgramData%\NoraMediBridge`) before its clean install.
+- **B** and **D** reset fully (same as A) before installing the previous
+  version, so "no ProgramData override exists yet" is guaranteed, not
+  assumed. A focused review found the original version of both simply
+  `throw`s if an override already existed — meaning `-Scenario A,B,C,D,E`
+  (or `All`) could fail because an earlier scenario in the *same run* left
+  an override behind, not because of a real product defect.
+- **C** and **E** reuse an already-installed candidate if present, or reset
+  and install it if a different version (or nothing) is installed. C always
+  seeds its own sentinel override, overwriting whatever was there; E seeds
+  one itself if none exists yet.
+
+This means every command below, and any scenario run alone (`-Scenario B`
+with nothing pre-installed, `-Scenario D` right after a `-Scenario C` run,
+etc.), works regardless of what a previous invocation left on the machine.
+`StateMachine.Tests.ps1` (see below) proves this at the logic level.
+
 ## Prerequisites
 
 - Elevated PowerShell 5.1+ session on the test machine.
@@ -36,6 +61,30 @@ silently passed.
   by accident.
 - `InstallerTestHelpers.psm1` in the same directory as the orchestrator
   script (copy the whole `tests\installer` directory, not just the `.ps1`).
+
+## Two local, non-mutating tests you can run first
+
+Both of these are safe on any developer machine — no admin rights, no
+msiexec, no service, no ProgramData/Program Files writes:
+
+- `MigrateLegacyConfigCommand.Tests.ps1` extracts the *exact* authored
+  `MigrateLegacyConfig` command from `Package.wxs` and runs it through a
+  real `cmd.exe` against disposable temp directories (one path deliberately
+  containing a space) to prove the command's own logic - source-missing,
+  destination-exists (no clobber), destination-blocked (failure) - without
+  needing an MSI at all.
+- `StateMachine.Tests.ps1` proves the order-independence design described
+  below (every scenario sequence, and each scenario run alone from a
+  "poisoned" leftover state) using a pure in-memory model of the same
+  reset/install rules `Reset-ScenarioState`/`Install-CandidateIfNeeded`
+  implement — it does not import the module or touch a real product,
+  specifically because an earlier attempt to mock the module's own
+  functions in-place did not reliably override them and risked invoking a
+  real `msiexec /x` against this machine's actual installed product.
+
+Run either directly: `powershell -File .\MigrateLegacyConfigCommand.Tests.ps1`
+/ `powershell -File .\StateMachine.Tests.ps1`. Both exit 0 only if every
+case passes.
 
 ## Commands
 
@@ -86,6 +135,25 @@ installing, upgrading, or removing anything:
 Each destructive step still prompts for confirmation; add `-Force` only once
 you've read through the plan on a run you trust (e.g. re-running after a
 fix, on a machine you've already reset).
+
+### Recommended order on the physical test machine
+
+Because every scenario now resets its own required state (see "Every
+scenario is independently reproducible" above), each of the commands below
+can be run as its own separate invocation — useful for reviewing one
+scenario's log/result bundle at a time instead of one large combined run:
+
+1. `-Scenario Preflight`
+2. `-Scenario B` (alone)
+3. `-Scenario A` (alone)
+4. `-Scenario C` (alone)
+5. `-Scenario E` (alone)
+6. `-Scenario D -RunDestructiveTests` (last, since it's the one that forces
+   a failure/rollback)
+
+Running `-Scenario A,B,C,E` or `-Scenario All` in one invocation (as in the
+examples above) is equally valid — order-independence means both styles are
+supported, not just the one-scenario-at-a-time list.
 
 ### Collecting the result bundle
 

@@ -117,18 +117,6 @@ if ($Scenario -contains 'All') {
     $Scenario = @('A', 'B', 'C', 'D', 'E')
 }
 
-function Confirm-DestructiveStep {
-    param([Parameter(Mandatory)][string]$Message)
-    if ($Force) { return }
-    Write-Host ""
-    Write-Host "ABOUT TO RUN A DESTRUCTIVE STEP:" -ForegroundColor Yellow
-    Write-Host "  $Message" -ForegroundColor Yellow
-    $answer = Read-Host "Type 'yes' to proceed, anything else to abort this run"
-    if ($answer -ne 'yes') {
-        throw "User did not confirm destructive step: $Message"
-    }
-}
-
 function Assert-FileHash {
     param([string]$Path, [string]$Expected, [string]$Label)
     if (-not (Test-Path $Path)) { throw "$Label not found at '$Path'." }
@@ -138,28 +126,27 @@ function Assert-FileHash {
     }
 }
 
-function Uninstall-IfPresent {
-    param([string]$LogDir, [string]$LogName)
-    $installed = Get-InstalledNoraMediProduct
-    if (-not $installed) { return }
-    Write-TestLog "Removing installed NoraMedi Bridge ($($installed.DisplayVersion), $($installed.ProductCode)) before scenario." -Level WARN
-    $result = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/x', $installed.ProductCode, '/quiet', '/norestart') -LogDirectory $LogDir -LogName $LogName
-    if ($result.ExitCode -ne 0) {
-        throw "Pre-scenario cleanup uninstall failed with exit code $($result.ExitCode). See $($result.LogPath)."
-    }
-    Start-Sleep -Seconds 2
-}
+# Confirm-DestructiveStep, Uninstall-IfPresent, Reset-ScenarioState, and
+# Install-CandidateIfNeeded live in InstallerTestHelpers.psm1 (not here) so
+# StateMachine.Tests.ps1 can exercise the order-independence logic with
+# mocked Get-InstalledNoraMediProduct/Invoke-MsiProcess/Test-Path, without
+# needing a real msiexec run. Every call site below passes -Force:$Force
+# explicitly since module functions don't see this script's $Force by
+# closure the way same-file functions would.
 
 function Invoke-ScenarioA {
     param([string]$RunDir)
     $result = New-ScenarioResult -Name 'A: Clean install'
     $result.LogDir = $RunDir
     try {
-        Confirm-DestructiveStep "Scenario A will ensure no NoraMedi Bridge product is installed, then install $CandidateVersion clean."
-        Uninstall-IfPresent -LogDir $RunDir -LogName 'A-precleanup'
+        # Order-independent: a clean install means both no product AND no
+        # leftover ProgramData override, regardless of what an earlier
+        # scenario in this same run (B, C, D, E) left behind.
+        Reset-ScenarioState -ScenarioName 'Scenario A' -RunDir $RunDir -LogNamePrefix 'A' -RemoveProgramData -Force:$Force
 
         Add-ScenarioAssertion -Result $result -Name 'No prior product installed' -Condition (-not (Get-InstalledNoraMediProduct)) -Detail 'checked Uninstall registry key'
         Add-ScenarioAssertion -Result $result -Name 'Program Files path absent' -Condition (-not (Test-Path $ProgramFilesInstallDir)) -Detail $ProgramFilesInstallDir
+        Add-ScenarioAssertion -Result $result -Name 'No ProgramData override left over from a prior scenario' -Condition (-not (Test-Path $ProgramDataRoot)) -Detail $ProgramDataRoot
 
         $install = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$CandidateMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'A-install'
         Add-ScenarioAssertion -Result $result -Name 'Clean install exit code 0' -Condition ($install.ExitCode -eq 0) -Detail "exit=$($install.ExitCode) log=$($install.LogPath)"
@@ -200,12 +187,13 @@ function Invoke-ScenarioB {
     $testServerUrl = 'http://127.0.0.1:5000'
     $testPipeName = 'NoraMediBridge-Test'
     try {
-        Confirm-DestructiveStep "Scenario B will install $PreviousVersion, hand-edit its legacy config, then upgrade to $CandidateVersion."
-        Uninstall-IfPresent -LogDir $RunDir -LogName 'B-precleanup'
-        if (Test-Path $ProgramDataConfigPath) {
-            throw "ProgramData override already exists at '$ProgramDataConfigPath' before Scenario B started. Clean the machine (or run Scenario E's uninstall with -RunDestructiveTests) before retrying."
-        }
+        # Order-independent: this scenario's whole premise is "no
+        # ProgramData override exists yet", so make that true rather than
+        # assume it and throw - a prior scenario in the same run (A, C, D, E)
+        # may well have left a product installed and/or an override behind.
+        Reset-ScenarioState -ScenarioName 'Scenario B' -RunDir $RunDir -LogNamePrefix 'B' -RemoveProgramData -Force:$Force
 
+        Confirm-DestructiveStep -Force:$Force -Message "Scenario B will install $PreviousVersion, hand-edit its legacy config, then upgrade to $CandidateVersion."
         $installPrev = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$PreviousMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'B-install-previous'
         Add-ScenarioAssertion -Result $result -Name "Previous version ($PreviousVersion) installs cleanly" -Condition ($installPrev.ExitCode -eq 0) -Detail "exit=$($installPrev.ExitCode)"
 
@@ -267,18 +255,20 @@ function Invoke-ScenarioC {
     $sentinelEnabled = 'false'
     $sentinelServerUrl = 'https://sentinel.invalid.test'
     try {
-        $installed = Get-InstalledNoraMediProduct
-        if (-not $installed) {
-            Confirm-DestructiveStep "Scenario C requires an installed product; installing $CandidateVersion first."
-            $install = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$CandidateMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'C-install'
-            Add-ScenarioAssertion -Result $result -Name 'Install for Scenario C exit code 0' -Condition ($install.ExitCode -eq 0) -Detail "exit=$($install.ExitCode)"
-        }
+        # Order-independent: ensures the candidate is installed regardless
+        # of what an earlier scenario left behind (nothing installed, the
+        # candidate already installed, or a stale previous-version install
+        # left by B/D). Always creates its own distinctive sentinel override
+        # below, overwriting anything an earlier scenario put there, since
+        # this scenario's assertion is specifically about *this* value
+        # surviving a repair, not about what came before it.
+        Install-CandidateIfNeeded -Result $result -ScenarioName 'Scenario C' -RunDir $RunDir -LogNamePrefix 'C' -CandidateMsiPath $CandidateMsiPath -CandidateVersion $CandidateVersion -Force:$Force
 
         New-Item -ItemType Directory -Path (Split-Path $ProgramDataConfigPath -Parent) -Force | Out-Null
         @{ BridgeSelfService = @{ Enabled = $sentinelEnabled; ServerUrl = $sentinelServerUrl } } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ProgramDataConfigPath -Encoding utf8
-        Write-TestLog "Seeded sentinel ProgramData override at $ProgramDataConfigPath." -Level INFO
+        Write-TestLog "Seeded sentinel ProgramData override at $ProgramDataConfigPath (overwriting any override left by an earlier scenario)." -Level INFO
 
-        Confirm-DestructiveStep "Scenario C will repair $CandidateVersion in place (msiexec /fa) and check the sentinel override survives."
+        Confirm-DestructiveStep -Force:$Force -Message "Scenario C will repair $CandidateVersion in place (msiexec /fa) and check the sentinel override survives."
         $repair = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/fa', "`"$CandidateMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'C-repair'
         Add-ScenarioAssertion -Result $result -Name 'Repair exit code 0' -Condition ($repair.ExitCode -eq 0) -Detail "exit=$($repair.ExitCode) log=$($repair.LogPath)"
 
@@ -311,12 +301,13 @@ function Invoke-ScenarioD {
     $configDir = Split-Path $ProgramDataConfigPath -Parent
     $aclBackup = $null
     try {
-        Confirm-DestructiveStep "Scenario D will install $PreviousVersion, then make the ProgramData config *directory* path unwritable (by pre-creating it as a file, not a directory) so MigrateLegacyConfig's mkdir/copy fails, then upgrade and confirm rollback."
-        Uninstall-IfPresent -LogDir $RunDir -LogName 'D-precleanup'
-        if (Test-Path $ProgramDataConfigPath) {
-            throw "ProgramData override already exists before Scenario D started; clean the machine first."
-        }
+        # Order-independent: same "no ProgramData override yet" precondition
+        # as Scenario B, made true rather than assumed - a prior scenario
+        # (A, B, C, E) in the same run may have left a product and/or an
+        # override behind.
+        Reset-ScenarioState -ScenarioName 'Scenario D' -RunDir $RunDir -LogNamePrefix 'D' -RemoveProgramData -Force:$Force
 
+        Confirm-DestructiveStep -Force:$Force -Message "Scenario D will install $PreviousVersion, then make the ProgramData config *directory* path unwritable (by pre-creating it as a file, not a directory) so MigrateLegacyConfig's mkdir/copy fails, then upgrade and confirm rollback."
         $installPrev = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$PreviousMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'D-install-previous'
         Add-ScenarioAssertion -Result $result -Name "Previous version ($PreviousVersion) installs cleanly" -Condition ($installPrev.ExitCode -eq 0) -Detail "exit=$($installPrev.ExitCode)"
 
@@ -374,16 +365,23 @@ function Invoke-ScenarioE {
     $result = New-ScenarioResult -Name 'E: Repair and uninstall'
     $result.LogDir = $RunDir
     try {
-        $installed = Get-InstalledNoraMediProduct
-        if (-not $installed) {
-            Confirm-DestructiveStep "Scenario E requires an installed product; installing $CandidateVersion first."
-            $install = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$CandidateMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'E-install'
-            Add-ScenarioAssertion -Result $result -Name 'Install for Scenario E exit code 0' -Condition ($install.ExitCode -eq 0) -Detail "exit=$($install.ExitCode)"
+        # Order-independent: ensures the candidate is installed regardless
+        # of what an earlier scenario left behind, the same as Scenario C.
+        Install-CandidateIfNeeded -Result $result -ScenarioName 'Scenario E' -RunDir $RunDir -LogNamePrefix 'E' -CandidateMsiPath $CandidateMsiPath -CandidateVersion $CandidateVersion -Force:$Force
+
+        # This scenario must not depend on B/C/D having left a ProgramData
+        # override behind - seed its own if none exists yet, so "the
+        # override survives repair/uninstall" is proven by this scenario
+        # alone, not by a coincidence of run order.
+        if (-not (Test-Path $ProgramDataConfigPath)) {
+            New-Item -ItemType Directory -Path (Split-Path $ProgramDataConfigPath -Parent) -Force | Out-Null
+            @{ BridgeSelfService = @{ Enabled = 'true'; ServerUrl = 'http://scenario-e-seed.invalid' } } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ProgramDataConfigPath -Encoding utf8
+            Write-TestLog "Scenario E: no ProgramData override existed yet; seeded one so this scenario is self-contained." -Level INFO
         }
 
         $overrideBefore = if (Test-Path $ProgramDataConfigPath) { Get-Content -LiteralPath $ProgramDataConfigPath -Raw -Encoding UTF8 } else { $null }
 
-        Confirm-DestructiveStep "Scenario E will repair $CandidateVersion in place (msiexec /fa)."
+        Confirm-DestructiveStep -Force:$Force -Message "Scenario E will repair $CandidateVersion in place (msiexec /fa)."
         $repair = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/fa', "`"$CandidateMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'E-repair'
         Add-ScenarioAssertion -Result $result -Name 'Repair exit code 0' -Condition ($repair.ExitCode -eq 0) -Detail "exit=$($repair.ExitCode)"
 
@@ -395,7 +393,7 @@ function Invoke-ScenarioE {
         Add-ScenarioAssertion -Result $result -Name 'Service registration valid after repair' -Condition $svcAfterRepair.Exists -Detail ($svcAfterRepair | ConvertTo-Json -Compress)
 
         $productBeforeUninstall = Get-InstalledNoraMediProduct
-        Confirm-DestructiveStep "Scenario E will now uninstall $CandidateVersion (normal uninstall, ProgramData is expected to survive by design)."
+        Confirm-DestructiveStep -Force:$Force -Message "Scenario E will now uninstall $CandidateVersion (normal uninstall, ProgramData is expected to survive by design)."
         $uninstall = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/x', $productBeforeUninstall.ProductCode, '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'E-uninstall'
         Add-ScenarioAssertion -Result $result -Name 'Uninstall exit code 0' -Condition ($uninstall.ExitCode -eq 0) -Detail "exit=$($uninstall.ExitCode)"
 
@@ -404,7 +402,7 @@ function Invoke-ScenarioE {
         Add-ScenarioAssertion -Result $result -Name 'ProgramData override survives normal uninstall (documented default)' -Condition (Test-Path $ProgramDataConfigPath) -Detail $ProgramDataConfigPath
 
         if ($RunDestructiveTests) {
-            Confirm-DestructiveStep "Optional destructive sub-case: reinstall $CandidateVersion then uninstall with REMOVE_LOCAL_DATA=1 to verify full ProgramData removal."
+            Confirm-DestructiveStep -Force:$Force -Message "Optional destructive sub-case: reinstall $CandidateVersion then uninstall with REMOVE_LOCAL_DATA=1 to verify full ProgramData removal."
             $reinstall = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$CandidateMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName 'E-reinstall-for-remove-local-data'
             Add-ScenarioAssertion -Result $result -Name 'Reinstall before REMOVE_LOCAL_DATA case exit code 0' -Condition ($reinstall.ExitCode -eq 0) -Detail "exit=$($reinstall.ExitCode)"
 

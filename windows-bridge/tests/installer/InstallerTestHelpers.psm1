@@ -15,6 +15,7 @@ Set-StrictMode -Version Latest
 $script:NoraMediServiceName = 'NoraMediBridge'
 $script:NoraMediUpgradeCode = '{12BB6A03-A76B-40B2-828E-7DAF6FB4A61E}'
 $script:ProgramFilesInstallDir = Join-Path ${env:ProgramFiles} 'NoraMedi\Bridge'
+$script:ProgramDataRoot = Join-Path ${env:ProgramData} 'NoraMediBridge'
 $script:ProgramDataConfigPath = Join-Path ${env:ProgramData} 'NoraMediBridge\config\appsettings.json'
 $script:LegacyServiceConfigPath = Join-Path $script:ProgramFilesInstallDir 'Service\appsettings.json'
 
@@ -162,6 +163,121 @@ function Backup-NoraMediConfigState {
     }
 }
 
+function Confirm-DestructiveStep {
+    <#
+    Prompts for an explicit 'yes' before a destructive step, unless -Force
+    is passed. Kept in this module (rather than the orchestrator script) so
+    Reset-ScenarioState/Install-CandidateIfNeeded can call it directly and
+    so it can be unit-tested / mocked in isolation from a real msiexec run.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Message,
+        [switch]$Force
+    )
+    if ($Force) { return }
+    Write-Host ""
+    Write-Host "ABOUT TO RUN A DESTRUCTIVE STEP:" -ForegroundColor Yellow
+    Write-Host "  $Message" -ForegroundColor Yellow
+    $answer = Read-Host "Type 'yes' to proceed, anything else to abort this run"
+    if ($answer -ne 'yes') {
+        throw "User did not confirm destructive step: $Message"
+    }
+}
+
+function Uninstall-IfPresent {
+    param([string]$LogDir, [string]$LogName)
+    $installed = Get-InstalledNoraMediProduct
+    if (-not $installed) { return }
+    Write-TestLog "Removing installed NoraMedi Bridge ($($installed.DisplayVersion), $($installed.ProductCode)) before scenario." -Level WARN
+    $result = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/x', $installed.ProductCode, '/quiet', '/norestart') -LogDirectory $LogDir -LogName $LogName
+    if ($result.ExitCode -ne 0) {
+        throw "Pre-scenario cleanup uninstall failed with exit code $($result.ExitCode). See $($result.LogPath)."
+    }
+    Start-Sleep -Seconds 2
+}
+
+function Reset-ScenarioState {
+    <#
+    Makes a scenario independently reproducible regardless of what an
+    earlier scenario in the same run left behind: uninstalls whatever
+    product is currently installed (any version) and, when -RemoveProgramData
+    is passed, also deletes %ProgramData%\NoraMediBridge (and only that
+    path - never any unrelated ProgramData tree). Scenarios B and D need
+    "no ProgramData override exists yet" to be a guaranteed precondition,
+    not an assumption; this replaces the old behavior of throwing when a
+    prior scenario (e.g. C's sentinel override, or a previous B/E run) left
+    one behind.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$ScenarioName,
+        [Parameter(Mandatory)][string]$RunDir,
+        [Parameter(Mandatory)][string]$LogNamePrefix,
+        [switch]$RemoveProgramData,
+        [switch]$Force
+    )
+    $installed = Get-InstalledNoraMediProduct
+    $needsProgramDataRemoval = [bool]($RemoveProgramData -and (Test-Path $script:ProgramDataRoot))
+    if (-not $installed -and -not $needsProgramDataRemoval) {
+        Write-TestLog "${ScenarioName} reset: machine already clean (no product installed$(if ($RemoveProgramData) { ', no ProgramData override' }))." -Level INFO
+        return
+    }
+    $planParts = New-Object System.Collections.Generic.List[string]
+    if ($installed) { $planParts.Add("uninstall the currently installed product ($($installed.DisplayVersion))") }
+    if ($needsProgramDataRemoval) { $planParts.Add("delete '$script:ProgramDataRoot'") }
+    Confirm-DestructiveStep -Force:$Force -Message "${ScenarioName} reset will $($planParts -join ' and ') so this scenario starts from a known, independent state."
+    Uninstall-IfPresent -LogDir $RunDir -LogName "$LogNamePrefix-reset-uninstall"
+    if ($RemoveProgramData) {
+        Remove-NoraMediProgramDataTree
+    }
+}
+
+function Install-CandidateIfNeeded {
+    <#
+    Used by scenarios (C, E) that only need "the candidate is installed",
+    not a from-scratch clean machine: if nothing is installed, installs the
+    candidate; if a different version is installed (leftover from a B/D/A
+    run earlier in the same invocation), resets first so the scenario still
+    runs against the candidate version it's meant to test, never silently
+    against whatever was left behind.
+    #>
+    param(
+        [Parameter(Mandatory)][object]$Result,
+        [Parameter(Mandatory)][string]$ScenarioName,
+        [Parameter(Mandatory)][string]$RunDir,
+        [Parameter(Mandatory)][string]$LogNamePrefix,
+        [Parameter(Mandatory)][string]$CandidateMsiPath,
+        [Parameter(Mandatory)][string]$CandidateVersion,
+        [switch]$Force
+    )
+    $installed = Get-InstalledNoraMediProduct
+    if ($installed -and $installed.DisplayVersion -eq $CandidateVersion) {
+        Write-TestLog "${ScenarioName}: candidate $CandidateVersion already installed, reusing it." -Level INFO
+        return
+    }
+    if ($installed) {
+        Write-TestLog "${ScenarioName}: a different version ($($installed.DisplayVersion)) is installed; resetting to the candidate." -Level WARN
+        Reset-ScenarioState -ScenarioName $ScenarioName -RunDir $RunDir -LogNamePrefix $LogNamePrefix -Force:$Force
+    }
+    Confirm-DestructiveStep -Force:$Force -Message "$ScenarioName requires the candidate ($CandidateVersion) installed; installing it now."
+    $install = Invoke-MsiProcess -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$CandidateMsiPath`"", '/quiet', '/norestart') -LogDirectory $RunDir -LogName "$LogNamePrefix-install"
+    Add-ScenarioAssertion -Result $Result -Name "Install for $ScenarioName exit code 0" -Condition ($install.ExitCode -eq 0) -Detail "exit=$($install.ExitCode)"
+}
+
+function Remove-NoraMediProgramDataTree {
+    <#
+    Deletes exactly %ProgramData%\NoraMediBridge (never anything else) so a
+    scenario can start from a known "no override exists" state instead of
+    throwing when a prior scenario left one behind. Caller is responsible
+    for confirming this destructive step first (see Confirm-DestructiveStep
+    in the orchestrator) - this function performs the removal unconditionally
+    once called.
+    #>
+    if (Test-Path $script:ProgramDataRoot) {
+        Remove-Item -LiteralPath $script:ProgramDataRoot -Recurse -Force
+        Write-TestLog "Removed '$script:ProgramDataRoot' to reset to a known clean state." -Level WARN
+    }
+}
+
 function Get-JsonConfigValue {
     param(
         [Parameter(Mandatory)][string]$Path,
@@ -220,4 +336,4 @@ function Complete-ScenarioResult {
     return $Result
 }
 
-Export-ModuleMember -Function * -Variable NoraMediServiceName, NoraMediUpgradeCode, ProgramFilesInstallDir, ProgramDataConfigPath, LegacyServiceConfigPath
+Export-ModuleMember -Function * -Variable NoraMediServiceName, NoraMediUpgradeCode, ProgramFilesInstallDir, ProgramDataRoot, ProgramDataConfigPath, LegacyServiceConfigPath
