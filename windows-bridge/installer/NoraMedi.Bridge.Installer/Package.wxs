@@ -159,7 +159,7 @@
     -->
     <CustomAction Id="MigrateLegacyConfig"
                   BinaryRef="Wix4UtilCA_X64"
-                  DllEntry="CAQuietExec"
+                  DllEntry="WixQuietExec64"
                   Execute="deferred"
                   Impersonate="no"
                   Return="check" />
