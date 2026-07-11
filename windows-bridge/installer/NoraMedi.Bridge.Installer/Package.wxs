@@ -28,6 +28,15 @@
   packaged defaults before this override existed — no WiX change was
   needed to fix it, only somewhere under this already-untouched tree for
   the override to live.
+
+  That fix alone only helps once a ProgramData override already exists.
+  A second real-hardware retest (upgrading a genuine pre-0.4.5 install,
+  whose only customization lived in the Program Files appsettings.json)
+  found the same values still silently reset, because InstallFiles
+  overwrites that file in place before the new Service binary ever runs
+  its ProgramDataConfigOverride-reading code. MigrateLegacyConfig (below)
+  closes that gap with a deferred CustomAction that copies the legacy file
+  into the ProgramData override location before InstallFiles runs.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
@@ -94,6 +103,55 @@
                        Type="raw"
                        Bitness="always64" />
     </Property>
+
+    <!--
+      Real-hardware retest of a 0.4.4 -> 0.4.5 upgrade found that
+      ProgramDataConfigOverride alone (see NoraMedi.Bridge.Service.Program.cs)
+      only helps once a ProgramData override already exists: it never reads
+      the legacy Program Files appsettings.json, and by the time the new
+      Service binary starts post-upgrade, InstallFiles has already
+      overwritten that file with the packaged defaults (MajorUpgrade's late
+      Schedule only delays RemoveExistingProducts's *old-product-removal*,
+      not the new product's own InstallFiles). So a locally customized
+      Enabled/ServerUrl from a pre-0.4.5 install was still silently lost on
+      first upgrade to a 0.4.5+ build.
+
+      MigrateLegacyConfig closes that gap: before InstallFiles runs (while
+      the legacy file is still intact on disk), it copies the installed
+      Service\appsettings.json wholesale into the ProgramData override
+      location, but only when no override exists yet — an operator's
+      already-migrated override (e.g. from a prior 0.4.5 upgrade, or one a
+      support tech hand-edited since) is never clobbered. The legacy file
+      only ever contains BridgeSelfService settings (Enabled/ServerUrl/
+      PipeName/etc.) — never a credential (those are DPAPI-protected
+      separately) — so copying it wholesale is safe.
+    -->
+    <Property Id="LEGACY_CONFIG_FOUND">
+      <DirectorySearch Id="LegacyConfigDirSearch" Path="[SERVICEFOLDER]">
+        <FileSearch Id="LegacyConfigSearch" Name="appsettings.json" />
+      </DirectorySearch>
+    </Property>
+    <Property Id="PROGRAMDATA_OVERRIDE_FOUND">
+      <DirectorySearch Id="ProgramDataOverrideDirSearch" Path="[CommonAppDataFolder]NoraMediBridge\config">
+        <FileSearch Id="ProgramDataOverrideSearch" Name="appsettings.json" />
+      </DirectorySearch>
+    </Property>
+
+    <CustomAction Id="MigrateLegacyConfig"
+                  BinaryRef="Wix4UtilCA_X64"
+                  DllEntry="CAQuietExec"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <SetProperty Id="MigrateLegacyConfig"
+                 Value="&quot;cmd.exe&quot; /c if not exist &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; mkdir &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; &amp; copy /y &quot;[SERVICEFOLDER]appsettings.json&quot; &quot;[CommonAppDataFolder]NoraMediBridge\config\appsettings.json&quot;"
+                 Before="MigrateLegacyConfig"
+                 Sequence="execute"
+                 Condition="LEGACY_CONFIG_FOUND AND NOT PROGRAMDATA_OVERRIDE_FOUND" />
+
+    <InstallExecuteSequence>
+      <Custom Action="MigrateLegacyConfig" Before="InstallFiles" Condition="LEGACY_CONFIG_FOUND AND NOT PROGRAMDATA_OVERRIDE_FOUND" />
+    </InstallExecuteSequence>
 
     <Launch Condition="Installed OR VersionNT64" Message="NoraMedi Bridge requires a 64-bit edition of Windows." />
     <Launch Condition="Installed OR (WINDOWSBUILDNUMBER AND WINDOWSBUILDNUMBER &gt;= 10240)" Message="NoraMedi Bridge requires Windows 10 (build 10240) / Windows Server 2016 or later." />

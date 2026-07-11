@@ -202,6 +202,44 @@ turned out to be scheduled at sequence 799 — before `CostInitialize`, far
 earlier than intuition suggests. The property-setting `<SetProperty>` now
 runs `Before="Wix4RemoveFoldersEx_X64"` explicitly.
 
+### Migrating a pre-0.4.5 install's local config
+
+`NoraMedi.Bridge.Service.ProgramDataConfigOverride` (added in 0.4.5) lets a
+locally customized `Enabled`/`ServerUrl`/`PipeName` survive an upgrade or
+repair by reading an optional `%ProgramData%\NoraMediBridge\config\
+appsettings.json` layered on top of the packaged Program Files defaults.
+That alone only helps once the override file already exists. A third
+real-hardware retest — upgrading a genuine pre-0.4.5 install whose only
+customization lived in `Service\appsettings.json` under Program Files, with
+no ProgramData override yet — found the values still silently reset:
+`InstallFiles` overwrites that Program Files file in place, in the same
+transaction, before the new Service binary (and its
+`ProgramDataConfigOverride`-reading code) ever runs.
+
+`MigrateLegacyConfig` closes that gap. It's a deferred `util:QuietExec`
+custom action, scheduled `Before="InstallFiles"`
+(confirmed at `InstallExecuteSequence` row 3999, immediately ahead of
+`InstallFiles` at 4000, by querying the built MSI directly — the same
+technique used above), conditioned on two `AppSearch`-populated properties:
+`LEGACY_CONFIG_FOUND` (a `DirectorySearch`/`FileSearch` for
+`Service\appsettings.json`) `AND NOT PROGRAMDATA_OVERRIDE_FOUND` (the same
+search against the ProgramData override path). When both are true — an
+existing installation with no ProgramData override yet — it copies the
+still-intact legacy file into the ProgramData override location before
+`InstallFiles` can overwrite it. It never runs on a fresh install (no
+legacy file to find) or a second 0.4.5+ upgrade/repair (the override
+already exists, so an operator's already-migrated or hand-edited override
+is never clobbered). The legacy file only ever holds
+`BridgeSelfService` settings — never a credential (those are DPAPI-protected
+separately) — so copying it wholesale is safe.
+
+This has been verified at the MSI-table level (the sequence, condition, and
+`SetProperty`-populated command line all confirmed via direct query of the
+compiled MSI's `InstallExecuteSequence`/`CustomAction` tables) but **not
+yet on real hardware** — an actual 0.4.4 → 0.4.5 upgrade of a customized
+install is required to prove the file is migrated and the running Service
+resolves the migrated values.
+
 ## Supported Windows versions
 
 The installer's `Launch` conditions require **Windows 10 build 10240 /
