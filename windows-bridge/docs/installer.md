@@ -217,28 +217,56 @@ transaction, before the new Service binary (and its
 `ProgramDataConfigOverride`-reading code) ever runs.
 
 `MigrateLegacyConfig` closes that gap. It's a deferred `util:QuietExec`
-custom action, scheduled `Before="InstallFiles"`
-(confirmed at `InstallExecuteSequence` row 3999, immediately ahead of
-`InstallFiles` at 4000, by querying the built MSI directly — the same
-technique used above), conditioned on two `AppSearch`-populated properties:
-`LEGACY_CONFIG_FOUND` (a `DirectorySearch`/`FileSearch` for
-`Service\appsettings.json`) `AND NOT PROGRAMDATA_OVERRIDE_FOUND` (the same
-search against the ProgramData override path). When both are true — an
-existing installation with no ProgramData override yet — it copies the
-still-intact legacy file into the ProgramData override location before
-`InstallFiles` can overwrite it. It never runs on a fresh install (no
-legacy file to find) or a second 0.4.5+ upgrade/repair (the override
-already exists, so an operator's already-migrated or hand-edited override
-is never clobbered). The legacy file only ever holds
-`BridgeSelfService` settings — never a credential (those are DPAPI-protected
-separately) — so copying it wholesale is safe.
+custom action, scheduled `Before="InstallFiles"` (confirmed at
+`InstallExecuteSequence` row 3999, immediately ahead of `InstallFiles` at
+4000, by querying the built MSI directly — the same technique used above).
+
+The first (0.4.5) version of this fix gated the copy on two
+`AppSearch`-populated properties, `LEGACY_CONFIG_FOUND` (a
+`DirectorySearch`/`FileSearch` for `Service\appsettings.json`) `AND NOT
+PROGRAMDATA_OVERRIDE_FOUND` (the same search against the ProgramData
+override path). A real-hardware retest of a genuine 0.4.4 → 0.4.5 upgrade
+proved this never actually ran: the MSI log showed both the `SetProperty`
+and the deferred action skipped with "condition is false" even though the
+legacy file was present and no override existed yet, and the Program Files
+`appsettings.json` was silently overwritten with packaged defaults exactly
+as before the fix. AppSearch results are captured once, early in the
+sequence, from directory properties whose resolution is session-sensitive
+— gating a deferred, no-impersonate action on them proved unreliable in
+a way that couldn't be reproduced against a local build.
+
+The 0.4.6 redesign removes that dependency entirely:
+
+- Gating condition is now `WIX_UPGRADE_DETECTED` — the property WiX's own
+  `<MajorUpgrade>` sets automatically (already public/secure, no
+  declaration needed) exactly when `RemoveExistingProducts` has found and
+  scheduled removal of an older installed version in *this* session. It is
+  true only for a genuine major upgrade: never for a clean install (no
+  older version exists to detect), a same-version repair (ditto), or an
+  uninstall.
+- The file-existence and no-clobber checks that used to live in the
+  Property/Condition graph now live inside the deferred command itself,
+  evaluated at the moment it actually executes rather than via AppSearch
+  minutes/steps earlier: it exits immediately (success, no-op) if the
+  legacy file doesn't exist, exits immediately (success, no-op) if a
+  ProgramData override already exists (never clobbering an operator's
+  already-migrated or hand-edited override), otherwise creates the
+  ProgramData directory and copies the legacy file into it.
+- The action is `Return="check"` (not `"ignore"`): if the copy itself
+  fails, the custom action fails, the install sequence fails, and the
+  upgrade rolls back instead of silently continuing with a lost
+  configuration.
+
+The legacy file only ever holds `BridgeSelfService` settings — never a
+credential (those are DPAPI-protected separately) — so copying it
+wholesale, and logging the command line that does so, is safe.
 
 This has been verified at the MSI-table level (the sequence, condition, and
 `SetProperty`-populated command line all confirmed via direct query of the
-compiled MSI's `InstallExecuteSequence`/`CustomAction` tables) but **not
-yet on real hardware** — an actual 0.4.4 → 0.4.5 upgrade of a customized
-install is required to prove the file is migrated and the running Service
-resolves the migrated values.
+compiled MSI's `InstallExecuteSequence`/`CustomAction` tables). Real-hardware
+retest of the 0.4.5 → 0.4.6 upgrade is tracked via
+`windows-bridge/tests/installer/Invoke-InstallerIntegrationTests.ps1`
+(scenario B) — see that script's README for exact commands.
 
 ## Supported Windows versions
 

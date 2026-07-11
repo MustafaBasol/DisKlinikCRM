@@ -37,6 +37,13 @@
   its ProgramDataConfigOverride-reading code. MigrateLegacyConfig (below)
   closes that gap with a deferred CustomAction that copies the legacy file
   into the ProgramData override location before InstallFiles runs.
+
+  A third real-hardware retest (0.4.4 -> 0.4.5) proved that first version
+  of MigrateLegacyConfig never actually ran: its AppSearch-based gating
+  properties evaluated false in the real install session even though the
+  legacy file was present. See the comment on MigrateLegacyConfig below for
+  the 0.4.6 redesign, which gates on WIX_UPGRADE_DETECTED instead and moves
+  the existence/no-clobber checks into the deferred command itself.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
@@ -116,41 +123,54 @@
       Enabled/ServerUrl from a pre-0.4.5 install was still silently lost on
       first upgrade to a 0.4.5+ build.
 
-      MigrateLegacyConfig closes that gap: before InstallFiles runs (while
-      the legacy file is still intact on disk), it copies the installed
-      Service\appsettings.json wholesale into the ProgramData override
-      location, but only when no override exists yet — an operator's
-      already-migrated override (e.g. from a prior 0.4.5 upgrade, or one a
-      support tech hand-edited since) is never clobbered. The legacy file
-      only ever contains BridgeSelfService settings (Enabled/ServerUrl/
-      PipeName/etc.) — never a credential (those are DPAPI-protected
-      separately) — so copying it wholesale is safe.
-    -->
-    <Property Id="LEGACY_CONFIG_FOUND">
-      <DirectorySearch Id="LegacyConfigDirSearch" Path="[SERVICEFOLDER]">
-        <FileSearch Id="LegacyConfigSearch" Name="appsettings.json" />
-      </DirectorySearch>
-    </Property>
-    <Property Id="PROGRAMDATA_OVERRIDE_FOUND">
-      <DirectorySearch Id="ProgramDataOverrideDirSearch" Path="[CommonAppDataFolder]NoraMediBridge\config">
-        <FileSearch Id="ProgramDataOverrideSearch" Name="appsettings.json" />
-      </DirectorySearch>
-    </Property>
+      A first fix (0.4.5) gated the copy on two AppSearch/DirectorySearch
+      properties (LEGACY_CONFIG_FOUND / PROGRAMDATA_OVERRIDE_FOUND). A
+      second real-hardware retest (genuine 0.4.4 -> 0.4.5 upgrade) proved
+      that fix itself never ran: the MSI log showed both SetProperty and
+      the deferred action skipped with "condition is false" even though the
+      legacy file was present and no override existed. AppSearch results are
+      evaluated once, early in the sequence, against directory properties
+      that are session/context-sensitive; relying on them to gate a
+      deferred, no-impersonate action proved fragile in a way that couldn't
+      be reproduced or trusted in a test environment. This redesign removes
+      that dependency entirely:
 
+        - Gating no longer reads any AppSearch-derived property. It uses
+          WIX_UPGRADE_DETECTED, the property WiX's own <MajorUpgrade>
+          element sets (built-in, already public/secure) precisely when
+          RemoveExistingProducts has found and scheduled removal of an
+          older installed version in *this* session — true only for a
+          genuine upgrade, never for a clean install, a same-version
+          repair (no older version exists to detect), or an uninstall.
+        - The file-existence and no-clobber checks that used to live in
+          the Property/Condition graph now live inside the deferred
+          command itself, evaluated at the moment it actually runs
+          (immediately before InstallFiles, elevated, no-impersonate) —
+          not hours/steps earlier via AppSearch.
+        - Return="ignore" is gone. A failed copy now fails the custom
+          action, which fails the sequence, which rolls back the upgrade
+          (no Return="ignore" to swallow it) rather than silently
+          continuing with a lost configuration.
+
+      The legacy file only ever contains BridgeSelfService settings
+      (Enabled/ServerUrl/PipeName/etc.) — never a credential (those are
+      DPAPI-protected separately) — so copying it wholesale, and logging
+      the command line that does so, is safe.
+    -->
     <CustomAction Id="MigrateLegacyConfig"
                   BinaryRef="Wix4UtilCA_X64"
                   DllEntry="CAQuietExec"
                   Execute="deferred"
                   Impersonate="no"
-                  Return="ignore" />
+                  Return="check" />
     <SetProperty Id="MigrateLegacyConfig"
-                 Value="&quot;cmd.exe&quot; /c if not exist &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; mkdir &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; &amp; copy /y &quot;[SERVICEFOLDER]appsettings.json&quot; &quot;[CommonAppDataFolder]NoraMediBridge\config\appsettings.json&quot;"
+                 Value="&quot;cmd.exe&quot; /c if not exist &quot;[SERVICEFOLDER]appsettings.json&quot; exit /b 0 &amp; if exist &quot;[CommonAppDataFolder]NoraMediBridge\config\appsettings.json&quot; exit /b 0 &amp; if not exist &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; mkdir &quot;[CommonAppDataFolder]NoraMediBridge\config\&quot; &amp; copy /y &quot;[SERVICEFOLDER]appsettings.json&quot; &quot;[CommonAppDataFolder]NoraMediBridge\config\appsettings.json&quot; || exit /b 1"
                  Before="MigrateLegacyConfig"
                  Sequence="execute"
-                 Condition="LEGACY_CONFIG_FOUND AND NOT PROGRAMDATA_OVERRIDE_FOUND" />
+                 Condition="WIX_UPGRADE_DETECTED" />
 
     <InstallExecuteSequence>
-      <Custom Action="MigrateLegacyConfig" Before="InstallFiles" Condition="LEGACY_CONFIG_FOUND AND NOT PROGRAMDATA_OVERRIDE_FOUND" />
+      <Custom Action="MigrateLegacyConfig" Before="InstallFiles" Condition="WIX_UPGRADE_DETECTED" />
     </InstallExecuteSequence>
 
     <Launch Condition="Installed OR VersionNT64" Message="NoraMedi Bridge requires a 64-bit edition of Windows." />
