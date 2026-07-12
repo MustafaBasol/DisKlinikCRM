@@ -117,5 +117,8 @@ someone to remember to strip fields later.
 
 ## What is intentionally out of scope for this PR
 
-Real auto-update (`CheckForUpdates` returns a truthful "not supported"
-response), WPF Manager, WiX installer — see `architecture.md`.
+WPF Manager and the WiX installer are covered by later PRs (3/4, both done
+— see `architecture.md`). Real auto-update security is its own PR
+(6/7) — see `docs/update-architecture.md` for its threat model, which is
+additive to everything in this document (DPAPI credential storage, pipe
+authorization, diagnostics redaction) and does not change any of it.

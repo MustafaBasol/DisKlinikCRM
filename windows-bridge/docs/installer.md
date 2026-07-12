@@ -31,16 +31,24 @@ Manager (PR 3) into one deliverable a clinic can run without installing
 dotnet publish windows-bridge\src\NoraMedi.Bridge.Service\NoraMedi.Bridge.Service.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o windows-bridge\publish\Service
 dotnet publish windows-bridge\src\NoraMedi.Bridge.Manager\NoraMedi.Bridge.Manager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o windows-bridge\publish\Manager
 
+# 1b. Publish the update helper (PR 6/7) INTO a subfolder of the Service
+#     publish output — BridgeOrchestrator resolves it at
+#     <Service install dir>\UpdateHelper\NoraMedi.Bridge.UpdateHelper.exe,
+#     and ServiceFiles's `Files Include="$(PublishServiceDir)\**"` glob
+#     below picks up the whole subtree automatically; no separate
+#     ComponentGroup is needed for it.
+dotnet publish windows-bridge\src\NoraMedi.Bridge.UpdateHelper\NoraMedi.Bridge.UpdateHelper.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o windows-bridge\publish\Service\UpdateHelper
+
 # 2. Build the MSI
 dotnet build windows-bridge\installer\NoraMedi.Bridge.Installer -c Release `
   -p:PublishServiceDir="$PWD\windows-bridge\publish\Service" `
   -p:PublishManagerDir="$PWD\windows-bridge\publish\Manager" `
-  -p:ProductVersion=0.4.0
+  -p:ProductVersion=0.4.7
 
 # 3. Build the bundle (wraps the MSI from step 2)
 dotnet build windows-bridge\installer\NoraMedi.Bridge.Bundle -c Release `
   -p:MsiSourceFile="$PWD\windows-bridge\installer\NoraMedi.Bridge.Installer\bin\x64\Release\NoraMediBridge.msi" `
-  -p:ProductVersion=0.4.0
+  -p:ProductVersion=0.4.7
 
 # Output: windows-bridge\installer\NoraMedi.Bridge.Bundle\bin\x64\Release\NoraMediBridgeSetup.exe
 ```
@@ -349,31 +357,46 @@ instead.
   `REMOVE_LOCAL_DATA`/`INSTALLDESKTOPSHORTCUT` are the only custom
   properties, and neither carries sensitive data.
 - Program Files binaries are self-contained publishes; nothing is
-  downloaded during install, and there is no update-check or download
-  behavior of any kind (`CheckForUpdates` in the Manager still returns a
-  truthful "not supported," unchanged from PR 3).
+  downloaded during install. **As of PR 6/7 the Service itself can download
+  and install a future release post-install** — see
+  `docs/update-architecture.md` for that subsystem's own, separate security
+  model (HTTPS-only, SHA-256 + pinned-publisher Authenticode verification,
+  admin-gated install, ACL-protected staging). Nothing about *this*
+  installer's own behavior changes: the MSI/Bundle you build still never
+  downloads anything during setup.
 
-## Code signing (not done in this PR)
+## Code signing
 
-`NoraMediBridgeSetup.exe`, `NoraMediBridge.msi`, and the two chained
-executables are **unsigned** in this PR — there is no Authenticode
-certificate or signing credential available yet, and none is fabricated.
-Expect a SmartScreen/"Unknown publisher" UAC prompt on a clean machine; this
-is expected, not a defect. When production signing credentials exist, sign:
+`NoraMediBridgeSetup.exe`, `NoraMediBridge.msi`, and the two/three chained
+executables (Service, Manager, and — as of PR 6/7 — UpdateHelper) are
+**unsigned in this repository's own build** — there is still no production
+Authenticode certificate or signing credential committed or available here,
+and none is fabricated. Expect a SmartScreen/"Unknown publisher" UAC prompt
+on a clean machine; this is expected, not a defect. PR 6/7's own physical
+acceptance testing signs its build with an **ephemeral, local-only test
+certificate** (created and destroyed by that test run — see
+`docs/update-architecture.md` and `docs/update-runbook.md`); that certificate
+is never committed and is not a substitute for production signing. When
+production signing credentials exist, sign:
 
-1. `windows-bridge\publish\Service\NoraMediBridge.Service.exe` and
-   `windows-bridge\publish\Manager\NoraMediBridge.Manager.exe` (`signtool
-   sign`) **before** they're fed into the MSI build.
+1. `windows-bridge\publish\Service\NoraMediBridge.Service.exe`,
+   `windows-bridge\publish\Manager\NoraMediBridge.Manager.exe`, and
+   `windows-bridge\publish\Service\UpdateHelper\NoraMedi.Bridge.UpdateHelper.exe`
+   (`signtool sign`) **before** they're fed into the MSI build.
 2. `NoraMediBridge.msi` after the MSI build.
 3. `NoraMediBridgeSetup.exe` after the Bundle build (Burn bundles are
    signed as a normal PE, same as any other `.exe`).
 
-All three need the same certificate/timestamp server; signing is out of
-scope for this PR per the root spec.
+All need the same certificate/timestamp server. The auto-updater additionally
+requires that certificate's thumbprint to be published via
+`IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT` (server-side) — see
+`docs/update-architecture.md` "Trust model".
 
-## Scope exclusions (unchanged from the root spec)
+## Scope exclusions (unchanged from the root spec, updated for PR 6/7)
 
-Web onboarding UI (PR 5), a real auto-updater (PR 6), release download
-infrastructure, and production feature enablement are all explicitly out of
-scope here — see `architecture.md`. `BridgeSelfService:Enabled` remains
-`false` in the shipped `appsettings.json`.
+Web onboarding UI (PR 5) and a real auto-updater (PR 6) are done — see
+`docs/update-architecture.md`. Production signing-credential acquisition,
+rollback/auto-revert of a failed update, staged rollout channels, and
+production feature enablement remain out of scope, reserved for PR 7.
+`BridgeSelfService:Enabled` remains `false` in the shipped
+`appsettings.json`.

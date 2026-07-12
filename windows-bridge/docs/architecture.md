@@ -92,9 +92,10 @@ security review) is satisfied.
 
 ## What is deliberately NOT in this PR
 
-WPF Manager (PR 3) and the WiX installer (PR 4, see `docs/installer.md`)
-are done. Web onboarding UI (PR 5), auto-updater (PR 6), production
-hardening/E2E (PR 7), DICOM C-STORE/DICOMweb, TWAIN/WIA, vendor SDK
-adapters, CBCT are still out of scope — see the root spec's "Scope
-exclusions." `CheckForUpdates` returns a truthful "not supported" status
-rather than pretending to check.
+WPF Manager (PR 3), the WiX installer (PR 4, see `docs/installer.md`), web
+onboarding UI (PR 5), and the secure auto-updater (PR 6, see
+`docs/update-architecture.md`) are done. Production hardening/E2E (PR 7),
+DICOM C-STORE/DICOMweb, TWAIN/WIA, vendor SDK adapters, CBCT are still out
+of scope — see the root spec's "Scope exclusions." `CheckForUpdates` now
+performs a real, authenticated check against the NoraMedi server and
+truthfully reports its result — see `docs/update-architecture.md`.
