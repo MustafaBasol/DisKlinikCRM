@@ -57,8 +57,14 @@ public sealed class BridgePipeClientService : IBridgePipeClientService
     public async Task<PipeCallResult<DiagnosticsSnapshot>> ExportDiagnosticsAsync(CancellationToken cancellationToken = default) =>
         await SendAsync<DiagnosticsSnapshot>(PipeOperation.ExportDiagnostics, payload: null, cancellationToken);
 
-    public async Task<PipeCallResult<CheckForUpdatesResponse>> CheckForUpdatesAsync(CancellationToken cancellationToken = default) =>
-        await SendAsync<CheckForUpdatesResponse>(PipeOperation.CheckForUpdates, payload: null, cancellationToken);
+    public async Task<PipeCallResult<UpdateStatusPayload>> CheckForUpdatesAsync(CancellationToken cancellationToken = default) =>
+        await SendAsync<UpdateStatusPayload>(PipeOperation.CheckForUpdates, payload: null, cancellationToken);
+
+    public async Task<PipeCallResult<UpdateStatusPayload>> GetUpdateStatusAsync(CancellationToken cancellationToken = default) =>
+        await SendAsync<UpdateStatusPayload>(PipeOperation.GetUpdateStatus, payload: null, cancellationToken);
+
+    public async Task<PipeCallResult<InstallUpdateResponse>> InstallUpdateAsync(CancellationToken cancellationToken = default) =>
+        await SendAsync<InstallUpdateResponse>(PipeOperation.InstallUpdate, new InstallUpdateRequest(), cancellationToken);
 
     public async Task<PipeCallResult<ProvisionWithPairingCodeResponse>> ProvisionWithPairingCodeAsync(
         string pairingCode, string? computerDisplayName, CancellationToken cancellationToken = default) =>

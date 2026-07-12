@@ -23,7 +23,9 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
     public PipeCallResult<QueueSummaryResponse>? NextQueueSummary { get; set; }
     public PipeCallResult<RetryFailedItemResponse>? NextRetryFailedItem { get; set; }
     public PipeCallResult<DiagnosticsSnapshot>? NextExportDiagnostics { get; set; }
-    public PipeCallResult<CheckForUpdatesResponse>? NextCheckForUpdates { get; set; }
+    public PipeCallResult<UpdateStatusPayload>? NextCheckForUpdates { get; set; }
+    public PipeCallResult<UpdateStatusPayload>? NextUpdateStatus { get; set; }
+    public PipeCallResult<InstallUpdateResponse>? NextInstallUpdate { get; set; }
     public PipeCallResult<ProvisionWithPairingCodeResponse>? NextProvisionWithPairingCode { get; set; }
     public PipeCallResult<GetAvailableServerBindingsResponse>? NextAvailableServerBindings { get; set; }
 
@@ -37,6 +39,8 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
     public int RetryFailedItemCallCount { get; private set; }
     public int ExportDiagnosticsCallCount { get; private set; }
     public int CheckForUpdatesCallCount { get; private set; }
+    public int GetUpdateStatusCallCount { get; private set; }
+    public int InstallUpdateCallCount { get; private set; }
     public int ProvisionWithPairingCodeCallCount { get; private set; }
     public int GetAvailableServerBindingsCallCount { get; private set; }
 
@@ -105,10 +109,22 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
         return Task.FromResult(NextExportDiagnostics ?? PipeCallResult<DiagnosticsSnapshot>.Fail(ManagerErrorKind.Internal));
     }
 
-    public Task<PipeCallResult<CheckForUpdatesResponse>> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+    public Task<PipeCallResult<UpdateStatusPayload>> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
     {
         CheckForUpdatesCallCount++;
-        return Task.FromResult(NextCheckForUpdates ?? PipeCallResult<CheckForUpdatesResponse>.Fail(ManagerErrorKind.Internal));
+        return Task.FromResult(NextCheckForUpdates ?? PipeCallResult<UpdateStatusPayload>.Fail(ManagerErrorKind.Internal));
+    }
+
+    public Task<PipeCallResult<UpdateStatusPayload>> GetUpdateStatusAsync(CancellationToken cancellationToken = default)
+    {
+        GetUpdateStatusCallCount++;
+        return Task.FromResult(NextUpdateStatus ?? PipeCallResult<UpdateStatusPayload>.Fail(ManagerErrorKind.Internal));
+    }
+
+    public Task<PipeCallResult<InstallUpdateResponse>> InstallUpdateAsync(CancellationToken cancellationToken = default)
+    {
+        InstallUpdateCallCount++;
+        return Task.FromResult(NextInstallUpdate ?? PipeCallResult<InstallUpdateResponse>.Fail(ManagerErrorKind.Internal));
     }
 
     public Task<PipeCallResult<ProvisionWithPairingCodeResponse>> ProvisionWithPairingCodeAsync(
