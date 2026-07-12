@@ -119,8 +119,7 @@ public sealed class UpdateViewModel : ViewModelBase, IDisposable
             var result = await _pipeClient.CheckForUpdatesAsync();
             if (!result.Success)
             {
-                IsSupported = false;
-                Message = StatusLabels.FromErrorKind(result.ErrorKind);
+                ResetToTransportFailure(result.ErrorKind);
                 return;
             }
 
@@ -143,8 +142,7 @@ public sealed class UpdateViewModel : ViewModelBase, IDisposable
             var result = await _pipeClient.InstallUpdateAsync();
             if (!result.Success)
             {
-                IsSupported = false;
-                Message = StatusLabels.FromErrorKind(result.ErrorKind);
+                ResetToTransportFailure(result.ErrorKind);
                 return;
             }
 
@@ -184,6 +182,29 @@ public sealed class UpdateViewModel : ViewModelBase, IDisposable
             _pollTimer?.Dispose();
             _pollTimer = null;
         }
+    }
+
+    /// <summary>
+    /// A pipe transport failure (service unavailable, pipe error) is not itself a lifecycle state —
+    /// it means the last known state can no longer be trusted. Previously this only set
+    /// IsSupported/Message and returned, leaving CanInstall/IsIndeterminate/OfferedVersion (and any
+    /// running poll timer) exactly as they were from the last successful call: a transient hiccup
+    /// right after a real "Verified" result could leave the Install button enabled, or a spinner
+    /// spinning, indefinitely with no update actually available.
+    /// </summary>
+    private void ResetToTransportFailure(NoraMedi.Bridge.Manager.Models.ManagerErrorKind errorKind)
+    {
+        _pollTimer?.Dispose();
+        _pollTimer = null;
+
+        IsSupported = false;
+        Message = StatusLabels.FromErrorKind(errorKind);
+        OfferedVersion = null;
+        _downloadedBytes = 0;
+        _totalBytes = null;
+        OnPropertyChanged(nameof(DownloadProgressText));
+        CanInstall = false;
+        IsIndeterminate = false;
     }
 
     private void Apply(UpdateStatusPayload status)

@@ -141,6 +141,52 @@ public class UpdateViewModelTests
     }
 
     [Fact]
+    public async Task CheckForUpdatesAsync_TransportFailureAfterVerified_ClearsStaleCanInstallAndProgress()
+    {
+        // Regression test for the Copilot-flagged bug: a transport failure right after a real
+        // "Verified" result previously left CanInstall/IsIndeterminate/OfferedVersion untouched,
+        // so the Install button could stay enabled (and any poll timer kept running) even though
+        // IsSupported flipped false and the state is no longer trustworthy.
+        var fake = new FakeBridgePipeClientService
+        {
+            NextCheckForUpdates = PipeCallResult<UpdateStatusPayload>.Ok(Status("Downloading", "0.4.7", downloaded: 5 * 1024 * 1024, total: 20 * 1024 * 1024)),
+        };
+        var vm = new UpdateViewModel(fake);
+        await vm.CheckForUpdatesAsync();
+        Assert.True(vm.IsIndeterminate);
+        Assert.NotNull(vm.DownloadProgressText);
+
+        fake.NextCheckForUpdates = PipeCallResult<UpdateStatusPayload>.Fail(ManagerErrorKind.ServiceUnavailable);
+        await vm.CheckForUpdatesAsync();
+
+        Assert.False(vm.IsSupported);
+        Assert.False(vm.CanInstall);
+        Assert.False(vm.IsIndeterminate);
+        Assert.Null(vm.OfferedVersion);
+        Assert.Null(vm.DownloadProgressText);
+        vm.Dispose();
+    }
+
+    [Fact]
+    public async Task InstallUpdateAsync_TransportFailureAfterVerified_DisablesInstallCommand()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextCheckForUpdates = PipeCallResult<UpdateStatusPayload>.Ok(Status("Verified", "0.4.7")),
+            NextInstallUpdate = PipeCallResult<InstallUpdateResponse>.Fail(ManagerErrorKind.ServiceUnavailable),
+        };
+        var vm = new UpdateViewModel(fake);
+        await vm.CheckForUpdatesAsync();
+        Assert.True(vm.CanInstall);
+
+        await vm.InstallUpdateAsync();
+
+        Assert.False(vm.IsSupported);
+        Assert.False(vm.CanInstall);
+        Assert.False(vm.InstallUpdateCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task InstallUpdateAsync_WhenNotVerified_DoesNothingAndNeverCallsPipe()
     {
         var fake = new FakeBridgePipeClientService();
