@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NoraMedi.Bridge.Core.Http;
 using NoraMedi.Bridge.Core.Ipc;
@@ -21,7 +22,7 @@ public class BridgeOrchestratorTests : IDisposable
     // identity so it retains access to the directories it just created.
     private static readonly string CurrentUserSid = WindowsIdentity.GetCurrent().User!.Value;
 
-    private BridgeOrchestrator NewOrchestrator(ScriptedHttpMessageHandler? handler = null, bool enabled = true)
+    private BridgeOrchestrator NewOrchestrator(ScriptedHttpMessageHandler? handler = null, bool enabled = true, ILogger<BridgeOrchestrator>? logger = null)
     {
         var options = new BridgeOptions
         {
@@ -37,7 +38,7 @@ public class BridgeOrchestratorTests : IDisposable
             ServiceAccountSid = CurrentUserSid,
         };
         var apiClient = new BridgeApiClient(new HttpClient(handler ?? new ScriptedHttpMessageHandler()), options.ServerUrl);
-        var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", NullLogger<BridgeOrchestrator>.Instance);
+        var orchestrator = new BridgeOrchestrator(options, apiClient, "1.0.0-test", logger ?? NullLogger<BridgeOrchestrator>.Instance);
         _created.Add(orchestrator);
         return orchestrator;
     }
@@ -98,8 +99,202 @@ public class BridgeOrchestratorTests : IDisposable
         var response = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("00000000"), default);
 
         Assert.False(response.Ok);
+        Assert.Equal(PairingErrorCategory.InvalidOrExpiredCode, response.ErrorCategory);
+        Assert.NotNull(response.CorrelationId);
         var status = await orchestrator.GetServiceStatusAsync(default);
         Assert.False(status.Paired);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, PairingErrorCategory.InvalidOrExpiredCode)]
+    [InlineData(HttpStatusCode.TooManyRequests, PairingErrorCategory.RateLimited)]
+    [InlineData(HttpStatusCode.BadRequest, PairingErrorCategory.InvalidRequest)]
+    [InlineData(HttpStatusCode.InternalServerError, PairingErrorCategory.ServerError)]
+    public async Task ProvisionWithPairingCode_DistinctHttpFailures_MapToDistinctErrorCategories(HttpStatusCode status, PairingErrorCategory expected)
+    {
+        var handler = new ScriptedHttpMessageHandler().Enqueue("/bridge/pair", status);
+        var orchestrator = NewOrchestrator(handler);
+
+        var response = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+
+        Assert.False(response.Ok);
+        Assert.Equal(expected, response.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task ProvisionWithPairingCode_MalformedSuccessBody_MapsToServerErrorCategory()
+    {
+        var handler = new ScriptedHttpMessageHandler().Enqueue("/bridge/pair", HttpStatusCode.Created, "{ not json");
+        var orchestrator = NewOrchestrator(handler);
+
+        var response = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+
+        Assert.False(response.Ok);
+        Assert.Equal(PairingErrorCategory.ServerError, response.ErrorCategory);
+        var status = await orchestrator.GetServiceStatusAsync(default);
+        Assert.False(status.Paired);
+    }
+
+    [Fact]
+    public async Task ProvisionWithPairingCode_TwoAttempts_GetDistinctCorrelationIds()
+    {
+        var handler = new ScriptedHttpMessageHandler()
+            .Enqueue("/bridge/pair", HttpStatusCode.Unauthorized)
+            .Enqueue("/bridge/pair", HttpStatusCode.Unauthorized);
+        var orchestrator = NewOrchestrator(handler);
+
+        var first = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+        var second = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("87654321"), default);
+
+        Assert.NotEqual(first.CorrelationId, second.CorrelationId);
+    }
+
+    [Fact]
+    public async Task ProvisionWithPairingCode_NeverLogsPairingCode()
+    {
+        var capturingLogger = new TestSupport.CapturingLogger<BridgeOrchestrator>();
+        var handler = new ScriptedHttpMessageHandler().Enqueue("/bridge/pair", HttpStatusCode.Unauthorized);
+        var orchestrator = NewOrchestrator(handler, logger: capturingLogger);
+
+        await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("19283746"), default);
+
+        Assert.NotEmpty(capturingLogger.Messages);
+        Assert.All(capturingLogger.Messages, m => Assert.DoesNotContain("19283746", m));
+    }
+
+    [Fact]
+    public async Task Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities()
+    {
+        // Regression test for the real-hardware finding: a paired agent stayed
+        // "pending" forever because the heartbeat payload sent an explicit
+        // "capabilities":null the backend schema rejects with 400, and the
+        // old HeartbeatTickAsync silently dropped anything but a 401. This
+        // proves the real Service call shape (Start()'s heartbeat timer, not
+        // a hand-built request) both omits capabilities and flips the
+        // orchestrator's own connection state to online.
+        var handler = new ScriptedHttpMessageHandler()
+            .Enqueue("/bridge/pair", HttpStatusCode.Created,
+                """{"bridgeCredential":"nmb_test_token","bridgeAgentId":"agent-1","clinicName":"Demo","bindings":[],"serverTime":"2026-07-08T00:00:00.000Z"}""")
+            .Enqueue("/bridge/heartbeat", HttpStatusCode.OK, """{"ok":true}""");
+        var orchestrator = NewOrchestrator(handler);
+
+        await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+        var beforeStatus = await orchestrator.GetServiceStatusAsync(default);
+        Assert.Null(beforeStatus.LastHeartbeatAt);
+
+        orchestrator.Start();
+
+        var status = await PollUntil(
+            () => orchestrator.GetServiceStatusAsync(default),
+            s => s.ConnectionState == "online" && s.LastHeartbeatAt is not null,
+            TimeSpan.FromSeconds(10));
+
+        Assert.Equal("online", status.ConnectionState);
+        Assert.NotNull(status.LastHeartbeatAt);
+
+        var heartbeatBody = handler.RequestBodies[^1];
+        Assert.DoesNotContain("capabilities", heartbeatBody);
+        Assert.Contains("\"lastSuccessfulUploadAt\":null", heartbeatBody);
+    }
+
+    [Fact]
+    public async Task Pairing_PersistsServerBindingCatalog_AvailableImmediately()
+    {
+        // Regression: GetAvailableServerBindingsAsync used to always return an
+        // empty list, so the Manager's "pick a folder for this device" step
+        // had nothing to show right after a successful pairing.
+        var handler = new ScriptedHttpMessageHandler().Enqueue(
+            "/bridge/pair", HttpStatusCode.Created,
+            """
+            {"bridgeCredential":"nmb_test_token","bridgeAgentId":"agent-1","clinicName":"Demo",
+             "bindings":[{"id":"b1","deviceId":"device-1","modality":"IO","displayName":"Test Panoramik","status":"pending","acquisitionType":"folder_watch"}],
+             "serverTime":"2026-07-08T00:00:00.000Z"}
+            """);
+        var orchestrator = NewOrchestrator(handler);
+
+        await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+
+        var catalog = await orchestrator.GetAvailableServerBindingsAsync(default);
+        Assert.Single(catalog.Bindings);
+        Assert.Equal("device-1", catalog.Bindings[0].DeviceId);
+        Assert.Equal("Test Panoramik", catalog.Bindings[0].DisplayName);
+        Assert.Equal("folder_watch", catalog.Bindings[0].AcquisitionType);
+    }
+
+    [Fact]
+    public async Task Restart_RefreshesServerBindingCatalogViaBootstrap()
+    {
+        // Simulates a Service restart: a brand-new BridgeOrchestrator over the
+        // same ProgramDataRoot (credential persists across restarts via DPAPI)
+        // must re-fetch the catalog from /bootstrap on Start(), not rely only
+        // on whatever pairing originally returned.
+        var pairHandler = new ScriptedHttpMessageHandler().Enqueue(
+            "/bridge/pair", HttpStatusCode.Created,
+            """{"bridgeCredential":"nmb_test_token","bridgeAgentId":"agent-1","clinicName":"Demo","bindings":[],"serverTime":"2026-07-08T00:00:00.000Z"}""");
+        var first = NewOrchestrator(pairHandler);
+        await first.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+
+        var restartHandler = new ScriptedHttpMessageHandler()
+            .Enqueue("/bridge/bootstrap", HttpStatusCode.OK,
+                """
+                {"bridgeAgentId":"agent-1","clinicName":"Demo",
+                 "bindings":[{"id":"b1","deviceId":"device-2","modality":"PANO","displayName":"Restarted Device","status":"pending","acquisitionType":"folder_watch"}],
+                 "supportedFileTypes":["image/jpeg"],"maxUploadSizeMb":50,"serverTime":"2026-07-08T00:00:00.000Z","updatePolicy":null}
+                """)
+            .Enqueue("/bridge/heartbeat", HttpStatusCode.OK, """{"ok":true}""");
+        var restarted = new BridgeOrchestrator(
+            new BridgeOptions
+            {
+                Enabled = true,
+                ServerUrl = "https://api.example.com",
+                ProgramDataRoot = _lastProgramDataRoot!,
+                HeartbeatIntervalSeconds = 1,
+                StabilityMs = 30,
+                DrainPollMs = 50,
+                ServiceAccountSid = CurrentUserSid,
+            },
+            new BridgeApiClient(new HttpClient(restartHandler), "https://api.example.com"),
+            "1.0.0-test",
+            NullLogger<BridgeOrchestrator>.Instance);
+        _created.Add(restarted);
+
+        restarted.Start();
+
+        var catalog = await PollUntil(
+            () => restarted.GetAvailableServerBindingsAsync(default),
+            c => c.Bindings.Count == 1,
+            TimeSpan.FromSeconds(10));
+
+        Assert.Equal("device-2", catalog.Bindings[0].DeviceId);
+        Assert.Equal("Restarted Device", catalog.Bindings[0].DisplayName);
+    }
+
+    [Fact]
+    public async Task GetAvailableServerBindingsAsync_AfterAuthMarkedInvalid_ReturnsEmptyNotStaleCatalog()
+    {
+        // A revoked/invalid credential must never keep serving a cached
+        // catalog it can no longer vouch for.
+        var handler = new ScriptedHttpMessageHandler()
+            .Enqueue("/bridge/pair", HttpStatusCode.Created,
+                """
+                {"bridgeCredential":"nmb_test_token","bridgeAgentId":"agent-1","clinicName":"Demo",
+                 "bindings":[{"id":"b1","deviceId":"device-1","modality":"IO","displayName":"Test Panoramik","status":"pending","acquisitionType":"folder_watch"}],
+                 "serverTime":"2026-07-08T00:00:00.000Z"}
+                """)
+            .Enqueue("/bridge/heartbeat", HttpStatusCode.Unauthorized);
+        var orchestrator = NewOrchestrator(handler);
+
+        await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
+        Assert.Single((await orchestrator.GetAvailableServerBindingsAsync(default)).Bindings);
+
+        orchestrator.Start();
+        await PollUntil(
+            () => orchestrator.GetServiceStatusAsync(default),
+            s => s.AuthState == "invalid",
+            TimeSpan.FromSeconds(10));
+
+        var catalog = await orchestrator.GetAvailableServerBindingsAsync(default);
+        Assert.Empty(catalog.Bindings);
     }
 
     [Fact]
@@ -266,6 +461,10 @@ public class BridgeOrchestratorTests : IDisposable
         var provisionResult = await orchestrator.ProvisionWithPairingCodeAsync(new ProvisionWithPairingCodeRequest("12345678"), default);
         Assert.True(provisionResult.Ok);
         AssertLockedDown(Path.Combine(_lastProgramDataRoot!, "credential.bin"), isDirectory: false);
+        AssertLockedDown(Path.Combine(_lastProgramDataRoot!, "server-bindings-catalog.json"), isDirectory: false);
+
+        var catalogJson = await File.ReadAllTextAsync(Path.Combine(_lastProgramDataRoot!, "server-bindings-catalog.json"));
+        Assert.DoesNotContain("nmb_acl_test_token", catalogJson);
 
         var watchDir = Directory.CreateTempSubdirectory("nmb-orch-acl-").FullName;
         await orchestrator.AddOrUpdateFolderBindingAsync(new AddOrUpdateFolderBindingRequest(null, watchDir, "device-1", "IO"), default);

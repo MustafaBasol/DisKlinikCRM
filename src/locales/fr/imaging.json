@@ -163,6 +163,59 @@
     "loadFailed": "Échec du chargement des données d'imagerie",
     "actionFailed": "Échec de l'opération"
   },
+  "onboarding": {
+    "card": {
+      "title": "NoraMedi Bridge pour Windows",
+      "description": "Une application Windows qui connecte les appareils d'imagerie de la clinique à NoraMedi — aucune connaissance technique requise.",
+      "supportedSystems": "Systèmes pris en charge : Windows 10/11 (64 bits) ou Windows Server 2016 et ultérieur",
+      "loadFailed": "Impossible de charger les informations de configuration",
+      "notAvailable": "Cette fonctionnalité n'est pas encore disponible pour votre clinique.",
+      "installerUnavailable": "Le programme d'installation n'est pas encore publié. Veuillez réessayer plus tard.",
+      "version": "Version {{version}}",
+      "unsignedWarning": "Il s'agit d'une version pilote/test non signée. Windows peut afficher un avertissement « Éditeur inconnu » lors de l'installation.",
+      "download": "Télécharger",
+      "setup": "Démarrer la configuration",
+      "clinicRequired": "Sélectionnez une clinique précise (pas « Toutes les cliniques ») pour configurer le pont."
+    },
+    "wizard": {
+      "title": "Configuration de NoraMedi Bridge",
+      "clinicRequired": "Sélectionnez une clinique précise (pas « Toutes les cliniques ») pour configurer le pont.",
+      "devices": {
+        "description": "Choisissez les appareils d'imagerie que cet ordinateur va connecter. Vous devez sélectionner au moins un appareil.",
+        "empty": "Aucun appareil actif éligible au pont pour le moment. Ajoutez d'abord un appareil d'imagerie."
+      },
+      "install": {
+        "description": "Effectuez les étapes suivantes sur l'ordinateur de la clinique (accueil, salle de radiographie, etc.) :",
+        "step1": "Téléchargez le programme d'installation avec le bouton ci-dessous",
+        "step2": "Exécutez NoraMediBridgeSetup.exe",
+        "step3": "Approuvez l'invite d'administrateur Windows",
+        "step4": "Laissez NoraMedi Bridge Manager ouvert",
+        "unsignedWarning": "Cette version pilote n'est pas signée ; Windows peut afficher un avertissement « Éditeur inconnu ». Choisissez « Exécuter quand même » pour continuer."
+      },
+      "pairing": {
+        "namePlaceholder": "ex. PC de l'accueil",
+        "generateCode": "Générer le code",
+        "createFailed": "Impossible de créer le code de jumelage",
+        "enterInManager": "Saisissez ce code dans NoraMedi Bridge Manager :",
+        "expiresIn": "Expire dans {{time}}",
+        "copyCode": "Copier le code",
+        "cancel": "Annuler",
+        "cancelFailed": "Impossible d'annuler — le code peut encore être valide. Veuillez réessayer.",
+        "waiting": "En attente de connexion...",
+        "generateNew": "Générer un nouveau code",
+        "status": {
+          "expired": "Ce code a expiré.",
+          "cancelled": "Le jumelage a été annulé.",
+          "locked": "Ce code a été verrouillé après trop de tentatives échouées."
+        }
+      },
+      "success": {
+        "title": "« {{name}} » connecté avec succès",
+        "description": "Le pont est maintenant enregistré auprès de NoraMedi. Utilisez NoraMedi Bridge Manager pour choisir les dossiers locaux.",
+        "nextSteps": "Vous pouvez désormais sélectionner les dossiers à surveiller pour les appareils connectés dans NoraMedi Bridge Manager."
+      }
+    }
+  },
   "viewer": {
     "title": "Visionneuse DICOM",
     "loading": "Chargement de l'image DICOM...",

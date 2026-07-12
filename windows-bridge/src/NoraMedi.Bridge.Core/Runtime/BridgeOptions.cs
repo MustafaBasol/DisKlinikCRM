@@ -56,4 +56,19 @@ public sealed record BridgeOptions
     public string InstallationIdPath => Path.Combine(ProgramDataRoot, "installation-id.txt");
 
     public string BindingsPath => Path.Combine(ProgramDataRoot, "bindings.json");
+
+    /// <summary>Cached copy of the server's device/binding catalog (see <see cref="Runtime.ServerBindingsCatalogStore"/>) — distinct from <see cref="BindingsPath"/>'s local folder-watch bindings.</summary>
+    public string ServerBindingsCatalogPath => Path.Combine(ProgramDataRoot, "server-bindings-catalog.json");
+
+    /// <summary>
+    /// Scheme+host+port only — never the path/query — so it's safe to put in
+    /// a startup log line. Exists so a support engineer can see, without
+    /// reading appsettings.json on disk, exactly which server this running
+    /// process will actually call; a misconfigured or ignored override
+    /// (e.g. editing appsettings.Development.json when the service runs in
+    /// the default Production environment) is otherwise invisible until a
+    /// pairing/upload attempt inexplicably fails.
+    /// </summary>
+    public string SafeServerUrlOrigin =>
+        Uri.TryCreate(ServerUrl, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Authority) : "invalid";
 }

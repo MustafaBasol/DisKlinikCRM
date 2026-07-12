@@ -73,4 +73,10 @@
   <data name="Dialog_FolderPickerTitle" xml:space="preserve"><value>Select the folder this device saves images to</value></data>
   <data name="Dialog_SaveDiagnosticsTitle" xml:space="preserve"><value>Save diagnostics</value></data>
   <data name="Dialog_SaveDiagnosticsFilter" xml:space="preserve"><value>JSON files (*.json)|*.json</value></data>
+
+  <data name="Pairing_InvalidOrExpiredCode" xml:space="preserve"><value>This pairing code is invalid or has expired. Generate a new code in NoraMedi and try again.</value></data>
+  <data name="Pairing_RateLimited" xml:space="preserve"><value>Too many attempts. Wait a few minutes and try again.</value></data>
+  <data name="Pairing_InvalidRequest" xml:space="preserve"><value>The pairing request was rejected. Update NoraMedi Bridge to the latest version and try again.</value></data>
+  <data name="Pairing_ServerError" xml:space="preserve"><value>The NoraMedi server could not process the request. Try again shortly.</value></data>
+  <data name="Pairing_NetworkFailure" xml:space="preserve"><value>Could not reach the NoraMedi server. Check the internet connection and try again.</value></data>
 </root>

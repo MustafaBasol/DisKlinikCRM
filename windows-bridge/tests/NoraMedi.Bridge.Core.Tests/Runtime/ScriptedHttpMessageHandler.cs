@@ -8,6 +8,7 @@ internal sealed class ScriptedHttpMessageHandler : HttpMessageHandler
 {
     private readonly Dictionary<string, Queue<(HttpStatusCode Status, string? Json)>> _routes = new();
     public List<string> RequestedPaths { get; } = [];
+    public List<string> RequestBodies { get; } = [];
 
     public ScriptedHttpMessageHandler Enqueue(string pathContains, HttpStatusCode status, string? json = null)
     {
@@ -20,10 +21,11 @@ internal sealed class ScriptedHttpMessageHandler : HttpMessageHandler
         return this;
     }
 
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var path = request.RequestUri!.AbsolutePath;
         RequestedPaths.Add(path);
+        RequestBodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken));
 
         foreach (var (key, queue) in _routes)
         {
@@ -34,10 +36,10 @@ internal sealed class ScriptedHttpMessageHandler : HttpMessageHandler
                 {
                     Content = json is null ? null! : new StringContent(json, Encoding.UTF8, "application/json"),
                 };
-                return Task.FromResult(response);
+                return response;
             }
         }
 
-        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        return new HttpResponseMessage(HttpStatusCode.NotFound);
     }
 }

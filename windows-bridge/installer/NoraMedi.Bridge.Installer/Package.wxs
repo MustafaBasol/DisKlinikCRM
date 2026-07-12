@@ -17,6 +17,33 @@
   upgrade, repair, and uninstall untouched. Full local-data removal is an
   explicit opt-in (see RemoveLocalDataComponent below), never the
   default uninstall behavior.
+
+  This same guarantee is what preserves an operator's mutable
+  Enabled/ServerUrl/PipeName override across a major upgrade or repair: it
+  lives at %ProgramData%\NoraMediBridge\config\appsettings.json (see
+  NoraMedi.Bridge.Service.ProgramDataConfigOverride), layered on top of the
+  packaged (Program Files) appsettings.json defaults that every
+  upgrade/repair legitimately overwrites. A real-hardware upgrade test
+  found the installed appsettings.json's local edits silently reset to
+  packaged defaults before this override existed — no WiX change was
+  needed to fix it, only somewhere under this already-untouched tree for
+  the override to live.
+
+  That fix alone only helps once a ProgramData override already exists.
+  A second real-hardware retest (upgrading a genuine pre-0.4.5 install,
+  whose only customization lived in the Program Files appsettings.json)
+  found the same values still silently reset, because InstallFiles
+  overwrites that file in place before the new Service binary ever runs
+  its ProgramDataConfigOverride-reading code. MigrateLegacyConfig (below)
+  closes that gap with a deferred CustomAction that copies the legacy file
+  into the ProgramData override location before InstallFiles runs.
+
+  A third real-hardware retest (0.4.4 -> 0.4.5) proved that first version
+  of MigrateLegacyConfig never actually ran: its AppSearch-based gating
+  properties evaluated false in the real install session even though the
+  legacy file was present. See the comment on MigrateLegacyConfig below for
+  the 0.4.6 redesign, which gates on WIX_UPGRADE_DETECTED instead and moves
+  the existence/no-clobber checks into the deferred command itself.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
@@ -40,19 +67,34 @@
       installation is refused with a clear message rather than silently
       corrupting state.
 
-      Schedule is deliberately the WiX default (afterInstallExecute), NOT
-      afterInstallInitialize: testing an actual upgrade on real hardware
-      (0.4.0 -> 0.4.1) showed the early schedule left NoraMediBridge
-      completely unregistered afterward — with RemoveExistingProducts run
-      before the new product's InstallServices, MSI's component-sharing
-      logic (same fixed Component Guid, same Service Name, across product
-      versions) computed Action=Null for ServiceInstallComponent in the
-      new product's session, so InstallServices had nothing to do. Late
-      scheduling removes the old product only after the new one is fully
-      installed and running, which is the documented-safe choice for
-      Windows Service components specifically.
+      Schedule is explicitly set to afterInstallExecute — WiX 4's actual
+      default is afterInstallValidate, which removes the old product
+      completely before the new product is installed. That default is wrong
+      here for two independent reasons:
+
+      1. MigrateLegacyConfig (see below) runs before InstallFiles and reads
+         the legacy Program Files appsettings.json. If the old product were
+         removed at afterInstallValidate, that file would already be gone
+         by the time MigrateLegacyConfig runs, and migration would silently
+         no-op.
+
+      2. Testing an actual upgrade on real hardware (0.4.0 -> 0.4.1) showed
+         that scheduling RemoveExistingProducts too early left
+         NoraMediBridge completely unregistered afterward — with
+         RemoveExistingProducts run before the new product's InstallServices,
+         MSI's component-sharing logic (same fixed Component Guid, same
+         Service Name, across product versions) computed Action=Null for
+         ServiceInstallComponent in the new product's session, so
+         InstallServices had nothing to do. Late scheduling removes the old
+         product only after the new one is fully installed and running,
+         which is the documented-safe choice for Windows Service components
+         specifically.
+
+      Both of the above rely on the existing stable component GUID/component
+      rules used across product versions.
     -->
     <MajorUpgrade
+      Schedule="afterInstallExecute"
       AllowSameVersionUpgrades="no"
       AllowDowngrades="no"
       DowngradeErrorMessage="A newer version of NoraMedi Bridge is already installed. Uninstall it first if you need to downgrade." />
@@ -83,6 +125,126 @@
                        Type="raw"
                        Bitness="always64" />
     </Property>
+
+    <!--
+      Real-hardware retest of a 0.4.4 -> 0.4.5 upgrade found that
+      ProgramDataConfigOverride alone (see NoraMedi.Bridge.Service.Program.cs)
+      only helps once a ProgramData override already exists: it never reads
+      the legacy Program Files appsettings.json, and by the time the new
+      Service binary starts post-upgrade, InstallFiles has already
+      overwritten that file with the packaged defaults (MajorUpgrade's late
+      Schedule only delays RemoveExistingProducts's *old-product-removal*,
+      not the new product's own InstallFiles). So a locally customized
+      Enabled/ServerUrl from a pre-0.4.5 install was still silently lost on
+      first upgrade to a 0.4.5+ build.
+
+      A first fix (0.4.5) gated the copy on two AppSearch/DirectorySearch
+      properties (LEGACY_CONFIG_FOUND / PROGRAMDATA_OVERRIDE_FOUND). A
+      second real-hardware retest (genuine 0.4.4 -> 0.4.5 upgrade) proved
+      that fix itself never ran: the MSI log showed both SetProperty and
+      the deferred action skipped with "condition is false" even though the
+      legacy file was present and no override existed. AppSearch results are
+      evaluated once, early in the sequence, against directory properties
+      that are session/context-sensitive; relying on them to gate a
+      deferred, no-impersonate action proved fragile in a way that couldn't
+      be reproduced or trusted in a test environment. This redesign removes
+      that dependency entirely:
+
+        - Gating no longer reads any AppSearch-derived property. It uses
+          WIX_UPGRADE_DETECTED, the property WiX's own <MajorUpgrade>
+          element sets (built-in, already public/secure) precisely when
+          RemoveExistingProducts has found and scheduled removal of an
+          older installed version in *this* session — true only for a
+          genuine upgrade, never for a clean install, a same-version
+          repair (no older version exists to detect), or an uninstall.
+        - The file-existence and no-clobber checks that used to live in
+          the Property/Condition graph now live inside the deferred
+          command itself, evaluated at the moment it actually runs
+          (immediately before InstallFiles, elevated, no-impersonate) —
+          not hours/steps earlier via AppSearch.
+        - Return="ignore" is gone. A failed copy now fails the custom
+          action, which fails the sequence, which rolls back the upgrade
+          (no Return="ignore" to swallow it) rather than silently
+          continuing with a lost configuration.
+
+      The legacy file only ever contains BridgeSelfService settings
+      (Enabled/ServerUrl/PipeName/etc.) — never a credential (those are
+      DPAPI-protected separately) — so copying it wholesale, and logging
+      the command line that does so, is safe.
+    -->
+    <CustomAction Id="MigrateLegacyConfig"
+                  BinaryRef="Wix4UtilCA_X64"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+    <!--
+      Kept under the 255-character limit Windows Installer imposes on the
+      CustomAction table's Target column (WiX's ICE03 flags any overflow at
+      build time — a first draft of this command that spelled out
+      [CommonAppDataFolder]NoraMediBridge\config\ and
+      [SERVICEFOLDER]appsettings.json inline four times came to 384
+      characters and failed that check) by `set`-ing each long,
+      MSI-property-substituted path into a short cmd.exe variable once and
+      referencing it thereafter. MSI substitutes [SERVICEFOLDER] and
+      [CommonAppDataFolder] into their resolved absolute paths before
+      cmd.exe ever sees this string, so the `set` assignments capture the
+      real paths, not the literal property names.
+
+      A focused review caught two real bugs in the first draft of this fix,
+      neither of which any MSI-table inspection could have caught (both are
+      pure cmd.exe parsing behavior):
+
+        1. It referenced %D%/%S% (immediate expansion). cmd.exe expands
+           %VAR% for an entire `a&b&c` compound line once, up front, before
+           any part of the line runs — so %D%/%S% were substituted from
+           whatever (nonexistent) environment values existed *before* the
+           `set` commands on that same line ever executed, not the values
+           those `set` commands just assigned. Fixed with `/V:ON` (delayed
+           expansion) and `!D!`/`!S!`, which defer each variable's
+           substitution to the moment it's actually reached, after the
+           preceding `set` on the same line has run.
+        2. Less well known: cmd.exe's `if condition action` — even once
+           delayed expansion made the condition itself evaluate correctly —
+           does not stop consuming input at the end of "action". On a
+           single logical line (exactly what `/C` receives, with no batch
+           file or newlines involved), an unparenthesized `if` swallows
+           every subsequent `&`-chained command as part of its own action,
+           for the entire rest of the line. That means `if not exist "!S!"
+           exit /b 0&if exist ...&md ...&copy ...` ran NOTHING at all
+           whenever the first condition was false, and NOTHING but that one
+           action when it was true — the two later `if`s, `md`, and `copy`
+           were silently unreachable either way. Confirmed interactively
+           (see the command history around this fix) before applying the
+           fix: wrapping each `if` statement, and only the `if` statement,
+           in its own parentheses - `(if not exist "!S!" exit /b 0)` -
+           restores normal top-level `&` separation between it and
+           whatever follows, in both the true and false branch.
+
+      `md "!D!" 2>nul` (rather than an `if not exist` guard before it) is
+      used only to save the ~10 characters that guard would have cost
+      against the 255-character limit — a failed `md` (path already
+      exists, or a real permission failure) is harmless here because the
+      following `copy` still fails, and still trips `||exit /b 1`, if the
+      destination directory isn't actually there.
+
+      See windows-bridge/tests/installer/MigrateLegacyConfigCommand.Tests.ps1,
+      which runs this exact authored string (after substituting fake
+      [CommonAppDataFolder]/[SERVICEFOLDER] paths that include a space, the
+      way "Program Files" does) through a real cmd.exe against temp
+      directories, proving both fixes behave correctly for every case
+      (source missing, destination present, destination blocked, a space
+      in both paths) without needing a real MSI install.
+    -->
+    <SetProperty Id="MigrateLegacyConfig"
+                 Value="&quot;cmd.exe&quot; /V:ON /c set D=[CommonAppDataFolder]NoraMediBridge\config\&amp;set S=[SERVICEFOLDER]appsettings.json&amp;(if not exist &quot;!S!&quot; exit /b 0)&amp;(if exist &quot;!D!appsettings.json&quot; exit /b 0)&amp;(md &quot;!D!&quot; 2&gt;nul)&amp;(copy /y &quot;!S!&quot; &quot;!D!appsettings.json&quot;||exit /b 1)"
+                 Before="MigrateLegacyConfig"
+                 Sequence="execute"
+                 Condition="WIX_UPGRADE_DETECTED" />
+
+    <InstallExecuteSequence>
+      <Custom Action="MigrateLegacyConfig" Before="InstallFiles" Condition="WIX_UPGRADE_DETECTED" />
+    </InstallExecuteSequence>
 
     <Launch Condition="Installed OR VersionNT64" Message="NoraMedi Bridge requires a 64-bit edition of Windows." />
     <Launch Condition="Installed OR (WINDOWSBUILDNUMBER AND WINDOWSBUILDNUMBER &gt;= 10240)" Message="NoraMedi Bridge requires Windows 10 (build 10240) / Windows Server 2016 or later." />

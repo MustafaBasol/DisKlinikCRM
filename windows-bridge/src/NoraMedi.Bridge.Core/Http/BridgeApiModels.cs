@@ -24,14 +24,28 @@ public sealed record UpdatePolicy(
     [property: JsonPropertyName("channel")] string Channel,
     [property: JsonPropertyName("mandatory")] bool Mandatory);
 
-/// <summary>Request body of POST /api/public/imaging/bridge/heartbeat — every field optional per imagingBridgeHeartbeatSchema.</summary>
+/// <summary>
+/// Request body of POST /api/public/imaging/bridge/heartbeat — every field
+/// optional per imagingBridgeHeartbeatSchema. AgentVersion/OsVersion/
+/// Architecture/Capabilities/PendingCount/FailedCount are optional but NOT
+/// nullable in that schema, so each carries [JsonIgnore(WhenWritingNull)] —
+/// an explicit "capabilities":null (the default whenever Capabilities is
+/// unset, as it always is today) is a schema violation the backend rejects
+/// with 400 before the agent is ever looked up, and HeartbeatTickAsync used
+/// to swallow that failure silently, leaving the agent "pending" forever.
+/// LastSuccessfulUploadAt and LastErrorCategory are deliberately excluded
+/// from that treatment: the schema declares them `.optional().nullable()`
+/// and the server treats an explicit null there as "clear this field",
+/// distinct from omitting the key entirely (no update) — so those two must
+/// always be written, null or not.
+/// </summary>
 public sealed record HeartbeatRequest(
-    [property: JsonPropertyName("agentVersion")] string? AgentVersion = null,
-    [property: JsonPropertyName("osVersion")] string? OsVersion = null,
-    [property: JsonPropertyName("architecture")] string? Architecture = null,
-    [property: JsonPropertyName("capabilities")] IReadOnlyDictionary<string, object>? Capabilities = null,
-    [property: JsonPropertyName("pendingCount")] int? PendingCount = null,
-    [property: JsonPropertyName("failedCount")] int? FailedCount = null,
+    [property: JsonPropertyName("agentVersion"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AgentVersion = null,
+    [property: JsonPropertyName("osVersion"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OsVersion = null,
+    [property: JsonPropertyName("architecture"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Architecture = null,
+    [property: JsonPropertyName("capabilities"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, object>? Capabilities = null,
+    [property: JsonPropertyName("pendingCount"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? PendingCount = null,
+    [property: JsonPropertyName("failedCount"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? FailedCount = null,
     [property: JsonPropertyName("lastSuccessfulUploadAt")] string? LastSuccessfulUploadAt = null,
     [property: JsonPropertyName("lastErrorCategory")] string? LastErrorCategory = null);
 
@@ -62,3 +76,42 @@ public sealed record PairResponse(
     [property: JsonPropertyName("clinicName")] string ClinicName,
     [property: JsonPropertyName("bindings")] IReadOnlyList<BootstrapBinding> Bindings,
     [property: JsonPropertyName("serverTime")] string ServerTime);
+
+/// <summary>
+/// Coarse-grained outcome of a pairing-code redemption attempt, distinct
+/// enough for the Manager to show an actionable message without ever
+/// seeing the pairing code, hash, or credential itself (those never leave
+/// <see cref="BridgeApiClient.RedeemPairingCodeAsync"/> / the credential
+/// store). Mirrors server/src/routes/imagingBridgePublic.ts's response
+/// matrix for POST /api/public/imaging/bridge/pair.
+/// </summary>
+public enum PairingResultCategory
+{
+    Success,
+
+    /// <summary>The HTTP request itself never completed (DNS/connect/timeout) — nothing to do with the code.</summary>
+    NetworkFailure,
+
+    /// <summary>401 — the server intentionally returns this generic status for wrong/expired/already-used/locked codes alike.</summary>
+    InvalidOrExpiredCode,
+
+    /// <summary>400 or other 4xx — the request payload itself was rejected; normally indicates a Manager/Service bug, not a user mistake.</summary>
+    BadRequest,
+
+    /// <summary>429 — either the per-IP or per-code rate limit was hit.</summary>
+    RateLimited,
+
+    /// <summary>5xx — the server could not process an otherwise well-formed request.</summary>
+    ServerError,
+
+    /// <summary>A 2xx response body that didn't deserialize into <see cref="PairResponse"/>.</summary>
+    MalformedResponse,
+}
+
+/// <summary>
+/// Result of <see cref="BridgeApiClient.RedeemPairingCodeAsync"/>: never
+/// carries a raw exception or the request body, only what's safe to log
+/// (see <see cref="StatusCode"/>/<see cref="Category"/>) and, on success,
+/// the parsed <see cref="PairResponse"/>.
+/// </summary>
+public sealed record PairingRedeemResult(PairingResultCategory Category, int? StatusCode, PairResponse? Response);

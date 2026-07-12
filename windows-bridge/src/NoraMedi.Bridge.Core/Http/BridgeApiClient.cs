@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using NoraMedi.Bridge.Core.Queue;
 
 namespace NoraMedi.Bridge.Core.Http;
@@ -18,6 +19,24 @@ public sealed class BridgeApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// Used ONLY for serializing the outgoing <see cref="PairRequest"/> body.
+    /// Omits null optional fields (machineIdHash, computerDisplayName,
+    /// osVersion, architecture, capabilities) instead of writing them as
+    /// JSON null — imagingBridgePublicPairSchema's `capabilities` field is
+    /// optional but not nullable, so an explicit `"capabilities":null`
+    /// (the default when Capabilities is unset) is a schema violation and
+    /// the whole request is rejected with 400 before the code is even
+    /// looked up. Deliberately scoped to pairing only: heartbeat's
+    /// lastSuccessfulUploadAt/lastErrorCategory distinguish omitted (no
+    /// update) from explicit null (clear), so <see cref="JsonOptions"/> must
+    /// keep writing nulls there.
+    /// </summary>
+    private static readonly JsonSerializerOptions PairRequestJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     private readonly HttpClient _http;
     private readonly string _serverUrl;
 
@@ -33,14 +52,16 @@ public sealed class BridgeApiClient
     /// performs this call directly, so the plaintext credential is only ever
     /// received here and immediately handed to <see cref="Security.ICredentialStore"/>;
     /// it never travels across the Named Pipe IPC boundary (see docs/security.md).
-    /// Returns null for any rejection — the server intentionally returns a
-    /// generic 401 for invalid/expired/locked/already-used codes alike.
+    /// Distinguishes network failure, invalid/expired code (401), bad request
+    /// (400/other 4xx), rate limit (429), server error (5xx) and a malformed
+    /// success body, so callers can show/log something more useful than a
+    /// single generic failure. Never logs the code, hash, or credential.
     /// </summary>
-    public async Task<PairResponse?> RedeemPairingCodeAsync(PairRequest pairRequest, CancellationToken cancellationToken = default)
+    public async Task<PairingRedeemResult> RedeemPairingCodeAsync(PairRequest pairRequest, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_serverUrl}/api/public/imaging/bridge/pair")
         {
-            Content = JsonContent.Create(pairRequest, options: JsonOptions),
+            Content = JsonContent.Create(pairRequest, options: PairRequestJsonOptions),
         };
 
         HttpResponseMessage response;
@@ -50,13 +71,38 @@ public sealed class BridgeApiClient
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            return null;
+            return new PairingRedeemResult(PairingResultCategory.NetworkFailure, null, null);
         }
 
         using (response)
         {
-            if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadFromJsonAsync<PairResponse>(JsonOptions, cancellationToken);
+            var statusCode = (int)response.StatusCode;
+
+            if (response.IsSuccessStatusCode)
+            {
+                PairResponse? body;
+                try
+                {
+                    body = await response.Content.ReadFromJsonAsync<PairResponse>(JsonOptions, cancellationToken);
+                }
+                catch (JsonException)
+                {
+                    return new PairingRedeemResult(PairingResultCategory.MalformedResponse, statusCode, null);
+                }
+
+                return body is null
+                    ? new PairingRedeemResult(PairingResultCategory.MalformedResponse, statusCode, null)
+                    : new PairingRedeemResult(PairingResultCategory.Success, statusCode, body);
+            }
+
+            var category = statusCode switch
+            {
+                401 => PairingResultCategory.InvalidOrExpiredCode,
+                429 => PairingResultCategory.RateLimited,
+                >= 400 and < 500 => PairingResultCategory.BadRequest,
+                _ => PairingResultCategory.ServerError,
+            };
+            return new PairingRedeemResult(category, statusCode, null);
         }
     }
 
@@ -91,11 +137,12 @@ public sealed class BridgeApiClient
         try
         {
             using var response = await _http.SendAsync(request, cancellationToken);
-            return new HeartbeatOutcome(response.IsSuccessStatusCode, (int)response.StatusCode);
+            var statusCode = (int)response.StatusCode;
+            return new HeartbeatOutcome(response.IsSuccessStatusCode, statusCode, ClassifyStatus(statusCode));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            return new HeartbeatOutcome(false);
+            return new HeartbeatOutcome(false, NetworkError: true);
         }
     }
 

@@ -163,6 +163,59 @@
     "loadFailed": "Failed to load imaging data",
     "actionFailed": "Action failed"
   },
+  "onboarding": {
+    "card": {
+      "title": "NoraMedi Bridge for Windows",
+      "description": "A Windows app that connects the clinic's imaging devices to NoraMedi — no technical knowledge required.",
+      "supportedSystems": "Supported systems: Windows 10/11 (64-bit) or Windows Server 2016 and later",
+      "loadFailed": "Failed to load setup information",
+      "notAvailable": "This feature is not yet available for your clinic.",
+      "installerUnavailable": "The installer isn't published yet. Please check back later.",
+      "version": "Version {{version}}",
+      "unsignedWarning": "This is an unsigned pilot/test build. Windows may show an \"Unknown publisher\" warning during install.",
+      "download": "Download",
+      "setup": "Start Setup",
+      "clinicRequired": "Select a specific clinic (not \"All clinics\") to set up the bridge."
+    },
+    "wizard": {
+      "title": "NoraMedi Bridge Setup",
+      "clinicRequired": "Select a specific clinic (not \"All clinics\") to set up the bridge.",
+      "devices": {
+        "description": "Choose the imaging devices this computer will connect. You must select at least one device.",
+        "empty": "No active bridge-eligible devices yet. Add an imaging device first."
+      },
+      "install": {
+        "description": "Do the following on the clinic computer (reception desk, X-ray room, etc.):",
+        "step1": "Download the installer using the button below",
+        "step2": "Run NoraMediBridgeSetup.exe",
+        "step3": "Approve the Windows administrator prompt",
+        "step4": "Leave NoraMedi Bridge Manager open",
+        "unsignedWarning": "This pilot build is unsigned; Windows may show an \"Unknown publisher\" warning. Choose \"Run anyway\" to continue."
+      },
+      "pairing": {
+        "namePlaceholder": "e.g. Reception PC",
+        "generateCode": "Generate Code",
+        "createFailed": "Could not create the pairing code",
+        "enterInManager": "Enter this code in NoraMedi Bridge Manager:",
+        "expiresIn": "Expires in {{time}}",
+        "copyCode": "Copy Code",
+        "cancel": "Cancel",
+        "cancelFailed": "Could not cancel — the code may still be valid. Please try again.",
+        "waiting": "Waiting for connection...",
+        "generateNew": "Generate New Code",
+        "status": {
+          "expired": "This code has expired.",
+          "cancelled": "Pairing was cancelled.",
+          "locked": "This code was locked after too many failed attempts."
+        }
+      },
+      "success": {
+        "title": "\"{{name}}\" connected successfully",
+        "description": "The bridge is now registered with NoraMedi. Use NoraMedi Bridge Manager to choose local folders.",
+        "nextSteps": "You can now select the folders to watch for the connected devices in NoraMedi Bridge Manager."
+      }
+    }
+  },
   "viewer": {
     "title": "DICOM Viewer",
     "loading": "Loading DICOM image...",

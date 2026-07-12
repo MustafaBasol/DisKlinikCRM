@@ -5,6 +5,13 @@ using NoraMedi.Bridge.Service;
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(options => options.ServiceName = "NoraMediBridge");
 
+// Layers a mutable ProgramData override on top of the packaged (Program
+// Files) appsettings.json defaults — see ProgramDataConfigOverride for why:
+// an MSI upgrade/repair always overwrites the installed appsettings.json,
+// so any locally customized Enabled/ServerUrl/PipeName must live here to
+// survive it.
+ProgramDataConfigOverride.Apply(builder.Configuration, ProgramDataConfigOverride.DefaultPath);
+
 builder.Services.AddSingleton(_ => BuildBridgeOptions(builder.Configuration));
 builder.Services.AddHttpClient("BridgeApi");
 builder.Services.AddSingleton(sp =>

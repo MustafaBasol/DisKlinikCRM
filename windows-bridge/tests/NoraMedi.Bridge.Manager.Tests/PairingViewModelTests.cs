@@ -81,7 +81,7 @@ public class PairingViewModelTests
         var fake = new FakeBridgePipeClientService
         {
             NextProvisionWithPairingCode = PipeCallResult<ProvisionWithPairingCodeResponse>.Ok(
-                new ProvisionWithPairingCodeResponse(false, null, null, null, "invalid or expired code")),
+                new ProvisionWithPairingCodeResponse(false, null, null, null, "invalid or expired code", PairingErrorCategory.InvalidOrExpiredCode, "corr-1")),
         };
         var vm = new PairingViewModel(fake);
         vm.SetInput("12345678");
@@ -89,6 +89,55 @@ public class PairingViewModelTests
         await vm.SubmitAsync();
 
         Assert.False(vm.IsSuccess);
+        Assert.Equal(StatusLabels.Pairing_InvalidOrExpiredCode, vm.ResultMessage);
+    }
+
+    [Theory]
+    [InlineData(PairingErrorCategory.InvalidOrExpiredCode)]
+    [InlineData(PairingErrorCategory.RateLimited)]
+    [InlineData(PairingErrorCategory.InvalidRequest)]
+    [InlineData(PairingErrorCategory.ServerError)]
+    [InlineData(PairingErrorCategory.NetworkFailure)]
+    [InlineData(PairingErrorCategory.FeatureDisabled)]
+    public async Task SubmitAsync_DistinctPairingErrorCategories_ProduceDistinctMessages(PairingErrorCategory category)
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextProvisionWithPairingCode = PipeCallResult<ProvisionWithPairingCodeResponse>.Ok(
+                new ProvisionWithPairingCodeResponse(false, null, null, null, "failed", category, "corr-1")),
+        };
+        var vm = new PairingViewModel(fake);
+        vm.SetInput("12345678");
+
+        await vm.SubmitAsync();
+
+        Assert.False(vm.IsSuccess);
+        Assert.NotEqual(StatusLabels.ConnectionRequired, vm.ResultMessage);
+        Assert.False(string.IsNullOrWhiteSpace(vm.ResultMessage));
+    }
+
+    [Fact]
+    public async Task SubmitAsync_InvalidCodeVsNetworkFailure_ProduceDifferentMessages()
+    {
+        var invalidCodeFake = new FakeBridgePipeClientService
+        {
+            NextProvisionWithPairingCode = PipeCallResult<ProvisionWithPairingCodeResponse>.Ok(
+                new ProvisionWithPairingCodeResponse(false, null, null, null, "failed", PairingErrorCategory.InvalidOrExpiredCode, "corr-1")),
+        };
+        var networkFailureFake = new FakeBridgePipeClientService
+        {
+            NextProvisionWithPairingCode = PipeCallResult<ProvisionWithPairingCodeResponse>.Ok(
+                new ProvisionWithPairingCodeResponse(false, null, null, null, "failed", PairingErrorCategory.NetworkFailure, "corr-2")),
+        };
+        var vm1 = new PairingViewModel(invalidCodeFake);
+        vm1.SetInput("12345678");
+        var vm2 = new PairingViewModel(networkFailureFake);
+        vm2.SetInput("12345678");
+
+        await vm1.SubmitAsync();
+        await vm2.SubmitAsync();
+
+        Assert.NotEqual(vm1.ResultMessage, vm2.ResultMessage);
     }
 
     [Fact]

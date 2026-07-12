@@ -202,6 +202,99 @@ turned out to be scheduled at sequence 799 — before `CostInitialize`, far
 earlier than intuition suggests. The property-setting `<SetProperty>` now
 runs `Before="Wix4RemoveFoldersEx_X64"` explicitly.
 
+### Migrating a pre-0.4.5 install's local config
+
+`NoraMedi.Bridge.Service.ProgramDataConfigOverride` (added in 0.4.5) lets a
+locally customized `Enabled`/`ServerUrl`/`PipeName` survive an upgrade or
+repair by reading an optional `%ProgramData%\NoraMediBridge\config\
+appsettings.json` layered on top of the packaged Program Files defaults.
+That alone only helps once the override file already exists. A third
+real-hardware retest — upgrading a genuine pre-0.4.5 install whose only
+customization lived in `Service\appsettings.json` under Program Files, with
+no ProgramData override yet — found the values still silently reset:
+`InstallFiles` overwrites that Program Files file in place, in the same
+transaction, before the new Service binary (and its
+`ProgramDataConfigOverride`-reading code) ever runs.
+
+`MigrateLegacyConfig` closes that gap. It's a deferred `util:QuietExec`
+custom action, scheduled `Before="InstallFiles"` (confirmed at
+`InstallExecuteSequence` row 3999, immediately ahead of `InstallFiles` at
+4000, by querying the built MSI directly — the same technique used above).
+
+The first (0.4.5) version of this fix gated the copy on two
+`AppSearch`-populated properties, `LEGACY_CONFIG_FOUND` (a
+`DirectorySearch`/`FileSearch` for `Service\appsettings.json`) `AND NOT
+PROGRAMDATA_OVERRIDE_FOUND` (the same search against the ProgramData
+override path). A real-hardware retest of a genuine 0.4.4 → 0.4.5 upgrade
+proved this never actually ran: the MSI log showed both the `SetProperty`
+and the deferred action skipped with "condition is false" even though the
+legacy file was present and no override existed yet, and the Program Files
+`appsettings.json` was silently overwritten with packaged defaults exactly
+as before the fix. AppSearch results are captured once, early in the
+sequence, from directory properties whose resolution is session-sensitive
+— gating a deferred, no-impersonate action on them proved unreliable in
+a way that couldn't be reproduced against a local build.
+
+The 0.4.6 redesign removes that dependency entirely:
+
+- Gating condition is now `WIX_UPGRADE_DETECTED` — the property WiX's own
+  `<MajorUpgrade>` sets automatically (already public/secure, no
+  declaration needed) exactly when `RemoveExistingProducts` has found and
+  scheduled removal of an older installed version in *this* session. It is
+  true only for a genuine major upgrade: never for a clean install (no
+  older version exists to detect), a same-version repair (ditto), or an
+  uninstall.
+- The file-existence and no-clobber checks that used to live in the
+  Property/Condition graph now live inside the deferred command itself,
+  evaluated at the moment it actually executes rather than via AppSearch
+  minutes/steps earlier: it exits immediately (success, no-op) if the
+  legacy file doesn't exist, exits immediately (success, no-op) if a
+  ProgramData override already exists (never clobbering an operator's
+  already-migrated or hand-edited override), otherwise creates the
+  ProgramData directory and copies the legacy file into it.
+- The action is `Return="check"` (not `"ignore"`): if the copy itself
+  fails, the custom action fails, the install sequence fails, and the
+  upgrade rolls back instead of silently continuing with a lost
+  configuration.
+
+The legacy file only ever holds `BridgeSelfService` settings — never a
+credential (those are DPAPI-protected separately) — so copying it
+wholesale, and logging the command line that does so, is safe.
+
+A focused review of that first 0.4.6 draft found two further defects, both
+fixed before this shipped:
+
+- The command used `%D%`/`%S%` (immediate cmd.exe variable expansion) on a
+  single compound `a&b&c` line — cmd.exe expands `%VAR%` for the *entire*
+  line once, up front, before any part of it runs, so `%D%`/`%S%` could not
+  reliably see the values the `set` commands earlier on the same line had
+  just assigned. Fixed with `/V:ON` (delayed expansion) and `!D!`/`!S!`.
+- Less obviously: an unparenthesized `if condition action` on a single
+  logical line (exactly what `cmd /c` receives) consumes every subsequent
+  `&`-chained command as part of its own action, in both the true and false
+  branch — so the original `if not exist "!S!" exit /b 0&if exist ...&md
+  ...&copy ...` ran nothing at all when the first condition was false, and
+  nothing but that one exit when it was true; the later checks, `md`, and
+  `copy` were unreachable either way. Fixed by wrapping each `if` statement,
+  and only the `if` statement, in its own parentheses, which restores normal
+  top-level `&` separation from whatever follows.
+
+Both fixes, including the case of a space in the resolved path (the way a
+real "Program Files" path has one), are proven by running the *exact*
+authored command through a real `cmd.exe` against disposable temp
+directories in
+`windows-bridge/tests/installer/MigrateLegacyConfigCommand.Tests.ps1` — no
+MSI or install needed to catch either bug.
+
+This has been verified at the MSI-table level (the sequence, condition, and
+`SetProperty`-populated command line all confirmed via direct query of the
+compiled MSI's `InstallExecuteSequence`/`CustomAction` tables). Real-hardware
+retest of the 0.4.5 → 0.4.6 upgrade is tracked via
+`windows-bridge/tests/installer/Invoke-InstallerIntegrationTests.ps1`
+(scenario B) — see that script's README for exact commands, including how
+every scenario now resets its own required state so scenarios can be run in
+any order or combination.
+
 ## Supported Windows versions
 
 The installer's `Launch` conditions require **Windows 10 build 10240 /

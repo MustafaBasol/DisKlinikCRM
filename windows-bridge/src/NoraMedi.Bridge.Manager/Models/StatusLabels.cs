@@ -1,3 +1,4 @@
+using NoraMedi.Bridge.Core.Ipc;
 using NoraMedi.Bridge.Manager.Resources;
 
 namespace NoraMedi.Bridge.Manager.Models;
@@ -38,5 +39,26 @@ public static class StatusLabels
         ManagerErrorKind.InvalidPayload => ActionRequired,
         ManagerErrorKind.Internal => ServiceUnavailable,
         _ => ServiceUnavailable,
+    };
+
+    public static string Pairing_InvalidOrExpiredCode => Strings.Pairing_InvalidOrExpiredCode;
+    public static string Pairing_RateLimited => Strings.Pairing_RateLimited;
+    public static string Pairing_InvalidRequest => Strings.Pairing_InvalidRequest;
+    public static string Pairing_ServerError => Strings.Pairing_ServerError;
+    public static string Pairing_NetworkFailure => Strings.Pairing_NetworkFailure;
+    public static string Pairing_FeatureDisabled => Msg_FeatureDisabled;
+
+    private static string Msg_FeatureDisabled => Strings.Msg_FeatureDisabled;
+
+    /// <summary>Maps a failed pairing attempt's typed reason to the plain, actionable label shown under the pairing code field.</summary>
+    public static string FromPairingErrorCategory(PairingErrorCategory? category) => category switch
+    {
+        PairingErrorCategory.FeatureDisabled => Pairing_FeatureDisabled,
+        PairingErrorCategory.InvalidOrExpiredCode => Pairing_InvalidOrExpiredCode,
+        PairingErrorCategory.RateLimited => Pairing_RateLimited,
+        PairingErrorCategory.InvalidRequest => Pairing_InvalidRequest,
+        PairingErrorCategory.ServerError => Pairing_ServerError,
+        PairingErrorCategory.NetworkFailure => Pairing_NetworkFailure,
+        _ => Pairing_InvalidOrExpiredCode,
     };
 }

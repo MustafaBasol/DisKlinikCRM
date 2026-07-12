@@ -118,7 +118,7 @@ public sealed class PairingViewModel : ViewModelBase
             if (!result.Value!.Ok)
             {
                 IsSuccess = false;
-                ResultMessage = StatusLabels.ConnectionRequired;
+                ResultMessage = StatusLabels.FromPairingErrorCategory(result.Value.ErrorCategory);
                 return;
             }
 

@@ -144,6 +144,71 @@ public class BridgeApiClientTests
         var outcome = await client.HeartbeatAsync("nmb_token", new HeartbeatRequest());
 
         Assert.False(outcome.Ok);
+        Assert.True(outcome.NetworkError);
+        Assert.Null(outcome.Category);
+    }
+
+    [Fact]
+    public async Task HeartbeatAsync_RealServicePayloadShape_OmitsNullCapabilitiesAndOtherOptionalFields()
+    {
+        // Contract test mirroring BridgeOrchestrator.HeartbeatTickAsync's real
+        // call shape: AgentVersion/OsVersion/Architecture/PendingCount/FailedCount
+        // set, Capabilities never set (always null today). imagingBridgeHeartbeatSchema
+        // declares capabilities optional but NOT nullable, so "capabilities":null
+        // would be a 400 the old code silently ignored, leaving the agent
+        // "pending" forever. The request must omit the key entirely.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.OK, """{"ok":true}""");
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+        var request = new HeartbeatRequest(
+            AgentVersion: "0.4.5",
+            OsVersion: "Microsoft Windows NT 10.0.19045.0",
+            Architecture: "X64",
+            PendingCount: 3,
+            FailedCount: 0);
+
+        await client.HeartbeatAsync("nmb_token", request);
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.DoesNotContain("capabilities", handler.LastRequestBody);
+        Assert.Contains("\"agentVersion\":\"0.4.5\"", handler.LastRequestBody);
+        Assert.Contains("\"pendingCount\":3", handler.LastRequestBody);
+        Assert.Contains("\"failedCount\":0", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task HeartbeatAsync_LastSuccessfulUploadAtAndLastErrorCategoryNull_AreStillSentAsExplicitNull()
+    {
+        // Unlike capabilities/agentVersion/etc, these two fields are
+        // `.optional().nullable()` server-side and an explicit null means
+        // "clear this field" — distinct from omitting the key (no update).
+        // The omit-null treatment must not extend to these two.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.OK, """{"ok":true}""");
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.HeartbeatAsync("nmb_token", new HeartbeatRequest(AgentVersion: "0.4.5"));
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.Contains("\"lastSuccessfulUploadAt\":null", handler.LastRequestBody);
+        Assert.Contains("\"lastErrorCategory\":null", handler.LastRequestBody);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK, true, ResponseCategory.Success)]
+    [InlineData(HttpStatusCode.Unauthorized, false, ResponseCategory.AuthFailure)]
+    [InlineData(HttpStatusCode.BadRequest, false, ResponseCategory.Permanent)]
+    [InlineData(HttpStatusCode.TooManyRequests, false, ResponseCategory.Retryable)]
+    [InlineData(HttpStatusCode.InternalServerError, false, ResponseCategory.Retryable)]
+    public async Task HeartbeatAsync_ClassifiesStatusCodesDistinctly(HttpStatusCode status, bool expectedOk, ResponseCategory expectedCategory)
+    {
+        var handler = FakeHttpMessageHandler.Returning(status, status == HttpStatusCode.OK ? """{"ok":true}""" : null);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var outcome = await client.HeartbeatAsync("nmb_token", new HeartbeatRequest());
+
+        Assert.Equal(expectedOk, outcome.Ok);
+        Assert.Equal((int)status, outcome.StatusCode);
+        Assert.Equal(expectedCategory, outcome.Category);
+        Assert.False(outcome.NetworkError);
     }
 
     [Fact]
@@ -234,5 +299,231 @@ public class BridgeApiClientTests
         var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
 
         Assert.Null(await client.BootstrapAsync("revoked"));
+    }
+
+    private static PairRequest SamplePairRequest() => new(
+        Code: "12345678",
+        InstallationId: "install-1",
+        AgentVersion: "1.0.0-test");
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_Success_ReturnsParsedResponse()
+    {
+        var json = """
+            {
+              "bridgeCredential": "nmb_test_token",
+              "bridgeAgentId": "agent-1",
+              "clinicName": "Demo Clinic",
+              "bindings": [],
+              "serverTime": "2026-07-08T00:00:00.000Z"
+            }
+            """;
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Created, json);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.Success, result.Category);
+        Assert.Equal(201, result.StatusCode);
+        Assert.NotNull(result.Response);
+        Assert.Equal("agent-1", result.Response!.BridgeAgentId);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_Success_ParsesBindingsWithAcquisitionType()
+    {
+        // End-to-end contract test: mirrors the real /api/public/imaging/bridge/pair
+        // 201 body (server/src/routes/imagingBridgePublic.ts) after fixing the
+        // response-contract mismatch where the pair route's binding select
+        // omitted acquisitionType while BootstrapBinding requires it.
+        var json = """
+            {
+              "bridgeCredential": "nmb_test_token",
+              "bridgeAgentId": "agent-1",
+              "clinicName": "Demo Clinic",
+              "bindings": [
+                {"id":"b1","deviceId":"d1","modality":"IO","displayName":"Sensor 1","status":"pending","acquisitionType":"folder_watch"}
+              ],
+              "serverTime": "2026-07-08T00:00:00.000Z"
+            }
+            """;
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Created, json);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.Success, result.Category);
+        Assert.NotNull(result.Response);
+        Assert.Single(result.Response!.Bindings);
+        Assert.Equal("folder_watch", result.Response.Bindings[0].AcquisitionType);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_SendsCamelCaseJsonBodyWithCodeAndInstallationId()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("https://api.example.com/api/public/imaging/bridge/pair", handler.LastRequest.RequestUri!.ToString());
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.Contains("\"code\":\"12345678\"", handler.LastRequestBody);
+        Assert.Contains("\"installationId\":\"install-1\"", handler.LastRequestBody);
+        Assert.Contains("\"agentVersion\":\"1.0.0-test\"", handler.LastRequestBody);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, PairingResultCategory.InvalidOrExpiredCode)]
+    [InlineData(HttpStatusCode.BadRequest, PairingResultCategory.BadRequest)]
+    [InlineData(HttpStatusCode.TooManyRequests, PairingResultCategory.RateLimited)]
+    [InlineData(HttpStatusCode.InternalServerError, PairingResultCategory.ServerError)]
+    [InlineData(HttpStatusCode.BadGateway, PairingResultCategory.ServerError)]
+    public async Task RedeemPairingCodeAsync_MapsStatusCodesToDistinctCategories(HttpStatusCode status, PairingResultCategory expected)
+    {
+        var handler = FakeHttpMessageHandler.Returning(status);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(expected, result.Category);
+        Assert.Equal((int)status, result.StatusCode);
+        Assert.Null(result.Response);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_NetworkFailure_ReturnsNetworkFailureCategory()
+    {
+        var handler = FakeHttpMessageHandler.Throwing(new HttpRequestException("dns failure"));
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.NetworkFailure, result.Category);
+        Assert.Null(result.StatusCode);
+        Assert.Null(result.Response);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_Timeout_ReturnsNetworkFailureCategory()
+    {
+        var handler = FakeHttpMessageHandler.Throwing(new TaskCanceledException("the operation timed out"));
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.NetworkFailure, result.Category);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_MalformedSuccessBody_ReturnsMalformedResponseCategory()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Created, "{ this is not valid json");
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.Equal(PairingResultCategory.MalformedResponse, result.Category);
+        Assert.Equal(201, result.StatusCode);
+        Assert.Null(result.Response);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_NullOptionalCapabilities_IsOmittedNotSentAsJsonNull()
+    {
+        // imagingBridgePublicPairSchema's `capabilities` is optional but NOT
+        // nullable — an explicit "capabilities":null (the default when
+        // PairRequest.Capabilities is unset, as it always is today) is a
+        // schema violation the backend rejects with 400 before the pairing
+        // code is even looked up. The request must omit the key entirely.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.DoesNotContain("capabilities", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_OtherNullOptionalFields_AreOmittedNotSentAsJsonNull()
+    {
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.DoesNotContain("machineIdHash", handler.LastRequestBody);
+        Assert.DoesNotContain("computerDisplayName", handler.LastRequestBody);
+        Assert.DoesNotContain("osVersion", handler.LastRequestBody);
+        Assert.DoesNotContain("architecture", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_SentFieldsWithValues_AreStillIncluded()
+    {
+        // The omit-nulls option must not accidentally drop populated fields —
+        // only fields that are actually null.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+        var request = SamplePairRequest() with
+        {
+            OsVersion = "Microsoft Windows NT 10.0.19045.0",
+            Architecture = "X64",
+            ComputerDisplayName = "RECEPTION-PC",
+        };
+
+        await client.RedeemPairingCodeAsync(request);
+
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.Contains("\"osVersion\":\"Microsoft Windows NT 10.0.19045.0\"", handler.LastRequestBody);
+        Assert.Contains("\"architecture\":\"X64\"", handler.LastRequestBody);
+        Assert.Contains("\"computerDisplayName\":\"RECEPTION-PC\"", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_RealServicePayloadShape_ReachesCodeValidationRatherThan400()
+    {
+        // Contract test: a payload shaped exactly like BridgeOrchestrator's
+        // real ProvisionWithPairingCodeAsync call (code + installationId +
+        // agentVersion + computerDisplayName + osVersion + architecture, no
+        // machineIdHash, no capabilities) must never be rejected as a bad
+        // request. We assert the fake server sees no "capabilities" key
+        // (which is what the real backend schema would reject) and that the
+        // client correctly classifies the fake server's 401 as an
+        // invalid/expired code outcome, not a BadRequest outcome — i.e. the
+        // payload got far enough to reach code lookup, not schema rejection.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+        var request = new PairRequest(
+            Code: "12345678",
+            InstallationId: "install-1",
+            AgentVersion: "0.4.4",
+            ComputerDisplayName: "RECEPTION-PC",
+            OsVersion: "Microsoft Windows NT 10.0.19045.0",
+            Architecture: "X64");
+
+        var result = await client.RedeemPairingCodeAsync(request);
+
+        Assert.DoesNotContain("capabilities", handler.LastRequestBody);
+        Assert.DoesNotContain("machineIdHash", handler.LastRequestBody);
+        Assert.Equal(PairingResultCategory.InvalidOrExpiredCode, result.Category);
+    }
+
+    [Fact]
+    public async Task RedeemPairingCodeAsync_NeverLeaksPairingCodeOrCredentialInException()
+    {
+        // Guards against a future refactor accidentally including the raw
+        // request/response in a thrown exception's message (which a caller
+        // might log). No exception should ever surface a code or credential.
+        var handler = FakeHttpMessageHandler.Returning(HttpStatusCode.Unauthorized);
+        var client = new BridgeApiClient(new HttpClient(handler), "https://api.example.com");
+
+        var result = await client.RedeemPairingCodeAsync(SamplePairRequest());
+
+        var serialized = System.Text.Json.JsonSerializer.Serialize(result);
+        Assert.DoesNotContain("12345678", serialized);
     }
 }
