@@ -111,6 +111,36 @@ public class UpdateDownloaderTests : IDisposable
     }
 
     [Fact]
+    public async Task DownloadAsync_RedirectsFromHttpsToHttp_RejectedAfterResolution()
+    {
+        // Starting URL passes IsAcceptableDownloadUrl (https), but the handler resolved it (as
+        // SocketsHttpHandler's AllowAutoRedirect would for a real 30x) to a plain-http final URI.
+        // The pre-request scheme check alone can't catch this — only re-validating the resolved URI does.
+        var body = Encoding.UTF8.GetBytes("payload");
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, body, contentLength: body.Length, finalRequestUri: new Uri("http://evil.example.com/setup.exe"));
+        var downloader = Make(handler);
+
+        var outcome = await downloader.DownloadAsync("https://cdn.example.com/setup.exe", HexOf(Sha256Of(body)), CancellationToken.None);
+
+        Assert.Equal(DownloadOutcomeKind.RejectedUrl, outcome.Kind);
+        Assert.Empty(Directory.GetFiles(_updatesDir, "NoraMediBridgeSetup-*.exe"));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_RedirectsToDifferentHttpsHost_StillAccepted()
+    {
+        // A same-scheme (https) redirect to a different host is not itself a security downgrade —
+        // only scheme/localhost-exception rules from IsAcceptableDownloadUrl apply.
+        var body = Encoding.UTF8.GetBytes("payload");
+        var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, body, contentLength: body.Length, finalRequestUri: new Uri("https://cdn2.example.com/setup.exe"));
+        var downloader = Make(handler);
+
+        var outcome = await downloader.DownloadAsync("https://cdn.example.com/setup.exe", HexOf(Sha256Of(body)), CancellationToken.None);
+
+        Assert.Equal(DownloadOutcomeKind.Success, outcome.Kind);
+    }
+
+    [Fact]
     public async Task DownloadAsync_MalformedUrl_RejectedUrl()
     {
         var downloader = Make(new FakeHttpMessageHandler(HttpStatusCode.OK, [1]));

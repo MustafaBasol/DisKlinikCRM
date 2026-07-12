@@ -55,6 +55,21 @@ public sealed class UpdateDownloader(HttpClient httpClient, UpdateOptions option
                 return new DownloadOutcome(DownloadOutcomeKind.HttpFailure, null, 0);
             }
 
+            // HttpClient follows redirects transparently (AllowAutoRedirect defaults to true on the
+            // real SocketsHttpHandler this class is constructed with in production), so
+            // IsAcceptableDownloadUrl(downloadUrl) above only validated the *starting* URL — a CDN
+            // issuing an https→http (or https→attacker-host) redirect would otherwise have its
+            // response body trusted here without ever being scheme-checked. A redirect-following
+            // handler sets response.RequestMessage.RequestUri to the actually-resolved final URI;
+            // re-validate it before a single byte of the body is streamed to disk. (A handler that
+            // never populates RequestMessage — as some minimal test doubles don't — is treated as "no
+            // redirect happened", falling back to the already-validated starting URL rather than
+            // spuriously rejecting every request.)
+            if (response.RequestMessage?.RequestUri is { } finalUri && !IsAcceptableDownloadUrl(finalUri.ToString()))
+            {
+                return new DownloadOutcome(DownloadOutcomeKind.RejectedUrl, null, 0);
+            }
+
             if (response.Content.Headers.ContentLength is { } declaredLength && declaredLength > options.MaxDownloadBytes)
             {
                 return new DownloadOutcome(DownloadOutcomeKind.TooLarge, null, 0);
