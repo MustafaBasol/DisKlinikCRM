@@ -21,15 +21,15 @@ public sealed record UpdateOptions
 
     /// <summary>
     /// Production default: an installer must carry a valid Authenticode
-    /// signature from the publisher thumbprint the server's own release
-    /// descriptor declares (authenticated over the paired bridge's bearer
-    /// credential — see <see cref="ServerUpdateRelease.PublisherThumbprint"/>).
-    /// There is no separate client-side pinned thumbprint: the trust anchor
-    /// is "does this specific release's declared signer match its actual
-    /// signature", not a static local value, so a key rotation only ever
-    /// requires an operational server-side deploy (see
-    /// docs/update-architecture.md "Trust model"). Only ever false for the
-    /// ephemeral local test-signing harness.
+    /// signature whose signer thumbprint matches BOTH the server's release
+    /// descriptor (<see cref="ServerUpdateRelease.PublisherThumbprint"/>)
+    /// AND the bridge's own compiled-in allowlist
+    /// (<see cref="Trust.PinnedPublisherThumbprints"/>). The server can only
+    /// ever narrow which signer is expected for one release — it cannot
+    /// expand the set of signers this bridge will ever trust, because that
+    /// set is a local constant the server never supplies. Only ever false
+    /// for the ephemeral local test-signing harness (see
+    /// docs/update-architecture.md "Trust model").
     /// </summary>
     public bool RequireTrustedSignature { get; init; } = true;
 

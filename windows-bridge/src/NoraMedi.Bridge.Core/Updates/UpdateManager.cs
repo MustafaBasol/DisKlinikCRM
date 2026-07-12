@@ -18,6 +18,7 @@ public sealed class UpdateManager
     private readonly string _agentVersion;
     private readonly ILogger _logger;
     private readonly Func<string, string, SignatureTrustResult>? _trustVerifierOverride;
+    private readonly Func<string, bool>? _pinnedThumbprintOverride;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public UpdateManager(
@@ -27,7 +28,8 @@ public sealed class UpdateManager
         Http.BridgeApiClient apiClient,
         string agentVersion,
         ILogger logger,
-        Func<string, string, SignatureTrustResult>? trustVerifierOverride = null)
+        Func<string, string, SignatureTrustResult>? trustVerifierOverride = null,
+        Func<string, bool>? pinnedThumbprintOverride = null)
     {
         _options = options;
         _stateStore = stateStore;
@@ -36,6 +38,7 @@ public sealed class UpdateManager
         _agentVersion = agentVersion;
         _logger = logger;
         _trustVerifierOverride = trustVerifierOverride;
+        _pinnedThumbprintOverride = pinnedThumbprintOverride;
     }
 
     public UpdateState CurrentState => _stateStore.Load(_agentVersion);
@@ -61,7 +64,11 @@ public sealed class UpdateManager
 
         try
         {
-            SetState(UpdateLifecycleState.Checking, UpdateErrorCategory.None);
+            // A fresh check supersedes any reboot-required status left over from a previous install
+            // attempt — otherwise RebootRequired sticks forever (see resetRebootRequired doc comment
+            // on SetState) and the Manager keeps showing "reboot required" even after the machine
+            // has since rebooted and a later check finds everything up to date.
+            SetState(UpdateLifecycleState.Checking, UpdateErrorCategory.None, resetRebootRequired: true);
 
             if (credential is null)
             {
@@ -119,7 +126,21 @@ public sealed class UpdateManager
     {
         SetState(UpdateLifecycleState.Downloading, UpdateErrorCategory.None, offeredVersion: release.Version);
 
-        var download = await _downloader.DownloadAsync(release.DownloadUrl, release.Sha256, cancellationToken);
+        // Feeds the downloader's real streaming byte count back into the persisted state so
+        // GetUpdateStatus (polled by the Manager) can show actual "X of Y MB" progress instead of a
+        // stale value stuck at whatever the last state transition happened to record. Throttled to
+        // avoid a state.json disk write per 80KB read-loop iteration on a fast connection.
+        var lastReported = DateTimeOffset.MinValue;
+        var progress = new Progress<(long downloaded, long? total)>(p =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (now - lastReported < TimeSpan.FromMilliseconds(500)) return;
+            lastReported = now;
+            SetState(UpdateLifecycleState.Downloading, UpdateErrorCategory.None, offeredVersion: release.Version,
+                downloadedBytes: p.downloaded, totalBytes: p.total);
+        });
+
+        var download = await _downloader.DownloadAsync(release.DownloadUrl, release.Sha256, cancellationToken, progress);
         switch (download.Kind)
         {
             case DownloadOutcomeKind.Success:
@@ -165,6 +186,23 @@ public sealed class UpdateManager
                     _ => UpdateErrorCategory.TamperedSignature,
                 };
                 SetState(UpdateLifecycleState.VerificationFailed, category, offeredVersion: release.Version);
+                return;
+            }
+
+            // The server declaring a thumbprint (and Authenticode agreeing with it) only proves
+            // "this file matches what the server told us to expect" — it does NOT prove NoraMedi
+            // signed it. A compromised backend/release config could declare any validly-signed
+            // thumbprint it controls. The bridge's own compiled-in allowlist is the independent
+            // ceiling: the server can narrow the accepted signer for one release, but cannot expand
+            // it beyond this local list. See Trust/PinnedPublisherThumbprints.cs.
+            var isPinnedPublisher = _pinnedThumbprintOverride is not null
+                ? _pinnedThumbprintOverride(release.PublisherThumbprint!)
+                : Trust.PinnedPublisherThumbprints.Contains(release.PublisherThumbprint!);
+            if (!isPinnedPublisher)
+            {
+                _logger.LogWarning("update.verification_failed reason=UntrustedPublisher");
+                DeleteStaged(download.StagedPath);
+                SetState(UpdateLifecycleState.VerificationFailed, UpdateErrorCategory.UntrustedPublisher, offeredVersion: release.Version);
                 return;
             }
         }
@@ -277,7 +315,9 @@ public sealed class UpdateManager
         string? stagedSha256 = null,
         long? downloadedBytes = null,
         bool rebootRequired = false,
-        string? stagedPublisherThumbprint = null)
+        string? stagedPublisherThumbprint = null,
+        bool resetRebootRequired = false,
+        long? totalBytes = null)
     {
         var current = _stateStore.Load(_agentVersion);
         var next = current with
@@ -288,8 +328,13 @@ public sealed class UpdateManager
             StagedInstallerSha256 = stagedSha256 ?? current.StagedInstallerSha256,
             StagedPublisherThumbprint = stagedPublisherThumbprint ?? current.StagedPublisherThumbprint,
             DownloadedBytes = downloadedBytes ?? current.DownloadedBytes,
+            TotalBytes = totalBytes ?? current.TotalBytes,
             ErrorCategory = errorCategory,
-            RebootRequired = rebootRequired || current.RebootRequired,
+            // OR-forward within one install attempt (multiple SetState calls before the terminal
+            // RebootRequired/Succeeded state shouldn't lose a true set earlier), but resetRebootRequired
+            // (passed only when a fresh CheckAsync cycle starts) intentionally breaks the chain — a new
+            // check cycle re-evaluates reality from scratch instead of parroting a stale prior result forever.
+            RebootRequired = resetRebootRequired ? rebootRequired : (rebootRequired || current.RebootRequired),
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         };
         _stateStore.Save(next);

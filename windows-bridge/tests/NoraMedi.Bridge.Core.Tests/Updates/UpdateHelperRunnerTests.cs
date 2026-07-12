@@ -16,9 +16,10 @@ internal sealed class FakeInstallerRunner(int? exitCode) : ISilentInstallerRunne
     }
 }
 
-internal sealed class FakeServiceStateProvider(string? status) : IServiceStateProvider
+internal sealed class FakeServiceStateProvider(string? status, string? installedVersion = null) : IServiceStateProvider
 {
     public string? GetStatus(string serviceName) => status;
+    public string? GetInstalledProductVersion(string serviceName) => installedVersion;
 }
 
 public class UpdateHelperRunnerTests : IDisposable
@@ -95,7 +96,11 @@ public class UpdateHelperRunnerTests : IDisposable
     public async Task RunAsync_TrustedPublisherAndServiceReturnsRunning_Succeeds()
     {
         var installerRunner = new FakeInstallerRunner(0);
-        var runner = new UpdateHelperRunner(installerRunner, new FakeServiceStateProvider("Running"), trustVerifierOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        var runner = new UpdateHelperRunner(
+            installerRunner,
+            new FakeServiceStateProvider("Running", installedVersion: "0.4.7"),
+            trustVerifierOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => true);
         var instruction = new UpdateHelperInstruction(_stagedPath, ActualHash(), "0.4.7", true, "a".PadLeft(40, 'a'));
 
         var result = await runner.RunAsync(instruction, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), CancellationToken.None);
@@ -106,15 +111,65 @@ public class UpdateHelperRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_TrustedPublisherNotInPinnedAllowlist_FailsWithUntrustedPublisher()
+    {
+        // Even when the server-declared thumbprint matches what Authenticode verified (TrustedPublisher),
+        // the bridge's own compiled-in allowlist is a second, independent gate — a compromised server
+        // cannot expand which signers are ever accepted, it can only narrow within this local list.
+        var installerRunner = new FakeInstallerRunner(0);
+        var runner = new UpdateHelperRunner(
+            installerRunner,
+            new FakeServiceStateProvider("Running", installedVersion: "0.4.7"),
+            trustVerifierOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => false);
+        var instruction = new UpdateHelperInstruction(_stagedPath, ActualHash(), "0.4.7", true, "a".PadLeft(40, 'a'));
+
+        var result = await runner.RunAsync(instruction, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), CancellationToken.None);
+
+        Assert.Equal("InstallFailed", result.Outcome);
+        Assert.Equal(nameof(UpdateErrorCategory.UntrustedPublisher), result.ErrorCategory);
+        Assert.Null(installerRunner.LastInstallerPath);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProductionDefaultEmptyAllowlist_RejectsEvenAServerTrustedPublisher()
+    {
+        // No trustVerifierOverride / pinnedThumbprintOverride: exercises the real, shipped default —
+        // Trust.PinnedPublisherThumbprints.Values is empty until PR 7 provisions a production
+        // certificate, so this must fail closed, not fall back to trusting the server's say-so.
+        var installerRunner = new FakeInstallerRunner(0);
+        var runner = new UpdateHelperRunner(installerRunner, new FakeServiceStateProvider("Running"), trustVerifierOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        var instruction = new UpdateHelperInstruction(_stagedPath, ActualHash(), "0.4.7", true, "a".PadLeft(40, 'a'));
+
+        var result = await runner.RunAsync(instruction, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), CancellationToken.None);
+
+        Assert.Equal("InstallFailed", result.Outcome);
+        Assert.Equal(nameof(UpdateErrorCategory.UntrustedPublisher), result.ErrorCategory);
+        Assert.Null(installerRunner.LastInstallerPath);
+    }
+
+    [Fact]
     public async Task RunAsync_ExitCode3010_ReportsRebootRequiredTruthfully_NotSucceeded()
     {
-        var runner = new UpdateHelperRunner(new FakeInstallerRunner(3010), new FakeServiceStateProvider("Running"));
+        var runner = new UpdateHelperRunner(new FakeInstallerRunner(3010), new FakeServiceStateProvider("Running", installedVersion: "0.4.7"));
         var instruction = new UpdateHelperInstruction(_stagedPath, ActualHash(), "0.4.7", false, null);
 
         var result = await runner.RunAsync(instruction, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), CancellationToken.None);
 
         Assert.Equal("RebootRequired", result.Outcome);
         Assert.True(result.RebootRequired);
+    }
+
+    [Fact]
+    public async Task RunAsync_InstalledVersionDoesNotMatchExpected_ReportsPostInstallVersionMismatch()
+    {
+        var runner = new UpdateHelperRunner(new FakeInstallerRunner(0), new FakeServiceStateProvider("Running", installedVersion: "0.4.6"));
+        var instruction = new UpdateHelperInstruction(_stagedPath, ActualHash(), "0.4.7", false, null);
+
+        var result = await runner.RunAsync(instruction, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), CancellationToken.None);
+
+        Assert.Equal("InstallFailed", result.Outcome);
+        Assert.Equal(nameof(UpdateErrorCategory.PostInstallVersionMismatch), result.ErrorCategory);
     }
 
     [Fact]

@@ -44,48 +44,80 @@ installs anything — `disabled` only ever answers `{ mode: "disabled" }`,
 `automatic` additionally allows the background loop to install without user
 action (still gated by the queue-drain-safety window, §Background loop).
 
-## Trust model — Authenticode + pinned publisher
+## Trust model — Authenticode + two-layer publisher pinning
 
 No code-signing certificate exists in this repository at any point in its
 history (confirmed: `docs/installer.md` "Code signing (not done in this
 PR)"). This PR does **not** fabricate one. It implements the verification
-side — `AuthenticodeTrustVerifier` (WinVerifyTrust via
-`System.Security.Cryptography.X509Certificates` + `AuthenticodeSignatureInformation`
-availability check) validates:
+side — `AuthenticodeVerifier` (WinVerifyTrust via
+`System.Security.Cryptography.X509Certificates` + a `wintrust.dll` P/Invoke
+wrapper, see `Updates/Trust/AuthenticodeVerifier.cs`) validates:
 
 1. The file has a valid, non-tampered Authenticode signature
-   (`SignerCertificate` chain builds, `TrustStatus == NoError`, exercised via
-   `.NET`'s built-in `System.Management.Automation`-free
-   `System.Security.Cryptography.Pkcs`/WinVerifyTrust P/Invoke wrapper —
-   see `Updates/Trust/AuthenticodeVerifier.cs`).
+   (`WinVerifyTrust` with `WINTRUST_ACTION_GENERIC_VERIFY_V2` — chain builds
+   and is trusted by this machine, code-signing EKU enforced by that action).
 2. The signer's certificate **thumbprint** matches
-   `IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT` byte-for-byte (case
-   insensitive, hex-normalized comparison — never a substring/"contains"
-   check). This is a pinned identity, not "any signature Windows currently
-   trusts" — a differently-issued cert for the same subject name is rejected.
+   `IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT` (the release descriptor's
+   declared signer) byte-for-byte (case-insensitive, hex-normalized — never
+   a substring/"contains" check).
+
+**A prior revision of this design stopped there.** An explicit threat-model
+review of PR #149 found that check #2 alone means the trust anchor is
+entirely "whatever the server's release descriptor says" — a compromised
+backend, a compromised `IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT`
+deployment value, a stolen bridge bearer credential, or DNS/TLS control over
+the update endpoint could all cause the bridge to accept a release "signed"
+by any Authenticode certificate the attacker controls (even one that
+chain-validates cleanly), because nothing on the bridge side constrained
+which signer identity the server was allowed to declare.
+
+**Fix: a third, independent check.** `Trust/PinnedPublisherThumbprints.cs`
+is a bridge-local, compiled-in allowlist of accepted signer thumbprints —
+never read from the server, ProgramData, the registry, or any runtime
+config. Both `UpdateManager.StageAsync` (download-time verification) and
+`UpdateHelperRunner.RunAsync` (the LocalSystem install-time re-verification,
+independently) now require the signer thumbprint to be in this local
+allowlist *in addition to* matching the server's declared thumbprint. The
+server can narrow the accepted signer for one release; it can never expand
+the set of signers this bridge will ever trust. `UpdateErrorCategory.UntrustedPublisher`
+is the resulting fail-closed state when a release passes Authenticode and
+matches its own declared thumbprint but that thumbprint isn't pinned locally.
+
+`PinnedPublisherThumbprints.Values` is **empty** until NoraMedi's production
+code-signing certificate is provisioned (PR 7 scope, see "What PR 7 still
+owns" below). While empty, every production release is rejected as
+`UntrustedPublisher` — this is the correct default for a LocalSystem-
+privileged updater: the check exists and fails closed today, rather than
+silently trusting the server, so PR 7 only has to populate two thumbprint
+constants rather than design a trust mechanism from scratch.
 
 Production installation (`RequireTrustedSignature=true`, the default) refuses
-an unsigned installer or one signed by any thumbprint other than the pinned
-one. For **local test-signing only** (this PR's own physical acceptance
-run), the pinned thumbprint is a value the test harness itself generates and
-trusts via `Updates:RequireTrustedSignature=false` + an explicit
-`Updates:TestPublisherThumbprint` override — never shipped, never the
-production default, and the ephemeral cert/key are deleted after the test
-run (§ physical acceptance).
+an unsigned installer, one signed by a thumbprint other than the one the
+server declared, or one whose (matching) thumbprint isn't in the local
+allowlist. For **local test-signing only** (this PR's own physical
+acceptance run), the pinned thumbprint is a value the test harness itself
+generates, trusts via `Updates:RequireTrustedSignature=false`, and passes as
+`pinnedThumbprintOverride`/`trustVerifierOverride` test seams — never
+shipped, never the production default, and the ephemeral cert/key are
+deleted after the test run (§ physical acceptance).
 
-**Key rotation:** rotating the signing certificate means publishing the new
-thumbprint via `IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT` *before* any
-release is signed with the new key — a bridge polling the old thumbprint
-value will fail-closed-reject a release signed by the new (not-yet-pinned)
-cert, which is the safe direction to fail. There is no in-band key rotation
-message; rotation is an out-of-band operational deploy of the env var,
-documented in `docs/update-runbook.md`.
+**Key rotation:** add the new thumbprint to `PinnedPublisherThumbprints.Values`
+*before* publishing it via `IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT` —
+both entries ("current" + "next") stay accepted simultaneously during the
+overlap window, so a bridge that hasn't yet updated past the cutover release
+still accepts releases signed by either cert. The compiled-in list is
+updated via a normal source-controlled code change and ships in the next
+Core binary — an explicit, reviewable engineering change, not an
+operational-only env var flip (which is exactly the property that closes
+the server-can't-redefine-the-trust-root gap above). Documented further in
+`docs/update-runbook.md`.
 
 **No separate signed release-manifest is added.** Authenticode signing of
-the installer executable itself, combined with SHA-256 pinning of that exact
-file by the authenticated HTTPS release descriptor, is the trust boundary —
-a second signed-manifest layer would duplicate the same guarantee (the
-descriptor already comes over an authenticated HTTPS channel) without
+the installer executable itself, the bridge's own compiled-in publisher
+allowlist, combined with SHA-256 pinning of that exact file by the
+authenticated HTTPS release descriptor, is the trust boundary — a second
+signed-manifest layer with an offline-pinned public key would duplicate the
+same guarantee Authenticode + the local allowlist already provide, without
 closing an additional gap, so it was scoped out rather than built
 speculatively.
 
@@ -164,17 +196,24 @@ The helper:
    publisher thumbprint itself — it does not trust the Service's prior
    verification blindly (defense in depth: if the Service process were
    somehow compromised after verifying but before launching the helper, the
-   helper is the last gate before `msiexec` runs).
+   helper is the last gate before `msiexec` runs). The re-verified thumbprint
+   is checked against the same bridge-local `PinnedPublisherThumbprints`
+   allowlist the Service used, independently — not against anything the
+   instruction file itself asserts about what's "trusted".
 2. Runs `NoraMediBridgeSetup.exe /quiet /norestart` via
    `ProcessStartInfo.ArgumentList` (never a shell/cmd string) — the exact
    flags `docs/installer.md` documents as the supported silent-upgrade
    invocation.
 3. Waits (bounded, default 180s) for the process to exit, capturing the exit
    code.
-4. Polls `SCM` for `NoraMediBridge` to reach `Running` (bounded wait) — only
-   then does it write `Succeeded` to the shared state file. A timeout writes
-   `InstallFailed` with a retryable=false category (needs support triage,
-   not an automatic retry loop).
+4. Polls `SCM` for `NoraMediBridge` to reach `Running` (bounded wait), then
+   independently confirms the *installed* product version (read from the
+   service binary's own `FileVersionInfo`, not anything the installer's exit
+   code claims) matches `ExpectedVersion` — only then does it write
+   `Succeeded`. A version mismatch writes `InstallFailed` with
+   `PostInstallVersionMismatch` rather than a false `Succeeded`. An SCM
+   timeout writes `InstallFailed` with a retryable=false category (needs
+   support triage, not an automatic retry loop).
 5. Recognizes MSI/Burn reboot-required exit codes (`ERROR_SUCCESS_REBOOT_REQUIRED`
    = 3010, and Burn's own reboot-pending signal) and writes `RebootRequired`
    truthfully instead of `Succeeded`.
@@ -184,10 +223,13 @@ The helper:
    It does not stay resident.
 
 The helper is intentionally **not** a generic command runner: its instruction
-schema has exactly three fields (staged file path it independently
-re-validates, expected SHA-256, expected version) and it only ever invokes
-one fixed executable name it itself resolves from the staging directory —
-there is no field that lets a caller name an arbitrary program.
+schema (`UpdateHelperInstruction`) has exactly five fields — staged file path
+it independently re-validates, expected SHA-256, expected version,
+`RequireTrustedSignature`, and the server-declared publisher thumbprint (also
+independently re-checked against the bridge-local allowlist) — and it only
+ever invokes one fixed executable name it itself resolves from the staging
+directory. There is no field that lets a caller name an arbitrary program,
+URL, or command line.
 
 ## Background checking loop
 
@@ -224,7 +266,11 @@ the real running total the downloader reports over IPC polling
 
 - Production Authenticode signing credential acquisition/HSM integration —
   this PR builds and tests entirely against an ephemeral local test
-  certificate; no production certificate exists yet.
+  certificate; no production certificate exists yet. Provisioning it also
+  means populating `Trust/PinnedPublisherThumbprints.Values` with the real
+  "current" thumbprint (and, at the next rotation, "next" alongside it) —
+  until that constant is populated, every production release is correctly
+  rejected as `UntrustedPublisher`.
 - Any rollback/auto-revert of a failed installation — not implemented;
   `InstallFailed` is a truthful terminal state requiring manual
   reinstall/support, not an automatic downgrade.

@@ -22,14 +22,15 @@ public class UpdateManagerTests : IDisposable
 
     private (UpdateManager manager, UpdateManagerFakeHandler handler) Make(
         string installedVersion = "0.4.6", bool requireTrustedSignature = false,
-        Func<string, string, SignatureTrustResult>? trustOverride = null)
+        Func<string, string, SignatureTrustResult>? trustOverride = null,
+        Func<string, bool>? pinnedThumbprintOverride = null)
     {
         var handler = new UpdateManagerFakeHandler();
         var apiClient = new BridgeApiClient(new HttpClient(handler), "https://api.noramedi.test");
         var options = new UpdateOptions { UpdatesDirectory = _dir, RequireTrustedSignature = requireTrustedSignature };
         var stateStore = new UpdateStateStore(_dir, CurrentUserSid);
         var downloader = new UpdateDownloader(new HttpClient(handler), options, CurrentUserSid);
-        var manager = new UpdateManager(options, stateStore, downloader, apiClient, installedVersion, NullLogger.Instance, trustOverride);
+        var manager = new UpdateManager(options, stateStore, downloader, apiClient, installedVersion, NullLogger.Instance, trustOverride, pinnedThumbprintOverride);
         return (manager, handler);
     }
 
@@ -155,6 +156,24 @@ public class UpdateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task CheckAsync_NotifyMode_FeedsRealDownloadByteCountIntoState()
+    {
+        // Regression test for the Copilot-flagged gap: StageAsync never passed an IProgress callback
+        // into UpdateDownloader.DownloadAsync, so TotalBytes stayed null and DownloadedBytes stuck at
+        // whatever it was before the transfer — the Manager's "X of Y MB" label could never be real.
+        var body = Encoding.UTF8.GetBytes("installer-bytes-for-progress-check");
+        var (manager, handler) = Make(installedVersion: "0.4.6");
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body)));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Verified, state.Lifecycle);
+        Assert.Equal(body.Length, state.TotalBytes);
+        Assert.Equal(body.Length, state.DownloadedBytes);
+    }
+
+    [Fact]
     public async Task CheckAsync_UnsignedReleaseWhenTrustRequired_VerificationFailsUnsigned()
     {
         var body = Encoding.UTF8.GetBytes("payload");
@@ -186,13 +205,72 @@ public class UpdateManagerTests : IDisposable
     public async Task CheckAsync_TrustedPublisher_ReachesVerifiedState()
     {
         var body = Encoding.UTF8.GetBytes("trusted-installer");
-        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        var (manager, handler) = Make(
+            installedVersion: "0.4.6", requireTrustedSignature: true,
+            trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => true);
         handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
         handler.DownloadBytes = body;
 
         var state = await manager.CheckAsync("cred", CancellationToken.None);
 
         Assert.Equal(UpdateLifecycleState.Verified, state.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CheckAsync_TrustedPublisherButNotInPinnedAllowlist_VerificationFailsUntrustedPublisher()
+    {
+        // The server's declared thumbprint matching what Authenticode verified is not enough on its
+        // own — a compromised server/release-config could declare any signer it controls. The bridge's
+        // own compiled-in allowlist (Trust.PinnedPublisherThumbprints) is the independent trust anchor
+        // the server cannot redefine.
+        var body = Encoding.UTF8.GetBytes("trusted-installer");
+        var (manager, handler) = Make(
+            installedVersion: "0.4.6", requireTrustedSignature: true,
+            trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => false);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.VerificationFailed, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.UntrustedPublisher, state.ErrorCategory);
+        Assert.False(File.Exists(state.StagedInstallerPath));
+    }
+
+    [Fact]
+    public async Task CheckAsync_ProductionDefaultEmptyAllowlist_FailsClosedEvenWithServerTrustedPublisher()
+    {
+        // No pinnedThumbprintOverride supplied: exercises the real shipped default
+        // (Trust.PinnedPublisherThumbprints.Values is empty pending PR 7's production certificate).
+        // A server that returns a thumbprint Authenticode happily verifies must still be rejected.
+        var body = Encoding.UTF8.GetBytes("trusted-installer");
+        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.VerificationFailed, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.UntrustedPublisher, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_AfterPriorRebootRequired_ClearsStaleRebootRequiredFlag()
+    {
+        // Regression test for the Copilot-flagged "RebootRequired sticky forever" bug: SetState's
+        // OR-forward previously meant a reboot-required install result never got cleared by any
+        // later check, even a later UpToDate result implying the machine is already current.
+        var (manager, handler) = Make(installedVersion: "0.4.7");
+        manager.RecordInstallResult(UpdateLifecycleState.RebootRequired, UpdateErrorCategory.None, rebootRequired: true);
+        Assert.True(manager.CurrentState.RebootRequired);
+
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf([1])));
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.UpToDate, state.Lifecycle);
+        Assert.False(state.RebootRequired);
     }
 
     [Fact]
@@ -225,7 +303,10 @@ public class UpdateManagerTests : IDisposable
     public async Task CheckAsync_TrustedPublisher_ThenTryLaunchInstall_TransitionsToInstallLaunched()
     {
         var body = Encoding.UTF8.GetBytes("trusted-installer");
-        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        var (manager, handler) = Make(
+            installedVersion: "0.4.6", requireTrustedSignature: true,
+            trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => true);
         handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
         handler.DownloadBytes = body;
         await manager.CheckAsync("cred", CancellationToken.None);
@@ -246,7 +327,10 @@ public class UpdateManagerTests : IDisposable
         // every time trust is required.
         var body = Encoding.UTF8.GetBytes("trusted-installer");
         var thumbprint = "b".PadLeft(40, 'b');
-        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        var (manager, handler) = Make(
+            installedVersion: "0.4.6", requireTrustedSignature: true,
+            trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => true);
         handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: thumbprint));
         handler.DownloadBytes = body;
 

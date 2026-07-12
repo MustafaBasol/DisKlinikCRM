@@ -16,6 +16,9 @@ public interface IServiceStateProvider
 {
     /// <summary>Returns the service's <c>ServiceControllerStatus</c> name (e.g. "Running"), or null if the service is not installed/queryable.</summary>
     string? GetStatus(string serviceName);
+
+    /// <summary>Returns the installed product version of the service's own binary (e.g. its assembly/file version), or null if it cannot be determined.</summary>
+    string? GetInstalledProductVersion(string serviceName);
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -68,6 +71,47 @@ public sealed class WindowsServiceStateProvider : IServiceStateProvider
             return null;
         }
     }
+
+    /// <summary>
+    /// Resolves the service's ImagePath from the SCM registry key and reads
+    /// the FileVersionInfo off the actual binary on disk — independent of
+    /// anything the just-run installer or instruction file claims, so a
+    /// silent-installer exit code alone can never be mistaken for "the
+    /// expected version is actually running".
+    /// </summary>
+    public string? GetInstalledProductVersion(string serviceName)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                $@"SYSTEM\CurrentControlSet\Services\{serviceName}");
+            var imagePath = key?.GetValue("ImagePath") as string;
+            if (string.IsNullOrWhiteSpace(imagePath)) return null;
+
+            var exePath = ExtractExecutablePath(imagePath);
+            if (exePath is null || !File.Exists(exePath)) return null;
+
+            var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(exePath);
+            return info.ProductVersion ?? info.FileVersion;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ExtractExecutablePath(string imagePath)
+    {
+        var trimmed = imagePath.Trim();
+        if (trimmed.StartsWith('"'))
+        {
+            var closingQuote = trimmed.IndexOf('"', 1);
+            return closingQuote > 0 ? trimmed[1..closingQuote] : null;
+        }
+
+        var spaceIndex = trimmed.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+        return spaceIndex > 0 ? trimmed[..(spaceIndex + 4)] : trimmed;
+    }
 }
 
 /// <summary>
@@ -82,7 +126,8 @@ public sealed class WindowsServiceStateProvider : IServiceStateProvider
 public sealed class UpdateHelperRunner(
     ISilentInstallerRunner installerRunner,
     IServiceStateProvider serviceStateProvider,
-    Func<string, string, SignatureTrustResult>? trustVerifierOverride = null)
+    Func<string, string, SignatureTrustResult>? trustVerifierOverride = null,
+    Func<string, bool>? pinnedThumbprintOverride = null)
 {
     public const string ServiceName = "NoraMediBridge";
     private const int ExitCodeSuccess = 0;
@@ -96,41 +141,80 @@ public sealed class UpdateHelperRunner(
             return Fail(UpdateErrorCategory.InstallerFailure, null);
         }
 
-        var actualHash = ComputeSha256(instruction.StagedInstallerPath);
-        if (!string.Equals(actualHash, instruction.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+        // Held open (FileShare.Read: readers/the installer's own execute-open are fine, writers are
+        // not) from the moment we first read the file for hashing all the way through the installer
+        // process actually running — closes the TOCTOU window where hash/signature verification and
+        // execution each separately re-open the file by path with nothing preventing substitution in
+        // between. A non-admin attacker still can't write here (ProgramDataAcl.ProtectFile already
+        // restricts the staging directory to LocalSystem/Administrators), but this removes reliance
+        // on that ACL being the *only* thing closing the gap.
+        FileStream lockStream;
+        try
         {
-            return Fail(UpdateErrorCategory.HashMismatch, null);
+            lockStream = new FileStream(instruction.StagedInstallerPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         }
-
-        if (instruction.RequireTrustedSignature)
-        {
-            if (string.IsNullOrEmpty(instruction.ExpectedPublisherThumbprint))
-            {
-                return Fail(UpdateErrorCategory.UnsignedPackage, null);
-            }
-
-            var trust = trustVerifierOverride is not null
-                ? trustVerifierOverride(instruction.StagedInstallerPath, instruction.ExpectedPublisherThumbprint)
-                : AuthenticodeVerifier.Verify(instruction.StagedInstallerPath, instruction.ExpectedPublisherThumbprint);
-
-            if (trust != SignatureTrustResult.TrustedPublisher)
-            {
-                var category = trust switch
-                {
-                    SignatureTrustResult.Unsigned => UpdateErrorCategory.UnsignedPackage,
-                    SignatureTrustResult.WrongPublisher => UpdateErrorCategory.WrongPublisher,
-                    _ => UpdateErrorCategory.TamperedSignature,
-                };
-                return Fail(category, null);
-            }
-        }
-
-        var exitCode = await installerRunner.RunAsync(instruction.StagedInstallerPath, installTimeout, cancellationToken);
-        if (exitCode is null)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return Fail(UpdateErrorCategory.InstallerFailure, null);
         }
 
+        using (lockStream)
+        {
+            var actualHash = ComputeSha256(lockStream);
+            if (!string.Equals(actualHash, instruction.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                return Fail(UpdateErrorCategory.HashMismatch, null);
+            }
+
+            if (instruction.RequireTrustedSignature)
+            {
+                if (string.IsNullOrEmpty(instruction.ExpectedPublisherThumbprint))
+                {
+                    return Fail(UpdateErrorCategory.UnsignedPackage, null);
+                }
+
+                var trust = trustVerifierOverride is not null
+                    ? trustVerifierOverride(instruction.StagedInstallerPath, instruction.ExpectedPublisherThumbprint)
+                    : AuthenticodeVerifier.Verify(instruction.StagedInstallerPath, instruction.ExpectedPublisherThumbprint);
+
+                if (trust != SignatureTrustResult.TrustedPublisher)
+                {
+                    var category = trust switch
+                    {
+                        SignatureTrustResult.Unsigned => UpdateErrorCategory.UnsignedPackage,
+                        SignatureTrustResult.WrongPublisher => UpdateErrorCategory.WrongPublisher,
+                        _ => UpdateErrorCategory.TamperedSignature,
+                    };
+                    return Fail(category, null);
+                }
+
+                // Defense in depth, same rationale as UpdateManager.StageAsync: the instruction file's
+                // ExpectedPublisherThumbprint ultimately traces back to the server's release descriptor.
+                // The helper is the last gate before LocalSystem code execution, so it independently
+                // checks the thumbprint against the bridge's own compiled-in allowlist too — not just
+                // against whatever this instruction file (however trustworthy its ACL) declares.
+                var isPinnedPublisher = pinnedThumbprintOverride is not null
+                    ? pinnedThumbprintOverride(instruction.ExpectedPublisherThumbprint!)
+                    : Trust.PinnedPublisherThumbprints.Contains(instruction.ExpectedPublisherThumbprint!);
+                if (!isPinnedPublisher)
+                {
+                    return Fail(UpdateErrorCategory.UntrustedPublisher, null);
+                }
+            }
+
+            var exitCode = await installerRunner.RunAsync(instruction.StagedInstallerPath, installTimeout, cancellationToken);
+            if (exitCode is null)
+            {
+                return Fail(UpdateErrorCategory.InstallerFailure, null);
+            }
+
+            return await FinishAsync(instruction, exitCode.Value, serviceWaitTimeout, cancellationToken);
+        }
+    }
+
+    private async Task<UpdateHelperResult> FinishAsync(
+        UpdateHelperInstruction instruction, int exitCode, TimeSpan serviceWaitTimeout, CancellationToken cancellationToken)
+    {
         var rebootRequired = exitCode == ExitCodeRebootRequired;
         if (exitCode != ExitCodeSuccess && !rebootRequired)
         {
@@ -142,6 +226,21 @@ public sealed class UpdateHelperRunner(
         {
             if (serviceStateProvider.GetStatus(ServiceName) == "Running")
             {
+                if (!string.IsNullOrEmpty(instruction.ExpectedVersion))
+                {
+                    var installedVersion = serviceStateProvider.GetInstalledProductVersion(ServiceName);
+                    if (!VersionsMatch(installedVersion, instruction.ExpectedVersion))
+                    {
+                        // The installer exited success and the service is Running again, but it is
+                        // not running the version this instruction was staged for — e.g. the wrong
+                        // (older/different) installer file got staged. Reporting "Succeeded" here
+                        // would be a lie the Manager and telemetry would both believe.
+                        return new UpdateHelperResult(
+                            "InstallFailed", nameof(UpdateErrorCategory.PostInstallVersionMismatch),
+                            exitCode, rebootRequired, DateTimeOffset.UtcNow);
+                    }
+                }
+
                 return new UpdateHelperResult(
                     rebootRequired ? "RebootRequired" : "Succeeded",
                     "None", exitCode, rebootRequired, DateTimeOffset.UtcNow);
@@ -157,12 +256,25 @@ public sealed class UpdateHelperRunner(
         return new UpdateHelperResult("InstallFailed", nameof(UpdateErrorCategory.ServiceUnavailable), exitCode, rebootRequired, DateTimeOffset.UtcNow);
     }
 
+    /// <summary>
+    /// Compares only Major.Minor.Build — MSI's own significant fields
+    /// (<see cref="UpdateVersion.IsValidMsiProductVersion"/>) — so a
+    /// FileVersionInfo fourth field (e.g. a build-metadata revision Windows
+    /// Installer never considers) can't cause a false mismatch.
+    /// </summary>
+    private static bool VersionsMatch(string? installedVersion, string expectedVersion)
+    {
+        if (!UpdateVersion.TryParse(installedVersion, out var installed)) return false;
+        if (!UpdateVersion.TryParse(expectedVersion, out var expected)) return false;
+        return installed.Major == expected.Major && installed.Minor == expected.Minor && installed.Build == expected.Build;
+    }
+
     private static UpdateHelperResult Fail(UpdateErrorCategory category, int? exitCode) =>
         new("InstallFailed", category.ToString(), exitCode, false, DateTimeOffset.UtcNow);
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha256(Stream stream)
     {
-        using var stream = File.OpenRead(path);
+        stream.Position = 0;
         using var sha256 = SHA256.Create();
         return Convert.ToHexStringLower(sha256.ComputeHash(stream));
     }

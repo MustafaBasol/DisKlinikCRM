@@ -70,12 +70,16 @@ public enum UpdateErrorCategory
     UnsignedPackage,
     WrongPublisher,
     TamperedSignature,
+    /// <summary>Signature is valid and matches the server-declared thumbprint, but that thumbprint is not in the bridge's own compiled-in trust anchor (<see cref="Trust.PinnedPublisherThumbprints"/>) — the server alone cannot authorize a signer.</summary>
+    UntrustedPublisher,
     InstallerFailure,
     ServiceUnavailable,
     Disabled,
     UnsupportedSourceVersion,
     AlreadyInProgress,
     CorruptState,
+    /// <summary>Installer ran, exited successfully, and the service reached Running, but the installed product version does not match the release that was offered.</summary>
+    PostInstallVersionMismatch,
     Unknown,
 }
 
