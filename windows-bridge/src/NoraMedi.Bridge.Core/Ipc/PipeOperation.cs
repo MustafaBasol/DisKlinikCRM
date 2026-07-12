@@ -14,6 +14,17 @@ public enum PipeOperation
     ExportDiagnostics,
     CheckForUpdates,
 
+    /// <summary>Read-only: reports the last-known update state without triggering a new server round-trip. Same trust tier as CheckForUpdates/GetServiceStatus.</summary>
+    GetUpdateStatus,
+
+    /// <summary>
+    /// Installs the release the last successful CheckForUpdates already
+    /// downloaded and verified. Privileged (administrator-only) — see
+    /// PipeOperationPolicy and docs/update-architecture.md "IPC contract
+    /// changes". Carries no URL/path/argument fields of any kind.
+    /// </summary>
+    InstallUpdate,
+
     /// <summary>
     /// Redeems a pairing code for a credential. Deliberately NOT called
     /// "ProvisionCredential" — no credential of any kind (plaintext or

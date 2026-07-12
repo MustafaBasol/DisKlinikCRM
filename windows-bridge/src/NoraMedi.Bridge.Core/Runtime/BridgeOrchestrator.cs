@@ -7,6 +7,7 @@ using NoraMedi.Bridge.Core.Http;
 using NoraMedi.Bridge.Core.Ipc;
 using NoraMedi.Bridge.Core.Queue;
 using NoraMedi.Bridge.Core.Security;
+using NoraMedi.Bridge.Core.Updates;
 
 namespace NoraMedi.Bridge.Core.Runtime;
 
@@ -34,6 +35,13 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
     private readonly Lock _drainGate = new();
 
+    private readonly UpdateOptions _updateOptions;
+    private readonly UpdateManager _updateManager;
+    private readonly UpdateDownloader _updateDownloader;
+    private readonly UpdateBackgroundLoop _updateLoop;
+    private readonly HttpClient _updateHttpClient;
+    private readonly bool _ownsUpdateHttpClient;
+
     private FolderWatchAdapter? _watcherAdapter;
     private Timer? _drainTimer;
     private Timer? _heartbeatTimer;
@@ -41,7 +49,9 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     private bool _draining;
     private bool _started;
 
-    public BridgeOrchestrator(BridgeOptions options, BridgeApiClient apiClient, string agentVersion, ILogger<BridgeOrchestrator> logger)
+    public BridgeOrchestrator(
+        BridgeOptions options, BridgeApiClient apiClient, string agentVersion, ILogger<BridgeOrchestrator> logger,
+        UpdateOptions? updateOptions = null, HttpClient? updateHttpClient = null)
     {
         _options = options;
         _apiClient = apiClient;
@@ -60,6 +70,20 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         _bindingsStore = new FolderBindingsStore(_options.BindingsPath, _options.ServiceAccountSid);
         _serverBindingsCatalogStore = new ServerBindingsCatalogStore(_options.ServerBindingsCatalogPath, _options.ServiceAccountSid);
         _installationId = InstallationIdProvider.GetOrCreate(_options.InstallationIdPath, _options.ServiceAccountSid);
+
+        _updateOptions = updateOptions ?? new UpdateOptions { UpdatesDirectory = Path.Combine(_options.ProgramDataRoot, "updates") };
+        _ownsUpdateHttpClient = updateHttpClient is null;
+        _updateHttpClient = updateHttpClient ?? new HttpClient();
+        var updateStateStore = new UpdateStateStore(_updateOptions.UpdatesDirectory, _options.ServiceAccountSid);
+        _updateDownloader = new UpdateDownloader(_updateHttpClient, _updateOptions, _options.ServiceAccountSid);
+        _updateManager = new UpdateManager(_updateOptions, updateStateStore, _updateDownloader, _apiClient, _agentVersion, _logger);
+        _updateLoop = new UpdateBackgroundLoop(
+            _updateManager, _updateDownloader, _updateOptions,
+            () => _authState.TryGetCredential(),
+            () => _queue.Counts()[QueueItemState.Processing] > 0,
+            () => _updateManager.LastKnownMode,
+            OnAutomaticInstallReady,
+            _logger);
     }
 
     public void Start()
@@ -79,6 +103,9 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
 
         _drainTimer = new Timer(_ => _ = SafeDrainOnceAsync(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(_options.DrainPollMs));
         _heartbeatTimer = new Timer(_ => _ = SafeHeartbeatTickAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(_options.HeartbeatIntervalSeconds));
+
+        _updateManager.ReconcileHelperResultOnStartup();
+        _updateLoop.Start();
 
         // Re-fetch the server's device/binding catalog on every restart so the
         // Manager's device selector doesn't rely solely on whatever was cached
@@ -496,8 +523,104 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
             watched));
     }
 
-    public Task<CheckForUpdatesResponse> CheckForUpdatesAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(CheckForUpdatesResponse.NotSupported());
+    public async Task<UpdateStatusPayload> CheckForUpdatesAsync(CancellationToken cancellationToken)
+    {
+        if (!_options.Enabled) return ToUpdateStatusPayload(UpdateState.Idle(_agentVersion) with { Lifecycle = UpdateLifecycleState.Disabled, ErrorCategory = UpdateErrorCategory.Disabled });
+        var credential = _authState.TryGetCredential();
+        var state = await _updateManager.CheckAsync(credential, cancellationToken);
+        return ToUpdateStatusPayload(state);
+    }
+
+    public Task<UpdateStatusPayload> GetUpdateStatusAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(ToUpdateStatusPayload(_updateManager.CurrentState));
+
+    /// <summary>
+    /// Launches the narrow, purpose-built update helper process (see
+    /// docs/update-architecture.md "Self-update handoff") against the
+    /// release the last successful check already downloaded and verified.
+    /// Never accepts any parameter that could redirect what gets installed
+    /// — see <see cref="InstallUpdateRequest"/>.
+    /// </summary>
+    public Task<InstallUpdateResponse> InstallUpdateAsync(InstallUpdateRequest request, CancellationToken cancellationToken)
+    {
+        var state = _updateManager.TryLaunchInstall();
+        if (state.Lifecycle != UpdateLifecycleState.InstallLaunched)
+        {
+            return Task.FromResult(new InstallUpdateResponse(false, ToUpdateStatusPayload(state), "No verified update is staged to install."));
+        }
+
+        var launched = TryLaunchUpdateHelper(state);
+        if (!launched)
+        {
+            _updateManager.RecordInstallResult(UpdateLifecycleState.InstallFailed, UpdateErrorCategory.Unknown, rebootRequired: false);
+        }
+
+        return Task.FromResult(new InstallUpdateResponse(launched, ToUpdateStatusPayload(_updateManager.CurrentState), launched ? null : "Failed to launch the update helper process."));
+    }
+
+    private bool TryLaunchUpdateHelper(UpdateState state)
+    {
+        try
+        {
+            var helperExe = Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe");
+            if (!File.Exists(helperExe))
+            {
+                _logger.LogError("update.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(helperExe));
+                return false;
+            }
+
+            var instructionPath = Path.Combine(_updateOptions.UpdatesDirectory, "helper-instruction.json");
+            // The expected publisher thumbprint travels with the staged
+            // state (the value the server's release descriptor declared and
+            // UpdateManager already verified against at staging time) — NOT
+            // a separate local config value — so the helper's defense-in-depth
+            // re-check validates against the exact same trust anchor.
+            var instruction = new UpdateHelperInstruction(
+                state.StagedInstallerPath!, state.StagedInstallerSha256!, state.OfferedVersion!,
+                _updateOptions.RequireTrustedSignature, state.StagedPublisherThumbprint);
+            var json = System.Text.Json.JsonSerializer.Serialize(instruction, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            var tmp = instructionPath + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, instructionPath, overwrite: true);
+            ProgramDataAcl.ProtectFile(instructionPath, _options.ServiceAccountSid);
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = helperExe,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add(instructionPath);
+            using var process = System.Diagnostics.Process.Start(psi);
+            return process is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            _logger.LogError(ex, "update.helper_launch_failed");
+            return false;
+        }
+    }
+
+    private void OnAutomaticInstallReady(UpdateState state)
+    {
+        var launchedState = _updateManager.TryLaunchInstall();
+        if (launchedState.Lifecycle != UpdateLifecycleState.InstallLaunched) return;
+
+        if (!TryLaunchUpdateHelper(launchedState))
+        {
+            _updateManager.RecordInstallResult(UpdateLifecycleState.InstallFailed, UpdateErrorCategory.Unknown, rebootRequired: false);
+        }
+    }
+
+    private static UpdateStatusPayload ToUpdateStatusPayload(UpdateState state) => new(
+        state.Lifecycle.ToString(),
+        state.InstalledVersion,
+        state.OfferedVersion,
+        state.DownloadedBytes,
+        state.TotalBytes,
+        state.ErrorCategory.ToString(),
+        state.RebootRequired,
+        state.UpdatedAtUtc);
 
     public async Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken)
     {
@@ -570,6 +693,8 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         if (_drainTimer is not null) await _drainTimer.DisposeAsync();
         if (_heartbeatTimer is not null) await _heartbeatTimer.DisposeAsync();
         if (_watcherAdapter is not null) await _watcherAdapter.DisposeAsync();
+        await _updateLoop.DisposeAsync();
+        if (_ownsUpdateHttpClient) _updateHttpClient.Dispose();
         _queue.Dispose();
     }
 }

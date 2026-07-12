@@ -286,6 +286,12 @@ public sealed class BridgePipeServer : IAsyncDisposable
             case PipeOperation.CheckForUpdates:
                 return Ok(await _handler.CheckForUpdatesAsync(cancellationToken));
 
+            case PipeOperation.GetUpdateStatus:
+                return Ok(await _handler.GetUpdateStatusAsync(cancellationToken));
+
+            case PipeOperation.InstallUpdate:
+                return Ok(await _handler.InstallUpdateAsync(new InstallUpdateRequest(), cancellationToken));
+
             case PipeOperation.ProvisionWithPairingCode:
                 {
                     var req = Deserialize<ProvisionWithPairingCodeRequest>(payloadJson);

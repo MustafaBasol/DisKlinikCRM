@@ -1,0 +1,260 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
+using NoraMedi.Bridge.Core.Http;
+using NoraMedi.Bridge.Core.Updates;
+using NoraMedi.Bridge.Core.Updates.Trust;
+
+namespace NoraMedi.Bridge.Core.Tests.Updates;
+
+public class UpdateManagerTests : IDisposable
+{
+    private readonly string _dir = Directory.CreateTempSubdirectory("nmb-updatemgr-").FullName;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly string CurrentUserSid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
+    }
+
+    private (UpdateManager manager, UpdateManagerFakeHandler handler) Make(
+        string installedVersion = "0.4.6", bool requireTrustedSignature = false,
+        Func<string, string, SignatureTrustResult>? trustOverride = null)
+    {
+        var handler = new UpdateManagerFakeHandler();
+        var apiClient = new BridgeApiClient(new HttpClient(handler), "https://api.noramedi.test");
+        var options = new UpdateOptions { UpdatesDirectory = _dir, RequireTrustedSignature = requireTrustedSignature };
+        var stateStore = new UpdateStateStore(_dir, CurrentUserSid);
+        var downloader = new UpdateDownloader(new HttpClient(handler), options, CurrentUserSid);
+        var manager = new UpdateManager(options, stateStore, downloader, apiClient, installedVersion, NullLogger.Instance, trustOverride);
+        return (manager, handler);
+    }
+
+    private static string ConfigJson(string mode, object? release) =>
+        JsonSerializer.Serialize(new { mode, release }, JsonOptions);
+
+    private static object Release(string version, string sha256, bool signed = false, string? publisherThumbprint = null, string? minimumSourceVersion = null) => new
+    {
+        version,
+        downloadUrl = "https://cdn.example.com/setup.exe",
+        sha256,
+        signed,
+        publisherThumbprint,
+        minimumSourceVersion,
+        notes = (string?)null,
+    };
+
+    private static string HashOf(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    [Fact]
+    public async Task CheckAsync_NoCredential_ReturnsDisabledServiceUnavailable()
+    {
+        var (manager, _) = Make();
+        var state = await manager.CheckAsync(null, CancellationToken.None);
+        Assert.Equal(UpdateLifecycleState.Disabled, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.ServiceUnavailable, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_ServerModeDisabled_ReturnsDisabled()
+    {
+        var (manager, handler) = Make();
+        handler.ConfigJson = ConfigJson("disabled", null);
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Disabled, state.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CheckAsync_NetworkFailure_ReturnsDisabledWithNetworkFailureCategory()
+    {
+        var (manager, handler) = Make();
+        handler.ConfigStatus = HttpStatusCode.InternalServerError;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Disabled, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.NetworkFailure, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_EqualVersion_ReturnsUpToDate_NeverStages()
+    {
+        var (manager, handler) = Make(installedVersion: "0.4.7");
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf([1])));
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.UpToDate, state.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CheckAsync_OlderOfferedVersion_ReturnsUpToDate_AntiDowngrade()
+    {
+        var (manager, handler) = Make(installedVersion: "0.4.7");
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.6", HashOf([1])));
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.UpToDate, state.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CheckAsync_MalformedOfferedVersion_ReturnsUnsupported()
+    {
+        var (manager, handler) = Make();
+        handler.ConfigJson = ConfigJson("notify", Release("not-a-version", HashOf([1])));
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Unsupported, state.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CheckAsync_InstalledBelowMinimumSourceVersion_ReturnsUnsupported()
+    {
+        var (manager, handler) = Make(installedVersion: "0.3.0");
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf([1]), minimumSourceVersion: "0.4.0"));
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Unsupported, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.UnsupportedSourceVersion, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_NotifyMode_NewerVersion_HashMismatchIsReportedTruthfully()
+    {
+        var (manager, handler) = Make(installedVersion: "0.4.6");
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf([9, 9, 9])));
+        handler.DownloadBytes = Encoding.UTF8.GetBytes("different-bytes-than-the-hash-expects");
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.VerificationFailed, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.HashMismatch, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_NotifyMode_NewerVersion_MatchingHash_ReachesVerified_TrustNotRequired()
+    {
+        var body = Encoding.UTF8.GetBytes("installer-bytes");
+        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: false);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body)));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Verified, state.Lifecycle);
+        Assert.NotNull(manager.CurrentState.StagedInstallerPath);
+        Assert.True(File.Exists(manager.CurrentState.StagedInstallerPath));
+    }
+
+    [Fact]
+    public async Task CheckAsync_UnsignedReleaseWhenTrustRequired_VerificationFailsUnsigned()
+    {
+        var body = Encoding.UTF8.GetBytes("payload");
+        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: false));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.VerificationFailed, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.UnsignedPackage, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_WrongPublisher_VerificationFailsWithWrongPublisherCategory()
+    {
+        var body = Encoding.UTF8.GetBytes("payload");
+        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.WrongPublisher);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.VerificationFailed, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.WrongPublisher, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_TrustedPublisher_ReachesVerifiedState()
+    {
+        var body = Encoding.UTF8.GetBytes("trusted-installer");
+        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Verified, state.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CheckAsync_ConcurrentCalls_SecondReturnsAlreadyInProgress()
+    {
+        var (manager, handler) = Make();
+        handler.ConfigJson = ConfigJson("disabled", null);
+        handler.ConfigDelay = TimeSpan.FromMilliseconds(200);
+
+        var first = manager.CheckAsync("cred", CancellationToken.None);
+        await Task.Delay(20); // let the first call actually acquire the gate before the second races it
+        var second = await manager.CheckAsync("cred", CancellationToken.None);
+        await first;
+
+        Assert.Equal(UpdateErrorCategory.AlreadyInProgress, second.ErrorCategory);
+    }
+
+    [Fact]
+    public void TryLaunchInstall_WithoutVerifiedState_ReturnsAlreadyInProgressNeverLaunches()
+    {
+        var (manager, _) = Make();
+
+        var state = manager.TryLaunchInstall();
+
+        Assert.NotEqual(UpdateLifecycleState.InstallLaunched, state.Lifecycle);
+        Assert.Equal(UpdateErrorCategory.AlreadyInProgress, state.ErrorCategory);
+    }
+
+    [Fact]
+    public async Task CheckAsync_TrustedPublisher_ThenTryLaunchInstall_TransitionsToInstallLaunched()
+    {
+        var body = Encoding.UTF8.GetBytes("trusted-installer");
+        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
+        handler.DownloadBytes = body;
+        await manager.CheckAsync("cred", CancellationToken.None);
+
+        var state = manager.TryLaunchInstall();
+
+        Assert.Equal(UpdateLifecycleState.InstallLaunched, state.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CheckAsync_Verified_PersistsTheServerDeclaredPublisherThumbprint_ForHelperRevalidation()
+    {
+        // Regression test: the helper's defense-in-depth re-check must
+        // validate against the exact thumbprint the server's release
+        // descriptor declared and UpdateManager already verified against —
+        // not a separate, unrelated config value. If this ever regresses to
+        // reading from somewhere else, InstallUpdate would silently fail
+        // every time trust is required.
+        var body = Encoding.UTF8.GetBytes("trusted-installer");
+        var thumbprint = "b".PadLeft(40, 'b');
+        var (manager, handler) = Make(installedVersion: "0.4.6", requireTrustedSignature: true, trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: thumbprint));
+        handler.DownloadBytes = body;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(thumbprint, state.StagedPublisherThumbprint);
+
+        var launched = manager.TryLaunchInstall();
+        Assert.Equal(thumbprint, launched.StagedPublisherThumbprint);
+    }
+}

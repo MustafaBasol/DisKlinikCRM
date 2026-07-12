@@ -1,5 +1,6 @@
 using NoraMedi.Bridge.Core.Http;
 using NoraMedi.Bridge.Core.Runtime;
+using NoraMedi.Bridge.Core.Updates;
 using NoraMedi.Bridge.Service;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -20,11 +21,13 @@ builder.Services.AddSingleton(sp =>
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("BridgeApi");
     return new BridgeApiClient(httpClient, options.ServerUrl);
 });
+builder.Services.AddSingleton(sp => BuildUpdateOptions(builder.Configuration, sp.GetRequiredService<BridgeOptions>()));
 builder.Services.AddSingleton(sp => new BridgeOrchestrator(
     sp.GetRequiredService<BridgeOptions>(),
     sp.GetRequiredService<BridgeApiClient>(),
     AgentVersion.Current,
-    sp.GetRequiredService<ILogger<BridgeOrchestrator>>()));
+    sp.GetRequiredService<ILogger<BridgeOrchestrator>>(),
+    sp.GetRequiredService<UpdateOptions>()));
 
 builder.Services.AddHostedService<Worker>();
 
@@ -60,5 +63,26 @@ static BridgeOptions BuildBridgeOptions(IConfiguration configuration)
         MinFreeDiskBytes = section.GetValue<long?>("MinFreeDiskBytes") ?? 500L * 1024 * 1024,
         FailedRetentionDays = section.GetValue<int?>("FailedRetentionDays") ?? 30,
         CompletedRetentionDays = section.GetValue<int?>("CompletedRetentionDays") ?? 7,
+    };
+}
+
+static UpdateOptions BuildUpdateOptions(IConfiguration configuration, BridgeOptions bridgeOptions)
+{
+    var section = configuration.GetSection("Updates");
+    return new UpdateOptions
+    {
+        UpdatesDirectory = Path.Combine(bridgeOptions.ProgramDataRoot, "updates"),
+        MaxDownloadBytes = section.GetValue<long?>("MaxDownloadBytes") ?? 300L * 1024 * 1024,
+        DownloadTimeoutSeconds = section.GetValue<int?>("DownloadTimeoutSeconds") ?? 300,
+        // Fail closed: both loosening flags below default to the safe
+        // production value regardless of what's missing from config.
+        AllowInsecureLocalhostHttp = section.GetValue<bool?>("AllowInsecureLocalhostHttp") ?? false,
+        RequireTrustedSignature = section.GetValue<bool?>("RequireTrustedSignature") ?? true,
+        CheckIntervalMinutes = section.GetValue<int?>("CheckIntervalMinutes") ?? 240,
+        StartupJitterSeconds = section.GetValue<int?>("StartupJitterSeconds") ?? 600,
+        BackoffBaseMs = section.GetValue<int?>("BackoffBaseMs") ?? 60_000,
+        BackoffCapMs = section.GetValue<int?>("BackoffCapMs") ?? 3_600_000,
+        InstallTimeoutSeconds = section.GetValue<int?>("InstallTimeoutSeconds") ?? 180,
+        StagedFileRetentionDays = section.GetValue<int?>("StagedFileRetentionDays") ?? 14,
     };
 }

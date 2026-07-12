@@ -164,12 +164,30 @@ public class BridgePipeServerTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 15000)]
-    public async Task CheckForUpdates_ReturnsTruthfulNotSupportedStatus()
+    public async Task CheckForUpdates_ReturnsRealStatusFromHandler()
     {
         var response = await BridgePipeClient.SendAsync(_pipeName, PipeOperation.CheckForUpdates);
-        var payload = BridgePipeClient.DeserializePayload<CheckForUpdatesResponse>(response);
+        var payload = BridgePipeClient.DeserializePayload<UpdateStatusPayload>(response);
 
-        Assert.False(payload!.Supported);
+        Assert.Equal("UpToDate", payload!.Lifecycle);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task GetUpdateStatus_RoundTripsThroughRealPipe()
+    {
+        var response = await BridgePipeClient.SendAsync(_pipeName, PipeOperation.GetUpdateStatus);
+        Assert.True(response.Success);
+        var payload = BridgePipeClient.DeserializePayload<UpdateStatusPayload>(response);
+        Assert.Equal("UpToDate", payload!.Lifecycle);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task InstallUpdate_AsAdministrator_RoundTripsThroughRealPipe()
+    {
+        var response = await BridgePipeClient.SendAsync(_pipeName, PipeOperation.InstallUpdate, new InstallUpdateRequest());
+        Assert.True(response.Success);
+        var payload = BridgePipeClient.DeserializePayload<InstallUpdateResponse>(response);
+        Assert.False(payload!.Launched); // fake handler has nothing staged to install
     }
 
     [Fact(Timeout = 15000)]

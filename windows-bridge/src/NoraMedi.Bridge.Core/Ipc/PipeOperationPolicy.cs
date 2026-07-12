@@ -22,12 +22,18 @@ public static class PipeOperationPolicy
         PipeOperation.RetryFailedItem,
         PipeOperation.TestConnection,
         PipeOperation.ProvisionWithPairingCode,
+
+        // Installing an update as LocalSystem is the highest-privilege
+        // action this pipe exposes — same tier as provisioning, never
+        // reachable by a non-admin local caller. See docs/update-architecture.md.
+        PipeOperation.InstallUpdate,
     ];
 
     private static readonly HashSet<PipeOperation> AllowedWhenFeatureDisabled =
     [
         PipeOperation.GetServiceStatus,
         PipeOperation.CheckForUpdates,
+        PipeOperation.GetUpdateStatus,
     ];
 
     // GetAvailableServerBindings deliberately appears in neither set above:

@@ -75,10 +75,22 @@ internal sealed class FakeBridgePipeRequestHandler : IBridgePipeRequestHandler
         return Task.FromResult(new DiagnosticsSnapshot("1.0.0", "install-123", DateTimeOffset.UtcNow, "online", "valid", DateTimeOffset.UtcNow, 1, 0, 0, 5, [new WatchFolderDiagnostics("watch-1", true)]));
     }
 
-    public Task<CheckForUpdatesResponse> CheckForUpdatesAsync(CancellationToken cancellationToken)
+    public Task<UpdateStatusPayload> CheckForUpdatesAsync(CancellationToken cancellationToken)
     {
         Record(nameof(CheckForUpdatesAsync));
-        return Task.FromResult(CheckForUpdatesResponse.NotSupported());
+        return Task.FromResult(new UpdateStatusPayload("UpToDate", "1.0.0", null, 0, null, "None", false, DateTimeOffset.UtcNow));
+    }
+
+    public Task<UpdateStatusPayload> GetUpdateStatusAsync(CancellationToken cancellationToken)
+    {
+        Record(nameof(GetUpdateStatusAsync));
+        return Task.FromResult(new UpdateStatusPayload("UpToDate", "1.0.0", null, 0, null, "None", false, DateTimeOffset.UtcNow));
+    }
+
+    public Task<InstallUpdateResponse> InstallUpdateAsync(InstallUpdateRequest request, CancellationToken cancellationToken)
+    {
+        Record(nameof(InstallUpdateAsync));
+        return Task.FromResult(new InstallUpdateResponse(false, new UpdateStatusPayload("UpToDate", "1.0.0", null, 0, null, "None", false, DateTimeOffset.UtcNow), "Nothing to install."));
     }
 
     public Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken)
