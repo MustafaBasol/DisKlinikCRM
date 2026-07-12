@@ -28,6 +28,7 @@ import prisma from '../db.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { generateBridgeToken, hashBridgeToken } from '../services/imaging/bridgeTokens.js';
+import { getBridgeUpdateConfig } from '../services/imaging/bridgeUpdateConfig.js';
 import { hashPairingCode, normalizePairingCodeInput } from '../services/imaging/bridgePairing.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { buildStorageKey, deleteFile, fileNameFromKey, saveFile } from '../services/fileStorage.js';
@@ -60,6 +61,9 @@ const uploadTokenLimiter = createRateLimiter(30, 60 * 1000, 'imaging-bridge-uplo
 // bu limitler yalnızca ek savunma katmanıdır (defense in depth).
 const pairIpLimiter = createRateLimiter(20, 60 * 1000, 'imaging-bridge-pair-ip');
 const pairCodeLimiter = createRateLimiter(10, 60 * 60 * 1000, 'imaging-bridge-pair-code');
+
+// Background update-check loop polls at most every few hours per bridge; this is a generous ceiling against a misbehaving/compromised agent.
+const updateTokenLimiter = createRateLimiter(10, 60 * 1000, 'imaging-bridge-update-token');
 
 // Eşzamanlı yükleme sınırı: bellek-tabanlı upload'ları (multer memoryStorage)
 // tek bir ajanın onlarca dosyayı aynı anda paralel göndermesinden korur.
@@ -575,6 +579,26 @@ router.get('/imaging/bridge/bootstrap', async (req: Request, res: Response) => {
     });
   } catch {
     res.status(500).json({ error: 'Failed to fetch bootstrap information' });
+  }
+});
+
+// GET /api/public/imaging/bridge/update — köprü token'ı ile kimlik doğrulanır;
+// yanıt hiçbir klinik/hasta verisi içermez, yalnızca yayın açıklayıcısı
+// (mode + varsa release). İstemci hiçbir zaman kendi URL/hash/sürüm bilgisini
+// göndermez — sunucu tarafı tek doğru kaynak (bridgeUpdateConfig.ts).
+router.get('/imaging/bridge/update', async (req: Request, res: Response) => {
+  try {
+    const authResult = await authenticateBridgeAgent(req);
+    if (!authResult) return res.status(401).json({ error: 'Unauthorized' });
+    const { tokenHash } = authResult;
+
+    if (!(await updateTokenLimiter.check(tokenHash))) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+
+    res.json(getBridgeUpdateConfig());
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch update information' });
   }
 });
 
