@@ -1,0 +1,93 @@
+name: windows-bridge-release
+
+# Manual, protected production release for the Windows Imaging Bridge (PR 7/7).
+# Never triggers automatically - dispatch only, requires the "production"
+# GitHub Environment (configure required reviewers on that environment in
+# repo settings; this workflow does not and cannot grant that protection
+# itself). Fails clearly if a real signing identity secret is not configured
+# rather than silently publishing an unsigned artifact as a release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Three-field MSI ProductVersion (Major.Minor.Build), e.g. 0.4.8'
+        required: true
+        type: string
+
+# Only one production release publish at a time, repo-wide - never two
+# concurrent releases racing to sign/publish.
+concurrency:
+  group: windows-bridge-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build, sign, and publish release candidate
+    runs-on: windows-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Verify signing identity is configured
+        shell: pwsh
+        run: |
+          # Fail loudly and immediately, before any publish/build work, if the
+          # protected environment doesn't have a real signing identity wired
+          # up yet. This is the documented external gate - see
+          # windows-bridge/docs/update-runbook.md "Production certificate
+          # status". Never falls back to an unsigned or test-signed publish.
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.NORAMEDI_SIGNING_THUMBPRINT }}")) {
+            Write-Error "NORAMEDI_SIGNING_THUMBPRINT secret is not configured on the 'production' environment. This workflow refuses to publish an unsigned or test-signed artifact as a release. See windows-bridge/docs/update-runbook.md 'Production certificate status' for the exact provisioning steps required before this workflow can run."
+            exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.NORAMEDI_TIMESTAMP_URL }}")) {
+            Write-Error "NORAMEDI_TIMESTAMP_URL secret is not configured. An untimestamped signature is refused."
+            exit 1
+          }
+
+      # Production signing identity: a certificate already provisioned into
+      # this runner's certificate store (self-hosted runner with an
+      # HSM/cloud-KSP-backed cert) or imported here from a protected secret
+      # that is itself a *reference* to such a provider - never an
+      # exportable PFX committed anywhere. The exact import step is
+      # infrastructure-specific and intentionally left as the one piece this
+      # workflow cannot supply on its own (see docs/update-runbook.md
+      # "Signing provider interface").
+      - name: Build, sign, and verify release
+        shell: pwsh
+        env:
+          NORAMEDI_SIGNING_THUMBPRINT: ${{ secrets.NORAMEDI_SIGNING_THUMBPRINT }}
+          NORAMEDI_TIMESTAMP_URL: ${{ secrets.NORAMEDI_TIMESTAMP_URL }}
+        run: |
+          .\windows-bridge\release\Build-Release.ps1 `
+            -Version "${{ inputs.version }}" `
+            -Release -ProductionRelease `
+            -CertThumbprint $env:NORAMEDI_SIGNING_THUMBPRINT `
+            -TimestampUrl $env:NORAMEDI_TIMESTAMP_URL `
+            -OutputDirectory "${{ runner.temp }}\release"
+
+      - name: Upload signed release artifacts + metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-bridge-release-${{ inputs.version }}
+          path: |
+            ${{ runner.temp }}\release\*.msi
+            ${{ runner.temp }}\release\*.exe
+            ${{ runner.temp }}\release\release-metadata.json
+            ${{ runner.temp }}\release\sbom.json
+          retention-days: 90
+
+      # No automatic production deployment step exists here by design - the
+      # server's IMAGING_BRIDGE_UPDATE_* environment variables (which
+      # actually offer the release to paired bridges) are set manually by an
+      # operator, out of band, only after independently reviewing this
+      # workflow's published hashes. See docs/update-runbook.md "Production
+      # release checklist".
