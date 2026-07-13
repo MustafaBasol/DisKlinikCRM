@@ -14,7 +14,14 @@ public sealed record ServerUpdateRelease(
     [property: JsonPropertyName("signed")] bool Signed,
     [property: JsonPropertyName("publisherThumbprint")] string? PublisherThumbprint,
     [property: JsonPropertyName("minimumSourceVersion")] string? MinimumSourceVersion,
-    [property: JsonPropertyName("notes")] string? Notes);
+    [property: JsonPropertyName("notes")] string? Notes,
+    // PR 7/7 fields — nullable/defaulted so a JSON payload from an older server
+    // (or a test fixture that predates staged rollout) still deserializes.
+    // The server has already made the rollout/channel decision for this bridge
+    // by the time this descriptor is served (see bridgeUpdateConfig.ts
+    // eligibility filtering) — the bridge never re-evaluates eligibility itself.
+    [property: JsonPropertyName("releaseId")] string? ReleaseId = null,
+    [property: JsonPropertyName("rollback")] Rollback.RollbackPackageDescriptor? Rollback = null);
 
 /// <summary>Fail-closed local interpretation of <see cref="ServerUpdateConfig.Mode"/>.</summary>
 public enum UpdatePolicyMode

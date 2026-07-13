@@ -120,4 +120,10 @@ internal sealed class FakeBridgePipeRequestHandler : IBridgePipeRequestHandler
         IReadOnlyList<AvailableServerBindingInfo> result = [new AvailableServerBindingInfo("binding-1", "device-1", "Sensor 1 (Op Room)", "IO", "active", "sensor")];
         return Task.FromResult(new GetAvailableServerBindingsResponse(result));
     }
+
+    public Task<RollbackStatusPayload> GetRollbackStatusAsync(CancellationToken cancellationToken)
+    {
+        Record(nameof(GetRollbackStatusAsync));
+        return Task.FromResult(new RollbackStatusPayload("None", "None", null, null, DateTimeOffset.UtcNow));
+    }
 }

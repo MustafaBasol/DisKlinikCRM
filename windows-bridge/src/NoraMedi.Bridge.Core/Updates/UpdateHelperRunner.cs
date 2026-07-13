@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using NoraMedi.Bridge.Core.Updates.Rollback;
 using NoraMedi.Bridge.Core.Updates.Trust;
 
 namespace NoraMedi.Bridge.Core.Updates;
@@ -19,6 +20,75 @@ public interface IServiceStateProvider
 
     /// <summary>Returns the installed product version of the service's own binary (e.g. its assembly/file version), or null if it cannot be determined.</summary>
     string? GetInstalledProductVersion(string serviceName);
+}
+
+/// <summary>
+/// Abstraction over uninstalling the currently-installed product before a
+/// rollback install runs — lets <see cref="UpdateHelperRunner"/> be unit
+/// tested without invoking real MSI APIs. Needed only for rollback: WiX's
+/// <c>MajorUpgrade</c> element (see installer/NoraMedi.Bridge.Installer/Package.wxs)
+/// sets <c>DowngradeErrorMessage</c>, which makes msiexec refuse to silently
+/// install a lower ProductVersion over a higher one under the same
+/// UpgradeCode — an explicit uninstall-then-install is the documented way
+/// around that guard (see docs/update-runbook.md "Rollback execution").
+/// </summary>
+public interface IProductUninstaller
+{
+    /// <summary>Finds the ProductCode currently registered for <paramref name="upgradeCode"/> and uninstalls it silently. Returns the msiexec exit code, or null if no matching product was found or the process never started/exited within <paramref name="timeout"/>.</summary>
+    Task<int?> UninstallAsync(string upgradeCode, TimeSpan timeout, CancellationToken cancellationToken);
+}
+
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public sealed class WindowsMsiProductUninstaller : IProductUninstaller
+{
+    private const int ErrorSuccess = 0;
+    private const int ErrorNoMoreItems = 259;
+
+    public async Task<int?> UninstallAsync(string upgradeCode, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var productCode = FindInstalledProductCode(upgradeCode);
+        if (productCode is null) return null;
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "msiexec.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        // Fixed, hardcoded uninstall command line — never built from any
+        // caller-supplied string, same discipline as ProcessSilentInstallerRunner.
+        psi.ArgumentList.Add("/x");
+        psi.ArgumentList.Add(productCode);
+        psi.ArgumentList.Add("/quiet");
+        psi.ArgumentList.Add("/norestart");
+
+        using var process = Process.Start(psi);
+        if (process is null) return null;
+
+        using var timeoutCts = new CancellationTokenSource(timeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        try
+        {
+            await process.WaitForExitAsync(linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+
+        return process.ExitCode;
+    }
+
+    /// <summary>P/Invoke MsiEnumRelatedProductsW — the documented Windows Installer API for "which ProductCode is installed for this UpgradeCode".</summary>
+    private static string? FindInstalledProductCode(string upgradeCode)
+    {
+        var buffer = new System.Text.StringBuilder(39);
+        var result = MsiEnumRelatedProductsW(upgradeCode, 0, 0, buffer);
+        return result == ErrorSuccess ? buffer.ToString() : null;
+    }
+
+    [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int MsiEnumRelatedProductsW(string lpUpgradeCode, uint dwReserved, uint iProductIndex, System.Text.StringBuilder lpProductBuf);
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -127,11 +197,97 @@ public sealed class UpdateHelperRunner(
     ISilentInstallerRunner installerRunner,
     IServiceStateProvider serviceStateProvider,
     Func<string, string, SignatureTrustResult>? trustVerifierOverride = null,
-    Func<string, bool>? pinnedThumbprintOverride = null)
+    Func<string, bool>? pinnedThumbprintOverride = null,
+    IProductUninstaller? productUninstaller = null)
 {
     public const string ServiceName = "NoraMediBridge";
     private const int ExitCodeSuccess = 0;
     private const int ExitCodeRebootRequired = 3010; // ERROR_SUCCESS_REBOOT_REQUIRED
+
+    /// <summary>
+    /// Runs a rollback: independently re-verify the cached installer's
+    /// hash+signer (defense in depth — never trust <see cref="RollbackManager"/>'s
+    /// prior verification blindly, same rationale as <see cref="RunAsync"/>),
+    /// uninstall the currently-installed (unhealthy) product via its
+    /// UpgradeCode (required — WiX blocks a same-UpgradeCode silent
+    /// downgrade otherwise), then install the rollback target and confirm the
+    /// service comes back up running the expected (older) version.
+    /// </summary>
+    public async Task<RollbackHelperResult> RunRollbackAsync(
+        RollbackHelperInstruction instruction, TimeSpan installTimeout, TimeSpan serviceWaitTimeout, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(instruction.CachedInstallerPath))
+        {
+            return RollbackFail(RollbackErrorCategory.InstallerFailure, null, null);
+        }
+
+        FileStream lockStream;
+        try
+        {
+            lockStream = new FileStream(instruction.CachedInstallerPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return RollbackFail(RollbackErrorCategory.InstallerFailure, null, null);
+        }
+
+        using (lockStream)
+        {
+            var actualHash = ComputeSha256(lockStream);
+            if (!string.Equals(actualHash, instruction.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                return RollbackFail(RollbackErrorCategory.CacheHashMismatch, null, null);
+            }
+
+            var trust = trustVerifierOverride is not null
+                ? trustVerifierOverride(instruction.CachedInstallerPath, instruction.ExpectedPublisherThumbprint)
+                : AuthenticodeVerifier.Verify(instruction.CachedInstallerPath, instruction.ExpectedPublisherThumbprint);
+            var isPinned = pinnedThumbprintOverride is not null
+                ? pinnedThumbprintOverride(instruction.ExpectedPublisherThumbprint)
+                : Trust.PinnedPublisherThumbprints.Contains(instruction.ExpectedPublisherThumbprint);
+
+            if (trust != SignatureTrustResult.TrustedPublisher || !isPinned)
+            {
+                return RollbackFail(RollbackErrorCategory.CacheSignerUntrusted, null, null);
+            }
+
+            var uninstaller = productUninstaller ?? new WindowsMsiProductUninstaller();
+            var uninstallExit = await uninstaller.UninstallAsync(instruction.UpgradeCode, installTimeout, cancellationToken);
+            if (uninstallExit is null || (uninstallExit != ExitCodeSuccess && uninstallExit != ExitCodeRebootRequired))
+            {
+                return RollbackFail(RollbackErrorCategory.UninstallFailed, uninstallExit, null);
+            }
+
+            var installExit = await installerRunner.RunAsync(instruction.CachedInstallerPath, installTimeout, cancellationToken);
+            if (installExit is null || (installExit != ExitCodeSuccess && installExit != ExitCodeRebootRequired))
+            {
+                return RollbackFail(RollbackErrorCategory.InstallerFailure, uninstallExit, installExit);
+            }
+
+            var deadline = DateTimeOffset.UtcNow + serviceWaitTimeout;
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                if (serviceStateProvider.GetStatus(ServiceName) == "Running")
+                {
+                    var installedVersion = serviceStateProvider.GetInstalledProductVersion(ServiceName);
+                    if (!VersionsMatch(installedVersion, instruction.ExpectedVersion))
+                    {
+                        return RollbackFail(RollbackErrorCategory.PostRollbackVersionMismatch, uninstallExit, installExit);
+                    }
+
+                    return new RollbackHelperResult(nameof(RollbackLifecycleState.Succeeded), nameof(RollbackErrorCategory.None), uninstallExit, installExit, DateTimeOffset.UtcNow);
+                }
+
+                try { await Task.Delay(1000, cancellationToken); }
+                catch (OperationCanceledException) { break; }
+            }
+
+            return RollbackFail(RollbackErrorCategory.ServiceUnavailable, uninstallExit, installExit);
+        }
+    }
+
+    private static RollbackHelperResult RollbackFail(RollbackErrorCategory category, int? uninstallExit, int? installExit) =>
+        new(nameof(RollbackLifecycleState.Failed), category.ToString(), uninstallExit, installExit, DateTimeOffset.UtcNow);
 
     public async Task<UpdateHelperResult> RunAsync(
         UpdateHelperInstruction instruction, TimeSpan installTimeout, TimeSpan serviceWaitTimeout, CancellationToken cancellationToken)

@@ -34,6 +34,7 @@ public static class PipeOperationPolicy
         PipeOperation.GetServiceStatus,
         PipeOperation.CheckForUpdates,
         PipeOperation.GetUpdateStatus,
+        PipeOperation.GetRollbackStatus,
     ];
 
     // GetAvailableServerBindings deliberately appears in neither set above:

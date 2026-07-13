@@ -42,4 +42,7 @@ public interface IBridgePipeRequestHandler
     Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken);
 
     Task<GetAvailableServerBindingsResponse> GetAvailableServerBindingsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Read-only: the last-known rollback state (PR 7/7). There is deliberately no caller-triggerable "start rollback" operation — rollback is decided and launched only by the Service's own post-update health check, never by IPC. See docs/update-runbook.md "Rollback cannot be redirected by Manager IPC".</summary>
+    Task<RollbackStatusPayload> GetRollbackStatusAsync(CancellationToken cancellationToken);
 }
