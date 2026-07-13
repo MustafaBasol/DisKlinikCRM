@@ -232,7 +232,26 @@ public sealed class UpdateManager
         SetState(UpdateLifecycleState.Verified, UpdateErrorCategory.None, offeredVersion: release.Version,
             stagedPath: download.StagedPath, stagedSha256: release.Sha256, downloadedBytes: download.Bytes,
             stagedPublisherThumbprint: release.PublisherThumbprint);
-        ReleaseVerified?.Invoke(release);
+
+        // Fail-open: the release has already been verified and persisted as Verified above — a
+        // throwing subscriber (e.g. rollback-target caching) must never turn a successful stage
+        // into a failed CheckAsync call. Each subscriber is invoked and isolated individually
+        // rather than via a single ReleaseVerified?.Invoke(release), so one misbehaving subscriber
+        // can't stop another from running either.
+        if (ReleaseVerified is not null)
+        {
+            foreach (var subscriber in ReleaseVerified.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<ServerUpdateRelease>)subscriber)(release);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "update.release_verified_subscriber_failed");
+                }
+            }
+        }
     }
 
     /// <summary>

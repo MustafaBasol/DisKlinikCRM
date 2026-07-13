@@ -53,7 +53,10 @@ public sealed class RollbackManager(
 
             if (state.IsInProgress)
             {
-                return null; // AlreadyInProgress — caller should not overwrite state here, a rollback is actively running.
+                // Deliberately returns without persisting anything: a rollback is actively
+                // running, and overwriting its in-flight state here (even with a dedicated
+                // "already in progress" category) would race the thread actually driving it.
+                return null;
             }
 
             // Loop prevention: a rollback already attempted (successfully or not) for

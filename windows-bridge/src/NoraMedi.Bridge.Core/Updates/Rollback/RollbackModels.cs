@@ -50,7 +50,6 @@ public enum RollbackErrorCategory
     CacheHashMismatch,
     CacheSignerUntrusted,
     TargetVersionMismatch,
-    AlreadyInProgress,
     LoopPrevented,
     UninstallFailed,
     InstallerFailure,

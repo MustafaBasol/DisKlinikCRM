@@ -218,6 +218,30 @@ public class UpdateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task CheckAsync_ReleaseVerifiedSubscriberThrows_StagingStillSucceeds_FailOpen()
+    {
+        // Regression test (Copilot review, PR 7/7): rollback-target caching subscribes to
+        // ReleaseVerified but must never be able to turn a successful stage into a failed
+        // CheckAsync call just because it (or some other subscriber) throws.
+        var body = Encoding.UTF8.GetBytes("trusted-installer");
+        var (manager, handler) = Make(
+            installedVersion: "0.4.6", requireTrustedSignature: true,
+            trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => true);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
+        handler.DownloadBytes = body;
+
+        var secondSubscriberRan = false;
+        manager.ReleaseVerified += _ => throw new InvalidOperationException("simulated subscriber failure");
+        manager.ReleaseVerified += _ => secondSubscriberRan = true;
+
+        var state = await manager.CheckAsync("cred", CancellationToken.None);
+
+        Assert.Equal(UpdateLifecycleState.Verified, state.Lifecycle);
+        Assert.True(secondSubscriberRan, "a later subscriber must still run even if an earlier one throws");
+    }
+
+    [Fact]
     public async Task CheckAsync_TrustedPublisherButNotInPinnedAllowlist_VerificationFailsUntrustedPublisher()
     {
         // The server's declared thumbprint matching what Authenticode verified is not enough on its

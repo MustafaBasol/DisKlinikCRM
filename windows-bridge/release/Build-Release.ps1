@@ -10,7 +10,7 @@
     Two modes:
 
       Unsigned (default) - for CI PR validation and local iteration. Produces
-      a clearly-unlabelled-as-unsigned MSI/Bundle. Never claims to be a
+      an MSI/Bundle clearly labelled as unsigned. Never claims to be a
       production release.
 
       Signed (-Release) - requires an explicit signing identity
@@ -217,7 +217,10 @@ if ($LASTEXITCODE -ne 0) { Fail "UpdateHelper publish failed." }
 function Invoke-SignTool([string[]]$Files) {
     foreach ($file in $Files) {
         if ($CertThumbprint) {
-            & signtool.exe sign /sha1 $CertThumbprint /fd SHA256 /tr $TimestampUrl /td SHA256 $file
+            # /sm searches the LocalMachine stores, not just CurrentUser\My (signtool's
+            # default) - required for a service-account/HSM/cloud-KSP-provisioned
+            # certificate, which is the expected production identity shape.
+            & signtool.exe sign /sm /sha1 $CertThumbprint /fd SHA256 /tr $TimestampUrl /td SHA256 $file
         }
         else {
             $pwd = (Get-Item "env:$PfxPasswordEnvVar").Value
@@ -286,7 +289,7 @@ if ($Release) {
 
     # -- 10. Verify signatures after signing ---------------------------------
     Write-Step "Verifying signatures"
-    foreach ($file in @($msiPath, $bundlePath, "$publishRoot\Service\NoraMediBridge.Service.exe", "$publishRoot\Manager\NoraMediBridge.Manager.exe")) {
+    foreach ($file in @($msiPath, $bundlePath, "$publishRoot\Service\NoraMediBridge.Service.exe", "$publishRoot\Manager\NoraMediBridge.Manager.exe", "$publishRoot\Service\UpdateHelper\NoraMedi.Bridge.UpdateHelper.exe")) {
         & signtool.exe verify /pa /v $file
         if ($LASTEXITCODE -ne 0) { Fail "signtool verify failed for '$file' - refusing to publish a release whose own signature doesn't verify." }
     }
@@ -301,7 +304,11 @@ if ($Release) {
     $layoutDir = Join-Path $env:TEMP "nmb-layout-$([Guid]::NewGuid().ToString('N'))"
     & $bundlePath "/layout" $layoutDir "/quiet"
     $layoutExit = $LASTEXITCODE
-    $layoutOk = (Test-Path (Join-Path $layoutDir 'NoraMediBridge.msi')) -or (Test-Path $layoutDir)
+    # Require the actual extracted MSI, not merely the directory's existence -
+    # Burn can create $layoutDir before extraction even starts, so a bare
+    # Test-Path on the directory alone would pass even for a failed/partial
+    # extraction and defeat the point of this check.
+    $layoutOk = Test-Path (Join-Path $layoutDir 'NoraMediBridge.msi')
     if (Test-Path $layoutDir) { Remove-Item $layoutDir -Recurse -Force }
     if ($layoutExit -ne 0 -or -not $layoutOk) {
         Fail "Bundle /layout self-extraction failed (exit $layoutExit) - the container is likely corrupted by the sign sequence. Never publish this artifact."
