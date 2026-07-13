@@ -20,6 +20,18 @@ public sealed class UpdateManager
     private readonly Func<string, string, SignatureTrustResult>? _trustVerifierOverride;
     private readonly Func<string, bool>? _pinnedThumbprintOverride;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    // Guards TryLaunchInstall's read-check-transition sequence. Found during
+    // PR #149 physical acceptance (Test 8, concurrent InstallUpdate calls):
+    // TryLaunchInstall's CurrentState read + Verified check + SetState(InstallLaunched)
+    // was unsynchronized, so two InstallUpdate IPC calls arriving close together
+    // (Windows' ~15ms system clock tick meant both SetState calls even logged
+    // the same UpdatedAtUtc) could both observe Verified and both transition to
+    // InstallLaunched — each then launched its own real UpdateHelper + msiexec
+    // process (proven by two independent helper-result-*.json files), violating
+    // the single-flight guarantee the IPC contract documents. A plain object
+    // lock is enough here: unlike _gate (which spans an async CheckAsync/StageAsync
+    // download), TryLaunchInstall itself is fully synchronous.
+    private readonly object _installLaunchLock = new();
 
     public UpdateManager(
         UpdateOptions options,
@@ -220,15 +232,18 @@ public sealed class UpdateManager
     /// </summary>
     public UpdateState TryLaunchInstall()
     {
-        var state = CurrentState;
-        if (state.Lifecycle != UpdateLifecycleState.Verified || state.StagedInstallerPath is null)
+        lock (_installLaunchLock)
         {
-            return state with { ErrorCategory = UpdateErrorCategory.AlreadyInProgress };
-        }
+            var state = CurrentState;
+            if (state.Lifecycle != UpdateLifecycleState.Verified || state.StagedInstallerPath is null)
+            {
+                return state with { ErrorCategory = UpdateErrorCategory.AlreadyInProgress };
+            }
 
-        return SetState(UpdateLifecycleState.InstallLaunched, UpdateErrorCategory.None,
-            offeredVersion: state.OfferedVersion, stagedPath: state.StagedInstallerPath, stagedSha256: state.StagedInstallerSha256,
-            stagedPublisherThumbprint: state.StagedPublisherThumbprint);
+            return SetState(UpdateLifecycleState.InstallLaunched, UpdateErrorCategory.None,
+                offeredVersion: state.OfferedVersion, stagedPath: state.StagedInstallerPath, stagedSha256: state.StagedInstallerSha256,
+                stagedPublisherThumbprint: state.StagedPublisherThumbprint);
+        }
     }
 
     /// <summary>Called by the Service after re-reading the helper's result log — see docs/update-architecture.md "Self-update handoff".</summary>

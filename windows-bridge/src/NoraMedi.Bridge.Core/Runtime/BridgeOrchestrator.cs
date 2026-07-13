@@ -544,7 +544,17 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     public Task<InstallUpdateResponse> InstallUpdateAsync(InstallUpdateRequest request, CancellationToken cancellationToken)
     {
         var state = _updateManager.TryLaunchInstall();
-        if (state.Lifecycle != UpdateLifecycleState.InstallLaunched)
+        // Checking ErrorCategory, not Lifecycle: once TryLaunchInstall's
+        // transition is correctly serialized (see its own doc comment), every
+        // caller racing after the winner reads back a persisted Lifecycle of
+        // InstallLaunched too — that value alone can no longer distinguish
+        // "I just launched it" from "someone else already did". ErrorCategory
+        // is the per-call outcome signal: AlreadyInProgress means the state
+        // machine did NOT transition for *this* call. Found alongside the
+        // TryLaunchInstall concurrency fix during PR #149 physical acceptance
+        // (Test 8) — without this, every racing caller would still launch its
+        // own real helper/msiexec process even with TryLaunchInstall locked.
+        if (state.ErrorCategory == UpdateErrorCategory.AlreadyInProgress)
         {
             return Task.FromResult(new InstallUpdateResponse(false, ToUpdateStatusPayload(state), "No verified update is staged to install."));
         }

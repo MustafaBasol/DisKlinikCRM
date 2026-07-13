@@ -341,4 +341,38 @@ public class UpdateManagerTests : IDisposable
         var launched = manager.TryLaunchInstall();
         Assert.Equal(thumbprint, launched.StagedPublisherThumbprint);
     }
+
+    [Fact]
+    public async Task TryLaunchInstall_ConcurrentCallers_OnlyOneTransitionsToInstallLaunched()
+    {
+        // Regression test for a real defect found during PR #149 physical
+        // acceptance (Test 8, concurrent InstallUpdate IPC calls): TryLaunchInstall's
+        // CurrentState read + Verified check + SetState(InstallLaunched) was
+        // unsynchronized, so two callers racing each other could both observe
+        // Verified and both transition to InstallLaunched — in the real
+        // Service, each then launches its own UpdateHelper + msiexec process
+        // (confirmed physically via two independent helper-result-*.json
+        // files), violating the documented single-flight guarantee.
+        var body = Encoding.UTF8.GetBytes("trusted-installer");
+        var (manager, handler) = Make(
+            installedVersion: "0.4.6", requireTrustedSignature: true,
+            trustOverride: (_, _) => SignatureTrustResult.TrustedPublisher,
+            pinnedThumbprintOverride: _ => true);
+        handler.ConfigJson = ConfigJson("notify", Release("0.4.7", HashOf(body), signed: true, publisherThumbprint: "a".PadLeft(40, 'a')));
+        handler.DownloadBytes = body;
+        await manager.CheckAsync("cred", CancellationToken.None);
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => Task.Run(() => manager.TryLaunchInstall())));
+
+        // Lifecycle alone can't discriminate here: once the winner persists
+        // InstallLaunched, every racing loser's CurrentState read (inside its
+        // own lock turn) *also* observes InstallLaunched — see
+        // BridgeOrchestrator.InstallUpdateAsync's matching fix. ErrorCategory
+        // is the real per-call outcome: exactly one call must transition the
+        // state machine (None), the rest must be told they didn't
+        // (AlreadyInProgress) regardless of what Lifecycle now reads.
+        Assert.Single(results, r => r.ErrorCategory == UpdateErrorCategory.None);
+        Assert.Equal(19, results.Count(r => r.ErrorCategory == UpdateErrorCategory.AlreadyInProgress));
+        Assert.All(results, r => Assert.Equal(UpdateLifecycleState.InstallLaunched, r.Lifecycle));
+    }
 }
