@@ -1,5 +1,6 @@
 using NoraMedi.Bridge.Core.Ipc;
 using NoraMedi.Bridge.Core.Updates;
+using NoraMedi.Bridge.Core.Updates.Rollback;
 using NoraMedi.Bridge.Manager.Resources;
 
 namespace NoraMedi.Bridge.Manager.Models;
@@ -95,5 +96,28 @@ public static class StatusLabels
             UpdateLifecycleState.Unsupported => Strings.Update_UnsupportedSourceVersion,
             UpdateLifecycleState.Disabled => Strings.Update_Disabled,
             _ => Strings.Update_Checking,
+        };
+
+    /// <summary>
+    /// Maps a truthful <see cref="RollbackStatusPayload"/> lifecycle to a
+    /// plain, non-alarming label. Deliberately does not expose internal
+    /// security detail (hash mismatch, untrusted signer, loop-prevented) —
+    /// every failure category reads as the same actionable "contact support,
+    /// your data is safe" message; the precise category is for support
+    /// diagnostics (ExportDiagnostics), not the clinic user's screen. Returns
+    /// null for <see cref="RollbackLifecycleState.None"/> — no rollback has
+    /// ever been attempted for the current install, so nothing is shown.
+    /// </summary>
+    public static string? FromRollbackLifecycle(string lifecycle) =>
+        (Enum.TryParse<RollbackLifecycleState>(lifecycle, out var state) ? state : RollbackLifecycleState.None) switch
+        {
+            RollbackLifecycleState.None => null,
+            RollbackLifecycleState.Preparing => Strings.Rollback_Preparing,
+            RollbackLifecycleState.Uninstalling => Strings.Rollback_Uninstalling,
+            RollbackLifecycleState.Installing => Strings.Rollback_Installing,
+            RollbackLifecycleState.Succeeded => Strings.Rollback_Succeeded,
+            RollbackLifecycleState.Failed => Strings.Rollback_Failed,
+            RollbackLifecycleState.InterventionRequired => Strings.Rollback_InterventionRequired,
+            _ => null,
         };
 }

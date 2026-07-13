@@ -100,4 +100,10 @@
   <data name="Update_UnsupportedSourceVersion" xml:space="preserve"><value>This version cannot be updated automatically. Contact NoraMedi support.</value></data>
   <data name="Update_Interrupted" xml:space="preserve"><value>The previous update attempt was interrupted. Check for updates again.</value></data>
   <data name="Button_InstallUpdate" xml:space="preserve"><value>_Install Update</value></data>
+  <data name="Rollback_Preparing" xml:space="preserve"><value>The last update did not start correctly. Preparing to restore the previous version...</value></data>
+  <data name="Rollback_Uninstalling" xml:space="preserve"><value>Restoring the previous version...</value></data>
+  <data name="Rollback_Installing" xml:space="preserve"><value>Restoring the previous version...</value></data>
+  <data name="Rollback_Succeeded" xml:space="preserve"><value>The previous version was restored automatically.</value></data>
+  <data name="Rollback_Failed" xml:space="preserve"><value>Automatic restore did not complete. Contact NoraMedi support -- your data and pairing are safe.</value></data>
+  <data name="Rollback_InterventionRequired" xml:space="preserve"><value>This computer needs attention from NoraMedi support. Your data, pairing, and settings are safe.</value></data>
 </root>

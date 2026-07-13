@@ -42,4 +42,7 @@ public interface IBridgePipeClientService
         string pairingCode, string? computerDisplayName, CancellationToken cancellationToken = default);
 
     Task<PipeCallResult<GetAvailableServerBindingsResponse>> GetAvailableServerBindingsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Read-only rollback state (PR 7/7) — there is no corresponding "trigger rollback" method; rollback is decided and launched only by the Service itself.</summary>
+    Task<PipeCallResult<RollbackStatusPayload>> GetRollbackStatusAsync(CancellationToken cancellationToken = default);
 }

@@ -28,6 +28,7 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
     public PipeCallResult<InstallUpdateResponse>? NextInstallUpdate { get; set; }
     public PipeCallResult<ProvisionWithPairingCodeResponse>? NextProvisionWithPairingCode { get; set; }
     public PipeCallResult<GetAvailableServerBindingsResponse>? NextAvailableServerBindings { get; set; }
+    public PipeCallResult<RollbackStatusPayload>? NextRollbackStatus { get; set; }
 
     public int GetServiceStatusCallCount { get; private set; }
     public int GetBindingsCallCount { get; private set; }
@@ -43,6 +44,7 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
     public int InstallUpdateCallCount { get; private set; }
     public int ProvisionWithPairingCodeCallCount { get; private set; }
     public int GetAvailableServerBindingsCallCount { get; private set; }
+    public int GetRollbackStatusCallCount { get; private set; }
 
     public string? LastValidatedPath { get; private set; }
     public string? LastAddOrUpdatePath { get; private set; }
@@ -139,5 +141,11 @@ public sealed class FakeBridgePipeClientService : IBridgePipeClientService
     {
         GetAvailableServerBindingsCallCount++;
         return Task.FromResult(NextAvailableServerBindings ?? PipeCallResult<GetAvailableServerBindingsResponse>.Fail(ManagerErrorKind.Internal));
+    }
+
+    public Task<PipeCallResult<RollbackStatusPayload>> GetRollbackStatusAsync(CancellationToken cancellationToken = default)
+    {
+        GetRollbackStatusCallCount++;
+        return Task.FromResult(NextRollbackStatus ?? PipeCallResult<RollbackStatusPayload>.Fail(ManagerErrorKind.Internal));
     }
 }

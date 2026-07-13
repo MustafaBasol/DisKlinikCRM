@@ -48,4 +48,10 @@
   <data name="Update_UnsupportedSourceVersion" xml:space="preserve"><value>Bu sürüm otomatik olarak güncellenemiyor. NoraMedi destek ile iletişime geçin.</value></data>
   <data name="Update_Interrupted" xml:space="preserve"><value>Önceki güncelleme denemesi kesintiye uğradı. Güncellemeleri tekrar kontrol edin.</value></data>
   <data name="Button_InstallUpdate" xml:space="preserve"><value>_Güncellemeyi Kur</value></data>
+  <data name="Rollback_Preparing" xml:space="preserve"><value>Son güncelleme düzgün başlamadı. Önceki sürüme geri dönülüyor...</value></data>
+  <data name="Rollback_Uninstalling" xml:space="preserve"><value>Önceki sürüme geri dönülüyor...</value></data>
+  <data name="Rollback_Installing" xml:space="preserve"><value>Önceki sürüme geri dönülüyor...</value></data>
+  <data name="Rollback_Succeeded" xml:space="preserve"><value>Önceki sürüm otomatik olarak geri yüklendi.</value></data>
+  <data name="Rollback_Failed" xml:space="preserve"><value>Otomatik geri yükleme tamamlanamadı. NoraMedi destek ile iletişime geçin -- verileriniz ve eşleştirmeniz güvende.</value></data>
+  <data name="Rollback_InterventionRequired" xml:space="preserve"><value>Bu bilgisayarın NoraMedi destek ekibinin ilgilenmesi gerekiyor. Verileriniz, eşleştirmeniz ve ayarlarınız güvende.</value></data>
 </root>

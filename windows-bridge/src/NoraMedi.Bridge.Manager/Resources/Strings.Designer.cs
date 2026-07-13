@@ -95,6 +95,13 @@ public static class Strings
     public static string Update_Interrupted => Get();
     public static string Button_InstallUpdate => Get();
 
+    public static string Rollback_Preparing => Get();
+    public static string Rollback_Uninstalling => Get();
+    public static string Rollback_Installing => Get();
+    public static string Rollback_Succeeded => Get();
+    public static string Rollback_Failed => Get();
+    public static string Rollback_InterventionRequired => Get();
+
     private static string Get([System.Runtime.CompilerServices.CallerMemberName] string name = "") =>
         ResourceManager.GetString(name, CultureInfo.CurrentUICulture) ?? name;
 }
