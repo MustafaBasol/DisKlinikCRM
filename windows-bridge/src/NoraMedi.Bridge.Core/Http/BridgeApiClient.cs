@@ -128,6 +128,44 @@ public sealed class BridgeApiClient
         }
     }
 
+    /// <summary>
+    /// GET /api/public/imaging/bridge/update — the one place the offered
+    /// release version/URL/hash/signer comes from. Nothing about the
+    /// installed version, folder bindings, or queue is ever sent in this
+    /// request; the server scopes the response to the caller's own agent via
+    /// the bearer credential alone. Null on any network/auth/malformed-body
+    /// failure — callers treat that identically to "no update available",
+    /// never as a reason to fall back to some other source.
+    /// </summary>
+    public async Task<Updates.ServerUpdateConfig?> GetUpdateConfigAsync(string credential, CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_serverUrl}/api/public/imaging/bridge/update");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return null;
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode) return null;
+            try
+            {
+                return await response.Content.ReadFromJsonAsync<Updates.ServerUpdateConfig>(JsonOptions, cancellationToken);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+    }
+
     public async Task<HeartbeatOutcome> HeartbeatAsync(string credential, HeartbeatRequest payload, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_serverUrl}/api/public/imaging/bridge/heartbeat");

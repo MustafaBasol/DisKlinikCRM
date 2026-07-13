@@ -32,7 +32,11 @@ public interface IBridgePipeClientService
 
     Task<PipeCallResult<DiagnosticsSnapshot>> ExportDiagnosticsAsync(CancellationToken cancellationToken = default);
 
-    Task<PipeCallResult<CheckForUpdatesResponse>> CheckForUpdatesAsync(CancellationToken cancellationToken = default);
+    Task<PipeCallResult<UpdateStatusPayload>> CheckForUpdatesAsync(CancellationToken cancellationToken = default);
+
+    Task<PipeCallResult<UpdateStatusPayload>> GetUpdateStatusAsync(CancellationToken cancellationToken = default);
+
+    Task<PipeCallResult<InstallUpdateResponse>> InstallUpdateAsync(CancellationToken cancellationToken = default);
 
     Task<PipeCallResult<ProvisionWithPairingCodeResponse>> ProvisionWithPairingCodeAsync(
         string pairingCode, string? computerDisplayName, CancellationToken cancellationToken = default);

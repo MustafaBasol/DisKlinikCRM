@@ -198,9 +198,23 @@
             <TabItem Header="{x:Static res:Strings.Tab_Updates}">
                 <StackPanel Margin="12" MaxWidth="420" HorizontalAlignment="Left">
                     <TextBlock Text="{x:Static res:Strings.Tab_Updates}" Style="{StaticResource HeadingText}" />
-                    <Button Content="{x:Static res:Strings.Button_CheckForUpdates}" Command="{Binding Update.CheckForUpdatesCommand}" />
-                    <TextBlock Text="{Binding Update.Message}" />
-                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Update.IsBusy, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock>
+                        <Run Text="{x:Static res:Strings.Update_CurrentVersion}" />
+                        <Run Text=": " />
+                        <Run Text="{Binding Update.InstalledVersion, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Visibility="{Binding Update.HasOfferedVersion, Converter={StaticResource BoolToVis}}">
+                        <Run Text="{x:Static res:Strings.Update_LatestVersion}" />
+                        <Run Text=": " />
+                        <Run Text="{Binding Update.OfferedVersion, Mode=OneWay}" />
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="{x:Static res:Strings.Button_CheckForUpdates}" Command="{Binding Update.CheckForUpdatesCommand}" Margin="0,0,8,0" />
+                        <Button Content="{x:Static res:Strings.Button_InstallUpdate}" Command="{Binding Update.InstallUpdateCommand}" Visibility="{Binding Update.CanInstall, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Update.Message}" Margin="0,8,0,0" />
+                    <TextBlock Text="{Binding Update.DownloadProgressText}" Foreground="Gray" />
+                    <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding Update.IsIndeterminate, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </TabItem>
         </TabControl>

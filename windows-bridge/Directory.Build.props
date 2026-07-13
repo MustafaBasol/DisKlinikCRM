@@ -2,11 +2,12 @@
 
   <PropertyGroup>
     <!-- PR sequence version (7 PRs total); bump alongside the installer's ProductVersion.
-         0.4.5 -> 0.4.6: 0.4.5 is already installed on the physical bridge
-         test machine and MajorUpgrade AllowSameVersionUpgrades="no" refuses
-         a same-version upgrade, so the MigrateLegacyConfig redesign needs a
-         real version bump to be retestable there. -->
-    <Version>0.4.6</Version>
+         0.4.6 -> 0.4.7: PR 6/7 (secure auto-update). 0.4.6 is already
+         installed on the physical bridge test machine and MajorUpgrade
+         AllowSameVersionUpgrades="no" refuses a same-version upgrade, so a
+         real version bump is required to physically retest the upgrade path
+         (and, this PR, to exercise the updater itself end to end). -->
+    <Version>0.4.7</Version>
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

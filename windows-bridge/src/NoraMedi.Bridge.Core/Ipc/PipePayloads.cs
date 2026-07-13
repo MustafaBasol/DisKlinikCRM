@@ -40,16 +40,32 @@ public sealed record RetryFailedItemRequest(string IngestKey);
 public sealed record RetryFailedItemResponse(bool Ok, string? Message);
 
 /// <summary>
-/// Truthful "not implemented" response — this phase deliberately ships no
-/// real updater (see spec section "Scope exclusions"). A future Manager
-/// must never be told an update is available/installing when it is not.
+/// Real update status (PR 6/7) — truthfully reflects the persisted
+/// <see cref="Updates.UpdateState"/>. Returned by both
+/// <see cref="PipeOperation.CheckForUpdates"/> (triggers a real server
+/// round-trip first) and <see cref="PipeOperation.GetUpdateStatus"/>
+/// (read-only, just reports the last-known state — used by the Manager to
+/// poll progress without re-triggering a check).
 /// </summary>
-public sealed record CheckForUpdatesResponse(bool Supported, string Message)
-{
-    public static CheckForUpdatesResponse NotSupported() => new(
-        false,
-        "Automatic updates are not available in this release. Install the latest signed installer manually.");
-}
+public sealed record UpdateStatusPayload(
+    string Lifecycle,
+    string? InstalledVersion,
+    string? OfferedVersion,
+    long DownloadedBytes,
+    long? TotalBytes,
+    string ErrorCategory,
+    bool RebootRequired,
+    DateTimeOffset UpdatedAtUtc);
+
+/// <summary>
+/// No fields by design — installing means "install the release the last
+/// successful check already staged and verified." A caller cannot smuggle
+/// an arbitrary URL/path/version/argument through this request; see
+/// docs/update-architecture.md "IPC contract changes".
+/// </summary>
+public sealed record InstallUpdateRequest;
+
+public sealed record InstallUpdateResponse(bool Launched, UpdateStatusPayload Status, string? Message);
 
 /// <summary>
 /// Request for the pairing-code redemption operation (see PipeOperation.ProvisionWithPairingCode).

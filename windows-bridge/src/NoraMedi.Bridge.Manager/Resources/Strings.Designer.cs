@@ -74,6 +74,27 @@ public static class Strings
     public static string Pairing_ServerError => Get();
     public static string Pairing_NetworkFailure => Get();
 
+    public static string Update_CurrentVersion => Get();
+    public static string Update_LatestVersion => Get();
+    public static string Update_Checking => Get();
+    public static string Update_UpToDate => Get();
+    public static string Update_Available => Get();
+    public static string Update_Downloading => Get();
+    public static string Update_Verifying => Get();
+    public static string Update_ReadyToInstall => Get();
+    public static string Update_Installing => Get();
+    public static string Update_ServiceRestarting => Get();
+    public static string Update_Succeeded => Get();
+    public static string Update_RebootRequired => Get();
+    public static string Update_DownloadFailed => Get();
+    public static string Update_VerificationFailed => Get();
+    public static string Update_PublisherVerificationFailed => Get();
+    public static string Update_InstallerFailed => Get();
+    public static string Update_Disabled => Get();
+    public static string Update_UnsupportedSourceVersion => Get();
+    public static string Update_Interrupted => Get();
+    public static string Button_InstallUpdate => Get();
+
     private static string Get([System.Runtime.CompilerServices.CallerMemberName] string name = "") =>
         ResourceManager.GetString(name, CultureInfo.CurrentUICulture) ?? name;
 }

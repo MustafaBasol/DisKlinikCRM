@@ -31,7 +31,13 @@ public interface IBridgePipeRequestHandler
 
     Task<DiagnosticsSnapshot> ExportDiagnosticsAsync(CancellationToken cancellationToken);
 
-    Task<CheckForUpdatesResponse> CheckForUpdatesAsync(CancellationToken cancellationToken);
+    /// <summary>Triggers a real server round-trip and returns the resulting update state.</summary>
+    Task<UpdateStatusPayload> CheckForUpdatesAsync(CancellationToken cancellationToken);
+
+    /// <summary>Read-only: the last-known update state, no server round-trip.</summary>
+    Task<UpdateStatusPayload> GetUpdateStatusAsync(CancellationToken cancellationToken);
+
+    Task<InstallUpdateResponse> InstallUpdateAsync(InstallUpdateRequest request, CancellationToken cancellationToken);
 
     Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken);
 

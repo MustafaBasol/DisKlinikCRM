@@ -1,4 +1,5 @@
 using NoraMedi.Bridge.Core.Ipc;
+using NoraMedi.Bridge.Core.Updates;
 using NoraMedi.Bridge.Manager.Resources;
 
 namespace NoraMedi.Bridge.Manager.Models;
@@ -61,4 +62,38 @@ public static class StatusLabels
         PairingErrorCategory.NetworkFailure => Pairing_NetworkFailure,
         _ => Pairing_InvalidOrExpiredCode,
     };
+
+    /// <summary>
+    /// Maps a truthful <see cref="UpdateStatusPayload"/> lifecycle/error pair
+    /// to a plain label. Never fabricates a progress percentage — the
+    /// download byte count, when present, is appended as a plain "X of Y MB"
+    /// suffix (see UpdateViewModel), not a synthesized bar value.
+    /// VerificationFailed is split by error category: a hash mismatch reads
+    /// as an integrity failure, an unsigned/wrong-publisher/tampered
+    /// signature reads as a publisher-verification failure — the two are
+    /// deliberately distinct so a clinic user's report to support is
+    /// actionable.
+    /// </summary>
+    public static string FromUpdateLifecycle(string lifecycle, string errorCategory) =>
+        (Enum.TryParse<UpdateLifecycleState>(lifecycle, out var state) ? state : UpdateLifecycleState.Idle) switch
+        {
+            UpdateLifecycleState.Checking => Strings.Update_Checking,
+            UpdateLifecycleState.UpToDate => Strings.Update_UpToDate,
+            UpdateLifecycleState.UpdateAvailable => Strings.Update_Available,
+            UpdateLifecycleState.Downloading => Strings.Update_Downloading,
+            UpdateLifecycleState.Verifying => Strings.Update_Verifying,
+            UpdateLifecycleState.Verified => Strings.Update_ReadyToInstall,
+            UpdateLifecycleState.DownloadFailed => Strings.Update_DownloadFailed,
+            UpdateLifecycleState.VerificationFailed =>
+                errorCategory is "UnsignedPackage" or "WrongPublisher" or "TamperedSignature" ? Strings.Update_PublisherVerificationFailed : Strings.Update_VerificationFailed,
+            UpdateLifecycleState.InstallLaunched => Strings.Update_Installing,
+            UpdateLifecycleState.Installing => Strings.Update_ServiceRestarting,
+            UpdateLifecycleState.Succeeded => Strings.Update_Succeeded,
+            UpdateLifecycleState.InstallFailed => Strings.Update_InstallerFailed,
+            UpdateLifecycleState.RebootRequired => Strings.Update_RebootRequired,
+            UpdateLifecycleState.Interrupted => Strings.Update_Interrupted,
+            UpdateLifecycleState.Unsupported => Strings.Update_UnsupportedSourceVersion,
+            UpdateLifecycleState.Disabled => Strings.Update_Disabled,
+            _ => Strings.Update_Checking,
+        };
 }

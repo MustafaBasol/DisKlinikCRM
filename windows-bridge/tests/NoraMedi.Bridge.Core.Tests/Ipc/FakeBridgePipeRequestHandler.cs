@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Security.Principal;
 using NoraMedi.Bridge.Core.Diagnostics;
 using NoraMedi.Bridge.Core.Ipc;
 
@@ -10,9 +12,22 @@ internal sealed class FakeBridgePipeRequestHandler : IBridgePipeRequestHandler
     public Exception? ThrowOnNextCall { get; set; }
     public bool FeatureEnabled { get; set; } = true;
 
+    /// <summary>
+    /// The current thread's <see cref="WindowsIdentity.ImpersonationLevel"/>,
+    /// captured at the moment each handler method runs — i.e. exactly where
+    /// <see cref="Updates.UpdateStateStore.Save"/> would perform a
+    /// LocalSystem-only file write in the real handler. Regression coverage
+    /// for the PR #149 physical-acceptance finding: client-identity capture
+    /// (<c>BridgePipeServer.CaptureClientIdentity</c>) must never leave the
+    /// thread that goes on to run request dispatch impersonating the caller.
+    /// </summary>
+    public ConcurrentBag<TokenImpersonationLevel> ObservedImpersonationLevels { get; } = [];
+
     private void Record(string name)
     {
         Calls.Add(name);
+        using var identity = WindowsIdentity.GetCurrent();
+        ObservedImpersonationLevels.Add(identity.ImpersonationLevel);
         if (ThrowOnNextCall is { } ex)
         {
             ThrowOnNextCall = null;
@@ -75,10 +90,22 @@ internal sealed class FakeBridgePipeRequestHandler : IBridgePipeRequestHandler
         return Task.FromResult(new DiagnosticsSnapshot("1.0.0", "install-123", DateTimeOffset.UtcNow, "online", "valid", DateTimeOffset.UtcNow, 1, 0, 0, 5, [new WatchFolderDiagnostics("watch-1", true)]));
     }
 
-    public Task<CheckForUpdatesResponse> CheckForUpdatesAsync(CancellationToken cancellationToken)
+    public Task<UpdateStatusPayload> CheckForUpdatesAsync(CancellationToken cancellationToken)
     {
         Record(nameof(CheckForUpdatesAsync));
-        return Task.FromResult(CheckForUpdatesResponse.NotSupported());
+        return Task.FromResult(new UpdateStatusPayload("UpToDate", "1.0.0", null, 0, null, "None", false, DateTimeOffset.UtcNow));
+    }
+
+    public Task<UpdateStatusPayload> GetUpdateStatusAsync(CancellationToken cancellationToken)
+    {
+        Record(nameof(GetUpdateStatusAsync));
+        return Task.FromResult(new UpdateStatusPayload("UpToDate", "1.0.0", null, 0, null, "None", false, DateTimeOffset.UtcNow));
+    }
+
+    public Task<InstallUpdateResponse> InstallUpdateAsync(InstallUpdateRequest request, CancellationToken cancellationToken)
+    {
+        Record(nameof(InstallUpdateAsync));
+        return Task.FromResult(new InstallUpdateResponse(false, new UpdateStatusPayload("UpToDate", "1.0.0", null, 0, null, "None", false, DateTimeOffset.UtcNow), "Nothing to install."));
     }
 
     public Task<ProvisionWithPairingCodeResponse> ProvisionWithPairingCodeAsync(ProvisionWithPairingCodeRequest request, CancellationToken cancellationToken)

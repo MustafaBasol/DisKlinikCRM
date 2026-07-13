@@ -27,4 +27,25 @@
   <data name="Pairing_InvalidRequest" xml:space="preserve"><value>Eşleştirme isteği reddedildi. NoraMedi Bridge'i en son sürüme güncelleyip tekrar deneyin.</value></data>
   <data name="Pairing_ServerError" xml:space="preserve"><value>NoraMedi sunucusu isteği işleyemedi. Kısa bir süre sonra tekrar deneyin.</value></data>
   <data name="Pairing_NetworkFailure" xml:space="preserve"><value>NoraMedi sunucusuna ulaşılamadı. İnternet bağlantısını kontrol edip tekrar deneyin.</value></data>
+
+  <data name="Update_CurrentVersion" xml:space="preserve"><value>Yüklü sürüm</value></data>
+  <data name="Update_LatestVersion" xml:space="preserve"><value>En güncel sürüm</value></data>
+  <data name="Update_Checking" xml:space="preserve"><value>Güncellemeler kontrol ediliyor…</value></data>
+  <data name="Update_UpToDate" xml:space="preserve"><value>Güncel</value></data>
+  <data name="Update_Available" xml:space="preserve"><value>Güncelleme mevcut</value></data>
+  <data name="Update_Downloading" xml:space="preserve"><value>Güncelleme indiriliyor…</value></data>
+  <data name="Update_Verifying" xml:space="preserve"><value>Güncelleme doğrulanıyor…</value></data>
+  <data name="Update_ReadyToInstall" xml:space="preserve"><value>Kuruluma hazır</value></data>
+  <data name="Update_Installing" xml:space="preserve"><value>Güncelleme kuruluyor…</value></data>
+  <data name="Update_ServiceRestarting" xml:space="preserve"><value>Servis yeniden başlatılıyor…</value></data>
+  <data name="Update_Succeeded" xml:space="preserve"><value>Güncelleme başarıyla kuruldu</value></data>
+  <data name="Update_RebootRequired" xml:space="preserve"><value>Güncelleme kuruldu — tamamlamak için bu bilgisayarı yeniden başlatın</value></data>
+  <data name="Update_DownloadFailed" xml:space="preserve"><value>Güncelleme indirilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.</value></data>
+  <data name="Update_VerificationFailed" xml:space="preserve"><value>İndirilen güncelleme bütünlük denetiminden geçemedi ve silindi.</value></data>
+  <data name="Update_PublisherVerificationFailed" xml:space="preserve"><value>İndirilen güncelleme yayımcı doğrulamasından geçemedi ve silindi.</value></data>
+  <data name="Update_InstallerFailed" xml:space="preserve"><value>Güncelleme kurulumu başarısız oldu. Sorun devam ederse NoraMedi destek ile iletişime geçin.</value></data>
+  <data name="Update_Disabled" xml:space="preserve"><value>Otomatik güncellemeler kullanılamıyor.</value></data>
+  <data name="Update_UnsupportedSourceVersion" xml:space="preserve"><value>Bu sürüm otomatik olarak güncellenemiyor. NoraMedi destek ile iletişime geçin.</value></data>
+  <data name="Update_Interrupted" xml:space="preserve"><value>Önceki güncelleme denemesi kesintiye uğradı. Güncellemeleri tekrar kontrol edin.</value></data>
+  <data name="Button_InstallUpdate" xml:space="preserve"><value>_Güncellemeyi Kur</value></data>
 </root>

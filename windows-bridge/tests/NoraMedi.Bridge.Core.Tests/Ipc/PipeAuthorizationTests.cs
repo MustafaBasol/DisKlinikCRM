@@ -61,6 +61,7 @@ public class PipeAuthorizationTests : IAsyncLifetime
     [InlineData(nameof(PipeOperation.RetryFailedItem))]
     [InlineData(nameof(PipeOperation.TestConnection))]
     [InlineData(nameof(PipeOperation.ProvisionWithPairingCode))]
+    [InlineData(nameof(PipeOperation.InstallUpdate))]
     public async Task StandardUser_IsRejectedForEveryPrivilegedOperation(string operationName)
     {
         await StartServer(StandardUser);
@@ -79,6 +80,7 @@ public class PipeAuthorizationTests : IAsyncLifetime
     [InlineData(nameof(PipeOperation.RetryFailedItem))]
     [InlineData(nameof(PipeOperation.TestConnection))]
     [InlineData(nameof(PipeOperation.ProvisionWithPairingCode))]
+    [InlineData(nameof(PipeOperation.InstallUpdate))]
     public async Task Administrator_CanCallPrivilegedOperations(string operationName)
     {
         await StartServer(Admin);
@@ -92,6 +94,7 @@ public class PipeAuthorizationTests : IAsyncLifetime
     [Theory]
     [InlineData(nameof(PipeOperation.GetServiceStatus))]
     [InlineData(nameof(PipeOperation.CheckForUpdates))]
+    [InlineData(nameof(PipeOperation.GetUpdateStatus))]
     public async Task FeatureDisabled_StillAnswersSafeStatusAndVersionQueries(string operationName)
     {
         _handler.FeatureEnabled = false;
@@ -114,6 +117,7 @@ public class PipeAuthorizationTests : IAsyncLifetime
     [InlineData(nameof(PipeOperation.TestConnection))]
     [InlineData(nameof(PipeOperation.ProvisionWithPairingCode))]
     [InlineData(nameof(PipeOperation.GetAvailableServerBindings))]
+    [InlineData(nameof(PipeOperation.InstallUpdate))]
     public async Task FeatureDisabled_BlocksEveryOtherOperation_EvenForAnAdministrator(string operationName)
     {
         _handler.FeatureEnabled = false;
@@ -134,6 +138,7 @@ public class PipeAuthorizationTests : IAsyncLifetime
         PipeOperation.RemoveFolderBinding => new RemoveFolderBindingRequest("watch-1"),
         PipeOperation.RetryFailedItem => new RetryFailedItemRequest(new string('a', 64)),
         PipeOperation.ProvisionWithPairingCode => new ProvisionWithPairingCodeRequest("12345678"),
+        PipeOperation.InstallUpdate => new InstallUpdateRequest(),
         _ => null,
     };
 }

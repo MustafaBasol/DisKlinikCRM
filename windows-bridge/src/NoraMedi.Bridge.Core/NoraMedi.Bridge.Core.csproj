@@ -5,6 +5,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" />
   </ItemGroup>
 
 </Project>
