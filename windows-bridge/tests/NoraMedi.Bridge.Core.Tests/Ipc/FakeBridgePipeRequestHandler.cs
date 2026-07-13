@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Security.Principal;
 using NoraMedi.Bridge.Core.Diagnostics;
 using NoraMedi.Bridge.Core.Ipc;
 
@@ -10,9 +12,22 @@ internal sealed class FakeBridgePipeRequestHandler : IBridgePipeRequestHandler
     public Exception? ThrowOnNextCall { get; set; }
     public bool FeatureEnabled { get; set; } = true;
 
+    /// <summary>
+    /// The current thread's <see cref="WindowsIdentity.ImpersonationLevel"/>,
+    /// captured at the moment each handler method runs — i.e. exactly where
+    /// <see cref="Updates.UpdateStateStore.Save"/> would perform a
+    /// LocalSystem-only file write in the real handler. Regression coverage
+    /// for the PR #149 physical-acceptance finding: client-identity capture
+    /// (<c>BridgePipeServer.CaptureClientIdentity</c>) must never leave the
+    /// thread that goes on to run request dispatch impersonating the caller.
+    /// </summary>
+    public ConcurrentBag<TokenImpersonationLevel> ObservedImpersonationLevels { get; } = [];
+
     private void Record(string name)
     {
         Calls.Add(name);
+        using var identity = WindowsIdentity.GetCurrent();
+        ObservedImpersonationLevels.Add(identity.ImpersonationLevel);
         if (ThrowOnNextCall is { } ex)
         {
             ThrowOnNextCall = null;

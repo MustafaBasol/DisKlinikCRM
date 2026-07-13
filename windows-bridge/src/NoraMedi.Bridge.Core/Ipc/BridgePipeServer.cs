@@ -141,21 +141,45 @@ public sealed class BridgePipeServer : IAsyncDisposable
     /// never keeps running as the client. Returns null for anonymous,
     /// unresolvable, or impersonation-refused connections, which the caller
     /// treats as unauthorized.
+    ///
+    /// Deliberately runs <see cref="NamedPipeServerStream.RunAsClient"/> on a
+    /// dedicated, throwaway <see cref="Thread"/> rather than inline on the
+    /// calling (thread-pool) thread. <c>RunAsClient</c> impersonates by
+    /// setting a token on the *current OS thread* and reverting via
+    /// <c>RevertToSelf</c> before it returns — correct in isolation, but a
+    /// thread-pool thread it runs on is returned to the pool afterward and
+    /// can be handed to a *different* connection's async continuation. Found
+    /// during PR #149 physical acceptance: with concurrent pipe traffic (the
+    /// background heartbeat/update loop plus an interactive caller), a
+    /// later, unrelated request's LocalSystem-only file write
+    /// (<see cref="Updates.UpdateStateStore.Save"/>) intermittently executed
+    /// under a *previous caller's* impersonated (non-admin) token instead of
+    /// the service's own LocalSystem identity, surfacing as an
+    /// <see cref="UnauthorizedAccessException"/> on
+    /// <c>C:\ProgramData\...\updates</c> that every operation-dispatch catch
+    /// silently turned into a generic <c>internal_error</c>. A dedicated
+    /// <see cref="Thread"/> is never pool-reused, so its impersonate/revert
+    /// cycle can never bleed into a different connection's continuation.
     /// </summary>
     private static PipeClientIdentity? CaptureClientIdentity(NamedPipeServerStream server)
     {
         PipeClientIdentity? result = null;
-        server.RunAsClient(() =>
+        var thread = new Thread(() =>
         {
-            using var identity = WindowsIdentity.GetCurrent();
-            if (identity is null || identity.IsAnonymous || string.IsNullOrEmpty(identity.Name))
+            server.RunAsClient(() =>
             {
-                return;
-            }
+                using var identity = WindowsIdentity.GetCurrent();
+                if (identity is null || identity.IsAnonymous || string.IsNullOrEmpty(identity.Name))
+                {
+                    return;
+                }
 
-            var isAdministrator = identity.IsSystem || new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
-            result = new PipeClientIdentity(identity.Name, isAdministrator);
+                var isAdministrator = identity.IsSystem || new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+                result = new PipeClientIdentity(identity.Name, isAdministrator);
+            });
         });
+        thread.Start();
+        thread.Join();
         return result;
     }
 

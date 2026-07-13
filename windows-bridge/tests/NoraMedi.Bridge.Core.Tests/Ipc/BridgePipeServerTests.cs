@@ -1,3 +1,4 @@
+using System.Security.Principal;
 using NoraMedi.Bridge.Core.Ipc;
 
 namespace NoraMedi.Bridge.Core.Tests.Ipc;
@@ -195,5 +196,66 @@ public class BridgePipeServerTests : IAsyncLifetime
     {
         await _server.DisposeAsync();
         await _server.DisposeAsync();
+    }
+}
+
+/// <summary>
+/// Regression coverage for a real defect found during PR #149 physical
+/// acceptance: <c>BridgePipeServer.CaptureClientIdentity</c> impersonates the
+/// connecting client (via <c>NamedPipeServerStream.RunAsClient</c>) to check
+/// its identity/Administrators membership, then must revert before request
+/// dispatch runs — dispatch includes LocalSystem-only file writes (e.g.
+/// <see cref="NoraMedi.Bridge.Core.Updates.UpdateStateStore.Save"/>) that must
+/// never execute under the caller's impersonated token. Under concurrent pipe
+/// traffic, physical testing observed dispatch intermittently running
+/// impersonated, causing those writes to fail with
+/// <see cref="UnauthorizedAccessException"/> (silently mapped to a generic
+/// <c>internal_error</c> by <c>HandleConnectionAsync</c>'s catch-all).
+/// These tests use the server's *real*, non-stubbed identity resolver
+/// (every other test in <see cref="BridgePipeServerTests"/> stubs it) so they
+/// actually exercise <c>CaptureClientIdentity</c>.
+/// </summary>
+public class BridgePipeServerImpersonationTests : IAsyncLifetime
+{
+    private readonly string _pipeName = "nmb-test-imp-" + Guid.NewGuid().ToString("N");
+    private readonly FakeBridgePipeRequestHandler _handler = new();
+    private BridgePipeServer _server = null!;
+
+    public Task InitializeAsync()
+    {
+        // No identityResolver override — uses the real CaptureClientIdentity.
+        _server = new BridgePipeServer(_pipeName, _handler, maxInstances: 4);
+        _server.Start();
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync() => await _server.DisposeAsync();
+
+    [Fact(Timeout = 15000)]
+    public async Task Dispatch_NeverRunsImpersonated_AfterRealIdentityCapture()
+    {
+        var response = await BridgePipeClient.SendAsync(_pipeName, PipeOperation.GetServiceStatus);
+
+        Assert.True(response.Success);
+        Assert.Single(_handler.ObservedImpersonationLevels);
+        Assert.Equal(TokenImpersonationLevel.None, _handler.ObservedImpersonationLevels.Single());
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task Dispatch_NeverRunsImpersonated_UnderConcurrentRealIdentityCapture()
+    {
+        // Many overlapping connections sharing the thread pool is exactly the
+        // condition physical testing hit: one connection's identity-capture
+        // thread must never leave an impersonation token that a *different*
+        // connection's dispatch later inherits.
+        var tasks = Enumerable.Range(0, 20)
+            .Select(_ => BridgePipeClient.SendAsync(_pipeName, PipeOperation.GetServiceStatus, connectTimeoutMs: 15000))
+            .ToArray();
+
+        var responses = await Task.WhenAll(tasks);
+
+        Assert.All(responses, r => Assert.True(r.Success));
+        Assert.Equal(20, _handler.ObservedImpersonationLevels.Count);
+        Assert.All(_handler.ObservedImpersonationLevels, level => Assert.Equal(TokenImpersonationLevel.None, level));
     }
 }
