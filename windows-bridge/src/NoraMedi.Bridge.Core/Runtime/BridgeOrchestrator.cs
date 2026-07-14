@@ -626,14 +626,51 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         return Task.FromResult(new InstallUpdateResponse(launched, ToUpdateStatusPayload(_updateManager.CurrentState), launched ? null : "Failed to launch the update helper process."));
     }
 
+    /// <summary>
+    /// Copies UpdateHelper.exe and its dependencies out of the MSI-owned
+    /// Program Files tree into a private ProgramData working copy, and
+    /// returns the copy's exe path (or null if the source is missing).
+    ///
+    /// PR 7/7 physical acceptance testing on real hardware found that
+    /// running the helper directly from AppContext.BaseDirectory\UpdateHelper
+    /// (its as-installed location) let Windows Installer's Restart Manager
+    /// integration force-close it mid-install: those files are versioned
+    /// payload the SAME MSI transaction the helper just launched needs to
+    /// overwrite, so RM saw the running exe holding them open and shut it
+    /// down (Event ID 10002, "'NoraMedi.Bridge.UpdateHelper' application or
+    /// service is being shut down") - killing the one process responsible
+    /// for observing the new service come up and writing the helper-result
+    /// file. With no result to reconcile on the next boot, the update
+    /// Lifecycle never reaches Succeeded, which silently defeated
+    /// PostUpdateHealthTracker's crash-loop rollback detector (it only
+    /// evaluates when Lifecycle==Succeeded). Running from a private copy
+    /// outside the MSI's own component set - the standard pattern for a
+    /// self-updater that replaces its own install directory - means the
+    /// running process is never one of the files being replaced.
+    /// </summary>
+    private string? StageDetachedUpdateHelper()
+    {
+        var sourceDir = Path.Combine(AppContext.BaseDirectory, "UpdateHelper");
+        var sourceExe = Path.Combine(sourceDir, "NoraMedi.Bridge.UpdateHelper.exe");
+        if (!File.Exists(sourceExe))
+        {
+            return null;
+        }
+
+        var stagedDir = Path.Combine(_updateOptions.UpdatesDirectory, "helper-runtime");
+        DetachedHelperStaging.CopyTree(sourceDir, stagedDir);
+        ProgramDataAcl.ProtectDirectory(stagedDir, _options.ServiceAccountSid);
+        return Path.Combine(stagedDir, "NoraMedi.Bridge.UpdateHelper.exe");
+    }
+
     private bool TryLaunchUpdateHelper(UpdateState state)
     {
         try
         {
-            var helperExe = Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe");
-            if (!File.Exists(helperExe))
+            var helperExe = StageDetachedUpdateHelper();
+            if (helperExe is null)
             {
-                _logger.LogError("update.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(helperExe));
+                _logger.LogError("update.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe")));
                 return false;
             }
 
@@ -692,10 +729,10 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
 
         try
         {
-            var helperExe = Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe");
-            if (!File.Exists(helperExe))
+            var helperExe = StageDetachedUpdateHelper();
+            if (helperExe is null)
             {
-                _logger.LogError("rollback.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(helperExe));
+                _logger.LogError("rollback.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe")));
                 _rollbackManager.RecordResult(new RollbackHelperResult("Failed", nameof(RollbackErrorCategory.Unknown), null, null, DateTimeOffset.UtcNow), offeredVersionThatFailed, instruction.ExpectedVersion);
                 return;
             }
