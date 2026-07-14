@@ -298,50 +298,74 @@
     "title": "Kliniğinizin büyüklüğüne uygun planlar",
     "description": "Tüm planlar temel CRM özelliklerini içerir; klinik sayınıza ve iletişim kanallarınıza göre genişler.",
     "popularBadge": "En Popüler",
-    "note": "Fiyatlar KDV hariçtir. İhtiyacınıza özel teklif için demo talebi oluşturabilirsiniz.",
+    "commonNote": "Tüm planlarda sınırsız kullanıcı, hekim ve cihaz.",
+    "aiNote1": "* AI destekli konuşma, sistemin standart akışla anlayamadığı bir konuşmaya AI'ın dahil olduğu konuşmadır.",
+    "aiNote2": "Standart sistem akışıyla veya personel tarafından yürütülen konuşmalar AI kotasına dahil edilmez.",
+    "note": "Fiyatlar KDV hariçtir. SMS, Meta mesaj ücretleri, kurulum, veri taşıma ve görüntüleme depolaması ayrıca fiyatlandırılır.",
+    "billing": {
+      "groupLabel": "Faturalandırma dönemi",
+      "monthly": "Aylık",
+      "yearly": "Yıllık",
+      "yearlySaving": "2 Ay Ücretsiz"
+    },
     "plans": {
       "starter": {
         "name": "Başlangıç",
-        "description": "Tek klinik için temel operasyon yönetimi.",
-        "price": "₺1.490",
-        "period": "/ay",
+        "description": "Tek klinik için eksiksiz temel operasyon yönetimi.",
+        "monthlyPrice": "2.390 TL",
+        "monthlyPeriod": "/ ay + KDV",
+        "monthlyNote": "Aylık faturalandırılır",
+        "yearlyPrice": "23.900 TL",
+        "yearlyPeriod": "/ yıl + KDV",
+        "yearlyNote": "Yıllık peşin ödeme · 12 ay kullanım",
         "cta": "Demo Talep Et",
         "features": {
-          "0": "Randevu ve hasta yönetimi",
-          "1": "Tedavi ve ödeme takibi",
-          "2": "Görev yönetimi",
-          "3": "3 kullanıcıya kadar",
-          "4": "E-posta desteği"
+          "0": "Hasta, randevu ve tedavi yönetimi",
+          "1": "Finans ve ödeme takibi",
+          "2": "Laboratuvar ve stok yönetimi",
+          "3": "2.500 aktif hasta",
+          "4": "10 GB dosya alanı",
+          "5": "Raporlama paneli",
+          "6": "Standart destek"
         }
       },
       "professional": {
-        "name": "Profesyonel",
-        "description": "Büyüyen klinikler için iletişim kanalları ve raporlama.",
-        "price": "₺2.990",
-        "period": "/ay",
+        "name": "Akıllı Klinik",
+        "description": "İletişim, AI ve otomasyonla büyüyen klinikler için.",
+        "monthlyPrice": "3.990 TL",
+        "monthlyPeriod": "/ ay + KDV",
+        "monthlyNote": "Aylık faturalandırılır",
+        "yearlyPrice": "39.900 TL",
+        "yearlyPeriod": "/ yıl + KDV",
+        "yearlyNote": "Yıllık peşin ödeme · 12 ay kullanım",
         "cta": "Demo Talep Et",
         "features": {
-          "0": "Başlangıç planındaki her şey",
-          "1": "WhatsApp ve Instagram gelen kutusu",
-          "2": "Hatırlatma otomasyonları",
-          "3": "Finans ve raporlama panelleri",
-          "4": "10 kullanıcıya kadar",
-          "5": "Öncelikli destek"
+          "0": "Başlangıç planındaki tüm özellikler",
+          "1": "10.000 aktif hasta",
+          "2": "50 GB dosya alanı",
+          "3": "1 WhatsApp hattı ve 1 Instagram hesabı",
+          "4": "Aylık 500 AI destekli konuşma",
+          "5": "Otomatik hasta takibi ve geri dönüşler",
+          "6": "Gelişmiş finans ve raporlama",
+          "7": "Öncelikli destek"
         }
       },
       "enterprise": {
         "name": "Kurumsal",
-        "description": "Çok şubeli organizasyonlar için merkezi yönetim.",
+        "description": "Çok klinikli organizasyonlar için merkezi yönetim.",
         "price": "Özel Teklif",
         "period": "",
-        "cta": "Bizimle İletişime Geçin",
+        "cta": "Bizimle İletişime Geç",
         "features": {
-          "0": "Profesyonel planındaki her şey",
-          "1": "Çoklu şube yönetimi",
-          "2": "Sınırsız kullanıcı",
-          "3": "Rol ve yetki özelleştirme",
-          "4": "KVKK uyum araçları",
-          "5": "Özel kurulum ve eğitim"
+          "0": "Akıllı Klinik planındaki tüm özellikler",
+          "1": "Çoklu klinik yönetimi",
+          "2": "Klinik başına 100 GB dosya alanı",
+          "3": "Her klinik için 1 WhatsApp hattı",
+          "4": "Her klinik için 1 Instagram hesabı",
+          "5": "Klinik bazlı rol, yetki ve raporlama",
+          "6": "Klinik bazlı özel AI kotası",
+          "7": "Gelişmiş API ve özel entegrasyonlar",
+          "8": "Müşteri yöneticisi ve SLA opsiyonu"
         }
       }
     }
