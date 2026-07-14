@@ -175,7 +175,16 @@
       "unsignedWarning": "Dies ist eine unsignierte Pilot-/Testversion. Windows zeigt beim Installieren möglicherweise die Warnung „Unbekannter Herausgeber“ an.",
       "download": "Herunterladen",
       "setup": "Einrichtung starten",
-      "clinicRequired": "Wählen Sie eine bestimmte Klinik aus (nicht „Alle Kliniken“), um die Bridge einzurichten."
+      "clinicRequired": "Wählen Sie eine bestimmte Klinik aus (nicht „Alle Kliniken“), um die Bridge einzurichten.",
+      "usageSteps": {
+        "title": "Einrichtungs- und Nutzungsreihenfolge",
+        "step1": { "title": "Bildgebungsgerät hinzufügen", "description": "Erstellen Sie Ihr Röntgen-, Panorama- oder anderes Bildgebungsgerät in NoraMedi." },
+        "step2": { "title": "Bridge-Anwendung installieren", "description": "Laden Sie die Bridge auf den Windows-Computer herunter, mit dem das Bildgebungsgerät verbunden ist, und installieren Sie sie." },
+        "step3": { "title": "Computer koppeln", "description": "Geben Sie den in NoraMedi erzeugten Kopplungscode in Bridge Manager → Pairing ein." },
+        "step4": { "title": "Gerät mit Ordner verknüpfen", "description": "Wählen Sie in Bridge Manager → Folder Bindings zuerst das NoraMedi-Gerät und dann den Ordner aus, in dem die Gerätesoftware Bilder speichert. Klicken Sie auf Validate Folder und anschließend auf Save." },
+        "step5": { "title": "Testbild senden", "description": "Speichern Sie ein Testbild im ausgewählten Ordner. Es wird automatisch in die NoraMedi-Bildgebungswarteschlange übertragen." },
+        "warning": "Jeder Ordner muss zwingend mit einem Bildgebungsgerät verknüpft werden. Nur einen Ordner auszuwählen reicht nicht aus."
+      }
     },
     "wizard": {
       "title": "NoraMedi Bridge-Einrichtung",
@@ -212,7 +221,12 @@
       "success": {
         "title": "„{{name}}“ erfolgreich verbunden",
         "description": "Die Bridge ist jetzt bei NoraMedi registriert. Verwenden Sie NoraMedi Bridge Manager, um lokale Ordner auszuwählen.",
-        "nextSteps": "Sie können jetzt in NoraMedi Bridge Manager die zu überwachenden Ordner für die verbundenen Geräte auswählen."
+        "nextSteps": "Sie können jetzt in NoraMedi Bridge Manager die zu überwachenden Ordner für die verbundenen Geräte auswählen.",
+        "folderBindingReminder": {
+          "title": "Letzter Schritt: Gerät und Ordner verknüpfen",
+          "description": "Öffnen Sie die Registerkarte Folder Bindings in Bridge Manager. Wählen Sie das NoraMedi-Gerät und den Ordner aus, in dem die Gerätesoftware Bilder speichert, validieren Sie den Ordner und speichern Sie.",
+          "warning": "Wird nur der Ordner ohne Geräteauswahl gespeichert, startet die Bildübertragung nicht."
+        }
       }
     }
   },

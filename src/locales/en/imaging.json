@@ -175,7 +175,16 @@
       "unsignedWarning": "This is an unsigned pilot/test build. Windows may show an \"Unknown publisher\" warning during install.",
       "download": "Download",
       "setup": "Start Setup",
-      "clinicRequired": "Select a specific clinic (not \"All clinics\") to set up the bridge."
+      "clinicRequired": "Select a specific clinic (not \"All clinics\") to set up the bridge.",
+      "usageSteps": {
+        "title": "Setup and usage order",
+        "step1": { "title": "Add your imaging device", "description": "Create your X-ray, panoramic, or other imaging device in NoraMedi." },
+        "step2": { "title": "Install the Bridge app", "description": "Download and install the Bridge on the Windows computer connected to the imaging device." },
+        "step3": { "title": "Pair the computer", "description": "Enter the pairing code generated in NoraMedi into Bridge Manager → Pairing." },
+        "step4": { "title": "Link the device to a folder", "description": "In Bridge Manager → Folder Bindings, first select the NoraMedi device, then the folder where the device software saves images. Click Validate Folder, then Save." },
+        "step5": { "title": "Send a test image", "description": "Save a test image to the selected folder. It's automatically transferred to the NoraMedi Imaging Queue." },
+        "warning": "Every folder must be paired with an imaging device. Selecting only a folder is not enough."
+      }
     },
     "wizard": {
       "title": "NoraMedi Bridge Setup",
@@ -212,7 +221,12 @@
       "success": {
         "title": "\"{{name}}\" connected successfully",
         "description": "The bridge is now registered with NoraMedi. Use NoraMedi Bridge Manager to choose local folders.",
-        "nextSteps": "You can now select the folders to watch for the connected devices in NoraMedi Bridge Manager."
+        "nextSteps": "You can now select the folders to watch for the connected devices in NoraMedi Bridge Manager.",
+        "folderBindingReminder": {
+          "title": "Final step: link device and folder",
+          "description": "Open the Folder Bindings tab in Bridge Manager. Select the NoraMedi device and the folder where the device software saves images, validate the folder, and save.",
+          "warning": "Saving only the folder without selecting a device will not start image transfer."
+        }
       }
     }
   },

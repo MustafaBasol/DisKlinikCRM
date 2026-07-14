@@ -503,6 +503,21 @@ const BridgeSetupWizard: React.FC<BridgeSetupWizardProps> = ({
               <p className="text-xs text-gray-400">
                 {t('imaging:onboarding.wizard.success.nextSteps')}
               </p>
+              <div className="rounded-lg border border-gray-200 p-3 text-left dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                  {t('imaging:onboarding.wizard.success.folderBindingReminder.title')}
+                </h3>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t('imaging:onboarding.wizard.success.folderBindingReminder.description')}
+                </p>
+                <div
+                  role="note"
+                  className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                >
+                  <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                  <span>{t('imaging:onboarding.wizard.success.folderBindingReminder.warning')}</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
