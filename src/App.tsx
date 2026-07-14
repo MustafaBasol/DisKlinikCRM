@@ -64,6 +64,7 @@ const LabOrders = React.lazy(() => import('./pages/LabOrders'));
 const ImagingQueue = React.lazy(() => import('./pages/ImagingQueue'));
 const RecallDashboard = React.lazy(() => import('./pages/RecallDashboard'));
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const PricingPage = React.lazy(() => import('./pages/PricingPage'));
 const LegalCenterPage = React.lazy(() => import('./pages/legal/LegalCenterPage'));
 const PrivacyNoticePage = React.lazy(() => import('./pages/legal/PrivacyNoticePage'));
 const CookiePolicyPage = React.lazy(() => import('./pages/legal/CookiePolicyPage'));
@@ -228,6 +229,7 @@ const App: React.FC = () => (
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
+      <Route path="/fiyatlandirma" element={<PricingPage />} />
       <Route path="/legal" element={<LegalCenterPage />} />
       <Route path="/legal/privacy" element={<PrivacyNoticePage />} />
       <Route path="/legal/cookies" element={<CookiePolicyPage />} />

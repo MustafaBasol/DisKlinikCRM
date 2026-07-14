@@ -302,6 +302,7 @@
     "aiNote1": "* An AI-assisted conversation is one where AI steps in because the standard flow couldn't handle it.",
     "aiNote2": "Conversations handled by the standard flow or by staff are not counted toward the AI quota.",
     "note": "Prices exclude VAT. SMS, Meta messaging fees, setup, data migration, and imaging storage are billed separately.",
+    "detailedLink": "Explore all plans and add-on services",
     "billing": {
       "groupLabel": "Billing period",
       "monthly": "Monthly",

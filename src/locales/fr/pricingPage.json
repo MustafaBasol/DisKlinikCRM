@@ -1,0 +1,246 @@
+{
+  "meta": {
+    "title": "Tarifs NoraMedi | Formules CRM pour cliniques dentaires",
+    "description": "Comparez les formules CRM NoraMedi pour cliniques dentaires, les forfaits de conversations IA, le stockage, les SMS, la mise en service et les frais de migration de données."
+  },
+  "hero": {
+    "title": "Formules et Tarifs NoraMedi",
+    "subtitle": "De la gestion de clinique à la communication patient assistée par IA, choisissez la formule et les services complémentaires adaptés à vos besoins.",
+    "commonNote": "Utilisateurs, praticiens et appareils illimités sur toutes les formules.",
+    "priceNote": "Prix hors TVA."
+  },
+  "backToHome": "Retour à l'accueil",
+  "comparison": {
+    "label": "Comparaison",
+    "title": "Comparatif détaillé des formules",
+    "description": "Comparez toutes les fonctionnalités des trois formules par catégorie.",
+    "mobileHint": "Faites défiler le tableau horizontalement pour voir toutes les colonnes.",
+    "cellIncluded": "Inclus",
+    "cellExcluded": "Non inclus",
+    "columns": {
+      "feature": "Fonctionnalité",
+      "starter": "Essentiel",
+      "professional": "Clinique Intelligente",
+      "enterprise": "Entreprise"
+    },
+    "categories": {
+      "general": "Général",
+      "patientsAppointments": "Patients et rendez-vous",
+      "treatmentOps": "Traitement et opérations",
+      "finance": "Finance",
+      "labInventory": "Laboratoire et stock",
+      "channels": "WhatsApp et Instagram",
+      "ai": "Intelligence artificielle",
+      "automation": "Communication automatisée et suivi",
+      "reporting": "Rapports",
+      "integration": "Intégration",
+      "support": "Support",
+      "capacity": "Capacité"
+    },
+    "rows": {
+      "clinicCount": { "label": "Nombre de cliniques", "values": { "starter": "1", "professional": "1", "enterprise": "Multiple (illimité)" } },
+      "users": { "label": "Utilisateurs", "values": { "starter": "Illimité", "professional": "Illimité", "enterprise": "Illimité" } },
+      "practitioners": { "label": "Praticiens", "values": { "starter": "Illimité", "professional": "Illimité", "enterprise": "Illimité" } },
+      "devices": { "label": "Appareils", "values": { "starter": "Illimité", "professional": "Illimité", "enterprise": "Illimité" } },
+      "activePatientCapacity": { "label": "Capacité de patients actifs", "values": { "starter": "2 500", "professional": "10 000", "enterprise": "Personnalisé par clinique" } },
+      "fileStorage": { "label": "Espace de stockage général", "values": { "starter": "10 Go", "professional": "50 Go", "enterprise": "100 Go par clinique" } },
+      "patientManagement": { "label": "Gestion des patients" },
+      "appointmentCalendar": { "label": "Calendrier de rendez-vous" },
+      "treatmentPlans": { "label": "Plans de traitement" },
+      "dentalChart": { "label": "Schéma dentaire" },
+      "financePaymentTracking": { "label": "Finance et suivi des paiements" },
+      "paymentPlans": { "label": "Plans de paiement" },
+      "labManagement": { "label": "Gestion du laboratoire" },
+      "inventoryManagement": { "label": "Gestion des stocks" },
+      "whatsappLine": { "label": "Ligne WhatsApp", "values": { "professional": "1 incluse", "enterprise": "1 par clinique" } },
+      "instagramAccount": { "label": "Compte Instagram", "values": { "professional": "1 inclus", "enterprise": "1 par clinique" } },
+      "unifiedInbox": { "label": "Boîte de réception unifiée" },
+      "aiConversationQuota": { "label": "Quota de conversations IA", "values": { "professional": "500 / mois", "enterprise": "Quota personnalisé par clinique" } },
+      "whatsappAiAssistant": { "label": "Assistant IA WhatsApp" },
+      "instagramAiAssistant": { "label": "Assistant IA Instagram" },
+      "autoPatientFollowUp": { "label": "Suivi automatisé des patients" },
+      "noShowFollowUp": { "label": "Relance des rendez-vous manqués" },
+      "postTreatmentFollowUp": { "label": "Suivi post-traitement" },
+      "checkupReminders": { "label": "Rappels de contrôle" },
+      "pendingRequestFollowUp": { "label": "Suivi des demandes de rendez-vous en attente" },
+      "reportingDashboard": { "label": "Tableau de bord de rapports" },
+      "advancedReports": { "label": "Rapports avancés" },
+      "aiUsageReports": { "label": "Rapports d'utilisation IA" },
+      "apiWebhook": { "label": "API et webhooks" },
+      "customIntegration": { "label": "Intégration personnalisée" },
+      "supportLevel": { "label": "Niveau de support", "values": { "starter": "Standard", "professional": "Prioritaire", "enterprise": "Chargé de compte dédié" } },
+      "sla": { "label": "SLA", "values": { "enterprise": "En option" } },
+      "setupFeePerClinic": { "label": "Frais de mise en service par clinique", "values": { "starter": "5.000 TL", "professional": "10.000 TL", "enterprise": "10.000 TL / clinique (min. 40.000 TL)" } }
+    }
+  },
+  "aiAddons": {
+    "label": "Services complémentaires",
+    "title": "Forfaits de conversations IA supplémentaires",
+    "description": "Utilisables en complément du quota de 500 conversations mensuelles de la formule Clinique Intelligente.",
+    "quotaLabel": "Quota supplémentaire",
+    "quotaUnit": "conversations / mois",
+    "packages": {
+      "aiMini": { "name": "AI Mini" },
+      "aiPlus": { "name": "AI Plus" },
+      "aiGrowth": { "name": "AI Growth" },
+      "aiScale": { "name": "AI Scale" }
+    },
+    "enterprise": { "name": "IA Entreprise", "description": "Volume personnalisé", "price": "Devis personnalisé" },
+    "notes": [
+      "Le quota se renouvelle chaque mois",
+      "Les droits non utilisés ne sont pas reportés au mois suivant",
+      "Le forfait est défini par clinique",
+      "Les canaux supplémentaires partagent le même quota IA de la clinique"
+    ],
+    "definition": "Une conversation assistée par IA est une conversation que le flux standard du système n'a pas pu traiter et où l'IA intervient.",
+    "definitionNote": "Les conversations traitées par le flux standard ou par le personnel ne sont pas comptées dans le quota IA.",
+    "sessionNote": "La durée de session de conversation est définie dans les conditions contractuelles.",
+    "cta": "Demander un devis"
+  },
+  "storageAddons": {
+    "title": "Stockage de fichiers supplémentaire",
+    "description": "Utilisable pour les documents patients, photos, fichiers PDF et pièces jointes de laboratoire.",
+    "packages": {
+      "storage25": { "name": "+25 Go" },
+      "storage50": { "name": "+50 Go" },
+      "storage100": { "name": "+100 Go" },
+      "storage250": { "name": "+250 Go" }
+    },
+    "dicomNote": "Le stockage d'imagerie radiographique, DICOM et CBCT n'est pas inclus dans le quota de stockage général.",
+    "dicomDescription": "Le stockage d'imagerie radiographique et DICOM est facturé séparément selon le volume d'utilisation et les besoins de sauvegarde.",
+    "cta": "Demander un devis"
+  },
+  "channelAddons": {
+    "title": "Canaux de communication supplémentaires",
+    "packages": {
+      "whatsappLine": { "name": "Ligne WhatsApp supplémentaire", "setupLabel": "Mise en service unique" },
+      "instagramAccount": { "name": "Compte Instagram supplémentaire", "setupLabel": "Mise en service unique" },
+      "webChatbot": { "name": "Assistant de chat IA pour site web", "setupLabel": "Mise en service unique" }
+    },
+    "notes": [
+      "La formule Clinique Intelligente inclut 1 ligne WhatsApp et 1 compte Instagram",
+      "La formule Entreprise inclut une connexion par clinique",
+      "Les canaux supplémentaires partagent le même quota IA de la clinique",
+      "Les frais de messagerie Meta ne sont pas inclus dans le prix de l'abonnement",
+      "Les frais de services tiers sont facturés séparément"
+    ],
+    "cta": "Demander un devis"
+  },
+  "sms": {
+    "title": "Forfaits SMS NoraMedi",
+    "subtitle": "Gérez vos crédits SMS via NoraMedi pour les rappels de rendez-vous, les notifications et la communication avec les patients.",
+    "infoNote": "Tous les envois de SMS s'effectuent via NoraMedi. Vous n'avez pas besoin d'ouvrir ou de connecter un compte fournisseur SMS distinct.",
+    "trackingNote": "Votre solde SMS, l'historique d'envoi et, le cas échéant, les statuts de livraison sont suivis via NoraMedi.",
+    "unitLabel": "crédits SMS",
+    "packages": {
+      "smsMini": { "name": "SMS Mini" },
+      "smsStandard": { "name": "SMS Standard" },
+      "smsPlus": { "name": "SMS Plus" },
+      "smsBulk": { "name": "SMS Bulk" }
+    },
+    "highVolume": { "name": "Volume élevé", "count": "25 000+", "price": "Devis personnalisé" },
+    "billingNote": "Les forfaits SMS sont des achats de crédits ponctuels, indépendants de votre formule d'abonnement principale.",
+    "cta": "Demander un forfait SMS",
+    "activationNote": "Les forfaits SMS sont attribués à votre compte par notre équipe commerciale.",
+    "usageNotes": [
+      "Les messages longs ou contenant des caractères accentués, des emojis ou d'autres caractères Unicode peuvent utiliser plusieurs crédits SMS selon leur longueur technique.",
+      "La politique de crédit pour les SMS échoués ou non livrés dépend du résultat fourni par le fournisseur et des conditions d'utilisation de NoraMedi.",
+      "Les tarifs SMS peuvent être mis à jour en fonction de l'évolution des coûts des opérateurs et fournisseurs SMS."
+    ]
+  },
+  "setup": {
+    "title": "Services de mise en service et de démarrage",
+    "starter": {
+      "title": "Mise en service Essentiel",
+      "priceLabel": "5.000 TL / clinique + TVA",
+      "items": ["Paramètres de base de la clinique", "Structure des rôles utilisateurs", "Types de services et de rendez-vous", "Configuration système de base", "Formation de démarrage à distance"]
+    },
+    "professional": {
+      "title": "Mise en service Clinique Intelligente",
+      "priceLabel": "10.000 TL / clinique + TVA",
+      "items": ["Mise en service Essentiel", "Connexion WhatsApp", "Connexion Instagram", "Modèles de messages", "Configuration des canaux IA", "Configuration de base des flux de communication automatisés", "Formation à distance"]
+    },
+    "enterprise": {
+      "title": "Mise en service Entreprise",
+      "items": ["Mise en service centrale entreprise : 20.000 TL + TVA", "Mise en service par clinique : 10.000 TL + TVA", "Total minimum : 40.000 TL + TVA"],
+      "description": "Le montant final de la mise en service est établi sur devis selon le nombre de cliniques, la migration de données et le périmètre d'intégration."
+    }
+  },
+  "migration": {
+    "title": "Forfaits de migration de données",
+    "topNote": "Un échantillon de données est analysé gratuitement avant la tarification finale.",
+    "basic": { "title": "Basique", "priceLabel": "5.000 TL + TVA", "items": ["Jusqu'à 2 500 patients", "Prénom", "Nom", "Téléphone", "E-mail", "Informations patient de base"] },
+    "standard": { "title": "Standard", "priceLabel": "12.500 TL + TVA", "items": ["Jusqu'à 10 000 patients", "Informations patient", "Rendez-vous", "Soldes ouverts", "Correspondance de champs de base"] },
+    "advanced": { "title": "Avancé", "priceLabel": "À partir de 25.000 TL + TVA", "items": ["Historique de traitement", "Paiements", "Rendez-vous", "Correspondance de champs personnalisée", "Nettoyage de données", "Analyse des doublons"] },
+    "custom": { "title": "Migration personnalisée", "priceLabel": "Devis personnalisé", "items": ["Base de données de l'ancien logiciel", "Transfert par API", "Documents", "Photos", "Transformation de données personnalisée"] },
+    "note": "Les documents patients, photos, radiographies/DICOM, fichiers Excel non structurés, fusion de doublons et développements API personnalisés sont évalués séparément.",
+    "generalDescription": "Les tarifs de migration de données varient selon la structure du système source, le nombre d'enregistrements et la qualité des données. Le prix final est communiqué après une analyse de données gratuite.",
+    "cta": "Demander une analyse de données gratuite"
+  },
+  "training": {
+    "title": "Formation et services personnalisés",
+    "items": {
+      "onlineExtra": { "name": "Formation en ligne supplémentaire — 2 heures", "priceLabel": "2.500 TL + TVA" },
+      "onSite": { "name": "Formation sur site — 1 jour ouvré", "priceLabel": "15.000 TL + TVA" },
+      "customReport": { "name": "Développement de rapport personnalisé", "priceLabel": "À partir de 5.000 TL + TVA" },
+      "customAutomation": { "name": "Automatisation / workflow personnalisé", "priceLabel": "À partir de 7.500 TL + TVA" },
+      "customApi": { "name": "Intégration API personnalisée", "priceLabel": "Selon le projet" },
+      "sla": { "name": "SLA Entreprise", "priceLabel": "Devis personnalisé" }
+    },
+    "note": "Les frais de déplacement et d'hébergement pour les formations sur site sont facturés séparément."
+  },
+  "capacity": {
+    "title": "Capacité de patients actifs supplémentaire",
+    "definition": "Un patient ayant une activité de rendez-vous, de traitement, de paiement ou de communication au cours des 24 derniers mois est considéré comme un patient actif.",
+    "archiveNote": "Les dossiers patients archivés ne sont pas supprimés. Le dossier redevient actif dès qu'une nouvelle activité est enregistrée pour ce patient.",
+    "packages": {
+      "capacity5k": { "name": "+5 000 patients actifs" },
+      "capacity10k": { "name": "+10 000 patients actifs" }
+    },
+    "enterprise": { "name": "25 000+ patients actifs", "price": "Devis entreprise" },
+    "note": "Pour des besoins de capacité de patients plus élevés sur la formule Essentiel, nous recommandons de passer à la formule Clinique Intelligente."
+  },
+  "faq": {
+    "title": "Questions fréquentes",
+    "items": {
+      "yearlyDiscount": { "question": "Comment fonctionne la réduction annuelle ?", "answer": "Avec la facturation annuelle, vous payez 10 mois et bénéficiez de 12 mois d'accès. Le paiement est perçu à l'avance." },
+      "setupPerClinic": { "question": "Les frais de mise en service sont-ils facturés par clinique ?", "answer": "Oui, les frais de mise en service sont facturés par clinique." },
+      "aiDeduction": { "question": "Quand une conversation IA est-elle déduite du quota ?", "answer": "Seules les conversations que le flux standard n'a pas pu traiter, et où l'IA intervient, sont déduites du quota." },
+      "aiRollover": { "question": "Les conversations IA non utilisées sont-elles reportées ?", "answer": "Non, le quota mensuel de conversations IA n'est pas reporté au mois suivant." },
+      "metaFees": { "question": "Les frais de messagerie Meta sont-ils inclus dans la formule ?", "answer": "Non, les frais de messagerie Meta (WhatsApp/Instagram) ne sont pas inclus dans le prix de l'abonnement et sont facturés séparément." },
+      "smsFees": { "question": "Les frais SMS sont-ils inclus dans la formule ?", "answer": "Non. L'utilisation des SMS est distincte des formules d'abonnement principales. Vous pouvez acheter séparément le forfait de crédits SMS NoraMedi adapté à vos besoins. Vous n'avez pas besoin de connecter un compte fournisseur SMS distinct." },
+      "ownChannels": { "question": "Puis-je utiliser mon propre compte WhatsApp ou Instagram ?", "answer": "Oui, vous pouvez connecter votre ligne WhatsApp et votre compte Instagram existants à NoraMedi." },
+      "activePatientDefinition": { "question": "Comment est calculé un patient actif ?", "answer": "Les patients ayant une activité de rendez-vous, de traitement, de paiement ou de communication au cours des 24 derniers mois sont comptés comme actifs." },
+      "archivedPatients": { "question": "Les patients archivés sont-ils supprimés ?", "answer": "Non, les dossiers patients archivés ne sont pas supprimés. Le dossier redevient actif dès qu'une nouvelle activité est enregistrée." },
+      "dicomStorage": { "question": "Les radiographies et DICOM sont-ils inclus dans le stockage de fichiers ?", "answer": "Non, le stockage d'imagerie radiographique et DICOM/CBCT est distinct du quota de stockage général et facturé séparément selon le volume." },
+      "migrationPriceVariance": { "question": "Pourquoi le prix de migration de données peut-il varier ?", "answer": "Le prix dépend de la structure du système source, du nombre d'enregistrements et de la qualité des données. Le prix final est communiqué après une analyse de données gratuite." },
+      "planUpgrade": { "question": "Puis-je changer de formule ultérieurement ?", "answer": "Oui, vous pouvez passer à une formule supérieure ultérieurement selon les besoins de votre clinique." },
+      "addonPurchaseLater": { "question": "Puis-je acheter un forfait IA ou stockage supplémentaire plus tard ?", "answer": "Oui, ces forfaits peuvent être ajoutés à votre abonnement existant à tout moment." },
+      "enterprisePricing": { "question": "Comment la formule Entreprise est-elle tarifée ?", "answer": "La formule Entreprise fait l'objet d'un devis personnalisé selon le nombre de cliniques, le volume de patients et les besoins de communication." },
+      "yearlyAddonDiscount": { "question": "Les forfaits complémentaires annuels bénéficient-ils aussi de 2 mois offerts ?", "answer": "Oui, l'option annuelle des forfaits IA, stockage et capacité de patients actifs suit également la règle 10 mois payés, 12 mois utilisés." },
+      "extraChannelAiQuota": { "question": "Comment le quota IA est-il calculé pour les canaux supplémentaires ?", "answer": "Les connexions WhatsApp, Instagram ou chatbot web supplémentaires partagent le même quota de conversations IA de la clinique ; aucun quota séparé n'est défini par canal." }
+    }
+  },
+  "finalCta": {
+    "title": "Définissons ensemble la formule adaptée à votre clinique",
+    "description": "Nous construirons la formule la mieux adaptée à votre nombre de cliniques, votre volume de patients et vos besoins de communication.",
+    "demoButton": "Demander une démo gratuite",
+    "salesButton": "Contacter l'équipe commerciale"
+  },
+  "generalNotes": {
+    "title": "Notes tarifaires générales",
+    "items": [
+      "Tous les prix sont hors TVA.",
+      "Toutes les formules annuelles offrent 12 mois d'accès pour le prix de 10 mois.",
+      "Les paiements annuels sont perçus à l'avance.",
+      "Les frais de mise en service sont facturés par clinique.",
+      "Les frais SMS et de messagerie Meta ne sont pas inclus dans le prix de l'abonnement.",
+      "Les frais de services tiers sont facturés séparément.",
+      "La migration de données, l'intégration personnalisée et la formation sur site sont facturées séparément.",
+      "Le stockage général de fichiers et le stockage radiographique/DICOM sont évalués séparément.",
+      "Les droits de conversation IA mensuels non utilisés ne sont pas reportés.",
+      "Les prix peuvent être mis à jour selon les coûts de service et des tiers."
+    ]
+  },
+  "vatSuffix": "hors TVA"
+}
