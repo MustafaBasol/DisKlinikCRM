@@ -278,7 +278,10 @@ public sealed class UpdateHelperRunner(
                     return new RollbackHelperResult(nameof(RollbackLifecycleState.Succeeded), nameof(RollbackErrorCategory.None), uninstallExit, installExit, DateTimeOffset.UtcNow);
                 }
 
-                try { await Task.Delay(1000, cancellationToken); }
+                // Same 200ms rationale as FinishAsync's forward-install wait
+                // loop above - a 1000ms poll can miss a Running window that
+                // closes within roughly a second.
+                try { await Task.Delay(200, cancellationToken); }
                 catch (OperationCanceledException) { break; }
             }
 
@@ -402,7 +405,20 @@ public sealed class UpdateHelperRunner(
                     "None", exitCode, rebootRequired, DateTimeOffset.UtcNow);
             }
 
-            try { await Task.Delay(1000, cancellationToken); }
+            // PR 7/7 physical acceptance testing found that a version which
+            // crashes within roughly a second of starting (Environment.Exit
+            // called right after IHostedService.StartAsync completes, before
+            // the ~1s background update-loop jitter tick) can report Running
+            // to the SCM and then exit again inside a single 1000ms poll
+            // window - starving PostUpdateHealthTracker's crash-loop
+            // rollback detector of the "Succeeded" reconciliation it depends
+            // on, since this loop never observed the transient Running
+            // state. Polling every 200ms instead of every 1000ms doesn't
+            // change what "success" means (still requires an actual Running
+            // observation, not a timer), it just makes that observation 5x
+            // less likely to be missed for a fast-crashing build - exactly
+            // the case this whole safety net exists to catch.
+            try { await Task.Delay(200, cancellationToken); }
             catch (OperationCanceledException) { break; }
         }
 
