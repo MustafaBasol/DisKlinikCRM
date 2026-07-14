@@ -55,6 +55,16 @@ public sealed class UpdateManager
 
     public UpdateState CurrentState => _stateStore.Load(_agentVersion);
 
+    /// <summary>
+    /// Raised once a release reaches <see cref="UpdateLifecycleState.Verified"/> —
+    /// i.e. it has already passed hash and (when required) signature/publisher
+    /// verification. <see cref="Runtime.BridgeOrchestrator"/> subscribes to
+    /// cache the release's declared rollback package (if any) at this point,
+    /// BEFORE the new version is ever installed — see
+    /// docs/update-runbook.md "Staged rollout & rollback".
+    /// </summary>
+    public event Action<ServerUpdateRelease>? ReleaseVerified;
+
     /// <summary>The server's mode from the most recent successful check — consulted by <see cref="Updates.UpdateBackgroundLoop"/> to decide whether a verified release may be auto-installed.</summary>
     public UpdatePolicyMode LastKnownMode { get; private set; } = UpdatePolicyMode.Disabled;
 
@@ -222,6 +232,26 @@ public sealed class UpdateManager
         SetState(UpdateLifecycleState.Verified, UpdateErrorCategory.None, offeredVersion: release.Version,
             stagedPath: download.StagedPath, stagedSha256: release.Sha256, downloadedBytes: download.Bytes,
             stagedPublisherThumbprint: release.PublisherThumbprint);
+
+        // Fail-open: the release has already been verified and persisted as Verified above — a
+        // throwing subscriber (e.g. rollback-target caching) must never turn a successful stage
+        // into a failed CheckAsync call. Each subscriber is invoked and isolated individually
+        // rather than via a single ReleaseVerified?.Invoke(release), so one misbehaving subscriber
+        // can't stop another from running either.
+        if (ReleaseVerified is not null)
+        {
+            foreach (var subscriber in ReleaseVerified.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<ServerUpdateRelease>)subscriber)(release);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "update.release_verified_subscriber_failed");
+                }
+            }
+        }
     }
 
     /// <summary>

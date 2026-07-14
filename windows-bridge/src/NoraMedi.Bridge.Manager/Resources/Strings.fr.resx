@@ -48,4 +48,10 @@
   <data name="Update_UnsupportedSourceVersion" xml:space="preserve"><value>Cette version ne peut pas être mise à jour automatiquement. Contactez le support NoraMedi.</value></data>
   <data name="Update_Interrupted" xml:space="preserve"><value>La tentative de mise à jour précédente a été interrompue. Vérifiez à nouveau les mises à jour.</value></data>
   <data name="Button_InstallUpdate" xml:space="preserve"><value>_Installer la mise à jour</value></data>
+  <data name="Rollback_Preparing" xml:space="preserve"><value>La dernière mise à jour n'a pas démarré correctement. Préparation du retour à la version précédente...</value></data>
+  <data name="Rollback_Uninstalling" xml:space="preserve"><value>Retour à la version précédente en cours...</value></data>
+  <data name="Rollback_Installing" xml:space="preserve"><value>Retour à la version précédente en cours...</value></data>
+  <data name="Rollback_Succeeded" xml:space="preserve"><value>La version précédente a été restaurée automatiquement.</value></data>
+  <data name="Rollback_Failed" xml:space="preserve"><value>La restauration automatique ne s'est pas terminée. Contactez le support NoraMedi -- vos données et votre appairage sont en sécurité.</value></data>
+  <data name="Rollback_InterventionRequired" xml:space="preserve"><value>Cet ordinateur nécessite l'attention du support NoraMedi. Vos données, votre appairage et vos paramètres sont en sécurité.</value></data>
 </root>

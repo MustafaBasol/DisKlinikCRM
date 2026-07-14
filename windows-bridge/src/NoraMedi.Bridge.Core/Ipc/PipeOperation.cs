@@ -43,4 +43,7 @@ public enum PipeOperation
     /// GetServiceStatus/CheckForUpdates it is NOT answered while disabled).
     /// </summary>
     GetAvailableServerBindings,
+
+    /// <summary>Read-only: reports the last-known rollback state (PR 7/7). Same trust tier as GetUpdateStatus — no operation exists to trigger a rollback via IPC (see IBridgePipeRequestHandler).</summary>
+    GetRollbackStatus,
 }

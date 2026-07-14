@@ -102,6 +102,7 @@ type AuthenticatedBridgeAgent = {
   id: string;
   clinicId: string;
   status: string;
+  updateChannel: string;
   clinic: { organizationId: string };
 };
 
@@ -118,7 +119,7 @@ async function authenticateBridgeAgent(req: Request): Promise<{ agent: Authentic
   const tokenHash = hashBridgeToken(rawToken);
   const agent = await prisma.imagingBridgeAgent.findUnique({
     where: { tokenHash },
-    select: { id: true, clinicId: true, status: true, clinic: { select: { organizationId: true } } },
+    select: { id: true, clinicId: true, status: true, updateChannel: true, clinic: { select: { organizationId: true } } },
   });
 
   if (!agent || agent.status === 'revoked') return null;
@@ -590,13 +591,13 @@ router.get('/imaging/bridge/update', async (req: Request, res: Response) => {
   try {
     const authResult = await authenticateBridgeAgent(req);
     if (!authResult) return res.status(401).json({ error: 'Unauthorized' });
-    const { tokenHash } = authResult;
+    const { agent, tokenHash } = authResult;
 
     if (!(await updateTokenLimiter.check(tokenHash))) {
       return res.status(429).json({ error: 'Too many requests' });
     }
 
-    res.json(getBridgeUpdateConfig());
+    res.json(getBridgeUpdateConfig({ bridgeAgentId: agent.id, updateChannel: agent.updateChannel }));
   } catch {
     res.status(500).json({ error: 'Failed to fetch update information' });
   }

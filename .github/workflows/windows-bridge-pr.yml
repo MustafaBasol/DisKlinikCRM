@@ -1,0 +1,136 @@
+name: windows-bridge-pr
+
+# Pull-request validation for the Windows Imaging Bridge (PR 7/7). Runs on
+# every PR that touches the bridge, server imaging surface, or frontend
+# imaging UI. Never touches a signing credential and never publishes a
+# release artifact - see windows-bridge-release.yml for that.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'windows-bridge/**'
+      - 'server/src/services/imaging/**'
+      - 'server/src/routes/imaging*.ts'
+      - 'server/src/tests/imaging*.ts'
+      - 'src/components/imaging/**'
+      - '.github/workflows/windows-bridge-pr.yml'
+      - '.github/workflows/windows-bridge-release.yml'
+
+# A superseded push to the same PR cancels the still-running check for the
+# prior push - no point finishing a validation run for code that's already
+# been replaced.
+concurrency:
+  group: windows-bridge-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-imaging:
+    name: Backend imaging tests + typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Imaging bridge test suites
+        run: |
+          npm run test:imaging
+          npm run test:imaging-bridge-pairing
+          npm run test:imaging-bridge-onboarding
+          npm run test:imaging-bridge-update
+
+  frontend-imaging:
+    name: Frontend typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Imaging component unit tests
+        run: |
+          npm run test:dicom-helpers
+          npm run test:onboarding-helpers
+          npm run test:pairing-poller
+      - name: Typecheck + build (tsc -b && vite build)
+        run: npm run build
+
+  dotnet-tests:
+    name: Windows Bridge .NET tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+      - name: dotnet test (all Windows Bridge projects)
+        working-directory: windows-bridge
+        run: dotnet test -c Debug --logger "trx;LogFileName=test-results.trx"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: dotnet-test-results
+          path: windows-bridge/**/TestResults/*.trx
+
+  installer-powershell-tests:
+    name: Installer PowerShell tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Run installer helper tests
+        # These are hand-rolled pass/fail scripts (Add-Result + exit 0/1), not
+        # Pester Describe/It suites - see windows-bridge/tests/installer/README.md
+        # "Run any of them directly: powershell -File .\X.Tests.ps1". Pester's
+        # Invoke-Pester would silently discover zero tests here.
+        shell: pwsh
+        working-directory: windows-bridge/tests/installer
+        run: |
+          $scripts = @('InstallerTestHelpers.Tests.ps1', 'MigrateLegacyConfigCommand.Tests.ps1', 'StateMachine.Tests.ps1', 'BuildReleaseScript.Tests.ps1')
+          $failed = $false
+          foreach ($script in $scripts) {
+            Write-Host "==> $script"
+            & ".\$script"
+            if ($LASTEXITCODE -ne 0) { Write-Error "$script exited $LASTEXITCODE"; $failed = $true }
+          }
+          if ($failed) { exit 1 }
+
+  release-script-dry-run:
+    name: Release script syntax + unsigned structural build
+    runs-on: windows-latest
+    needs: [dotnet-tests]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+      - name: Validate release script syntax
+        shell: pwsh
+        run: |
+          $errors = $null; $tokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("windows-bridge\release\Build-Release.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+      - name: Unsigned structural MSI/Bundle build (no signing identity touched)
+        shell: pwsh
+        run: .\windows-bridge\release\Build-Release.ps1 -Version 0.4.8 -OutputDirectory "${{ runner.temp }}\artifacts" -AllowDirtyTree
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-structural-build
+          path: |
+            ${{ runner.temp }}\artifacts\*.msi
+            ${{ runner.temp }}\artifacts\*.exe
+            ${{ runner.temp }}\artifacts\*.json
+            ${{ runner.temp }}\artifacts\*.txt

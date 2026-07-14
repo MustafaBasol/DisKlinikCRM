@@ -1,4 +1,4 @@
-# NoraMedi Windows Bridge — Auto-Update Server Contract (PR 6/7)
+# NoraMedi Windows Bridge — Auto-Update Server Contract (PR 6/7 + PR 7/7)
 
 ## Endpoint
 
@@ -12,9 +12,14 @@
   the background loop only polls every `CheckIntervalMinutes`, so this is
   a generous ceiling against a misbehaving/compromised agent, not a
   legitimate-traffic constraint.
-- Response is the same for every caller (no clinic-specific fields) — the
-  release descriptor is a single global configuration, not per-tenant data,
-  so there is nothing clinic-scoped to leak between callers.
+- **PR 7 change:** the response is **no longer identical for every caller**.
+  The underlying release descriptor is still one global configuration (no
+  per-clinic patient/business data is ever involved), but staged-rollout
+  eligibility — computed from the authenticated bridge's own agent ID and
+  channel, both already resolved server-side by `authenticateBridgeAgent`,
+  never from any client-supplied value — can now cause `release` to be
+  `null` for one bridge and populated for another even under the identical
+  global config. See "Staged rollout" below.
 
 Response shape (`server/src/services/imaging/bridgeUpdateConfig.ts`):
 
@@ -22,19 +27,30 @@ Response shape (`server/src/services/imaging/bridgeUpdateConfig.ts`):
 {
   "mode": "disabled" | "notify" | "automatic",
   "release": {
+    "releaseId": "rel-0.4.8-2026-07-13",
     "version": "0.4.8",
     "downloadUrl": "https://cdn.noramedi.com/bridge/NoraMediBridgeSetup-0.4.8.exe",
     "sha256": "<64-char lowercase hex>",
     "signed": true,
     "publisherThumbprint": "<40-char hex Authenticode cert thumbprint>",
     "minimumSourceVersion": "0.4.0",
-    "notes": "Adds secure auto-update."
+    "notes": "Adds secure auto-update.",
+    "channel": "stable" | "pilot",
+    "rolloutPercent": 100,
+    "forced": false,
+    "rollback": {
+      "version": "0.4.7",
+      "downloadUrl": "https://cdn.noramedi.com/bridge/NoraMediBridgeSetup-0.4.7.exe",
+      "sha256": "<64-char lowercase hex>",
+      "publisherThumbprint": "<40-char hex>"
+    } | null
   }
 }
 ```
 
-`release` is `null` whenever the mode is `disabled`, or the configured
-metadata is malformed/incomplete (fail closed — see below).
+`release` is `null` whenever the mode is `disabled`, the configured metadata
+is malformed/incomplete (fail closed — see below), or (PR 7) this specific
+bridge is not in the release's rollout cohort / on the release's channel.
 
 ## Canonical validation
 
@@ -61,6 +77,11 @@ restart to pick up a changed `.env` file.
 | `IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT` | When signed=true | 40-char hex Authenticode certificate thumbprint. This is the release's declared trust anchor — the bridge pins **this value**, not a separate client-side config, so key rotation is a pure server-side deploy (see "Key rotation" below). |
 | `IMAGING_BRIDGE_UPDATE_MIN_SOURCE_VERSION` | No | If set, a bridge running an older version than this is told `Unsupported` rather than offered the release. |
 | `IMAGING_BRIDGE_UPDATE_NOTES` | No | Free text surfaced in the Manager. |
+| `IMAGING_BRIDGE_UPDATE_RELEASE_ID` | For `notify`/`automatic` (PR 7) | Opaque cohort-hash input, safe charset, max 128 chars. Changing it reshuffles rollout cohorts. |
+| `IMAGING_BRIDGE_UPDATE_ROLLOUT_PERCENT` | No (default `100`) (PR 7) | Integer 0-100. `0` pauses rollout without touching `IMAGING_BRIDGE_UPDATE_MODE`. |
+| `IMAGING_BRIDGE_UPDATE_CHANNEL` | No (default `stable`) (PR 7) | `stable` \| `pilot`. Exact match against the bridge's `updateChannel`. |
+| `IMAGING_BRIDGE_UPDATE_FORCED` | No (default `false`) (PR 7) | Bypasses rollout percentage only — never channel/mode/minimum-version. |
+| `IMAGING_BRIDGE_ROLLBACK_VERSION` / `_DOWNLOAD_URL` / `_SHA256` / `_PUBLISHER_THUMBPRINT` | No (PR 7) | All four or none — a partial set is rejected. The previously-trusted release the bridge caches as its one-step rollback target before installing this one. |
 
 ## Update modes
 
@@ -89,17 +110,48 @@ change:
 
 A bridge that already fetched the *old* thumbprint mid-rotation simply
 fails closed (`WrongPublisher`) against a release signed by the
-not-yet-published new key — safe direction to fail. There is no in-band
-rotation message and no dual-thumbprint transition window in this PR; if a
-zero-downtime rotation window is ever needed, that's a PR 7 candidate, not
-implemented here.
+not-yet-published new key — safe direction to fail.
+
+**PR 7 addition — bridge-side dual-pin overlap window:** the server-side
+`IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT` value above is still a single
+value per release descriptor (the server can only ever declare one signer
+per release). The actual current+next overlap window is a **bridge-side**
+mechanism — `Trust/PinnedPublisherThumbprints.Values` can hold two
+compiled-in accepted thumbprints simultaneously, so different releases in
+the fleet can be signed by either the outgoing or incoming certificate
+during a rotation without any bridge rejecting a legitimately-signed
+release. See `windows-bridge/docs/update-runbook.md` "Publisher trust-pin
+rotation" for the full sequence.
+
+## Staged rollout (PR 7)
+
+`bridgeUpdateConfig.ts`'s `getBridgeUpdateConfig(eligibility)` takes the
+authenticated bridge's own `{ bridgeAgentId, updateChannel }` (resolved by
+`authenticateBridgeAgent`, never client-supplied) and filters the release:
+
+- **Channel**: exact match against `ImagingBridgeAgent.updateChannel`
+  (schema default `'stable'`).
+- **Rollout cohort**: `sha256(bridgeAgentId + ':' + releaseId)`, first 4
+  bytes as a big-endian uint32, `mod 100 < rolloutPercent`. Deterministic —
+  the same bridge gets the same answer for the same release on every call;
+  a new `releaseId` reshuffles cohorts. Never `Math.random()`, never
+  re-evaluated per-request beyond this pure function of stable inputs.
+- **Forced** releases (`IMAGING_BRIDGE_UPDATE_FORCED=true`) skip the
+  rollout-percentage check but still respect channel and
+  `minimumSourceVersion`.
+
+This is intentionally a single global release config plus a percentage/
+channel knob — not a per-clinic campaign system. See
+`imagingBridgeUpdate.test.ts` for the full boundary/stability/isolation test
+coverage (0%, 1%, 50%, 100%, repeated-call stability, distinct release IDs,
+channel mismatch, kill switch).
 
 ## Tenant isolation
 
-The response carries no clinic identifier, patient data, or agent-specific
-field — it is the same descriptor for every authenticated caller. "Tenant
-isolation" for this endpoint therefore reduces to: authentication is
-required (no clinic can query another clinic's *anything* through this
-endpoint, because there is nothing clinic-specific to query), and a
-revoked/invalid credential is rejected identically to every other bridge
-endpoint.
+The underlying release configuration is still one global descriptor — no
+clinic identifier, patient data, or business data is read or returned.
+Per-bridge rollout eligibility uses only the authenticated bridge's own
+agent ID and channel (never another bridge's or clinic's identifiers,
+never a client-supplied query parameter — see the source-regression test
+asserting the handler never reads `req.query`/`req.body`). A revoked/invalid
+credential is rejected identically to every other bridge endpoint.

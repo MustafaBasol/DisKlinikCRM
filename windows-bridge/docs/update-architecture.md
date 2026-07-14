@@ -262,19 +262,39 @@ byte-count-based "X of Y MB" label is shown during download, sourced from
 the real running total the downloader reports over IPC polling
 (`GetUpdateStatus`), never a fake incrementing bar.
 
-## What PR 7 still owns
+## PR 7/7 — production hardening (closed)
 
-- Production Authenticode signing credential acquisition/HSM integration —
-  this PR builds and tests entirely against an ephemeral local test
-  certificate; no production certificate exists yet. Provisioning it also
-  means populating `Trust/PinnedPublisherThumbprints.Values` with the real
-  "current" thumbprint (and, at the next rotation, "next" alongside it) —
-  until that constant is populated, every production release is correctly
-  rejected as `UntrustedPublisher`.
-- Any rollback/auto-revert of a failed installation — not implemented;
-  `InstallFailed` is a truthful terminal state requiring manual
-  reinstall/support, not an automatic downgrade.
-- Staged rollout percentages/channels — the `mode`/`minimumSourceVersion`
-  fields leave room for this but no rollout logic is implemented.
-- DICOM/TWAIN/vendor SDK adapters, production E2E hardening — unchanged
-  scope exclusions from `architecture.md`.
+Everything listed below as "PR 7 still owns" as of PR 6 is now implemented
+and tested — see `docs/update-runbook.md` for the full operational detail
+on each:
+
+- **Release/signing pipeline**: `windows-bridge/release/Build-Release.ps1`
+  — deterministic, fail-closed, documented Burn detach/sign-engine/reattach/
+  sign-bundle sequence, `/layout` container-integrity verification,
+  hashes computed only from final signed bytes.
+- **Publisher trust-pin rotation**: `Trust/PinnedPublisherThumbprints`
+  already supported a current+next allowlist (designed in at PR 6 time);
+  PR 7 adds the compiled-list sanity tests and the documented rotation
+  sequence.
+- **Staged rollout**: server-side `releaseId`/`channel`/`rolloutPercent`/
+  `forced`, deterministic per-bridge cohort hashing, no bridge-side rollout
+  logic at all.
+- **One-step rollback**: `Updates/Rollback/*` (`RollbackCache`,
+  `RollbackManager`, `RollbackStateStore`) plus
+  `UpdateHelperRunner.RunRollbackAsync` — uninstall-then-install via the
+  installer's `UpgradeCode`, single-flight, loop-prevented, triggered only
+  by an internal crash-loop health check, never by IPC.
+- **CI**: `.github/workflows/windows-bridge-pr.yml` (PR validation, unsigned
+  structural build) and `windows-bridge-release.yml` (manual, protected,
+  fails closed without a real signing identity).
+
+**Still an external (non-code) gate**: no real NoraMedi production
+Authenticode certificate has been provisioned. `Trust/PinnedPublisherThumbprints.Values`
+ships empty and the protected release workflow refuses to run without
+`NORAMEDI_SIGNING_THUMBPRINT`/`NORAMEDI_TIMESTAMP_URL` configured — this is
+the correct fail-closed default, not an unresolved vulnerability. See
+`docs/update-runbook.md` "Production certificate status" for the exact
+remaining steps.
+
+DICOM/TWAIN/vendor SDK adapters remain an unchanged scope exclusion from
+`architecture.md`.

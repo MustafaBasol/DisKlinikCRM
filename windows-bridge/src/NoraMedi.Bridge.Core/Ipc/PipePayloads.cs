@@ -123,3 +123,15 @@ public sealed record AvailableServerBindingInfo(
 /// devices available yet" empty state, never as fabricated/placeholder rows.
 /// </summary>
 public sealed record GetAvailableServerBindingsResponse(IReadOnlyList<AvailableServerBindingInfo> Bindings);
+
+/// <summary>
+/// Real rollback status (PR 7/7) — truthfully reflects the persisted
+/// <see cref="Updates.Rollback.RollbackState"/>. Read-only; see
+/// <see cref="PipeOperation.GetRollbackStatus"/>.
+/// </summary>
+public sealed record RollbackStatusPayload(
+    string Lifecycle,
+    string ErrorCategory,
+    string? AttemptedForOfferedVersion,
+    string? TargetVersion,
+    DateTimeOffset UpdatedAtUtc);

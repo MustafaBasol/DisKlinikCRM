@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using NoraMedi.Bridge.Core.Ipc;
 using NoraMedi.Bridge.Core.Updates;
+using NoraMedi.Bridge.Core.Updates.Rollback;
 using NoraMedi.Bridge.Manager.Models;
 using NoraMedi.Bridge.Manager.Services;
 
@@ -30,6 +31,8 @@ public sealed class UpdateViewModel : ViewModelBase, IDisposable
     private bool _canInstall;
     private bool _isIndeterminate;
     private bool _rebootRequired;
+    private string? _rollbackMessage;
+    private bool _rollbackInProgress;
 
     public UpdateViewModel(IBridgePipeClientService pipeClient)
     {
@@ -107,6 +110,22 @@ public sealed class UpdateViewModel : ViewModelBase, IDisposable
         private set => SetProperty(ref _rebootRequired, value);
     }
 
+    /// <summary>
+    /// Truthful rollback status (PR 7/7) — null unless a rollback has ever
+    /// been attempted for the currently installed version. There is
+    /// deliberately no command to trigger a rollback from the Manager: it is
+    /// decided and launched only by the Service's own post-update health
+    /// check (see docs/update-runbook.md "Rollback cannot be redirected by
+    /// Manager IPC").
+    /// </summary>
+    public string? RollbackMessage
+    {
+        get => _rollbackMessage;
+        private set => SetProperty(ref _rollbackMessage, value);
+    }
+
+    public bool HasRollbackMessage => !string.IsNullOrEmpty(_rollbackMessage);
+
     public ICommand CheckForUpdatesCommand { get; }
 
     public ICommand InstallUpdateCommand { get; }
@@ -155,6 +174,22 @@ public sealed class UpdateViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Fetches the last-known rollback state once — called on Manager startup and manual refresh (see MainViewModel.RefreshAllAsync), independent of the update check/poll cycle above.</summary>
+    public async Task RefreshRollbackStatusAsync()
+    {
+        var result = await _pipeClient.GetRollbackStatusAsync();
+        if (!result.Success || result.Value is null) return;
+        ApplyRollback(result.Value);
+    }
+
+    private void ApplyRollback(RollbackStatusPayload status)
+    {
+        RollbackMessage = StatusLabels.FromRollbackLifecycle(status.Lifecycle);
+        OnPropertyChanged(nameof(HasRollbackMessage));
+        _rollbackInProgress = Enum.TryParse<RollbackLifecycleState>(status.Lifecycle, out var state)
+            && state is RollbackLifecycleState.Preparing or RollbackLifecycleState.Uninstalling or RollbackLifecycleState.Installing;
+    }
+
     private void StartPollingIfInProgress(string lifecycle)
     {
         _pollTimer?.Dispose();
@@ -171,13 +206,22 @@ public sealed class UpdateViewModel : ViewModelBase, IDisposable
     private async Task PollOnceAsync()
     {
         var result = await _pipeClient.GetUpdateStatusAsync();
-        if (!result.Success || result.Value is null) return;
+        if (result.Success && result.Value is not null)
+        {
+            Apply(result.Value);
+        }
 
-        Apply(result.Value);
+        // Also refresh rollback status on every tick while an update is
+        // in flight — a rollback can begin (crash-loop detected on the
+        // Service's next restart) without any further Manager action.
+        await RefreshRollbackStatusAsync();
 
-        if (!Enum.TryParse<UpdateLifecycleState>(result.Value.Lifecycle, out var state)
-            || state is not (UpdateLifecycleState.Downloading or UpdateLifecycleState.Verifying
-                or UpdateLifecycleState.InstallLaunched or UpdateLifecycleState.Installing))
+        var updateStillInProgress = result.Success && result.Value is not null
+            && Enum.TryParse<UpdateLifecycleState>(result.Value.Lifecycle, out var updateState)
+            && updateState is UpdateLifecycleState.Downloading or UpdateLifecycleState.Verifying
+                or UpdateLifecycleState.InstallLaunched or UpdateLifecycleState.Installing;
+
+        if (!updateStillInProgress && !_rollbackInProgress)
         {
             _pollTimer?.Dispose();
             _pollTimer = null;

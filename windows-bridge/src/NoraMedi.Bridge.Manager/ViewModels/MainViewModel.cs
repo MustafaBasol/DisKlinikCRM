@@ -84,5 +84,6 @@ public sealed class MainViewModel : ViewModelBase
         {
             await Bindings.RefreshAvailableServerBindingsAsync();
         }
+        await Update.RefreshRollbackStatusAsync();
     }
 }

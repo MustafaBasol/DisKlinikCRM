@@ -53,3 +53,28 @@ export function parseUpdateMode(value: string | undefined): UpdateMode {
   const normalized = value?.trim().toLowerCase();
   return (UPDATE_MODES as readonly string[]).includes(normalized ?? '') ? (normalized as UpdateMode) : 'disabled';
 }
+
+/** Staged-rollout channels (PR 7). Deliberately just two — this is not a campaign platform. */
+export const UPDATE_CHANNELS = ['stable', 'pilot'] as const;
+export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
+
+/** Unlike parseUpdateMode, an unrecognized channel is NOT coerced to a default — a
+ * misconfigured/typo'd channel must make the release metadata invalid (no release
+ * offered to anyone) rather than silently falling back to 'stable' and rolling out
+ * to every paired bridge. */
+export function parseUpdateChannel(value: string | undefined): UpdateChannel | null {
+  const normalized = value?.trim().toLowerCase();
+  return (UPDATE_CHANNELS as readonly string[]).includes(normalized ?? '') ? (normalized as UpdateChannel) : null;
+}
+
+/** Integer 0-100 inclusive. Missing/blank is handled by the caller (defaults to 100 — full rollout). */
+export function isValidRolloutPercent(value: string): boolean {
+  if (!/^\d{1,3}$/.test(value)) return false;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 100;
+}
+
+/** Opaque release identifier used only as deterministic-cohort hash input — never parsed, just constrained to a safe, loggable charset. */
+export function isValidReleaseId(value: string): boolean {
+  return /^[A-Za-z0-9._-]{1,128}$/.test(value);
+}

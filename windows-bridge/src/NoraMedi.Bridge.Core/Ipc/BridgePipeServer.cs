@@ -326,6 +326,9 @@ public sealed class BridgePipeServer : IAsyncDisposable
             case PipeOperation.GetAvailableServerBindings:
                 return Ok(await _handler.GetAvailableServerBindingsAsync(cancellationToken));
 
+            case PipeOperation.GetRollbackStatus:
+                return Ok(await _handler.GetRollbackStatusAsync(cancellationToken));
+
             default:
                 return PipeResponse.Error(PipeErrorCodes.UnknownOperation);
         }

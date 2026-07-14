@@ -8,6 +8,7 @@ using NoraMedi.Bridge.Core.Ipc;
 using NoraMedi.Bridge.Core.Queue;
 using NoraMedi.Bridge.Core.Security;
 using NoraMedi.Bridge.Core.Updates;
+using NoraMedi.Bridge.Core.Updates.Rollback;
 
 namespace NoraMedi.Bridge.Core.Runtime;
 
@@ -41,6 +42,11 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
     private readonly UpdateBackgroundLoop _updateLoop;
     private readonly HttpClient _updateHttpClient;
     private readonly bool _ownsUpdateHttpClient;
+
+    private readonly RollbackCache _rollbackCache;
+    private readonly RollbackManager _rollbackManager;
+    private readonly PostUpdateHealthTracker _healthTracker;
+    private const string InstallerUpgradeCode = "12BB6A03-A76B-40B2-828E-7DAF6FB4A61E"; // windows-bridge/installer/NoraMedi.Bridge.Installer/Package.wxs UpgradeCode — must stay in sync.
 
     private FolderWatchAdapter? _watcherAdapter;
     private Timer? _drainTimer;
@@ -84,6 +90,36 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
             () => _updateManager.LastKnownMode,
             OnAutomaticInstallReady,
             _logger);
+
+        var rollbackDirectory = Path.Combine(_updateOptions.UpdatesDirectory, "rollback");
+        _rollbackCache = new RollbackCache(_updateDownloader, rollbackDirectory, _options.ServiceAccountSid);
+        var rollbackStateStore = new RollbackStateStore(_updateOptions.UpdatesDirectory, _options.ServiceAccountSid);
+        _rollbackManager = new RollbackManager(_rollbackCache, rollbackStateStore, InstallerUpgradeCode, _logger);
+        _healthTracker = new PostUpdateHealthTracker(_updateOptions.UpdatesDirectory, _options.ServiceAccountSid);
+
+        // Cache the declared rollback target BEFORE the new version is ever
+        // installed — see docs/update-runbook.md "Staged rollout & rollback".
+        // Fire-and-forget: a caching failure must never block the forward
+        // update itself; it only means a subsequent health-check failure
+        // will find no cached target and correctly report InterventionRequired
+        // instead of silently "rolling back" to nothing.
+        _updateManager.ReleaseVerified += release =>
+        {
+            if (release.Rollback is null) return;
+            _ = CacheRollbackTargetSafeAsync(release.Rollback);
+        };
+    }
+
+    private async Task CacheRollbackTargetSafeAsync(RollbackPackageDescriptor package)
+    {
+        try
+        {
+            await _rollbackManager.EnsureRollbackTargetCachedAsync(package, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
+        {
+            _logger.LogWarning(ex, "rollback.cache_target_failed");
+        }
     }
 
     public void Start()
@@ -105,6 +141,28 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         _heartbeatTimer = new Timer(_ => _ = SafeHeartbeatTickAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(_options.HeartbeatIntervalSeconds));
 
         _updateManager.ReconcileHelperResultOnStartup();
+        _rollbackManager.ReconcileOnStartup();
+        TryReconcileRollbackHelperResult();
+
+        // Post-update health check (PR 7/7): the only self-reportable signal
+        // this process can honestly give without an external observer is "did
+        // I keep crashing and getting relaunched right after this version
+        // installed" — see PostUpdateHealthTracker's doc comment for why this
+        // is deliberately NOT based on backend/heartbeat reachability. Only
+        // evaluated when the update state machine shows THIS version just
+        // succeeded a self-update (never for a version that was installed by
+        // the MSI/first-run installer directly, or one already running fine
+        // for a while — CurrentState.Lifecycle stays Succeeded only until the
+        // next check cycle moves it to UpToDate).
+        var updateState = _updateManager.CurrentState;
+        if (updateState.Lifecycle == UpdateLifecycleState.Succeeded
+            && string.Equals(updateState.OfferedVersion, _agentVersion, StringComparison.OrdinalIgnoreCase)
+            && _healthTracker.RecordBootAndCheckCrashLoop(_agentVersion))
+        {
+            _logger.LogError("update.crash_loop_detected version={Version} — triggering automatic rollback", _agentVersion);
+            TryLaunchRollback(_agentVersion);
+        }
+
         _updateLoop.Start();
 
         // Re-fetch the server's device/binding catalog on every restart so the
@@ -568,14 +626,51 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
         return Task.FromResult(new InstallUpdateResponse(launched, ToUpdateStatusPayload(_updateManager.CurrentState), launched ? null : "Failed to launch the update helper process."));
     }
 
+    /// <summary>
+    /// Copies UpdateHelper.exe and its dependencies out of the MSI-owned
+    /// Program Files tree into a private ProgramData working copy, and
+    /// returns the copy's exe path (or null if the source is missing).
+    ///
+    /// PR 7/7 physical acceptance testing on real hardware found that
+    /// running the helper directly from AppContext.BaseDirectory\UpdateHelper
+    /// (its as-installed location) let Windows Installer's Restart Manager
+    /// integration force-close it mid-install: those files are versioned
+    /// payload the SAME MSI transaction the helper just launched needs to
+    /// overwrite, so RM saw the running exe holding them open and shut it
+    /// down (Event ID 10002, "'NoraMedi.Bridge.UpdateHelper' application or
+    /// service is being shut down") - killing the one process responsible
+    /// for observing the new service come up and writing the helper-result
+    /// file. With no result to reconcile on the next boot, the update
+    /// Lifecycle never reaches Succeeded, which silently defeated
+    /// PostUpdateHealthTracker's crash-loop rollback detector (it only
+    /// evaluates when Lifecycle==Succeeded). Running from a private copy
+    /// outside the MSI's own component set - the standard pattern for a
+    /// self-updater that replaces its own install directory - means the
+    /// running process is never one of the files being replaced.
+    /// </summary>
+    private string? StageDetachedUpdateHelper()
+    {
+        var sourceDir = Path.Combine(AppContext.BaseDirectory, "UpdateHelper");
+        var sourceExe = Path.Combine(sourceDir, "NoraMedi.Bridge.UpdateHelper.exe");
+        if (!File.Exists(sourceExe))
+        {
+            return null;
+        }
+
+        var stagedDir = Path.Combine(_updateOptions.UpdatesDirectory, "helper-runtime");
+        DetachedHelperStaging.CopyTree(sourceDir, stagedDir);
+        ProgramDataAcl.ProtectDirectory(stagedDir, _options.ServiceAccountSid);
+        return Path.Combine(stagedDir, "NoraMedi.Bridge.UpdateHelper.exe");
+    }
+
     private bool TryLaunchUpdateHelper(UpdateState state)
     {
         try
         {
-            var helperExe = Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe");
-            if (!File.Exists(helperExe))
+            var helperExe = StageDetachedUpdateHelper();
+            if (helperExe is null)
             {
-                _logger.LogError("update.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(helperExe));
+                _logger.LogError("update.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe")));
                 return false;
             }
 
@@ -609,6 +704,98 @@ public sealed class BridgeOrchestrator : IBridgePipeRequestHandler, IAsyncDispos
             _logger.LogError(ex, "update.helper_launch_failed");
             return false;
         }
+    }
+
+    public Task<RollbackStatusPayload> GetRollbackStatusAsync(CancellationToken cancellationToken)
+    {
+        var state = _rollbackManager.CurrentState;
+        return Task.FromResult(new RollbackStatusPayload(
+            state.Lifecycle.ToString(), state.ErrorCategory.ToString(), state.AttemptedForOfferedVersion, state.TargetVersion, state.UpdatedAtUtc));
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="TryLaunchUpdateHelper"/> for the rollback path:
+    /// asks <see cref="RollbackManager"/> for a verified instruction (which
+    /// already re-checked hash/signer and loop-prevention), writes it to an
+    /// ACL-protected file, and launches the same helper executable with the
+    /// distinguishing "rollback" argument (see NoraMedi.Bridge.UpdateHelper's
+    /// Program.cs). Never reachable via IPC — only called from this class's
+    /// own post-update health check.
+    /// </summary>
+    private void TryLaunchRollback(string offeredVersionThatFailed)
+    {
+        var instruction = _rollbackManager.TryPrepareRollback(offeredVersionThatFailed);
+        if (instruction is null) return; // RollbackManager has already persisted a truthful terminal state.
+
+        try
+        {
+            var helperExe = StageDetachedUpdateHelper();
+            if (helperExe is null)
+            {
+                _logger.LogError("rollback.helper_missing path={Path}", DiagnosticsRedactor.RedactPath(Path.Combine(AppContext.BaseDirectory, "UpdateHelper", "NoraMedi.Bridge.UpdateHelper.exe")));
+                _rollbackManager.RecordResult(new RollbackHelperResult("Failed", nameof(RollbackErrorCategory.Unknown), null, null, DateTimeOffset.UtcNow), offeredVersionThatFailed, instruction.ExpectedVersion);
+                return;
+            }
+
+            var instructionPath = Path.Combine(_updateOptions.UpdatesDirectory, "rollback-helper-instruction.json");
+            var json = System.Text.Json.JsonSerializer.Serialize(instruction, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            var tmp = instructionPath + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, instructionPath, overwrite: true);
+            ProgramDataAcl.ProtectFile(instructionPath, _options.ServiceAccountSid);
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = helperExe,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("rollback");
+            psi.ArgumentList.Add(instructionPath);
+            using var process = System.Diagnostics.Process.Start(psi);
+            if (process is null)
+            {
+                _rollbackManager.RecordResult(new RollbackHelperResult("Failed", nameof(RollbackErrorCategory.Unknown), null, null, DateTimeOffset.UtcNow), offeredVersionThatFailed, instruction.ExpectedVersion);
+                return;
+            }
+
+            _rollbackManager.MarkLaunched(offeredVersionThatFailed, instruction.ExpectedVersion);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            _logger.LogError(ex, "rollback.helper_launch_failed");
+            _rollbackManager.RecordResult(new RollbackHelperResult("Failed", nameof(RollbackErrorCategory.Unknown), null, null, DateTimeOffset.UtcNow), offeredVersionThatFailed, instruction.ExpectedVersion);
+        }
+    }
+
+    /// <summary>Mirrors <see cref="UpdateManager.TryReconcileHelperResult"/> for rollback result files — called once at startup (before the health check re-evaluates) so a rollback the helper already finished gets its true terminal state without any delay.</summary>
+    private void TryReconcileRollbackHelperResult()
+    {
+        if (!Directory.Exists(_updateOptions.UpdatesDirectory)) return;
+        var resultPath = Directory.EnumerateFiles(_updateOptions.UpdatesDirectory, "rollback-helper-result-*.json")
+            .OrderByDescending(f => f)
+            .FirstOrDefault();
+        if (resultPath is null) return;
+
+        RollbackHelperResult? result;
+        try
+        {
+            var json = File.ReadAllText(resultPath);
+            result = System.Text.Json.JsonSerializer.Deserialize<RollbackHelperResult>(json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            result = null;
+        }
+
+        try { if (File.Exists(resultPath)) File.Delete(resultPath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+
+        if (result is null) return;
+
+        var current = _rollbackManager.CurrentState;
+        if (current.AttemptedForOfferedVersion is null || current.TargetVersion is null) return;
+        _rollbackManager.RecordResult(result, current.AttemptedForOfferedVersion, current.TargetVersion);
     }
 
     private void OnAutomaticInstallReady(UpdateState state)

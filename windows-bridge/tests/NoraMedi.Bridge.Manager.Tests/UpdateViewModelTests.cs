@@ -284,4 +284,63 @@ public class UpdateViewModelTests
 
         Assert.False(vm.InstallUpdateCommand.CanExecute(null));
     }
+
+    [Fact]
+    public async Task RefreshRollbackStatusAsync_None_ShowsNoMessage()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextRollbackStatus = PipeCallResult<RollbackStatusPayload>.Ok(new RollbackStatusPayload("None", "None", null, null, DateTimeOffset.UtcNow)),
+        };
+        var vm = new UpdateViewModel(fake);
+
+        await vm.RefreshRollbackStatusAsync();
+
+        Assert.Null(vm.RollbackMessage);
+        Assert.False(vm.HasRollbackMessage);
+    }
+
+    [Fact]
+    public async Task RefreshRollbackStatusAsync_InterventionRequired_ShowsActionableSupportMessage()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextRollbackStatus = PipeCallResult<RollbackStatusPayload>.Ok(
+                new RollbackStatusPayload("InterventionRequired", "CacheHashMismatch", "0.4.8", "0.4.7", DateTimeOffset.UtcNow)),
+        };
+        var vm = new UpdateViewModel(fake);
+
+        await vm.RefreshRollbackStatusAsync();
+
+        Assert.Equal(Strings.Rollback_InterventionRequired, vm.RollbackMessage);
+        Assert.True(vm.HasRollbackMessage);
+        // The internal error category must never leak into the shown message.
+        Assert.DoesNotContain("CacheHashMismatch", vm.RollbackMessage);
+    }
+
+    [Fact]
+    public async Task RefreshRollbackStatusAsync_Succeeded_ShowsSucceededMessage()
+    {
+        var fake = new FakeBridgePipeClientService
+        {
+            NextRollbackStatus = PipeCallResult<RollbackStatusPayload>.Ok(
+                new RollbackStatusPayload("Succeeded", "None", "0.4.8", "0.4.7", DateTimeOffset.UtcNow)),
+        };
+        var vm = new UpdateViewModel(fake);
+
+        await vm.RefreshRollbackStatusAsync();
+
+        Assert.Equal(Strings.Rollback_Succeeded, vm.RollbackMessage);
+    }
+
+    [Fact]
+    public async Task RefreshRollbackStatusAsync_TransportFailure_LeavesMessageUnset()
+    {
+        var fake = new FakeBridgePipeClientService { NextRollbackStatus = null };
+        var vm = new UpdateViewModel(fake);
+
+        await vm.RefreshRollbackStatusAsync();
+
+        Assert.Null(vm.RollbackMessage);
+    }
 }
