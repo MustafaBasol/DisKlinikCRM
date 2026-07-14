@@ -298,50 +298,74 @@
     "title": "Plans that fit the size of your clinic",
     "description": "All plans include the core CRM features and scale with your number of clinics and communication channels.",
     "popularBadge": "Most Popular",
-    "note": "Prices exclude VAT. Request a demo for a quote tailored to your needs.",
+    "commonNote": "Unlimited users, practitioners, and devices on every plan.",
+    "aiNote1": "* An AI-assisted conversation is one where AI steps in because the standard flow couldn't handle it.",
+    "aiNote2": "Conversations handled by the standard flow or by staff are not counted toward the AI quota.",
+    "note": "Prices exclude VAT. SMS, Meta messaging fees, setup, data migration, and imaging storage are billed separately.",
+    "billing": {
+      "groupLabel": "Billing period",
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "yearlySaving": "2 Months Free"
+    },
     "plans": {
       "starter": {
         "name": "Starter",
-        "description": "Core operations management for a single clinic.",
-        "price": "₺1,490",
-        "period": "/mo",
+        "description": "Complete core operations management for a single clinic.",
+        "monthlyPrice": "₺2,390",
+        "monthlyPeriod": "/mo + VAT",
+        "monthlyNote": "Billed monthly",
+        "yearlyPrice": "₺23,900",
+        "yearlyPeriod": "/yr + VAT",
+        "yearlyNote": "Billed yearly upfront · 12 months access",
         "cta": "Request a Demo",
         "features": {
-          "0": "Appointment and patient management",
-          "1": "Treatment and payment tracking",
-          "2": "Task management",
-          "3": "Up to 3 users",
-          "4": "Email support"
+          "0": "Patient, appointment, and treatment management",
+          "1": "Finance and payment tracking",
+          "2": "Lab and inventory management",
+          "3": "2,500 active patients",
+          "4": "10 GB file storage",
+          "5": "Reporting dashboard",
+          "6": "Standard support"
         }
       },
       "professional": {
-        "name": "Professional",
-        "description": "Communication channels and reporting for growing clinics.",
-        "price": "₺2,990",
-        "period": "/mo",
+        "name": "Smart Clinic",
+        "description": "For clinics growing with messaging, AI, and automation.",
+        "monthlyPrice": "₺3,990",
+        "monthlyPeriod": "/mo + VAT",
+        "monthlyNote": "Billed monthly",
+        "yearlyPrice": "₺39,900",
+        "yearlyPeriod": "/yr + VAT",
+        "yearlyNote": "Billed yearly upfront · 12 months access",
         "cta": "Request a Demo",
         "features": {
           "0": "Everything in Starter",
-          "1": "WhatsApp and Instagram inbox",
-          "2": "Reminder automations",
-          "3": "Finance and reporting dashboards",
-          "4": "Up to 10 users",
-          "5": "Priority support"
+          "1": "10,000 active patients",
+          "2": "50 GB file storage",
+          "3": "1 WhatsApp line and 1 Instagram account",
+          "4": "500 AI-assisted conversations per month",
+          "5": "Automated patient follow-ups",
+          "6": "Advanced finance and reporting",
+          "7": "Priority support"
         }
       },
       "enterprise": {
         "name": "Enterprise",
-        "description": "Central management for multi-branch organizations.",
+        "description": "Central management for multi-clinic organizations.",
         "price": "Custom Quote",
         "period": "",
         "cta": "Contact Us",
         "features": {
-          "0": "Everything in Professional",
-          "1": "Multi-branch management",
-          "2": "Unlimited users",
-          "3": "Role and permission customization",
-          "4": "KVKK/GDPR compliance tools",
-          "5": "Custom onboarding and training"
+          "0": "Everything in Smart Clinic",
+          "1": "Multi-clinic management",
+          "2": "100 GB file storage per clinic",
+          "3": "1 WhatsApp line per clinic",
+          "4": "1 Instagram account per clinic",
+          "5": "Per-clinic roles, permissions, and reporting",
+          "6": "Per-clinic custom AI quota",
+          "7": "Advanced API and custom integrations",
+          "8": "Account manager and SLA option"
         }
       }
     }

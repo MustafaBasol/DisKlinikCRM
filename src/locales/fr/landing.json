@@ -298,50 +298,74 @@
     "title": "Des formules adaptées à la taille de votre clinique",
     "description": "Toutes les formules incluent les fonctionnalités CRM essentielles et évoluent avec le nombre de cliniques et de canaux de communication.",
     "popularBadge": "La plus populaire",
-    "note": "Prix hors TVA. Demandez une démo pour une offre adaptée à vos besoins.",
+    "commonNote": "Utilisateurs, praticiens et appareils illimités sur toutes les formules.",
+    "aiNote1": "* Une conversation assistée par IA est une conversation que le flux standard n'a pas pu traiter et où l'IA intervient.",
+    "aiNote2": "Les conversations traitées par le flux standard ou par le personnel ne sont pas comptées dans le quota IA.",
+    "note": "Prix hors TVA. SMS, frais de messagerie Meta, mise en service, migration de données et stockage d'imagerie sont facturés séparément.",
+    "billing": {
+      "groupLabel": "Période de facturation",
+      "monthly": "Mensuel",
+      "yearly": "Annuel",
+      "yearlySaving": "2 mois offerts"
+    },
     "plans": {
       "starter": {
         "name": "Essentiel",
-        "description": "Gestion opérationnelle de base pour une seule clinique.",
-        "price": "₺1 490",
-        "period": "/mois",
+        "description": "Gestion opérationnelle de base complète pour une seule clinique.",
+        "monthlyPrice": "2 390 ₺",
+        "monthlyPeriod": "/mois + TVA",
+        "monthlyNote": "Facturation mensuelle",
+        "yearlyPrice": "23 900 ₺",
+        "yearlyPeriod": "/an + TVA",
+        "yearlyNote": "Paiement annuel anticipé · accès pendant 12 mois",
         "cta": "Demander une démo",
         "features": {
-          "0": "Gestion des rendez-vous et des patients",
-          "1": "Suivi des traitements et des paiements",
-          "2": "Gestion des tâches",
-          "3": "Jusqu'à 3 utilisateurs",
-          "4": "Assistance par e-mail"
+          "0": "Gestion des patients, rendez-vous et traitements",
+          "1": "Suivi financier et des paiements",
+          "2": "Gestion du laboratoire et des stocks",
+          "3": "2 500 patients actifs",
+          "4": "10 Go d'espace de stockage",
+          "5": "Tableau de bord de reporting",
+          "6": "Assistance standard"
         }
       },
       "professional": {
-        "name": "Professionnel",
-        "description": "Canaux de communication et rapports pour les cliniques en croissance.",
-        "price": "₺2 990",
-        "period": "/mois",
+        "name": "Clinique Intelligente",
+        "description": "Pour les cliniques en croissance grâce à la messagerie, l'IA et l'automatisation.",
+        "monthlyPrice": "3 990 ₺",
+        "monthlyPeriod": "/mois + TVA",
+        "monthlyNote": "Facturation mensuelle",
+        "yearlyPrice": "39 900 ₺",
+        "yearlyPeriod": "/an + TVA",
+        "yearlyNote": "Paiement annuel anticipé · accès pendant 12 mois",
         "cta": "Demander une démo",
         "features": {
           "0": "Tout le contenu d'Essentiel",
-          "1": "Boîte de réception WhatsApp et Instagram",
-          "2": "Automatisations de rappels",
-          "3": "Tableaux de bord financiers et de reporting",
-          "4": "Jusqu'à 10 utilisateurs",
-          "5": "Assistance prioritaire"
+          "1": "10 000 patients actifs",
+          "2": "50 Go d'espace de stockage",
+          "3": "1 ligne WhatsApp et 1 compte Instagram",
+          "4": "500 conversations assistées par IA par mois",
+          "5": "Suivi et relance automatisés des patients",
+          "6": "Finances et reporting avancés",
+          "7": "Assistance prioritaire"
         }
       },
       "enterprise": {
         "name": "Entreprise",
-        "description": "Gestion centralisée pour les organisations multi-succursales.",
+        "description": "Gestion centralisée pour les organisations multi-cliniques.",
         "price": "Offre personnalisée",
         "period": "",
         "cta": "Contactez-nous",
         "features": {
-          "0": "Tout le contenu de Professionnel",
-          "1": "Gestion multi-succursales",
-          "2": "Utilisateurs illimités",
-          "3": "Personnalisation des rôles et permissions",
-          "4": "Outils de conformité KVKK/RGPD",
-          "5": "Intégration et formation sur mesure"
+          "0": "Tout le contenu de Clinique Intelligente",
+          "1": "Gestion multi-cliniques",
+          "2": "100 Go d'espace de stockage par clinique",
+          "3": "1 ligne WhatsApp par clinique",
+          "4": "1 compte Instagram par clinique",
+          "5": "Rôles, permissions et reporting par clinique",
+          "6": "Quota IA personnalisé par clinique",
+          "7": "API avancée et intégrations sur mesure",
+          "8": "Gestionnaire de compte et option SLA"
         }
       }
     }

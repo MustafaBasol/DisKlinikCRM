@@ -298,50 +298,74 @@
     "title": "Pläne passend zur Größe Ihrer Klinik",
     "description": "Alle Pläne enthalten die zentralen CRM-Funktionen und wachsen mit der Anzahl Ihrer Kliniken und Kommunikationskanäle.",
     "popularBadge": "Am beliebtesten",
-    "note": "Preise zzgl. MwSt. Fordern Sie eine Demo für ein individuelles Angebot an.",
+    "commonNote": "Unbegrenzte Benutzer, Behandler und Geräte in jedem Plan.",
+    "aiNote1": "* Ein KI-gestütztes Gespräch ist ein Gespräch, das der Standardablauf nicht bewältigen konnte und bei dem die KI einspringt.",
+    "aiNote2": "Über den Standardablauf oder durch das Personal geführte Gespräche zählen nicht zum KI-Kontingent.",
+    "note": "Preise zzgl. MwSt. SMS, Meta-Nachrichtengebühren, Einrichtung, Datenmigration und Bildarchivierung werden separat berechnet.",
+    "billing": {
+      "groupLabel": "Abrechnungszeitraum",
+      "monthly": "Monatlich",
+      "yearly": "Jährlich",
+      "yearlySaving": "2 Monate kostenlos"
+    },
     "plans": {
       "starter": {
         "name": "Starter",
-        "description": "Grundlegendes Betriebsmanagement für eine einzelne Klinik.",
-        "price": "₺1.490",
-        "period": "/Monat",
+        "description": "Vollständiges grundlegendes Betriebsmanagement für eine einzelne Klinik.",
+        "monthlyPrice": "2.390 ₺",
+        "monthlyPeriod": "/Monat + MwSt.",
+        "monthlyNote": "Monatliche Abrechnung",
+        "yearlyPrice": "23.900 ₺",
+        "yearlyPeriod": "/Jahr + MwSt.",
+        "yearlyNote": "Jährliche Vorauszahlung · 12 Monate Nutzung",
         "cta": "Demo anfordern",
         "features": {
-          "0": "Termin- und Patientenverwaltung",
-          "1": "Behandlungs- und Zahlungsverfolgung",
-          "2": "Aufgabenverwaltung",
-          "3": "Bis zu 3 Benutzer",
-          "4": "E-Mail-Support"
+          "0": "Patienten-, Termin- und Behandlungsverwaltung",
+          "1": "Finanz- und Zahlungsverfolgung",
+          "2": "Labor- und Lagerverwaltung",
+          "3": "2.500 aktive Patienten",
+          "4": "10 GB Speicherplatz",
+          "5": "Reporting-Dashboard",
+          "6": "Standard-Support"
         }
       },
       "professional": {
-        "name": "Professional",
-        "description": "Kommunikationskanäle und Reporting für wachsende Kliniken.",
-        "price": "₺2.990",
-        "period": "/Monat",
+        "name": "Smart Clinic",
+        "description": "Für mit Kommunikation, KI und Automatisierung wachsende Kliniken.",
+        "monthlyPrice": "3.990 ₺",
+        "monthlyPeriod": "/Monat + MwSt.",
+        "monthlyNote": "Monatliche Abrechnung",
+        "yearlyPrice": "39.900 ₺",
+        "yearlyPeriod": "/Jahr + MwSt.",
+        "yearlyNote": "Jährliche Vorauszahlung · 12 Monate Nutzung",
         "cta": "Demo anfordern",
         "features": {
           "0": "Alles aus Starter",
-          "1": "WhatsApp- und Instagram-Posteingang",
-          "2": "Erinnerungsautomationen",
-          "3": "Finanz- und Reporting-Dashboards",
-          "4": "Bis zu 10 Benutzer",
-          "5": "Priorisierter Support"
+          "1": "10.000 aktive Patienten",
+          "2": "50 GB Speicherplatz",
+          "3": "1 WhatsApp-Leitung und 1 Instagram-Konto",
+          "4": "500 KI-gestützte Gespräche pro Monat",
+          "5": "Automatisierte Patientennachverfolgung",
+          "6": "Erweiterte Finanzen und Reporting",
+          "7": "Priorisierter Support"
         }
       },
       "enterprise": {
         "name": "Enterprise",
-        "description": "Zentrale Verwaltung für Organisationen mit mehreren Filialen.",
+        "description": "Zentrale Verwaltung für Organisationen mit mehreren Kliniken.",
         "price": "Individuelles Angebot",
         "period": "",
         "cta": "Kontaktieren Sie uns",
         "features": {
-          "0": "Alles aus Professional",
-          "1": "Verwaltung mehrerer Filialen",
-          "2": "Unbegrenzte Benutzer",
-          "3": "Anpassbare Rollen und Berechtigungen",
-          "4": "KVKK/DSGVO-Compliance-Werkzeuge",
-          "5": "Individuelles Onboarding und Schulung"
+          "0": "Alles aus Smart Clinic",
+          "1": "Verwaltung mehrerer Kliniken",
+          "2": "100 GB Speicherplatz pro Klinik",
+          "3": "1 WhatsApp-Leitung pro Klinik",
+          "4": "1 Instagram-Konto pro Klinik",
+          "5": "Klinikbezogene Rollen, Berechtigungen und Reporting",
+          "6": "Klinikbezogenes individuelles KI-Kontingent",
+          "7": "Erweiterte API und individuelle Integrationen",
+          "8": "Account Manager und SLA-Option"
         }
       }
     }
