@@ -294,24 +294,33 @@ if ($Release) {
         if ($LASTEXITCODE -ne 0) { Fail "signtool verify failed for '$file' - refusing to publish a release whose own signature doesn't verify." }
     }
 
-    # -- 11. Verify the Bundle actually launches enough to prove the container isn't corrupted --
-    # Burn's own `/layout` mode self-extracts every attached container without
-    # installing anything - this is what actually proves the detach/reattach
-    # sequence didn't corrupt the container footer (docs/update-runbook.md:
-    # both Get-AuthenticodeSignature and signtool verify can report a
-    # corrupted bundle as validly signed; only running it reveals the defect).
-    Write-Step "Verifying Bundle container integrity via /layout (no install)"
-    $layoutDir = Join-Path $env:TEMP "nmb-layout-$([Guid]::NewGuid().ToString('N'))"
-    & $bundlePath "/layout" $layoutDir "/quiet"
-    $layoutExit = $LASTEXITCODE
-    # Require the actual extracted MSI, not merely the directory's existence -
-    # Burn can create $layoutDir before extraction even starts, so a bare
-    # Test-Path on the directory alone would pass even for a failed/partial
-    # extraction and defeat the point of this check.
-    $layoutOk = Test-Path (Join-Path $layoutDir 'NoraMediBridge.msi')
-    if (Test-Path $layoutDir) { Remove-Item $layoutDir -Recurse -Force }
-    if ($layoutExit -ne 0 -or -not $layoutOk) {
-        Fail "Bundle /layout self-extraction failed (exit $layoutExit) - the container is likely corrupted by the sign sequence. Never publish this artifact."
+    # -- 11. Verify the Bundle's attached container isn't corrupted -------------
+    # The chained MsiPackage is attached (embedded) inside the bundle exe's own
+    # container, not staged as an external payload. The bundle's own runtime
+    # `/layout` action therefore only ever copies the bundle exe itself for an
+    # attached package - it does not write out a separate MSI file - so a
+    # Test-Path for a standalone MSI after `/layout` always fails regardless of
+    # whether detach/sign/reattach corrupted anything. The tool that actually
+    # unpacks attached containers is `wix burn extract` (docs/update-runbook.md);
+    # its output is verified byte-for-byte against the pre-signing MSI hash,
+    # which is what actually proves the detach/reattach sequence didn't corrupt
+    # the container (both Get-AuthenticodeSignature and signtool verify can
+    # report a corrupted bundle as validly signed; only unpacking it reveals
+    # the defect).
+    Write-Step "Verifying Bundle container integrity via 'wix burn extract'"
+    $preSignMsiHash = (Get-FileHash $msiPath -Algorithm SHA256).Hash
+    $extractDir = Join-Path $env:TEMP "nmb-extract-$([Guid]::NewGuid().ToString('N'))"
+    & wix.exe burn extract $bundlePath -o $extractDir
+    $extractExit = $LASTEXITCODE
+    $extractOk = $false
+    if ($extractExit -eq 0 -and (Test-Path $extractDir)) {
+        $extractOk = @(Get-ChildItem $extractDir -File -Recurse | Where-Object {
+            (Get-FileHash $_.FullName -Algorithm SHA256).Hash -eq $preSignMsiHash
+        }).Count -gt 0
+    }
+    if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+    if ($extractExit -ne 0 -or -not $extractOk) {
+        Fail "Bundle container extraction failed or its attached MSI payload does not hash-match the pre-signing MSI (wix burn extract exit $extractExit) - the container is likely corrupted by the sign sequence. Never publish this artifact."
     }
 }
 else {

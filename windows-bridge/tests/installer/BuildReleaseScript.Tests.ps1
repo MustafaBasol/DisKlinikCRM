@@ -17,6 +17,21 @@
          extraction, which made the previous check nearly meaningless).
       4. The script's own doc comment must not contain the
          "clearly-unlabelled-as-unsigned" wording defect.
+      5. The Bundle container-integrity check must use `wix burn extract`
+         and a byte-hash comparison against the pre-signing MSI, not the
+         bundle's own runtime `/layout` action + a bare
+         `NoraMediBridge.msi` filename Test-Path. Found during PR 7/7
+         physical acceptance testing on 2026-07-14: the chained MsiPackage
+         is attached (embedded) inside the bundle container, so Burn's own
+         `/layout` action for an attached package only ever copies the
+         bundle exe itself and never writes a standalone MSI file - the
+         previous check therefore failed unconditionally on every signed
+         build (verified reproducing identically on a freshly built,
+         never-signed bundle, ruling out the detach/sign/reattach sequence
+         itself as the cause). `wix burn extract` is the tool that actually
+         unpacks a bundle's attached containers; comparing an extracted
+         payload's SHA-256 against the pre-signing MSI hash is what proves
+         the sign sequence didn't corrupt the container.
 
     These are static content checks, not functional builds (a real signed
     build requires elevation/a certificate this test environment does not
@@ -52,12 +67,15 @@ Add-Result 'Case 2: signtool verify loop includes NoraMedi.Bridge.UpdateHelper.e
     ($verifyLoopMatch.Success -and $verifyLoopMatch.Groups[1].Value -match 'UpdateHelper\.exe') `
     "found=$($verifyLoopMatch.Groups[1].Value)"
 
-# --- Case 3: /layout check requires the extracted MSI, not just the directory ---
-$layoutOkLine = ($content -split "`n") | Where-Object { $_ -match '\$layoutOk\s*=' }
-Add-Result 'Case 3: /layout check does not fall back to bare directory existence' `
-    ($layoutOkLine -notmatch '-or\s*\(Test-Path\s+\$layoutDir\)') "line=$layoutOkLine"
-Add-Result 'Case 3: /layout check requires the extracted MSI file' `
-    ($layoutOkLine -match "NoraMediBridge\.msi") "line=$layoutOkLine"
+# --- Case 3/5: Bundle container-integrity check uses wix burn extract + hash compare ---
+Add-Result 'Case 3/5: container check no longer relies on bundle /layout + bare MSI filename' `
+    ($content -notmatch '"/layout"[\s\S]{0,400}NoraMediBridge\.msi') ''
+Add-Result 'Case 3/5: container check invokes wix burn extract' `
+    ($content -match 'wix\.exe burn extract') ''
+Add-Result 'Case 3/5: container check compares extracted payload hash against pre-signing MSI hash' `
+    ($content -match '\$preSignMsiHash\s*=\s*\(Get-FileHash\s+\$msiPath') ''
+Add-Result 'Case 3/5: container check does not fall back to bare directory existence' `
+    ($content -notmatch '\$extractOk\s*=[\s\S]{0,120}-or\s*\(Test-Path\s+\$extractDir\)') ''
 
 # --- Case 4: no leftover wording defect -------------------------------------
 Add-Result 'Case 4: no "clearly-unlabelled-as-unsigned" wording defect remains' `

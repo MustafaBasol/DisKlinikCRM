@@ -400,7 +400,29 @@
                        Start="auto"
                        Type="ownProcess"
                        ErrorControl="normal"
-                       Account="LocalSystem" />
+                       Account="LocalSystem">
+        <!--
+          Without this, the Service Control Manager never restarts the
+          process after a crash (verified on real hardware: `sc.exe
+          qfailure NoraMediBridge` showed no failure actions and a
+          freshly-crashing signed update just stayed Stopped forever).
+          That silently defeats PostUpdateHealthTracker's crash-loop
+          rollback safety net (PR 7/7): it only triggers an automatic
+          rollback after observing 3 boots of the same bad version within
+          its stabilization window, but a version that crashes on launch
+          never got a 2nd or 3rd boot to be observed, so the one signal
+          designed to catch "shipped a build that crashes immediately"
+          could never fire. Restarting on the 1st and 2nd failures (not
+          the 3rd — see ThirdFailureActionType="none") gives the detector
+          exactly the repeated-boot signal it needs without turning a
+          persistently broken install into an infinite restart loop.
+        -->
+        <util:ServiceConfig FirstFailureActionType="restart"
+                             SecondFailureActionType="restart"
+                             ThirdFailureActionType="none"
+                             RestartServiceDelayInSeconds="15"
+                             ResetPeriodInDays="1" />
+      </ServiceInstall>
       <!--
         Windows Installer's ServiceInstall table has no native "delayed
         auto-start" bit (only StartType=auto/demand/disabled). The
