@@ -302,6 +302,7 @@
     "aiNote1": "* AI destekli konuşma, sistemin standart akışla anlayamadığı bir konuşmaya AI'ın dahil olduğu konuşmadır.",
     "aiNote2": "Standart sistem akışıyla veya personel tarafından yürütülen konuşmalar AI kotasına dahil edilmez.",
     "note": "Fiyatlar KDV hariçtir. SMS, Meta mesaj ücretleri, kurulum, veri taşıma ve görüntüleme depolaması ayrıca fiyatlandırılır.",
+    "detailedLink": "Tüm planları ve ek hizmetleri incele",
     "billing": {
       "groupLabel": "Faturalandırma dönemi",
       "monthly": "Aylık",

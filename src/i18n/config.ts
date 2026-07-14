@@ -35,6 +35,7 @@ import earningsEn from '../locales/en/earnings.json';
 import platformEn from '../locales/en/platform.json';
 import organizationEn from '../locales/en/organization.json';
 import landingEn from '../locales/en/landing.json';
+import pricingPageEn from '../locales/en/pricingPage.json';
 import legalEn from '../locales/en/legal.json';
 import postTreatmentEn from '../locales/en/postTreatment.json';
 import smsEn from '../locales/en/sms.json';
@@ -71,6 +72,7 @@ import earningsTr from '../locales/tr/earnings.json';
 import platformTr from '../locales/tr/platform.json';
 import organizationTr from '../locales/tr/organization.json';
 import landingTr from '../locales/tr/landing.json';
+import pricingPageTr from '../locales/tr/pricingPage.json';
 import legalTr from '../locales/tr/legal.json';
 import postTreatmentTr from '../locales/tr/postTreatment.json';
 import smsTr from '../locales/tr/sms.json';
@@ -107,6 +109,7 @@ import earningsFr from '../locales/fr/earnings.json';
 import platformFr from '../locales/fr/platform.json';
 import organizationFr from '../locales/fr/organization.json';
 import landingFr from '../locales/fr/landing.json';
+import pricingPageFr from '../locales/fr/pricingPage.json';
 import legalFr from '../locales/fr/legal.json';
 import postTreatmentFr from '../locales/fr/postTreatment.json';
 import smsFr from '../locales/fr/sms.json';
@@ -143,6 +146,7 @@ import earningsDe from '../locales/de/earnings.json';
 import platformDe from '../locales/de/platform.json';
 import organizationDe from '../locales/de/organization.json';
 import landingDe from '../locales/de/landing.json';
+import pricingPageDe from '../locales/de/pricingPage.json';
 import legalDe from '../locales/de/legal.json';
 import postTreatmentDe from '../locales/de/postTreatment.json';
 import smsDe from '../locales/de/sms.json';
@@ -178,6 +182,7 @@ const namespaces = [
   'platform',
   'organization',
   'landing',
+  'pricingPage',
   'legal',
   'postTreatment',
   'sms',
@@ -217,6 +222,7 @@ const resources = {
     platform: platformEn,
     organization: organizationEn,
     landing: landingEn,
+    pricingPage: pricingPageEn,
     legal: legalEn,
     postTreatment: postTreatmentEn,
     sms: smsEn,
@@ -254,6 +260,7 @@ const resources = {
     platform: platformTr,
     organization: organizationTr,
     landing: landingTr,
+    pricingPage: pricingPageTr,
     legal: legalTr,
     postTreatment: postTreatmentTr,
     sms: smsTr,
@@ -291,6 +298,7 @@ const resources = {
     platform: platformFr,
     organization: organizationFr,
     landing: landingFr,
+    pricingPage: pricingPageFr,
     legal: legalFr,
     postTreatment: postTreatmentFr,
     sms: smsFr,
@@ -328,6 +336,7 @@ const resources = {
     platform: platformDe,
     organization: organizationDe,
     landing: landingDe,
+    pricingPage: pricingPageDe,
     legal: legalDe,
     postTreatment: postTreatmentDe,
     sms: smsDe,

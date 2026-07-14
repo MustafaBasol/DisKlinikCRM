@@ -302,6 +302,7 @@
     "aiNote1": "* Une conversation assistée par IA est une conversation que le flux standard n'a pas pu traiter et où l'IA intervient.",
     "aiNote2": "Les conversations traitées par le flux standard ou par le personnel ne sont pas comptées dans le quota IA.",
     "note": "Prix hors TVA. SMS, frais de messagerie Meta, mise en service, migration de données et stockage d'imagerie sont facturés séparément.",
+    "detailedLink": "Découvrir toutes les formules et services complémentaires",
     "billing": {
       "groupLabel": "Période de facturation",
       "monthly": "Mensuel",

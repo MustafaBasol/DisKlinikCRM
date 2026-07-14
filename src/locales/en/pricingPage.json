@@ -1,0 +1,246 @@
+{
+  "meta": {
+    "title": "NoraMedi Pricing | Dental Clinic CRM Plans",
+    "description": "Compare NoraMedi dental clinic CRM plans, AI conversation packages, storage, SMS, setup, and data migration fees."
+  },
+  "hero": {
+    "title": "NoraMedi Plans and Pricing",
+    "subtitle": "From clinic management to AI-assisted patient communication, choose the plan and add-on services that fit your needs.",
+    "commonNote": "Unlimited users, practitioners, and devices on every plan.",
+    "priceNote": "Prices exclude VAT."
+  },
+  "backToHome": "Back to home",
+  "comparison": {
+    "label": "Comparison",
+    "title": "Detailed Plan Comparison",
+    "description": "Compare all features of the three plans by category.",
+    "mobileHint": "Scroll the table horizontally to see all columns.",
+    "cellIncluded": "Included",
+    "cellExcluded": "Not included",
+    "columns": {
+      "feature": "Feature",
+      "starter": "Starter",
+      "professional": "Smart Clinic",
+      "enterprise": "Enterprise"
+    },
+    "categories": {
+      "general": "General",
+      "patientsAppointments": "Patients & Appointments",
+      "treatmentOps": "Treatment & Clinic Operations",
+      "finance": "Finance",
+      "labInventory": "Lab & Inventory",
+      "channels": "WhatsApp & Instagram",
+      "ai": "AI",
+      "automation": "Automated Communication & Follow-up",
+      "reporting": "Reporting",
+      "integration": "Integration",
+      "support": "Support",
+      "capacity": "Capacity"
+    },
+    "rows": {
+      "clinicCount": { "label": "Number of clinics", "values": { "starter": "1", "professional": "1", "enterprise": "Multiple (unlimited)" } },
+      "users": { "label": "Users", "values": { "starter": "Unlimited", "professional": "Unlimited", "enterprise": "Unlimited" } },
+      "practitioners": { "label": "Practitioners", "values": { "starter": "Unlimited", "professional": "Unlimited", "enterprise": "Unlimited" } },
+      "devices": { "label": "Devices", "values": { "starter": "Unlimited", "professional": "Unlimited", "enterprise": "Unlimited" } },
+      "activePatientCapacity": { "label": "Active patient capacity", "values": { "starter": "2,500", "professional": "10,000", "enterprise": "Custom per clinic" } },
+      "fileStorage": { "label": "General file storage", "values": { "starter": "10 GB", "professional": "50 GB", "enterprise": "100 GB per clinic" } },
+      "patientManagement": { "label": "Patient management" },
+      "appointmentCalendar": { "label": "Appointment calendar" },
+      "treatmentPlans": { "label": "Treatment plans" },
+      "dentalChart": { "label": "Dental chart" },
+      "financePaymentTracking": { "label": "Finance and payment tracking" },
+      "paymentPlans": { "label": "Payment plans" },
+      "labManagement": { "label": "Lab management" },
+      "inventoryManagement": { "label": "Inventory management" },
+      "whatsappLine": { "label": "WhatsApp line", "values": { "professional": "1 included", "enterprise": "1 per clinic" } },
+      "instagramAccount": { "label": "Instagram account", "values": { "professional": "1 included", "enterprise": "1 per clinic" } },
+      "unifiedInbox": { "label": "Unified inbox" },
+      "aiConversationQuota": { "label": "AI conversation quota", "values": { "professional": "500 / month", "enterprise": "Custom quota per clinic" } },
+      "whatsappAiAssistant": { "label": "WhatsApp AI assistant" },
+      "instagramAiAssistant": { "label": "Instagram AI assistant" },
+      "autoPatientFollowUp": { "label": "Automated patient follow-up" },
+      "noShowFollowUp": { "label": "No-show follow-up" },
+      "postTreatmentFollowUp": { "label": "Post-treatment follow-up" },
+      "checkupReminders": { "label": "Check-up reminders" },
+      "pendingRequestFollowUp": { "label": "Pending appointment request follow-up" },
+      "reportingDashboard": { "label": "Reporting dashboard" },
+      "advancedReports": { "label": "Advanced reports" },
+      "aiUsageReports": { "label": "AI usage reports" },
+      "apiWebhook": { "label": "API and webhooks" },
+      "customIntegration": { "label": "Custom integration" },
+      "supportLevel": { "label": "Support level", "values": { "starter": "Standard", "professional": "Priority", "enterprise": "Dedicated account manager" } },
+      "sla": { "label": "SLA", "values": { "enterprise": "Optional" } },
+      "setupFeePerClinic": { "label": "Setup fee per clinic", "values": { "starter": "5.000 TL", "professional": "10.000 TL", "enterprise": "10.000 TL / clinic (min. 40.000 TL)" } }
+    }
+  },
+  "aiAddons": {
+    "label": "Add-on Services",
+    "title": "Additional AI Conversation Packages",
+    "description": "Usable in addition to the 500 monthly conversation quota on the Smart Clinic plan.",
+    "quotaLabel": "Extra quota",
+    "quotaUnit": "conversations / month",
+    "packages": {
+      "aiMini": { "name": "AI Mini" },
+      "aiPlus": { "name": "AI Plus" },
+      "aiGrowth": { "name": "AI Growth" },
+      "aiScale": { "name": "AI Scale" }
+    },
+    "enterprise": { "name": "Enterprise AI", "description": "Custom volume", "price": "Custom quote" },
+    "notes": [
+      "The quota renews every month",
+      "Unused allowance does not roll over to the next month",
+      "Packages are per clinic",
+      "Additional channels share the same clinic AI quota"
+    ],
+    "definition": "An AI-assisted conversation is one the standard system flow cannot handle, where AI steps in.",
+    "definitionNote": "Conversations handled by the standard system flow or by staff are not counted toward the AI quota.",
+    "sessionNote": "Conversation session duration is defined in the contract terms.",
+    "cta": "Request a Quote"
+  },
+  "storageAddons": {
+    "title": "Additional File Storage",
+    "description": "Usable for patient documents, photos, PDF files, and lab attachments.",
+    "packages": {
+      "storage25": { "name": "+25 GB" },
+      "storage50": { "name": "+50 GB" },
+      "storage100": { "name": "+100 GB" },
+      "storage250": { "name": "+250 GB" }
+    },
+    "dicomNote": "X-ray, DICOM, and CBCT imaging storage are not included in the general file quota.",
+    "dicomDescription": "X-ray and DICOM imaging storage is priced separately based on usage volume and backup needs.",
+    "cta": "Request a Quote"
+  },
+  "channelAddons": {
+    "title": "Additional Communication Channels",
+    "packages": {
+      "whatsappLine": { "name": "Additional WhatsApp line", "setupLabel": "One-time connection setup" },
+      "instagramAccount": { "name": "Additional Instagram account", "setupLabel": "One-time connection setup" },
+      "webChatbot": { "name": "Website AI chat assistant", "setupLabel": "One-time setup" }
+    },
+    "notes": [
+      "The Smart Clinic plan includes 1 WhatsApp line and 1 Instagram account",
+      "The Enterprise plan includes one connection per clinic",
+      "Additional channels share the same clinic AI quota",
+      "Meta messaging fees are not included in the subscription price",
+      "Third-party service fees are billed separately"
+    ],
+    "cta": "Request a Quote"
+  },
+  "sms": {
+    "title": "NoraMedi SMS Packages",
+    "subtitle": "Manage your SMS credits through NoraMedi for appointment reminders, notifications, and patient communication.",
+    "infoNote": "All SMS messages are sent through NoraMedi. You do not need to open or connect a separate SMS provider account.",
+    "trackingNote": "Your SMS balance, sending history, and delivery status (where available) are tracked through NoraMedi.",
+    "unitLabel": "SMS credits",
+    "packages": {
+      "smsMini": { "name": "SMS Mini" },
+      "smsStandard": { "name": "SMS Standard" },
+      "smsPlus": { "name": "SMS Plus" },
+      "smsBulk": { "name": "SMS Bulk" }
+    },
+    "highVolume": { "name": "High Volume", "count": "25,000+", "price": "Custom quote" },
+    "billingNote": "SMS packages are one-time credit purchases, independent of your main subscription plan.",
+    "cta": "Request an SMS Package",
+    "activationNote": "SMS packages are assigned to your account by our sales team.",
+    "usageNotes": [
+      "Long messages and messages containing accented, emoji, or other Unicode characters may use more than one SMS credit depending on technical length.",
+      "The credit policy for failed or undelivered SMS messages is determined by the provider result and NoraMedi's terms of use.",
+      "SMS prices may be updated based on changes in carrier and SMS provider costs."
+    ]
+  },
+  "setup": {
+    "title": "Setup and Onboarding Services",
+    "starter": {
+      "title": "Starter Setup",
+      "priceLabel": "5.000 TL / clinic + VAT",
+      "items": ["Basic clinic settings", "User role structure", "Service and appointment types", "Basic system configuration", "Remote onboarding training"]
+    },
+    "professional": {
+      "title": "Smart Clinic Setup",
+      "priceLabel": "10.000 TL / clinic + VAT",
+      "items": ["Starter setup", "WhatsApp connection", "Instagram connection", "Message templates", "AI channel configuration", "Basic configuration of automated communication flows", "Remote training"]
+    },
+    "enterprise": {
+      "title": "Enterprise Setup",
+      "items": ["Central enterprise setup: 20.000 TL + VAT", "Per-clinic setup: 10.000 TL + VAT", "Minimum total: 40.000 TL + VAT"],
+      "description": "The final setup fee is quoted based on the number of clinics, data migration, and integration scope."
+    }
+  },
+  "migration": {
+    "title": "Data Migration Packages",
+    "topNote": "Sample data is analyzed free of charge before final pricing.",
+    "basic": { "title": "Basic", "priceLabel": "5.000 TL + VAT", "items": ["Up to 2,500 patients", "First name", "Last name", "Phone", "Email", "Basic patient information"] },
+    "standard": { "title": "Standard", "priceLabel": "12.500 TL + VAT", "items": ["Up to 10,000 patients", "Patient information", "Appointments", "Outstanding balances", "Basic field mapping"] },
+    "advanced": { "title": "Advanced", "priceLabel": "From 25.000 TL + VAT", "items": ["Treatment history", "Payments", "Appointments", "Custom field mapping", "Data cleansing", "Duplicate record analysis"] },
+    "custom": { "title": "Custom Migration", "priceLabel": "Custom quote", "items": ["Legacy software database", "API-based transfer", "Documents", "Photos", "Custom data transformation"] },
+    "note": "Patient documents, photos, X-ray/DICOM, irregular Excel files, duplicate-record merging, and custom API development are evaluated separately.",
+    "generalDescription": "Data migration prices vary based on the structure of the source system, record count, and data quality. The final price is provided after a free data analysis.",
+    "cta": "Request Free Data Analysis"
+  },
+  "training": {
+    "title": "Training and Custom Services",
+    "items": {
+      "onlineExtra": { "name": "Additional online training — 2 hours", "priceLabel": "2.500 TL + VAT" },
+      "onSite": { "name": "On-site training — 1 business day", "priceLabel": "15.000 TL + VAT" },
+      "customReport": { "name": "Custom report development", "priceLabel": "From 5.000 TL + VAT" },
+      "customAutomation": { "name": "Custom automation / workflow", "priceLabel": "From 7.500 TL + VAT" },
+      "customApi": { "name": "Custom API integration", "priceLabel": "Project-based" },
+      "sla": { "name": "Enterprise SLA", "priceLabel": "Custom quote" }
+    },
+    "note": "Travel and accommodation costs for on-site training are billed separately."
+  },
+  "capacity": {
+    "title": "Additional Active Patient Capacity",
+    "definition": "A patient with an appointment, treatment, payment, or communication activity within the last 24 months is considered an active patient.",
+    "archiveNote": "Archived past patient records are not deleted. A record becomes active again once new activity occurs for that patient.",
+    "packages": {
+      "capacity5k": { "name": "+5,000 active patients" },
+      "capacity10k": { "name": "+10,000 active patients" }
+    },
+    "enterprise": { "name": "25,000+ active patients", "price": "Enterprise quote" },
+    "note": "For higher patient-capacity needs on the Starter plan, we recommend upgrading to the Smart Clinic plan."
+  },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "items": {
+      "yearlyDiscount": { "question": "How does the yearly plan discount work?", "answer": "With yearly billing you pay for 10 months and get 12 months of access. Payment is collected upfront." },
+      "setupPerClinic": { "question": "Is the setup fee charged per clinic?", "answer": "Yes, the setup fee is charged per clinic." },
+      "aiDeduction": { "question": "When is an AI conversation deducted from the quota?", "answer": "Only conversations the standard system flow could not handle, where AI steps in, are deducted from the quota." },
+      "aiRollover": { "question": "Do unused AI conversations roll over to the next month?", "answer": "No, the monthly AI conversation quota does not roll over." },
+      "metaFees": { "question": "Are Meta messaging fees included in the plan?", "answer": "No, Meta's (WhatsApp/Instagram) messaging fees are not included in the subscription price and are billed separately." },
+      "smsFees": { "question": "Are SMS fees included in the plan?", "answer": "No. SMS usage is separate from the main subscription plans. You can purchase the NoraMedi SMS credit package that fits your needs separately. You do not need to connect a separate SMS provider account." },
+      "ownChannels": { "question": "Can I use my own WhatsApp or Instagram account?", "answer": "Yes, you can connect your existing WhatsApp line and Instagram account to NoraMedi." },
+      "activePatientDefinition": { "question": "How is an active patient calculated?", "answer": "Patients with an appointment, treatment, payment, or communication activity within the last 24 months are counted as active." },
+      "archivedPatients": { "question": "Are archived patients deleted?", "answer": "No, archived patient records are not deleted. A record becomes active again once new activity occurs for that patient." },
+      "dicomStorage": { "question": "Is X-ray and DICOM included in file storage?", "answer": "No, X-ray and DICOM/CBCT imaging storage is separate from the general file quota and is priced separately based on usage volume." },
+      "migrationPriceVariance": { "question": "Why can the data migration price vary?", "answer": "The price depends on the structure of the source system, record count, and data quality. The final price is provided after a free data analysis." },
+      "planUpgrade": { "question": "Can I upgrade my plan later?", "answer": "Yes, you can upgrade your plan later as your clinic's needs grow." },
+      "addonPurchaseLater": { "question": "Can I purchase additional AI or storage packages later?", "answer": "Yes, these packages can be added to your existing subscription at any time." },
+      "enterprisePricing": { "question": "How is the Enterprise plan priced?", "answer": "The Enterprise plan is custom-quoted based on the number of clinics, patient volume, and communication needs." },
+      "yearlyAddonDiscount": { "question": "Do yearly add-on packages also get 2 months free?", "answer": "Yes, the yearly option for AI, storage, and active patient capacity packages also follows the pay-for-10-months, use-for-12-months rule." },
+      "extraChannelAiQuota": { "question": "How is the AI quota calculated for additional channel connections?", "answer": "Additional WhatsApp, Instagram, or website chatbot connections share the same clinic AI conversation quota; no separate quota is defined per channel." }
+    }
+  },
+  "finalCta": {
+    "title": "Let's find the right plan for your clinic together",
+    "description": "We'll build the plan that best fits your number of clinics, patient volume, and communication needs.",
+    "demoButton": "Request a Free Demo",
+    "salesButton": "Talk to Sales"
+  },
+  "generalNotes": {
+    "title": "General Pricing Notes",
+    "items": [
+      "All prices exclude VAT.",
+      "All yearly plans provide 12 months of access for the price of 10 months.",
+      "Yearly payments are collected upfront.",
+      "The setup fee is charged per clinic.",
+      "SMS and Meta messaging fees are not included in the subscription price.",
+      "Third-party service fees are billed separately.",
+      "Data migration, custom integration, and on-site training are priced separately.",
+      "General file storage and X-ray/DICOM storage are evaluated separately.",
+      "Unused monthly AI conversation allowance does not roll over.",
+      "Prices may be updated based on service and third-party costs."
+    ]
+  },
+  "vatSuffix": "excluding VAT"
+}

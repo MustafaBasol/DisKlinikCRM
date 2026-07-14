@@ -1,0 +1,246 @@
+{
+  "meta": {
+    "title": "NoraMedi Preise | Zahnklinik-CRM-Pläne",
+    "description": "Vergleichen Sie die NoraMedi Zahnklinik-CRM-Pläne, KI-Gesprächspakete, Speicher-, SMS-, Einrichtungs- und Datenmigrationsgebühren."
+  },
+  "hero": {
+    "title": "NoraMedi Pläne und Preise",
+    "subtitle": "Von der Klinikverwaltung bis zur KI-gestützten Patientenkommunikation – wählen Sie den passenden Plan und die Zusatzleistungen für Ihre Anforderungen.",
+    "commonNote": "Unbegrenzte Benutzer, Behandler und Geräte in jedem Plan.",
+    "priceNote": "Preise zzgl. MwSt."
+  },
+  "backToHome": "Zurück zur Startseite",
+  "comparison": {
+    "label": "Vergleich",
+    "title": "Ausführlicher Planvergleich",
+    "description": "Vergleichen Sie alle Funktionen der drei Pläne nach Kategorie.",
+    "mobileHint": "Scrollen Sie die Tabelle horizontal, um alle Spalten zu sehen.",
+    "cellIncluded": "Enthalten",
+    "cellExcluded": "Nicht enthalten",
+    "columns": {
+      "feature": "Funktion",
+      "starter": "Starter",
+      "professional": "Smart Clinic",
+      "enterprise": "Enterprise"
+    },
+    "categories": {
+      "general": "Allgemein",
+      "patientsAppointments": "Patienten und Termine",
+      "treatmentOps": "Behandlung und Klinikbetrieb",
+      "finance": "Finanzen",
+      "labInventory": "Labor und Lager",
+      "channels": "WhatsApp und Instagram",
+      "ai": "Künstliche Intelligenz",
+      "automation": "Automatisierte Kommunikation und Nachverfolgung",
+      "reporting": "Berichte",
+      "integration": "Integration",
+      "support": "Support",
+      "capacity": "Kapazität"
+    },
+    "rows": {
+      "clinicCount": { "label": "Anzahl der Kliniken", "values": { "starter": "1", "professional": "1", "enterprise": "Mehrere (unbegrenzt)" } },
+      "users": { "label": "Benutzer", "values": { "starter": "Unbegrenzt", "professional": "Unbegrenzt", "enterprise": "Unbegrenzt" } },
+      "practitioners": { "label": "Behandler", "values": { "starter": "Unbegrenzt", "professional": "Unbegrenzt", "enterprise": "Unbegrenzt" } },
+      "devices": { "label": "Geräte", "values": { "starter": "Unbegrenzt", "professional": "Unbegrenzt", "enterprise": "Unbegrenzt" } },
+      "activePatientCapacity": { "label": "Kapazität aktiver Patienten", "values": { "starter": "2.500", "professional": "10.000", "enterprise": "Individuell pro Klinik" } },
+      "fileStorage": { "label": "Allgemeiner Dateispeicher", "values": { "starter": "10 GB", "professional": "50 GB", "enterprise": "100 GB pro Klinik" } },
+      "patientManagement": { "label": "Patientenverwaltung" },
+      "appointmentCalendar": { "label": "Terminkalender" },
+      "treatmentPlans": { "label": "Behandlungspläne" },
+      "dentalChart": { "label": "Zahnschema" },
+      "financePaymentTracking": { "label": "Finanzen und Zahlungsverfolgung" },
+      "paymentPlans": { "label": "Zahlungspläne" },
+      "labManagement": { "label": "Laborverwaltung" },
+      "inventoryManagement": { "label": "Lagerverwaltung" },
+      "whatsappLine": { "label": "WhatsApp-Anschluss", "values": { "professional": "1 enthalten", "enterprise": "1 pro Klinik" } },
+      "instagramAccount": { "label": "Instagram-Konto", "values": { "professional": "1 enthalten", "enterprise": "1 pro Klinik" } },
+      "unifiedInbox": { "label": "Einheitlicher Posteingang" },
+      "aiConversationQuota": { "label": "KI-Gesprächskontingent", "values": { "professional": "500 / Monat", "enterprise": "Individuelles Kontingent pro Klinik" } },
+      "whatsappAiAssistant": { "label": "WhatsApp-KI-Assistent" },
+      "instagramAiAssistant": { "label": "Instagram-KI-Assistent" },
+      "autoPatientFollowUp": { "label": "Automatisierte Patientennachverfolgung" },
+      "noShowFollowUp": { "label": "Nachverfolgung bei Terminversäumnis" },
+      "postTreatmentFollowUp": { "label": "Nachsorge nach der Behandlung" },
+      "checkupReminders": { "label": "Kontrollerinnerungen" },
+      "pendingRequestFollowUp": { "label": "Nachverfolgung offener Terminanfragen" },
+      "reportingDashboard": { "label": "Berichts-Dashboard" },
+      "advancedReports": { "label": "Erweiterte Berichte" },
+      "aiUsageReports": { "label": "KI-Nutzungsberichte" },
+      "apiWebhook": { "label": "API und Webhooks" },
+      "customIntegration": { "label": "Individuelle Integration" },
+      "supportLevel": { "label": "Support-Level", "values": { "starter": "Standard", "professional": "Priorität", "enterprise": "Persönlicher Kundenbetreuer" } },
+      "sla": { "label": "SLA", "values": { "enterprise": "Optional" } },
+      "setupFeePerClinic": { "label": "Einrichtungsgebühr pro Klinik", "values": { "starter": "5.000 TL", "professional": "10.000 TL", "enterprise": "10.000 TL / Klinik (min. 40.000 TL)" } }
+    }
+  },
+  "aiAddons": {
+    "label": "Zusatzleistungen",
+    "title": "Zusätzliche KI-Gesprächspakete",
+    "description": "Zusätzlich zum monatlichen Kontingent von 500 Gesprächen im Smart-Clinic-Plan nutzbar.",
+    "quotaLabel": "Zusätzliches Kontingent",
+    "quotaUnit": "Gespräche / Monat",
+    "packages": {
+      "aiMini": { "name": "AI Mini" },
+      "aiPlus": { "name": "AI Plus" },
+      "aiGrowth": { "name": "AI Growth" },
+      "aiScale": { "name": "AI Scale" }
+    },
+    "enterprise": { "name": "Enterprise KI", "description": "Individuelles Volumen", "price": "Individuelles Angebot" },
+    "notes": [
+      "Das Kontingent erneuert sich jeden Monat",
+      "Nicht genutzte Guthaben werden nicht in den nächsten Monat übertragen",
+      "Das Paket gilt pro Klinik",
+      "Zusätzliche Kanäle nutzen dasselbe KI-Kontingent der Klinik"
+    ],
+    "definition": "Ein KI-gestütztes Gespräch ist ein Gespräch, das der Standardablauf des Systems nicht bewältigen konnte und bei dem die KI einspringt.",
+    "definitionNote": "Über den Standardablauf oder durch das Personal geführte Gespräche zählen nicht zum KI-Kontingent.",
+    "sessionNote": "Die Dauer einer Gesprächssitzung wird in den Vertragsbedingungen festgelegt.",
+    "cta": "Angebot anfordern"
+  },
+  "storageAddons": {
+    "title": "Zusätzlicher Dateispeicher",
+    "description": "Nutzbar für Patientendokumente, Fotos, PDF-Dateien und Laboranhänge.",
+    "packages": {
+      "storage25": { "name": "+25 GB" },
+      "storage50": { "name": "+50 GB" },
+      "storage100": { "name": "+100 GB" },
+      "storage250": { "name": "+250 GB" }
+    },
+    "dicomNote": "Röntgen-, DICOM- und CBCT-Bildspeicherung sind nicht im allgemeinen Dateikontingent enthalten.",
+    "dicomDescription": "Röntgen- und DICOM-Bildspeicherung wird je nach Nutzungsvolumen und Sicherungsbedarf separat berechnet.",
+    "cta": "Angebot anfordern"
+  },
+  "channelAddons": {
+    "title": "Zusätzliche Kommunikationskanäle",
+    "packages": {
+      "whatsappLine": { "name": "Zusätzlicher WhatsApp-Anschluss", "setupLabel": "Einmalige Verbindungseinrichtung" },
+      "instagramAccount": { "name": "Zusätzliches Instagram-Konto", "setupLabel": "Einmalige Verbindungseinrichtung" },
+      "webChatbot": { "name": "KI-Chat-Assistent für die Website", "setupLabel": "Einmalige Einrichtung" }
+    },
+    "notes": [
+      "Der Smart-Clinic-Plan enthält 1 WhatsApp-Anschluss und 1 Instagram-Konto",
+      "Der Enterprise-Plan enthält eine Verbindung pro Klinik",
+      "Zusätzliche Kanäle nutzen dasselbe KI-Kontingent der Klinik",
+      "Meta-Nachrichtengebühren sind nicht im Abonnementpreis enthalten",
+      "Gebühren von Drittanbietern werden separat berechnet"
+    ],
+    "cta": "Angebot anfordern"
+  },
+  "sms": {
+    "title": "NoraMedi SMS-Pakete",
+    "subtitle": "Verwalten Sie Ihre SMS-Guthaben über NoraMedi für Terminerinnerungen, Benachrichtigungen und Patientenkommunikation.",
+    "infoNote": "Alle SMS-Versendungen erfolgen über NoraMedi. Sie müssen kein separates SMS-Anbieterkonto eröffnen oder verbinden.",
+    "trackingNote": "Ihr SMS-Guthaben, der Versandverlauf und, sofern verfügbar, der Zustellstatus werden über NoraMedi nachverfolgt.",
+    "unitLabel": "SMS-Guthaben",
+    "packages": {
+      "smsMini": { "name": "SMS Mini" },
+      "smsStandard": { "name": "SMS Standard" },
+      "smsPlus": { "name": "SMS Plus" },
+      "smsBulk": { "name": "SMS Bulk" }
+    },
+    "highVolume": { "name": "Hohes Volumen", "count": "25.000+", "price": "Individuelles Angebot" },
+    "billingNote": "SMS-Pakete sind einmalige Guthabenkäufe und unabhängig von Ihrem Hauptabonnementplan.",
+    "cta": "SMS-Paket anfragen",
+    "activationNote": "SMS-Pakete werden Ihrem Konto durch unser Vertriebsteam zugewiesen.",
+    "usageNotes": [
+      "Lange Nachrichten sowie Nachrichten mit Umlauten, Emojis oder anderen Unicode-Zeichen können je nach technischer Länge mehr als ein SMS-Guthaben verbrauchen.",
+      "Die Guthabenregelung für fehlgeschlagene oder nicht zustellbare SMS-Nachrichten richtet sich nach dem Ergebnis des Anbieters und den Nutzungsbedingungen von NoraMedi.",
+      "Die SMS-Preise können sich je nach Änderungen der Netzbetreiber- und SMS-Anbieterkosten ändern."
+    ]
+  },
+  "setup": {
+    "title": "Einrichtungs- und Startdienstleistungen",
+    "starter": {
+      "title": "Starter-Einrichtung",
+      "priceLabel": "5.000 TL / Klinik + MwSt.",
+      "items": ["Grundlegende Klinikeinstellungen", "Benutzerrollenstruktur", "Leistungs- und Termintypen", "Grundlegende Systemkonfiguration", "Remote-Starterschulung"]
+    },
+    "professional": {
+      "title": "Smart-Clinic-Einrichtung",
+      "priceLabel": "10.000 TL / Klinik + MwSt.",
+      "items": ["Starter-Einrichtung", "WhatsApp-Verbindung", "Instagram-Verbindung", "Nachrichtenvorlagen", "KI-Kanalkonfiguration", "Grundkonfiguration automatisierter Kommunikationsabläufe", "Remote-Schulung"]
+    },
+    "enterprise": {
+      "title": "Enterprise-Einrichtung",
+      "items": ["Zentrale Unternehmenseinrichtung: 20.000 TL + MwSt.", "Einrichtung pro Klinik: 10.000 TL + MwSt.", "Mindestgesamtbetrag: 40.000 TL + MwSt."],
+      "description": "Die endgültige Einrichtungsgebühr wird je nach Anzahl der Kliniken, Datenmigration und Integrationsumfang angeboten."
+    }
+  },
+  "migration": {
+    "title": "Datenmigrationspakete",
+    "topNote": "Vor der endgültigen Preisgestaltung werden Beispieldaten kostenlos analysiert.",
+    "basic": { "title": "Basis", "priceLabel": "5.000 TL + MwSt.", "items": ["Bis zu 2.500 Patienten", "Vorname", "Nachname", "Telefon", "E-Mail", "Grundlegende Patienteninformationen"] },
+    "standard": { "title": "Standard", "priceLabel": "12.500 TL + MwSt.", "items": ["Bis zu 10.000 Patienten", "Patienteninformationen", "Termine", "Offene Salden", "Grundlegende Feldzuordnung"] },
+    "advanced": { "title": "Erweitert", "priceLabel": "Ab 25.000 TL + MwSt.", "items": ["Behandlungshistorie", "Zahlungen", "Termine", "Individuelle Feldzuordnung", "Datenbereinigung", "Dublettenanalyse"] },
+    "custom": { "title": "Individuelle Migration", "priceLabel": "Individuelles Angebot", "items": ["Datenbank der Altsoftware", "API-basierte Übertragung", "Dokumente", "Fotos", "Individuelle Datenumwandlung"] },
+    "note": "Patientendokumente, Fotos, Röntgen/DICOM, unstrukturierte Excel-Dateien, Dublettenzusammenführung und individuelle API-Entwicklungen werden separat bewertet.",
+    "generalDescription": "Die Preise für die Datenmigration variieren je nach Struktur des Quellsystems, Datensatzanzahl und Datenqualität. Der endgültige Preis wird nach einer kostenlosen Datenanalyse mitgeteilt.",
+    "cta": "Kostenlose Datenanalyse anfordern"
+  },
+  "training": {
+    "title": "Schulung und individuelle Dienstleistungen",
+    "items": {
+      "onlineExtra": { "name": "Zusätzliche Online-Schulung — 2 Stunden", "priceLabel": "2.500 TL + MwSt." },
+      "onSite": { "name": "Vor-Ort-Schulung — 1 Arbeitstag", "priceLabel": "15.000 TL + MwSt." },
+      "customReport": { "name": "Individuelle Berichtsentwicklung", "priceLabel": "Ab 5.000 TL + MwSt." },
+      "customAutomation": { "name": "Individuelle Automatisierung / Workflow", "priceLabel": "Ab 7.500 TL + MwSt." },
+      "customApi": { "name": "Individuelle API-Integration", "priceLabel": "Projektbasiert" },
+      "sla": { "name": "Enterprise-SLA", "priceLabel": "Individuelles Angebot" }
+    },
+    "note": "Reise- und Unterbringungskosten für Vor-Ort-Schulungen werden separat berechnet."
+  },
+  "capacity": {
+    "title": "Zusätzliche Kapazität aktiver Patienten",
+    "definition": "Ein Patient mit Termin-, Behandlungs-, Zahlungs- oder Kommunikationsaktivität innerhalb der letzten 24 Monate gilt als aktiver Patient.",
+    "archiveNote": "Archivierte frühere Patientendaten werden nicht gelöscht. Der Datensatz wird wieder aktiv, sobald für diesen Patienten eine neue Aktivität stattfindet.",
+    "packages": {
+      "capacity5k": { "name": "+5.000 aktive Patienten" },
+      "capacity10k": { "name": "+10.000 aktive Patienten" }
+    },
+    "enterprise": { "name": "25.000+ aktive Patienten", "price": "Unternehmensangebot" },
+    "note": "Für einen höheren Patientenkapazitätsbedarf im Starter-Plan empfehlen wir den Wechsel zum Smart-Clinic-Plan."
+  },
+  "faq": {
+    "title": "Häufig gestellte Fragen",
+    "items": {
+      "yearlyDiscount": { "question": "Wie funktioniert der Jahresrabatt?", "answer": "Bei jährlicher Abrechnung zahlen Sie für 10 Monate und erhalten 12 Monate Zugang. Die Zahlung wird im Voraus erhoben." },
+      "setupPerClinic": { "question": "Wird die Einrichtungsgebühr pro Klinik berechnet?", "answer": "Ja, die Einrichtungsgebühr wird pro Klinik berechnet." },
+      "aiDeduction": { "question": "Wann wird ein KI-Gespräch vom Kontingent abgezogen?", "answer": "Nur Gespräche, die der Standardablauf des Systems nicht bewältigen konnte und bei denen die KI einspringt, werden vom Kontingent abgezogen." },
+      "aiRollover": { "question": "Werden ungenutzte KI-Gespräche in den nächsten Monat übertragen?", "answer": "Nein, das monatliche KI-Gesprächskontingent wird nicht übertragen." },
+      "metaFees": { "question": "Sind Meta-Nachrichtengebühren im Plan enthalten?", "answer": "Nein, die Nachrichtengebühren von Meta (WhatsApp/Instagram) sind nicht im Abonnementpreis enthalten und werden separat berechnet." },
+      "smsFees": { "question": "Sind SMS-Gebühren im Plan enthalten?", "answer": "Nein. Die SMS-Nutzung ist von den Hauptabonnementplänen getrennt. Sie können das für Sie passende NoraMedi-SMS-Guthabenpaket separat erwerben. Sie müssen kein separates SMS-Anbieterkonto verbinden." },
+      "ownChannels": { "question": "Kann ich mein eigenes WhatsApp- oder Instagram-Konto verwenden?", "answer": "Ja, Sie können Ihren bestehenden WhatsApp-Anschluss und Ihr Instagram-Konto mit NoraMedi verbinden." },
+      "activePatientDefinition": { "question": "Wie wird ein aktiver Patient berechnet?", "answer": "Patienten mit Termin-, Behandlungs-, Zahlungs- oder Kommunikationsaktivität innerhalb der letzten 24 Monate gelten als aktiv." },
+      "archivedPatients": { "question": "Werden archivierte Patienten gelöscht?", "answer": "Nein, archivierte Patientendaten werden nicht gelöscht. Der Datensatz wird wieder aktiv, sobald eine neue Aktivität stattfindet." },
+      "dicomStorage": { "question": "Sind Röntgen und DICOM im Dateispeicher enthalten?", "answer": "Nein, die Röntgen- und DICOM/CBCT-Bildspeicherung ist vom allgemeinen Dateikontingent getrennt und wird je nach Nutzungsvolumen separat berechnet." },
+      "migrationPriceVariance": { "question": "Warum kann der Preis für die Datenmigration variieren?", "answer": "Der Preis hängt von der Struktur des Quellsystems, der Datensatzanzahl und der Datenqualität ab. Der endgültige Preis wird nach einer kostenlosen Datenanalyse mitgeteilt." },
+      "planUpgrade": { "question": "Kann ich meinen Plan später upgraden?", "answer": "Ja, Sie können Ihren Plan später entsprechend dem Bedarf Ihrer Klinik upgraden." },
+      "addonPurchaseLater": { "question": "Kann ich später ein zusätzliches KI- oder Speicherpaket erwerben?", "answer": "Ja, diese Pakete können Ihrem bestehenden Abonnement jederzeit hinzugefügt werden." },
+      "enterprisePricing": { "question": "Wie wird der Enterprise-Plan bepreist?", "answer": "Der Enterprise-Plan wird individuell nach Anzahl der Kliniken, Patientenvolumen und Kommunikationsbedarf angeboten." },
+      "yearlyAddonDiscount": { "question": "Gibt es bei jährlichen Zusatzpaketen ebenfalls 2 Monate kostenlos?", "answer": "Ja, auch bei der jährlichen Option für KI-, Speicher- und Patientenkapazitätspakete gilt: 10 Monate zahlen, 12 Monate nutzen." },
+      "extraChannelAiQuota": { "question": "Wie wird das KI-Kontingent bei zusätzlichen Kanalverbindungen berechnet?", "answer": "Zusätzliche WhatsApp-, Instagram- oder Website-Chatbot-Verbindungen nutzen dasselbe KI-Gesprächskontingent der Klinik; es wird kein separates Kontingent pro Kanal definiert." }
+    }
+  },
+  "finalCta": {
+    "title": "Lassen Sie uns gemeinsam den passenden Plan für Ihre Klinik finden",
+    "description": "Wir erstellen den Plan, der am besten zu Ihrer Klinikanzahl, Ihrem Patientenvolumen und Ihrem Kommunikationsbedarf passt.",
+    "demoButton": "Kostenlose Demo anfordern",
+    "salesButton": "Mit dem Vertrieb sprechen"
+  },
+  "generalNotes": {
+    "title": "Allgemeine Preishinweise",
+    "items": [
+      "Alle Preise verstehen sich zzgl. MwSt.",
+      "Alle Jahrespläne bieten 12 Monate Zugang zum Preis von 10 Monaten.",
+      "Jahreszahlungen werden im Voraus erhoben.",
+      "Die Einrichtungsgebühr wird pro Klinik berechnet.",
+      "SMS- und Meta-Nachrichtengebühren sind nicht im Abonnementpreis enthalten.",
+      "Gebühren von Drittanbietern werden separat berechnet.",
+      "Datenmigration, individuelle Integration und Vor-Ort-Schulung werden separat berechnet.",
+      "Allgemeiner Dateispeicher und Röntgen-/DICOM-Speicher werden separat betrachtet.",
+      "Nicht genutzte monatliche KI-Gesprächsguthaben werden nicht übertragen.",
+      "Preise können sich je nach Dienstleistungs- und Drittanbieterkosten ändern."
+    ]
+  },
+  "vatSuffix": "zzgl. MwSt."
+}

@@ -1,0 +1,246 @@
+{
+  "meta": {
+    "title": "NoraMedi Fiyatları | Diş Kliniği CRM Planları",
+    "description": "NoraMedi diş kliniği CRM planlarını, yapay zekâ konuşma paketlerini, depolama, SMS, kurulum ve veri taşıma ücretlerini karşılaştırın."
+  },
+  "hero": {
+    "title": "NoraMedi Planları ve Fiyatlandırma",
+    "subtitle": "Klinik yönetiminden yapay zekâ destekli hasta iletişimine kadar ihtiyacınıza uygun planı ve ek hizmetleri seçin.",
+    "commonNote": "Tüm planlarda sınırsız kullanıcı, hekim ve cihaz.",
+    "priceNote": "Fiyatlar KDV hariçtir."
+  },
+  "backToHome": "Anasayfaya dön",
+  "comparison": {
+    "label": "Karşılaştırma",
+    "title": "Ayrıntılı Plan Karşılaştırması",
+    "description": "Üç planın tüm özelliklerini kategori bazında karşılaştırın.",
+    "mobileHint": "Tabloyu yatay olarak kaydırarak tüm sütunları görebilirsiniz.",
+    "cellIncluded": "Dahil",
+    "cellExcluded": "Dahil değil",
+    "columns": {
+      "feature": "Özellik",
+      "starter": "Başlangıç",
+      "professional": "Akıllı Klinik",
+      "enterprise": "Kurumsal"
+    },
+    "categories": {
+      "general": "Genel",
+      "patientsAppointments": "Hasta ve Randevu",
+      "treatmentOps": "Tedavi ve Klinik Operasyon",
+      "finance": "Finans",
+      "labInventory": "Laboratuvar ve Stok",
+      "channels": "WhatsApp ve Instagram",
+      "ai": "Yapay Zekâ",
+      "automation": "Otomatik İletişim ve Takip",
+      "reporting": "Raporlama",
+      "integration": "Entegrasyon",
+      "support": "Destek",
+      "capacity": "Kapasite"
+    },
+    "rows": {
+      "clinicCount": { "label": "Klinik sayısı", "values": { "starter": "1", "professional": "1", "enterprise": "Çoklu (sınırsız)" } },
+      "users": { "label": "Kullanıcı", "values": { "starter": "Sınırsız", "professional": "Sınırsız", "enterprise": "Sınırsız" } },
+      "practitioners": { "label": "Hekim", "values": { "starter": "Sınırsız", "professional": "Sınırsız", "enterprise": "Sınırsız" } },
+      "devices": { "label": "Cihaz", "values": { "starter": "Sınırsız", "professional": "Sınırsız", "enterprise": "Sınırsız" } },
+      "activePatientCapacity": { "label": "Aktif hasta kapasitesi", "values": { "starter": "2.500", "professional": "10.000", "enterprise": "Klinik başına özel" } },
+      "fileStorage": { "label": "Genel dosya alanı", "values": { "starter": "10 GB", "professional": "50 GB", "enterprise": "Klinik başına 100 GB" } },
+      "patientManagement": { "label": "Hasta yönetimi" },
+      "appointmentCalendar": { "label": "Randevu takvimi" },
+      "treatmentPlans": { "label": "Tedavi planları" },
+      "dentalChart": { "label": "Diş şeması" },
+      "financePaymentTracking": { "label": "Finans ve ödeme takibi" },
+      "paymentPlans": { "label": "Ödeme planları" },
+      "labManagement": { "label": "Laboratuvar yönetimi" },
+      "inventoryManagement": { "label": "Stok yönetimi" },
+      "whatsappLine": { "label": "WhatsApp hattı", "values": { "professional": "1 dahil", "enterprise": "Klinik başına 1" } },
+      "instagramAccount": { "label": "Instagram hesabı", "values": { "professional": "1 dahil", "enterprise": "Klinik başına 1" } },
+      "unifiedInbox": { "label": "Birleşik gelen kutusu" },
+      "aiConversationQuota": { "label": "AI konuşma kotası", "values": { "professional": "500 / ay", "enterprise": "Klinik bazlı özel kota" } },
+      "whatsappAiAssistant": { "label": "WhatsApp AI asistanı" },
+      "instagramAiAssistant": { "label": "Instagram AI asistanı" },
+      "autoPatientFollowUp": { "label": "Otomatik hasta takibi" },
+      "noShowFollowUp": { "label": "Randevuya gelmeyen hastalara geri dönüş" },
+      "postTreatmentFollowUp": { "label": "Tedavi sonrası takip" },
+      "checkupReminders": { "label": "Kontrol zamanı hatırlatmaları" },
+      "pendingRequestFollowUp": { "label": "Yarım kalan randevu taleplerinin takibi" },
+      "reportingDashboard": { "label": "Raporlama paneli" },
+      "advancedReports": { "label": "Gelişmiş raporlar" },
+      "aiUsageReports": { "label": "AI kullanım raporları" },
+      "apiWebhook": { "label": "API ve webhook" },
+      "customIntegration": { "label": "Özel entegrasyon" },
+      "supportLevel": { "label": "Destek seviyesi", "values": { "starter": "Standart", "professional": "Öncelikli", "enterprise": "Müşteri yöneticisi" } },
+      "sla": { "label": "SLA", "values": { "enterprise": "Opsiyonel" } },
+      "setupFeePerClinic": { "label": "Klinik başına kurulum", "values": { "starter": "5.000 TL", "professional": "10.000 TL", "enterprise": "10.000 TL / klinik (min. 40.000 TL)" } }
+    }
+  },
+  "aiAddons": {
+    "label": "Ek Hizmetler",
+    "title": "İlave AI Konuşma Paketleri",
+    "description": "Akıllı Klinik planındaki 500 aylık konuşma kotasına ek olarak kullanılabilir.",
+    "quotaLabel": "İlave kota",
+    "quotaUnit": "konuşma / ay",
+    "packages": {
+      "aiMini": { "name": "AI Mini" },
+      "aiPlus": { "name": "AI Plus" },
+      "aiGrowth": { "name": "AI Growth" },
+      "aiScale": { "name": "AI Scale" }
+    },
+    "enterprise": { "name": "Kurumsal AI", "description": "Özel hacim", "price": "Özel teklif" },
+    "notes": [
+      "Kota her ay yenilenir",
+      "Kullanılmayan hak sonraki aya devretmez",
+      "Paket klinik bazlıdır",
+      "İlave kanallar aynı klinik AI kotasını kullanır"
+    ],
+    "definition": "AI destekli konuşma, standart sistem akışının anlayamadığı ve yapay zekânın devreye girdiği görüşmedir.",
+    "definitionNote": "Standart sistem akışıyla veya personel tarafından yürütülen görüşmeler AI kotasına dahil edilmez.",
+    "sessionNote": "Konuşma oturumu süresi sözleşme koşullarında tanımlanır.",
+    "cta": "Teklif İste"
+  },
+  "storageAddons": {
+    "title": "İlave Dosya Depolama",
+    "description": "Hasta belgeleri, fotoğraflar, PDF dosyaları ve laboratuvar ekleri için kullanılabilir.",
+    "packages": {
+      "storage25": { "name": "+25 GB" },
+      "storage50": { "name": "+50 GB" },
+      "storage100": { "name": "+100 GB" },
+      "storage250": { "name": "+250 GB" }
+    },
+    "dicomNote": "Röntgen, DICOM ve CBCT görüntü depolaması genel dosya kotasına dahil değildir.",
+    "dicomDescription": "Röntgen ve DICOM görüntüleme depolaması, kullanım hacmine ve yedekleme ihtiyacına göre ayrıca fiyatlandırılır.",
+    "cta": "Teklif İste"
+  },
+  "channelAddons": {
+    "title": "İlave İletişim Kanalları",
+    "packages": {
+      "whatsappLine": { "name": "İlave WhatsApp hattı", "setupLabel": "Tek seferlik bağlantı kurulumu" },
+      "instagramAccount": { "name": "İlave Instagram hesabı", "setupLabel": "Tek seferlik bağlantı kurulumu" },
+      "webChatbot": { "name": "Web sitesi AI sohbet asistanı", "setupLabel": "Tek seferlik kurulum" }
+    },
+    "notes": [
+      "Akıllı Klinik planında 1 WhatsApp hattı ve 1 Instagram hesabı dahildir",
+      "Kurumsal planda her klinik için birer bağlantı dahildir",
+      "İlave kanallar aynı klinik AI kotasını kullanır",
+      "Meta mesaj ücretleri abonelik fiyatına dahil değildir",
+      "Üçüncü taraf servis ücretleri ayrıca yansıtılır"
+    ],
+    "cta": "Teklif İste"
+  },
+  "sms": {
+    "title": "NoraMedi SMS Paketleri",
+    "subtitle": "Randevu hatırlatmaları, bilgilendirmeler ve hasta iletişimi için SMS kredilerinizi NoraMedi üzerinden yönetin.",
+    "infoNote": "Tüm SMS gönderimleri NoraMedi üzerinden gerçekleştirilir. Ayrı bir SMS sağlayıcı hesabı açmanız veya bağlamanız gerekmez.",
+    "trackingNote": "SMS bakiyesi, gönderim geçmişi ve mevcutsa teslimat durumları NoraMedi üzerinden takip edilir.",
+    "unitLabel": "SMS kredisi",
+    "packages": {
+      "smsMini": { "name": "SMS Mini" },
+      "smsStandard": { "name": "SMS Standard" },
+      "smsPlus": { "name": "SMS Plus" },
+      "smsBulk": { "name": "SMS Bulk" }
+    },
+    "highVolume": { "name": "Yüksek Hacim", "count": "25.000+", "price": "Özel teklif" },
+    "billingNote": "SMS paketleri tek seferlik kredi alımıdır ve ana abonelik planından bağımsızdır.",
+    "cta": "SMS Paketi Talep Et",
+    "activationNote": "SMS paketleri satış ekibi aracılığıyla hesabınıza tanımlanır.",
+    "usageNotes": [
+      "Uzun mesajlar ve Türkçe karakter, emoji veya diğer Unicode karakterleri içeren mesajlar teknik uzunluğa bağlı olarak birden fazla SMS kredisi kullanabilir.",
+      "Başarısız veya teslim edilemeyen SMS mesajlarının kredi politikası sağlayıcı sonucuna ve NoraMedi kullanım koşullarına göre uygulanır.",
+      "SMS fiyatları operatör ve SMS sağlayıcı maliyetlerindeki değişikliklere göre güncellenebilir."
+    ]
+  },
+  "setup": {
+    "title": "Kurulum ve Başlangıç Hizmetleri",
+    "starter": {
+      "title": "Başlangıç Kurulumu",
+      "priceLabel": "5.000 TL / klinik + KDV",
+      "items": ["Klinik temel ayarları", "Kullanıcı rol yapısı", "Hizmet ve randevu tipleri", "Temel sistem konfigürasyonu", "Uzaktan başlangıç eğitimi"]
+    },
+    "professional": {
+      "title": "Akıllı Klinik Kurulumu",
+      "priceLabel": "10.000 TL / klinik + KDV",
+      "items": ["Başlangıç kurulumu", "WhatsApp bağlantısı", "Instagram bağlantısı", "Mesaj şablonları", "AI kanal ayarları", "Otomatik iletişim akışlarının temel konfigürasyonu", "Uzaktan eğitim"]
+    },
+    "enterprise": {
+      "title": "Kurumsal Kurulum",
+      "items": ["Merkezi kurumsal kurulum: 20.000 TL + KDV", "Klinik başına kurulum: 10.000 TL + KDV", "Minimum toplam: 40.000 TL + KDV"],
+      "description": "Kesin kurulum bedeli klinik sayısı, veri taşıma ve entegrasyon kapsamına göre tekliflendirilir."
+    }
+  },
+  "migration": {
+    "title": "Veri Taşıma Paketleri",
+    "topNote": "Kesin fiyatlandırma öncesinde örnek veri ücretsiz olarak analiz edilir.",
+    "basic": { "title": "Temel", "priceLabel": "5.000 TL + KDV", "items": ["2.500 hastaya kadar", "Ad", "Soyad", "Telefon", "E-posta", "Temel hasta bilgileri"] },
+    "standard": { "title": "Standart", "priceLabel": "12.500 TL + KDV", "items": ["10.000 hastaya kadar", "Hasta bilgileri", "Randevular", "Açık bakiyeler", "Temel alan eşleştirmeleri"] },
+    "advanced": { "title": "Gelişmiş", "priceLabel": "25.000 TL’den başlayan + KDV", "items": ["Tedavi geçmişi", "Ödemeler", "Randevular", "Özel alan eşleştirme", "Veri temizleme", "Mükerrer kayıt analizi"] },
+    "custom": { "title": "Özel Migrasyon", "priceLabel": "Özel teklif", "items": ["Eski yazılım veritabanı", "API ile aktarım", "Belgeler", "Fotoğraflar", "Özel veri dönüştürme"] },
+    "note": "Hasta belgeleri, fotoğraflar, röntgen/DICOM, düzensiz Excel dosyaları, mükerrer kayıt birleştirme ve özel API geliştirmeleri ayrıca değerlendirilir.",
+    "generalDescription": "Veri taşıma fiyatları kaynak sistemin yapısına, kayıt sayısına ve veri kalitesine göre değişebilir. Kesin fiyat ücretsiz veri analizi sonrasında verilir.",
+    "cta": "Ücretsiz Veri Analizi İste"
+  },
+  "training": {
+    "title": "Eğitim ve Özel Hizmetler",
+    "items": {
+      "onlineExtra": { "name": "İlave online eğitim — 2 saat", "priceLabel": "2.500 TL + KDV" },
+      "onSite": { "name": "Yerinde eğitim — 1 iş günü", "priceLabel": "15.000 TL + KDV" },
+      "customReport": { "name": "Özel rapor geliştirme", "priceLabel": "5.000 TL’den başlayan + KDV" },
+      "customAutomation": { "name": "Özel otomasyon / workflow", "priceLabel": "7.500 TL’den başlayan + KDV" },
+      "customApi": { "name": "Özel API entegrasyonu", "priceLabel": "Proje bazlı" },
+      "sla": { "name": "Kurumsal SLA", "priceLabel": "Özel teklif" }
+    },
+    "note": "Yerinde eğitimlerde ulaşım ve konaklama giderleri ayrıca faturalandırılır."
+  },
+  "capacity": {
+    "title": "İlave Aktif Hasta Kapasitesi",
+    "definition": "Son 24 ay içinde randevu, tedavi, ödeme veya iletişim hareketi bulunan hasta aktif hasta olarak değerlendirilir.",
+    "archiveNote": "Arşivlenen geçmiş hasta kayıtları silinmez. Hasta üzerinde yeniden işlem yapıldığında kayıt aktif hale gelir.",
+    "packages": {
+      "capacity5k": { "name": "+5.000 aktif hasta" },
+      "capacity10k": { "name": "+10.000 aktif hasta" }
+    },
+    "enterprise": { "name": "25.000+ aktif hasta", "price": "Kurumsal teklif" },
+    "note": "Başlangıç planında yüksek hasta kapasitesi ihtiyacı için Akıllı Klinik planına geçiş önerilir."
+  },
+  "faq": {
+    "title": "Sık Sorulan Sorular",
+    "items": {
+      "yearlyDiscount": { "question": "Yıllık plan indirimi nasıl çalışır?", "answer": "Yıllık ödemede 10 aylık ücret alınır, 12 ay kullanım sağlanır. Ödeme peşin tahsil edilir." },
+      "setupPerClinic": { "question": "Kurulum ücreti her klinik için alınır mı?", "answer": "Evet, kurulum ücreti klinik başına alınır." },
+      "aiDeduction": { "question": "AI konuşması ne zaman kotadan düşer?", "answer": "Yalnızca sistemin standart akışla yanıtlayamadığı ve yapay zekânın devreye girdiği konuşmalar kotadan düşer." },
+      "aiRollover": { "question": "Kullanılmayan AI konuşmaları sonraki aya devreder mi?", "answer": "Hayır, aylık AI konuşma kotası devretmez." },
+      "metaFees": { "question": "Meta mesaj ücretleri plana dahil mi?", "answer": "Hayır, Meta’nın (WhatsApp/Instagram) mesaj ücretleri abonelik fiyatına dahil değildir ve ayrıca yansıtılır." },
+      "smsFees": { "question": "SMS ücretleri plana dahil mi?", "answer": "Hayır. SMS kullanımı ana abonelik planlarından ayrıdır. İhtiyacınıza uygun NoraMedi SMS kredi paketini ayrıca satın alabilirsiniz. Ayrı bir SMS sağlayıcı hesabı bağlamanız gerekmez." },
+      "ownChannels": { "question": "Kendi WhatsApp veya Instagram hesabımı kullanabilir miyim?", "answer": "Evet, mevcut WhatsApp hattınızı ve Instagram hesabınızı NoraMedi’ye bağlayabilirsiniz." },
+      "activePatientDefinition": { "question": "Aktif hasta nasıl hesaplanır?", "answer": "Son 24 ay içinde randevu, tedavi, ödeme veya iletişim hareketi bulunan hastalar aktif hasta olarak sayılır." },
+      "archivedPatients": { "question": "Arşivlenen hastalar silinir mi?", "answer": "Hayır, arşivlenen hasta kayıtları silinmez. Hasta üzerinde yeniden işlem yapıldığında kayıt tekrar aktif hale gelir." },
+      "dicomStorage": { "question": "Dosya depolamasına röntgen ve DICOM dahil mi?", "answer": "Hayır, röntgen ve DICOM/CBCT görüntü depolaması genel dosya kotasından ayrıdır ve kullanım hacmine göre ayrıca fiyatlandırılır." },
+      "migrationPriceVariance": { "question": "Veri taşıma fiyatı neden değişebilir?", "answer": "Fiyat, kaynak sistemin yapısına, kayıt sayısına ve veri kalitesine göre değişir. Kesin fiyat ücretsiz veri analizinden sonra verilir." },
+      "planUpgrade": { "question": "Planımı sonradan yükseltebilir miyim?", "answer": "Evet, kliniğinizin ihtiyacına göre planınızı sonradan yükseltebilirsiniz." },
+      "addonPurchaseLater": { "question": "İlave AI veya depolama paketi sonradan alınabilir mi?", "answer": "Evet, bu paketler mevcut aboneliğinize sonradan eklenebilir." },
+      "enterprisePricing": { "question": "Kurumsal plan nasıl fiyatlandırılır?", "answer": "Kurumsal plan; klinik sayısı, hasta hacmi ve iletişim ihtiyaçlarına göre özel olarak tekliflendirilir." },
+      "yearlyAddonDiscount": { "question": "Yıllık ek paketlerde de 2 ay ücretsiz mi?", "answer": "Evet, ilave AI, depolama ve aktif hasta paketlerinin yıllık seçeneğinde de 10 ay öde, 12 ay kullan mantığı uygulanır." },
+      "extraChannelAiQuota": { "question": "İlave kanal bağlantılarında AI kotası nasıl hesaplanır?", "answer": "İlave WhatsApp, Instagram veya web chatbot bağlantıları aynı kliniğin AI konuşma kotasını paylaşır; kanal başına ayrı bir kota tanımlanmaz." }
+    }
+  },
+  "finalCta": {
+    "title": "Kliniğiniz için doğru planı birlikte belirleyelim",
+    "description": "Klinik sayınızı, hasta hacminizi ve iletişim ihtiyaçlarınızı değerlendirerek size en uygun planı oluşturalım.",
+    "demoButton": "Ücretsiz Demo Talep Et",
+    "salesButton": "Satış Ekibiyle Görüş"
+  },
+  "generalNotes": {
+    "title": "Genel Fiyat Notları",
+    "items": [
+      "Tüm fiyatlar KDV hariçtir.",
+      "Tüm yıllık planlarda 10 aylık ücret karşılığında 12 ay kullanım sağlanır.",
+      "Yıllık ödemeler peşin tahsil edilir.",
+      "Kurulum ücreti klinik başına alınır.",
+      "SMS ve Meta mesaj ücretleri abonelik fiyatına dahil değildir.",
+      "Üçüncü taraf servis ücretleri ayrıca yansıtılır.",
+      "Veri taşıma, özel entegrasyon ve yerinde eğitim ayrıca fiyatlandırılır.",
+      "Genel dosya depolaması ile röntgen/DICOM depolaması ayrı değerlendirilir.",
+      "Kullanılmayan aylık AI konuşma hakları sonraki aya devretmez.",
+      "Fiyatlar hizmet ve üçüncü taraf maliyetlerine göre güncellenebilir."
+    ]
+  },
+  "vatSuffix": "+ KDV"
+}
