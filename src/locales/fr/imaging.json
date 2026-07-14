@@ -175,7 +175,16 @@
       "unsignedWarning": "Il s'agit d'une version pilote/test non signée. Windows peut afficher un avertissement « Éditeur inconnu » lors de l'installation.",
       "download": "Télécharger",
       "setup": "Démarrer la configuration",
-      "clinicRequired": "Sélectionnez une clinique précise (pas « Toutes les cliniques ») pour configurer le pont."
+      "clinicRequired": "Sélectionnez une clinique précise (pas « Toutes les cliniques ») pour configurer le pont.",
+      "usageSteps": {
+        "title": "Ordre d'installation et d'utilisation",
+        "step1": { "title": "Ajoutez votre appareil d'imagerie", "description": "Créez votre appareil de radiographie, panoramique ou autre appareil d'imagerie dans NoraMedi." },
+        "step2": { "title": "Installez l'application Bridge", "description": "Téléchargez et installez Bridge sur l'ordinateur Windows connecté à l'appareil d'imagerie." },
+        "step3": { "title": "Jumelez l'ordinateur", "description": "Saisissez le code de jumelage généré dans NoraMedi dans Bridge Manager → Pairing." },
+        "step4": { "title": "Associez l'appareil au dossier", "description": "Dans Bridge Manager → Folder Bindings, sélectionnez d'abord l'appareil NoraMedi, puis le dossier où le logiciel de l'appareil enregistre les images. Cliquez sur Validate Folder, puis sur Save." },
+        "step5": { "title": "Envoyez une image de test", "description": "Enregistrez une image de test dans le dossier sélectionné. Elle est automatiquement transférée vers la file d'imagerie NoraMedi." },
+        "warning": "Chaque dossier doit obligatoirement être associé à un appareil d'imagerie. Sélectionner uniquement un dossier ne suffit pas."
+      }
     },
     "wizard": {
       "title": "Configuration de NoraMedi Bridge",
@@ -212,7 +221,12 @@
       "success": {
         "title": "« {{name}} » connecté avec succès",
         "description": "Le pont est maintenant enregistré auprès de NoraMedi. Utilisez NoraMedi Bridge Manager pour choisir les dossiers locaux.",
-        "nextSteps": "Vous pouvez désormais sélectionner les dossiers à surveiller pour les appareils connectés dans NoraMedi Bridge Manager."
+        "nextSteps": "Vous pouvez désormais sélectionner les dossiers à surveiller pour les appareils connectés dans NoraMedi Bridge Manager.",
+        "folderBindingReminder": {
+          "title": "Dernière étape : association appareil et dossier",
+          "description": "Ouvrez l'onglet Folder Bindings dans Bridge Manager. Sélectionnez l'appareil NoraMedi et le dossier où le logiciel de l'appareil enregistre les images, validez le dossier et enregistrez.",
+          "warning": "Enregistrer uniquement le dossier sans sélectionner d'appareil ne démarre pas le transfert des images."
+        }
       }
     }
   },

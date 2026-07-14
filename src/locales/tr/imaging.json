@@ -175,7 +175,16 @@
       "unsignedWarning": "Bu, dijital olarak imzalanmamış bir pilot/test sürümüdür. Kurulum sırasında Windows \"Bilinmeyen yayımcı\" uyarısı gösterebilir.",
       "download": "İndir",
       "setup": "Kurulumu Başlat",
-      "clinicRequired": "Köprü kurulumu için belirli bir klinik seçin (\"Tüm klinikler\" değil)."
+      "clinicRequired": "Köprü kurulumu için belirli bir klinik seçin (\"Tüm klinikler\" değil).",
+      "usageSteps": {
+        "title": "Kurulum ve kullanım sırası",
+        "step1": { "title": "Görüntüleme cihazını ekleyin", "description": "NoraMedi'de röntgen, panoramik veya diğer görüntüleme cihazınızı oluşturun." },
+        "step2": { "title": "Bridge uygulamasını kurun", "description": "Bridge'i görüntüleme cihazının bağlı olduğu Windows bilgisayara indirin ve kurun." },
+        "step3": { "title": "Bilgisayarı eşleştirin", "description": "NoraMedi'de oluşturulan eşleştirme kodunu Bridge Manager → Pairing bölümüne girin." },
+        "step4": { "title": "Cihaz ile klasörü bağlayın", "description": "Bridge Manager → Folder Bindings bölümünde önce NoraMedi cihazını, ardından cihaz yazılımının görüntü kaydettiği klasörü seçin. Validate Folder ve ardından Save düğmesine basın." },
+        "step5": { "title": "Test görüntüsü gönderin", "description": "Bir test görüntüsünü seçtiğiniz klasöre kaydedin. Görüntü otomatik olarak NoraMedi Görüntüleme Kuyruğu'na aktarılır." },
+        "warning": "Her klasör mutlaka bir görüntüleme cihazıyla eşleştirilmelidir. Yalnızca klasör seçilmesi yeterli değildir."
+      }
     },
     "wizard": {
       "title": "NoraMedi Bridge Kurulumu",
@@ -212,7 +221,12 @@
       "success": {
         "title": "\"{{name}}\" başarıyla bağlandı",
         "description": "Köprü artık NoraMedi'ye kayıtlı. Yerel klasörleri seçmek için NoraMedi Bridge Manager'ı kullanın.",
-        "nextSteps": "Bağlı cihazlar için izlenecek klasörleri NoraMedi Bridge Manager üzerinden seçebilirsiniz."
+        "nextSteps": "Bağlı cihazlar için izlenecek klasörleri NoraMedi Bridge Manager üzerinden seçebilirsiniz.",
+        "folderBindingReminder": {
+          "title": "Son adım: cihaz ve klasör bağlantısı",
+          "description": "Bridge Manager'da Folder Bindings sekmesini açın. NoraMedi cihazını ve cihaz yazılımının görüntü kaydettiği klasörü seçin, klasörü doğrulayın ve kaydedin.",
+          "warning": "Cihaz seçmeden yalnızca klasörü kaydetmek görüntü aktarımını başlatmaz."
+        }
       }
     }
   },
