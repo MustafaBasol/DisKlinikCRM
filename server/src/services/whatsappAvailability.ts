@@ -136,7 +136,7 @@ const getZonedDateTimeParts = (date: Date, timeZone: string) => {
   };
 };
 
-const localDateTimeToClinicDate = (date: string, time: string, timeZone: string) => {
+export const localDateTimeToClinicDate = (date: string, time: string, timeZone: string) => {
   const [year, month, day] = date.split('-').map(Number);
   const [hour, minute] = time.split(':').map(Number);
   const utcGuess = Date.UTC(year, month - 1, day, hour, minute);

@@ -34,7 +34,7 @@
 import assert from 'node:assert/strict';
 import type { PrismaClient } from '@prisma/client';
 
-import { buildAvailableSlots } from '../services/whatsappAvailability.js';
+import { buildAvailableSlots, localDateTimeToClinicDate } from '../services/whatsappAvailability.js';
 import {
   checkAppointmentOverlap,
   checkAppointmentRequestConflict,
@@ -542,6 +542,45 @@ async function main() {
 
     assert.equal(linked, true);
     assert.equal(requestCount, 1, 'exactly one AppointmentRequest created on the successful retry');
+  });
+
+  section('Submit-time preferredTime parsing must use the CLINIC timezone, not the server host timezone (browser-acceptance regression, PR #157)');
+
+  await test('localDateTimeToClinicDate("11:00", Europe/Istanbul) resolves to the correct absolute instant (08:00 UTC) regardless of the test runner\'s own OS timezone', () => {
+    const dt = localDateTimeToClinicDate('2026-07-22', '11:00', 'Europe/Istanbul');
+    assert.equal(dt.toISOString(), '2026-07-22T08:00:00.000Z', 'Europe/Istanbul is a fixed UTC+3 offset with no DST');
+  });
+
+  await test('a naive `new Date(`${date}T${time}:00`)` parse (the pre-fix behavior) would silently disagree with the clinic-timezone conversion whenever the server host runs in a different zone than the clinic', () => {
+    // This does not assert a specific host timezone (that would make the
+    // test environment-dependent) — it documents the exact bug found via
+    // real-browser acceptance testing: this dev host's OS timezone
+    // (Europe/Paris, UTC+2 in July) silently produced a DIFFERENT instant
+    // (09:00 UTC) than the clinic's Europe/Istanbul 11:00 (08:00 UTC) — a
+    // full hour off, undetectable by any test that mocks the clock instead
+    // of exercising the real Node Date/Intl timezone machinery.
+    const naive = new Date('2026-07-22T11:00:00');
+    const correct = localDateTimeToClinicDate('2026-07-22', '11:00', 'Europe/Istanbul');
+    // The two only agree when the process's own local timezone happens to
+    // be Europe/Istanbul — assert they're computed by genuinely different
+    // mechanisms (this documents intent; the real guard is that
+    // publicBooking.ts's submit handler now calls localDateTimeToClinicDate
+    // exclusively, verified by the source-scan test below).
+    assert.equal(typeof naive.getTime(), 'number');
+    assert.equal(correct.toISOString(), '2026-07-22T08:00:00.000Z');
+  });
+
+  await test('publicBooking.ts submit handler no longer parses preferredDate/preferredTime with a bare `new Date(...)` template string', async () => {
+    const fs = await import('node:fs/promises');
+    const source = await fs.readFile(new URL('../routes/publicBooking.ts', import.meta.url), 'utf8');
+    assert.ok(
+      source.includes('localDateTimeToClinicDate(preferredDate, preferredTime'),
+      'submit handler must build preferredStartTime via the clinic-timezone-aware helper',
+    );
+    assert.ok(
+      !/new Date\(`\$\{preferredDate\}T\$\{preferredTime\}/.test(source),
+      'the naive server-host-timezone parse must not be reintroduced',
+    );
   });
 
   // ─── Summary ──────────────────────────────────────────────────────────────

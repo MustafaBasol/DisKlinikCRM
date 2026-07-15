@@ -7,7 +7,7 @@ import {
   assertSlotAvailable,
   SlotConflictError,
 } from '../services/appointments/appointmentAvailabilityService.js';
-import { buildAvailableSlots } from '../services/whatsappAvailability.js';
+import { buildAvailableSlots, localDateTimeToClinicDate } from '../services/whatsappAvailability.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import {
   resolvePublishedLegalProfile,
@@ -246,7 +246,7 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
   const cleanNotes = notes && typeof notes === 'string' ? notes.trim().substring(0, 500) : undefined;
 
   try {
-    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
+    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true, timezone: true } });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
     // Do not collect/store patient data without server-validated evidence
@@ -278,11 +278,20 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
       if (!doc) return res.status(400).json({ error: 'Invalid practitionerId' });
     }
 
-    // Build preferredStartTime / preferredEndTime.
+    // Build preferredStartTime / preferredEndTime. preferredDate/preferredTime
+    // are wall-clock values in the CLINIC's timezone (the same values
+    // buildAvailableSlots used to compute the localStartTime the customer
+    // saw and clicked) — they must be converted using that timezone, not
+    // the server process's own OS timezone. A naive `new Date(...)` parse
+    // here would silently book a different real-world instant than the one
+    // shown/checked at availability time whenever the server host's local
+    // timezone differs from the clinic's (e.g. server in Europe/Paris,
+    // clinic in Europe/Istanbul — a full hour off, undetectable without a
+    // real cross-timezone deployment or browser test).
     let preferredStartTime: Date | undefined;
     let preferredEndTime: Date | undefined;
-    if (preferredDate && preferredTime) {
-      const dt = new Date(`${preferredDate}T${preferredTime}:00`);
+    if (preferredDate && ISO_DATE_RE.test(preferredDate) && preferredTime && /^\d{2}:\d{2}$/.test(preferredTime)) {
+      const dt = localDateTimeToClinicDate(preferredDate, preferredTime, clinic.timezone || 'Europe/Istanbul');
       if (!isNaN(dt.getTime())) {
         preferredStartTime = dt;
         if (svc) {
