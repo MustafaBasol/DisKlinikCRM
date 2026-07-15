@@ -18,6 +18,7 @@ import {
   selectableTimesForDoctor,
   removeStaleSlot,
   isSlotUnavailableError,
+  isSelectedSlotStillOffered,
   type PublicSlot,
 } from '../bookingWidgetHelpers';
 
@@ -91,6 +92,56 @@ async function main() {
   await test('no slots for the filtered doctor → empty list (renders the "no times" empty state)', () => {
     const times = selectableTimesForDoctor([SLOT_A_9], 'doc-nonexistent');
     assert.equal(times.length, 0);
+  });
+
+  section('── selectableTimesForDoctor: practitioner-identity safety (shared time) ──');
+
+  await test('two practitioners share a time, only one available → button maps to the available one', () => {
+    // doc-a's 09:00 slot is gone (booked/unavailable); doc-b's remains.
+    const times = selectableTimesForDoctor([SLOT_A_10, SLOT_B_9], '');
+    const nine = times.find((t) => t.localStartTime === '09:00');
+    assert.ok(nine);
+    assert.equal(nine!.practitionerId, 'doc-b', 'must map to the practitioner actually offering 09:00, not a stale doc-a mapping');
+  });
+
+  await test('two practitioners both available at the same time → deterministic tie-break (lowest practitionerId), not array order', () => {
+    // doc-b appears before doc-a in the input array — the tie-break must not
+    // depend on this incidental ordering.
+    const timesReversedInput = selectableTimesForDoctor([SLOT_B_9, SLOT_A_9], '');
+    const timesNormalInput = selectableTimesForDoctor([SLOT_A_9, SLOT_B_9], '');
+    assert.equal(timesReversedInput.find((t) => t.localStartTime === '09:00')?.practitionerId, 'doc-a');
+    assert.equal(timesNormalInput.find((t) => t.localStartTime === '09:00')?.practitionerId, 'doc-a');
+  });
+
+  await test('a specific doctorId filter is always unambiguous regardless of other practitioners sharing the time', () => {
+    const times = selectableTimesForDoctor([SLOT_A_9, SLOT_B_9], 'doc-b');
+    assert.equal(times.length, 1);
+    assert.equal(times[0].practitionerId, 'doc-b');
+  });
+
+  section('── isSelectedSlotStillOffered (selection must never silently change practitioner) ──');
+
+  await test('selected practitioner still offers the exact time after refresh → still offered', () => {
+    assert.equal(
+      isSelectedSlotStillOffered([SLOT_A_9, SLOT_B_9], { practitionerId: 'doc-a', localStartTime: '09:00' }),
+      true,
+    );
+  });
+
+  await test('selected practitioner becomes unavailable after refresh (only the other doctor remains at that time) → not offered', () => {
+    // Only doc-b's 09:00 survived the refresh; doc-a's did not.
+    assert.equal(
+      isSelectedSlotStillOffered([SLOT_B_9], { practitionerId: 'doc-a', localStartTime: '09:00' }),
+      false,
+      'must not report the selection as valid just because SOME practitioner still has that time',
+    );
+  });
+
+  await test('refresh that re-adds the same tuple in a different array position still preserves the selection', () => {
+    assert.equal(
+      isSelectedSlotStillOffered([SLOT_B_9, SLOT_A_10, SLOT_A_9], { practitionerId: 'doc-a', localStartTime: '09:00' }),
+      true,
+    );
   });
 
   section('── removeStaleSlot (409 recovery: clear only the rejected slot) ──');

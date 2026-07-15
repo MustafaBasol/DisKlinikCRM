@@ -54,14 +54,22 @@ export function normalizePublicSlots(payload: unknown): PublicSlot[] {
 /**
  * Deduplicated, sorted list of selectable times for the given doctor filter
  * (empty string = "any doctor" — all practitioners' slots are candidates).
- * When multiple practitioners share the same local time, the first one
- * encountered is used as the concrete practitioner for that button.
+ *
+ * When multiple practitioners share the same local time in "any doctor"
+ * mode, exactly one concrete (practitionerId, localStartTime) tuple is
+ * chosen to represent that time button. The tie-break is deterministic and
+ * explicit — lowest `practitionerId` wins — rather than depending on
+ * whatever order the slots happened to arrive in from the backend. This
+ * value is what actually gets submitted, so it must never be ambiguous.
  */
 export function selectableTimesForDoctor(slots: PublicSlot[], doctorId: string): SelectableTime[] {
   const filtered = doctorId ? slots.filter((s) => s.practitionerId === doctorId) : slots;
   const seen = new Map<string, string>();
   for (const slot of filtered) {
-    if (!seen.has(slot.localStartTime)) seen.set(slot.localStartTime, slot.practitionerId);
+    const current = seen.get(slot.localStartTime);
+    if (current === undefined || slot.practitionerId < current) {
+      seen.set(slot.localStartTime, slot.practitionerId);
+    }
   }
   return Array.from(seen.entries())
     .map(([localStartTime, practitionerId]) => ({ localStartTime, practitionerId }))
@@ -75,6 +83,23 @@ export function removeStaleSlot(
 ): PublicSlot[] {
   return slots.filter(
     (slot) => !(slot.practitionerId === rejected.practitionerId && slot.localStartTime === rejected.localStartTime),
+  );
+}
+
+/**
+ * True only if the exact (practitionerId, localStartTime) tuple currently
+ * selected by the customer is still present in a freshly fetched slot list.
+ * Used after every availability refresh to decide whether to keep the
+ * selection — the practitioner bound to a selection must never silently
+ * change to a different practitioner; if the exact tuple is gone, the
+ * selection is cleared instead so the customer picks again explicitly.
+ */
+export function isSelectedSlotStillOffered(
+  slots: PublicSlot[],
+  selection: { practitionerId: string; localStartTime: string },
+): boolean {
+  return slots.some(
+    (slot) => slot.practitionerId === selection.practitionerId && slot.localStartTime === selection.localStartTime,
   );
 }
 

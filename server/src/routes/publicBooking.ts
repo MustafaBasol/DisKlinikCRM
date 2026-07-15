@@ -152,6 +152,10 @@ router.get('/booking/:clinicId/slots', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid serviceId' });
     }
 
+    // Availability changes as other customers/staff book — never let the
+    // browser or an intermediary cache a stale slot list.
+    res.set('Cache-Control', 'no-store');
+
     return res.json({
       slots: slots.map((slot) => ({
         practitionerId: slot.practitioner.id,

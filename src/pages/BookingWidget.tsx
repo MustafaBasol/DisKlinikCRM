@@ -14,6 +14,7 @@ import {
   selectableTimesForDoctor,
   removeStaleSlot,
   isSlotUnavailableError,
+  isSelectedSlotStillOffered,
   type PublicSlot,
 } from './bookingWidgetHelpers';
 
@@ -328,14 +329,28 @@ const BookingWidget: React.FC = () => {
     publicBookingService
       .getSlots(clinicId, { date: selectedDate, serviceId: selectedService || undefined })
       .then((r) => {
-        setSlots(normalizePublicSlots(r.data));
+        const freshSlots = normalizePublicSlots(r.data);
+        setSlots(freshSlots);
+        // If a specific (practitioner, time) was selected, it must never
+        // silently swap to a different practitioner just because this
+        // refresh reordered the underlying slots. Only keep it if the exact
+        // tuple is still offered; otherwise clear it explicitly so the
+        // customer re-selects rather than submitting a stale pairing.
+        if (
+          selectedTime &&
+          selectedSlotPractitionerId &&
+          !isSelectedSlotStillOffered(freshSlots, { practitionerId: selectedSlotPractitionerId, localStartTime: selectedTime })
+        ) {
+          setSelectedTime('');
+          setSelectedSlotPractitionerId('');
+        }
       })
       .catch(() => {
         setSlots([]);
         setSlotsError(t('booking:schedule.slotsError'));
       })
       .finally(() => setSlotsLoading(false));
-  }, [clinicId, selectedDate, selectedService, t]);
+  }, [clinicId, selectedDate, selectedService, t, selectedTime, selectedSlotPractitionerId]);
 
   useEffect(() => {
     if (!selectedDate) {
