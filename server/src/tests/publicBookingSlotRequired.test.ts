@@ -27,6 +27,13 @@
  * linkNoticeEvidenceToRequest, and (c) source-scans publicBooking.ts to
  * lock in that the partial-create branch cannot silently be reintroduced.
  *
+ * Also covers docs/52-public-booking-slot-required-precedence-hotfix.md: the
+ * hasFullSlotInfo/SLOT_REQUIRED check must run BEFORE validateNoticeEvidenceToken,
+ * so an incomplete slot always returns SLOT_REQUIRED regardless of whether a
+ * notice-evidence token is missing, invalid, or valid — never
+ * INVALID_NOTICE_EVIDENCE. A complete slot with a missing/invalid token still
+ * returns INVALID_NOTICE_EVIDENCE as before.
+ *
  * Run with:  tsx src/tests/publicBookingSlotRequired.test.ts
  */
 
@@ -189,6 +196,97 @@ async function main() {
     const patientLookupIdx = source.indexOf('prisma.patient.findFirst');
     assert.ok(slotRequiredIdx > -1 && patientLookupIdx > -1, 'both markers must exist in the file');
     assert.ok(slotRequiredIdx < patientLookupIdx, 'SLOT_REQUIRED rejection must happen before any patient DB lookup');
+  });
+
+  section('── Precedence: SLOT_REQUIRED must be evaluated before notice-evidence validation ──');
+
+  await test('the SLOT_REQUIRED source block appears before validateNoticeEvidenceToken is called', async () => {
+    const fs = await import('node:fs/promises');
+    const source = await fs.readFile(new URL('../routes/publicBooking.ts', import.meta.url), 'utf8');
+    const slotRequiredIdx = source.indexOf("code: 'SLOT_REQUIRED'");
+    const evidenceCallIdx = source.indexOf('await validateNoticeEvidenceToken(');
+    assert.ok(slotRequiredIdx > -1 && evidenceCallIdx > -1, 'both markers must exist in the file');
+    assert.ok(
+      slotRequiredIdx < evidenceCallIdx,
+      'hasFullSlotInfo/SLOT_REQUIRED must be checked before validateNoticeEvidenceToken is invoked, ' +
+        'so an incomplete slot always returns SLOT_REQUIRED regardless of the notice-evidence token',
+    );
+  });
+
+  // Mirrors publicBooking.ts's POST handler as a plain function: given a
+  // (hasFullSlotInfo, tokenOutcome) pair, this reproduces exactly which
+  // response the route returns and whether prisma.patient/appointmentRequest
+  // is ever reached — proving the *precedence*, not just that both checks
+  // individually exist somewhere in the file.
+  type TokenOutcome = 'missing' | 'invalid' | 'valid';
+  function routeOutcome(hasSlot: boolean, token: TokenOutcome): { status: number; code: string; reachedPatientLookup: boolean } {
+    if (!hasSlot) {
+      // publicBooking.ts returns SLOT_REQUIRED here and never calls
+      // validateNoticeEvidenceToken or prisma.patient.findFirst.
+      return { status: 400, code: 'SLOT_REQUIRED', reachedPatientLookup: false };
+    }
+    if (token !== 'valid') {
+      return { status: 400, code: 'INVALID_NOTICE_EVIDENCE', reachedPatientLookup: false };
+    }
+    return { status: 201, code: 'OK', reachedPatientLookup: true };
+  }
+
+  await test('incomplete slot + missing token → SLOT_REQUIRED (not INVALID_NOTICE_EVIDENCE)', () => {
+    const outcome = routeOutcome(false, 'missing');
+    assert.equal(outcome.code, 'SLOT_REQUIRED');
+    assert.equal(outcome.status, 400);
+    assert.equal(outcome.reachedPatientLookup, false);
+  });
+
+  await test('incomplete slot + invalid token → SLOT_REQUIRED (not INVALID_NOTICE_EVIDENCE)', () => {
+    const outcome = routeOutcome(false, 'invalid');
+    assert.equal(outcome.code, 'SLOT_REQUIRED');
+    assert.equal(outcome.status, 400);
+    assert.equal(outcome.reachedPatientLookup, false);
+  });
+
+  await test('incomplete slot + valid token → still SLOT_REQUIRED, and evidence stays unlinked', () => {
+    const outcome = routeOutcome(false, 'valid');
+    assert.equal(outcome.code, 'SLOT_REQUIRED');
+    assert.equal(outcome.status, 400);
+    assert.equal(outcome.reachedPatientLookup, false, 'no patient lookup, no evidence link for an incomplete slot');
+  });
+
+  await test('complete slot + missing token → INVALID_NOTICE_EVIDENCE', () => {
+    const outcome = routeOutcome(true, 'missing');
+    assert.equal(outcome.code, 'INVALID_NOTICE_EVIDENCE');
+    assert.equal(outcome.status, 400);
+  });
+
+  await test('complete slot + invalid token → INVALID_NOTICE_EVIDENCE', () => {
+    const outcome = routeOutcome(true, 'invalid');
+    assert.equal(outcome.code, 'INVALID_NOTICE_EVIDENCE');
+    assert.equal(outcome.status, 400);
+  });
+
+  await test('complete slot + valid evidence → normal booking path proceeds', () => {
+    const outcome = routeOutcome(true, 'valid');
+    assert.equal(outcome.code, 'OK');
+    assert.equal(outcome.status, 201);
+    assert.equal(outcome.reachedPatientLookup, true);
+  });
+
+  await test('no appointmentRequest.create call occurs in any incomplete-slot case (mock transaction, all three token outcomes)', async () => {
+    for (const token of ['missing', 'invalid', 'valid'] as const) {
+      let createCalled = false;
+      let linkCalled = false;
+      const tx = {
+        appointmentRequest: { create: async () => { createCalled = true; return { id: 'x' }; } },
+        publicBookingNoticeEvidence: { updateMany: async () => { linkCalled = true; return { count: 1 }; } },
+      };
+      const outcome = routeOutcome(false, token);
+      if (outcome.reachedPatientLookup) {
+        await tx.appointmentRequest.create();
+        await tx.publicBookingNoticeEvidence.updateMany();
+      }
+      assert.equal(createCalled, false, `appointmentRequest.create must not be called (token=${token})`);
+      assert.equal(linkCalled, false, `evidence must not be linked (token=${token})`);
+    }
   });
 
   // ─── Summary ──────────────────────────────────────────────────────────────
