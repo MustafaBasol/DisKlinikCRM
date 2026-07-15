@@ -7,6 +7,7 @@ import {
   assertSlotAvailable,
   SlotConflictError,
 } from '../services/appointments/appointmentAvailabilityService.js';
+import { buildAvailableSlots } from '../services/whatsappAvailability.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import {
   resolvePublishedLegalProfile,
@@ -21,6 +22,9 @@ const router = express.Router();
 // Unauthenticated write endpoint — throttle per IP to limit spam requests.
 const bookingSubmitLimiter = createRateLimiter(10, 15 * 60 * 1000, 'public-booking');
 const noticeEvidenceLimiter = createRateLimiter(30, 15 * 60 * 1000, 'public-booking-notice');
+const slotsLimiter = createRateLimiter(60, 60 * 1000, 'public-booking-slots');
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const SAFE_UNAVAILABLE_ERROR = 'The online booking form is temporarily unavailable. Please contact the clinic directly.';
 
@@ -110,6 +114,55 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
     });
   } catch {
     return res.status(500).json({ error: 'Failed to fetch booking info' });
+  }
+});
+
+// GET /api/public/booking/:clinicId/slots — real, conflict-checked available
+// slots for a given date (+ optional service/practitioner). This is the
+// canonical availability the widget must render — it applies the exact same
+// Appointment-overlap and pending/approved AppointmentRequest rules that
+// submit-time assertSlotAvailable enforces, so a slot shown here cannot be
+// rejected at submission for a reason this endpoint should have caught.
+router.get('/booking/:clinicId/slots', async (req: Request, res: Response) => {
+  const clinicId = req.params.clinicId as string;
+
+  const clientIp = req.ip || 'unknown';
+  if (!(await slotsLimiter.check(clientIp))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+  await slotsLimiter.record(clientIp);
+
+  const dateRaw = req.query.date;
+  const serviceIdRaw = req.query.serviceId;
+  const practitionerIdRaw = req.query.practitionerId;
+
+  const date = typeof dateRaw === 'string' ? dateRaw : '';
+  if (!ISO_DATE_RE.test(date)) {
+    return res.status(400).json({ error: 'Invalid or missing date (expected YYYY-MM-DD)' });
+  }
+  const serviceId = typeof serviceIdRaw === 'string' && serviceIdRaw ? serviceIdRaw : null;
+  const practitionerId = typeof practitionerIdRaw === 'string' && practitionerIdRaw ? practitionerIdRaw : null;
+
+  try {
+    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    const slots = await buildAvailableSlots(prisma, clinicId, serviceId, date, practitionerId);
+    if (slots === null) {
+      return res.status(400).json({ error: 'Invalid serviceId' });
+    }
+
+    return res.json({
+      slots: slots.map((slot) => ({
+        practitionerId: slot.practitioner.id,
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString(),
+        localStartTime: slot.localStartTime,
+        localEndTime: slot.localEndTime,
+      })),
+    });
+  } catch {
+    return res.status(500).json({ error: 'Failed to load availability' });
   }
 });
 

@@ -7,7 +7,8 @@
     "loadClinic": "Klinikinformationen konnten nicht geladen werden.",
     "loading": "Ladefehler",
     "namePhoneRequired": "Vollständiger Name und Telefon sind erforderlich.",
-    "submitFailed": "Terminanfrage konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+    "submitFailed": "Terminanfrage konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
+    "slotUnavailable": "Dieser Termin wurde soeben vergeben. Ihre Angaben wurden gespeichert; bitte wählen Sie eine andere Uhrzeit."
   },
   "service": {
     "title": "Leistung auswählen",
@@ -22,7 +23,10 @@
     "doctorOptional": "Behandler (optional)",
     "anyDoctor": "Keine Präferenz",
     "dateOptional": "Gewünschtes Datum (optional)",
-    "timeOptional": "Gewünschte Uhrzeit (optional)"
+    "timeOptional": "Gewünschte Uhrzeit (optional)",
+    "slotsLoading": "Verfügbare Termine werden geladen...",
+    "slotsEmpty": "An diesem Datum sind keine Termine verfügbar. Bitte wählen Sie ein anderes Datum.",
+    "slotsError": "Verfügbare Termine konnten nicht geladen werden. Bitte versuchen Sie es erneut."
   },
   "contact": {
     "title": "Kontaktinformationen",

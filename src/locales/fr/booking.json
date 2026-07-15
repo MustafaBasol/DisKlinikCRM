@@ -7,7 +7,8 @@
     "loadClinic": "Les informations de la clinique n'ont pas pu être chargées.",
     "loading": "Erreur de chargement",
     "namePhoneRequired": "Le nom complet et le téléphone sont obligatoires.",
-    "submitFailed": "La demande de rendez-vous n'a pas pu être envoyée. Veuillez réessayer."
+    "submitFailed": "La demande de rendez-vous n'a pas pu être envoyée. Veuillez réessayer.",
+    "slotUnavailable": "Ce créneau vient d'être pris. Vos informations ont été conservées ; veuillez choisir un autre horaire."
   },
   "service": {
     "title": "Sélectionnez un service",
@@ -22,7 +23,10 @@
     "doctorOptional": "Praticien (facultatif)",
     "anyDoctor": "Pas de préférence",
     "dateOptional": "Date souhaitée (facultatif)",
-    "timeOptional": "Heure souhaitée (facultatif)"
+    "timeOptional": "Heure souhaitée (facultatif)",
+    "slotsLoading": "Chargement des horaires disponibles...",
+    "slotsEmpty": "Aucun horaire disponible à cette date. Veuillez choisir une autre date.",
+    "slotsError": "Impossible de charger les horaires disponibles. Veuillez réessayer."
   },
   "contact": {
     "title": "Coordonnées",

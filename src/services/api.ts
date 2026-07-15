@@ -540,6 +540,8 @@ export const treatmentPlanProceduresService = {
 
 export const publicBookingService = {
   getClinicInfo: (clinicId: string) => axios.get(`${API_URL}/public/booking/${encodeURIComponent(clinicId)}`),
+  getSlots: (clinicId: string, params: { date: string; serviceId?: string; practitionerId?: string }) =>
+    axios.get(`${API_URL}/public/booking/${encodeURIComponent(clinicId)}/slots`, { params }),
   getNoticeEvidence: (clinicId: string, data: { sessionId: string; language: string }) =>
     axios.post(`${API_URL}/public/booking/${encodeURIComponent(clinicId)}/notice-evidence`, data),
   submit: (clinicId: string, data: any) => axios.post(`${API_URL}/public/booking/${encodeURIComponent(clinicId)}`, data),

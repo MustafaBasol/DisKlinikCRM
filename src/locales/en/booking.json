@@ -7,7 +7,8 @@
     "loadClinic": "Clinic information could not be loaded.",
     "loading": "Loading error",
     "namePhoneRequired": "Full name and phone are required.",
-    "submitFailed": "Appointment request could not be sent. Please try again."
+    "submitFailed": "Appointment request could not be sent. Please try again.",
+    "slotUnavailable": "This time slot was just taken. Your information has been kept; please choose another time."
   },
   "service": {
     "title": "Select a service",
@@ -22,7 +23,10 @@
     "doctorOptional": "Practitioner (optional)",
     "anyDoctor": "No preference",
     "dateOptional": "Preferred date (optional)",
-    "timeOptional": "Preferred time (optional)"
+    "timeOptional": "Preferred time (optional)",
+    "slotsLoading": "Loading available times...",
+    "slotsEmpty": "No available times on this date. Please choose another date.",
+    "slotsError": "Available times could not be loaded. Please try again."
   },
   "contact": {
     "title": "Contact Information",
