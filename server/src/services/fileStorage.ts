@@ -29,6 +29,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 
 const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
@@ -108,6 +109,77 @@ export async function openFileStream(ref: string): Promise<Readable | null> {
   const localPath = resolveLocalPath(ref);
   if (!fs.existsSync(localPath)) return null;
   return fs.createReadStream(localPath);
+}
+
+/**
+ * Yeni (KVKK yaşam döngüsü, docs/compliance/53) kod yolları için güvenlik
+ * kapısı: mutlak yol veya ".." içeren anahtarları reddeder. Eski mutlak-yol
+ * fallback'ı (resolveLocalPath) yalnızca legacy kayıtlar içindir — bu kapı
+ * yeni özelliklerin o fallback'i asla kullanmamasını garanti eder.
+ */
+export function isSafeStorageKey(ref: string): boolean {
+  if (!ref || typeof ref !== 'string') return false;
+  if (path.isAbsolute(ref)) return false;
+  const normalized = ref.split(/[\\/]/).filter(Boolean);
+  if (normalized.some((segment) => segment === '..' || segment === '.')) return false;
+  if (ref.includes('..')) return false;
+  return true;
+}
+
+/**
+ * Dosyanın var olup olmadığını, içeriğini açmadan kontrol eder (HEAD/stat).
+ * Yalnızca yeni ("clinicId/..." veya "exports/clinicId/...") anahtarlarla
+ * çalışır — mutlak yol kabul etmez (bkz. isSafeStorageKey).
+ */
+export async function fileExists(ref: string): Promise<boolean> {
+  if (!isSafeStorageKey(ref)) return false;
+  if (isRemoteStorageEnabled()) {
+    try {
+      await getS3().send(new HeadObjectCommand({ Bucket: bucket(), Key: ref }));
+      return true;
+    } catch (error: any) {
+      if (error?.name === 'NotFound' || error?.$metadata?.httpStatusCode === 404) return false;
+      throw error;
+    }
+  }
+  const localPath = resolveLocalPath(ref);
+  return fs.existsSync(localPath);
+}
+
+/**
+ * Dosyanın boyutu gibi metadata'sını, içeriğini açmadan döner; dosya yoksa
+ * null döner. Yalnızca yeni ("clinicId/..." veya "exports/clinicId/...")
+ * anahtarlarla çalışır — mutlak yol kabul etmez.
+ */
+export async function statFile(ref: string): Promise<{ size: number } | null> {
+  if (!isSafeStorageKey(ref)) return null;
+  if (isRemoteStorageEnabled()) {
+    try {
+      const result = await getS3().send(new HeadObjectCommand({ Bucket: bucket(), Key: ref }));
+      return { size: Number(result.ContentLength ?? 0) };
+    } catch (error: any) {
+      if (error?.name === 'NotFound' || error?.$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    }
+  }
+  const localPath = resolveLocalPath(ref);
+  try {
+    const stat = await fs.promises.stat(localPath);
+    return { size: stat.size };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Yeni bir dışa aktarım (export) paketi için depolama anahtarı üretir:
+ * `exports/clinicId/uuid.zip`. clinicId sunucu tarafında doğrulanmış oturum
+ * bilgisinden, uuid ise crypto.randomUUID()'den gelir — hiçbir kullanıcı
+ * girdisi yol segmentine karışmaz, bu yüzden path traversal yapısal olarak
+ * imkansızdır.
+ */
+export function buildExportStorageKey(clinicId: string, exportId: string): string {
+  return `exports/${clinicId}/${exportId}.zip`;
 }
 
 /** Dosyayı siler; yoksa sessizce döner (idempotent). */
