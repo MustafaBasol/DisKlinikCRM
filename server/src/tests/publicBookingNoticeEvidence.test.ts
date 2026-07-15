@@ -28,6 +28,10 @@
  *   15. NOTICE_CHANNEL is fixed to 'web_booking'
  *   16. SUPPORTED_NOTICE_LANGUAGES covers all four shipped app locales (tr/en/fr/de)
  *
+ *   Token hashing (hashNoticeToken):
+ *   17. Deterministic — same raw token always hashes the same
+ *   18. Different raw tokens hash to different values
+ *
  * Run with: cd server && npx tsx src/tests/publicBookingNoticeEvidence.test.ts
  * No external test framework — uses node:assert/strict. No DB connection
  * required: validateNoticeEvidenceToken/linkNoticeEvidenceToRequest are
@@ -66,6 +70,7 @@ import {
   normalizeNoticeLanguage,
   validateNoticeEvidenceToken,
   linkNoticeEvidenceToRequest,
+  hashNoticeToken,
   NOTICE_CHANNEL,
   SUPPORTED_NOTICE_LANGUAGES,
 } from '../services/publicBookingNoticeEvidence.js';
@@ -96,12 +101,18 @@ type MockEvidenceRow = {
   appointmentRequestId: string | null;
 };
 
+// Keyed by raw token — mockTx hashes it the same way the real service does,
+// so tests exercise the same lookup-by-hash path as production.
 function mockTx(rowsByToken: Record<string, MockEvidenceRow>, updateManyCounts: number[] = []) {
+  const rowsByHash: Record<string, MockEvidenceRow> = {};
+  for (const [rawToken, row] of Object.entries(rowsByToken)) {
+    rowsByHash[hashNoticeToken(rawToken)] = row;
+  }
   let updateCallIndex = 0;
   const tx = {
     publicBookingNoticeEvidence: {
-      findUnique: async ({ where }: { where: { token: string } }) => {
-        return rowsByToken[where.token] ?? null;
+      findUnique: async ({ where }: { where: { tokenHash: string } }) => {
+        return rowsByHash[where.tokenHash] ?? null;
       },
       updateMany: async (_args: { where: { id: string; appointmentRequestId: null }; data: unknown }) => {
         const count = updateManyCounts[updateCallIndex] ?? 0;
@@ -245,6 +256,18 @@ await test('16. SUPPORTED_NOTICE_LANGUAGES covers all four shipped app locales (
   for (const lang of ['tr', 'en', 'fr', 'de']) {
     assert.ok((SUPPORTED_NOTICE_LANGUAGES as readonly string[]).includes(lang), `missing ${lang}`);
   }
+});
+
+// ── 17-18. Token hashing ────────────────────────────────────────────────────
+
+section('17-18. hashNoticeToken');
+
+await test('17. same raw token always hashes to the same value (deterministic lookup)', () => {
+  assert.equal(hashNoticeToken('same-raw-token'), hashNoticeToken('same-raw-token'));
+});
+
+await test('18. different raw tokens hash to different values (no collisions in practice)', () => {
+  assert.notEqual(hashNoticeToken('raw-token-a'), hashNoticeToken('raw-token-b'));
 });
 
 // ── Summary ────────────────────────────────────────────────────────────────────

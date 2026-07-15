@@ -5,13 +5,13 @@ CREATE TABLE "PublicBookingNoticeEvidence" (
     "clinicId" TEXT NOT NULL,
     "legalProfileId" TEXT,
     "sessionId" TEXT NOT NULL,
-    "token" TEXT NOT NULL,
+    "tokenHash" TEXT NOT NULL,
     "appointmentRequestId" TEXT,
     "noticeVersion" TEXT NOT NULL,
     "noticeEffectiveDate" TIMESTAMP(3),
     "language" TEXT NOT NULL DEFAULT 'tr',
     "channel" TEXT NOT NULL DEFAULT 'web_booking',
-    "displayedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deliveredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "noticeTextSnapshot" TEXT NOT NULL,
     "controllerNameSnapshot" TEXT NOT NULL,
     "privacyContactSnapshot" TEXT,
@@ -23,7 +23,7 @@ CREATE TABLE "PublicBookingNoticeEvidence" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "PublicBookingNoticeEvidence_token_key" ON "PublicBookingNoticeEvidence"("token");
+CREATE UNIQUE INDEX "PublicBookingNoticeEvidence_tokenHash_key" ON "PublicBookingNoticeEvidence"("tokenHash");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PublicBookingNoticeEvidence_appointmentRequestId_key" ON "PublicBookingNoticeEvidence"("appointmentRequestId");
@@ -35,7 +35,7 @@ CREATE INDEX "PublicBookingNoticeEvidence_clinicId_sessionId_channel_idx" ON "Pu
 CREATE INDEX "PublicBookingNoticeEvidence_organizationId_idx" ON "PublicBookingNoticeEvidence"("organizationId");
 
 -- CreateIndex
-CREATE INDEX "PublicBookingNoticeEvidence_token_idx" ON "PublicBookingNoticeEvidence"("token");
+CREATE INDEX "PublicBookingNoticeEvidence_tokenHash_idx" ON "PublicBookingNoticeEvidence"("tokenHash");
 
 -- CreateIndex
 CREATE INDEX "PublicBookingNoticeEvidence_expiresAt_idx" ON "PublicBookingNoticeEvidence"("expiresAt");

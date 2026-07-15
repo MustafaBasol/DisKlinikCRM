@@ -1887,10 +1887,12 @@ model PublicBookingNoticeEvidence {
   /// and page refreshes within the same booking session.
   sessionId String
 
-  /// Opaque server-issued token the client must echo back with the booking
-  /// submission. Always server-generated — this value is never trusted if
-  /// supplied by the client anywhere else.
-  token String @unique
+  /// SHA-256 hash of the opaque server-issued token the client must echo
+  /// back with the booking submission. The raw token itself is returned to
+  /// the client once and never persisted — only its hash is stored, so a
+  /// database read cannot recover a usable token. Always server-generated —
+  /// never trusted if supplied by the client anywhere else.
+  tokenHash String @unique
 
   appointmentRequestId String?             @unique
   appointmentRequest   AppointmentRequest? @relation(fields: [appointmentRequestId], references: [id], onDelete: SetNull)
@@ -1901,7 +1903,11 @@ model PublicBookingNoticeEvidence {
   /// Fixed to "web_booking" for this flow; kept as a column (not a literal)
   /// so other future channels can reuse this table without a schema change.
   channel             String   @default("web_booking")
-  displayedAt         DateTime @default(now())
+  /// Timestamp the server issued/delivered the notice payload to the
+  /// client. This proves server-side delivery only, NOT that the visitor
+  /// actually read or scrolled to the notice — never describe it as proof
+  /// of reading or review anywhere in code, UI copy, or documentation.
+  deliveredAt         DateTime @default(now())
 
   noticeTextSnapshot     String
   controllerNameSnapshot String
@@ -1913,7 +1919,7 @@ model PublicBookingNoticeEvidence {
 
   @@index([clinicId, sessionId, channel])
   @@index([organizationId])
-  @@index([token])
+  @@index([tokenHash])
   @@index([expiresAt])
 }
 

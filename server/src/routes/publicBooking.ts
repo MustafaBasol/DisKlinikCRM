@@ -146,7 +146,7 @@ router.post('/booking/:clinicId/notice-evidence', async (req: Request, res: Resp
       noticeEffectiveDate: evidence.noticeEffectiveDate,
       language: evidence.language,
       channel: evidence.channel,
-      displayedAt: evidence.displayedAt,
+      deliveredAt: evidence.deliveredAt,
     });
   } catch {
     return res.status(500).json({ error: SAFE_UNAVAILABLE_ERROR });
