@@ -1,0 +1,288 @@
+/**
+ * publicBookingNoticeEvidence.ts — KVKK-CRIT-001a
+ *
+ * Automatic evidence that a clinic's published Art. 10 privacy notice was
+ * delivered to a public-booking visitor's browser, and that the submitted
+ * booking request is attributable to that exact notice.
+ *
+ * `deliveredAt` proves server-side delivery of the notice payload only — it
+ * is NOT proof the visitor read, scrolled to, or reviewed the notice. Do not
+ * describe it that way anywhere (code, UI copy, or compliance docs).
+ *
+ * This is explicitly NOT a consent flow:
+ *   - Evidence is created automatically, with no acknowledgment action.
+ *   - Nothing here is ever surfaced as "consent", "approval" or "accepted".
+ *   - Separate from ChannelConsentLog (WhatsApp/Instagram first-contact
+ *     consent), which this module does not read or write.
+ *
+ * ClinicLegalProfile rows are mutable in place (an already-published
+ * profile can be re-saved via POST /publish), so a bare foreign key would
+ * not reliably preserve historical notice attribution once a clinic
+ * updates its notice. We therefore snapshot the notice text and controller
+ * identity into the evidence row at issuance time.
+ *
+ * Token handling: the token returned to the client is never itself
+ * persisted — only its SHA-256 hash is stored (tokenHash), following the
+ * same pattern as password-reset and imaging-bridge pairing tokens
+ * elsewhere in this codebase. A database read (or leaked backup) cannot be
+ * used to forge a valid booking submission.
+ */
+
+import crypto from 'node:crypto';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import prisma from '../db.js';
+
+export const NOTICE_CHANNEL = 'web_booking';
+export const SUPPORTED_NOTICE_LANGUAGES = ['tr', 'en', 'fr', 'de'] as const;
+export type NoticeLanguage = (typeof SUPPORTED_NOTICE_LANGUAGES)[number];
+
+const EVIDENCE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours — long enough to complete the widget flow
+
+export interface PublishedLegalProfileSummary {
+  legalProfileId: string;
+  organizationId: string;
+  clinicId: string;
+  controllerName: string;
+  privacyContact: string | null;
+  noticeText: string;
+  channelDisclosureText: string | null;
+  noticeVersion: string;
+  noticeEffectiveDate: Date | null;
+}
+
+/**
+ * Resolves the clinic's currently published legal profile. Never trusts
+ * client-supplied clinic/profile/version data — always re-reads from the
+ * database. Returns null when the clinic has no published profile (the
+ * caller must then refuse to collect booking data).
+ */
+export async function resolvePublishedLegalProfile(
+  clinicId: string,
+): Promise<PublishedLegalProfileSummary | null> {
+  const clinic = await prisma.clinic.findUnique({
+    where: { id: clinicId },
+    select: {
+      id: true,
+      organizationId: true,
+      name: true,
+      legalName: true,
+      defaultLanguage: true,
+      clinicLegalProfile: {
+        select: {
+          id: true,
+          isPublished: true,
+          dataControllerTitle: true,
+          privacyRequestEmail: true,
+          email: true,
+          privacyNoticeText: true,
+          channelDisclosureText: true,
+          privacyNoticeVersion: true,
+          effectiveDate: true,
+        },
+      },
+    },
+  });
+
+  const profile = clinic?.clinicLegalProfile;
+  if (!clinic || !profile || !profile.isPublished) return null;
+  if (!profile.privacyNoticeText?.trim() || !profile.privacyNoticeVersion?.trim()) return null;
+
+  const controllerName = profile.dataControllerTitle?.trim() || clinic.legalName?.trim() || clinic.name;
+
+  return {
+    legalProfileId: profile.id,
+    organizationId: clinic.organizationId,
+    clinicId: clinic.id,
+    controllerName,
+    privacyContact: profile.privacyRequestEmail?.trim() || profile.email?.trim() || null,
+    noticeText: profile.privacyNoticeText,
+    channelDisclosureText: profile.channelDisclosureText,
+    noticeVersion: profile.privacyNoticeVersion,
+    noticeEffectiveDate: profile.effectiveDate,
+  };
+}
+
+export function normalizeNoticeLanguage(value: unknown, fallback: string): NoticeLanguage {
+  if (typeof value === 'string' && (SUPPORTED_NOTICE_LANGUAGES as readonly string[]).includes(value)) {
+    return value as NoticeLanguage;
+  }
+  if ((SUPPORTED_NOTICE_LANGUAGES as readonly string[]).includes(fallback)) {
+    return fallback as NoticeLanguage;
+  }
+  return 'tr';
+}
+
+function computeNoticeHash(profile: PublishedLegalProfileSummary): string {
+  const material = [
+    profile.legalProfileId,
+    profile.noticeVersion,
+    profile.noticeEffectiveDate?.toISOString() ?? '',
+    profile.controllerName,
+    profile.noticeText,
+  ].join(' ');
+  return crypto.createHash('sha256').update(material, 'utf8').digest('hex');
+}
+
+/** SHA-256 hex digest of a raw evidence token. Tokens are high-entropy random values (32 bytes), so a fast hash is sufficient — no salt/bcrypt needed. */
+export function hashNoticeToken(rawToken: string): string {
+  return crypto.createHash('sha256').update(rawToken, 'utf8').digest('hex');
+}
+
+export interface NoticeEvidenceRecord {
+  id: string;
+  /** Raw, single-use token — never itself persisted; only hashNoticeToken(token) is stored. */
+  token: string;
+  clinicId: string;
+  noticeVersion: string;
+  noticeEffectiveDate: Date | null;
+  language: string;
+  channel: string;
+  deliveredAt: Date;
+  expiresAt: Date;
+}
+
+/**
+ * Idempotently issues (or reuses) notice-delivery evidence for a booking
+ * session. Re-fetch/refresh within the same TTL window and same client
+ * session id reuses the same evidence row instead of creating a new one
+ * (as long as the published notice version has not changed and the
+ * evidence has not already been linked to a submitted booking request), so
+ * repeated calls never accumulate unbounded rows. The returned token is
+ * always freshly generated and rotated on the underlying row, since only
+ * its hash is persisted and a prior raw token cannot be recovered from the
+ * database to be returned again.
+ */
+export async function issueOrReuseNoticeEvidence(params: {
+  sessionId: string;
+  language: string;
+  profile: PublishedLegalProfileSummary;
+}): Promise<NoticeEvidenceRecord> {
+  const { sessionId, language, profile } = params;
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + EVIDENCE_TTL_MS);
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = hashNoticeToken(token);
+
+  const existing = await prisma.publicBookingNoticeEvidence.findFirst({
+    where: {
+      clinicId: profile.clinicId,
+      sessionId,
+      channel: NOTICE_CHANNEL,
+      noticeVersion: profile.noticeVersion,
+      appointmentRequestId: null,
+      expiresAt: { gt: now },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const row = existing
+    ? await prisma.publicBookingNoticeEvidence.update({
+        where: { id: existing.id },
+        data: { tokenHash, language, deliveredAt: now, expiresAt },
+      })
+    : await prisma.publicBookingNoticeEvidence.create({
+        data: {
+          organizationId: profile.organizationId,
+          clinicId: profile.clinicId,
+          legalProfileId: profile.legalProfileId,
+          sessionId,
+          tokenHash,
+          noticeVersion: profile.noticeVersion,
+          noticeEffectiveDate: profile.noticeEffectiveDate,
+          language,
+          channel: NOTICE_CHANNEL,
+          deliveredAt: now,
+          noticeTextSnapshot: profile.noticeText,
+          controllerNameSnapshot: profile.controllerName,
+          privacyContactSnapshot: profile.privacyContact,
+          noticeHash: computeNoticeHash(profile),
+          expiresAt,
+        },
+      });
+
+  return {
+    id: row.id,
+    token,
+    clinicId: row.clinicId,
+    noticeVersion: row.noticeVersion,
+    noticeEffectiveDate: row.noticeEffectiveDate,
+    language: row.language,
+    channel: row.channel,
+    deliveredAt: row.deliveredAt,
+    expiresAt: row.expiresAt,
+  };
+}
+
+export type EvidenceValidationFailure =
+  | 'missing'
+  | 'not_found'
+  | 'wrong_clinic'
+  | 'wrong_channel'
+  | 'expired'
+  | 'already_linked';
+
+export interface EvidenceValidationResult {
+  ok: boolean;
+  failure?: EvidenceValidationFailure;
+  evidence?: { id: string };
+}
+
+/**
+ * Server-side validation of a client-supplied evidence token before it is
+ * trusted to gate a booking submission. Never trusts clinic/version/notice
+ * text supplied by the client — only the opaque token is accepted, hashed,
+ * and resolved against the database by its hash.
+ */
+export async function validateNoticeEvidenceToken(
+  tx: Prisma.TransactionClient | PrismaClient,
+  params: { clinicId: string; token: string },
+): Promise<EvidenceValidationResult> {
+  const { clinicId, token } = params;
+  if (!token || typeof token !== 'string') return { ok: false, failure: 'missing' };
+
+  const evidence = await tx.publicBookingNoticeEvidence.findUnique({
+    where: { tokenHash: hashNoticeToken(token) },
+    select: { id: true, clinicId: true, channel: true, expiresAt: true, appointmentRequestId: true },
+  });
+
+  if (!evidence) return { ok: false, failure: 'not_found' };
+  if (evidence.clinicId !== clinicId) return { ok: false, failure: 'wrong_clinic' };
+  if (evidence.channel !== NOTICE_CHANNEL) return { ok: false, failure: 'wrong_channel' };
+  if (evidence.expiresAt.getTime() <= Date.now()) return { ok: false, failure: 'expired' };
+  if (evidence.appointmentRequestId) return { ok: false, failure: 'already_linked' };
+
+  return { ok: true, evidence: { id: evidence.id } };
+}
+
+/**
+ * Atomically links previously validated evidence to the appointment
+ * request created from it. Guarded by appointmentRequestId: null so a
+ * concurrent double-submit of the same token can link at most once — the
+ * loser's updateMany affects 0 rows and the caller should treat that as a
+ * conflict.
+ */
+export async function linkNoticeEvidenceToRequest(
+  tx: Prisma.TransactionClient,
+  params: { evidenceId: string; appointmentRequestId: string },
+): Promise<boolean> {
+  const result = await tx.publicBookingNoticeEvidence.updateMany({
+    where: { id: params.evidenceId, appointmentRequestId: null },
+    data: { appointmentRequestId: params.appointmentRequestId },
+  });
+  return result.count === 1;
+}
+
+/**
+ * Deletes evidence rows that were never linked to a booking request and
+ * whose TTL has passed. Never touches rows already linked to an
+ * AppointmentRequest — those are the historical evidence trail and must be
+ * preserved. Safe to call repeatedly (idempotent, no-op once nothing is
+ * eligible).
+ */
+export async function cleanupExpiredNoticeEvidence(now: Date = new Date()): Promise<number> {
+  const { count } = await prisma.publicBookingNoticeEvidence.deleteMany({
+    where: { appointmentRequestId: null, expiresAt: { lt: now } },
+  });
+  return count;
+}

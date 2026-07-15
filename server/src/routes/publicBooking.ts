@@ -8,11 +8,24 @@ import {
   SlotConflictError,
 } from '../services/appointments/appointmentAvailabilityService.js';
 import { createRateLimiter } from '../utils/helpers.js';
+import {
+  resolvePublishedLegalProfile,
+  issueOrReuseNoticeEvidence,
+  validateNoticeEvidenceToken,
+  linkNoticeEvidenceToRequest,
+  normalizeNoticeLanguage,
+} from '../services/publicBookingNoticeEvidence.js';
 
 const router = express.Router();
 
 // Unauthenticated write endpoint — throttle per IP to limit spam requests.
 const bookingSubmitLimiter = createRateLimiter(10, 15 * 60 * 1000, 'public-booking');
+const noticeEvidenceLimiter = createRateLimiter(30, 15 * 60 * 1000, 'public-booking-notice');
+
+const SAFE_UNAVAILABLE_ERROR = 'The online booking form is temporarily unavailable. Please contact the clinic directly.';
+
+/** Thrown when a concurrent submission already consumed this evidence token — not a slot conflict. */
+class NoticeEvidenceAlreadyLinkedError extends Error {}
 
 // GET /api/public/booking/:clinicId — clinic info + active services + active doctors
 router.get('/booking/:clinicId', async (req: Request, res: Response) => {
@@ -25,6 +38,8 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
     });
 
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    const publishedProfile = await resolvePublishedLegalProfile(clinicId);
 
     const [services, doctors, availabilities, offDays, operatingPreferences] = await Promise.all([
       prisma.appointmentType.findMany({
@@ -79,9 +94,62 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
         availableWeekdays: doctorAvailability[d.id] ?? [],
         offDates: doctorOffDates[d.id] ?? [],
       })),
+      // Privacy-notice DELIVERY metadata only — not consent, not an
+      // acknowledgment. See services/publicBookingNoticeEvidence.ts.
+      legalNotice: publishedProfile
+        ? {
+            available: true,
+            controllerName: publishedProfile.controllerName,
+            privacyContact: publishedProfile.privacyContact,
+            noticeText: publishedProfile.noticeText,
+            channelDisclosureText: publishedProfile.channelDisclosureText,
+            noticeVersion: publishedProfile.noticeVersion,
+            noticeEffectiveDate: publishedProfile.noticeEffectiveDate,
+          }
+        : { available: false },
     });
   } catch {
     return res.status(500).json({ error: 'Failed to fetch booking info' });
+  }
+});
+
+// POST /api/public/booking/:clinicId/notice-evidence — idempotently issue
+// automatic notice-delivery evidence for this booking session. No
+// acknowledgment/consent action is required or recorded here.
+router.post('/booking/:clinicId/notice-evidence', async (req: Request, res: Response) => {
+  const clinicId = req.params.clinicId as string;
+
+  const clientIp = req.ip || 'unknown';
+  if (!(await noticeEvidenceLimiter.check(clientIp))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+  await noticeEvidenceLimiter.record(clientIp);
+
+  const sessionIdRaw = req.body?.sessionId;
+  if (typeof sessionIdRaw !== 'string' || sessionIdRaw.trim().length < 8 || sessionIdRaw.length > 200) {
+    return res.status(400).json({ error: 'Invalid session identifier' });
+  }
+  const sessionId = sessionIdRaw.trim();
+
+  try {
+    const profile = await resolvePublishedLegalProfile(clinicId);
+    if (!profile) {
+      return res.status(404).json({ error: SAFE_UNAVAILABLE_ERROR, code: 'blocked_missing_legal_profile' });
+    }
+
+    const language = normalizeNoticeLanguage(req.body?.language, 'tr');
+    const evidence = await issueOrReuseNoticeEvidence({ sessionId, language, profile });
+
+    return res.status(200).json({
+      token: evidence.token,
+      noticeVersion: evidence.noticeVersion,
+      noticeEffectiveDate: evidence.noticeEffectiveDate,
+      language: evidence.language,
+      channel: evidence.channel,
+      deliveredAt: evidence.deliveredAt,
+    });
+  } catch {
+    return res.status(500).json({ error: SAFE_UNAVAILABLE_ERROR });
   }
 });
 
@@ -104,6 +172,7 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
     preferredDate,   // ISO date string "YYYY-MM-DD"
     preferredTime,   // "HH:MM"
     notes,
+    noticeEvidenceToken,
   } = req.body;
 
   // Basic validation
@@ -122,6 +191,23 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
   try {
     const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    // Do not collect/store patient data without server-validated evidence
+    // that this clinic's published privacy notice was displayed for this
+    // exact session. The client cannot substitute another clinic's token,
+    // an expired token, or an arbitrary version string — only the opaque
+    // token is trusted, and it is resolved against the database here.
+    const evidenceCheck = await validateNoticeEvidenceToken(prisma, {
+      clinicId,
+      token: typeof noticeEvidenceToken === 'string' ? noticeEvidenceToken : '',
+    });
+    if (!evidenceCheck.ok || !evidenceCheck.evidence) {
+      return res.status(400).json({
+        error: 'Your booking session has expired. Please reload the page and try again.',
+        code: 'INVALID_NOTICE_EVIDENCE',
+      });
+    }
+    const evidenceId = evidenceCheck.evidence.id;
 
     // Validate optional FK references belong to this clinic.
     // Keep svc so we can compute preferredEndTime from durationMinutes.
@@ -194,7 +280,7 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
             endTime: preferredEndTime!,
           });
 
-          return tx.appointmentRequest.create({
+          const created = await tx.appointmentRequest.create({
             data: {
               clinicId,
               patientId: existingPatient?.id ?? null,
@@ -211,6 +297,14 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
               notes: cleanNotes,
             },
           });
+
+          const linked = await linkNoticeEvidenceToRequest(tx, {
+            evidenceId,
+            appointmentRequestId: created.id,
+          });
+          if (!linked) throw new NoticeEvidenceAlreadyLinkedError();
+
+          return created;
         });
 
         return res.status(201).json({ success: true, requestId: request.id });
@@ -221,31 +315,57 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
             code: 'SLOT_UNAVAILABLE',
           });
         }
+        if (slotErr instanceof NoticeEvidenceAlreadyLinkedError) {
+          return res.status(409).json({
+            error: 'Your booking session has expired. Please reload the page and try again.',
+            code: 'INVALID_NOTICE_EVIDENCE',
+          });
+        }
         throw slotErr;
       }
     }
 
     // ── Partial request (no full slot info) — staff will review ────────────
     // No lock/overlap check: practitioner or slot is unresolved.
-    const request = await prisma.appointmentRequest.create({
-      data: {
-        clinicId,
-        patientId: existingPatient?.id ?? null,
-        patientName: cleanName,
-        phone: cleanPhone,
-        email: cleanEmail,
-        appointmentTypeId: serviceId ?? null,
-        practitionerId: practitionerId ?? null,
-        preferredStartTime: preferredStartTime ?? null,
-        preferredEndTime: preferredEndTime ?? null,
-        requestType: 'appointment',
-        source: 'widget',
-        status: 'pending',
-        notes: cleanNotes,
-      },
-    });
+    try {
+      const request = await prisma.$transaction(async (tx) => {
+        const created = await tx.appointmentRequest.create({
+          data: {
+            clinicId,
+            patientId: existingPatient?.id ?? null,
+            patientName: cleanName,
+            phone: cleanPhone,
+            email: cleanEmail,
+            appointmentTypeId: serviceId ?? null,
+            practitionerId: practitionerId ?? null,
+            preferredStartTime: preferredStartTime ?? null,
+            preferredEndTime: preferredEndTime ?? null,
+            requestType: 'appointment',
+            source: 'widget',
+            status: 'pending',
+            notes: cleanNotes,
+          },
+        });
 
-    return res.status(201).json({ success: true, requestId: request.id });
+        const linked = await linkNoticeEvidenceToRequest(tx, {
+          evidenceId,
+          appointmentRequestId: created.id,
+        });
+        if (!linked) throw new NoticeEvidenceAlreadyLinkedError();
+
+        return created;
+      });
+
+      return res.status(201).json({ success: true, requestId: request.id });
+    } catch (err) {
+      if (err instanceof NoticeEvidenceAlreadyLinkedError) {
+        return res.status(409).json({
+          error: 'Your booking session has expired. Please reload the page and try again.',
+          code: 'INVALID_NOTICE_EVIDENCE',
+        });
+      }
+      throw err;
+    }
   } catch {
     return res.status(500).json({ error: 'Failed to submit booking request' });
   }

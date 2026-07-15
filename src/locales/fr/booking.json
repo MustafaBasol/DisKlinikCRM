@@ -40,6 +40,14 @@
     "submitting": "Envoi...",
     "submit": "Envoyer la demande de rendez-vous"
   },
+  "notice": {
+    "unavailable": "Le formulaire de réservation en ligne est temporairement indisponible. Veuillez contacter directement la clinique.",
+    "notReady": "Chargement de la notice d'information, veuillez réessayer dans quelques secondes.",
+    "summary": "Vos informations de réservation sont traitées par {{controller}} conformément à la loi KVKK (protection des données turque).",
+    "viewFull": "Afficher la notice d'information",
+    "hideFull": "Masquer la notice d'information",
+    "version": "Version {{version}}"
+  },
   "success": {
     "title": "Votre demande a été reçue !",
     "body": "L'équipe de {{clinic}} appellera {{phone}} dès que possible pour confirmer votre rendez-vous.",

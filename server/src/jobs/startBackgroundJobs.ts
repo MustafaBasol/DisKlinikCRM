@@ -13,6 +13,7 @@ import { startMetaTemplateSyncJob } from './metaTemplateSyncJob.js';
 import { startDataRetentionCleanupJob } from './dataRetentionCleanupJob.js';
 import { startInboundEventRetryJob } from './inboundEventRetryJob.js';
 import { startImagingBridgeOfflineJob } from './imagingBridgeOfflineJob.js';
+import { startPublicBookingNoticeEvidenceCleanupJob } from './publicBookingNoticeEvidenceCleanupJob.js';
 
 export function startBackgroundJobs(): void {
   startReminderJobs();
@@ -20,4 +21,5 @@ export function startBackgroundJobs(): void {
   startDataRetentionCleanupJob();
   startInboundEventRetryJob();
   startImagingBridgeOfflineJob();
+  startPublicBookingNoticeEvidenceCleanupJob();
 }

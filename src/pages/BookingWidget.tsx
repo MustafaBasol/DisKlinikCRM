@@ -36,11 +36,21 @@ interface ClinicInfo {
   address?: string;
 }
 
+interface LegalNotice {
+  available: boolean;
+  controllerName?: string;
+  privacyContact?: string | null;
+  noticeText?: string;
+  noticeVersion?: string;
+  noticeEffectiveDate?: string | null;
+}
+
 interface BookingData {
   clinic: ClinicInfo;
   services: Service[];
   doctors: Doctor[];
   operatingPreferences: ClinicOperatingPreferences;
+  legalNotice: LegalNotice;
 }
 
 type RawObject = Record<string, unknown>;
@@ -120,6 +130,23 @@ function normalizeDoctor(raw: unknown): Doctor | null {
   };
 }
 
+function normalizeLegalNotice(raw: unknown): LegalNotice {
+  if (!isRawObject(raw) || raw.available !== true) return { available: false };
+  const noticeText = readString(raw.noticeText);
+  const controllerName = readString(raw.controllerName);
+  const noticeVersion = readString(raw.noticeVersion);
+  if (!noticeText || !controllerName || !noticeVersion) return { available: false };
+
+  return {
+    available: true,
+    controllerName,
+    privacyContact: readString(raw.privacyContact) ?? null,
+    noticeText,
+    noticeVersion,
+    noticeEffectiveDate: readString(raw.noticeEffectiveDate) ?? null,
+  };
+}
+
 function normalizeBookingData(payload: unknown): BookingData | null {
   const response = isRawObject(payload) && isRawObject(payload.data) ? payload.data : payload;
   if (!isRawObject(response)) return null;
@@ -146,8 +173,34 @@ function normalizeBookingData(payload: unknown): BookingData | null {
     operatingPreferences: isRawObject(response.operatingPreferences)
       ? { ...DEFAULT_CLINIC_OPERATING_PREFERENCES, ...response.operatingPreferences }
       : DEFAULT_CLINIC_OPERATING_PREFERENCES,
+    legalNotice: normalizeLegalNotice(response.legalNotice),
   };
 }
+
+// ── Booking-session identifier (not a patient identifier) ────────────────
+// Used only so the backend can idempotently reuse the same notice-evidence
+// row across re-renders/refreshes within one browser tab session, instead
+// of creating a new evidence row every time. Cleared when the tab session
+// ends (sessionStorage), which is an acceptable and intentional boundary
+// for a new "notice display" event.
+const NOTICE_SESSION_STORAGE_KEY = 'noramedi_booking_notice_session';
+
+function getOrCreateBookingSessionId(): string {
+  try {
+    const existing = window.sessionStorage.getItem(NOTICE_SESSION_STORAGE_KEY);
+    if (existing) return existing;
+    const generated =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.sessionStorage.setItem(NOTICE_SESSION_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+const SUPPORTED_NOTICE_LANGUAGES = ['tr', 'en', 'fr', 'de'];
 
 // ── Helpers ────────────────────────────────────────────────────────────
 function getNext30Days(preferences: ClinicOperatingPreferences): { date: string; label: string; weekday: number; weekdayName: string }[] {
@@ -192,7 +245,7 @@ const StepIndicator: React.FC<{ step: number; total: number }> = ({ step, total 
 
 // ── Main Widget ────────────────────────────────────────────────────────
 const BookingWidget: React.FC = () => {
-  const { t } = useTranslation(['booking', 'common']);
+  const { t, i18n } = useTranslation(['booking', 'common']);
   const { clinicId: clinicIdParam } = useParams<{ clinicId: string }>();
   const clinicId = clinicIdParam || '';
 
@@ -213,6 +266,13 @@ const BookingWidget: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // Automatic privacy-notice delivery evidence — not a consent/acknowledgment
+  // flow. The token is issued silently once the clinic's published notice is
+  // known to be displayable; no user action is required to obtain it.
+  const [noticeToken, setNoticeToken] = useState('');
+  const [noticeReady, setNoticeReady] = useState(false);
+  const [showFullNotice, setShowFullNotice] = useState(false);
+
   useEffect(() => {
     if (!clinicId) { setLoadError(t('booking:errors.invalidLink')); setLoading(false); return; }
     publicBookingService
@@ -225,6 +285,31 @@ const BookingWidget: React.FC = () => {
       .catch(() => setLoadError(t('booking:errors.loadClinic')))
       .finally(() => setLoading(false));
   }, [clinicId, t]);
+
+  useEffect(() => {
+    if (!clinicId || !data?.legalNotice.available) return;
+    const currentLanguage = i18n.language?.split('-')[0] ?? 'tr';
+    const language = SUPPORTED_NOTICE_LANGUAGES.includes(currentLanguage) ? currentLanguage : 'tr';
+    const sessionId = getOrCreateBookingSessionId();
+    let cancelled = false;
+    publicBookingService
+      .getNoticeEvidence(clinicId, { sessionId, language })
+      .then((r) => {
+        if (cancelled) return;
+        const token = isRawObject(r.data) ? readString(r.data.token) : undefined;
+        if (token) {
+          setNoticeToken(token);
+          setNoticeReady(true);
+        }
+      })
+      .catch(() => {
+        // Leave noticeReady=false — submit stays disabled and the server
+        // will safely reject any submission without valid evidence anyway.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clinicId, data?.legalNotice.available, i18n.language]);
 
   const preferences = data?.operatingPreferences ?? DEFAULT_CLINIC_OPERATING_PREFERENCES;
   const allDays = getNext30Days(preferences);
@@ -242,6 +327,10 @@ const BookingWidget: React.FC = () => {
       setSubmitError(t('booking:errors.namePhoneRequired'));
       return;
     }
+    if (!noticeReady || !noticeToken) {
+      setSubmitError(t('booking:notice.notReady'));
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
     try {
@@ -254,6 +343,7 @@ const BookingWidget: React.FC = () => {
         preferredDate: selectedDate || undefined,
         preferredTime: selectedTime || undefined,
         notes: notes.trim() || undefined,
+        noticeEvidenceToken: noticeToken,
       });
       setStep(3);
     } catch {
@@ -281,7 +371,25 @@ const BookingWidget: React.FC = () => {
     );
   }
 
-  const { clinic, services, doctors } = data;
+  // No published privacy notice for this clinic — do not collect or submit
+  // any patient data. Neutral message only; no internal configuration
+  // details are exposed.
+  if (!data.legalNotice.available) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8 max-w-sm">
+          <p className="text-gray-700 font-medium">{t('booking:notice.unavailable')}</p>
+          {data.clinic.phone && (
+            <p className="text-sm text-gray-400 mt-3">
+              <a href={`tel:${data.clinic.phone}`} className="text-blue-600 hover:underline">{data.clinic.phone}</a>
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const { clinic, services, doctors, legalNotice } = data;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50">
@@ -481,13 +589,37 @@ const BookingWidget: React.FC = () => {
               />
             </div>
 
+            {/* Privacy-notice delivery — informational only, no acknowledgment
+                or consent control. Evidence that this notice was displayed
+                is recorded automatically by the server. */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-500 space-y-1.5">
+              <p>
+                {t('booking:notice.summary', { controller: legalNotice.controllerName })}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowFullNotice((v) => !v)}
+                className="text-blue-600 hover:underline font-medium"
+              >
+                {showFullNotice ? t('booking:notice.hideFull') : t('booking:notice.viewFull')}
+              </button>
+              {showFullNotice && (
+                <div className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3 text-gray-600">
+                  {legalNotice.noticeText}
+                </div>
+              )}
+              <p className="text-[10px] text-gray-400">
+                {t('booking:notice.version', { version: legalNotice.noticeVersion })}
+              </p>
+            </div>
+
             {submitError && (
               <p className="text-red-500 text-sm bg-red-50 rounded-lg p-3">{submitError}</p>
             )}
 
             <button
               onClick={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || !noticeReady}
               className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               {submitting ? <><Loader2 size={18} className="animate-spin" /> {t('booking:actions.submitting')}</> : t('booking:actions.submit')}

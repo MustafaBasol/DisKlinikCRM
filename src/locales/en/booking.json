@@ -40,6 +40,14 @@
     "submitting": "Sending...",
     "submit": "Send Appointment Request"
   },
+  "notice": {
+    "unavailable": "The online booking form is temporarily unavailable. Please contact the clinic directly.",
+    "notReady": "Loading the privacy notice, please try again in a few seconds.",
+    "summary": "Your booking information is processed by {{controller}} under KVKK (Turkish data protection law).",
+    "viewFull": "View privacy notice",
+    "hideFull": "Hide privacy notice",
+    "version": "Version {{version}}"
+  },
   "success": {
     "title": "Your Request Has Been Received!",
     "body": "{{clinic}} team will call {{phone}} as soon as possible to confirm your appointment.",
