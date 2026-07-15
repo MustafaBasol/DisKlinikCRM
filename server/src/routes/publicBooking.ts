@@ -249,23 +249,6 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
     const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true, timezone: true } });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
-    // Do not collect/store patient data without server-validated evidence
-    // that this clinic's published privacy notice was displayed for this
-    // exact session. The client cannot substitute another clinic's token,
-    // an expired token, or an arbitrary version string — only the opaque
-    // token is trusted, and it is resolved against the database here.
-    const evidenceCheck = await validateNoticeEvidenceToken(prisma, {
-      clinicId,
-      token: typeof noticeEvidenceToken === 'string' ? noticeEvidenceToken : '',
-    });
-    if (!evidenceCheck.ok || !evidenceCheck.evidence) {
-      return res.status(400).json({
-        error: 'Your booking session has expired. Please reload the page and try again.',
-        code: 'INVALID_NOTICE_EVIDENCE',
-      });
-    }
-    const evidenceId = evidenceCheck.evidence.id;
-
     // Validate optional FK references belong to this clinic.
     // Keep svc so we can compute preferredEndTime from durationMinutes.
     let svc: { durationMinutes: number } | null = null;
@@ -321,6 +304,27 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
         code: 'SLOT_REQUIRED',
       });
     }
+
+    // Do not collect/store patient data without server-validated evidence
+    // that this clinic's published privacy notice was displayed for this
+    // exact session. The client cannot substitute another clinic's token,
+    // an expired token, or an arbitrary version string — only the opaque
+    // token is trusted, and it is resolved against the database here.
+    // Runs only after hasFullSlotInfo passes, so an incomplete slot always
+    // returns SLOT_REQUIRED regardless of the token's validity — see
+    // docs/51-public-booking-required-slot-hotfix.md and
+    // docs/52-public-booking-slot-required-precedence-hotfix.md.
+    const evidenceCheck = await validateNoticeEvidenceToken(prisma, {
+      clinicId,
+      token: typeof noticeEvidenceToken === 'string' ? noticeEvidenceToken : '',
+    });
+    if (!evidenceCheck.ok || !evidenceCheck.evidence) {
+      return res.status(400).json({
+        error: 'Your booking session has expired. Please reload the page and try again.',
+        code: 'INVALID_NOTICE_EVIDENCE',
+      });
+    }
+    const evidenceId = evidenceCheck.evidence.id;
 
     // Try to match an existing patient by phone in this clinic
     const existingPatient = await prisma.patient.findFirst({
