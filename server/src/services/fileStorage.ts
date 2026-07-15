@@ -192,34 +192,57 @@ export function buildExportStorageKey(clinicId: string, exportId: string): strin
  *
  * Used by patientPrivacyExportPackage.ts so large ZIP export packages are
  * never fully materialized as a Buffer/Buffer[] in process memory.
+ *
+ * Temp-file contract (PR #160 review — P0 fix): this function ALWAYS
+ * consumes/removes `tempFilePath` before returning or throwing, in every
+ * mode — callers must never rely on their own cleanup of this path. Without
+ * this, a sensitive patient ZIP could be left under the OS temp directory
+ * indefinitely (the cleanup job/TTL logic only knows about the *storage*
+ * key, never about this local scratch file).
  */
 export async function saveFileFromPath(key: string, tempFilePath: string, contentType: string): Promise<void> {
   if (isRemoteStorageEnabled()) {
-    const body = fs.createReadStream(tempFilePath);
-    const upload = new Upload({
-      client: getS3(),
-      params: { Bucket: bucket(), Key: key, Body: body, ContentType: contentType },
-    });
-    await upload.done();
+    try {
+      const body = fs.createReadStream(tempFilePath);
+      const upload = new Upload({
+        client: getS3(),
+        params: { Bucket: bucket(), Key: key, Body: body, ContentType: contentType },
+        // Explicit (matches the library default): abort and clean up any
+        // already-uploaded parts of a multipart upload on failure, rather
+        // than leaving orphaned parts billed/stored in the bucket.
+        leavePartsOnError: false,
+      });
+      await upload.done();
+    } finally {
+      // Runs on both success and failure — the temp file must never survive
+      // this call either way.
+      await fs.promises.unlink(tempFilePath).catch(() => {});
+    }
     return;
   }
   const localPath = resolveLocalPath(key);
   await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
   try {
-    // Fast path: same-filesystem rename (no copy).
+    // Fast path: same-filesystem rename (no copy) — tempFilePath no longer
+    // exists at its old path once this succeeds, nothing further to clean up.
     await fs.promises.rename(tempFilePath, localPath);
   } catch {
     // Cross-device (EXDEV) or other rename failure — fall back to a
     // streamed copy, still without loading the whole file into memory.
-    await new Promise<void>((resolve, reject) => {
-      const read = fs.createReadStream(tempFilePath);
-      const write = fs.createWriteStream(localPath);
-      read.on('error', reject);
-      write.on('error', reject);
-      write.on('finish', () => resolve());
-      read.pipe(write);
-    });
-    await fs.promises.unlink(tempFilePath).catch(() => {});
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const read = fs.createReadStream(tempFilePath);
+        const write = fs.createWriteStream(localPath);
+        read.on('error', reject);
+        write.on('error', reject);
+        write.on('finish', () => resolve());
+        read.pipe(write);
+      });
+    } finally {
+      // Runs whether the copy succeeded or failed — the source temp file is
+      // either consumed (success) or abandoned (failure) either way.
+      await fs.promises.unlink(tempFilePath).catch(() => {});
+    }
   }
 }
 

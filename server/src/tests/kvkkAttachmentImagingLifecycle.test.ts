@@ -73,12 +73,24 @@
  *   49. attachments.ts legal-hold route requires a reason for release too (not just placing) and writes an audit log
  *   50. tr/en/fr/de locale files have matching keys for the new patientPrivacy i18n namespace
  *
+ * Second follow-up review round additions (S3 temp-file leakage +
+ * reservation race, this file's DB-free portion only — the real
+ * disposable-Postgres concurrency proof lives in
+ * scripts/verify-export-archive-lifecycle.ts, see that file):
+ *   51. saveFileFromPath (local mode): same-filesystem rename path removes the temp file
+ *   52. saveFileFromPath (local mode): cross-device copy-fallback path removes the temp file even when rename fails
+ *   53. saveFileFromPath (S3 mode, mocked client): temp file is removed after a successful upload
+ *   54. saveFileFromPath (S3 mode, mocked client): temp file is removed even when the upload fails, and the failure still propagates
+ *   55. computeExportLockKey is deterministic for the same clinicId and differs across clinicIds
+ *
  * Run with: cd server && npx tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts
  */
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { S3Client } from '@aws-sdk/client-s3';
 
 import {
   buildStorageKey,
@@ -87,12 +99,14 @@ import {
   fileExists,
   statFile,
   saveFile,
+  saveFileFromPath,
   deleteFile,
 } from '../services/fileStorage.js';
 import {
   hashExportToken,
   validateExportDownloadToken,
   cleanupExpiredExportArchives,
+  computeExportLockKey,
   EXPORT_MAX_FILE_COUNT,
   EXPORT_MAX_FILE_SIZE_BYTES,
   EXPORT_MAX_TOTAL_SIZE_BYTES,
@@ -823,6 +837,103 @@ await test('tr/en/fr/de patientPrivacy.json locale files have identical key sets
     assert.deepEqual(other.keys, first.keys, `${other.locale}/patientPrivacy.json keys must match ${first.locale}/patientPrivacy.json`);
   }
   assert.ok(first.keys.length > 0, 'namespace must not be empty');
+});
+
+section('51-52. saveFileFromPath temp-file cleanup (local mode)');
+
+await test('local rename path: temp file is gone after a successful save', async () => {
+  const tempPath = path.join(os.tmpdir(), `kvkk-test-rename-${Date.now()}.txt`);
+  fs.writeFileSync(tempPath, 'rename-fixture');
+  const key = `clinic-test/${Date.now()}-rename-target.txt`;
+  await saveFileFromPath(key, tempPath, 'text/plain');
+  assert.equal(fs.existsSync(tempPath), false, 'temp file must not survive a successful rename');
+  assert.equal(await fileExists(key), true, 'final key must exist after the save');
+  await deleteFile(key);
+});
+
+await test('copy-fallback path: temp file is gone even when rename fails (e.g. EXDEV)', async () => {
+  const tempPath = path.join(os.tmpdir(), `kvkk-test-copy-${Date.now()}.txt`);
+  fs.writeFileSync(tempPath, 'copy-fixture');
+  const key = `clinic-test/${Date.now()}-copy-target.txt`;
+
+  const originalRename = fs.promises.rename;
+  (fs.promises as any).rename = async () => {
+    throw Object.assign(new Error('simulated EXDEV'), { code: 'EXDEV' });
+  };
+  try {
+    await saveFileFromPath(key, tempPath, 'text/plain');
+  } finally {
+    (fs.promises as any).rename = originalRename;
+  }
+
+  assert.equal(fs.existsSync(tempPath), false, 'temp file must not survive the copy fallback');
+  assert.equal(await fileExists(key), true, 'final key must exist via the streamed-copy fallback');
+  const stat = await statFile(key);
+  assert.equal(stat!.size, Buffer.byteLength('copy-fixture'));
+  await deleteFile(key);
+});
+
+section('53-54. saveFileFromPath temp-file cleanup (S3 mode, mocked client)');
+
+await test('S3 mode: temp file is removed after a successful mocked upload', async () => {
+  const originalBucket = process.env.S3_BUCKET;
+  process.env.S3_BUCKET = 'kvkk-test-bucket';
+  const originalSend = S3Client.prototype.send;
+  (S3Client.prototype as any).send = async function (command: unknown) {
+    // Simulate a successful single-part PutObjectCommand (the Upload class
+    // in @aws-sdk/lib-storage falls back to a single PutObject for bodies
+    // under the multipart size threshold, which is true for this fixture).
+    void command;
+    return {};
+  };
+  const tempPath = path.join(os.tmpdir(), `kvkk-test-s3-ok-${Date.now()}.txt`);
+  fs.writeFileSync(tempPath, 's3-success-fixture');
+  try {
+    await saveFileFromPath('exports/clinic-test/s3-ok.zip', tempPath, 'application/zip');
+    assert.equal(fs.existsSync(tempPath), false, 'temp file must not survive a successful S3 upload');
+  } finally {
+    S3Client.prototype.send = originalSend;
+    if (originalBucket === undefined) delete process.env.S3_BUCKET;
+    else process.env.S3_BUCKET = originalBucket;
+    fs.rmSync(tempPath, { force: true });
+  }
+});
+
+await test('S3 mode: temp file is removed even when the upload fails, and the failure still propagates', async () => {
+  const originalBucket = process.env.S3_BUCKET;
+  process.env.S3_BUCKET = 'kvkk-test-bucket';
+  const originalSend = S3Client.prototype.send;
+  (S3Client.prototype as any).send = async function () {
+    throw new Error('simulated S3 upload failure');
+  };
+  const tempPath = path.join(os.tmpdir(), `kvkk-test-s3-fail-${Date.now()}.txt`);
+  fs.writeFileSync(tempPath, 's3-failure-fixture');
+  try {
+    await assert.rejects(
+      saveFileFromPath('exports/clinic-test/s3-fail.zip', tempPath, 'application/zip'),
+      /simulated S3 upload failure/,
+    );
+    assert.equal(fs.existsSync(tempPath), false, 'temp file must not survive a failed S3 upload either');
+  } finally {
+    S3Client.prototype.send = originalSend;
+    if (originalBucket === undefined) delete process.env.S3_BUCKET;
+    else process.env.S3_BUCKET = originalBucket;
+    fs.rmSync(tempPath, { force: true });
+  }
+});
+
+section('55. Export-reservation advisory lock key');
+
+await test('computeExportLockKey is deterministic for the same clinicId', () => {
+  const a = computeExportLockKey('clinic-fixed');
+  const b = computeExportLockKey('clinic-fixed');
+  assert.deepEqual(a, b);
+});
+
+await test('computeExportLockKey differs across clinicIds', () => {
+  const a = computeExportLockKey('clinic-one');
+  const b = computeExportLockKey('clinic-two');
+  assert.notDeepEqual(a, b);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

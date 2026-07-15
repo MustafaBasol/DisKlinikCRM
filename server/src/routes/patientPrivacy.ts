@@ -31,6 +31,7 @@ import {
 import { buildDeletionReviewInventory } from '../services/privacy/deletionReviewInventory.js';
 import { inspectOrphans } from '../services/privacy/orphanFileInspection.js';
 import { openFileStream } from '../services/fileStorage.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 /** Header carrying the one-time export-download token (never a query param — see PR #160 review). */
 const EXPORT_DOWNLOAD_TOKEN_HEADER = 'x-export-download-token';
@@ -497,7 +498,11 @@ router.post(
       if (err instanceof ExportGenerationInProgressError) {
         return res.status(409).json({ error: 'An export package is already being generated for this clinic. Please try again shortly.' });
       }
-      console.error('[patientPrivacy/export-package]', err?.message ?? err);
+      console.error('[patientPrivacy/export-package]', {
+        operation: 'export-package-create',
+        patientId,
+        ...safeErrorFields(err),
+      });
       return res.status(500).json({ error: 'Export package generation failed. Please try again.' });
     }
   },
@@ -590,12 +595,20 @@ router.get(
             ...extractRequestMeta(req),
           });
         } catch (auditErr) {
-          console.error('[patientPrivacy/export-package/download] audit log failed:', auditErr);
+          console.error('[patientPrivacy/export-package/download] audit log failed', {
+            operation: 'download-audit-log',
+            exportId,
+            ...safeErrorFields(auditErr),
+          });
         }
       };
 
       stream.on('error', (streamErr) => {
-        console.error('[patientPrivacy/export-package/download] stream error:', streamErr?.message ?? streamErr);
+        console.error('[patientPrivacy/export-package/download] stream error', {
+          operation: 'download-stream',
+          exportId,
+          ...safeErrorFields(streamErr),
+        });
         void logOutcome(
           'patient_data_export_package_download_failed',
           'Patient data export package (ZIP) download failed mid-stream (KVKK/GDPR access request)',
@@ -624,7 +637,11 @@ router.get(
       });
       stream.pipe(res as any);
     } catch (err: any) {
-      console.error('[patientPrivacy/export-package/download]', err?.message ?? err);
+      console.error('[patientPrivacy/export-package/download]', {
+        operation: 'download',
+        exportId,
+        ...safeErrorFields(err),
+      });
       return res.status(500).json({ error: 'Download failed. Please try again.' });
     }
   },

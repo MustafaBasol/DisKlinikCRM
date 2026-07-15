@@ -29,12 +29,12 @@
  * read) rather than discovered only after buffering everything.
  */
 
-import crypto from 'node:crypto';
+import crypto, { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import archiver from 'archiver';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import prisma from '../../db.js';
 import {
   buildExportStorageKey,
@@ -44,6 +44,7 @@ import {
   deleteFile,
 } from '../fileStorage.js';
 import { ATTACHMENT_MAX_FILE_SIZE_BYTES } from '../../routes/attachments.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 
 export const EXPORT_PACKAGE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -119,42 +120,87 @@ export function hashExportToken(rawToken: string): string {
 }
 
 /**
- * Throws ExportGenerationInProgressError (and otherwise reserves the slot by
- * creating a status="generating" row) if no other queued/generating export
- * is currently in flight for this clinic. Rows older than
- * EXPORT_GENERATION_STALE_MS are treated as abandoned and do not block.
+ * Deterministic pg_advisory_xact_lock key pair for a clinic's export-slot
+ * reservation, mirroring services/appointmentRequestSafety.ts's
+ * computeSlotLockKey pattern: SHA-256 of a namespaced string, split into two
+ * signed int32 values (the only overload pg_advisory_xact_lock(int4, int4)
+ * accepts). Exported for unit testing only.
  */
-async function reserveGenerationSlot(
+export function computeExportLockKey(clinicId: string): [number, number] {
+  const hash = createHash('sha256').update(`export-archive-slot:${clinicId}`, 'utf8').digest();
+  return [hash.readInt32BE(0), hash.readInt32BE(4)];
+}
+
+/**
+ * Reserves the per-clinic export-generation slot atomically.
+ *
+ * Two concurrent requests for the same clinic MUST NOT both be able to
+ * create a "generating" row: a naive findFirst-then-create (as this function
+ * used to do) has a race window under READ COMMITTED — both transactions can
+ * read "no active row" before either commits its create. This is closed the
+ * same way appointment-slot booking is (acquireAppointmentSlotLock): a
+ * PostgreSQL advisory transaction lock, scoped to this clinic, acquired
+ * BEFORE the active-row check, inside the same transaction as the check and
+ * the create. The lock is released automatically when the transaction ends
+ * (commit or rollback) — no in-memory mutex, so this is correct across
+ * multiple Node processes/API instances, not just within one.
+ *
+ * Within the locked transaction:
+ *   1. Sweep stale queued/generating rows (older than
+ *      EXPORT_GENERATION_STALE_MS) to status='failed' so an abandoned
+ *      generation attempt never blocks new exports forever.
+ *   2. Check for a current active (queued/generating) row; throw
+ *      ExportGenerationInProgressError if one exists.
+ *   3. Otherwise create exactly one new "generating" row.
+ *
+ * `client` is injectable (default: the shared prisma singleton) purely so
+ * tests can point this at a disposable database without a reimplementation —
+ * production code always uses the default.
+ */
+export async function reserveGenerationSlot(
   clinicId: string,
   organizationId: string,
   patientId: string,
   requestedByUserId: string,
-  now: Date,
+  now: Date = new Date(),
+  client: Pick<PrismaClient, '$transaction'> = prisma,
 ): Promise<string> {
   const staleBefore = new Date(now.getTime() - EXPORT_GENERATION_STALE_MS);
-  const inFlight = await prisma.patientPrivacyExportArchive.findFirst({
-    where: {
-      clinicId,
-      status: { in: ['queued', 'generating'] },
-      createdAt: { gte: staleBefore },
-    },
-    select: { id: true },
-  });
-  if (inFlight) {
-    throw new ExportGenerationInProgressError();
-  }
-
   const exportId = crypto.randomUUID();
-  await prisma.patientPrivacyExportArchive.create({
-    data: {
-      id: exportId,
-      organizationId,
-      clinicId,
-      patientId,
-      requestedByUserId,
-      status: 'generating',
-    },
+
+  await client.$transaction(async (tx: Prisma.TransactionClient) => {
+    const [key1, key2] = computeExportLockKey(clinicId);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`;
+
+    await tx.patientPrivacyExportArchive.updateMany({
+      where: {
+        clinicId,
+        status: { in: ['queued', 'generating'] },
+        createdAt: { lt: staleBefore },
+      },
+      data: { status: 'failed' },
+    });
+
+    const inFlight = await tx.patientPrivacyExportArchive.findFirst({
+      where: { clinicId, status: { in: ['queued', 'generating'] } },
+      select: { id: true },
+    });
+    if (inFlight) {
+      throw new ExportGenerationInProgressError();
+    }
+
+    await tx.patientPrivacyExportArchive.create({
+      data: {
+        id: exportId,
+        organizationId,
+        clinicId,
+        patientId,
+        requestedByUserId,
+        status: 'generating',
+      },
+    });
   });
+
   return exportId;
 }
 
@@ -266,7 +312,12 @@ export async function createExportPackage(
         });
         totalBytesIncluded += buf.length;
       } catch (err) {
-        console.error('[export-package] attachment read failed:', attachment.id, err);
+        const { errorName, errorCode } = safeErrorFields(err);
+        console.error('[export-package] attachment read failed', {
+          attachmentId: attachment.id,
+          errorName,
+          errorCode,
+        });
         missingFiles.push({ attachmentId: attachment.id, reason: 'read_failed' });
       }
     }
@@ -290,7 +341,10 @@ export async function createExportPackage(
 
     const storageKey = buildExportStorageKey(clinicId, exportId);
     await saveFileFromPath(storageKey, tempFilePath, 'application/zip');
-    tempFilePath = null; // consumed by saveFileFromPath (renamed/uploaded)
+    // saveFileFromPath always removes tempFilePath itself (success or
+    // failure, local or S3 mode) — null it out so the outer catch below
+    // never attempts a redundant unlink of a path that no longer exists.
+    tempFilePath = null;
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + EXPORT_PACKAGE_TTL_MS);
@@ -453,7 +507,12 @@ export async function cleanupExpiredExportArchives(
       await deleteRow(row.id);
       count++;
     } catch (err) {
-      console.error('[export-package-cleanup] failed to clean up archive', row.id, err);
+      const { errorName, errorCode } = safeErrorFields(err);
+      console.error('[export-package-cleanup] failed to clean up archive', {
+        exportId: row.id,
+        errorName,
+        errorCode,
+      });
     }
   }
   return count;
