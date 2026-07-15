@@ -115,15 +115,20 @@ export const patientPrivacyService = {
   // KVKK lifecycle (docs/compliance/53): downloadable ZIP export package.
   createExportPackage: (patientId: string) =>
     api.post(`/patients/${patientId}/privacy/export-package`),
+  // The one-time download token is sent via a header (X-Export-Download-Token),
+  // never a query parameter — query strings land in access/proxy logs and
+  // browser history (PR #160 review). responseType 'blob' + explicit header
+  // means this can no longer be a plain <a href> navigation; callers must
+  // build an object URL from the blob response themselves.
   downloadExportPackage: (patientId: string, exportId: string, token: string) =>
     api.get(`/patients/${patientId}/privacy/export-package/${exportId}/download`, {
-      params: { token },
+      headers: { 'X-Export-Download-Token': token },
       responseType: 'blob',
     }),
+  // Dry-run only in this release — there is no live-delete/execute endpoint
+  // (removed per PR #160 review; see docs/compliance/53).
   getDeletionReview: (patientId: string) =>
     api.get(`/patients/${patientId}/privacy/deletion-review`),
-  executeDeletionReview: (patientId: string, reason: string) =>
-    api.post(`/patients/${patientId}/privacy/deletion-review/execute`, { confirm: true, reason }),
   getOrphanCheck: (patientId: string) =>
     api.get(`/patients/${patientId}/privacy/orphan-check`),
 };

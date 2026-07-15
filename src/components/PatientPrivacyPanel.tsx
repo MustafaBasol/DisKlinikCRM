@@ -1,12 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Shield, Download, AlertTriangle, CheckCircle2, Loader2, Plus, X, ChevronDown, PackageSearch, FileArchive } from 'lucide-react';
 import { patientPrivacyService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 
 // ── KVKK lifecycle types (docs/compliance/53) ──────────────────────────────────
+// No lifecycle-category enum exists yet — every non-legal-hold attachment is
+// reported as `unclassifiedRetained` (not eligible for automated deletion in
+// this release). There is no live-delete endpoint in this PR.
 
 interface DeletionReviewInventory {
-  attachments: { total: number; legalHold: number; deletableAdministrative: number; estimatedBytes: number };
+  attachments: { total: number; legalHold: number; unclassifiedRetained: number; estimatedBytes: number };
   imaging: { total: number; legalHold: number; retainedClinical: number; estimatedBytes: number };
   blockers: string[];
   dryRun: true;
@@ -65,6 +69,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
   canManage,
   onAnonymized,
 }) => {
+  const { t } = useTranslation('patientPrivacy');
   const { formatDate } = useClinicPreferences();
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +144,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
           attachmentResults: res.data.attachmentResults,
           imagingResults: res.data.imagingResults,
         });
-        setSuccess('Hasta anonimleştirildi, ancak bazı dosya/görüntü meta veri redaksiyonları başarısız oldu (aşağıya bakın).');
+        setSuccess(t('partialFailure.anonymizeSuccessWithWarning'));
       } else {
         setSuccess('Hasta başarıyla anonimleştirildi.');
       }
@@ -170,9 +175,12 @@ const PatientPrivacyPanel: React.FC<Props> = ({
       a.download = `patient-export-${patientId}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      setSuccess('Dosya paketi indirildi (ekler + veriler + manifest).');
+      setSuccess(t('actions.exportPackageSuccess'));
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Dosya paketi oluşturma/indirme başarısız.';
+      const status = err?.response?.status;
+      const msg = status === 409
+        ? t('actions.exportPackageInProgress')
+        : (err?.response?.data?.error ?? t('actions.exportPackageError'));
       setError(msg);
     } finally {
       setExportingPackage(false);
@@ -187,7 +195,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
       setDeletionReview(res.data);
       setShowReviewPanel(true);
     } catch {
-      setError('Silme incelemesi önizlemesi yüklenemedi.');
+      setError(t('actions.deletionReviewError'));
     } finally {
       setReviewLoading(false);
     }
@@ -247,20 +255,26 @@ const PatientPrivacyPanel: React.FC<Props> = ({
         <div className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm border border-amber-200 space-y-1">
           <div className="flex items-center gap-2 font-medium">
             <AlertTriangle size={15} />
-            Bazı redaksiyonlar başarısız oldu — lütfen manuel kontrol edin.
+            {t('partialFailure.title')}
           </div>
           {partialFailureWarning.attachmentResults && (
             <p className="text-xs">
-              Ekler: {partialFailureWarning.attachmentResults.redacted}/{partialFailureWarning.attachmentResults.total} redakte edildi,
-              {' '}{partialFailureWarning.attachmentResults.skippedLegalHold} yasal tutma nedeniyle atlandı,
-              {' '}{partialFailureWarning.attachmentResults.failed} başarısız.
+              {t('partialFailure.attachmentsSummary', {
+                redacted: partialFailureWarning.attachmentResults.redacted,
+                total: partialFailureWarning.attachmentResults.total,
+                skippedLegalHold: partialFailureWarning.attachmentResults.skippedLegalHold,
+                failed: partialFailureWarning.attachmentResults.failed,
+              })}
             </p>
           )}
           {partialFailureWarning.imagingResults && (
             <p className="text-xs">
-              Görüntüler: {partialFailureWarning.imagingResults.redacted}/{partialFailureWarning.imagingResults.total} redakte edildi,
-              {' '}{partialFailureWarning.imagingResults.skippedLegalHold} yasal tutma nedeniyle atlandı,
-              {' '}{partialFailureWarning.imagingResults.failed} başarısız.
+              {t('partialFailure.imagingSummary', {
+                redacted: partialFailureWarning.imagingResults.redacted,
+                total: partialFailureWarning.imagingResults.total,
+                skippedLegalHold: partialFailureWarning.imagingResults.skippedLegalHold,
+                failed: partialFailureWarning.imagingResults.failed,
+              })}
             </p>
           )}
         </div>
@@ -278,27 +292,27 @@ const PatientPrivacyPanel: React.FC<Props> = ({
               title={isAnonymized ? 'Anonimleştirilmiş hasta dışa aktarılamaz' : undefined}
             >
               {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              Verileri dışa aktar (JSON)
+              {t('actions.exportJson')}
             </button>
 
             <button
               onClick={handleExportPackage}
               disabled={exportingPackage || isAnonymized}
               className="btn-secondary flex items-center gap-2 text-sm"
-              title={isAnonymized ? 'Anonimleştirilmiş hasta dışa aktarılamaz' : 'Ekler + veriler + manifest içeren ZIP paketi'}
+              title={isAnonymized ? 'Anonimleştirilmiş hasta dışa aktarılamaz' : t('actions.exportPackageTooltip')}
             >
               {exportingPackage ? <Loader2 size={15} className="animate-spin" /> : <FileArchive size={15} />}
-              Dosya paketini indir (ZIP)
+              {t('actions.exportPackage')}
             </button>
 
             <button
               onClick={handleLoadDeletionReview}
               disabled={reviewLoading}
               className="btn-secondary flex items-center gap-2 text-sm"
-              title="Silme incelemesi ön izlemesi (yalnızca önizleme, hiçbir şey silinmez)"
+              title={t('actions.deletionReviewTooltip')}
             >
               {reviewLoading ? <Loader2 size={15} className="animate-spin" /> : <PackageSearch size={15} />}
-              Silme incelemesi önizle
+              {t('actions.deletionReviewButton')}
             </button>
 
             <button
@@ -339,7 +353,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
               <PackageSearch size={15} />
-              Silme İncelemesi Önizlemesi (yalnızca önizleme — hiçbir kayıt silinmedi)
+              {t('deletionReview.panelTitle')}
             </h4>
             <button onClick={() => setShowReviewPanel(false)} className="text-gray-400 hover:text-gray-600">
               <X size={16} />
@@ -348,18 +362,24 @@ const PatientPrivacyPanel: React.FC<Props> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="font-medium text-gray-700">Dosya Ekleri</p>
+              <p className="font-medium text-gray-700">{t('deletionReview.attachmentsLabel')}</p>
               <p className="text-gray-500">
-                Toplam: {deletionReview.attachments.total} · Yasal tutma: {deletionReview.attachments.legalHold} ·
-                {' '}Silinebilir (idari): {deletionReview.attachments.deletableAdministrative}
+                {t('deletionReview.attachmentsSummary', {
+                  total: deletionReview.attachments.total,
+                  legalHold: deletionReview.attachments.legalHold,
+                  unclassifiedRetained: deletionReview.attachments.unclassifiedRetained,
+                })}
               </p>
               <p className="text-xs text-gray-400">≈{Math.round(deletionReview.attachments.estimatedBytes / 1024)} KB</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="font-medium text-gray-700">Görüntüleme (Imaging)</p>
+              <p className="font-medium text-gray-700">{t('deletionReview.imagingLabel')}</p>
               <p className="text-gray-500">
-                Toplam: {deletionReview.imaging.total} · Yasal tutma: {deletionReview.imaging.legalHold} ·
-                {' '}Korunan (klinik): {deletionReview.imaging.retainedClinical}
+                {t('deletionReview.imagingSummary', {
+                  total: deletionReview.imaging.total,
+                  legalHold: deletionReview.imaging.legalHold,
+                  retainedClinical: deletionReview.imaging.retainedClinical,
+                })}
               </p>
               <p className="text-xs text-gray-400">≈{Math.round(deletionReview.imaging.estimatedBytes / 1024)} KB</p>
             </div>
@@ -374,8 +394,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
           )}
 
           <p className="text-xs text-gray-400">
-            Not: Bu bir önizlemedir (dryRun). Yalnızca yasal tutma altında olmayan dosya ekleri, ayrı bir onay akışıyla silinebilir;
-            görüntüleme/klinik veriler bu sürümde silinemez.
+            {t('deletionReview.footnote')}
           </p>
         </div>
       )}

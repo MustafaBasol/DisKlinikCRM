@@ -3,10 +3,29 @@
  * (docs/compliance/53-kvkk-attachment-imaging-lifecycle.md).
  *
  * Builds a read-only preview of what a "deletion review" for a patient would
- * cover. This module NEVER writes to the database — it only counts/sums.
- * Live deletion (only for non-legal-hold PatientAttachment rows) is a
- * separate, narrowly-scoped endpoint — see
- * POST /patients/:id/privacy/deletion-review/execute in routes/patientPrivacy.ts.
+ * cover. This module NEVER writes to the database — it only counts/sums, and
+ * there is NO live-delete endpoint in this PR (see below).
+ *
+ * IMPORTANT — no lifecycle-category classification exists yet: PatientAttachment
+ * has no field distinguishing "administrative" from any more sensitive
+ * category. A prior revision of this module labelled every non-legal-hold
+ * attachment `deletableAdministrative`, implying it was safe to bulk-delete —
+ * that was an unsafe blanket classification (flagged in PR #160 review) and
+ * has been removed. Every non-legal-hold PatientAttachment is now reported
+ * under `unclassifiedRetained`, meaning: not eligible for any automated
+ * deletion in this release, pending manual/legal review.
+ *
+ * Live deletion was previously exposed at
+ * POST /patients/:id/privacy/deletion-review/execute; that endpoint has been
+ * REMOVED entirely (not hardened) because it deleted physical
+ * PatientAttachment rows/files with no binding to a specific
+ * PatientPrivacyRequest workflow, no dry-run-snapshot requirement, and no
+ * atomic DB+storage consistency guarantee. A future PR must introduce (a) a
+ * lifecycle-category enum for PatientAttachment distinguishing genuinely
+ * administrative documents from clinical ones, and (b) a workflow-bound
+ * execute endpoint that only deletes items explicitly approved via a
+ * PatientPrivacyRequest — see docs/compliance/53-kvkk-attachment-imaging-lifecycle.md
+ * for the tracked follow-up.
  *
  * Imaging/clinical data is conservative-retain by design in this PR: there is
  * no category field to distinguish "administrative" vs "clinical/DICOM"
@@ -33,13 +52,12 @@ export interface DeletionReviewInventory {
     total: number;
     legalHold: number;
     /**
-     * All non-legal-hold attachments. There is no category field on
-     * PatientAttachment yet distinguishing "administrative" from anything
-     * more sensitive, so this is conservatively treated as the full
-     * deletable set for the narrow execute endpoint — documented limitation,
-     * not a bug.
+     * All non-legal-hold attachments. No PatientAttachment category enum
+     * exists yet, so none of these are automatically deletable in this
+     * release — they are RETAIN_REVIEW by default (manual/legal review
+     * required). This field does NOT imply "safe to delete."
      */
-    deletableAdministrative: number;
+    unclassifiedRetained: number;
     estimatedBytes: number;
   };
   imaging: {
@@ -94,7 +112,9 @@ export async function buildDeletionReviewInventory(params: {
   const imagingLegalHold = imagingImageRows.filter((i) => i.study?.legalHold).length;
   const imagingBytes = imagingImageRows.reduce((sum, i) => sum + (i.fileSize ?? 0), 0);
 
-  const blockers: string[] = [];
+  const blockers: string[] = [
+    'This is a dry-run inventory only — no automated deletion endpoint exists in this release. Live deletion requires a future PR implementing a lifecycle-category enum and a privacy-request-workflow-bound execute endpoint.',
+  ];
   if (attachmentLegalHold > 0) {
     blockers.push(`${attachmentLegalHold} attachment(s) under legal hold — excluded from any deletion.`);
   }
@@ -129,7 +149,7 @@ export async function buildDeletionReviewInventory(params: {
     attachments: {
       total: attachmentRows.length,
       legalHold: attachmentLegalHold,
-      deletableAdministrative: attachmentRows.length - attachmentLegalHold,
+      unclassifiedRetained: attachmentRows.length - attachmentLegalHold,
       estimatedBytes: attachmentBytes,
     },
     imaging: {

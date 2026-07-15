@@ -1,0 +1,27 @@
+{
+  "partialFailure": {
+    "title": "Einige Schwärzungen sind fehlgeschlagen — bitte manuell überprüfen.",
+    "attachmentsSummary": "Anhänge: {{redacted}}/{{total}} geschwärzt, {{skippedLegalHold}} wegen Aufbewahrungspflicht übersprungen, {{failed}} fehlgeschlagen.",
+    "imagingSummary": "Bildgebung: {{redacted}}/{{total}} geschwärzt, {{skippedLegalHold}} wegen Aufbewahrungspflicht übersprungen, {{failed}} fehlgeschlagen.",
+    "anonymizeSuccessWithWarning": "Patient anonymisiert, aber einige Schwärzungen von Anhang-/Bildgebungsmetadaten sind fehlgeschlagen (siehe unten)."
+  },
+  "actions": {
+    "exportJson": "Daten exportieren (JSON)",
+    "exportPackage": "Dateipaket herunterladen (ZIP)",
+    "exportPackageTooltip": "ZIP-Paket mit Anhängen + Daten + Manifest",
+    "exportPackageSuccess": "Dateipaket heruntergeladen (Anhänge + Daten + Manifest).",
+    "exportPackageError": "Erstellung/Download des Dateipakets fehlgeschlagen.",
+    "exportPackageInProgress": "Für diese Klinik wird bereits ein Exportpaket erstellt. Bitte versuchen Sie es in Kürze erneut.",
+    "deletionReviewButton": "Löschprüfung anzeigen",
+    "deletionReviewTooltip": "Vorschau der Löschprüfung (nur Vorschau, nichts wird gelöscht)",
+    "deletionReviewError": "Vorschau der Löschprüfung konnte nicht geladen werden."
+  },
+  "deletionReview": {
+    "panelTitle": "Vorschau der Löschprüfung (nur Vorschau — es wurde nichts gelöscht)",
+    "attachmentsLabel": "Dateianhänge",
+    "attachmentsSummary": "Gesamt: {{total}} · Aufbewahrungspflicht: {{legalHold}} · Zur Prüfung ausstehend (nicht klassifiziert): {{unclassifiedRetained}}",
+    "imagingLabel": "Bildgebung",
+    "imagingSummary": "Gesamt: {{total}} · Aufbewahrungspflicht: {{legalHold}} · Aufbewahrt (klinisch): {{retainedClinical}}",
+    "footnote": "Hinweis: Dies ist nur eine Vorschau (Dry-Run); in dieser Version gibt es keinen Live-/automatisierten Löschendpunkt. Nicht klassifizierte Anhänge (es gibt noch keine Unterscheidung nach Verwaltungskategorie) sowie klinische/Bildgebungsdaten können über diese Ansicht erst gelöscht werden, wenn eine zukünftige Version eine Lebenszyklus-Kategorie-Enum und einen an einen Anfrage-Workflow gebundenen Löschendpunkt einführt."
+  }
+}

@@ -4,6 +4,8 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import prisma from '../db.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import {
   buildStorageKey,
   deleteFile,
@@ -32,12 +34,19 @@ const ALLOWED_EXTENSIONS_BY_MIME: Record<string, string[]> = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
 };
 
+/**
+ * Per-file attachment upload limit — also reused as the per-file bound for
+ * KVKK export packages (services/privacy/patientPrivacyExportPackage.ts) so
+ * the two limits never drift apart.
+ */
+export const ATTACHMENT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 // Dosya bellekte tutulur (10 MB sınırıyla) ve doğrulama sonrası fileStorage'a
 // yazılır: yerel disk veya S3_BUCKET tanımlıysa S3-uyumlu depo
 // (docs/45 Faz 3 #11). Diske geçici dosya hiç yazılmaz.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  limits: { fileSize: ATTACHMENT_MAX_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) {
       cb(null, true);
@@ -238,38 +247,72 @@ router.get(
 
 // ── PATCH /api/patients/:patientId/attachments/:id/legal-hold ─────────
 // KVKK lifecycle (docs/compliance/53): sets/clears legalHold on a single
-// PatientAttachment. Restricted to OWNER/ORG_ADMIN — legal hold blocks both
-// anonymization metadata redaction and the deletion-review/execute
-// live-delete path for this row. No automatic trigger exists in this PR.
+// PatientAttachment. Restricted to OWNER/ORG_ADMIN — legal hold blocks
+// anonymization metadata redaction for this row. There is no live-delete
+// endpoint in this PR at all (see routes/patientPrivacy.ts). Requires a
+// reason (min 3 chars) both to place AND to release a hold, and writes an
+// audit log entry for both directions.
 router.patch(
   '/patients/:patientId/attachments/:id/legal-hold',
   authorize(['OWNER', 'ORG_ADMIN']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
-    const clinicId = req.user!.clinicId;
     const { legalHold, reason } = req.body as { legalHold?: boolean; reason?: string };
 
     if (typeof legalHold !== 'boolean') {
       return res.status(400).json({ error: 'legalHold must be a boolean' });
     }
-    if (legalHold && (!reason || String(reason).trim().length < 3)) {
-      return res.status(400).json({ error: 'A reason is required (min 3 characters) to place a legal hold.' });
+    // A reason is required for BOTH placing AND releasing a hold — releasing
+    // is just as consequential (it re-opens the row to anonymization
+    // redaction) and must be justified/audited the same way.
+    if (!reason || String(reason).trim().length < 3) {
+      return res.status(400).json({
+        error: `A reason is required (min 3 characters) to ${legalHold ? 'place' : 'release'} a legal hold.`,
+      });
     }
 
     try {
+      // Resolve the patient's clinic through the org/branch-scoped helper
+      // (validateAndGetClinicIdScope) rather than trusting req.user.clinicId
+      // directly — mirrors imaging.ts's findStudyInScope so OWNER/ORG_ADMIN
+      // users with multi-branch access are scoped correctly.
+      const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+      if (scope === false) return;
+
       const attachment = await prisma.patientAttachment.findFirst({
-        where: { id, patientId, clinicId },
+        where: { id, patientId, ...scope },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
+
+      const previousLegalHold = attachment.legalHold;
+      const trimmedReason = String(reason).trim().slice(0, 500);
 
       const updated = await prisma.patientAttachment.update({
         where: { id },
         data: {
           legalHold,
-          legalHoldReason: legalHold ? String(reason).trim().slice(0, 500) : null,
+          legalHoldReason: trimmedReason,
         },
         select: { id: true, legalHold: true, legalHoldReason: true },
+      });
+
+      await writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId: attachment.clinicId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: legalHold ? 'patient_attachment_legal_hold_set' : 'patient_attachment_legal_hold_released',
+        entityType: 'patient_attachment',
+        entityId: id,
+        description: `Patient attachment legal hold ${legalHold ? 'set' : 'released'}: ${trimmedReason}`,
+        metadata: {
+          patientId,
+          previousLegalHold,
+          newLegalHold: legalHold,
+          reason: trimmedReason,
+        },
+        ...extractRequestMeta(req),
       });
 
       res.json(updated);

@@ -907,25 +907,33 @@ router.patch('/imaging/studies/:id/legal-hold', authorize(['OWNER', 'ORG_ADMIN']
   if (typeof legalHold !== 'boolean') {
     return res.status(400).json({ error: 'legalHold must be a boolean' });
   }
-  if (legalHold && (!reason || String(reason).trim().length < 3)) {
-    return res.status(400).json({ error: 'A reason is required (min 3 characters) to place a legal hold.' });
+  // A reason is required for BOTH placing AND releasing a hold.
+  if (!reason || String(reason).trim().length < 3) {
+    return res.status(400).json({
+      error: `A reason is required (min 3 characters) to ${legalHold ? 'place' : 'release'} a legal hold.`,
+    });
   }
 
   try {
     const study = await findStudyInScope(req, res, id);
     if (!study) return;
 
+    const previousLegalHold = study.legalHold;
+    const trimmedReason = String(reason).trim().slice(0, 500);
+
     const updated = await prisma.imagingStudy.update({
       where: { id },
       data: {
         legalHold,
-        legalHoldReason: legalHold ? String(reason).trim().slice(0, 500) : null,
+        legalHoldReason: trimmedReason,
       },
       select: { id: true, legalHold: true, legalHoldReason: true },
     });
 
     await auditImaging(req, study.clinicId, 'imaging_study_legal_hold_updated', 'imaging_study', id, {
       legalHold,
+      previousLegalHold,
+      reason: trimmedReason,
     });
 
     res.json(updated);

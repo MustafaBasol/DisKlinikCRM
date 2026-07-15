@@ -39,6 +39,7 @@ import pricingPageEn from '../locales/en/pricingPage.json';
 import legalEn from '../locales/en/legal.json';
 import postTreatmentEn from '../locales/en/postTreatment.json';
 import smsEn from '../locales/en/sms.json';
+import patientPrivacyEn from '../locales/en/patientPrivacy.json';
 
 import commonTr from '../locales/tr/common.json';
 import authTr from '../locales/tr/auth.json';
@@ -76,6 +77,7 @@ import pricingPageTr from '../locales/tr/pricingPage.json';
 import legalTr from '../locales/tr/legal.json';
 import postTreatmentTr from '../locales/tr/postTreatment.json';
 import smsTr from '../locales/tr/sms.json';
+import patientPrivacyTr from '../locales/tr/patientPrivacy.json';
 
 import commonFr from '../locales/fr/common.json';
 import authFr from '../locales/fr/auth.json';
@@ -113,6 +115,7 @@ import pricingPageFr from '../locales/fr/pricingPage.json';
 import legalFr from '../locales/fr/legal.json';
 import postTreatmentFr from '../locales/fr/postTreatment.json';
 import smsFr from '../locales/fr/sms.json';
+import patientPrivacyFr from '../locales/fr/patientPrivacy.json';
 
 import commonDe from '../locales/de/common.json';
 import authDe from '../locales/de/auth.json';
@@ -150,6 +153,7 @@ import pricingPageDe from '../locales/de/pricingPage.json';
 import legalDe from '../locales/de/legal.json';
 import postTreatmentDe from '../locales/de/postTreatment.json';
 import smsDe from '../locales/de/sms.json';
+import patientPrivacyDe from '../locales/de/patientPrivacy.json';
 
 const namespaces = [
   'common',
@@ -186,6 +190,7 @@ const namespaces = [
   'legal',
   'postTreatment',
   'sms',
+  'patientPrivacy',
   'validation',
   'errors',
 ];
@@ -226,6 +231,7 @@ const resources = {
     legal: legalEn,
     postTreatment: postTreatmentEn,
     sms: smsEn,
+    patientPrivacy: patientPrivacyEn,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -264,6 +270,7 @@ const resources = {
     legal: legalTr,
     postTreatment: postTreatmentTr,
     sms: smsTr,
+    patientPrivacy: patientPrivacyTr,
     validation: validationTr,
     errors: errorsTr,
   },
@@ -302,6 +309,7 @@ const resources = {
     legal: legalFr,
     postTreatment: postTreatmentFr,
     sms: smsFr,
+    patientPrivacy: patientPrivacyFr,
     validation: validationFr,
     errors: errorsFr,
   },
@@ -340,6 +348,7 @@ const resources = {
     legal: legalDe,
     postTreatment: postTreatmentDe,
     sms: smsDe,
+    patientPrivacy: patientPrivacyDe,
     validation: validationDe,
     errors: errorsDe,
   }

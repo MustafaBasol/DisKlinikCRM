@@ -2444,22 +2444,33 @@ model PatientPrivacyExportArchive {
   requestedByUserId String
   requestedByUser   User      @relation("PrivacyExportRequester", fields: [requestedByUserId], references: [id])
 
+  /// Lifecycle state: queued -> generating -> ready | failed. A row is
+  /// created with status="generating" BEFORE the (potentially slow) ZIP
+  /// build starts, so a concurrent request for the same clinic can be
+  /// rejected with 409 rather than racing to build two exports at once. Rows
+  /// older than the in-flight staleness window (see
+  /// patientPrivacyExportPackage.ts) are treated as abandoned/failed, not as
+  /// a permanent lock.
+  status String @default("ready")
+
   /// Storage key under exports/<clinicId>/<uuid>.zip (fileStorage.ts) —
-  /// never serialized to any API response.
-  storageKey String
+  /// never serialized to any API response. Null while status="generating".
+  storageKey String?
   /// Manifest described in docs/compliance/53 (exportVersion, includedFiles
-  /// w/ sha256, missingFiles, skippedFiles).
-  manifestJson Json
+  /// w/ sha256, missingFiles, skippedFiles). Null while status="generating".
+  manifestJson Json?
 
   /// SHA-256 hash of the opaque one-time download token. Raw token is
-  /// returned once to the caller and never persisted.
-  tokenHash String @unique
+  /// returned once to the caller and never persisted. Null while
+  /// status="generating".
+  tokenHash String? @unique
 
-  expiresAt    DateTime
+  expiresAt    DateTime?
   downloadedAt DateTime?
   createdAt    DateTime  @default(now())
 
   @@index([clinicId, patientId])
   @@index([organizationId])
   @@index([expiresAt])
+  @@index([clinicId, status])
 }

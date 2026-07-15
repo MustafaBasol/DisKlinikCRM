@@ -31,6 +31,7 @@ import {
   DeleteObjectCommand,
   HeadObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 
 const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 
@@ -180,6 +181,46 @@ export async function statFile(ref: string): Promise<{ size: number } | null> {
  */
 export function buildExportStorageKey(clinicId: string, exportId: string): string {
   return `exports/${clinicId}/${exportId}.zip`;
+}
+
+/**
+ * Streams a file already on local disk (e.g. a temp file built by
+ * archiver) into final storage without ever buffering it fully in process
+ * memory. Local mode: rename/copy on the same filesystem. S3 mode: multipart
+ * streaming upload via @aws-sdk/lib-storage's Upload class (body is a
+ * read stream, never a single in-memory Buffer).
+ *
+ * Used by patientPrivacyExportPackage.ts so large ZIP export packages are
+ * never fully materialized as a Buffer/Buffer[] in process memory.
+ */
+export async function saveFileFromPath(key: string, tempFilePath: string, contentType: string): Promise<void> {
+  if (isRemoteStorageEnabled()) {
+    const body = fs.createReadStream(tempFilePath);
+    const upload = new Upload({
+      client: getS3(),
+      params: { Bucket: bucket(), Key: key, Body: body, ContentType: contentType },
+    });
+    await upload.done();
+    return;
+  }
+  const localPath = resolveLocalPath(key);
+  await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+  try {
+    // Fast path: same-filesystem rename (no copy).
+    await fs.promises.rename(tempFilePath, localPath);
+  } catch {
+    // Cross-device (EXDEV) or other rename failure — fall back to a
+    // streamed copy, still without loading the whole file into memory.
+    await new Promise<void>((resolve, reject) => {
+      const read = fs.createReadStream(tempFilePath);
+      const write = fs.createWriteStream(localPath);
+      read.on('error', reject);
+      write.on('error', reject);
+      write.on('finish', () => resolve());
+      read.pipe(write);
+    });
+    await fs.promises.unlink(tempFilePath).catch(() => {});
+  }
 }
 
 /** Dosyayı siler; yoksa sessizce döner (idempotent). */

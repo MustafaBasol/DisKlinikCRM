@@ -1,0 +1,27 @@
+{
+  "partialFailure": {
+    "title": "Bazı redaksiyonlar başarısız oldu — lütfen manuel kontrol edin.",
+    "attachmentsSummary": "Ekler: {{redacted}}/{{total}} redakte edildi, {{skippedLegalHold}} yasal tutma nedeniyle atlandı, {{failed}} başarısız.",
+    "imagingSummary": "Görüntüler: {{redacted}}/{{total}} redakte edildi, {{skippedLegalHold}} yasal tutma nedeniyle atlandı, {{failed}} başarısız.",
+    "anonymizeSuccessWithWarning": "Hasta anonimleştirildi, ancak bazı dosya/görüntü meta veri redaksiyonları başarısız oldu (aşağıya bakın)."
+  },
+  "actions": {
+    "exportJson": "Verileri dışa aktar (JSON)",
+    "exportPackage": "Dosya paketini indir (ZIP)",
+    "exportPackageTooltip": "Ekler + veriler + manifest içeren ZIP paketi",
+    "exportPackageSuccess": "Dosya paketi indirildi (ekler + veriler + manifest).",
+    "exportPackageError": "Dosya paketi oluşturma/indirme başarısız.",
+    "exportPackageInProgress": "Bu klinik için zaten bir dışa aktarım paketi oluşturuluyor. Lütfen kısa bir süre sonra tekrar deneyin.",
+    "deletionReviewButton": "Silme incelemesi önizle",
+    "deletionReviewTooltip": "Silme incelemesi ön izlemesi (yalnızca önizleme, hiçbir şey silinmez)",
+    "deletionReviewError": "Silme incelemesi önizlemesi yüklenemedi."
+  },
+  "deletionReview": {
+    "panelTitle": "Silme İncelemesi Önizlemesi (yalnızca önizleme — hiçbir kayıt silinmedi)",
+    "attachmentsLabel": "Dosya Ekleri",
+    "attachmentsSummary": "Toplam: {{total}} · Yasal tutma: {{legalHold}} · İncelemede bekleyen (sınıflandırılmamış): {{unclassifiedRetained}}",
+    "imagingLabel": "Görüntüleme (Imaging)",
+    "imagingSummary": "Toplam: {{total}} · Yasal tutma: {{legalHold}} · Korunan (klinik): {{retainedClinical}}",
+    "footnote": "Not: Bu bir önizlemedir (dryRun) ve bu sürümde otomatik/canlı bir silme uç noktası yoktur. Sınıflandırılmamış (idari kategori ayrımı henüz tanımlanmamış) dosya ekleri ile klinik/görüntüleme verileri, gelecek bir sürümde eklenecek yaşam-döngüsü kategorisi ve talep-akışına bağlı silme uç noktası onaylanana kadar bu üzerinden silinemez."
+  }
+}

@@ -25,11 +25,15 @@ import { getParam } from '../utils/helpers.js';
 import {
   createExportPackage,
   validateExportDownloadToken,
-  markExportDownloaded,
+  claimExportDownload,
+  ExportGenerationInProgressError,
 } from '../services/privacy/patientPrivacyExportPackage.js';
 import { buildDeletionReviewInventory } from '../services/privacy/deletionReviewInventory.js';
 import { inspectOrphans } from '../services/privacy/orphanFileInspection.js';
-import { openFileStream, deleteFile } from '../services/fileStorage.js';
+import { openFileStream } from '../services/fileStorage.js';
+
+/** Header carrying the one-time export-download token (never a query param — see PR #160 review). */
+const EXPORT_DOWNLOAD_TOKEN_HEADER = 'x-export-download-token';
 
 const router = express.Router();
 
@@ -490,6 +494,9 @@ router.post(
         manifest: result.manifest,
       });
     } catch (err: any) {
+      if (err instanceof ExportGenerationInProgressError) {
+        return res.status(409).json({ error: 'An export package is already being generated for this clinic. Please try again shortly.' });
+      }
       console.error('[patientPrivacy/export-package]', err?.message ?? err);
       return res.status(500).json({ error: 'Export package generation failed. Please try again.' });
     }
@@ -497,9 +504,16 @@ router.post(
 );
 
 // ── GET /api/patients/:id/privacy/export-package/:exportId/download ──────────
-// Token-gated download — validates clinic/org/patient scope + token hash +
-// expiry before streaming. Sets downloadedAt and audit-logs the download (no
-// patient name/phone/email/file content in the log).
+// Token-gated download. The one-time token MUST be sent via the
+// X-Export-Download-Token header — never a query parameter (query strings
+// land in access/proxy logs and browser history). Validates clinic/org/
+// patient scope + token hash + expiry, opens the file stream, THEN
+// atomically claims the download (closing the concurrent-replay window)
+// before piping to the response. Writes three distinct audit events:
+//   - patient_data_export_package_download_started   (token claimed)
+//   - patient_data_export_package_downloaded          (stream completed)
+//   - patient_data_export_package_download_failed     (stream error/abort)
+// The raw token itself is never logged/audited anywhere in this route.
 
 router.get(
   '/patients/:id/privacy/export-package/:exportId/download',
@@ -507,7 +521,7 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     const patientId = getParam(req, 'id');
     const exportId = getParam(req, 'exportId');
-    const token = String(req.query.token ?? '');
+    const token = String(req.headers[EXPORT_DOWNLOAD_TOKEN_HEADER] ?? '');
     const user = req.user!;
 
     const patient = await resolvePatient(patientId, user);
@@ -525,32 +539,88 @@ router.get(
       });
 
       if (!validation.ok || !validation.archive) {
-        return res.status(404).json({ error: 'Export package not found or expired' });
+        const reason = validation.failure ?? 'not_found';
+        const status = reason === 'already_downloaded' ? 409 : 404;
+        return res.status(status).json({ error: 'Export package not available for download', reason });
       }
 
+      // Confirm the file can actually be opened BEFORE claiming the
+      // download, so a storage-layer failure doesn't burn the one-time
+      // token for a download that never happened.
       const stream = await openFileStream(validation.archive.storageKey);
-      if (!stream) return res.status(404).json({ error: 'Export package file missing in storage' });
+      if (!stream) return res.status(404).json({ error: 'Export package file missing in storage', reason: 'not_found' });
 
-      await markExportDownloaded(validation.archive.id);
+      const claim = await claimExportDownload(validation.archive.id);
+      if (!claim.claimed) {
+        // Lost the race to a concurrent request — distinct code, no file served.
+        return res.status(409).json({ error: 'Export package already downloaded', reason: 'already_downloaded' });
+      }
+
       await writeAuditLog({
         organizationId: user.organizationId,
         clinicId,
         actorUserId: user.id,
         actorRole: user.role,
-        action: 'patient_data_export_package_downloaded',
+        action: 'patient_data_export_package_download_started',
         entityType: 'patient',
         entityId: patientId,
-        description: 'Patient data export package (ZIP) downloaded (KVKK/GDPR access request)',
+        description: 'Patient data export package (ZIP) download claimed (KVKK/GDPR access request)',
         metadata: { exportId },
         ...extractRequestMeta(req),
       });
 
       res.setHeader('Content-Disposition', `attachment; filename="patient-export-${patientId}.zip"`);
       res.setHeader('Content-Type', 'application/zip');
+
+      let outcomeLogged = false;
+      const logOutcome = async (action: string, description: string, extra?: Record<string, unknown>) => {
+        if (outcomeLogged) return;
+        outcomeLogged = true;
+        try {
+          await writeAuditLog({
+            organizationId: user.organizationId,
+            clinicId,
+            actorUserId: user.id,
+            actorRole: user.role,
+            action,
+            entityType: 'patient',
+            entityId: patientId,
+            description,
+            metadata: { exportId, ...extra },
+            ...extractRequestMeta(req),
+          });
+        } catch (auditErr) {
+          console.error('[patientPrivacy/export-package/download] audit log failed:', auditErr);
+        }
+      };
+
       stream.on('error', (streamErr) => {
         console.error('[patientPrivacy/export-package/download] stream error:', streamErr?.message ?? streamErr);
+        void logOutcome(
+          'patient_data_export_package_download_failed',
+          'Patient data export package (ZIP) download failed mid-stream (KVKK/GDPR access request)',
+          { reason: 'stream_error' },
+        );
         if (!res.headersSent) res.status(500).json({ error: 'Failed to download export package' });
         else res.destroy();
+      });
+      res.on('close', () => {
+        // Client disconnected before the response finished — 'end' will not
+        // fire in that case, so record it as interrupted rather than silently
+        // treating an aborted download as a successful one.
+        if (!outcomeLogged) {
+          void logOutcome(
+            'patient_data_export_package_download_failed',
+            'Patient data export package (ZIP) download interrupted (client disconnected)',
+            { reason: 'interrupted' },
+          );
+        }
+      });
+      stream.on('end', () => {
+        void logOutcome(
+          'patient_data_export_package_downloaded',
+          'Patient data export package (ZIP) downloaded (KVKK/GDPR access request)',
+        );
       });
       stream.pipe(res as any);
     } catch (err: any) {
@@ -587,78 +657,13 @@ router.get(
   },
 );
 
-// ── POST /api/patients/:id/privacy/deletion-review/execute ───────────────────
-// Narrow-scope live delete: ONLY non-legal-hold PatientAttachment rows.
-// Never touches imaging/clinical records. Idempotent — safe to call twice.
-
-router.post(
-  '/patients/:id/privacy/deletion-review/execute',
-  authorize(PRIVACY_MANAGE_ROLES),
-  async (req: AuthRequest, res: Response) => {
-    const patientId = getParam(req, 'id');
-    const user = req.user!;
-    const { confirm, reason } = req.body as { confirm?: boolean; reason?: string };
-
-    if (!confirm) {
-      return res.status(400).json({ error: 'confirm field must be true to proceed with deletion.' });
-    }
-    if (!reason || String(reason).trim().length < 3) {
-      return res.status(400).json({ error: 'A reason is required (min 3 characters).' });
-    }
-
-    const patient = await resolvePatient(patientId, user);
-    if (!patient) return res.status(404).json({ error: 'Patient not found' });
-
-    const clinicId = patient.clinicId;
-
-    try {
-      const deletable = await prisma.patientAttachment.findMany({
-        where: { clinicId, patientId, legalHold: false },
-        select: { id: true, filePath: true, originalName: true },
-      });
-
-      const results: { id: string; status: 'deleted' | 'failed'; error?: string }[] = [];
-      for (const attachment of deletable) {
-        try {
-          await prisma.patientAttachment.delete({ where: { id: attachment.id } });
-          await deleteFile(attachment.filePath).catch((delErr) => {
-            console.error('[patientPrivacy/deletion-review/execute] storage delete error:', delErr?.message ?? delErr);
-          });
-          results.push({ id: attachment.id, status: 'deleted' });
-        } catch (err: any) {
-          results.push({ id: attachment.id, status: 'failed', error: err?.message ?? 'unknown error' });
-        }
-      }
-
-      await writeAuditLog({
-        organizationId: user.organizationId,
-        clinicId,
-        actorUserId: user.id,
-        actorRole: user.role,
-        action: 'patient_deletion_review_executed',
-        entityType: 'patient',
-        entityId: patientId,
-        description: 'Deletion-review executed: non-legal-hold PatientAttachment rows deleted per KVKK request.',
-        metadata: {
-          reasonProvided: !!reason,
-          deletedCount: results.filter((r) => r.status === 'deleted').length,
-          failedCount: results.filter((r) => r.status === 'failed').length,
-        },
-        ...extractRequestMeta(req),
-      });
-
-      return res.json({
-        success: true,
-        deletedCount: results.filter((r) => r.status === 'deleted').length,
-        failedCount: results.filter((r) => r.status === 'failed').length,
-        results,
-      });
-    } catch (err: any) {
-      console.error('[patientPrivacy/deletion-review/execute]', err?.message ?? err);
-      return res.status(500).json({ error: 'Deletion-review execution failed. Please try again.' });
-    }
-  },
-);
+// NOTE: POST /patients/:id/privacy/deletion-review/execute (live delete of
+// non-legal-hold PatientAttachment rows) has been REMOVED per PR #160 review
+// (unsafe blanket classification, no privacy-request-workflow binding, no
+// dry-run-snapshot requirement). This PR ships dry-run inventory only — see
+// GET /patients/:id/privacy/deletion-review below and
+// docs/compliance/53-kvkk-attachment-imaging-lifecycle.md for the deferred
+// follow-up (lifecycle-category enum + workflow-bound execute endpoint).
 
 // ── GET /api/patients/:id/privacy/orphan-check ────────────────────────────────
 // Patient-scoped, bounded, dry-run only (docs/compliance/53).
