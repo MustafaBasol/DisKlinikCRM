@@ -7,7 +7,7 @@ import {
   assertSlotAvailable,
   SlotConflictError,
 } from '../services/appointments/appointmentAvailabilityService.js';
-import { buildAvailableSlots, localDateTimeToClinicDate } from '../services/whatsappAvailability.js';
+import { buildAvailableSlots, localDateTimeToClinicDate, DEFAULT_SLOT_DURATION_MINUTES } from '../services/whatsappAvailability.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import {
   resolvePublishedLegalProfile,
@@ -294,10 +294,32 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
       const dt = localDateTimeToClinicDate(preferredDate, preferredTime, clinic.timezone || 'Europe/Istanbul');
       if (!isNaN(dt.getTime())) {
         preferredStartTime = dt;
-        if (svc) {
-          preferredEndTime = new Date(dt.getTime() + svc.durationMinutes * 60 * 1000);
-        }
+        // Mirrors buildAvailableSlots (GET /booking/:clinicId/slots): when no
+        // service is selected ("Hizmet seçmeden devam et"), the widget still
+        // shows real slots sized by DEFAULT_SLOT_DURATION_MINUTES. The submit
+        // handler must resolve the same duration here, or a customer who
+        // legitimately selected one of those displayed slots would be
+        // rejected with SLOT_REQUIRED for a request that was in fact complete.
+        const durationMinutes = svc?.durationMinutes ?? DEFAULT_SLOT_DURATION_MINUTES;
+        preferredEndTime = new Date(dt.getTime() + durationMinutes * 60 * 1000);
       }
+    }
+
+    // ── Full slot info is mandatory for the public widget ───────────────────
+    // Full slot info = practitionerId + preferredStartTime + preferredEndTime
+    // (the exact tuple returned by GET /booking/:clinicId/slots). A public
+    // customer must select a real, conflict-checked slot — there is no staff
+    // review step to backfill an under-specified request here, unlike the
+    // WhatsApp/Instagram assisted-booking flows (separate routes, unaffected
+    // by this check). No AppointmentRequest row and no evidence link are
+    // created for a request that reaches this point without a full slot —
+    // the notice-evidence token stays valid/unlinked for a follow-up retry.
+    const hasFullSlotInfo = !!(practitionerId && preferredStartTime && preferredEndTime);
+    if (!hasFullSlotInfo) {
+      return res.status(400).json({
+        error: 'Please select an available appointment time.',
+        code: 'SLOT_REQUIRED',
+      });
     }
 
     // Try to match an existing patient by phone in this clinic
@@ -306,95 +328,39 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
       select: { id: true },
     });
 
-    // ── Slot safety (only when we have full slot info) ─────────────────────
-    // Full slot info = practitionerId + preferredStartTime + preferredEndTime.
-    // When any piece is missing the request is under-specified; staff will
-    // assign the final slot during review, so no lock/overlap check needed.
-    const hasFullSlotInfo = !!(practitionerId && preferredStartTime && preferredEndTime);
-
-    if (hasFullSlotInfo) {
-      // 1. Practitioner availability check (outside transaction — stable schedule data).
-      const availability = await checkPractitionerAvailabilityForSlot(
-        clinicId,
-        practitionerId!,
-        preferredStartTime!,
-        preferredEndTime!,
-      );
-      if (!availability.ok) {
-        return res.status(409).json({
-          error: 'This slot is no longer available. Please choose another time.',
-          code: 'SLOT_UNAVAILABLE',
-        });
-      }
-
-      // 2. Advisory lock → overlap check → request conflict check → create (all in one tx).
-      //    pg_advisory_xact_lock serializes concurrent public submissions for the same slot.
-      try {
-        const request = await prisma.$transaction(async (tx) => {
-          await acquireAppointmentSlotLock(tx, {
-            clinicId,
-            practitionerId: practitionerId!,
-            startTime: preferredStartTime!,
-          });
-
-          // assertSlotAvailable checks both Appointment overlap and
-          // pending/approved AppointmentRequest conflict in a single call.
-          await assertSlotAvailable(tx, {
-            clinicId,
-            practitionerId: practitionerId!,
-            startTime: preferredStartTime!,
-            endTime: preferredEndTime!,
-          });
-
-          const created = await tx.appointmentRequest.create({
-            data: {
-              clinicId,
-              patientId: existingPatient?.id ?? null,
-              patientName: cleanName,
-              phone: cleanPhone,
-              email: cleanEmail,
-              appointmentTypeId: serviceId ?? null,
-              practitionerId: practitionerId ?? null,
-              preferredStartTime: preferredStartTime ?? null,
-              preferredEndTime: preferredEndTime ?? null,
-              requestType: 'appointment',
-              source: 'widget',
-              status: 'pending',
-              notes: cleanNotes,
-            },
-          });
-
-          const linked = await linkNoticeEvidenceToRequest(tx, {
-            evidenceId,
-            appointmentRequestId: created.id,
-          });
-          if (!linked) throw new NoticeEvidenceAlreadyLinkedError();
-
-          return created;
-        });
-
-        return res.status(201).json({ success: true, requestId: request.id });
-      } catch (slotErr) {
-        if (slotErr instanceof SlotConflictError) {
-          return res.status(409).json({
-            error: 'This slot is no longer available. Please choose another time.',
-            code: 'SLOT_UNAVAILABLE',
-          });
-        }
-        if (slotErr instanceof NoticeEvidenceAlreadyLinkedError) {
-          return res.status(409).json({
-            error: 'Your booking session has expired. Please reload the page and try again.',
-            code: 'INVALID_NOTICE_EVIDENCE',
-          });
-        }
-        throw slotErr;
-      }
+    // 1. Practitioner availability check (outside transaction — stable schedule data).
+    const availability = await checkPractitionerAvailabilityForSlot(
+      clinicId,
+      practitionerId!,
+      preferredStartTime!,
+      preferredEndTime!,
+    );
+    if (!availability.ok) {
+      return res.status(409).json({
+        error: 'This slot is no longer available. Please choose another time.',
+        code: 'SLOT_UNAVAILABLE',
+      });
     }
 
-    // ── Partial request (no full slot info) — staff will review ────────────
-    // No lock/overlap check: practitioner or slot is unresolved.
+    // 2. Advisory lock → overlap check → request conflict check → create (all in one tx).
+    //    pg_advisory_xact_lock serializes concurrent public submissions for the same slot.
     try {
       const request = await prisma.$transaction(async (tx) => {
+        await acquireAppointmentSlotLock(tx, {
+          clinicId,
+          practitionerId: practitionerId!,
+          startTime: preferredStartTime!,
+        });
+
+        // assertSlotAvailable checks both Appointment overlap and
+        // pending/approved AppointmentRequest conflict in a single call.
+        await assertSlotAvailable(tx, {
+          clinicId,
+          practitionerId: practitionerId!,
+          startTime: preferredStartTime!,
+          endTime: preferredEndTime!,
+        });
+
         const created = await tx.appointmentRequest.create({
           data: {
             clinicId,
@@ -423,14 +389,20 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
       });
 
       return res.status(201).json({ success: true, requestId: request.id });
-    } catch (err) {
-      if (err instanceof NoticeEvidenceAlreadyLinkedError) {
+    } catch (slotErr) {
+      if (slotErr instanceof SlotConflictError) {
+        return res.status(409).json({
+          error: 'This slot is no longer available. Please choose another time.',
+          code: 'SLOT_UNAVAILABLE',
+        });
+      }
+      if (slotErr instanceof NoticeEvidenceAlreadyLinkedError) {
         return res.status(409).json({
           error: 'Your booking session has expired. Please reload the page and try again.',
           code: 'INVALID_NOTICE_EVIDENCE',
         });
       }
-      throw err;
+      throw slotErr;
     }
   } catch {
     return res.status(500).json({ error: 'Failed to submit booking request' });

@@ -26,7 +26,8 @@
     "timeOptional": "Preferred time (optional)",
     "slotsLoading": "Loading available times...",
     "slotsEmpty": "No available times on this date. Please choose another date.",
-    "slotsError": "Available times could not be loaded. Please try again."
+    "slotsError": "Available times could not be loaded. Please try again.",
+    "slotRequired": "You must select an available time to continue."
   },
   "contact": {
     "title": "Contact Information",

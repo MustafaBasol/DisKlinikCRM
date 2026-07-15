@@ -103,6 +103,17 @@ export function isSelectedSlotStillOffered(
   );
 }
 
+/**
+ * True only when an exact (practitionerId, localStartTime) slot has been
+ * selected — a date or practitioner chosen alone is never sufficient. Used
+ * to gate the "Devam Et" (Continue) button and as the defense-in-depth check
+ * in handleSubmit, so a stale/forced step transition can't bypass slot
+ * selection. See docs/51-public-booking-required-slot-hotfix.md.
+ */
+export function hasValidSlotSelection(selectedTime: string, selectedSlotPractitionerId: string): boolean {
+  return Boolean(selectedTime && selectedSlotPractitionerId);
+}
+
 /** True only for the specific 409 SLOT_UNAVAILABLE shape the public booking submit endpoint returns — never matches INVALID_NOTICE_EVIDENCE or other 409s. */
 export function isSlotUnavailableError(err: unknown): boolean {
   const response = (err as { response?: { status?: number; data?: unknown } } | undefined)?.response;

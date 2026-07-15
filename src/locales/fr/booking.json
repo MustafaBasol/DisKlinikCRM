@@ -26,7 +26,8 @@
     "timeOptional": "Heure souhaitée (facultatif)",
     "slotsLoading": "Chargement des horaires disponibles...",
     "slotsEmpty": "Aucun horaire disponible à cette date. Veuillez choisir une autre date.",
-    "slotsError": "Impossible de charger les horaires disponibles. Veuillez réessayer."
+    "slotsError": "Impossible de charger les horaires disponibles. Veuillez réessayer.",
+    "slotRequired": "Vous devez sélectionner un horaire disponible pour continuer."
   },
   "contact": {
     "title": "Coordonnées",
