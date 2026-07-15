@@ -1,6 +1,12 @@
 import type { PrismaClient } from '@prisma/client';
 import type { TimePreference } from './whatsappInterpreter.js';
-import { NON_BLOCKING_APPOINTMENT_STATUSES } from './appointmentRequestSafety.js';
+import {
+  checkAppointmentOverlap,
+  checkAppointmentRequestConflict,
+} from './appointments/appointmentAvailabilityService.js';
+
+/** Default slot duration (minutes) used when no service/appointmentType is selected yet. */
+const DEFAULT_SLOT_DURATION_MINUTES = 30;
 
 export type SavedAvailableSlot = {
   practitionerId: string;
@@ -130,7 +136,7 @@ const getZonedDateTimeParts = (date: Date, timeZone: string) => {
   };
 };
 
-const localDateTimeToClinicDate = (date: string, time: string, timeZone: string) => {
+export const localDateTimeToClinicDate = (date: string, time: string, timeZone: string) => {
   const [year, month, day] = date.split('-').map(Number);
   const [hour, minute] = time.split(':').map(Number);
   const utcGuess = Date.UTC(year, month - 1, day, hour, minute);
@@ -150,13 +156,15 @@ const localDateTimeToClinicDate = (date: string, time: string, timeZone: string)
 export const buildAvailableSlots = async (
   prisma: PrismaClient,
   clinicId: string,
-  appointmentTypeId: string,
+  appointmentTypeId: string | null | undefined,
   date: string,
   practitionerId?: string | null
 ) => {
   const [clinic, service, practitioners] = await Promise.all([
     prisma.clinic.findUnique({ where: { id: clinicId } }),
-    prisma.appointmentType.findFirst({ where: { id: appointmentTypeId, clinicId, isActive: true } }),
+    appointmentTypeId
+      ? prisma.appointmentType.findFirst({ where: { id: appointmentTypeId, clinicId, isActive: true } })
+      : Promise.resolve(null),
     prisma.user.findMany({
       where: {
         clinicId,
@@ -169,7 +177,10 @@ export const buildAvailableSlots = async (
     }),
   ]);
 
-  if (!service) {
+  // A serviceId was supplied but does not resolve to an active service for
+  // this clinic — distinct from "no service selected yet" (appointmentTypeId
+  // falsy), which is allowed and falls back to DEFAULT_SLOT_DURATION_MINUTES.
+  if (appointmentTypeId && !service) {
     return null;
   }
 
@@ -184,7 +195,7 @@ export const buildAvailableSlots = async (
     return [];
   }
 
-  const durationMinutes = service.durationMinutes;
+  const durationMinutes = service?.durationMinutes ?? DEFAULT_SLOT_DURATION_MINUTES;
   const results: RawAvailableSlot[] = [];
   const now = new Date();
 
@@ -210,25 +221,25 @@ export const buildAvailableSlots = async (
         const startTime = localDateTimeToClinicDate(date, slotStart, timeZone);
         const endTime = localDateTimeToClinicDate(date, slotEnd, timeZone);
 
-        const overlap = await prisma.appointment.findFirst({
-          where: {
-            clinicId,
-            practitionerId: practitioner.id,
-            deletedAt: null,
-            status: { notIn: [...NON_BLOCKING_APPOINTMENT_STATUSES] },
-            OR: [{ startTime: { lt: endTime }, endTime: { gt: startTime } }],
-          },
-          select: { id: true },
-        });
+        // Canonical conflict rules — same functions submit-time
+        // assertSlotAvailable is built from, so a slot shown here can never
+        // be rejected at submission for a reason this check should have caught.
+        if (startTime > now) {
+          const conflictParams = { clinicId, practitionerId: practitioner.id, startTime, endTime };
+          const [hasAppointmentOverlap, hasRequestConflict] = await Promise.all([
+            checkAppointmentOverlap(prisma, conflictParams),
+            checkAppointmentRequestConflict(prisma, conflictParams),
+          ]);
 
-        if (!overlap && startTime > now) {
-          results.push({
-            practitioner,
-            startTime,
-            endTime,
-            localStartTime: slotStart,
-            localEndTime: slotEnd,
-          });
+          if (!hasAppointmentOverlap && !hasRequestConflict) {
+            results.push({
+              practitioner,
+              startTime,
+              endTime,
+              localStartTime: slotStart,
+              localEndTime: slotEnd,
+            });
+          }
         }
 
         cursor += 30;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, Clock, User, Stethoscope, Phone, Mail, MessageSquare, CheckCircle, ChevronRight, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -9,6 +9,14 @@ import {
   formatDateWithPreference,
 } from '../utils/clinicPreferences';
 import type { ClinicOperatingPreferences } from '../utils/clinicPreferences';
+import {
+  normalizePublicSlots,
+  selectableTimesForDoctor,
+  removeStaleSlot,
+  isSlotUnavailableError,
+  isSelectedSlotStillOffered,
+  type PublicSlot,
+} from './bookingWidgetHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Service {
@@ -218,12 +226,6 @@ function getNext30Days(preferences: ClinicOperatingPreferences): { date: string;
   return days;
 }
 
-const TIME_SLOTS = [
-  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
-  '11:00', '11:30', '12:00', '13:00', '13:30', '14:00',
-  '14:30', '15:00', '15:30', '16:00', '16:30', '17:00',
-];
-
 // ── Step components ────────────────────────────────────────────────────
 const StepIndicator: React.FC<{ step: number; total: number }> = ({ step, total }) => (
   <div className="flex items-center justify-center gap-2 mb-6">
@@ -259,12 +261,21 @@ const BookingWidget: React.FC = () => {
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
+  const [selectedSlotPractitionerId, setSelectedSlotPractitionerId] = useState<string>('');
   const [patientName, setPatientName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [recoveryNotice, setRecoveryNotice] = useState('');
+
+  // Real, conflict-checked slots for selectedDate (+ selectedService). Not
+  // filtered by doctor client-side (see selectableTimesForDoctor) so switching
+  // the doctor chip doesn't require a refetch.
+  const [slots, setSlots] = useState<PublicSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState('');
 
   // Automatic privacy-notice delivery evidence — not a consent/acknowledgment
   // flow. The token is issued silently once the clinic's published notice is
@@ -311,6 +322,48 @@ const BookingWidget: React.FC = () => {
     };
   }, [clinicId, data?.legalNotice.available, i18n.language]);
 
+  const fetchSlots = useCallback(() => {
+    if (!clinicId || !selectedDate) return;
+    setSlotsLoading(true);
+    setSlotsError('');
+    publicBookingService
+      .getSlots(clinicId, { date: selectedDate, serviceId: selectedService || undefined })
+      .then((r) => {
+        const freshSlots = normalizePublicSlots(r.data);
+        setSlots(freshSlots);
+        // If a specific (practitioner, time) was selected, it must never
+        // silently swap to a different practitioner just because this
+        // refresh reordered the underlying slots. Only keep it if the exact
+        // tuple is still offered; otherwise clear it explicitly so the
+        // customer re-selects rather than submitting a stale pairing.
+        if (
+          selectedTime &&
+          selectedSlotPractitionerId &&
+          !isSelectedSlotStillOffered(freshSlots, { practitionerId: selectedSlotPractitionerId, localStartTime: selectedTime })
+        ) {
+          setSelectedTime('');
+          setSelectedSlotPractitionerId('');
+        }
+      })
+      .catch(() => {
+        setSlots([]);
+        setSlotsError(t('booking:schedule.slotsError'));
+      })
+      .finally(() => setSlotsLoading(false));
+  }, [clinicId, selectedDate, selectedService, t, selectedTime, selectedSlotPractitionerId]);
+
+  useEffect(() => {
+    if (!selectedDate) {
+      setSlots([]);
+      return;
+    }
+    fetchSlots();
+    // Selecting a new date invalidates any previously chosen time.
+    setSelectedTime('');
+    setSelectedSlotPractitionerId('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinicId, selectedDate, selectedService]);
+
   const preferences = data?.operatingPreferences ?? DEFAULT_CLINIC_OPERATING_PREFERENCES;
   const allDays = getNext30Days(preferences);
 
@@ -339,15 +392,26 @@ const BookingWidget: React.FC = () => {
         phone: phone.trim(),
         email: email.trim() || undefined,
         serviceId: selectedService || undefined,
-        practitionerId: selectedDoctor || undefined,
+        practitionerId: selectedTime ? selectedSlotPractitionerId : selectedDoctor || undefined,
         preferredDate: selectedDate || undefined,
         preferredTime: selectedTime || undefined,
         notes: notes.trim() || undefined,
         noticeEvidenceToken: noticeToken,
       });
       setStep(3);
-    } catch {
-      setSubmitError(t('booking:errors.submitFailed'));
+    } catch (err) {
+      if (selectedTime && isSlotUnavailableError(err)) {
+        // Stale slot — form data (name/phone/email/notes/service/doctor) is
+        // intentionally left untouched. Only the rejected time is cleared.
+        setSlots((prev) => removeStaleSlot(prev, { practitionerId: selectedSlotPractitionerId, localStartTime: selectedTime }));
+        setSelectedTime('');
+        setSelectedSlotPractitionerId('');
+        setRecoveryNotice(t('booking:errors.slotUnavailable'));
+        setStep(1);
+        fetchSlots();
+      } else {
+        setSubmitError(t('booking:errors.submitFailed'));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -453,6 +517,10 @@ const BookingWidget: React.FC = () => {
               <p className="text-sm text-gray-500">{t('booking:schedule.optional')}</p>
             </div>
 
+            {recoveryNotice && (
+              <p className="text-amber-700 text-sm bg-amber-50 border border-amber-200 rounded-lg p-3">{recoveryNotice}</p>
+            )}
+
             {/* Doctor selection */}
             {doctors.length > 0 && (
               <div>
@@ -498,28 +566,48 @@ const BookingWidget: React.FC = () => {
               </div>
             </div>
 
-            {/* Time slot */}
+            {/* Time slot — real, conflict-checked availability for selectedDate */}
             {selectedDate && (
               <div>
                 <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
                   <Clock size={14} /> {t('booking:schedule.timeOptional')}
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {TIME_SLOTS.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setSelectedTime(selectedTime === t ? '' : t)}
-                      className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${selectedTime === t ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:border-blue-400 bg-white'}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
+                {slotsLoading && (
+                  <p className="text-sm text-gray-400">{t('booking:schedule.slotsLoading')}</p>
+                )}
+                {!slotsLoading && slotsError && (
+                  <p className="text-sm text-red-500">{slotsError}</p>
+                )}
+                {!slotsLoading && !slotsError && selectableTimesForDoctor(slots, selectedDoctor).length === 0 && (
+                  <p className="text-sm text-gray-400">{t('booking:schedule.slotsEmpty')}</p>
+                )}
+                {!slotsLoading && !slotsError && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectableTimesForDoctor(slots, selectedDoctor).map((slot) => (
+                      <button
+                        key={`${slot.practitionerId}:${slot.localStartTime}`}
+                        onClick={() => {
+                          setRecoveryNotice('');
+                          if (selectedTime === slot.localStartTime && selectedSlotPractitionerId === slot.practitionerId) {
+                            setSelectedTime('');
+                            setSelectedSlotPractitionerId('');
+                          } else {
+                            setSelectedTime(slot.localStartTime);
+                            setSelectedSlotPractitionerId(slot.practitionerId);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${selectedTime === slot.localStartTime && selectedSlotPractitionerId === slot.practitionerId ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:border-blue-400 bg-white'}`}
+                      >
+                        {slot.localStartTime}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             <button
-              onClick={() => setStep(2)}
+              onClick={() => { setRecoveryNotice(''); setStep(2); }}
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
             >
               {t('booking:actions.continue')} →
@@ -647,7 +735,7 @@ const BookingWidget: React.FC = () => {
               </p>
             )}
             <button
-              onClick={() => { setStep(0); setSelectedService(''); setSelectedDoctor(''); setSelectedDate(''); setSelectedTime(''); setPatientName(''); setPhone(''); setEmail(''); setNotes(''); }}
+              onClick={() => { setStep(0); setSelectedService(''); setSelectedDoctor(''); setSelectedDate(''); setSelectedTime(''); setSelectedSlotPractitionerId(''); setRecoveryNotice(''); setPatientName(''); setPhone(''); setEmail(''); setNotes(''); }}
               className="mt-4 px-6 py-2 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             >
               {t('booking:success.newAppointment')}

@@ -10,7 +10,8 @@
     "lint": "eslint . --ext ts,tsx",
     "test:dicom-helpers": "tsx src/components/imaging/__tests__/dicomHelpers.test.ts",
     "test:onboarding-helpers": "tsx src/components/imaging/__tests__/onboardingHelpers.test.ts",
-    "test:pairing-poller": "tsx src/components/imaging/__tests__/pairingPoller.test.ts"
+    "test:pairing-poller": "tsx src/components/imaging/__tests__/pairingPoller.test.ts",
+    "test:booking-widget-helpers": "tsx src/pages/__tests__/bookingWidgetHelpers.test.ts"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.21",

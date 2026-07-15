@@ -7,7 +7,8 @@
     "loadClinic": "Klinik bilgileri yüklenemedi.",
     "loading": "Yükleme hatası",
     "namePhoneRequired": "Ad Soyad ve telefon zorunludur.",
-    "submitFailed": "Randevu talebi gönderilemedi. Lütfen tekrar deneyin."
+    "submitFailed": "Randevu talebi gönderilemedi. Lütfen tekrar deneyin.",
+    "slotUnavailable": "Bu saat az önce doldu. Bilgileriniz korundu; lütfen başka bir saat seçin."
   },
   "service": {
     "title": "Hizmet seçin",
@@ -22,7 +23,10 @@
     "doctorOptional": "Hekim (opsiyonel)",
     "anyDoctor": "Farksız",
     "dateOptional": "Tercih edilen tarih (opsiyonel)",
-    "timeOptional": "Tercih edilen saat (opsiyonel)"
+    "timeOptional": "Tercih edilen saat (opsiyonel)",
+    "slotsLoading": "Uygun saatler yükleniyor...",
+    "slotsEmpty": "Bu tarihte uygun saat bulunamadı. Lütfen başka bir tarih seçin.",
+    "slotsError": "Uygun saatler yüklenemedi. Lütfen tekrar deneyin."
   },
   "contact": {
     "title": "İletişim Bilgileri",

@@ -7,6 +7,7 @@ import {
   assertSlotAvailable,
   SlotConflictError,
 } from '../services/appointments/appointmentAvailabilityService.js';
+import { buildAvailableSlots, localDateTimeToClinicDate } from '../services/whatsappAvailability.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import {
   resolvePublishedLegalProfile,
@@ -21,6 +22,9 @@ const router = express.Router();
 // Unauthenticated write endpoint — throttle per IP to limit spam requests.
 const bookingSubmitLimiter = createRateLimiter(10, 15 * 60 * 1000, 'public-booking');
 const noticeEvidenceLimiter = createRateLimiter(30, 15 * 60 * 1000, 'public-booking-notice');
+const slotsLimiter = createRateLimiter(60, 60 * 1000, 'public-booking-slots');
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const SAFE_UNAVAILABLE_ERROR = 'The online booking form is temporarily unavailable. Please contact the clinic directly.';
 
@@ -113,6 +117,59 @@ router.get('/booking/:clinicId', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/public/booking/:clinicId/slots — real, conflict-checked available
+// slots for a given date (+ optional service/practitioner). This is the
+// canonical availability the widget must render — it applies the exact same
+// Appointment-overlap and pending/approved AppointmentRequest rules that
+// submit-time assertSlotAvailable enforces, so a slot shown here cannot be
+// rejected at submission for a reason this endpoint should have caught.
+router.get('/booking/:clinicId/slots', async (req: Request, res: Response) => {
+  const clinicId = req.params.clinicId as string;
+
+  const clientIp = req.ip || 'unknown';
+  if (!(await slotsLimiter.check(clientIp))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+  await slotsLimiter.record(clientIp);
+
+  const dateRaw = req.query.date;
+  const serviceIdRaw = req.query.serviceId;
+  const practitionerIdRaw = req.query.practitionerId;
+
+  const date = typeof dateRaw === 'string' ? dateRaw : '';
+  if (!ISO_DATE_RE.test(date)) {
+    return res.status(400).json({ error: 'Invalid or missing date (expected YYYY-MM-DD)' });
+  }
+  const serviceId = typeof serviceIdRaw === 'string' && serviceIdRaw ? serviceIdRaw : null;
+  const practitionerId = typeof practitionerIdRaw === 'string' && practitionerIdRaw ? practitionerIdRaw : null;
+
+  try {
+    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    const slots = await buildAvailableSlots(prisma, clinicId, serviceId, date, practitionerId);
+    if (slots === null) {
+      return res.status(400).json({ error: 'Invalid serviceId' });
+    }
+
+    // Availability changes as other customers/staff book — never let the
+    // browser or an intermediary cache a stale slot list.
+    res.set('Cache-Control', 'no-store');
+
+    return res.json({
+      slots: slots.map((slot) => ({
+        practitionerId: slot.practitioner.id,
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString(),
+        localStartTime: slot.localStartTime,
+        localEndTime: slot.localEndTime,
+      })),
+    });
+  } catch {
+    return res.status(500).json({ error: 'Failed to load availability' });
+  }
+});
+
 // POST /api/public/booking/:clinicId/notice-evidence — idempotently issue
 // automatic notice-delivery evidence for this booking session. No
 // acknowledgment/consent action is required or recorded here.
@@ -189,7 +246,7 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
   const cleanNotes = notes && typeof notes === 'string' ? notes.trim().substring(0, 500) : undefined;
 
   try {
-    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
+    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true, timezone: true } });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
     // Do not collect/store patient data without server-validated evidence
@@ -221,11 +278,20 @@ router.post('/booking/:clinicId', async (req: Request, res: Response) => {
       if (!doc) return res.status(400).json({ error: 'Invalid practitionerId' });
     }
 
-    // Build preferredStartTime / preferredEndTime.
+    // Build preferredStartTime / preferredEndTime. preferredDate/preferredTime
+    // are wall-clock values in the CLINIC's timezone (the same values
+    // buildAvailableSlots used to compute the localStartTime the customer
+    // saw and clicked) — they must be converted using that timezone, not
+    // the server process's own OS timezone. A naive `new Date(...)` parse
+    // here would silently book a different real-world instant than the one
+    // shown/checked at availability time whenever the server host's local
+    // timezone differs from the clinic's (e.g. server in Europe/Paris,
+    // clinic in Europe/Istanbul — a full hour off, undetectable without a
+    // real cross-timezone deployment or browser test).
     let preferredStartTime: Date | undefined;
     let preferredEndTime: Date | undefined;
-    if (preferredDate && preferredTime) {
-      const dt = new Date(`${preferredDate}T${preferredTime}:00`);
+    if (preferredDate && ISO_DATE_RE.test(preferredDate) && preferredTime && /^\d{2}:\d{2}$/.test(preferredTime)) {
+      const dt = localDateTimeToClinicDate(preferredDate, preferredTime, clinic.timezone || 'Europe/Istanbul');
       if (!isNaN(dt.getTime())) {
         preferredStartTime = dt;
         if (svc) {
