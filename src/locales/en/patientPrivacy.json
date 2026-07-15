@@ -1,0 +1,27 @@
+{
+  "partialFailure": {
+    "title": "Some redactions failed — please review manually.",
+    "attachmentsSummary": "Attachments: {{redacted}}/{{total}} redacted, {{skippedLegalHold}} skipped due to legal hold, {{failed}} failed.",
+    "imagingSummary": "Imaging: {{redacted}}/{{total}} redacted, {{skippedLegalHold}} skipped due to legal hold, {{failed}} failed.",
+    "anonymizeSuccessWithWarning": "Patient anonymized, but some attachment/imaging metadata redactions failed (see below)."
+  },
+  "actions": {
+    "exportJson": "Export data (JSON)",
+    "exportPackage": "Download file package (ZIP)",
+    "exportPackageTooltip": "ZIP package containing attachments + data + manifest",
+    "exportPackageSuccess": "File package downloaded (attachments + data + manifest).",
+    "exportPackageError": "File package generation/download failed.",
+    "exportPackageInProgress": "An export package is already being generated for this clinic. Please try again shortly.",
+    "deletionReviewButton": "Preview deletion review",
+    "deletionReviewTooltip": "Deletion review preview (dry-run only, nothing is deleted)",
+    "deletionReviewError": "Failed to load the deletion review preview."
+  },
+  "deletionReview": {
+    "panelTitle": "Deletion Review Preview (dry-run only — nothing was deleted)",
+    "attachmentsLabel": "File Attachments",
+    "attachmentsSummary": "Total: {{total}} · Legal hold: {{legalHold}} · Pending review (unclassified): {{unclassifiedRetained}}",
+    "imagingLabel": "Imaging",
+    "imagingSummary": "Total: {{total}} · Legal hold: {{legalHold}} · Retained (clinical): {{retainedClinical}}",
+    "footnote": "Note: this is a dry-run preview, and there is no live/automated deletion endpoint in this release. Unclassified (no administrative-category distinction exists yet) attachments and clinical/imaging data cannot be deleted through this view until a future release adds a lifecycle-category enum and a request-workflow-bound deletion endpoint."
+  }
+}

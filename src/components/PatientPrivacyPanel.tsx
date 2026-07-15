@@ -1,7 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Shield, Download, AlertTriangle, CheckCircle2, Loader2, Plus, X, ChevronDown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Shield, Download, AlertTriangle, CheckCircle2, Loader2, Plus, X, ChevronDown, PackageSearch, FileArchive } from 'lucide-react';
 import { patientPrivacyService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+
+// ── KVKK lifecycle types (docs/compliance/53) ──────────────────────────────────
+// No lifecycle-category enum exists yet — every non-legal-hold attachment is
+// reported as `unclassifiedRetained` (not eligible for automated deletion in
+// this release). There is no live-delete endpoint in this PR.
+
+interface DeletionReviewInventory {
+  attachments: { total: number; legalHold: number; unclassifiedRetained: number; estimatedBytes: number };
+  imaging: { total: number; legalHold: number; retainedClinical: number; estimatedBytes: number };
+  blockers: string[];
+  dryRun: true;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,6 +69,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
   canManage,
   onAnonymized,
 }) => {
+  const { t } = useTranslation('patientPrivacy');
   const { formatDate } = useClinicPreferences();
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +82,15 @@ const PatientPrivacyPanel: React.FC<Props> = ({
   const [newRequestNote, setNewRequestNote] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [partialFailureWarning, setPartialFailureWarning] = useState<{
+    attachmentResults?: { total: number; redacted: number; skippedLegalHold: number; failed: number };
+    imagingResults?: { total: number; redacted: number; skippedLegalHold: number; failed: number };
+  } | null>(null);
+
+  const [exportingPackage, setExportingPackage] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [deletionReview, setDeletionReview] = useState<DeletionReviewInventory | null>(null);
+  const [showReviewPanel, setShowReviewPanel] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -113,9 +136,18 @@ const PatientPrivacyPanel: React.FC<Props> = ({
     setAnonymizing(true);
     setError('');
     setSuccess('');
+    setPartialFailureWarning(null);
     try {
-      await patientPrivacyService.anonymize(patientId, anonReason.trim());
-      setSuccess('Hasta başarıyla anonimleştirildi.');
+      const res = await patientPrivacyService.anonymize(patientId, anonReason.trim());
+      if (res.data?.partialFailure) {
+        setPartialFailureWarning({
+          attachmentResults: res.data.attachmentResults,
+          imagingResults: res.data.imagingResults,
+        });
+        setSuccess(t('partialFailure.anonymizeSuccessWithWarning'));
+      } else {
+        setSuccess('Hasta başarıyla anonimleştirildi.');
+      }
       setShowAnonModal(false);
       setAnonReason('');
       loadRequests();
@@ -125,6 +157,47 @@ const PatientPrivacyPanel: React.FC<Props> = ({
       setError(msg);
     } finally {
       setAnonymizing(false);
+    }
+  };
+
+  const handleExportPackage = async () => {
+    setExportingPackage(true);
+    setError('');
+    setSuccess('');
+    try {
+      const created = await patientPrivacyService.createExportPackage(patientId);
+      const { exportId, downloadToken } = created.data;
+      const downloaded = await patientPrivacyService.downloadExportPackage(patientId, exportId, downloadToken);
+      const blob = new Blob([downloaded.data], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `patient-export-${patientId}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setSuccess(t('actions.exportPackageSuccess'));
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const msg = status === 409
+        ? t('actions.exportPackageInProgress')
+        : (err?.response?.data?.error ?? t('actions.exportPackageError'));
+      setError(msg);
+    } finally {
+      setExportingPackage(false);
+    }
+  };
+
+  const handleLoadDeletionReview = async () => {
+    setReviewLoading(true);
+    setError('');
+    try {
+      const res = await patientPrivacyService.getDeletionReview(patientId);
+      setDeletionReview(res.data);
+      setShowReviewPanel(true);
+    } catch {
+      setError(t('actions.deletionReviewError'));
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -178,6 +251,34 @@ const PatientPrivacyPanel: React.FC<Props> = ({
           {success}
         </div>
       )}
+      {partialFailureWarning && (
+        <div className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm border border-amber-200 space-y-1">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle size={15} />
+            {t('partialFailure.title')}
+          </div>
+          {partialFailureWarning.attachmentResults && (
+            <p className="text-xs">
+              {t('partialFailure.attachmentsSummary', {
+                redacted: partialFailureWarning.attachmentResults.redacted,
+                total: partialFailureWarning.attachmentResults.total,
+                skippedLegalHold: partialFailureWarning.attachmentResults.skippedLegalHold,
+                failed: partialFailureWarning.attachmentResults.failed,
+              })}
+            </p>
+          )}
+          {partialFailureWarning.imagingResults && (
+            <p className="text-xs">
+              {t('partialFailure.imagingSummary', {
+                redacted: partialFailureWarning.imagingResults.redacted,
+                total: partialFailureWarning.imagingResults.total,
+                skippedLegalHold: partialFailureWarning.imagingResults.skippedLegalHold,
+                failed: partialFailureWarning.imagingResults.failed,
+              })}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       {canManage && (
@@ -191,7 +292,27 @@ const PatientPrivacyPanel: React.FC<Props> = ({
               title={isAnonymized ? 'Anonimleştirilmiş hasta dışa aktarılamaz' : undefined}
             >
               {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              Verileri dışa aktar
+              {t('actions.exportJson')}
+            </button>
+
+            <button
+              onClick={handleExportPackage}
+              disabled={exportingPackage || isAnonymized}
+              className="btn-secondary flex items-center gap-2 text-sm"
+              title={isAnonymized ? 'Anonimleştirilmiş hasta dışa aktarılamaz' : t('actions.exportPackageTooltip')}
+            >
+              {exportingPackage ? <Loader2 size={15} className="animate-spin" /> : <FileArchive size={15} />}
+              {t('actions.exportPackage')}
+            </button>
+
+            <button
+              onClick={handleLoadDeletionReview}
+              disabled={reviewLoading}
+              className="btn-secondary flex items-center gap-2 text-sm"
+              title={t('actions.deletionReviewTooltip')}
+            >
+              {reviewLoading ? <Loader2 size={15} className="animate-spin" /> : <PackageSearch size={15} />}
+              {t('actions.deletionReviewButton')}
             </button>
 
             <button
@@ -223,6 +344,58 @@ const PatientPrivacyPanel: React.FC<Props> = ({
               Bu hasta anonimleştirildi. Kimlik bilgileri kaldırıldı.
             </p>
           )}
+        </div>
+      )}
+
+      {/* Deletion-review dry-run summary (docs/compliance/53) */}
+      {showReviewPanel && deletionReview && (
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <PackageSearch size={15} />
+              {t('deletionReview.panelTitle')}
+            </h4>
+            <button onClick={() => setShowReviewPanel(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="font-medium text-gray-700">{t('deletionReview.attachmentsLabel')}</p>
+              <p className="text-gray-500">
+                {t('deletionReview.attachmentsSummary', {
+                  total: deletionReview.attachments.total,
+                  legalHold: deletionReview.attachments.legalHold,
+                  unclassifiedRetained: deletionReview.attachments.unclassifiedRetained,
+                })}
+              </p>
+              <p className="text-xs text-gray-400">≈{Math.round(deletionReview.attachments.estimatedBytes / 1024)} KB</p>
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="font-medium text-gray-700">{t('deletionReview.imagingLabel')}</p>
+              <p className="text-gray-500">
+                {t('deletionReview.imagingSummary', {
+                  total: deletionReview.imaging.total,
+                  legalHold: deletionReview.imaging.legalHold,
+                  retainedClinical: deletionReview.imaging.retainedClinical,
+                })}
+              </p>
+              <p className="text-xs text-gray-400">≈{Math.round(deletionReview.imaging.estimatedBytes / 1024)} KB</p>
+            </div>
+          </div>
+
+          {deletionReview.blockers.length > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
+              {deletionReview.blockers.map((b, i) => (
+                <p key={i}>• {b}</p>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400">
+            {t('deletionReview.footnote')}
+          </p>
         </div>
       )}
 

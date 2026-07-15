@@ -25,11 +25,110 @@ export type AnonymizePatientArgs = {
   reason: string;
 };
 
+export type RedactionCounters = {
+  total: number;
+  redacted: number;
+  skippedLegalHold: number;
+  failed: number;
+};
+
 export type AnonymizePatientResult = {
   alreadyAnonymized: boolean;
   patientId: string;
   privacyRequestId: string;
+  /** Per-object redaction counts for PatientAttachment rows (docs/compliance/53). */
+  attachmentResults: RedactionCounters;
+  /** Per-object redaction counts for ImagingImage rows (via the patient's ImagingStudy records). */
+  imagingResults: RedactionCounters;
+  /**
+   * True if any attachment or imaging redaction failed. Callers (the privacy
+   * route) MUST surface this — never report unconditional success when this
+   * is true.
+   */
+  partialFailure: boolean;
 };
+
+const emptyCounters = (): RedactionCounters => ({
+  total: 0,
+  redacted: 0,
+  skippedLegalHold: 0,
+  failed: 0,
+});
+
+/**
+ * Redacts originalName to '[ANONYMIZED]' for every PatientAttachment of the
+ * patient, unless legalHold is true (legal-hold items are skipped entirely —
+ * preserved as-is for legal review, not just protected from deletion) or the
+ * row is already redacted (idempotent re-run). Physical file bytes are never
+ * touched — fileName/filePath are already non-identifying storage keys. Each
+ * row is wrapped in its own try/catch so one failure never aborts the loop.
+ */
+async function redactPatientAttachments(clinicId: string, patientId: string): Promise<RedactionCounters> {
+  const counters = emptyCounters();
+  const attachments = await prisma.patientAttachment.findMany({
+    where: { clinicId, patientId },
+    select: { id: true, originalName: true, legalHold: true },
+  });
+  counters.total = attachments.length;
+
+  for (const attachment of attachments) {
+    if (attachment.legalHold) {
+      counters.skippedLegalHold++;
+      continue;
+    }
+    if (attachment.originalName === ANON_TEXT) {
+      // Already redacted — idempotent no-op, not a failure.
+      continue;
+    }
+    try {
+      await prisma.patientAttachment.update({
+        where: { id: attachment.id },
+        data: { originalName: ANON_TEXT },
+      });
+      counters.redacted++;
+    } catch (err) {
+      counters.failed++;
+      console.error('[patientAnonymization] attachment redaction failed', attachment.id, err);
+    }
+  }
+  return counters;
+}
+
+/**
+ * Same redaction semantics as redactPatientAttachments, applied to
+ * ImagingImage rows belonging to the patient's ImagingStudy records.
+ * ImagingImage has no legalHold field of its own — it inherits its parent
+ * study's hold (docs/compliance/53).
+ */
+async function redactPatientImagingImages(clinicId: string, patientId: string): Promise<RedactionCounters> {
+  const counters = emptyCounters();
+  const images = await prisma.imagingImage.findMany({
+    where: { clinicId, study: { patientId } },
+    select: { id: true, originalName: true, study: { select: { legalHold: true } } },
+  });
+  counters.total = images.length;
+
+  for (const image of images) {
+    if (image.study?.legalHold) {
+      counters.skippedLegalHold++;
+      continue;
+    }
+    if (image.originalName === ANON_TEXT) {
+      continue;
+    }
+    try {
+      await prisma.imagingImage.update({
+        where: { id: image.id },
+        data: { originalName: ANON_TEXT },
+      });
+      counters.redacted++;
+    } catch (err) {
+      counters.failed++;
+      console.error('[patientAnonymization] imaging image redaction failed', image.id, err);
+    }
+  }
+  return counters;
+}
 
 const ANON_FIRST = 'Anonim';
 const ANON_LAST  = 'Hasta';
@@ -94,10 +193,19 @@ export async function anonymizePatientData(
       select: { id: true },
       orderBy: { createdAt: 'desc' },
     });
+    // Still run the attachment/imaging redaction pass — re-running must be a
+    // safe no-op (already-redacted rows are skipped, see redactPatientAttachments),
+    // but a first anonymization performed before this feature shipped may not
+    // have touched attachments/imaging yet.
+    const attachmentResults = await redactPatientAttachments(clinicId, patientId);
+    const imagingResults = await redactPatientImagingImages(clinicId, patientId);
     return {
       alreadyAnonymized: true,
       patientId,
       privacyRequestId: existing?.id ?? '',
+      attachmentResults,
+      imagingResults,
+      partialFailure: attachmentResults.failed > 0 || imagingResults.failed > 0,
     };
   }
 
@@ -236,7 +344,13 @@ export async function anonymizePatientData(
       }),
   );
 
-  // ── 9. Create PatientPrivacyRequest record ────────────────────────────────
+  // ── 9. PatientAttachment metadata redaction (legal-hold skipped) ──────────
+  const attachmentResults = await redactPatientAttachments(clinicId, patientId);
+
+  // ── 10. ImagingImage metadata redaction, via patient's ImagingStudy rows ──
+  const imagingResults = await redactPatientImagingImages(clinicId, patientId);
+
+  // ── 11. Create PatientPrivacyRequest record ───────────────────────────────
   const privacyRequest = await prisma.patientPrivacyRequest.create({
     data: {
       clinicId,
@@ -252,7 +366,9 @@ export async function anonymizePatientData(
     select: { id: true },
   });
 
-  // ── 10. Write audit log (no full PII) ─────────────────────────────────────
+  const partialFailure = attachmentResults.failed > 0 || imagingResults.failed > 0;
+
+  // ── 12. Write audit log (no full PII) ─────────────────────────────────────
   await writeAuditLog({
     organizationId,
     clinicId,
@@ -265,10 +381,13 @@ export async function anonymizePatientData(
     metadata: {
       privacyRequestId: privacyRequest.id,
       reasonProvided: !!safeReason,
+      attachmentResults,
+      imagingResults,
+      partialFailure,
     },
   });
 
-  // ── 11. Write activity log ────────────────────────────────────────────────
+  // ── 13. Write activity log ────────────────────────────────────────────────
   await logActivity({
     clinicId,
     userId: actorUserId,
@@ -283,5 +402,8 @@ export async function anonymizePatientData(
     alreadyAnonymized: false,
     patientId,
     privacyRequestId: privacyRequest.id,
+    attachmentResults,
+    imagingResults,
+    partialFailure,
   };
 }

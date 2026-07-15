@@ -1,0 +1,27 @@
+{
+  "partialFailure": {
+    "title": "Certaines rédactions ont échoué — veuillez vérifier manuellement.",
+    "attachmentsSummary": "Pièces jointes : {{redacted}}/{{total}} rédigées, {{skippedLegalHold}} ignorées pour rétention légale, {{failed}} échouées.",
+    "imagingSummary": "Imagerie : {{redacted}}/{{total}} rédigées, {{skippedLegalHold}} ignorées pour rétention légale, {{failed}} échouées.",
+    "anonymizeSuccessWithWarning": "Patient anonymisé, mais certaines rédactions de métadonnées de pièces jointes/imagerie ont échoué (voir ci-dessous)."
+  },
+  "actions": {
+    "exportJson": "Exporter les données (JSON)",
+    "exportPackage": "Télécharger le paquet de fichiers (ZIP)",
+    "exportPackageTooltip": "Paquet ZIP contenant les pièces jointes + données + manifeste",
+    "exportPackageSuccess": "Paquet de fichiers téléchargé (pièces jointes + données + manifeste).",
+    "exportPackageError": "Échec de la génération/du téléchargement du paquet de fichiers.",
+    "exportPackageInProgress": "Un paquet d'export est déjà en cours de génération pour cette clinique. Veuillez réessayer sous peu.",
+    "deletionReviewButton": "Aperçu de la révision de suppression",
+    "deletionReviewTooltip": "Aperçu de la révision de suppression (aperçu uniquement, rien n'est supprimé)",
+    "deletionReviewError": "Échec du chargement de l'aperçu de la révision de suppression."
+  },
+  "deletionReview": {
+    "panelTitle": "Aperçu de la révision de suppression (aperçu uniquement — aucune donnée supprimée)",
+    "attachmentsLabel": "Pièces jointes",
+    "attachmentsSummary": "Total : {{total}} · Rétention légale : {{legalHold}} · En attente de révision (non classées) : {{unclassifiedRetained}}",
+    "imagingLabel": "Imagerie",
+    "imagingSummary": "Total : {{total}} · Rétention légale : {{legalHold}} · Conservées (cliniques) : {{retainedClinical}}",
+    "footnote": "Remarque : ceci est un aperçu (dry-run) et il n'existe aucun point de terminaison de suppression en direct/automatisé dans cette version. Les pièces jointes non classées (aucune distinction de catégorie administrative n'existe encore) et les données cliniques/imagerie ne peuvent pas être supprimées via cette vue tant qu'une future version n'ajoute pas une énumération de catégories de cycle de vie et un point de terminaison de suppression lié à un flux de demande."
+  }
+}

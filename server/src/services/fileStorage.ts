@@ -23,13 +23,17 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 
 const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 
@@ -108,6 +112,154 @@ export async function openFileStream(ref: string): Promise<Readable | null> {
   const localPath = resolveLocalPath(ref);
   if (!fs.existsSync(localPath)) return null;
   return fs.createReadStream(localPath);
+}
+
+/**
+ * Yeni (KVKK yaşam döngüsü, docs/compliance/53) kod yolları için güvenlik
+ * kapısı: mutlak yol veya ".." içeren anahtarları reddeder. Eski mutlak-yol
+ * fallback'ı (resolveLocalPath) yalnızca legacy kayıtlar içindir — bu kapı
+ * yeni özelliklerin o fallback'i asla kullanmamasını garanti eder.
+ */
+export function isSafeStorageKey(ref: string): boolean {
+  if (!ref || typeof ref !== 'string') return false;
+  if (path.isAbsolute(ref)) return false;
+  const normalized = ref.split(/[\\/]/).filter(Boolean);
+  if (normalized.some((segment) => segment === '..' || segment === '.')) return false;
+  if (ref.includes('..')) return false;
+  return true;
+}
+
+/**
+ * Dosyanın var olup olmadığını, içeriğini açmadan kontrol eder (HEAD/stat).
+ * Yalnızca yeni ("clinicId/..." veya "exports/clinicId/...") anahtarlarla
+ * çalışır — mutlak yol kabul etmez (bkz. isSafeStorageKey).
+ */
+export async function fileExists(ref: string): Promise<boolean> {
+  if (!isSafeStorageKey(ref)) return false;
+  if (isRemoteStorageEnabled()) {
+    try {
+      await getS3().send(new HeadObjectCommand({ Bucket: bucket(), Key: ref }));
+      return true;
+    } catch (error: any) {
+      if (error?.name === 'NotFound' || error?.$metadata?.httpStatusCode === 404) return false;
+      throw error;
+    }
+  }
+  const localPath = resolveLocalPath(ref);
+  return fs.existsSync(localPath);
+}
+
+/**
+ * Dosyanın boyutu gibi metadata'sını, içeriğini açmadan döner; dosya yoksa
+ * null döner. Yalnızca yeni ("clinicId/..." veya "exports/clinicId/...")
+ * anahtarlarla çalışır — mutlak yol kabul etmez.
+ */
+export async function statFile(ref: string): Promise<{ size: number } | null> {
+  if (!isSafeStorageKey(ref)) return null;
+  if (isRemoteStorageEnabled()) {
+    try {
+      const result = await getS3().send(new HeadObjectCommand({ Bucket: bucket(), Key: ref }));
+      return { size: Number(result.ContentLength ?? 0) };
+    } catch (error: any) {
+      if (error?.name === 'NotFound' || error?.$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    }
+  }
+  const localPath = resolveLocalPath(ref);
+  try {
+    const stat = await fs.promises.stat(localPath);
+    return { size: stat.size };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Yeni bir dışa aktarım (export) paketi için depolama anahtarı üretir:
+ * `exports/clinicId/uuid.zip`. clinicId sunucu tarafında doğrulanmış oturum
+ * bilgisinden, uuid ise crypto.randomUUID()'den gelir — hiçbir kullanıcı
+ * girdisi yol segmentine karışmaz, bu yüzden path traversal yapısal olarak
+ * imkansızdır.
+ */
+export function buildExportStorageKey(clinicId: string, exportId: string): string {
+  return `exports/${clinicId}/${exportId}.zip`;
+}
+
+/**
+ * Streams a file already on local disk (e.g. a temp file built by
+ * archiver) into final storage without ever buffering it fully in process
+ * memory. Local mode: rename/copy on the same filesystem. S3 mode: multipart
+ * streaming upload via @aws-sdk/lib-storage's Upload class (body is a
+ * read stream, never a single in-memory Buffer).
+ *
+ * Used by patientPrivacyExportPackage.ts so large ZIP export packages are
+ * never fully materialized as a Buffer/Buffer[] in process memory.
+ *
+ * Temp-file contract (PR #160 review — P0 fix): this function ALWAYS
+ * consumes/removes `tempFilePath` before returning or throwing, in every
+ * mode — callers must never rely on their own cleanup of this path. Without
+ * this, a sensitive patient ZIP could be left under the OS temp directory
+ * indefinitely (the cleanup job/TTL logic only knows about the *storage*
+ * key, never about this local scratch file).
+ *
+ * Partial-artifact contract (local mode, second review round): this
+ * function NEVER stream-copies directly into the final storage path. A
+ * cross-device (EXDEV) copy always lands in a unique `.partial-<uuid>`
+ * sibling first; only a same-directory (same-filesystem) rename promotes it
+ * to the final path, which is atomic — there is no window where a reader of
+ * `key` can observe a truncated file. If the copy into the partial path
+ * fails partway through, the partial file is removed in `finally` and the
+ * final path is never touched, so no orphaned/truncated artifact is left
+ * behind with no DB storageKey reference and no TTL cleanup path.
+ */
+export async function saveFileFromPath(key: string, tempFilePath: string, contentType: string): Promise<void> {
+  if (isRemoteStorageEnabled()) {
+    try {
+      const body = fs.createReadStream(tempFilePath);
+      const upload = new Upload({
+        client: getS3(),
+        params: { Bucket: bucket(), Key: key, Body: body, ContentType: contentType },
+        // Explicit (matches the library default): abort and clean up any
+        // already-uploaded parts of a multipart upload on failure, rather
+        // than leaving orphaned parts billed/stored in the bucket.
+        leavePartsOnError: false,
+      });
+      await upload.done();
+    } finally {
+      // Runs on both success and failure — the temp file must never survive
+      // this call either way.
+      await fs.promises.unlink(tempFilePath).catch(() => {});
+    }
+    return;
+  }
+  const localPath = resolveLocalPath(key);
+  await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+  const partialPath = `${localPath}.partial-${crypto.randomUUID()}`;
+  try {
+    try {
+      // Fast path: same-filesystem rename (no copy) into the partial path —
+      // tempFilePath no longer exists at its old path once this succeeds.
+      await fs.promises.rename(tempFilePath, partialPath);
+    } catch {
+      // Cross-device (EXDEV) or other rename failure — fall back to a
+      // streamed copy into the partial path (never the final path), still
+      // without loading the whole file into memory. pipeline() propagates
+      // errors from either side and destroys both streams on failure.
+      await pipeline(fs.createReadStream(tempFilePath), fs.createWriteStream(partialPath));
+      await fs.promises.unlink(tempFilePath).catch(() => {});
+    }
+    // Promote the fully-written partial file to its final name. Same
+    // directory => same filesystem => atomic rename; readers of `key` never
+    // observe a partially-written file.
+    await fs.promises.rename(partialPath, localPath);
+  } finally {
+    // Belt-and-suspenders cleanup: whichever of tempFilePath/partialPath is
+    // still present after success or failure is removed here. On the
+    // success path both have already been consumed by the renames above, so
+    // these are no-ops (unlink of a missing path is swallowed).
+    await fs.promises.unlink(tempFilePath).catch(() => {});
+    await fs.promises.unlink(partialPath).catch(() => {});
+  }
 }
 
 /** Dosyayı siler; yoksa sessizce döner (idempotent). */
