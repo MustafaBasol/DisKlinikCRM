@@ -18,6 +18,16 @@
  *   - ActivityLog (FK-linked to appointments/patients — retain for clinic history)
  *   - Pending or in-progress ContactRequest rows
  *   - SentMessage records (outbound message log — may be needed for billing/audit)
+ *   - PatientAttachment / ImagingStudy / ImagingImage physical files and rows —
+ *     retained indefinitely by design pending the legal retention-period
+ *     decisions tracked in docs/compliance/53-kvkk-attachment-imaging-lifecycle.md
+ *     ("Remaining legal decisions"). Anonymization (patientAnonymization.ts)
+ *     redacts their metadata but never deletes the underlying files.
+ *   - PatientPrivacyExportArchive rows/files — these ARE cleaned, but by a
+ *     separate dedicated job (patientPrivacyExportCleanupJob.ts, mirroring
+ *     publicBookingNoticeEvidenceCleanupJob.ts) rather than this one, so that
+ *     this job's existing dependency-injected unit tests are never touched
+ *     by unrelated feature work.
  *
  * Environment variables:
  *   DATA_RETENTION_CLEANUP_ENABLED          true|false (default: true)

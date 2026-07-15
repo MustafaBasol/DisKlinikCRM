@@ -236,6 +236,50 @@ router.get(
   },
 );
 
+// ── PATCH /api/patients/:patientId/attachments/:id/legal-hold ─────────
+// KVKK lifecycle (docs/compliance/53): sets/clears legalHold on a single
+// PatientAttachment. Restricted to OWNER/ORG_ADMIN — legal hold blocks both
+// anonymization metadata redaction and the deletion-review/execute
+// live-delete path for this row. No automatic trigger exists in this PR.
+router.patch(
+  '/patients/:patientId/attachments/:id/legal-hold',
+  authorize(['OWNER', 'ORG_ADMIN']),
+  async (req: AuthRequest, res: Response) => {
+    const patientId = String(req.params.patientId);
+    const id = String(req.params.id);
+    const clinicId = req.user!.clinicId;
+    const { legalHold, reason } = req.body as { legalHold?: boolean; reason?: string };
+
+    if (typeof legalHold !== 'boolean') {
+      return res.status(400).json({ error: 'legalHold must be a boolean' });
+    }
+    if (legalHold && (!reason || String(reason).trim().length < 3)) {
+      return res.status(400).json({ error: 'A reason is required (min 3 characters) to place a legal hold.' });
+    }
+
+    try {
+      const attachment = await prisma.patientAttachment.findFirst({
+        where: { id, patientId, clinicId },
+      });
+      if (!attachment) return res.status(404).json({ error: 'Not found' });
+
+      const updated = await prisma.patientAttachment.update({
+        where: { id },
+        data: {
+          legalHold,
+          legalHoldReason: legalHold ? String(reason).trim().slice(0, 500) : null,
+        },
+        select: { id: true, legalHold: true, legalHoldReason: true },
+      });
+
+      res.json(updated);
+    } catch (err: any) {
+      console.error('[attachments] legal-hold error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to update legal hold' });
+    }
+  },
+);
+
 // ── DELETE /api/patients/:patientId/attachments/:id ───────────────────
 router.delete(
   '/patients/:patientId/attachments/:id',

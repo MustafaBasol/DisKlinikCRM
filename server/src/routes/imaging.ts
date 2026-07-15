@@ -896,6 +896,45 @@ router.patch('/imaging/studies/:id/archive', authorize([...IMAGING_CLINICAL_ROLE
 router.patch('/imaging/studies/:id/unarchive', authorize([...IMAGING_CLINICAL_ROLES]), (req: AuthRequest, res: Response) =>
   setStudyStatus(req, res, 'active'));
 
+// PATCH /api/imaging/studies/:id/legal-hold — KVKK lifecycle (docs/compliance/53).
+// Images inherit their study's hold — there is no per-image field. Restricted
+// to OWNER/ORG_ADMIN; blocks anonymization metadata redaction for all images
+// under this study. No automatic trigger exists in this PR.
+router.patch('/imaging/studies/:id/legal-hold', authorize(['OWNER', 'ORG_ADMIN']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const { legalHold, reason } = req.body as { legalHold?: boolean; reason?: string };
+
+  if (typeof legalHold !== 'boolean') {
+    return res.status(400).json({ error: 'legalHold must be a boolean' });
+  }
+  if (legalHold && (!reason || String(reason).trim().length < 3)) {
+    return res.status(400).json({ error: 'A reason is required (min 3 characters) to place a legal hold.' });
+  }
+
+  try {
+    const study = await findStudyInScope(req, res, id);
+    if (!study) return;
+
+    const updated = await prisma.imagingStudy.update({
+      where: { id },
+      data: {
+        legalHold,
+        legalHoldReason: legalHold ? String(reason).trim().slice(0, 500) : null,
+      },
+      select: { id: true, legalHold: true, legalHoldReason: true },
+    });
+
+    await auditImaging(req, study.clinicId, 'imaging_study_legal_hold_updated', 'imaging_study', id, {
+      legalHold,
+    });
+
+    res.json(updated);
+  } catch (err: any) {
+    console.error('[imaging] legal-hold error:', err?.message ?? err);
+    res.status(500).json({ error: 'Failed to update legal hold' });
+  }
+});
+
 // ═══ Köprü ajanları (Bridge Agents) ════════════════════════════════════
 // Yalnızca kayıt/listeleme/iptal (Phase 2 sözleşmesi). Heartbeat public
 // endpoint'i routes/imagingBridgePublic.ts dosyasındadır; köprüden görüntü
