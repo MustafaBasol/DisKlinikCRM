@@ -618,6 +618,44 @@ await test('KVKK lifecycle migration.sql contains none of the unrelated-drift st
   assert.ok(sql.includes('PatientPrivacyExportArchive'), 'migration.sql must still contain the actual feature tables');
 });
 
+// PR #160 follow-up: the migration must match schema.prisma's final shape for
+// PatientPrivacyExportArchive exactly — status column present with its
+// default, and the artifact columns (storageKey/manifestJson/tokenHash/
+// expiresAt) nullable so reserveGenerationSlot() can create a "generating"
+// row before any of them are known. A stale migration here would make
+// `prisma migrate deploy` produce a table reserveGenerationSlot cannot
+// actually insert into (NOT NULL violation on an empty "generating" row).
+await test('migration.sql CREATE TABLE for PatientPrivacyExportArchive matches the final schema shape', () => {
+  const migrationPath = path.resolve(
+    import.meta.dirname,
+    '../../prisma/migrations/20260715145843_add_kvkk_attachment_imaging_lifecycle/migration.sql',
+  );
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+  const tableStart = sql.indexOf('CREATE TABLE "PatientPrivacyExportArchive"');
+  assert.ok(tableStart > -1, 'CREATE TABLE for PatientPrivacyExportArchive must exist');
+  const tableEnd = sql.indexOf(');', tableStart);
+  const tableBlock = sql.slice(tableStart, tableEnd);
+
+  assert.ok(
+    /"status"\s+TEXT\s+NOT NULL\s+DEFAULT\s+'ready'/.test(tableBlock),
+    'status column must exist as TEXT NOT NULL DEFAULT \'ready\'',
+  );
+  for (const nullableColumn of ['storageKey', 'manifestJson', 'tokenHash', 'expiresAt']) {
+    const columnLine = tableBlock
+      .split('\n')
+      .find((line) => line.trim().startsWith(`"${nullableColumn}"`));
+    assert.ok(columnLine, `${nullableColumn} column must exist`);
+    assert.ok(
+      !/NOT NULL/.test(columnLine!),
+      `${nullableColumn} must be nullable (reserveGenerationSlot creates a "generating" row before this is known), got: ${columnLine}`,
+    );
+  }
+  assert.ok(
+    sql.includes('CREATE INDEX "PatientPrivacyExportArchive_clinicId_status_idx" ON "PatientPrivacyExportArchive"("clinicId", "status")'),
+    'clinicId/status index must exist (used to find in-flight/stale generation rows per clinic)',
+  );
+});
+
 // ── 41-43: Removed execute route + renamed field + header-based token ───────
 
 section('41-43. Live-delete removal, renamed field, header-based token (source scans)');

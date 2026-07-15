@@ -2,8 +2,11 @@
 -- statements required by the additive schema.prisma changes for this
 -- feature: legal-hold + storage-verified-missing fields on PatientAttachment
 -- / ImagingStudy / ImagingImage, and the new PatientPrivacyExportArchive
--- table. No unrelated drift (dropped/renamed indexes, changed column
--- defaults/types on other tables, or FK drop/recreate) is included.
+-- table (including its "status" lifecycle column — queued/generating/ready/
+-- failed — and the nullable artifact columns that are only populated once
+-- generation completes). No unrelated drift (dropped/renamed indexes,
+-- changed column defaults/types on other tables, or FK drop/recreate) is
+-- included.
 
 -- AlterTable
 ALTER TABLE "ImagingImage" ADD COLUMN     "storageVerifiedMissingAt" TIMESTAMP(3);
@@ -24,10 +27,11 @@ CREATE TABLE "PatientPrivacyExportArchive" (
     "clinicId" TEXT NOT NULL,
     "patientId" TEXT NOT NULL,
     "requestedByUserId" TEXT NOT NULL,
-    "storageKey" TEXT NOT NULL,
-    "manifestJson" JSONB NOT NULL,
-    "tokenHash" TEXT NOT NULL,
-    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'ready',
+    "storageKey" TEXT,
+    "manifestJson" JSONB,
+    "tokenHash" TEXT,
+    "expiresAt" TIMESTAMP(3),
     "downloadedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -45,6 +49,9 @@ CREATE INDEX "PatientPrivacyExportArchive_organizationId_idx" ON "PatientPrivacy
 
 -- CreateIndex
 CREATE INDEX "PatientPrivacyExportArchive_expiresAt_idx" ON "PatientPrivacyExportArchive"("expiresAt");
+
+-- CreateIndex
+CREATE INDEX "PatientPrivacyExportArchive_clinicId_status_idx" ON "PatientPrivacyExportArchive"("clinicId", "status");
 
 -- CreateIndex
 CREATE INDEX "ImagingStudy_clinicId_legalHold_idx" ON "ImagingStudy"("clinicId", "legalHold");
