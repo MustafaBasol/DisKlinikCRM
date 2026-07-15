@@ -112,6 +112,20 @@ export const patientPrivacyService = {
     api.post(`/patients/${patientId}/privacy/requests`, data),
   updateRequestStatus: (requestId: string, status: string, decisionNote?: string) =>
     api.patch(`/privacy-requests/${requestId}/status`, { status, decisionNote }),
+  // KVKK lifecycle (docs/compliance/53): downloadable ZIP export package.
+  createExportPackage: (patientId: string) =>
+    api.post(`/patients/${patientId}/privacy/export-package`),
+  downloadExportPackage: (patientId: string, exportId: string, token: string) =>
+    api.get(`/patients/${patientId}/privacy/export-package/${exportId}/download`, {
+      params: { token },
+      responseType: 'blob',
+    }),
+  getDeletionReview: (patientId: string) =>
+    api.get(`/patients/${patientId}/privacy/deletion-review`),
+  executeDeletionReview: (patientId: string, reason: string) =>
+    api.post(`/patients/${patientId}/privacy/deletion-review/execute`, { confirm: true, reason }),
+  getOrphanCheck: (patientId: string) =>
+    api.get(`/patients/${patientId}/privacy/orphan-check`),
 };
 
 export const appointmentTypeService = {

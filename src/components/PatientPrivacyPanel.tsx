@@ -1,7 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Shield, Download, AlertTriangle, CheckCircle2, Loader2, Plus, X, ChevronDown } from 'lucide-react';
+import { Shield, Download, AlertTriangle, CheckCircle2, Loader2, Plus, X, ChevronDown, PackageSearch, FileArchive } from 'lucide-react';
 import { patientPrivacyService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+
+// ── KVKK lifecycle types (docs/compliance/53) ──────────────────────────────────
+
+interface DeletionReviewInventory {
+  attachments: { total: number; legalHold: number; deletableAdministrative: number; estimatedBytes: number };
+  imaging: { total: number; legalHold: number; retainedClinical: number; estimatedBytes: number };
+  blockers: string[];
+  dryRun: true;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +77,15 @@ const PatientPrivacyPanel: React.FC<Props> = ({
   const [newRequestNote, setNewRequestNote] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [partialFailureWarning, setPartialFailureWarning] = useState<{
+    attachmentResults?: { total: number; redacted: number; skippedLegalHold: number; failed: number };
+    imagingResults?: { total: number; redacted: number; skippedLegalHold: number; failed: number };
+  } | null>(null);
+
+  const [exportingPackage, setExportingPackage] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [deletionReview, setDeletionReview] = useState<DeletionReviewInventory | null>(null);
+  const [showReviewPanel, setShowReviewPanel] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -113,9 +131,18 @@ const PatientPrivacyPanel: React.FC<Props> = ({
     setAnonymizing(true);
     setError('');
     setSuccess('');
+    setPartialFailureWarning(null);
     try {
-      await patientPrivacyService.anonymize(patientId, anonReason.trim());
-      setSuccess('Hasta başarıyla anonimleştirildi.');
+      const res = await patientPrivacyService.anonymize(patientId, anonReason.trim());
+      if (res.data?.partialFailure) {
+        setPartialFailureWarning({
+          attachmentResults: res.data.attachmentResults,
+          imagingResults: res.data.imagingResults,
+        });
+        setSuccess('Hasta anonimleştirildi, ancak bazı dosya/görüntü meta veri redaksiyonları başarısız oldu (aşağıya bakın).');
+      } else {
+        setSuccess('Hasta başarıyla anonimleştirildi.');
+      }
       setShowAnonModal(false);
       setAnonReason('');
       loadRequests();
@@ -125,6 +152,44 @@ const PatientPrivacyPanel: React.FC<Props> = ({
       setError(msg);
     } finally {
       setAnonymizing(false);
+    }
+  };
+
+  const handleExportPackage = async () => {
+    setExportingPackage(true);
+    setError('');
+    setSuccess('');
+    try {
+      const created = await patientPrivacyService.createExportPackage(patientId);
+      const { exportId, downloadToken } = created.data;
+      const downloaded = await patientPrivacyService.downloadExportPackage(patientId, exportId, downloadToken);
+      const blob = new Blob([downloaded.data], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `patient-export-${patientId}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setSuccess('Dosya paketi indirildi (ekler + veriler + manifest).');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Dosya paketi oluşturma/indirme başarısız.';
+      setError(msg);
+    } finally {
+      setExportingPackage(false);
+    }
+  };
+
+  const handleLoadDeletionReview = async () => {
+    setReviewLoading(true);
+    setError('');
+    try {
+      const res = await patientPrivacyService.getDeletionReview(patientId);
+      setDeletionReview(res.data);
+      setShowReviewPanel(true);
+    } catch {
+      setError('Silme incelemesi önizlemesi yüklenemedi.');
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -178,6 +243,28 @@ const PatientPrivacyPanel: React.FC<Props> = ({
           {success}
         </div>
       )}
+      {partialFailureWarning && (
+        <div className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm border border-amber-200 space-y-1">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle size={15} />
+            Bazı redaksiyonlar başarısız oldu — lütfen manuel kontrol edin.
+          </div>
+          {partialFailureWarning.attachmentResults && (
+            <p className="text-xs">
+              Ekler: {partialFailureWarning.attachmentResults.redacted}/{partialFailureWarning.attachmentResults.total} redakte edildi,
+              {' '}{partialFailureWarning.attachmentResults.skippedLegalHold} yasal tutma nedeniyle atlandı,
+              {' '}{partialFailureWarning.attachmentResults.failed} başarısız.
+            </p>
+          )}
+          {partialFailureWarning.imagingResults && (
+            <p className="text-xs">
+              Görüntüler: {partialFailureWarning.imagingResults.redacted}/{partialFailureWarning.imagingResults.total} redakte edildi,
+              {' '}{partialFailureWarning.imagingResults.skippedLegalHold} yasal tutma nedeniyle atlandı,
+              {' '}{partialFailureWarning.imagingResults.failed} başarısız.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       {canManage && (
@@ -191,7 +278,27 @@ const PatientPrivacyPanel: React.FC<Props> = ({
               title={isAnonymized ? 'Anonimleştirilmiş hasta dışa aktarılamaz' : undefined}
             >
               {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              Verileri dışa aktar
+              Verileri dışa aktar (JSON)
+            </button>
+
+            <button
+              onClick={handleExportPackage}
+              disabled={exportingPackage || isAnonymized}
+              className="btn-secondary flex items-center gap-2 text-sm"
+              title={isAnonymized ? 'Anonimleştirilmiş hasta dışa aktarılamaz' : 'Ekler + veriler + manifest içeren ZIP paketi'}
+            >
+              {exportingPackage ? <Loader2 size={15} className="animate-spin" /> : <FileArchive size={15} />}
+              Dosya paketini indir (ZIP)
+            </button>
+
+            <button
+              onClick={handleLoadDeletionReview}
+              disabled={reviewLoading}
+              className="btn-secondary flex items-center gap-2 text-sm"
+              title="Silme incelemesi ön izlemesi (yalnızca önizleme, hiçbir şey silinmez)"
+            >
+              {reviewLoading ? <Loader2 size={15} className="animate-spin" /> : <PackageSearch size={15} />}
+              Silme incelemesi önizle
             </button>
 
             <button
@@ -223,6 +330,53 @@ const PatientPrivacyPanel: React.FC<Props> = ({
               Bu hasta anonimleştirildi. Kimlik bilgileri kaldırıldı.
             </p>
           )}
+        </div>
+      )}
+
+      {/* Deletion-review dry-run summary (docs/compliance/53) */}
+      {showReviewPanel && deletionReview && (
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <PackageSearch size={15} />
+              Silme İncelemesi Önizlemesi (yalnızca önizleme — hiçbir kayıt silinmedi)
+            </h4>
+            <button onClick={() => setShowReviewPanel(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="font-medium text-gray-700">Dosya Ekleri</p>
+              <p className="text-gray-500">
+                Toplam: {deletionReview.attachments.total} · Yasal tutma: {deletionReview.attachments.legalHold} ·
+                {' '}Silinebilir (idari): {deletionReview.attachments.deletableAdministrative}
+              </p>
+              <p className="text-xs text-gray-400">≈{Math.round(deletionReview.attachments.estimatedBytes / 1024)} KB</p>
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="font-medium text-gray-700">Görüntüleme (Imaging)</p>
+              <p className="text-gray-500">
+                Toplam: {deletionReview.imaging.total} · Yasal tutma: {deletionReview.imaging.legalHold} ·
+                {' '}Korunan (klinik): {deletionReview.imaging.retainedClinical}
+              </p>
+              <p className="text-xs text-gray-400">≈{Math.round(deletionReview.imaging.estimatedBytes / 1024)} KB</p>
+            </div>
+          </div>
+
+          {deletionReview.blockers.length > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
+              {deletionReview.blockers.map((b, i) => (
+                <p key={i}>• {b}</p>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400">
+            Not: Bu bir önizlemedir (dryRun). Yalnızca yasal tutma altında olmayan dosya ekleri, ayrı bir onay akışıyla silinebilir;
+            görüntüleme/klinik veriler bu sürümde silinemez.
+          </p>
         </div>
       )}
 
