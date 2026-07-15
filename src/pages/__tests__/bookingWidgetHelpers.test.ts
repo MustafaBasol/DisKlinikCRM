@@ -19,6 +19,7 @@ import {
   removeStaleSlot,
   isSlotUnavailableError,
   isSelectedSlotStillOffered,
+  hasValidSlotSelection,
   type PublicSlot,
 } from '../bookingWidgetHelpers';
 
@@ -188,6 +189,24 @@ async function main() {
     assert.equal(isSlotUnavailableError(new Error('Network Error')), false);
     assert.equal(isSlotUnavailableError({}), false);
     assert.equal(isSlotUnavailableError(undefined), false);
+  });
+
+  section('── hasValidSlotSelection (Continue-button gate, hotfix regression) ──');
+
+  await test('zero available slots (no time, no practitioner) → invalid, Continue stays disabled', () => {
+    assert.equal(hasValidSlotSelection('', ''), false);
+  });
+
+  await test('a date selected but no time chosen → invalid', () => {
+    assert.equal(hasValidSlotSelection('', 'doc-a'), false, 'practitionerId alone (e.g. a stale value) must not count as a valid selection');
+  });
+
+  await test('a time string present but no practitionerId resolved → invalid', () => {
+    assert.equal(hasValidSlotSelection('09:00', ''), false);
+  });
+
+  await test('exact (time, practitionerId) tuple selected → valid, Continue enabled', () => {
+    assert.equal(hasValidSlotSelection('09:00', 'doc-a'), true);
   });
 
   // ─── Summary ──────────────────────────────────────────────────────────────

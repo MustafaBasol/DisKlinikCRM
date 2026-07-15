@@ -15,6 +15,7 @@ import {
   removeStaleSlot,
   isSlotUnavailableError,
   isSelectedSlotStillOffered,
+  hasValidSlotSelection as computeHasValidSlotSelection,
   type PublicSlot,
 } from './bookingWidgetHelpers';
 
@@ -355,14 +356,22 @@ const BookingWidget: React.FC = () => {
   useEffect(() => {
     if (!selectedDate) {
       setSlots([]);
+      setSelectedTime('');
+      setSelectedSlotPractitionerId('');
       return;
     }
     fetchSlots();
-    // Selecting a new date invalidates any previously chosen time.
+    // Selecting a new date (or a new service while a date is set) invalidates
+    // any previously chosen time — the customer must pick a fresh slot.
     setSelectedTime('');
     setSelectedSlotPractitionerId('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicId, selectedDate, selectedService]);
+
+  // An exact (practitionerId, startTime, endTime) slot must be selected
+  // before the customer can proceed — a date or practitioner chosen alone is
+  // not sufficient. See docs/51-public-booking-required-slot-hotfix.md.
+  const hasValidSlotSelection = computeHasValidSlotSelection(selectedTime, selectedSlotPractitionerId);
 
   const preferences = data?.operatingPreferences ?? DEFAULT_CLINIC_OPERATING_PREFERENCES;
   const allDays = getNext30Days(preferences);
@@ -376,6 +385,16 @@ const BookingWidget: React.FC = () => {
   });
 
   const handleSubmit = async () => {
+    // Defense in depth: the Step-1 Continue button already guards this, but
+    // handleSubmit is the single call site that reaches the network, so it
+    // must never trust step/UI state alone (stale state, a forced step
+    // change, or a keyboard Enter on a supposedly-disabled control must not
+    // be able to submit without an exact slot).
+    if (!hasValidSlotSelection) {
+      setSubmitError(t('booking:schedule.slotRequired'));
+      setStep(1);
+      return;
+    }
     if (!patientName.trim() || !phone.trim()) {
       setSubmitError(t('booking:errors.namePhoneRequired'));
       return;
@@ -392,7 +411,7 @@ const BookingWidget: React.FC = () => {
         phone: phone.trim(),
         email: email.trim() || undefined,
         serviceId: selectedService || undefined,
-        practitionerId: selectedTime ? selectedSlotPractitionerId : selectedDoctor || undefined,
+        practitionerId: selectedSlotPractitionerId,
         preferredDate: selectedDate || undefined,
         preferredTime: selectedTime || undefined,
         notes: notes.trim() || undefined,
@@ -482,7 +501,7 @@ const BookingWidget: React.FC = () => {
               {services.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => { setSelectedService(s.id); setStep(1); }}
+                  onClick={() => { setSelectedService(s.id); setSelectedTime(''); setSelectedSlotPractitionerId(''); setStep(1); }}
                   className="w-full flex items-center justify-between p-4 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all text-left group"
                 >
                   <div>
@@ -499,7 +518,7 @@ const BookingWidget: React.FC = () => {
                 <p className="text-gray-500 text-center py-4">{t('booking:service.empty')}</p>
               )}
               <button
-                onClick={() => { setSelectedService(''); setStep(1); }}
+                onClick={() => { setSelectedService(''); setSelectedTime(''); setSelectedSlotPractitionerId(''); setStep(1); }}
                 className="w-full py-3 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
               >
                 {t('booking:service.continueWithoutService')}
@@ -529,7 +548,7 @@ const BookingWidget: React.FC = () => {
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => setSelectedDoctor('')}
+                    onClick={() => { setSelectedDoctor(''); setSelectedTime(''); setSelectedSlotPractitionerId(''); }}
                     className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${!selectedDoctor ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}
                   >
                     {t('booking:schedule.anyDoctor')}
@@ -537,7 +556,7 @@ const BookingWidget: React.FC = () => {
                   {doctors.map((d) => (
                     <button
                       key={d.id}
-                      onClick={() => { setSelectedDoctor(d.id); setSelectedDate(''); }}
+                      onClick={() => { setSelectedDoctor(d.id); setSelectedDate(''); setSelectedTime(''); setSelectedSlotPractitionerId(''); }}
                       className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${selectedDoctor === d.id ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}
                     >
                       Dr. {d.firstName} {d.lastName}
@@ -556,7 +575,11 @@ const BookingWidget: React.FC = () => {
                 {availableDays.map(({ date, label, weekdayName }) => (
                   <button
                     key={date}
-                    onClick={() => setSelectedDate(selectedDate === date ? '' : date)}
+                    onClick={() => {
+                      setSelectedDate(selectedDate === date ? '' : date);
+                      setSelectedTime('');
+                      setSelectedSlotPractitionerId('');
+                    }}
                     className={`px-2 py-2 rounded-lg border text-xs transition-colors ${selectedDate === date ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-700 hover:border-blue-400 bg-white'}`}
                   >
                     <span className="block font-medium">{weekdayName}</span>
@@ -603,12 +626,16 @@ const BookingWidget: React.FC = () => {
                     ))}
                   </div>
                 )}
+                {!slotsLoading && !slotsError && selectableTimesForDoctor(slots, selectedDoctor).length > 0 && !hasValidSlotSelection && (
+                  <p className="text-amber-700 text-sm mt-2">{t('booking:schedule.slotRequired')}</p>
+                )}
               </div>
             )}
 
             <button
               onClick={() => { setRecoveryNotice(''); setStep(2); }}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
+              disabled={!hasValidSlotSelection}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors"
             >
               {t('booking:actions.continue')} →
             </button>

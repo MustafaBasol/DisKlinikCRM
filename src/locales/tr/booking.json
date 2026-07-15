@@ -26,7 +26,8 @@
     "timeOptional": "Tercih edilen saat (opsiyonel)",
     "slotsLoading": "Uygun saatler yükleniyor...",
     "slotsEmpty": "Bu tarihte uygun saat bulunamadı. Lütfen başka bir tarih seçin.",
-    "slotsError": "Uygun saatler yüklenemedi. Lütfen tekrar deneyin."
+    "slotsError": "Uygun saatler yüklenemedi. Lütfen tekrar deneyin.",
+    "slotRequired": "Devam etmek için uygun bir saat seçmelisiniz."
   },
   "contact": {
     "title": "İletişim Bilgileri",

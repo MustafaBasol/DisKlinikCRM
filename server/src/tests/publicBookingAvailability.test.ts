@@ -10,16 +10,20 @@
  *   We test the central service helpers (acquireAppointmentSlotLock,
  *   assertSlotAvailable, SlotConflictError) in the same way the new
  *   publicBooking.ts code uses them, and verify the branching logic:
- *     - hasFullSlotInfo path  → lock + assert + create
- *     - partial path          → direct create, no lock
+ *     - hasFullSlotInfo === true  → lock + assert + create (the only path)
+ *     - hasFullSlotInfo === false → 400 SLOT_REQUIRED, no create, no lock
+ *       (see publicBookingSlotRequired.test.ts for the dedicated hotfix
+ *       regression coverage — the old "partial request" fallback branch
+ *       that used to create an AppointmentRequest without full slot info
+ *       has been removed entirely)
  *   We also verify the status semantics via the shared constants.
  *
  * Test coverage:
  *  ── hasFullSlotInfo gating ────────────────────────────────────────────────
  *   1. Full slot info (practitionerId + startTime + endTime) → uses lock path
- *   2. Missing practitionerId → partial path (no lock)
- *   3. Missing startTime → partial path (no lock)
- *   4. Missing endTime (no serviceId/duration) → partial path (no lock)
+ *   2. Missing practitionerId → hasFullSlotInfo = false (→ 400 SLOT_REQUIRED)
+ *   3. Missing startTime → hasFullSlotInfo = false (→ 400 SLOT_REQUIRED)
+ *   4. Missing endTime (no serviceId/duration) → hasFullSlotInfo = false (→ 400 SLOT_REQUIRED)
  *
  *  ── Slot available — no conflict ──────────────────────────────────────────
  *   5. No Appointment conflict, no AppointmentRequest conflict → create succeeds
@@ -327,7 +331,7 @@ await test('19. preferredEndTime is undefined/null when serviceId is absent', ()
     preferredEndTime = new Date(startTime.getTime() + (svc as { durationMinutes: number }).durationMinutes * 60 * 1000);
   }
   assert.equal(preferredEndTime, undefined);
-  // hasFullSlotInfo would be false → partial path (no lock)
+  // hasFullSlotInfo would be false → 400 SLOT_REQUIRED (see publicBookingSlotRequired.test.ts)
   const hasFullSlotInfo = !!(true /* practitionerId */ && startTime && preferredEndTime);
   assert.equal(hasFullSlotInfo, false);
 });

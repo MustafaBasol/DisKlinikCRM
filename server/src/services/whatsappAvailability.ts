@@ -6,7 +6,7 @@ import {
 } from './appointments/appointmentAvailabilityService.js';
 
 /** Default slot duration (minutes) used when no service/appointmentType is selected yet. */
-const DEFAULT_SLOT_DURATION_MINUTES = 30;
+export const DEFAULT_SLOT_DURATION_MINUTES = 30;
 
 export type SavedAvailableSlot = {
   practitionerId: string;
