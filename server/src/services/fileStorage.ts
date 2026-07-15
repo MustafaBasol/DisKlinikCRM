@@ -23,7 +23,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import {
   S3Client,
   PutObjectCommand,
@@ -199,6 +201,16 @@ export function buildExportStorageKey(clinicId: string, exportId: string): strin
  * this, a sensitive patient ZIP could be left under the OS temp directory
  * indefinitely (the cleanup job/TTL logic only knows about the *storage*
  * key, never about this local scratch file).
+ *
+ * Partial-artifact contract (local mode, second review round): this
+ * function NEVER stream-copies directly into the final storage path. A
+ * cross-device (EXDEV) copy always lands in a unique `.partial-<uuid>`
+ * sibling first; only a same-directory (same-filesystem) rename promotes it
+ * to the final path, which is atomic — there is no window where a reader of
+ * `key` can observe a truncated file. If the copy into the partial path
+ * fails partway through, the partial file is removed in `finally` and the
+ * final path is never touched, so no orphaned/truncated artifact is left
+ * behind with no DB storageKey reference and no TTL cleanup path.
  */
 export async function saveFileFromPath(key: string, tempFilePath: string, contentType: string): Promise<void> {
   if (isRemoteStorageEnabled()) {
@@ -222,27 +234,31 @@ export async function saveFileFromPath(key: string, tempFilePath: string, conten
   }
   const localPath = resolveLocalPath(key);
   await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+  const partialPath = `${localPath}.partial-${crypto.randomUUID()}`;
   try {
-    // Fast path: same-filesystem rename (no copy) — tempFilePath no longer
-    // exists at its old path once this succeeds, nothing further to clean up.
-    await fs.promises.rename(tempFilePath, localPath);
-  } catch {
-    // Cross-device (EXDEV) or other rename failure — fall back to a
-    // streamed copy, still without loading the whole file into memory.
     try {
-      await new Promise<void>((resolve, reject) => {
-        const read = fs.createReadStream(tempFilePath);
-        const write = fs.createWriteStream(localPath);
-        read.on('error', reject);
-        write.on('error', reject);
-        write.on('finish', () => resolve());
-        read.pipe(write);
-      });
-    } finally {
-      // Runs whether the copy succeeded or failed — the source temp file is
-      // either consumed (success) or abandoned (failure) either way.
+      // Fast path: same-filesystem rename (no copy) into the partial path —
+      // tempFilePath no longer exists at its old path once this succeeds.
+      await fs.promises.rename(tempFilePath, partialPath);
+    } catch {
+      // Cross-device (EXDEV) or other rename failure — fall back to a
+      // streamed copy into the partial path (never the final path), still
+      // without loading the whole file into memory. pipeline() propagates
+      // errors from either side and destroys both streams on failure.
+      await pipeline(fs.createReadStream(tempFilePath), fs.createWriteStream(partialPath));
       await fs.promises.unlink(tempFilePath).catch(() => {});
     }
+    // Promote the fully-written partial file to its final name. Same
+    // directory => same filesystem => atomic rename; readers of `key` never
+    // observe a partially-written file.
+    await fs.promises.rename(partialPath, localPath);
+  } finally {
+    // Belt-and-suspenders cleanup: whichever of tempFilePath/partialPath is
+    // still present after success or failure is removed here. On the
+    // success path both have already been consumed by the renames above, so
+    // these are no-ops (unlink of a missing path is swallowed).
+    await fs.promises.unlink(tempFilePath).catch(() => {});
+    await fs.promises.unlink(partialPath).catch(() => {});
   }
 }
 

@@ -48,8 +48,21 @@ import { safeErrorFields } from '../../utils/safeError.js';
 
 export const EXPORT_PACKAGE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-/** How long a "generating"/"queued" row is treated as a live in-flight lock before being considered abandoned. */
-export const EXPORT_GENERATION_STALE_MS = 10 * 60 * 1000; // 10 minutes
+/**
+ * Lease/heartbeat (replaces createdAt-based staleness — PR #160 review,
+ * third round). A legitimate export can run well past any fixed age
+ * threshold: the configured maximum package size is EXPORT_MAX_TOTAL_SIZE_BYTES
+ * (2 GB). Instead of failing any row merely because it is "old", a running
+ * generation renews its lease periodically (see renewExportLease /
+ * startExportLeaseHeartbeat below); only a row whose lease has actually
+ * expired — i.e. renewal itself has stopped, meaning the process died or
+ * stalled — is swept to "failed".
+ */
+export const EXPORT_LEASE_DURATION_MS = 10 * 60 * 1000; // 10 minutes without renewal = abandoned
+/** How often a running generation renews its lease via a background timer. */
+export const EXPORT_LEASE_RENEWAL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+/** Also renew the lease after this many attachment files, independent of the timer. */
+export const EXPORT_LEASE_RENEWAL_FILE_BATCH = 25;
 
 /** Bounds enforced on every export package build (PR #160 review). */
 export const EXPORT_MAX_FILE_COUNT = 500;
@@ -110,6 +123,20 @@ export class ExportGenerationInProgressError extends Error {
   }
 }
 
+/**
+ * Thrown when the generating worker discovers, at completion time, that it
+ * no longer holds the lease on its own row (another process's stale-sweep
+ * already marked it failed, or the lease simply expired). The archive this
+ * worker just wrote to storage is deleted before this error propagates —
+ * callers must never treat it as success.
+ */
+export class ExportLeaseLostError extends Error {
+  constructor() {
+    super('Export generation lost its lease before completion; the archive was discarded.');
+    this.name = 'ExportLeaseLostError';
+  }
+}
+
 function sha256(buffer: Buffer): string {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
@@ -146,12 +173,19 @@ export function computeExportLockKey(clinicId: string): [number, number] {
  * multiple Node processes/API instances, not just within one.
  *
  * Within the locked transaction:
- *   1. Sweep stale queued/generating rows (older than
- *      EXPORT_GENERATION_STALE_MS) to status='failed' so an abandoned
- *      generation attempt never blocks new exports forever.
+ *   1. Sweep queued/generating rows whose LEASE has expired (leaseExpiresAt
+ *      is null or in the past) to status='failed'. This is deliberately NOT
+ *      based on createdAt/age: a legitimate export can run for a long time
+ *      (up to EXPORT_MAX_TOTAL_SIZE_BYTES = 2 GB) and keeps its lease alive
+ *      via periodic renewal (renewExportLease/startExportLeaseHeartbeat), so
+ *      an active worker is never swept out from under itself just for being
+ *      old. Only a lease that has actually stopped being renewed — because
+ *      the worker died, crashed, or lost connectivity — is treated as
+ *      abandoned.
  *   2. Check for a current active (queued/generating) row; throw
  *      ExportGenerationInProgressError if one exists.
- *   3. Otherwise create exactly one new "generating" row.
+ *   3. Otherwise create exactly one new "generating" row with a fresh
+ *      heartbeat/lease.
  *
  * `client` is injectable (default: the shared prisma singleton) purely so
  * tests can point this at a disposable database without a reimplementation —
@@ -165,7 +199,6 @@ export async function reserveGenerationSlot(
   now: Date = new Date(),
   client: Pick<PrismaClient, '$transaction'> = prisma,
 ): Promise<string> {
-  const staleBefore = new Date(now.getTime() - EXPORT_GENERATION_STALE_MS);
   const exportId = crypto.randomUUID();
 
   await client.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -176,7 +209,7 @@ export async function reserveGenerationSlot(
       where: {
         clinicId,
         status: { in: ['queued', 'generating'] },
-        createdAt: { lt: staleBefore },
+        OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }],
       },
       data: { status: 'failed' },
     });
@@ -197,11 +230,56 @@ export async function reserveGenerationSlot(
         patientId,
         requestedByUserId,
         status: 'generating',
+        heartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + EXPORT_LEASE_DURATION_MS),
       },
     });
   });
 
   return exportId;
+}
+
+/**
+ * Renews the lease on a "generating" row (heartbeat). Guarded on
+ * status='generating' so a row that has already been swept to 'failed' (lost
+ * its lease) or completed to 'ready' can never be resurrected by a late
+ * renewal — it simply becomes a no-op (returns false). Never throws:
+ * callers (the periodic timer and the per-file-batch renewal in
+ * createExportPackage) treat a transient DB error the same as a missed
+ * heartbeat and let the next renewal attempt or the eventual lease-expiry
+ * check settle the row's fate.
+ */
+export async function renewExportLease(
+  exportId: string,
+  now: Date = new Date(),
+  client: Pick<PrismaClient, 'patientPrivacyExportArchive'> = prisma,
+): Promise<boolean> {
+  try {
+    const result = await client.patientPrivacyExportArchive.updateMany({
+      where: { id: exportId, status: 'generating' },
+      data: { heartbeatAt: now, leaseExpiresAt: new Date(now.getTime() + EXPORT_LEASE_DURATION_MS) },
+    });
+    return result.count > 0;
+  } catch (err) {
+    const { errorName, errorCode } = safeErrorFields(err);
+    console.error('[export-package] lease heartbeat renewal failed', { exportId, errorName, errorCode });
+    return false;
+  }
+}
+
+/**
+ * Starts a timer that renews `exportId`'s lease every
+ * EXPORT_LEASE_RENEWAL_INTERVAL_MS. Callers MUST stop this timer (clearInterval)
+ * in a `finally` block once generation ends, success or failure — an
+ * unstopped timer would keep renewing the lease of a row that is no longer
+ * actually being worked on.
+ */
+export function startExportLeaseHeartbeat(exportId: string): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    void renewExportLease(exportId);
+  }, EXPORT_LEASE_RENEWAL_INTERVAL_MS);
+  timer.unref?.();
+  return timer;
 }
 
 /**
@@ -227,6 +305,7 @@ export async function createExportPackage(
   const exportId = await reserveGenerationSlot(clinicId, organizationId, patientId, requestedByUserId, new Date());
 
   let tempFilePath: string | null = null;
+  const heartbeatTimer = startExportLeaseHeartbeat(exportId);
 
   try {
     const attachments = await prisma.patientAttachment.findMany({
@@ -311,6 +390,9 @@ export async function createExportPackage(
           sizeBytes: buf.length,
         });
         totalBytesIncluded += buf.length;
+        if (includedFiles.length % EXPORT_LEASE_RENEWAL_FILE_BATCH === 0) {
+          await renewExportLease(exportId);
+        }
       } catch (err) {
         const { errorName, errorCode } = safeErrorFields(err);
         console.error('[export-package] attachment read failed', {
@@ -351,9 +433,21 @@ export async function createExportPackage(
     const token = crypto.randomBytes(32).toString('base64url');
     const tokenHash = hashExportToken(token);
 
+    // Guarded completion: only transition generating -> ready if this row is
+    // STILL 'generating' AND (no lease recorded, defensively, or) its lease
+    // has not expired. If another process's stale-sweep already lost the
+    // race and flipped this row to 'failed' — or the lease simply expired
+    // without us noticing — this updateMany matches zero rows. In that case
+    // we must NOT resurrect the row back to 'ready': the archive we just
+    // wrote is deleted and no download token is ever returned.
+    let updateCount: number;
     try {
-      await prisma.patientPrivacyExportArchive.update({
-        where: { id: exportId },
+      const result = await prisma.patientPrivacyExportArchive.updateMany({
+        where: {
+          id: exportId,
+          status: 'generating',
+          OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { gte: now } }],
+        },
         data: {
           status: 'ready',
           storageKey,
@@ -362,6 +456,7 @@ export async function createExportPackage(
           expiresAt,
         },
       });
+      updateCount = result.count;
     } catch (dbErr) {
       // The physical file was already written to storage — never leave an
       // orphaned file behind if the DB update fails.
@@ -369,18 +464,28 @@ export async function createExportPackage(
       throw dbErr;
     }
 
+    if (updateCount === 0) {
+      await deleteFile(storageKey).catch(() => {});
+      throw new ExportLeaseLostError();
+    }
+
     return { exportId, downloadToken: token, expiresAt, manifest };
   } catch (err) {
     // Best-effort cleanup of the temp file (if we didn't get as far as
-    // saveFileFromPath) and mark the row failed so it doesn't count as an
-    // in-flight lock.
+    // saveFileFromPath) and mark the row failed — but ONLY if it is still
+    // 'generating'. This guard matters for the ExportLeaseLostError path
+    // above: that row is no longer 'generating' (it was already swept to
+    // 'failed' by another process, or its lease expired), so this must be a
+    // no-op rather than clobbering whatever state it's actually in.
     if (tempFilePath) {
       await fs.promises.unlink(tempFilePath).catch(() => {});
     }
     await prisma.patientPrivacyExportArchive
-      .update({ where: { id: exportId }, data: { status: 'failed' } })
+      .updateMany({ where: { id: exportId, status: 'generating' }, data: { status: 'failed' } })
       .catch(() => {});
     throw err;
+  } finally {
+    clearInterval(heartbeatTimer);
   }
 }
 
@@ -482,12 +587,14 @@ export async function cleanupExpiredExportArchives(
   const findExpired =
     deps.findExpired ??
     (async (n: Date) => {
-      const staleBefore = new Date(n.getTime() - EXPORT_GENERATION_STALE_MS);
       return prisma.patientPrivacyExportArchive.findMany({
         where: {
           OR: [
             { expiresAt: { lt: n } },
-            { status: { in: ['queued', 'generating'] }, createdAt: { lt: staleBefore } },
+            {
+              status: { in: ['queued', 'generating'] },
+              OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: n } }],
+            },
           ],
         },
         select: { id: true, storageKey: true },

@@ -83,6 +83,12 @@
  *   54. saveFileFromPath (S3 mode, mocked client): temp file is removed even when the upload fails, and the failure still propagates
  *   55. computeExportLockKey is deterministic for the same clinicId and differs across clinicIds
  *
+ * Third follow-up review round additions (partial-artifact leak fix — this
+ * file's DB-free portion only; the real disposable-Postgres lease/heartbeat
+ * concurrency proof lives in scripts/verify-export-archive-lifecycle.ts):
+ *   56. saveFileFromPath (local mode): copy-fallback failure after partial bytes were written leaves no partial or final artifact behind, and the source temp path is also gone
+ *   57. saveFileFromPath (local mode): a successful copy-fallback leaves no stray `.partial-*` sibling file behind
+ *
  * Run with: cd server && npx tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts
  */
 
@@ -90,6 +96,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Writable } from 'node:stream';
 import { S3Client } from '@aws-sdk/client-s3';
 
 import {
@@ -857,8 +864,15 @@ await test('copy-fallback path: temp file is gone even when rename fails (e.g. E
   const key = `clinic-test/${Date.now()}-copy-target.txt`;
 
   const originalRename = fs.promises.rename;
-  (fs.promises as any).rename = async () => {
-    throw Object.assign(new Error('simulated EXDEV'), { code: 'EXDEV' });
+  (fs.promises as any).rename = async (from: fs.PathLike, to: fs.PathLike) => {
+    // Only the initial tempPath -> partialPath rename is cross-device in
+    // this simulation; the later partialPath -> finalPath promotion is a
+    // same-directory (same-filesystem) rename and must be allowed to
+    // actually succeed, exactly as it would on a real filesystem.
+    if (from === tempPath) {
+      throw Object.assign(new Error('simulated EXDEV'), { code: 'EXDEV' });
+    }
+    return originalRename(from, to);
   };
   try {
     await saveFileFromPath(key, tempPath, 'text/plain');
@@ -934,6 +948,83 @@ await test('computeExportLockKey differs across clinicIds', () => {
   const a = computeExportLockKey('clinic-one');
   const b = computeExportLockKey('clinic-two');
   assert.notDeepEqual(a, b);
+});
+
+section('56-57. saveFileFromPath partial-artifact cleanup (local mode, copy-fallback path)');
+
+const UPLOADS_BASE_DIR = path.resolve(process.cwd(), 'uploads');
+
+await test('copy-fallback failure after partial bytes: no partial or final artifact survives', async () => {
+  const tempPath = path.join(os.tmpdir(), `kvkk-test-partial-fail-${Date.now()}.bin`);
+  fs.writeFileSync(tempPath, Buffer.alloc(200_000, 'A'));
+  const key = `clinic-test/${Date.now()}-partial-fail-target.bin`;
+
+  const originalRename = fs.promises.rename;
+  const originalCreateWriteStream = fs.createWriteStream;
+  let observedPartialPath: string | null = null;
+  let writeCallCount = 0;
+  (fs.promises as any).rename = async () => {
+    throw Object.assign(new Error('simulated EXDEV'), { code: 'EXDEV' });
+  };
+  (fs as any).createWriteStream = (dest: string) => {
+    observedPartialPath = dest;
+    return new Writable({
+      write(chunk, _enc, cb) {
+        writeCallCount++;
+        if (writeCallCount === 1) {
+          // Prove real partial bytes land on disk before the simulated
+          // mid-stream failure — this is the scenario the fix must survive.
+          fs.writeFileSync(dest, chunk);
+          cb();
+        } else {
+          cb(new Error('simulated write failure mid-stream'));
+        }
+      },
+    });
+  };
+
+  try {
+    await assert.rejects(
+      saveFileFromPath(key, tempPath, 'application/octet-stream'),
+      /simulated write failure mid-stream/,
+    );
+  } finally {
+    (fs.promises as any).rename = originalRename;
+    (fs as any).createWriteStream = originalCreateWriteStream;
+  }
+
+  assert.ok(writeCallCount >= 2, 'test fixture must actually exercise a multi-chunk write to prove partial bytes were flushed');
+  assert.equal(fs.existsSync(tempPath), false, 'source temp path must not survive a failed copy');
+  assert.equal(await fileExists(key), false, 'final storage key must not exist after a failed copy');
+  assert.ok(observedPartialPath, 'the copy must have targeted a partial path, never the final path directly');
+  assert.notEqual(observedPartialPath, path.join(UPLOADS_BASE_DIR, key), 'copy destination must never be the final storage path itself');
+  assert.equal(fs.existsSync(observedPartialPath!), false, 'partial artifact must not survive a failed copy');
+});
+
+await test('copy-fallback success: no stray .partial-* sibling file is left behind', async () => {
+  const tempPath = path.join(os.tmpdir(), `kvkk-test-partial-ok-${Date.now()}.txt`);
+  fs.writeFileSync(tempPath, 'partial-success-fixture');
+  const key = `clinic-test/${Date.now()}-partial-ok-target.txt`;
+
+  const originalRename = fs.promises.rename;
+  (fs.promises as any).rename = async (from: fs.PathLike, to: fs.PathLike) => {
+    if (from === tempPath) {
+      throw Object.assign(new Error('simulated EXDEV'), { code: 'EXDEV' });
+    }
+    return originalRename(from, to);
+  };
+  try {
+    await saveFileFromPath(key, tempPath, 'text/plain');
+  } finally {
+    (fs.promises as any).rename = originalRename;
+  }
+
+  assert.equal(await fileExists(key), true, 'final key must exist via the streamed-copy fallback');
+  const dir = path.dirname(path.join(UPLOADS_BASE_DIR, key));
+  const base = path.basename(key);
+  const stray = fs.readdirSync(dir).filter((f) => f.startsWith(`${base}.partial-`));
+  assert.deepEqual(stray, [], 'no .partial-<uuid> sibling file may remain after a successful save');
+  await deleteFile(key);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

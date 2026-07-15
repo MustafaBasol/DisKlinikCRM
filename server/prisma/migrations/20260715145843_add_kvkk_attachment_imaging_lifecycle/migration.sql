@@ -34,6 +34,9 @@ CREATE TABLE "PatientPrivacyExportArchive" (
     "expiresAt" TIMESTAMP(3),
     "downloadedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "heartbeatAt" TIMESTAMP(3),
+    "leaseExpiresAt" TIMESTAMP(3),
 
     CONSTRAINT "PatientPrivacyExportArchive_pkey" PRIMARY KEY ("id")
 );
@@ -52,6 +55,9 @@ CREATE INDEX "PatientPrivacyExportArchive_expiresAt_idx" ON "PatientPrivacyExpor
 
 -- CreateIndex
 CREATE INDEX "PatientPrivacyExportArchive_clinicId_status_idx" ON "PatientPrivacyExportArchive"("clinicId", "status");
+
+-- CreateIndex
+CREATE INDEX "PatientPrivacyExportArchive_clinicId_status_leaseExpiresAt_idx" ON "PatientPrivacyExportArchive"("clinicId", "status", "leaseExpiresAt");
 
 -- CreateIndex
 CREATE INDEX "ImagingStudy_clinicId_legalHold_idx" ON "ImagingStudy"("clinicId", "legalHold");

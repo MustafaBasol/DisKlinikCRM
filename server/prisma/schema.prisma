@@ -2468,9 +2468,19 @@ model PatientPrivacyExportArchive {
   expiresAt    DateTime?
   downloadedAt DateTime?
   createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  /// Lease/heartbeat (replaces createdAt-based staleness — an export can
+  /// legitimately run for a long time up to EXPORT_MAX_TOTAL_SIZE_BYTES).
+  /// heartbeatAt is renewed periodically by the running generation; the
+  /// stale sweep in reserveGenerationSlot only fails a row once
+  /// leaseExpiresAt has passed, never merely because it is old.
+  heartbeatAt    DateTime?
+  leaseExpiresAt DateTime?
 
   @@index([clinicId, patientId])
   @@index([organizationId])
   @@index([expiresAt])
   @@index([clinicId, status])
+  @@index([clinicId, status, leaseExpiresAt])
 }

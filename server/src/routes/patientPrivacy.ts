@@ -27,6 +27,7 @@ import {
   validateExportDownloadToken,
   claimExportDownload,
   ExportGenerationInProgressError,
+  ExportLeaseLostError,
 } from '../services/privacy/patientPrivacyExportPackage.js';
 import { buildDeletionReviewInventory } from '../services/privacy/deletionReviewInventory.js';
 import { inspectOrphans } from '../services/privacy/orphanFileInspection.js';
@@ -497,6 +498,11 @@ router.post(
     } catch (err: any) {
       if (err instanceof ExportGenerationInProgressError) {
         return res.status(409).json({ error: 'An export package is already being generated for this clinic. Please try again shortly.' });
+      }
+      if (err instanceof ExportLeaseLostError) {
+        // The generated archive was already discarded by createExportPackage
+        // — safe (and necessary) for the client to simply retry.
+        return res.status(503).json({ error: 'Export package generation lost its lock and was discarded. Please try again.' });
       }
       console.error('[patientPrivacy/export-package]', {
         operation: 'export-package-create',
