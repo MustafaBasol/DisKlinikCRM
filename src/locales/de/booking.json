@@ -40,6 +40,14 @@
     "submitting": "Wird gesendet...",
     "submit": "Terminanfrage senden"
   },
+  "notice": {
+    "unavailable": "Das Online-Buchungsformular ist vorübergehend nicht verfügbar. Bitte wenden Sie sich direkt an die Klinik.",
+    "notReady": "Die Datenschutzhinweise werden geladen, bitte versuchen Sie es in wenigen Sekunden erneut.",
+    "summary": "Ihre Buchungsdaten werden von {{controller}} gemäß KVKK (türkisches Datenschutzrecht) verarbeitet.",
+    "viewFull": "Datenschutzhinweis anzeigen",
+    "hideFull": "Datenschutzhinweis ausblenden",
+    "version": "Version {{version}}"
+  },
   "success": {
     "title": "Ihre Anfrage wurde empfangen!",
     "body": "Das Team von {{clinic}} ruft {{phone}} so bald wie möglich an, um Ihren Termin zu bestätigen.",

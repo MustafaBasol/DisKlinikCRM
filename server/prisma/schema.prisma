@@ -95,6 +95,7 @@ model Clinic {
   imagingBridgeAgents           ImagingBridgeAgent[]
   imagingBridgePairings         ImagingBridgePairing[]
   imagingBridgeBindings         ImagingBridgeBinding[]
+  publicBookingNoticeEvidences  PublicBookingNoticeEvidence[]
 
   @@unique([organizationId, slug])
 }
@@ -377,6 +378,8 @@ model AppointmentRequest {
   convertedAppointment   Appointment?     @relation("ConvertedAppointment", fields: [convertedAppointmentId], references: [id])
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
+
+  noticeEvidence PublicBookingNoticeEvidence?
 
   @@index([clinicId, status, createdAt])
   @@index([clinicId, phone])
@@ -1856,8 +1859,62 @@ model ClinicLegalProfile {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  noticeEvidences PublicBookingNoticeEvidence[]
+
   @@index([organizationId])
   @@index([clinicId])
+}
+
+/// Automatic evidence that a clinic's published Art. 10 privacy notice was
+/// displayed to a public-booking visitor. This is NOT a consent record: no
+/// acknowledgment action is required to create it, and it must never be
+/// treated as proof of consent anywhere in the codebase. See
+/// docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md (KVKK-CRIT-001a).
+///
+/// Snapshot fields exist because ClinicLegalProfile rows are mutable in
+/// place (publish can be re-run to edit an already-published profile), so a
+/// mutable FK alone would not preserve historical notice attribution.
+model PublicBookingNoticeEvidence {
+  id             String  @id @default(uuid())
+  organizationId String
+  clinicId       String
+  clinic         Clinic  @relation(fields: [clinicId], references: [id])
+  legalProfileId String?
+  legalProfile   ClinicLegalProfile? @relation(fields: [legalProfileId], references: [id], onDelete: SetNull)
+
+  /// Opaque per-tab/session identifier generated client-side (not a patient
+  /// identifier) — used only to make bootstrap idempotent across re-renders
+  /// and page refreshes within the same booking session.
+  sessionId String
+
+  /// Opaque server-issued token the client must echo back with the booking
+  /// submission. Always server-generated — this value is never trusted if
+  /// supplied by the client anywhere else.
+  token String @unique
+
+  appointmentRequestId String?             @unique
+  appointmentRequest   AppointmentRequest? @relation(fields: [appointmentRequestId], references: [id], onDelete: SetNull)
+
+  noticeVersion       String
+  noticeEffectiveDate DateTime?
+  language            String   @default("tr")
+  /// Fixed to "web_booking" for this flow; kept as a column (not a literal)
+  /// so other future channels can reuse this table without a schema change.
+  channel             String   @default("web_booking")
+  displayedAt         DateTime @default(now())
+
+  noticeTextSnapshot     String
+  controllerNameSnapshot String
+  privacyContactSnapshot String?
+  noticeHash             String
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([clinicId, sessionId, channel])
+  @@index([organizationId])
+  @@index([token])
+  @@index([expiresAt])
 }
 
 model ChannelConsentLog {

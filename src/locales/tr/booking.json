@@ -40,6 +40,14 @@
     "submitting": "Gönderiliyor...",
     "submit": "Randevu Talebini Gönder"
   },
+  "notice": {
+    "unavailable": "Online randevu formu şu anda kullanılamıyor. Lütfen klinikle doğrudan iletişime geçin.",
+    "notReady": "Aydınlatma metni yükleniyor, lütfen birkaç saniye içinde tekrar deneyin.",
+    "summary": "Randevu bilgileriniz {{controller}} tarafından KVKK kapsamında işlenmektedir.",
+    "viewFull": "Aydınlatma metnini görüntüle",
+    "hideFull": "Aydınlatma metnini gizle",
+    "version": "Sürüm {{version}}"
+  },
   "success": {
     "title": "Talebiniz Alındı!",
     "body": "{{clinic}} ekibi en kısa sürede {{phone}} numaranızı arayarak randevunuzu onaylayacaktır.",
