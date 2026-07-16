@@ -67,8 +67,27 @@ export interface DeletionReviewInventory {
     retainedClinical: number;
     estimatedBytes: number;
   };
-  blockers: string[];
+  /**
+   * Stable machine-readable codes (+ counts where relevant) instead of
+   * pre-rendered English prose — the frontend maps each code through the
+   * patientPrivacy i18n namespace (deletionReview.blockers.<code>) so no
+   * user-facing backend string ever needs translating (docs/compliance/53
+   * P1 follow-up: deletion-review blocker text was previously hardcoded
+   * English inside a Turkish UI).
+   */
+  blockers: DeletionReviewBlocker[];
   dryRun: true;
+}
+
+export type DeletionReviewBlockerCode =
+  | 'DRY_RUN_ONLY'
+  | 'ATTACHMENTS_LEGAL_HOLD'
+  | 'IMAGING_RETENTION_NOT_APPROVED'
+  | 'IMAGING_LEGAL_HOLD';
+
+export interface DeletionReviewBlocker {
+  code: DeletionReviewBlockerCode;
+  count?: number;
 }
 
 export async function buildDeletionReviewInventory(params: {
@@ -112,19 +131,15 @@ export async function buildDeletionReviewInventory(params: {
   const imagingLegalHold = imagingImageRows.filter((i) => i.study?.legalHold).length;
   const imagingBytes = imagingImageRows.reduce((sum, i) => sum + (i.fileSize ?? 0), 0);
 
-  const blockers: string[] = [
-    'This is a dry-run inventory only — no automated deletion endpoint exists in this release. Live deletion requires a future PR implementing a lifecycle-category enum and a privacy-request-workflow-bound execute endpoint.',
-  ];
+  const blockers: DeletionReviewBlocker[] = [{ code: 'DRY_RUN_ONLY' }];
   if (attachmentLegalHold > 0) {
-    blockers.push(`${attachmentLegalHold} attachment(s) under legal hold — excluded from any deletion.`);
+    blockers.push({ code: 'ATTACHMENTS_LEGAL_HOLD', count: attachmentLegalHold });
   }
   if (imagingImageRows.length > 0) {
-    blockers.push(
-      'Clinical/DICOM imaging retention policy not yet legally approved — no imaging deletion permitted (conservative retain by default).',
-    );
+    blockers.push({ code: 'IMAGING_RETENTION_NOT_APPROVED' });
   }
   if (imagingLegalHold > 0) {
-    blockers.push(`${imagingLegalHold} imaging image(s) additionally under legal hold via their study.`);
+    blockers.push({ code: 'IMAGING_LEGAL_HOLD', count: imagingLegalHold });
   }
 
   // organizationId is accepted for API-shape consistency / future cross-checks

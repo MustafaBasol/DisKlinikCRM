@@ -9,12 +9,27 @@ import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 // reported as `unclassifiedRetained` (not eligible for automated deletion in
 // this release). There is no live-delete endpoint in this PR.
 
+interface DeletionReviewBlocker {
+  code: 'DRY_RUN_ONLY' | 'ATTACHMENTS_LEGAL_HOLD' | 'IMAGING_RETENTION_NOT_APPROVED' | 'IMAGING_LEGAL_HOLD';
+  count?: number;
+}
+
 interface DeletionReviewInventory {
   attachments: { total: number; legalHold: number; unclassifiedRetained: number; estimatedBytes: number };
   imaging: { total: number; legalHold: number; retainedClinical: number; estimatedBytes: number };
-  blockers: string[];
+  blockers: DeletionReviewBlocker[];
   dryRun: true;
 }
+
+// System-generated PatientPrivacyRequest note/decision text is stored verbatim
+// in English (immutable historical rows are never rewritten for translation —
+// docs/compliance/53 P1). Known values are mapped to a localized string here,
+// at render time only; anything unrecognized (a real user-entered note) is
+// shown as-is.
+const SYSTEM_NOTE_KEYS: Record<string, string> = {
+  'Data export requested via API.': 'systemNotes.dataExportRequestedViaApi',
+  'Export delivered.': 'systemNotes.exportDelivered',
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +86,10 @@ const PatientPrivacyPanel: React.FC<Props> = ({
 }) => {
   const { t } = useTranslation('patientPrivacy');
   const { formatDate } = useClinicPreferences();
+  const translateSystemNote = (note: string) => {
+    const key = SYSTEM_NOTE_KEYS[note];
+    return key ? t(key) : note;
+  };
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -388,7 +407,7 @@ const PatientPrivacyPanel: React.FC<Props> = ({
           {deletionReview.blockers.length > 0 && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
               {deletionReview.blockers.map((b, i) => (
-                <p key={i}>• {b}</p>
+                <p key={i}>• {t(`deletionReview.blockers.${b.code}`, { count: b.count })}</p>
               ))}
             </div>
           )}
@@ -423,10 +442,10 @@ const PatientPrivacyPanel: React.FC<Props> = ({
                   </span>
                 </div>
                 {r.requestNote && (
-                  <p className="text-xs text-gray-500 line-clamp-2">{r.requestNote}</p>
+                  <p className="text-xs text-gray-500 line-clamp-2">{translateSystemNote(r.requestNote)}</p>
                 )}
                 {r.decisionNote && (
-                  <p className="text-xs text-gray-600 bg-gray-50 rounded p-1.5 line-clamp-3">{r.decisionNote}</p>
+                  <p className="text-xs text-gray-600 bg-gray-50 rounded p-1.5 line-clamp-3">{translateSystemNote(r.decisionNote)}</p>
                 )}
                 <p className="text-xs text-gray-400">
                   {formatDate(r.createdAt)}

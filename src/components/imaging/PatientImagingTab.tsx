@@ -7,6 +7,8 @@ import {
   FileImage,
   Link2Off,
   Loader2,
+  Lock,
+  LockOpen,
   Plus,
   ScanLine,
   X,
@@ -37,6 +39,8 @@ export interface ImagingStudyRow {
   images: ImagingImageRow[];
   device?: { id: string; name: string; modality: string } | null;
   createdBy?: { id: string; firstName: string; lastName: string } | null;
+  legalHold?: boolean;
+  legalHoldReason?: string | null;
 }
 
 interface DeviceOption {
@@ -47,11 +51,16 @@ interface DeviceOption {
 
 interface PatientImagingTabProps {
   patientId: string;
+  /** OWNER/ORG_ADMIN only (docs/compliance/53) — gates the legal-hold place/release controls. */
+  canManageLegalHold?: boolean;
 }
 
-const PatientImagingTab: React.FC<PatientImagingTabProps> = ({ patientId }) => {
+const PatientImagingTab: React.FC<PatientImagingTabProps> = ({ patientId, canManageLegalHold = false }) => {
   const { t } = useTranslation(['imaging', 'common']);
   const { formatDate } = useClinicPreferences();
+  const [legalHoldModal, setLegalHoldModal] = useState<{ study: ImagingStudyRow; nextHold: boolean } | null>(null);
+  const [legalHoldReasonInput, setLegalHoldReasonInput] = useState('');
+  const [legalHoldSubmitting, setLegalHoldSubmitting] = useState(false);
   const [studies, setStudies] = useState<ImagingStudyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -192,6 +201,11 @@ const PatientImagingTab: React.FC<PatientImagingTabProps> = ({ patientId }) => {
                       </span>
                       <span className="text-sm font-semibold text-gray-900">{formatDate(study.studyDate)}</span>
                       {archived && <span className="badge badge-gray">{t('imaging:study.archivedBadge')}</span>}
+                      {study.legalHold && (
+                        <span className="badge bg-red-50 text-red-700 border border-red-200 flex items-center gap-1">
+                          <Lock size={11} /> {t('imaging:study.legalHoldBadge')}
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
                       {study.description || <span className="italic text-gray-400">{t('imaging:study.noDescription')}</span>}
@@ -228,6 +242,19 @@ const PatientImagingTab: React.FC<PatientImagingTabProps> = ({ patientId }) => {
                     >
                       <Link2Off size={16} />
                     </button>
+                    {canManageLegalHold && (
+                      <button
+                        onClick={() => {
+                          setLegalHoldReasonInput('');
+                          setLegalHoldModal({ study, nextHold: !study.legalHold });
+                        }}
+                        disabled={busy}
+                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                        title={study.legalHold ? t('imaging:actions.releaseLegalHold') as string : t('imaging:actions.setLegalHold') as string}
+                      >
+                        {study.legalHold ? <LockOpen size={16} /> : <Lock size={16} />}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -356,6 +383,68 @@ const PatientImagingTab: React.FC<PatientImagingTabProps> = ({ patientId }) => {
           }}
           onClose={() => setPreviewImage(null)}
         />
+      )}
+
+      {/* Legal-hold place/release modal (docs/compliance/53) — OWNER/ORG_ADMIN only,
+          reason required (min 3 chars) both ways, extra confirm on release. */}
+      {legalHoldModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !legalHoldSubmitting && setLegalHoldModal(null)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">
+                {legalHoldModal.nextHold ? t('imaging:legalHold.setTitle') : t('imaging:legalHold.releaseTitle')}
+              </h3>
+              <button onClick={() => !legalHoldSubmitting && setLegalHoldModal(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('imaging:legalHold.reason')}</label>
+                <textarea
+                  value={legalHoldReasonInput}
+                  onChange={e => setLegalHoldReasonInput(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  className="input-field w-full resize-none"
+                  placeholder={t('imaging:legalHold.reasonPlaceholder') as string}
+                />
+                <p className="text-xs text-gray-400 mt-1">{legalHoldReasonInput.length}/500</p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setLegalHoldModal(null)} disabled={legalHoldSubmitting} className="btn-secondary text-sm">
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={async () => {
+                  const reason = legalHoldReasonInput.trim();
+                  if (reason.length < 3) {
+                    showToast(t('imaging:legalHold.reasonTooShort'), 'error');
+                    return;
+                  }
+                  if (!legalHoldModal.nextHold && !confirm(t('imaging:legalHold.releaseConfirm') as string)) return;
+                  setLegalHoldSubmitting(true);
+                  try {
+                    await imagingService.setStudyLegalHold(legalHoldModal.study.id, legalHoldModal.nextHold, reason);
+                    setLegalHoldModal(null);
+                    showToast(legalHoldModal.nextHold ? t('imaging:legalHold.setSuccess') : t('imaging:legalHold.releaseSuccess'));
+                    await fetchStudies();
+                  } catch {
+                    showToast(t('imaging:legalHold.failed'), 'error');
+                  } finally {
+                    setLegalHoldSubmitting(false);
+                  }
+                }}
+                disabled={legalHoldSubmitting || legalHoldReasonInput.trim().length < 3}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 transition-colors"
+              >
+                {legalHoldSubmitting ? <Loader2 size={15} className="animate-spin" /> : (legalHoldModal.nextHold ? <Lock size={15} /> : <LockOpen size={15} />)}
+                {legalHoldModal.nextHold ? t('imaging:legalHold.setSubmit') : t('imaging:legalHold.releaseSubmit')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

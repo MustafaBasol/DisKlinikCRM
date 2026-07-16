@@ -212,6 +212,18 @@ export function canManageInventory(user: UserForPermission | null | undefined): 
 }
 
 /**
+ * KVKK yasal tutma (legal hold) — hasta dosya eki / görüntüleme çalışması
+ * üzerinde tutma koyma/kaldırma: Yalnızca OWNER ve ORG_ADMIN (docs/compliance/53).
+ * Backend'deki authorize(['OWNER', 'ORG_ADMIN']) ile birebir eşleşir; burada
+ * ayrıca permissions override'ı yoktur çünkü bu bir uyumluluk sınırıdır,
+ * yapılandırılabilir bir iş izni değildir.
+ */
+export function canManageLegalHold(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+/**
  * Şube yönetimi (oluştur / düzenle / durum değiştir):
  * Yalnızca OWNER ve ORG_ADMIN.
  */

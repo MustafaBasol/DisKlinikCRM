@@ -324,6 +324,12 @@ router.patch(
 );
 
 // ── DELETE /api/patients/:patientId/attachments/:id ───────────────────
+// KVKK lifecycle (docs/compliance/53): a legalHold=true attachment can never
+// be deleted through this route — this is the ONLY attachment-delete path in
+// the codebase (verified: no other route/service calls
+// prisma.patientAttachment.delete or deleteFile() on a PatientAttachment
+// row). Rejects with a stable code before touching the DB row or physical
+// storage, and writes an audit event for the rejected attempt.
 router.delete(
   '/patients/:patientId/attachments/:id',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
@@ -337,6 +343,27 @@ router.delete(
         where: { id, patientId, clinicId },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
+
+      if (attachment.legalHold) {
+        const canSeeReason = req.user!.role === 'OWNER' || req.user!.role === 'ORG_ADMIN';
+        await writeAuditLog({
+          organizationId: req.user!.organizationId,
+          clinicId: attachment.clinicId,
+          actorUserId: req.user!.id,
+          actorRole: req.user!.role,
+          action: 'patient_attachment_delete_blocked_legal_hold',
+          entityType: 'patient_attachment',
+          entityId: id,
+          description: `Deletion of attachment "${attachment.originalName}" rejected — under legal hold`,
+          metadata: { patientId },
+          ...extractRequestMeta(req),
+        });
+        return res.status(409).json({
+          error: 'ATTACHMENT_LEGAL_HOLD',
+          message: 'This attachment is under legal hold and cannot be deleted.',
+          ...(canSeeReason ? { legalHoldReason: attachment.legalHoldReason } : {}),
+        });
+      }
 
       await prisma.patientAttachment.delete({ where: { id } });
 

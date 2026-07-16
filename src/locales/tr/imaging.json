@@ -23,7 +23,8 @@
     "images": "{{count}} görüntü",
     "archivedBadge": "Arşivlendi",
     "noDescription": "Açıklama yok",
-    "uploadedBy": "Yükleyen"
+    "uploadedBy": "Yükleyen",
+    "legalHoldBadge": "Yasal tutma"
   },
   "actions": {
     "upload": "Görüntü Yükle",
@@ -32,11 +33,26 @@
     "archive": "Arşivle",
     "unarchive": "Arşivden Çıkar",
     "unlink": "Bağlantıyı Kaldır",
-    "link": "Hastaya Bağla"
+    "link": "Hastaya Bağla",
+    "setLegalHold": "Yasal tutma koy",
+    "releaseLegalHold": "Yasal tutmayı kaldır"
   },
   "confirm": {
     "unlink": "Bu çalışma hastadan ayrılacak ve bağlanmamış kuyruğuna dönecek. Devam edilsin mi?",
     "archive": "Bu çalışma arşivlenecek. Orijinal görüntüler silinmez. Devam edilsin mi?"
+  },
+  "legalHold": {
+    "setTitle": "Çalışmaya yasal tutma koy",
+    "releaseTitle": "Çalışmadaki yasal tutmayı kaldır",
+    "reason": "Neden",
+    "reasonPlaceholder": "Yasal tutma gerekçesini açıklayın...",
+    "reasonTooShort": "Lütfen geçerli bir neden girin (en az 3 karakter).",
+    "releaseConfirm": "Bu çalışmanın (ve tüm görüntülerinin) yasal tutması kaldırılacak. Devam edilsin mi?",
+    "setSuccess": "Yasal tutma kondu",
+    "releaseSuccess": "Yasal tutma kaldırıldı",
+    "failed": "Yasal tutma güncellenemedi",
+    "setSubmit": "Tutma Koy",
+    "releaseSubmit": "Tutmayı Kaldır"
   },
   "upload": {
     "title": "Görüntü Yükle",

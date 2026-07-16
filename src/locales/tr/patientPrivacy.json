@@ -22,6 +22,16 @@
     "attachmentsSummary": "Toplam: {{total}} · Yasal tutma: {{legalHold}} · İncelemede bekleyen (sınıflandırılmamış): {{unclassifiedRetained}}",
     "imagingLabel": "Görüntüleme (Imaging)",
     "imagingSummary": "Toplam: {{total}} · Yasal tutma: {{legalHold}} · Korunan (klinik): {{retainedClinical}}",
-    "footnote": "Not: Bu bir önizlemedir (dryRun) ve bu sürümde otomatik/canlı bir silme uç noktası yoktur. Sınıflandırılmamış (idari kategori ayrımı henüz tanımlanmamış) dosya ekleri ile klinik/görüntüleme verileri, gelecek bir sürümde eklenecek yaşam-döngüsü kategorisi ve talep-akışına bağlı silme uç noktası onaylanana kadar bu üzerinden silinemez."
+    "footnote": "Not: Bu bir önizlemedir (dryRun) ve bu sürümde otomatik/canlı bir silme uç noktası yoktur. Sınıflandırılmamış (idari kategori ayrımı henüz tanımlanmamış) dosya ekleri ile klinik/görüntüleme verileri, gelecek bir sürümde eklenecek yaşam-döngüsü kategorisi ve talep-akışına bağlı silme uç noktası onaylanana kadar bu üzerinden silinemez.",
+    "blockers": {
+      "DRY_RUN_ONLY": "Bu yalnızca bir önizleme envanteridir — bu sürümde otomatik bir silme uç noktası yoktur. Canlı silme, yaşam-döngüsü kategorisi ve talep-akışına bağlı bir silme uç noktası uygulayan gelecek bir sürüm gerektirir.",
+      "ATTACHMENTS_LEGAL_HOLD": "{{count}} dosya eki yasal tutma altında — her türlü silme işleminden hariç tutuldu.",
+      "IMAGING_RETENTION_NOT_APPROVED": "Klinik/DICOM görüntüleme saklama politikası henüz yasal olarak onaylanmadı — görüntüleme silmeye izin verilmiyor (varsayılan olarak korumacı yaklaşım).",
+      "IMAGING_LEGAL_HOLD": "{{count}} görüntüleme görseli, çalışması üzerinden ayrıca yasal tutma altında."
+    }
+  },
+  "systemNotes": {
+    "dataExportRequestedViaApi": "Veri dışa aktarımı API üzerinden talep edildi.",
+    "exportDelivered": "Dışa aktarım teslim edildi."
   }
 }

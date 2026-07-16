@@ -23,7 +23,8 @@
     "images": "{{count}} image(s)",
     "archivedBadge": "Archived",
     "noDescription": "No description",
-    "uploadedBy": "Uploaded by"
+    "uploadedBy": "Uploaded by",
+    "legalHoldBadge": "Legal hold"
   },
   "actions": {
     "upload": "Upload Image",
@@ -32,11 +33,26 @@
     "archive": "Archive",
     "unarchive": "Unarchive",
     "unlink": "Unlink",
-    "link": "Link to Patient"
+    "link": "Link to Patient",
+    "setLegalHold": "Place legal hold",
+    "releaseLegalHold": "Release legal hold"
   },
   "confirm": {
     "unlink": "This study will be detached from the patient and returned to the unlinked queue. Continue?",
     "archive": "This study will be archived. Original images are never deleted. Continue?"
+  },
+  "legalHold": {
+    "setTitle": "Place legal hold on study",
+    "releaseTitle": "Release legal hold on study",
+    "reason": "Reason",
+    "reasonPlaceholder": "Explain the reason for the legal hold...",
+    "reasonTooShort": "Please enter a valid reason (at least 3 characters).",
+    "releaseConfirm": "The legal hold on this study (and all its images) will be released. Continue?",
+    "setSuccess": "Legal hold placed",
+    "releaseSuccess": "Legal hold released",
+    "failed": "Failed to update the legal hold",
+    "setSubmit": "Place Hold",
+    "releaseSubmit": "Release Hold"
   },
   "upload": {
     "title": "Upload Image",

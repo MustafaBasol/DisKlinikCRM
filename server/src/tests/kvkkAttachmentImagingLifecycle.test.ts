@@ -1089,6 +1089,240 @@ await test('copy-fallback success: no stray .partial-* sibling file is left behi
   await deleteFile(key);
 });
 
+// ── 58: attachments.ts DELETE route enforces legalHold ──────────────────────
+// hotfix/kvkk-legal-hold-enforcement-and-ui: DELETE /patients/:patientId/attachments/:id
+// previously did not check legalHold at all, so a held attachment could be
+// deleted through the ordinary delete route (bypassing the compliance
+// guarantee the legal-hold PATCH endpoint exists to provide). This file has
+// no DB harness, so — consistent with test 49/41 above — this is a source-scan
+// proof that the fix is structurally correct: the legalHold check runs before
+// any prisma.patientAttachment.delete/deleteFile call, on both branches
+// (held/not held) of the SAME route, with a stable 409 code and an audit log
+// for the rejected attempt. grep confirms this route is the ONLY
+// prisma.patientAttachment.delete call site in the whole server (verified
+// during implementation), so hardening it here closes every path.
+
+section('58. attachments.ts DELETE route enforces legalHold before any delete');
+
+function readAttachmentsSrc(): string {
+  return fs.readFileSync(path.resolve(import.meta.dirname, '../routes/attachments.ts'), 'utf8');
+}
+
+function getDeleteRouteBlock(): string {
+  const src = readAttachmentsSrc();
+  // There are two routes mentioning this path segment (the legal-hold PATCH
+  // and this DELETE); anchor on the DELETE-specific role list immediately
+  // following the path to land on the right one regardless of line-ending style.
+  const anchor = "'/patients/:patientId/attachments/:id',";
+  let routeStart = src.indexOf(anchor);
+  while (routeStart > -1 && !src.slice(routeStart, routeStart + 200).includes("'RECEPTIONIST'")) {
+    routeStart = src.indexOf(anchor, routeStart + 1);
+  }
+  assert.ok(routeStart > -1, 'attachment DELETE route must exist');
+  return src.slice(routeStart, routeStart + 2500);
+}
+
+await test('DELETE route checks legalHold before calling prisma.patientAttachment.delete', () => {
+  const block = getDeleteRouteBlock();
+  const legalHoldCheckIdx = block.indexOf('if (attachment.legalHold)');
+  const deleteCallIdx = block.indexOf('prisma.patientAttachment.delete(');
+  assert.ok(legalHoldCheckIdx > -1, 'route must check attachment.legalHold');
+  assert.ok(deleteCallIdx > -1, 'route must still call prisma.patientAttachment.delete for the non-held path');
+  assert.ok(legalHoldCheckIdx < deleteCallIdx, 'legalHold check must run BEFORE the DB delete, not after');
+});
+
+await test('DELETE route returns a stable ATTACHMENT_LEGAL_HOLD code with a 409 status', () => {
+  const block = getDeleteRouteBlock();
+  const legalHoldBlock = block.slice(block.indexOf('if (attachment.legalHold)'), block.indexOf('prisma.patientAttachment.delete('));
+  assert.ok(legalHoldBlock.includes('res.status(409)'), 'must reject with 409 (or 423 — this impl uses 409) consistently');
+  assert.ok(legalHoldBlock.includes("error: 'ATTACHMENT_LEGAL_HOLD'"), 'must return a stable machine-readable code');
+  assert.ok(!legalHoldBlock.includes('prisma.patientAttachment.delete'), 'the rejected-hold branch must never reach the DB delete call');
+  assert.ok(!legalHoldBlock.includes('deleteFile('), 'the rejected-hold branch must never call physical storage deletion');
+});
+
+await test('DELETE route writes an audit log entry for the rejected attempt', () => {
+  const block = getDeleteRouteBlock();
+  const legalHoldBlock = block.slice(block.indexOf('if (attachment.legalHold)'), block.indexOf('prisma.patientAttachment.delete('));
+  assert.ok(legalHoldBlock.includes('writeAuditLog'), 'rejected-hold branch must write an audit log entry');
+  assert.ok(legalHoldBlock.includes("'patient_attachment_delete_blocked_legal_hold'"), 'audit action must be a stable, descriptive code');
+});
+
+await test('DELETE route only exposes legalHoldReason to OWNER/ORG_ADMIN', () => {
+  const block = getDeleteRouteBlock();
+  const legalHoldBlock = block.slice(block.indexOf('if (attachment.legalHold)'), block.indexOf('prisma.patientAttachment.delete('));
+  assert.ok(
+    /canSeeReason\s*=\s*req\.user!\.role === 'OWNER' \|\| req\.user!\.role === 'ORG_ADMIN'/.test(legalHoldBlock),
+    'legalHoldReason exposure must be gated to OWNER/ORG_ADMIN specifically',
+  );
+  assert.ok(
+    legalHoldBlock.includes('...(canSeeReason ? { legalHoldReason: attachment.legalHoldReason } : {})'),
+    'legalHoldReason must be conditionally spread, never unconditionally included in the response',
+  );
+});
+
+await test('DELETE route resolves the attachment scoped to clinicId (cross-clinic/cross-org isolation)', () => {
+  const block = getDeleteRouteBlock();
+  assert.ok(
+    block.includes('where: { id, patientId, clinicId }'),
+    'lookup must be scoped to the requesting clinicId — a different clinic/org attachment must 404, never reach the legalHold branch',
+  );
+});
+
+await test('non-held attachment DELETE still deletes the DB row and physical file (unchanged behavior)', () => {
+  const block = getDeleteRouteBlock();
+  const afterHoldCheck = block.slice(block.indexOf('await prisma.patientAttachment.delete('));
+  assert.ok(afterHoldCheck.startsWith('await prisma.patientAttachment.delete({ where: { id } });'));
+  assert.ok(afterHoldCheck.includes('deleteFile(attachment.filePath)'), 'non-held delete must still remove the physical file');
+});
+
+// ── 59: attachments.ts legal-hold PATCH is the only attachment mutation route
+// gated to OWNER/ORG_ADMIN; no other route can set/clear legalHold ──────────
+
+section('59. legal-hold mutation is restricted to OWNER/ORG_ADMIN on both attachment and imaging routes');
+
+await test('attachments.ts legal-hold PATCH route authorizes only OWNER/ORG_ADMIN', () => {
+  const src = readAttachmentsSrc();
+  const routeStart = src.indexOf("'/patients/:patientId/attachments/:id/legal-hold'");
+  const block = src.slice(routeStart, routeStart + 200);
+  assert.ok(block.includes("authorize(['OWNER', 'ORG_ADMIN'])"));
+});
+
+await test('imaging.ts study legal-hold PATCH route authorizes only OWNER/ORG_ADMIN', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../routes/imaging.ts'), 'utf8');
+  const routeStart = src.indexOf("'/imaging/studies/:id/legal-hold'");
+  assert.ok(routeStart > -1, 'imaging study legal-hold route must exist');
+  const block = src.slice(routeStart, routeStart + 200);
+  assert.ok(block.includes("authorize(['OWNER', 'ORG_ADMIN'])"));
+});
+
+await test('imaging images have no independent legal-hold field — they inherit their study\'s hold', () => {
+  const schemaSrc = fs.readFileSync(path.resolve(import.meta.dirname, '../../prisma/schema.prisma'), 'utf8');
+  const imageModelStart = schemaSrc.indexOf('model ImagingImage ');
+  assert.ok(imageModelStart > -1);
+  const imageModelBlock = schemaSrc.slice(imageModelStart, schemaSrc.indexOf('\n}\n', imageModelStart));
+  assert.ok(!imageModelBlock.includes('legalHold'), 'ImagingImage must not carry its own legalHold field');
+});
+
+await test('no imaging deletion route exists (imaging.ts) — images/studies are never hard-deleted', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../routes/imaging.ts'), 'utf8');
+  assert.ok(!/router\.delete\('\\?\/imaging\/studies/.test(src), 'no DELETE route for imaging studies may exist');
+  assert.ok(!/router\.delete\('\\?\/imaging\/studies\/:id\/images/.test(src), 'no DELETE route for imaging images may exist');
+});
+
+await test('no live patient-privacy deletion-execute endpoint exists', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../routes/patientPrivacy.ts'), 'utf8');
+  assert.ok(!src.includes("'/patients/:id/privacy/deletion-review/execute'"), 'live deletion-review execute endpoint must not exist');
+});
+
+// ── 60: deletionReviewInventory returns structured blocker codes, not English prose ──
+
+section('60. deletionReviewInventory blockers are stable codes (docs/compliance/53 P1 — no hardcoded English UI text)');
+
+type DeletionReviewBlocker = { code: string; count?: number };
+
+function buildInventoryV2(params: {
+  attachments: { legalHold: boolean; fileSize: number }[];
+  imagingImages: { studyLegalHold: boolean; fileSize: number }[];
+}) {
+  const attachmentLegalHold = params.attachments.filter((a) => a.legalHold).length;
+  const imagingLegalHold = params.imagingImages.filter((i) => i.studyLegalHold).length;
+  const blockers: DeletionReviewBlocker[] = [{ code: 'DRY_RUN_ONLY' }];
+  if (attachmentLegalHold > 0) blockers.push({ code: 'ATTACHMENTS_LEGAL_HOLD', count: attachmentLegalHold });
+  if (params.imagingImages.length > 0) blockers.push({ code: 'IMAGING_RETENTION_NOT_APPROVED' });
+  if (imagingLegalHold > 0) blockers.push({ code: 'IMAGING_LEGAL_HOLD', count: imagingLegalHold });
+  return { blockers, dryRun: true as const };
+}
+
+await test('dryRun is always true (blocker-code shape)', () => {
+  const inv = buildInventoryV2({ attachments: [], imagingImages: [] });
+  assert.equal(inv.dryRun, true);
+  assert.deepEqual(inv.blockers, [{ code: 'DRY_RUN_ONLY' }]);
+});
+
+await test('legal-hold attachments produce an ATTACHMENTS_LEGAL_HOLD code with a count, not a prose string', () => {
+  const inv = buildInventoryV2({ attachments: [{ legalHold: true, fileSize: 100 }], imagingImages: [] });
+  const blocker = inv.blockers.find((b) => b.code === 'ATTACHMENTS_LEGAL_HOLD');
+  assert.ok(blocker, 'ATTACHMENTS_LEGAL_HOLD blocker must be present');
+  assert.equal(blocker!.count, 1);
+  assert.ok(inv.blockers.every((b) => typeof b.code === 'string' && !('message' in b)), 'blockers must never carry a pre-rendered message field');
+});
+
+await test('any imaging rows produce IMAGING_RETENTION_NOT_APPROVED (no count)', () => {
+  const inv = buildInventoryV2({ attachments: [], imagingImages: [{ studyLegalHold: false, fileSize: 50 }] });
+  assert.ok(inv.blockers.some((b) => b.code === 'IMAGING_RETENTION_NOT_APPROVED'));
+});
+
+await test('real deletionReviewInventory.ts module defines exactly the four documented blocker codes', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../services/privacy/deletionReviewInventory.ts'), 'utf8');
+  assert.ok(src.includes("| 'DRY_RUN_ONLY'"));
+  assert.ok(src.includes("| 'ATTACHMENTS_LEGAL_HOLD'"));
+  assert.ok(src.includes("| 'IMAGING_RETENTION_NOT_APPROVED'"));
+  assert.ok(src.includes("| 'IMAGING_LEGAL_HOLD';"));
+  assert.ok(!/blockers:\s*string\[\]/.test(src), 'blockers must no longer be typed as raw string[] (that was the pre-fix English-prose shape)');
+});
+
+await test('patientPrivacy.json deletionReview.blockers keys exist for all four codes across tr/en/fr/de', () => {
+  const locales = ['tr', 'en', 'fr', 'de'];
+  const codes = ['DRY_RUN_ONLY', 'ATTACHMENTS_LEGAL_HOLD', 'IMAGING_RETENTION_NOT_APPROVED', 'IMAGING_LEGAL_HOLD'];
+  for (const locale of locales) {
+    const p = path.resolve(import.meta.dirname, `../../../src/locales/${locale}/patientPrivacy.json`);
+    const json = JSON.parse(fs.readFileSync(p, 'utf8'));
+    for (const code of codes) {
+      assert.ok(json.deletionReview?.blockers?.[code], `${locale}/patientPrivacy.json missing deletionReview.blockers.${code}`);
+    }
+    assert.ok(json.systemNotes?.dataExportRequestedViaApi, `${locale}/patientPrivacy.json missing systemNotes.dataExportRequestedViaApi`);
+    assert.ok(json.systemNotes?.exportDelivered, `${locale}/patientPrivacy.json missing systemNotes.exportDelivered`);
+  }
+});
+
+// ── 61: frontend legal-hold UI permission gating (source scan — no React harness in this file) ──
+
+section('61. frontend legal-hold controls are gated to OWNER/ORG_ADMIN, delete is hidden while held');
+
+await test('canManageLegalHold permission helper allows only OWNER/ORG_ADMIN', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/utils/permissions.ts'), 'utf8');
+  const fnStart = src.indexOf('export function canManageLegalHold');
+  assert.ok(fnStart > -1, 'canManageLegalHold must exist');
+  const block = src.slice(fnStart, fnStart + 300);
+  assert.ok(block.includes("role === 'OWNER' || role === 'ORG_ADMIN'"));
+  assert.ok(!block.includes('CLINIC_MANAGER'), 'must not extend to CLINIC_MANAGER — only OWNER/ORG_ADMIN per docs/compliance/53');
+});
+
+await test('PatientDetail.tsx hides the delete button while an attachment is under legal hold', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/pages/PatientDetail.tsx'), 'utf8');
+  assert.ok(
+    src.includes('!att.legalHold && ([\'OWNER\', \'ORG_ADMIN\', \'CLINIC_MANAGER\', \'RECEPTIONIST\'] as const).includes(userCanonicalRole as any)'),
+    'delete button must be gated on !att.legalHold in addition to role',
+  );
+});
+
+await test('PatientDetail.tsx maps the ATTACHMENT_LEGAL_HOLD backend error to a localized message', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/pages/PatientDetail.tsx'), 'utf8');
+  assert.ok(src.includes("err?.response?.data?.error === 'ATTACHMENT_LEGAL_HOLD'"));
+  assert.ok(src.includes("t('patients:detail.files.deleteBlockedLegalHold')"));
+});
+
+await test('PatientImagingTab.tsx gates legal-hold controls behind a canManageLegalHold prop', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/components/imaging/PatientImagingTab.tsx'), 'utf8');
+  assert.ok(src.includes('canManageLegalHold = false'), 'prop must default closed (hidden) for all other roles');
+  assert.ok(src.includes('imagingService.setStudyLegalHold('), 'must call the existing imaging legal-hold endpoint, no new endpoint introduced');
+});
+
+await test('patients.json and imaging.json legal-hold keys match across tr/en/fr/de', () => {
+  const locales = ['tr', 'en', 'fr', 'de'];
+  for (const file of ['patients.json', 'imaging.json']) {
+    const keySets = locales.map((locale) => {
+      const p = path.resolve(import.meta.dirname, `../../../src/locales/${locale}/${file}`);
+      const json = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return { locale, keys: flattenKeys(json).sort() };
+    });
+    const [first, ...rest] = keySets;
+    for (const other of rest) {
+      assert.deepEqual(other.keys, first.keys, `${other.locale}/${file} keys must match ${first.locale}/${file}`);
+    }
+  }
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

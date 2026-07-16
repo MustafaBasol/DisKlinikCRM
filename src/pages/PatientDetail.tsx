@@ -29,7 +29,9 @@ import {
   Layers,
   AlertTriangle,
   Eye,
-  ExternalLink
+  ExternalLink,
+  Lock,
+  LockOpen
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -46,7 +48,7 @@ import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
 import FilePreviewModal, { isInlinePreviewable } from '../components/FilePreviewModal';
 import PatientImagingTab from '../components/imaging/PatientImagingTab';
-import { normalizeRole, canViewPatients, canViewImaging } from '../utils/permissions';
+import { normalizeRole, canViewPatients, canViewImaging, canManageLegalHold } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -71,6 +73,10 @@ const PatientDetail: React.FC = () => {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<any | null>(null);
+  const [attachmentLegalHoldModal, setAttachmentLegalHoldModal] = useState<{ attachment: any; nextHold: boolean } | null>(null);
+  const [attachmentLegalHoldReasonInput, setAttachmentLegalHoldReasonInput] = useState('');
+  const [attachmentLegalHoldSubmitting, setAttachmentLegalHoldSubmitting] = useState(false);
+  const [attachmentLegalHoldError, setAttachmentLegalHoldError] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [whatsappSearch, setWhatsappSearch] = useState('');
   const [whatsappDirection, setWhatsappDirection] = useState<'all' | 'incoming' | 'outgoing'>('all');
@@ -1209,9 +1215,14 @@ const PatientDetail: React.FC = () => {
                     <div className="flex-1 min-w-0">
                       <button
                         onClick={() => setPreviewAttachment(att)}
-                        className="text-sm font-medium truncate text-left hover:text-primary-600 hover:underline"
+                        className="text-sm font-medium truncate text-left hover:text-primary-600 hover:underline inline-flex items-center gap-2"
                       >
                         {att.originalName}
+                        {att.legalHold && (
+                          <span className="badge bg-red-50 text-red-700 border border-red-200 shrink-0 flex items-center gap-1">
+                            <Lock size={11} /> {t('patients:detail.files.legalHoldBadge')}
+                          </span>
+                        )}
                       </button>
                       <p className="text-xs text-gray-400">
                         {(att.fileSize / 1024).toFixed(1)} KB &bull; {formatDate(att.createdAt)} &bull; {att.uploadedBy?.firstName} {att.uploadedBy?.lastName}
@@ -1231,12 +1242,35 @@ const PatientDetail: React.FC = () => {
                     >
                       <Download size={16} />
                     </button>
-                    {(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'] as const).includes(userCanonicalRole as any) && (
+                    {canManageLegalHold(user) && (
+                      <button
+                        onClick={() => {
+                          setAttachmentLegalHoldReasonInput('');
+                          setAttachmentLegalHoldError('');
+                          setAttachmentLegalHoldModal({ attachment: att, nextHold: !att.legalHold });
+                        }}
+                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        title={att.legalHold ? t('patients:detail.files.releaseLegalHold') as string : t('patients:detail.files.setLegalHold') as string}
+                      >
+                        {att.legalHold ? <LockOpen size={16} /> : <Lock size={16} />}
+                      </button>
+                    )}
+                    {!att.legalHold && (['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'] as const).includes(userCanonicalRole as any) && (
                       <button
                         onClick={async () => {
                           if (!id || !confirm(t('patients:detail.files.deleteConfirm'))) return;
-                          await attachmentService.delete(id, att.id);
-                          setAttachments(prev => prev.filter(a => a.id !== att.id));
+                          try {
+                            await attachmentService.delete(id, att.id);
+                            setAttachments(prev => prev.filter(a => a.id !== att.id));
+                          } catch (err: any) {
+                            if (err?.response?.data?.error === 'ATTACHMENT_LEGAL_HOLD') {
+                              alert(t('patients:detail.files.deleteBlockedLegalHold'));
+                              const attachRes = await attachmentService.getAll(id);
+                              setAttachments(attachRes.data);
+                            } else {
+                              alert(t('patients:detail.files.deleteFailed'));
+                            }
+                          }
                         }}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                         title={t('common:delete')}
@@ -1252,7 +1286,7 @@ const PatientDetail: React.FC = () => {
         )}
         {/* Imaging Tab — BILLING/ASSISTANT için render edilmez */}
         {activeTab === 'imaging' && canSeeImaging && (
-          <PatientImagingTab patientId={id!} />
+          <PatientImagingTab patientId={id!} canManageLegalHold={canManageLegalHold(user)} />
         )}
         {/* Dental Chart Tab */}
         {activeTab === 'dental' && (
@@ -1399,6 +1433,83 @@ const PatientDetail: React.FC = () => {
           }}
           onClose={() => setPreviewAttachment(null)}
         />
+      )}
+
+      {/* Attachment legal-hold place/release modal (docs/compliance/53) — OWNER/ORG_ADMIN
+          only, reason required (min 3 chars) both ways, extra confirm on release. */}
+      {attachmentLegalHoldModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !attachmentLegalHoldSubmitting && setAttachmentLegalHoldModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <h3 className="font-semibold text-gray-900">
+                {attachmentLegalHoldModal.nextHold
+                  ? t('patients:detail.files.setLegalHoldTitle')
+                  : t('patients:detail.files.releaseLegalHoldTitle')}
+              </h3>
+              <button onClick={() => !attachmentLegalHoldSubmitting && setAttachmentLegalHoldModal(null)} className="text-gray-400 hover:text-gray-600">
+                <span aria-hidden>×</span>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('patients:detail.files.legalHoldReason')} <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={attachmentLegalHoldReasonInput}
+                  onChange={(e) => setAttachmentLegalHoldReasonInput(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  className="input-field resize-none"
+                  placeholder={t('patients:detail.files.legalHoldReasonPlaceholder') as string}
+                />
+                <p className="text-xs text-gray-400 mt-1">{attachmentLegalHoldReasonInput.length}/500</p>
+              </div>
+              {attachmentLegalHoldError && (
+                <p className="text-sm text-red-600 flex items-center gap-1">
+                  <AlertTriangle size={13} />
+                  {attachmentLegalHoldError}
+                </p>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t flex justify-end gap-3">
+              <button
+                onClick={() => setAttachmentLegalHoldModal(null)}
+                disabled={attachmentLegalHoldSubmitting}
+                className="btn-secondary"
+              >
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={async () => {
+                  const reason = attachmentLegalHoldReasonInput.trim();
+                  if (reason.length < 3) {
+                    setAttachmentLegalHoldError(t('patients:detail.files.legalHoldReasonTooShort'));
+                    return;
+                  }
+                  if (!attachmentLegalHoldModal.nextHold && !confirm(t('patients:detail.files.releaseLegalHoldConfirm') as string)) return;
+                  setAttachmentLegalHoldSubmitting(true);
+                  setAttachmentLegalHoldError('');
+                  try {
+                    await attachmentService.setLegalHold(id!, attachmentLegalHoldModal.attachment.id, attachmentLegalHoldModal.nextHold, reason);
+                    setAttachmentLegalHoldModal(null);
+                    const attachRes = await attachmentService.getAll(id!);
+                    setAttachments(attachRes.data);
+                  } catch {
+                    setAttachmentLegalHoldError(t('patients:detail.files.legalHoldFailed'));
+                  } finally {
+                    setAttachmentLegalHoldSubmitting(false);
+                  }
+                }}
+                disabled={attachmentLegalHoldSubmitting || attachmentLegalHoldReasonInput.trim().length < 3}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 transition-colors"
+              >
+                {attachmentLegalHoldSubmitting ? <Loader2 size={15} className="animate-spin" /> : (attachmentLegalHoldModal.nextHold ? <Lock size={15} /> : <LockOpen size={15} />)}
+                {attachmentLegalHoldModal.nextHold ? t('patients:detail.files.setLegalHoldSubmit') : t('patients:detail.files.releaseLegalHoldSubmit')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
