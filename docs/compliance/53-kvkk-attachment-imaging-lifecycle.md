@@ -1,9 +1,9 @@
 # 53 — KVKK Attachment & Imaging Lifecycle (Physical File Governance)
 
 **Report date:** 2026-07-15 (updated same day — PR #160 review remediation pass, a second follow-up pass fixing a migration/schema drift, a third follow-up pass fixing an S3 temp-file leak and an export-reservation race condition, then a fourth follow-up pass fixing a local-copy partial-artifact leak and replacing createdAt-based staleness with a real lease/heartbeat, all found by independent review)
-**Branch:** `feature/kvkk-attachment-and-imaging-lifecycle` (based off `main`)
-**Status:** Implemented — awaiting deployment/operational verification. No production/browser verification has occurred. Not merged.
-**Related tracker:** `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` — see the new remediation row added there (ID `KVKK-ATTACH-IMAGING-001`), which cross-references `KVKK-HIGH-001` (attachment encryption) and `KVKK-HIGH-003` (medical-record retention).
+**Branch:** `feature/kvkk-attachment-and-imaging-lifecycle` (based off `main`), merged via PR #160; follow-on hardening merged via PRs #162 and #163
+**Status (updated 2026-07-16):** Completed and verified (technical lifecycle control). Merged into `main` (PRs #160, #162, #163), deployed to NoraMedi production, migration applied successfully, and manually production-verified — see `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` Section 6.2.1 for the full production evidence. Legal decisions in Section 16 below (retention periods, hard-deletion policy, backup expectations) and infrastructure encryption verification remain outstanding, non-blocking dependencies.
+**Related tracker:** `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` — see the remediation row for `KVKK-ATTACH-IMAGING-001` (Sections 6.2/6.2.1), which cross-references `KVKK-HIGH-001` (attachment encryption) and `KVKK-HIGH-003` (medical-record retention).
 
 **PR #160 review update:** a human review round found several merge-blocking issues in the first version of this PR (unsafe blanket "deletable" classification with a live-delete endpoint not bound to any privacy-request workflow, whole-archive in-memory buffering with no size bounds, a download token carried in a URL query parameter with no true one-time atomicity, `req.user.clinicId` used directly instead of the org/branch-scoped helper on the attachments legal-hold route, no env kill-switch on the new cleanup job). All of these have been remediated; the sections below describe the corrected design, not the original one. **The live deletion-review execute endpoint has been removed entirely** (not hardened) — this PR now ships dry-run deletion-review only, see Section 4.5.
 
@@ -222,7 +222,9 @@ cd server && npx prisma migrate resolve --rolled-back 20260715145843_add_kvkk_at
 # 4. Re-run information_schema verification (Section 12) to confirm the columns/table are actually gone.
 ```
 
-## 15. Production verification steps (for a human to run after deployment — not run by this session; browser acceptance not performed, see Section 10 of the final report)
+## 15. Production verification steps
+
+**Performed in production on 2026-07-16 — see `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` Section 6.2.1 for the recorded evidence.** The checklist below was written for a human to run after deployment; it has since been executed against NoraMedi production.
 
 1. Confirm both migrations applied: `npx prisma migrate status` shows "Database schema is up to date!" against the production database.
 2. As an `OWNER`/`ORG_ADMIN` test user, set and clear a legal hold on a test attachment and a test imaging study, each **with** a reason; confirm a request with no/short reason is rejected in both directions; confirm an `AuditLog` row is written for both the set and the release; confirm a non-`OWNER`/`ORG_ADMIN` user gets 403.
