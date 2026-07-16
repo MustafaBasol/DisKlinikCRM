@@ -1,8 +1,8 @@
 # NoraMedi (DisKlinikCRM) — KVKK Compliance Audit & Remediation Tracker
 
 **Report date:** 2026-07-15
-**Last updated:** 2026-07-15 (KVKK-ATTACH-IMAGING-001 implemented)
-**Current Git commit / branch:** `feature/kvkk-attachment-and-imaging-lifecycle` (recorded at time of writing; update this line whenever the document changes)
+**Last updated:** 2026-07-16 (KVKK-CRIT-001a and KVKK-ATTACH-IMAGING-001 confirmed merged, deployed to NoraMedi production, and manually verified in production)
+**Current Git commit / branch:** `main` @ `59b9a33bd339dcc42155efd8836cb734514d8178` (merge of PR #163; recorded at time of writing — update this line whenever the document changes)
 **Audit scope:** NoraMedi/DisKlinikCRM platform's compliance with Law No. 6698 (KVKK). Based on source-code review plus verification against official Turkish sources (kvkk.gov.tr, Official Gazette references). No access to Google/Meta contracts, VPS/backup infrastructure, or clinic-level legal documents — those items are explicitly marked "not verified" below and require separate production/legal verification.
 **Legal disclaimer:** This document is **not** a legal compliance certificate. No item in this document may be read as a declaration that the system is "fully KVKK compliant." Final legal determinations belong to Turkish legal counsel. Status labels here describe engineering/documentation state only, except where explicitly marked as legally approved with a recorded approval reference.
 
@@ -14,20 +14,28 @@ Original (superseded) first-pass report: `docs/compliance/archive/NoraMedi_KVKK_
 
 ## 1. Current controlled-pilot status
 
-**KOŞULLU KONTROLLÜ PİLOT (Conditional Controlled Pilot) — not yet cleared.** Unlimited production use with real patient data is not recommended until all Phase 0 items below are either `Completed and verified`, `N/A` with documented justification, or `[L]`/`[O]` items are resolved by legal counsel / production verification. A limited single-clinic pilot with marketing features disabled is technically reasonable once Phase 0 closes.
+**KOŞULLU KONTROLLÜ PİLOT (Conditional Controlled Pilot) — not yet cleared.** Two of the ten Phase 0 items (KVKK-CRIT-001a, KVKK-ATTACH-IMAGING-001) are now `Completed and verified` on their technical/engineering sub-item — merged into `main`, deployed to NoraMedi production, and manually verified in production (see Sections 6.1/6.2 and the evidence below). The remaining eight items are unchanged: three purely technical items are `Not started`, four are `Waiting for legal review`, and one (`HIGH-001`) is `Waiting for operational/infrastructure evidence`. Unlimited production use with real patient data is **still not recommended** until all Phase 0 items are either `Completed and verified`, `N/A` with documented justification, or their `[L]`/`[O]` dependencies are resolved by legal counsel / production/infrastructure verification. A limited single-clinic pilot with marketing features disabled is technically reasonable once Phase 0 closes; reaching two `Completed and verified` items does not by itself clear that bar.
+
+**Important limitation on the two `Completed and verified` items (do not over-read these):**
+- KVKK-CRIT-001a's `Completed and verified` status covers the *delivery/evidence* mechanism only — it proves the server issued and linked a notice-version record to the booking, not that any visitor read, understood, or consented to the notice, and it does **not** approve the legal wording of any clinic's own privacy notice (that remains a separate, still-outstanding legal dependency — see Section 3).
+- KVKK-ATTACH-IMAGING-001's `Completed and verified` status covers the *technical lifecycle control* only — legal-hold, export package, anonymization redaction, and deletion-review dry-run are implemented, deployed, and verified in production. It does **not** mean medical-record retention periods are legally approved, that hard deletion of medical records is approved, that backup deletion/restore is resolved, or that infrastructure/application-level file encryption is settled — all of those remain explicit outstanding dependencies (Section 6.2).
+
+This tracker is **not** a KVKK compliance certificate. Reaching `Completed and verified` on these two items does not automatically clear the system for unlimited production use, and outstanding Phase 0 technical, legal, and infrastructure controls remain. Legal dependencies cannot be completed based on code, and infrastructure controls cannot be completed based on repository inspection alone.
 
 ## 2. Current remediation progress (summary)
 
 | Status | Count (Phase 0 items) |
 |---|---|
-| Completed and verified | 0 |
-| Implemented — awaiting deployment/operational verification | 2 (KVKK-CRIT-001a, KVKK-ATTACH-IMAGING-001) |
+| Completed and verified | 2 (KVKK-CRIT-001a, KVKK-ATTACH-IMAGING-001) |
 | In progress | 0 |
-| Not started | 8 |
+| Not started | 3 (KVKK-HIGH-007, KVKK-CRIT-003, KVKK-HIGH-004) |
 | Blocked | 0 |
-| Waiting for legal review | 5 (overlaps with legal-dependency items below) |
-| Waiting for operational/infrastructure evidence | 1 |
+| Waiting for legal review | 4 (KVKK-CRIT-002, KVKK-CRIT-005, Platform↔clinic processor agreement, VERBİS decision tree) |
+| Waiting for operational/infrastructure evidence | 1 (HIGH-001) |
 | N/A | 0 |
+| **Total Phase 0 items** | **10** |
+
+Each Phase 0 item carries exactly one primary status above. Legal and operational dependencies that remain attached to an otherwise-technically-complete item (e.g. the legal-wording/retention/backup/encryption caveats on the two `Completed and verified` items above) are documented as notes on that item, not double-counted as separate Phase 0 rows.
 
 ## 3. Outstanding legal dependencies
 
@@ -54,8 +62,8 @@ Original (superseded) first-pass report: `docs/compliance/archive/NoraMedi_KVKK_
 
 Status legend: `[ ]` Not started · `[-]` In progress · `[x]` Completed and verified · `[!]` Blocked · `[L]` Waiting for legal review · `[O]` Waiting for operational/infrastructure evidence · `[N/A]` Not applicable
 
-- `[-]` KVKK-CRIT-001a — Public booking privacy-notice display and automatic notice-version evidence record (no consent/acknowledgment checkbox) — **Implemented on `feature/kvkk-public-booking-notice-evidence`, awaiting deployment + browser/production verification**
-- `[-]` KVKK-ATTACH-IMAGING-001 — Attachment/imaging physical-file lifecycle: legal hold, downloadable export package (streamed, bounded), anonymization metadata redaction, deletion-review dry-run only (no live-delete endpoint exists) — **Implemented on `feature/kvkk-attachment-and-imaging-lifecycle`, awaiting deployment/operational verification** (see Section 6.2 / `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md`)
+- `[x]` KVKK-CRIT-001a — Public booking privacy-notice display and automatic notice-version evidence record (no consent/acknowledgment checkbox) — **Merged (PRs #156–#159), deployed to NoraMedi production, and production-verified** (technical/evidence sub-item only — see Section 6.1 for the still-outstanding legal-wording caveat)
+- `[x]` KVKK-ATTACH-IMAGING-001 — Attachment/imaging physical-file lifecycle: legal hold, downloadable export package (streamed, bounded), anonymization metadata redaction, deletion-review dry-run only (no live-delete endpoint exists) — **Merged (PRs #160–#163), deployed to NoraMedi production, and production-verified** (see Section 6.2 / `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md` for still-outstanding legal/infrastructure caveats)
 - `[ ]` KVKK-HIGH-007 — Normalized channel+purpose `CommunicationPreference` model and `resolveOutboundPolicy`
 - `[L]` KVKK-CRIT-002 — International transfer inventory and mechanism decision (Google/Meta)
 - `[ ]` KVKK-CRIT-003 — Breach-response plan and baseline security alerting
@@ -73,7 +81,7 @@ The detailed remediation table (Section 6) is the source of truth for status —
 
 | ID | Remediation | Status | Evidence | Completed in | Verified by | Notes |
 |---|---|---|---|---|---|---|
-| KVKK-CRIT-001a | Public booking privacy notice display + automatic notice-version evidence record | Implemented — awaiting deployment/operational verification | See Section 10 below (implementation evidence) | `feature/kvkk-public-booking-notice-evidence` | Automated tests + Node-level HTTP smoke test against a disposable Postgres (this session); no production/browser verification yet | No consent/acknowledgment checkbox of any kind (see full report Section 10, item 1). New model `PublicBookingNoticeEvidence` reuses the existing `ClinicLegalProfile` publish/versioning architecture; does not touch `ChannelConsentLog` |
+| KVKK-CRIT-001a | Public booking privacy notice display + automatic notice-version evidence record | Completed and verified (technical/evidence sub-item; legal-wording approval remains separate, see Section 3) | See Section 6.1 (implementation evidence) | PRs #156, #157, #158, #159, merged into `main` | Automated tests + real-browser acceptance (this session) + production deployment, production migration, and manual production browser verification with real clinic-specific published legal profiles (confirms correct clinic-specific controller/notice display, blocks booking when no published profile exists, creates/links notice evidence on successful booking, no consent/acknowledgment checkbox, no cross-clinic demo-data leak) | No consent/acknowledgment checkbox of any kind (see full report Section 10, item 1). New model `PublicBookingNoticeEvidence` reuses the existing `ClinicLegalProfile` publish/versioning architecture; does not touch `ChannelConsentLog`. Notice evidence proves server-side delivery and linkage only — not that the patient read, understood, or consented to the notice. Separate public-booking slot-consistency/recovery defects surfaced during production testing were fixed via PRs #157–#159 (non-KVKK; see Section 6.1) |
 | KVKK-HIGH-007 | Normalized `CommunicationPreference` model (channel+purpose) + migration of `smsOptOut` to `channel=sms` scope | Not started | — | — | — | `smsOptOut` must NOT be interpreted as blocking WhatsApp without explicit WhatsApp-specific evidence |
 | KVKK-CRIT-002 | International transfer contracts, DPA review, Art. 9 mechanism selection (Google/Meta) | Waiting for legal review | Google/Meta contracts required | — | Legal counsel | Physical processing country not asserted; see full report Section 7 matrix |
 | KVKK-CRIT-003 | Written incident-response plan + baseline security alerting (≥3 scenarios) | Not started | — | — | — | Absence of "breach" keyword in repo is not evidence of a past breach |
@@ -85,13 +93,13 @@ The detailed remediation table (Section 6) is the source of truth for status —
 | KVKK-HIGH-006 | Reclassify 63 `req.user.clinicId` usages via targeted CodeGraph analysis; fix only confirmed-incorrect ones | Not started | 15 files / 63 usages identified (prior audit grep) | — | — | No mechanical bulk replacement; each fixed route needs its own regression test |
 | KVKK-HIGH-005 | İYS integration (only if marketing/campaign features are ever built) | N/A (feature not active) | No active marketing send path found in code | — | — | Re-evaluate if/when a marketing feature is scoped |
 | KVKK-HIGH-003 | Medical-record retention period + periodic anonymization policy | Waiting for legal review | `dataRetentionPolicy.ts` explicitly excludes medical/financial records from cleanup | — | Legal counsel | Hard-delete of medical records is explicitly NOT recommended |
-| KVKK-ATTACH-IMAGING-001 | Attachment/imaging physical-file lifecycle (legal hold, streamed/bounded export package, anonymization redaction, deletion-review dry-run only, orphan-check) | Implemented — awaiting deployment/operational verification | See Section 6.2 below and `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md` | `feature/kvkk-attachment-and-imaging-lifecycle` | Automated tests only (this session); no production/browser verification yet | No PatientAttachment live-delete path exists at all in this PR (dry-run inventory only — the original narrow execute endpoint was removed per PR #160 review, not hardened; see Section 6.2). Imaging/clinical data likewise has no live-delete path, pending legal retention-period decisions. Overlaps with KVKK-HIGH-001 (attachment encryption, still separately outstanding) and KVKK-HIGH-003 (retention period, still waiting for legal review) |
+| KVKK-ATTACH-IMAGING-001 | Attachment/imaging physical-file lifecycle (legal hold, streamed/bounded export package, anonymization redaction, deletion-review dry-run only, orphan-check) | Completed and verified (technical lifecycle control; legal/infrastructure dependencies below remain separate) | See Section 6.2 below and `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md` | PRs #160, #161 (CI-flake tracking issue, not a code PR), #162, #163, merged into `main` | Automated tests + production deployment, production migration, production schema/index verification, production backup created and checksum/content verified, patient ZIP export production-verified (contents, archive-row lifecycle, no leftover temp/`.partial-*` artifacts), `PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED=true` and its cron job confirmed running in production logs, cross-platform storage-key validation fix (PR #162) production-tested, attachment legal-hold enforcement/UI (PR #163) manually accepted in production | No PatientAttachment live-delete path exists at all (dry-run inventory only — the original narrow execute endpoint was removed per PR #160 review, not hardened; see Section 6.2). Imaging/clinical data likewise has no live-delete path, pending legal retention-period decisions. Still-outstanding: KVKK-HIGH-001 (attachment encryption, separately tracked below), KVKK-HIGH-003 (retention period, waiting for legal review), medical/DICOM retention approval, hard-deletion-of-medical-records policy, backup deletion/restore expectations, infrastructure encryption verification |
 
 ---
 
 ## 6.1 KVKK-CRIT-001a — Implementation evidence
 
-**Status:** Implemented — awaiting deployment/operational verification (technical sub-item). Legal-text approval for each clinic's own privacy notice remains a separate, still-outstanding dependency (see Section 3) — publishing/approving the notice *content* is not part of this remediation item, only the delivery/evidence mechanism.
+**Status:** Completed and verified (technical/evidence sub-item — merged into `main` via PRs #156–#159, deployed to NoraMedi production, migration applied successfully, and manually browser-verified in production; see Section 6.1.2 below). Legal-text approval for each clinic's own privacy notice remains a separate, still-outstanding dependency (see Section 3) — publishing/approving the notice *content* is not part of this remediation item, only the delivery/evidence mechanism. Notice evidence proves server-side delivery and linkage of the notice version only — it is not proof that any patient read, understood, or consented to the notice, and must never be described as such.
 
 **Root cause / previous behavior:** The public booking widget (`src/pages/BookingWidget.tsx`, `server/src/routes/publicBooking.ts`) collected and stored patient personal data (name, phone, email, notes) with no Art. 10 privacy-notice display and no record of which notice version, if any, was shown at the time of collection. `ClinicLegalProfile` and its publish/versioning flow already existed for the clinic KVKK page (`publicClinicKvkk.ts`) but was never consulted by the booking flow.
 
@@ -124,7 +132,7 @@ The detailed remediation table (Section 6) is the source of truth for status —
 
 ### 6.1.1 Final pre-merge review (2026-07-15) — timing semantics, token security, orphan lifecycle, browser acceptance
 
-This sub-section records a second review pass performed before merging PR #156, focused specifically on evidentiary accuracy and token-handling security. **PR #156 was not merged as part of this review** — it remains open pending deployment.
+This sub-section records a second review pass performed before merging PR #156, focused specifically on evidentiary accuracy and token-handling security. At the time this review pass was written, PR #156 had not yet been merged. **Update (2026-07-16): PR #156, along with the follow-up PRs #157–#159, has since been merged into `main`, deployed to NoraMedi production, and production-verified — see Section 6.1.2 below.**
 
 **1. Evidence timing semantics — code change required.**
 The field was originally named `displayedAt`, which implied the notice had actually been rendered/read by the visitor. In reality the timestamp is written when the server *issues* the evidence token in response to the frontend's `GET .../notice-evidence` bootstrap call — this proves server-side delivery of the notice payload to the client, not that the visitor scrolled to, read, or acknowledged it. **Fixed:** renamed to `deliveredAt` throughout (`schema.prisma`, migration SQL, `publicBookingNoticeEvidence.ts`, the `POST /notice-evidence` route response). The Prisma model doc comment now states explicitly: "proves server-side delivery only, NOT that the visitor actually read or scrolled to the notice — never describe it as proof of reading or review anywhere in code, UI copy, or documentation." No compliance-tracker or UI copy anywhere claims proof of reading, review, or consent; this was verified by the existing static no-consent-wording tests (test 13/14 in `publicBookingNoticeEvidence.test.ts`), which also scan this exact wording.
@@ -187,23 +195,33 @@ Stack: disposable Postgres (Docker, ephemeral, destroyed after the run) → back
 - `npm run build` (frontend, `tsc -b && vite build`) → succeeded (pre-existing chunk-size warnings only, unrelated to this change)
 - Ad hoc Node-level HTTP smoke test (not committed — run against the same disposable Postgres, exercised the real Express router with real Prisma queries, then deleted): bootstrap with/without published profile, submission blocked with no evidence, idempotent re-issuance (1 row for repeated bootstrap calls), cross-clinic token rejection, successful submission + atomic evidence linking, rejected reuse of an already-linked token, historical snapshot unchanged after publishing a new notice version, forged/unknown token rejection — **all 10 scenarios passed**.
 
-**Browser acceptance:** **Performed** this review pass (2026-07-15) — see 6.1.1 item 4 above for the full checklist and results (11/11 automated Playwright checks passed against a real Chromium browser, real frontend/backend dev servers, and a disposable Postgres database). This satisfies the *local/dev-environment* browser acceptance checklist. It does **not** constitute production verification — no staging/production deployment has occurred yet (see remaining dependencies below).
+**Browser acceptance (dev-environment):** Performed 2026-07-15 — see 6.1.1 item 4 above for the full checklist and results (11/11 automated Playwright checks passed against a real Chromium browser, real frontend/backend dev servers, and a disposable Postgres database). This satisfied the *local/dev-environment* browser acceptance checklist but did not by itself constitute production verification.
 
-**Remaining dependencies before `Completed and verified`:**
-1. ~~Manual browser acceptance testing against a real running frontend+backend~~ — done this review pass (see 6.1.1 item 4), against a disposable local environment.
-2. Deployment of the migration to any shared/staging/production database.
-3. Post-deployment production verification that public booking pages for real clinics correctly block/allow based on their actual published-profile state.
-4. (Separate, longer-running dependency, not blocking this technical sub-item) Legal-text approval of each clinic's own privacy-notice content remains with legal counsel / clinic operators — this remediation item only fixes *delivery and evidence*, not notice wording.
+### 6.1.2 Production deployment and verification (2026-07-16)
 
-Status is deliberately **kept at** "Implemented — awaiting deployment/operational verification" rather than being upgraded, because items 2 and 3 (real deployment + production verification) are still outstanding — dev-environment browser acceptance is necessary but not sufficient for `Completed and verified` per the Section 7 rules.
+**PRs #156, #157, #158, #159 have been merged into `main`, deployed to NoraMedi production, and their migration applied successfully.** Manual production verification (real Chromium browser, against production, real clinic-specific published legal profiles) confirmed all of the following:
 
-**Cross-reference (not a KVKK finding):** Production verification of this item surfaced a separate, non-KVKK public-booking defect — the widget could display a time slot that submit-time validation then rejected with `409 SLOT_UNAVAILABLE` (stale-slot / recovery-UX bug, unrelated to notice delivery or evidence). This does not change the legal interpretation, scope, or status of KVKK-CRIT-001a above. See `docs/50-public-booking-slot-consistency-hotfix.md` for the full technical defect record, fixed on branch `hotfix/public-booking-slot-consistency-and-recovery`.
+- Public booking correctly blocks data collection when the clinic has no published `ClinicLegalProfile`.
+- Public booking shows the correct clinic-specific controller identity and notice text for clinics that do have a published profile.
+- A successful booking creates and links a `PublicBookingNoticeEvidence` row to the created `AppointmentRequest`.
+- No mandatory consent/acknowledgment checkbox exists anywhere in the flow.
+- No cross-clinic data leak — the operator's own demo/legal-profile data ("Mustafa Basol") does not surface as notice/controller content for any other clinic.
+- Production verification surfaced a separate, non-KVKK public-booking defect (stale time-slot display vs. submit-time rejection) — fixed separately via PRs #157, #158, #159 (see the cross-reference paragraph below).
+
+**Scope of "Completed and verified":** this covers only the technical delivery/evidence control — that the server correctly resolves the clinic's published legal profile, blocks booking when none exists, displays the correct clinic-specific notice/controller, and creates+links a notice-version evidence record on successful booking. It does **not** approve the legal wording of any clinic's own privacy notice, and notice evidence must never be described as proof that a patient read, understood, or consented to the notice — it proves server-side delivery and linkage of the notice version only. Per-clinic notice wording and lawful-basis approval remain separate, outstanding legal dependencies (Section 3).
+
+**Remaining dependency (not blocking this technical sub-item's status):**
+1. Legal-text approval of each clinic's own privacy-notice content remains with legal counsel / clinic operators — this remediation item only fixes *delivery and evidence*, not notice wording.
+
+Status is now **Completed and verified** for the technical/evidence sub-item, per the Section 7 rules (implementation present, migrations applied and validated, type checks and focused/regression tests pass, tenant-scope tests pass, and production verification has now been performed).
+
+**Cross-reference (not a KVKK finding):** Production verification of this item surfaced a separate, non-KVKK public-booking defect — the widget could display a time slot that submit-time validation then rejected with `409 SLOT_UNAVAILABLE` (stale-slot / recovery-UX bug, unrelated to notice delivery or evidence). This does not change the legal interpretation, scope, or status of KVKK-CRIT-001a above. See `docs/50-public-booking-slot-consistency-hotfix.md` for the full technical defect record; fixed and merged via PRs #157, #158, #159.
 
 ---
 
 ## 6.2 KVKK-ATTACH-IMAGING-001 — Implementation evidence
 
-**Status:** Implemented — awaiting deployment/operational verification. Not merged.
+**Status:** Completed and verified (technical lifecycle control — merged into `main` via PRs #160, #162, #163, deployed to NoraMedi production, migration applied successfully, and manually production-verified; see Section 6.2.1 below). Legal/infrastructure dependencies listed at the end of this section remain outstanding and are not blocking this technical sub-item's status.
 
 **Root cause / previous behavior:** every other KVKK remediation item covered structured database records and messaging metadata, but `PatientAttachment` and `ImagingStudy`/`ImagingImage` physical files were untouched by any privacy workflow — no legal-hold concept, no downloadable export including actual file bytes, no anonymization of attachment/imaging metadata, no deletion-review coverage, and no orphan-file (DB row present, physical file missing) visibility.
 
@@ -238,13 +256,43 @@ Status is deliberately **kept at** "Implemented — awaiting deployment/operatio
 - `npx tsc -b` (frontend) → 0 errors
 - `npm run build` (frontend, `tsc -b && vite build`) → succeeded (pre-existing chunk-size warnings only, unrelated to this PR; no frontend files changed this round)
 
-**Remaining dependencies before `Completed and verified`:**
-1. Manual/browser acceptance testing of the new UI (export-package download, deletion-review panel, partial-failure banner) — not performed this session (no browser run was done for this item, unlike KVKK-CRIT-001a's 6.1.1).
-2. Deployment of the migration to any shared/staging/production database.
-3. Post-deployment production verification per the 8-step checklist in `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md` Section 15.
-4. Legal decisions listed in `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md` Section 16 (clinical/DICOM retention periods, hard-deletion-of-medical-records policy, backup deletion expectations, legal-hold trigger authority) remain outstanding and are **not** blocking this technical sub-item's status, consistent with how KVKK-CRIT-001a separates its own technical-vs-legal dependencies.
+### 6.2.1 Production deployment and verification (2026-07-16)
 
-Status is deliberately kept at "Implemented — awaiting deployment/operational verification" per the same Section 7 rules applied to KVKK-CRIT-001a.
+**PRs #160, #162, #163 have been merged into `main`, deployed to NoraMedi production, and their migration applied successfully.** (PR #161 is a CI-flake tracking issue, not a code change — see Section 12 of `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md`.) Production schema and indexes were verified directly, backend and frontend focused tests passed, GitHub Actions checks passed, and a production backup was created with its checksum and content verified.
+
+Production verification, following the 8-step checklist in `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md` Section 15, confirmed:
+
+1. A patient ZIP export was successfully generated and downloaded.
+2. The ZIP contained `data.json`, `manifest.json`, and physical attachment files where present.
+3. The corresponding `PatientPrivacyExportArchive` row had `status=ready`, `storageKey` present, `tokenHash` present, and `downloadedAt` present.
+4. No `queued`/`generating` export rows remained after completion.
+5. No `kvkk-export` temp files or `.partial-*` artifacts remained on disk/storage.
+6. `PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED=true` was verified in the production environment.
+7. The worker log confirmed the cleanup job is scheduled: `[privacy-export-cleanup] Scheduled cleanup job cron="*/15 * * * *".`
+8. The cross-platform unsafe storage-key validation fix (PR #162) passed its production focused tests.
+
+**PR #163 — attachment legal-hold enforcement and UI — production-verified:**
+- `OWNER`/`ORG_ADMIN`-only hold mutation, with a reason required both when placing and releasing a hold.
+- A held attachment cannot be deleted; the enforcement is atomic at the DB level.
+- `legalHoldReason` is hidden from unauthorized roles.
+- Audit logs exclude filename and free-text reason.
+- Attachment upload/list/download/preview support authorized non-default clinics (multi-branch scope).
+- Imaging-study legal-hold UI is available.
+- No imaging deletion endpoint exists (matches the "diagnostic data is never hard-deleted" design — Section 4.5/8 of the lifecycle document).
+
+Manual production acceptance for legal hold, localization, the attachment export package, and the deletion-review dry-run was completed.
+
+**Scope of "Completed and verified":** this covers the technical lifecycle control only. It does **not** mean:
+- medical/DICOM retention periods have legal approval (still awaiting legal counsel);
+- hard deletion of medical records is approved (it is not);
+- backup deletion/restore expectations are resolved (still unresolved);
+- infrastructure encryption is verified (still a separate control, see Section 4 above);
+- application-level file encryption is settled (may still become mandatory depending on infrastructure evidence);
+- normal attachment physical-storage deletion failure/orphan handling is fully closed (remains a separate technical follow-up).
+
+This tracker does not claim complete KVKK compliance from this item's completion.
+
+Status is now **Completed and verified** for the technical lifecycle control, per the Section 7 rules (implementation present, migrations applied and validated, type checks and focused/regression tests pass, tenant-scope tests pass, and production verification has now been performed). The legal decisions listed in `docs/compliance/53-kvkk-attachment-imaging-lifecycle.md` Section 16 (clinical/DICOM retention periods, hard-deletion-of-medical-records policy, backup deletion expectations, legal-hold trigger authority) remain outstanding and are **not** blocking this technical sub-item's status, consistent with how KVKK-CRIT-001a separates its own technical-vs-legal dependencies.
 
 ---
 
@@ -270,14 +318,25 @@ Never mark a legal dependency complete based only on code. Never mark an infrast
 | 2026-07-15 | KVKK-ATTACH-IMAGING-001 | Implemented — awaiting deployment/operational verification | Implemented — awaiting deployment/operational verification (status unchanged; PR #160 review remediation pass, same PR) | PR #160 review pass, branch `feature/kvkk-attachment-and-imaging-lifecycle` | Human review of PR #160 found 7 merge-blocking issues, all fixed same day: (1) migration.sql drift cleaned (confirmed pre-existing/unrelated via before/after diff against `main`'s own migration history — byte-identical remaining drift on both); (2) removed the deletion-review live-delete endpoint entirely (unsafe blanket classification, no privacy-request-workflow binding) rather than hardening it, renamed `deletableAdministrative`→`unclassifiedRetained`; (3) rewrote export-package generation to stream to a temp file (no whole-archive in-memory buffer) with enforced file-count/file-size/total-size bounds and stable reason codes (no raw exception text in manifest/responses); added a `status` column + migration for per-clinic generation concurrency (409 if already in flight); (4) moved the one-time download token from a query parameter to a request header, made consumption atomic (`updateMany` guarded by `downloadedAt: null`), split into 3 distinct started/completed/failed audit events; (5) fixed `attachments.ts`'s legal-hold route to use `validateAndGetClinicIdScope` instead of `req.user.clinicId`, required a reason for release (not just placing) a hold, added a missing audit log call; (6) added `PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED` kill-switch, deliberately separate from `DATA_RETENTION_CLEANUP_ENABLED`; (7) added a new `patientPrivacy` i18n namespace (tr/en/fr/de) for every string this PR introduces. Tests: 54/54 focused suite (was 39), full server suite unchanged/passing, frontend `tsc -b` + `vite build` clean | Automated tests + disposable-Postgres migration-diff verification only (this session); no production/browser verification |
 | 2026-07-15 | KVKK-ATTACH-IMAGING-001 | Implemented — awaiting deployment/operational verification | Implemented — awaiting deployment/operational verification (status unchanged; second follow-up review pass, same PR) | Independent review pass, branch `feature/kvkk-attachment-and-imaging-lifecycle`, commit `ca5e936` → this pass | Independent review of the migration-drift-fix pass found two further P0s and a P1, all fixed same day: (1) `saveFileFromPath()` uploaded the export ZIP to S3 but never removed the local temp file — fixed with `try`/`finally` cleanup in every mode (local rename, local copy-fallback, S3 success, S3 failure) plus explicit `leavePartsOnError: false` on the multipart upload; (2) `reserveGenerationSlot()`'s findFirst-then-create had no lock, allowing two concurrent requests for the same clinic to both create a `generating` row — fixed with a `prisma.$transaction` + PostgreSQL advisory transaction lock keyed off `clinicId` (mirrors `acquireAppointmentSlotLock`), proven with genuinely concurrent calls to the real exported function via `Promise.allSettled` against a real disposable Postgres database (exactly one winner, one `ExportGenerationInProgressError`, exactly one active row; different clinics don't contend; stale rows are swept to `failed`); (3, P1) replaced raw-exception-object logging on export read/upload/download paths with a new `safeErrorFields()` helper (stable error name/code only, never a local path/S3 endpoint/raw exception). Also corrected this document's and `docs/compliance/53-...md`'s rollback guidance (`prisma migrate resolve --rolled-back` is bookkeeping-only, not a schema rollback). Tests: 61/61 focused suite (was 55, +6 temp-file-cleanup/lock-key tests), disposable-DB script now 9/9 (was 6/6, +3 real-concurrency tests), full server suite unchanged/passing, frontend `tsc -b` + `vite build` clean | Automated tests + disposable-Postgres migration-diff + real concurrent-reservation verification, all this session; no production/browser verification |
 
+| 2026-07-16 | KVKK-CRIT-001a | Implemented — awaiting deployment/operational verification | Completed and verified (technical/evidence sub-item) | PRs #156, #157, #158, #159, merged into `main` | Completed and verified after production deployment and browser verification. PRs #156–#159 merged into `main`, deployed to NoraMedi production, migration applied successfully, and manually browser-verified in production with real clinic-specific published legal profiles: blocks public booking data collection when the clinic has no published legal profile; shows the correct clinic-specific controller and notice; creates and links notice evidence during successful booking; no mandatory consent/acknowledgment checkbox; no cross-clinic demo-data leak. Per-clinic notice wording and lawful-basis approval remain separate, outstanding legal dependencies (Section 3) — this status does not approve notice content, only the delivery/evidence mechanism. See Section 6.1.2 | Manual production browser verification (operator) |
+| 2026-07-16 | KVKK-ATTACH-IMAGING-001 | Implemented — awaiting deployment/operational verification | Completed and verified (technical lifecycle control) | PRs #160, #161 (CI-flake tracking issue, no code change), #162, #163, merged into `main` | Completed and verified after PRs #160–#163, production migration, and backup/schema/worker/export/legal-hold/manual acceptance verification. Production schema/indexes verified; production backup created and checksum/content verified; patient ZIP export production-verified end-to-end (contents, archive-row lifecycle status/storageKey/tokenHash/downloadedAt, no leftover queued/generating rows, no temp/`.partial-*` artifacts); `PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED=true` and its 15-minute cron confirmed in production logs; cross-platform storage-key validation (PR #162) production-tested; attachment legal-hold enforcement and UI (PR #163) manually accepted in production, including multi-branch clinic scope for attachment upload/list/download/preview. Medical/DICOM retention periods, hard-deletion-of-medical-records policy, backup deletion/restore expectations, and infrastructure/application-level encryption remain outstanding, non-blocking dependencies. See Section 6.2.1 | Manual production verification + production backup checksum/content verification (operator) |
+
 Every future status change adds a new row here. Do not rewrite or delete existing rows.
 
 ---
 
 ## 9. Next recommended remediation item
 
-**KVKK-CRIT-001a is now implemented** (see Section 6.1) — awaiting deployment/operational verification and legal-text approval, not further technical implementation.
+**KVKK-CRIT-001a and KVKK-ATTACH-IMAGING-001 are now Completed and verified** (see Sections 6.1/6.1.2 and 6.2/6.2.1) — production-deployed and production-verified on their technical/evidence sub-items; only their documented legal/infrastructure dependencies remain, not further technical implementation.
 
-**Next: KVKK-HIGH-007 — Normalized `CommunicationPreference` model (channel+purpose) + migration of `smsOptOut` to `channel=sms` scope.**
+**Next engineering control (highest priority): KVKK-HIGH-004 — full-clinic/bulk export protection.**
 
-Rationale: it is the next `Not started` Phase 0 item in Section 5's ordering that is purely technical (no legal-counsel dependency, unlike KVKK-CRIT-002/KVKK-CRIT-005/VERBİS/processor-agreement which are `Waiting for legal review`, and unlike HIGH-001 which is `Waiting for operational evidence`). Per the existing correction-log context (Section 0.1 of the full narrative report), `smsOptOut` must **not** be mechanically interpreted as blocking WhatsApp — the fix requires an explicit channel-scoped preference model, not a blanket reinterpretation. This item was not started in this task.
+`server/src/routes/gdprExport.ts`'s full-clinic export path currently has no step-up authentication, no rate limiting, and no audit alerting beyond the baseline authorization check. The next engineering remediation should either:
+- add step-up authentication, rate limiting, audit alerting, and strict authorization to the full-clinic export endpoint; **or**
+- disable it through a server-enforced feature flag until those protections exist.
+
+This control is **not implemented as part of this documentation update** — it is flagged here as the next engineering priority for a future PR. Pilot must not run with an unrestricted bulk export path enabled.
+
+**After KVKK-HIGH-004: KVKK-HIGH-007 — Normalized `CommunicationPreference` model (channel+purpose) + migration of `smsOptOut` to `channel=sms` scope.**
+
+Rationale: both are `Not started` Phase 0 items that are purely technical (no legal-counsel dependency, unlike KVKK-CRIT-002/KVKK-CRIT-005/VERBİS/processor-agreement which are `Waiting for legal review`, and unlike HIGH-001 which is `Waiting for operational evidence`). KVKK-HIGH-004 is prioritized first because an unrestricted bulk-export path is a standing exposure risk independent of pilot scale. Per the existing correction-log context (Section 0.1 of the full narrative report), `smsOptOut` must **not** be mechanically interpreted as blocking WhatsApp — the KVKK-HIGH-007 fix requires an explicit channel-scoped preference model, not a blanket reinterpretation. Neither item was started in this task.
