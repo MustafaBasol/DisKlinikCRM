@@ -174,9 +174,71 @@ await test('isSafeStorageKey accepts a well-formed key', () => {
   assert.equal(isSafeStorageKey('exports/clinic-1/uuid.zip'), true);
 });
 
+// Regression tests: PR #160 follow-up — isSafeStorageKey previously relied on
+// Node's platform-dependent path.isAbsolute(ref), which does not recognize
+// Windows absolute paths as absolute when the server runs on Linux
+// (npm run test:kvkk-lifecycle failed in production on Linux as a result).
+await test('isSafeStorageKey rejects POSIX absolute paths', () => {
+  assert.equal(isSafeStorageKey('/etc/passwd'), false);
+});
+
+await test('isSafeStorageKey rejects Windows drive-absolute paths (backslash)', () => {
+  assert.equal(isSafeStorageKey('C:\\Windows\\System32'), false);
+});
+
+await test('isSafeStorageKey rejects Windows drive-absolute paths (forward slash)', () => {
+  assert.equal(isSafeStorageKey('C:/Windows/System32'), false);
+});
+
+await test('isSafeStorageKey rejects Windows UNC paths (backslash)', () => {
+  assert.equal(isSafeStorageKey('\\\\server\\share\\file'), false);
+});
+
+await test('isSafeStorageKey rejects Windows UNC-style paths (forward slash)', () => {
+  assert.equal(isSafeStorageKey('//server/share/file'), false);
+});
+
+await test('isSafeStorageKey rejects Windows drive-relative paths', () => {
+  assert.equal(isSafeStorageKey('C:relative-file'), false);
+});
+
+await test('isSafeStorageKey rejects traversal with forward slashes', () => {
+  assert.equal(isSafeStorageKey('../file'), false);
+  assert.equal(isSafeStorageKey('clinic/../../file'), false);
+});
+
+await test('isSafeStorageKey rejects traversal with backslashes', () => {
+  assert.equal(isSafeStorageKey('..\\file'), false);
+  assert.equal(isSafeStorageKey('clinic\\..\\..\\file'), false);
+});
+
+await test('isSafeStorageKey rejects NUL/control-character paths', () => {
+  assert.equal(isSafeStorageKey('clinic-1/file' + String.fromCharCode(0) + '.pdf'), false);
+  assert.equal(isSafeStorageKey('clinic-1/' + String.fromCharCode(1) + 'file.pdf'), false);
+});
+
+await test('isSafeStorageKey accepts valid generated storage keys (regression)', () => {
+  assert.equal(isSafeStorageKey('clinic-id/generated-file.pdf'), true);
+  assert.equal(isSafeStorageKey('exports/clinic-id/export-id.zip'), true);
+});
+
 await test('fileExists returns false (not a throw) for an absolute-path ref', async () => {
   const result = await fileExists('/etc/passwd');
   assert.equal(result, false);
+});
+
+await test('fileExists returns false without touching disk for Windows absolute/UNC refs', async () => {
+  assert.equal(await fileExists('C:\\Windows\\System32\\config'), false);
+  assert.equal(await fileExists('C:/Windows/System32/config'), false);
+  assert.equal(await fileExists('\\\\server\\share\\file'), false);
+  assert.equal(await fileExists('//server/share/file'), false);
+});
+
+await test('statFile returns null without touching disk for Windows absolute/UNC refs', async () => {
+  assert.equal(await statFile('C:\\Windows\\System32\\config'), null);
+  assert.equal(await statFile('C:/Windows/System32/config'), null);
+  assert.equal(await statFile('\\\\server\\share\\file'), null);
+  assert.equal(await statFile('//server/share/file'), null);
 });
 
 await test('fileExists/statFile return false/null for a nonexistent safe key', async () => {

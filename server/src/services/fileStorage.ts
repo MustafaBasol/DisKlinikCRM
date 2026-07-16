@@ -114,15 +114,37 @@ export async function openFileStream(ref: string): Promise<Readable | null> {
   return fs.createReadStream(localPath);
 }
 
+// Matches a Windows drive prefix ("C:\...", "C:/...", or the drive-relative
+// "C:relative-file" form) regardless of host OS.
+const WINDOWS_DRIVE_PREFIX = /^[A-Za-z]:/;
+// Matches a UNC/backslash-or-slash-doubled prefix ("\\server\share",
+// "//server/share") regardless of host OS.
+const UNC_PREFIX = /^[\\/]{2}/;
+// NUL byte or any other C0 control character — never valid in a storage key.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR = /[\x00-\x1f]/;
+
 /**
  * Yeni (KVKK yaşam döngüsü, docs/compliance/53) kod yolları için güvenlik
  * kapısı: mutlak yol veya ".." içeren anahtarları reddeder. Eski mutlak-yol
  * fallback'ı (resolveLocalPath) yalnızca legacy kayıtlar içindir — bu kapı
  * yeni özelliklerin o fallback'i asla kullanmamasını garanti eder.
+ *
+ * Node's own `path.isAbsolute(ref)` is platform-dependent: on Linux it does
+ * not recognize a Windows absolute path like "C:\Windows\System32" as
+ * absolute, so a check built only on the host implementation lets attacker
+ * paths through on Linux production servers (found via PR #160 follow-up:
+ * npm run test:kvkk-lifecycle failing on Linux). This function instead uses
+ * explicit, host-independent checks so behavior is identical on every OS the
+ * server might run on.
  */
 export function isSafeStorageKey(ref: string): boolean {
   if (!ref || typeof ref !== 'string') return false;
-  if (path.isAbsolute(ref)) return false;
+  if (CONTROL_CHAR.test(ref)) return false;
+  if (path.posix.isAbsolute(ref)) return false;
+  if (path.win32.isAbsolute(ref)) return false;
+  if (UNC_PREFIX.test(ref)) return false;
+  if (WINDOWS_DRIVE_PREFIX.test(ref)) return false;
   const normalized = ref.split(/[\\/]/).filter(Boolean);
   if (normalized.some((segment) => segment === '..' || segment === '.')) return false;
   if (ref.includes('..')) return false;
