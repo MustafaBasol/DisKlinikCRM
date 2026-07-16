@@ -442,6 +442,216 @@ async function main() {
     assert.equal(new ClinicBulkExportRateLimitedError('daily_cap').reason, 'daily_cap');
   });
 
+  const { ClinicBulkExportLeaseLostError } = await import('../services/privacy/clinicBulkExportPackage.js');
+  await test('ClinicBulkExportLeaseLostError is a real Error subclass', () => {
+    assert.ok(new ClinicBulkExportLeaseLostError() instanceof Error);
+  });
+
+  section('11. Remediation round — actor-bound step-up window reuse (P0)');
+
+  const { isStepUpWindowReusableBy } = await import('../utils/passwordStepUp.js');
+
+  await test('requester may reuse their own valid window', () => {
+    const now = new Date('2026-01-01T00:02:00.000Z');
+    const row = { stepUpVerifiedAt: new Date('2026-01-01T00:00:00.000Z'), stepUpVerifiedByUserId: 'user-a' };
+    assert.equal(isStepUpWindowReusableBy(row, 'user-a', now), true);
+  });
+
+  await test('a different OWNER/ORG_ADMIN cannot reuse the requester\'s window', () => {
+    const now = new Date('2026-01-01T00:02:00.000Z');
+    const row = { stepUpVerifiedAt: new Date('2026-01-01T00:00:00.000Z'), stepUpVerifiedByUserId: 'user-a' };
+    assert.equal(isStepUpWindowReusableBy(row, 'user-b', now), false);
+  });
+
+  await test('an expired window fails even for the original verifier', () => {
+    const now = new Date('2026-01-01T00:10:00.000Z'); // 10 minutes later, window is 5 minutes
+    const row = { stepUpVerifiedAt: new Date('2026-01-01T00:00:00.000Z'), stepUpVerifiedByUserId: 'user-a' };
+    assert.equal(isStepUpWindowReusableBy(row, 'user-a', now), false);
+  });
+
+  await test('a null verifying user (e.g. deleted) can never produce passwordless reuse for anyone', () => {
+    const now = new Date('2026-01-01T00:01:00.000Z');
+    const row = { stepUpVerifiedAt: new Date('2026-01-01T00:00:00.000Z'), stepUpVerifiedByUserId: null };
+    assert.equal(isStepUpWindowReusableBy(row, 'user-a', now), false);
+    assert.equal(isStepUpWindowReusableBy(row, 'user-b', now), false);
+  });
+
+  await test('a null row can never satisfy reuse', () => {
+    assert.equal(isStepUpWindowReusableBy(null, 'user-a', new Date()), false);
+  });
+
+  await test('route uses isStepUpWindowReusableBy for passwordless reuse, not an inline field comparison', async () => {
+    const source = stripComments(await readSource('routes/clinicBulkExport.ts'));
+    assert.ok(source.includes('isStepUpWindowReusableBy('), 'must delegate to the shared, unit-tested actor-binding helper');
+  });
+
+  await test('reserveClinicBulkExport binds the requester as the initial step-up verifier', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.ok(source.includes('stepUpVerifiedByUserId: args.requestedByUserId'));
+  });
+
+  section('12. Remediation round — fully guarded download claim (P0)');
+
+  const { claimClinicBulkExportDownload } = await import('../services/privacy/clinicBulkExportPackage.js');
+
+  await test('claimClinicBulkExportDownload signature accepts a tokenHash (bound to the exact issued token)', () => {
+    assert.equal(typeof claimClinicBulkExportDownload, 'function');
+  });
+
+  await test('the guarded claim updateMany WHERE clause checks every required field', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const claimFnStart = source.indexOf('export async function claimClinicBulkExportDownload');
+    const claimFnBody = source.slice(claimFnStart, claimFnStart + 1500);
+    for (const field of ['clinicId: args.clinicId', 'organizationId: args.organizationId', "status: 'ready'", 'expiresAt: { gt: now }', 'downloadedAt: null', 'downloadTokenHash: args.tokenHash']) {
+      assert.ok(claimFnBody.includes(field), `guarded claim WHERE must include ${field}`);
+    }
+  });
+
+  await test('download route destroys the stream on every claim failure path, and computes tokenHash via hashDownloadToken', async () => {
+    const source = await readSource('routes/clinicBulkExport.ts');
+    assert.ok(source.includes('tokenHash: hashDownloadToken(token)'), 'claim must be called with the hash of the exact validated token');
+    assert.ok(source.includes('stream.destroy();'), 'a claim-failure path must destroy the already-opened stream');
+  });
+
+  section('13. Remediation round — lease-renewal amplification fix (P0)');
+
+  await test('lease renewal is no longer wired to stream "data" events (per-record amplification removed)', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    assert.ok(!/stream\.on\(\s*['"]data['"]/.test(source), 'must not renew the lease from a per-record stream "data" listener');
+  });
+
+  await test('lease renewal is awaited once per cursor-paginated batch inside the entity generator', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.ok(source.includes('await limits.renewLease()'), 'must await a single renewal per batch, not a fire-and-forget call');
+    assert.ok(source.includes('if (!leaseOk) throw new ClinicBulkExportLeaseLostError()'), 'must abort generation immediately on lease loss');
+  });
+
+  await test('generateClinicBulkExport maps ClinicBulkExportLeaseLostError to the stable LEASE_LOST failure code', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.ok(source.includes("'LEASE_LOST'"));
+  });
+
+  section('14. Remediation round — download completion/abort audit semantics (P0)');
+
+  const { attachDownloadOutcomeListeners } = await import('../services/privacy/clinicBulkExportPackage.js');
+
+  function fakeEmitter() {
+    const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
+    return {
+      once(event: string, listener: (...args: unknown[]) => void) {
+        (listeners[event] ??= []).push(listener);
+      },
+      emit(event: string) {
+        for (const l of listeners[event] ?? []) l();
+      },
+    };
+  }
+
+  await test('normal finish => completed, exactly once', () => {
+    const res = fakeEmitter();
+    const stream = fakeEmitter();
+    let completed = 0;
+    let failed = 0;
+    attachDownloadOutcomeListeners({ res, stream, onCompleted: () => completed++, onFailed: () => failed++ });
+    res.emit('finish');
+    assert.equal(completed, 1);
+    assert.equal(failed, 0);
+  });
+
+  await test('client close before finish => failed (interrupted), never completed', () => {
+    const res = fakeEmitter();
+    const stream = fakeEmitter();
+    let completed = 0;
+    const failures: string[] = [];
+    attachDownloadOutcomeListeners({ res, stream, onCompleted: () => completed++, onFailed: (r) => failures.push(r) });
+    res.emit('close');
+    assert.equal(completed, 0);
+    assert.deepEqual(failures, ['interrupted']);
+  });
+
+  await test('source stream ending followed by a client close before finish => not completed', () => {
+    // Source 'end' is not listened to by attachDownloadOutcomeListeners at
+    // all (only res 'finish'/'close' and stream 'error') — simulate the
+    // source finishing internally (no event emitted here) while the
+    // response then gets a 'close' before 'finish'.
+    const res = fakeEmitter();
+    const stream = fakeEmitter();
+    let completed = 0;
+    const failures: string[] = [];
+    attachDownloadOutcomeListeners({ res, stream, onCompleted: () => completed++, onFailed: (r) => failures.push(r) });
+    res.emit('close');
+    assert.equal(completed, 0, 'must not be marked completed merely because the source finished reading');
+    assert.deepEqual(failures, ['interrupted']);
+  });
+
+  await test('stream error => failed (stream_error)', () => {
+    const res = fakeEmitter();
+    const stream = fakeEmitter();
+    let completed = 0;
+    const failures: string[] = [];
+    attachDownloadOutcomeListeners({ res, stream, onCompleted: () => completed++, onFailed: (r) => failures.push(r) });
+    stream.emit('error');
+    assert.equal(completed, 0);
+    assert.deepEqual(failures, ['stream_error']);
+  });
+
+  await test('exactly one terminal outcome even if multiple events fire (finish then close)', () => {
+    const res = fakeEmitter();
+    const stream = fakeEmitter();
+    let completed = 0;
+    let failed = 0;
+    attachDownloadOutcomeListeners({ res, stream, onCompleted: () => completed++, onFailed: () => failed++ });
+    res.emit('finish');
+    res.emit('close'); // must be a no-op — outcome already decided
+    assert.equal(completed, 1);
+    assert.equal(failed, 0);
+  });
+
+  await test('route wires attachDownloadOutcomeListeners instead of ad hoc stream "end"-based completion', async () => {
+    const source = stripComments(await readSource('routes/clinicBulkExport.ts'));
+    assert.ok(source.includes('attachDownloadOutcomeListeners('));
+    assert.ok(!/stream\.on\(\s*['"]end['"]/.test(source), 'must not treat the source stream ending as download success');
+  });
+
+  section('15. Remediation round — Redis no longer authoritative over password correctness (P0)');
+
+  await test('clinicBulkExportPasswordAttempts.ts no longer imports/uses createRateLimiter', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPasswordAttempts.ts'));
+    assert.ok(!source.includes('createRateLimiter'), 'PostgreSQL must be the sole authority — no Redis pre-check on this path');
+  });
+
+  await test('bcrypt.compare (via verifyCurrentPassword) always runs once PostgreSQL confirms the key is not locked', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPasswordAttempts.ts');
+    // No conditional branch gating verifyCurrentPassword behind anything other than the lockedUntil check.
+    const afterLockCheck = source.slice(source.indexOf('outcome: \'locked\''));
+    assert.ok(afterLockCheck.includes('const verification = await verifyCurrentPassword('));
+    assert.ok(!afterLockCheck.includes('likelyLockedOut'));
+  });
+
+  section('16. Remediation round — manifest checksum completeness (P1)');
+
+  await test('clinic.json gets a computed SHA-256 entry in sha256PerFile; manifest.json is documented as excluded', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.ok(source.includes("'clinic.json': clinicJsonSha256"), 'clinic.json must have a real computed checksum, not be omitted');
+    assert.ok(source.includes('circular self-hash') || source.includes('EXCLUDED'), 'the manifest.json self-hash exclusion must be documented');
+  });
+
+  section('17. Remediation round — non-critical audit calls are awaited (P1)');
+
+  await test('clinicBulkExport.ts request-path audit calls are awaited, not fire-and-forget', async () => {
+    const source = await readSource('routes/clinicBulkExport.ts');
+    const voidAuditCalls = source.match(/void\s+writeAuditLog\(/g) ?? [];
+    assert.equal(voidAuditCalls.length, 0, 'every request-path writeAuditLog call must be awaited so the response never precedes the audit attempt');
+    const awaitedAuditCalls = source.match(/await\s+writeAuditLog\(/g) ?? [];
+    assert.ok(awaitedAuditCalls.length >= 3, 'expected at least 3 awaited non-critical audit calls (feature-disabled, rate-limited, step-up-failed x2)');
+  });
+
+  await test('gdprExport.ts legacy audit call is awaited', async () => {
+    const source = await readSource('routes/gdprExport.ts');
+    assert.ok(!/void\s+writeAuditLog\(/.test(source));
+    assert.ok(/await\s+writeAuditLog\(/.test(source));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

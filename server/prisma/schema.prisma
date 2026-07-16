@@ -144,6 +144,7 @@ model User {
   uploadedAttachments          PatientAttachment[]            @relation("AttachmentUploader")
   privacyExportsRequested      PatientPrivacyExportArchive[]  @relation("PrivacyExportRequester")
   clinicBulkExportsRequested   ClinicBulkExportArchive[]      @relation("ClinicBulkExportRequester")
+  clinicBulkExportsStepUpVerified ClinicBulkExportArchive[]   @relation("ClinicBulkExportStepUpVerifier")
   toothRecordsCreated          ToothRecord[]                  @relation("ToothRecordCreator")
   paymentPlans                 PaymentPlan[]
   compensationRules            PractitionerCompensationRule[] @relation("PractitionerCompRules")
@@ -2534,6 +2535,20 @@ model ClinicBulkExportArchive {
   requestedByUserId String?
   requestedByUser   User?         @relation("ClinicBulkExportRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
 
+  /// The user whose password most recently satisfied step-up for THIS
+  /// archive (creation, or a fresh re-verification at download-token
+  /// issuance). Binds the STEP_UP_WINDOW_MS reuse window to a specific
+  /// actor — download-token issuance without a fresh password is only
+  /// permitted when the current authenticated user matches this field AND
+  /// stepUpVerifiedAt is still within the window. A different OWNER/
+  /// ORG_ADMIN may still obtain a token, but only after verifying their OWN
+  /// current password (which then overwrites both fields). Nullable +
+  /// SetNull so archive history survives the verifying user being
+  /// deactivated/deleted — a null value can never satisfy passwordless
+  /// window reuse for anyone.
+  stepUpVerifiedByUserId String?
+  stepUpVerifiedByUser   User?         @relation("ClinicBulkExportStepUpVerifier", fields: [stepUpVerifiedByUserId], references: [id], onDelete: SetNull)
+
   status String @default("queued") // queued | generating | ready | failed | expired
 
   purpose        String // regulatory_request | clinic_migration | contract_termination | legal_request | other
@@ -2589,6 +2604,7 @@ model ClinicBulkExportArchive {
   @@index([organizationId, clinicId])
   @@index([clinicId, status])
   @@index([requestedByUserId, createdAt])
+  @@index([stepUpVerifiedByUserId])
   @@index([expiresAt])
   @@index([leaseExpiresAt])
   @@index([clinicId, status, leaseExpiresAt])

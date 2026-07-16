@@ -17,6 +17,7 @@ CREATE TABLE "ClinicBulkExportArchive" (
     "storageKey" TEXT,
     "manifestJson" JSONB,
     "downloadTokenHash" TEXT,
+    "stepUpVerifiedByUserId" TEXT,
     "stepUpVerifiedAt" TIMESTAMP(3),
     "expiresAt" TIMESTAMP(3),
     "downloadedAt" TIMESTAMP(3),
@@ -58,6 +59,9 @@ CREATE INDEX "ClinicBulkExportArchive_clinicId_status_idx" ON "ClinicBulkExportA
 CREATE INDEX "ClinicBulkExportArchive_requestedByUserId_createdAt_idx" ON "ClinicBulkExportArchive"("requestedByUserId", "createdAt");
 
 -- CreateIndex
+CREATE INDEX "ClinicBulkExportArchive_stepUpVerifiedByUserId_idx" ON "ClinicBulkExportArchive"("stepUpVerifiedByUserId");
+
+-- CreateIndex
 CREATE INDEX "ClinicBulkExportArchive_expiresAt_idx" ON "ClinicBulkExportArchive"("expiresAt");
 
 -- CreateIndex
@@ -80,6 +84,9 @@ ALTER TABLE "ClinicBulkExportArchive" ADD CONSTRAINT "ClinicBulkExportArchive_cl
 
 -- AddForeignKey
 ALTER TABLE "ClinicBulkExportArchive" ADD CONSTRAINT "ClinicBulkExportArchive_requestedByUserId_fkey" FOREIGN KEY ("requestedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ClinicBulkExportArchive" ADD CONSTRAINT "ClinicBulkExportArchive_stepUpVerifiedByUserId_fkey" FOREIGN KEY ("stepUpVerifiedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ClinicBulkExportPasswordAttempt" ADD CONSTRAINT "ClinicBulkExportPasswordAttempt_clinicId_fkey" FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

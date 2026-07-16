@@ -25,7 +25,7 @@ import { safeErrorFields } from '../utils/safeError.js';
 import { isClinicBulkExportEnabled } from '../services/privacy/clinicBulkExportConfig.js';
 import {
   assertIpHashSecretConfigured,
-  isWithinStepUpWindow,
+  isStepUpWindowReusableBy,
 } from '../utils/passwordStepUp.js';
 import { verifyStepUpPasswordWithLockout } from '../services/privacy/clinicBulkExportPasswordAttempts.js';
 import {
@@ -34,8 +34,11 @@ import {
   issueClinicBulkExportDownloadToken,
   validateClinicBulkExportDownloadToken,
   claimClinicBulkExportDownload,
+  attachDownloadOutcomeListeners,
+  hashDownloadToken,
   ClinicBulkExportAlreadyRunningError,
   ClinicBulkExportRateLimitedError,
+  type ClaimDownloadFailure,
 } from '../services/privacy/clinicBulkExportPackage.js';
 import { openFileStream } from '../services/fileStorage.js';
 
@@ -92,7 +95,10 @@ router.post(
 
     if (!isClinicBulkExportEnabled()) {
       const clinicId = getParam(req, 'clinicId');
-      void writeAuditLog({
+      // Non-critical event (writeAuditLog swallows insert failures) — still
+      // awaited so the response is never sent before the audit attempt has
+      // completed.
+      await writeAuditLog({
         organizationId: user.organizationId,
         clinicId,
         actorUserId: user.id,
@@ -146,7 +152,7 @@ router.post(
     }
 
     if (stepUp.outcome === 'locked') {
-      void writeAuditLog({
+      await writeAuditLog({
         organizationId: scope.organizationId,
         clinicId: scope.clinicId,
         actorUserId: user.id,
@@ -160,7 +166,7 @@ router.post(
       return res.status(429).json({ error: 'CLINIC_BULK_EXPORT_RATE_LIMITED' });
     }
     if (stepUp.outcome === 'rejected') {
-      void writeAuditLog({
+      await writeAuditLog({
         organizationId: scope.organizationId,
         clinicId: scope.clinicId,
         actorUserId: user.id,
@@ -260,6 +266,7 @@ router.post(
     const now = new Date();
 
     let stepUpOk = false;
+    let freshStepUp = false;
     if (typeof suppliedPassword === 'string' && suppliedPassword.length > 0) {
       const ip = req.ip ?? 'unknown';
       let stepUp;
@@ -279,16 +286,22 @@ router.post(
         return res.status(429).json({ error: 'CLINIC_BULK_EXPORT_RATE_LIMITED' });
       }
       stepUpOk = stepUp.outcome === 'verified';
+      freshStepUp = stepUpOk;
     } else {
+      // Passwordless reuse of a still-fresh step-up window is only allowed
+      // for the SAME actor who most recently satisfied it — otherwise one
+      // OWNER/ORG_ADMIN could reuse another user's recent step-up. A null
+      // stepUpVerifiedByUserId (e.g. the original verifier was later
+      // deleted) can never satisfy passwordless reuse for anyone.
       const row = await prisma.clinicBulkExportArchive.findFirst({
         where: { id: jobId, clinicId: scope.clinicId, organizationId: scope.organizationId },
-        select: { stepUpVerifiedAt: true },
+        select: { stepUpVerifiedAt: true, stepUpVerifiedByUserId: true },
       });
-      stepUpOk = Boolean(row && isWithinStepUpWindow(row.stepUpVerifiedAt, now));
+      stepUpOk = isStepUpWindowReusableBy(row, user.id, now);
     }
 
     if (!stepUpOk) {
-      void writeAuditLog({
+      await writeAuditLog({
         organizationId: scope.organizationId,
         clinicId: scope.clinicId,
         actorUserId: user.id,
@@ -310,6 +323,7 @@ router.post(
       actorUserId: user.id,
       actorRole: user.role,
       stepUpOk: true,
+      freshStepUp,
       req,
       now,
     });
@@ -382,6 +396,7 @@ router.get(
           jobId: validation.archive.id,
           clinicId: scope.clinicId,
           organizationId: scope.organizationId,
+          tokenHash: hashDownloadToken(token),
           actorUserId: user.id,
           actorRole: user.role,
           req,
@@ -394,17 +409,36 @@ router.get(
         return res.status(500).json({ error: 'Download failed. Please try again.' });
       }
       if (!claim.claimed) {
+        // The guarded claim lost the race (e.g. the archive expired or was
+        // replaced between validation and claim) — the stream opened above
+        // must never be piped; destroy it before returning the precise
+        // reason.
         stream.destroy();
-        return res.status(409).json({ error: 'CLINIC_BULK_EXPORT_ALREADY_DOWNLOADED' });
+        const statusByClaimFailure: Record<ClaimDownloadFailure, number> = {
+          not_found: 404,
+          wrong_scope: 404,
+          expired: 410,
+          not_ready: 409,
+          already_downloaded: 409,
+          invalid_token: 400,
+        };
+        const codeByClaimFailure: Record<ClaimDownloadFailure, string> = {
+          not_found: 'Export job not found',
+          wrong_scope: 'Export job not found',
+          expired: 'CLINIC_BULK_EXPORT_EXPIRED',
+          not_ready: 'CLINIC_BULK_EXPORT_NOT_READY',
+          already_downloaded: 'CLINIC_BULK_EXPORT_ALREADY_DOWNLOADED',
+          invalid_token: 'Export not available for download',
+        };
+        return res
+          .status(statusByClaimFailure[claim.failure])
+          .json({ error: codeByClaimFailure[claim.failure] });
       }
 
       res.setHeader('Content-Disposition', `attachment; filename="clinic-export-${scope.clinicId}.zip"`);
       res.setHeader('Content-Type', 'application/zip');
 
-      let outcomeLogged = false;
       const logOutcome = async (action: string, description: string, extra?: Record<string, unknown>) => {
-        if (outcomeLogged) return;
-        outcomeLogged = true;
         try {
           await writeAuditLog({
             organizationId: scope.organizationId,
@@ -423,19 +457,29 @@ router.get(
         }
       };
 
+      // Exactly-once terminal outcome: res 'finish' = completed, res
+      // 'close' before 'finish' = interrupted, stream 'error' = failed. The
+      // source stream's own 'end' event is deliberately NOT treated as
+      // success — it can fire while the response is still flushing to a
+      // slow/disconnecting client.
+      attachDownloadOutcomeListeners({
+        res,
+        stream,
+        onCompleted: () => void logOutcome('clinic_bulk_export_downloaded', 'Clinic bulk export downloaded'),
+        onFailed: (reason) =>
+          void logOutcome(
+            'clinic_bulk_export_download_failed',
+            reason === 'interrupted'
+              ? 'Clinic bulk export download interrupted (client disconnected)'
+              : 'Clinic bulk export download failed mid-stream',
+            { reason },
+          ),
+      });
+
       stream.on('error', (streamErr) => {
         console.error('[clinic-bulk-export] download stream error', { jobId, ...safeErrorFields(streamErr) });
-        void logOutcome('clinic_bulk_export_download_failed', 'Clinic bulk export download failed mid-stream', { reason: 'stream_error' });
         if (!res.headersSent) res.status(500).json({ error: 'Download failed' });
         else res.destroy();
-      });
-      res.on('close', () => {
-        if (!outcomeLogged) {
-          void logOutcome('clinic_bulk_export_download_failed', 'Clinic bulk export download interrupted (client disconnected)', { reason: 'interrupted' });
-        }
-      });
-      stream.on('end', () => {
-        void logOutcome('clinic_bulk_export_downloaded', 'Clinic bulk export downloaded');
       });
       stream.pipe(res as any);
     } catch (err) {

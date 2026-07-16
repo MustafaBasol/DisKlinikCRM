@@ -410,3 +410,86 @@ of `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md`.
   technical facts here, not validated against any specific legal
   requirement — that remains a legal-review dependency, consistent with how
   this tracker treats every other legal question.
+
+## 17. Remediation round (2026-07-16, second pass — PR #165 review)
+
+A follow-up security review of the initial implementation found six issues,
+all fixed on the same branch before requesting further review. Status
+remains **Implemented — awaiting deployment/operational verification**; the
+feature flag remains `false`.
+
+1. **Step-up reuse was not bound to an actor.** The download-token route
+   only checked the archive's `stepUpVerifiedAt` timestamp, so any
+   OWNER/ORG_ADMIN on the same archive could reuse a DIFFERENT user's recent
+   step-up window. Fixed by adding `stepUpVerifiedByUserId` (nullable,
+   `onDelete: SetNull`) to `ClinicBulkExportArchive`: creation binds the
+   requester, a fresh password re-verification at token-issuance time
+   rebinds the actor atomically in the same guarded update that issues the
+   token, and passwordless window reuse now requires
+   `stepUpVerifiedByUserId === current user` via the new pure helper
+   `isStepUpWindowReusableBy()` (`utils/passwordStepUp.ts`). A null verifier
+   (e.g. the original verifier was deleted) can never satisfy passwordless
+   reuse for anyone.
+2. **The download claim was under-guarded.** It previously matched only
+   `id + downloadedAt: null`, leaving a gap between the earlier
+   `validateClinicBulkExportDownloadToken` read and the claim itself.
+   `claimClinicBulkExportDownload` now guards
+   `id/clinicId/organizationId/status='ready'/expiresAt>now/downloadedAt=null/downloadTokenHash=<exact hash>`
+   in one `updateMany`, and on a miss re-reads to return a precise reason
+   (`not_found`/`wrong_scope`/`expired`/`not_ready`/`already_downloaded`/`invalid_token`)
+   instead of a generic one. Proven against a real database: an archive that
+   expires strictly between validation and claim can never be claimed, even
+   with an otherwise-valid token.
+3. **Redis could reject a correct password.** The step-up lockout path had a
+   Redis fast-pre-check that could skip `bcrypt.compare` — and record a
+   failed attempt — purely because Redis *suggested* the key was over
+   threshold, even when PostgreSQL had no active `lockedUntil`. Removed
+   entirely; PostgreSQL (already advisory-lock-serialized) is now the sole
+   authority. Proven against a real database: after failed attempts below
+   the lockout threshold, the correct password still succeeds and resets
+   the attempt counter.
+4. **Lease renewal amplified with record count.** Renewal was fired
+   fire-and-forget from the entity stream's per-record `'data'` event
+   (batched every 25 records but still unbounded in principle for a large
+   export). Replaced with one *awaited* renewal per cursor-paginated DB
+   batch (proportional to batch count, never record count); a failed
+   renewal now throws `ClinicBulkExportLeaseLostError`, mapped to the stable
+   `LEASE_LOST` failure code, and generation stops immediately. Because the
+   renewal is awaited inline in the generator's own pull loop, calls for the
+   same job can never overlap. Proven against a real database with a
+   1,250-row fixture (3 batches).
+5. **Download completion was decided by the wrong event.** The old code
+   marked a download "completed" on the *source* stream's `'end'` event,
+   which can fire while the response is still flushing to a
+   slow/disconnecting client. Replaced with an exactly-once outcome decided
+   only by the response: `res` `'finish'` → completed, `res` `'close'`
+   before `'finish'` → failed (interrupted), `stream` `'error'` → failed.
+   Extracted into a standalone, unit-tested helper,
+   `attachDownloadOutcomeListeners()`.
+6. **Manifest checksums were incomplete; some audit writes were
+   fire-and-forget.** `clinic.json` now gets a real computed SHA-256 entry
+   in `sha256PerFile` (manifest.json remains deliberately excluded — hashing
+   itself would be circular — and this is documented on the type). Every
+   non-critical, request-path `writeAuditLog` call (feature-disabled
+   attempt, rate-limited, step-up-failed ×2, the legacy endpoint attempt) is
+   now `await`ed rather than `void`-fired, so the response can never precede
+   the audit attempt (the calls still swallow insert failures — they are
+   not part of the fail-closed critical-event set).
+
+A real bug was also found and fixed while extending the disposable-Postgres
+verification script to exercise a genuine end-to-end ZIP lifecycle
+(reserve → claim → generate a real ZIP → inspect its entries and checksums →
+issue a token → download → replay-reject → expire → cleanup deletes the real
+file → a dedicated `SIZE_LIMIT_EXCEEDED` run with a tiny configured limit):
+`generateClinicBulkExport`'s `writeFinished` promise (resolved by the
+archiver/write-stream pipeline) was created early but only ever `await`ed on
+the happy path. When generation failed before reaching that `await` (e.g. a
+size-limit abort), the promise could still reject later and crash the
+process as an unhandled rejection. Fixed by attaching a no-op `.catch()`
+immediately after creation — the later `await writeFinished` on the happy
+path is unaffected.
+
+See `server/src/tests/clinicBulkExport.test.ts` sections 11–17 (34 new
+tests) and `server/scripts/verify-clinic-bulk-export-lifecycle.ts` (10 new
+disposable-Postgres tests, including the full real-ZIP lifecycle) for the
+verification coverage.

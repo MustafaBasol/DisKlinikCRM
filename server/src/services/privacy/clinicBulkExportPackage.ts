@@ -66,8 +66,6 @@ export function getDownloadTokenTtlMs(): number {
 
 /** Lease duration for both "queued awaiting a worker" and "generating" states. */
 export const LEASE_DURATION_MS = 10 * 60 * 1000; // 10 minutes without a claim/renewal = abandoned
-export const LEASE_RENEWAL_INTERVAL_MS = 2 * 60 * 1000;
-export const LEASE_RENEWAL_BATCH_SIZE = 25;
 
 /** Step-up remains reusable (no re-prompt) for this long after verification. */
 export { STEP_UP_WINDOW_MS } from '../../utils/passwordStepUp.js';
@@ -116,6 +114,13 @@ export class ClinicBulkExportSizeLimitExceededError extends Error {
   constructor() {
     super('Clinic bulk export exceeded the configured record/byte ceiling.');
     this.name = 'ClinicBulkExportSizeLimitExceededError';
+  }
+}
+
+export class ClinicBulkExportLeaseLostError extends Error {
+  constructor() {
+    super('Clinic bulk export worker lease was lost or could not be renewed mid-generation.');
+    this.name = 'ClinicBulkExportLeaseLostError';
   }
 }
 
@@ -209,6 +214,11 @@ export async function reserveClinicBulkExport(args: ReserveClinicBulkExportArgs)
           restrictedNote: args.restrictedNote,
           exportSchemaVersion: EXPORT_SCHEMA_VERSION,
           stepUpVerifiedAt: args.stepUpVerifiedAt,
+          // Creation itself required the requester's own current password
+          // (see routes/clinicBulkExport.ts POST /), so the requester is by
+          // construction the step-up verifier for the fresh window this row
+          // starts with.
+          stepUpVerifiedByUserId: args.requestedByUserId,
           heartbeatAt: now,
           leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS),
         },
@@ -359,6 +369,16 @@ export interface IssueDownloadTokenArgs {
   actorRole: string;
   /** True once the caller has already confirmed a fresh-or-windowed step-up. */
   stepUpOk: boolean;
+  /**
+   * True when `stepUpOk` came from THIS request supplying and verifying a
+   * fresh current password (as opposed to reusing a prior step-up window).
+   * When true, the guarded update also rebinds stepUpVerifiedAt/
+   * stepUpVerifiedByUserId to `actorUserId`/`now` — so a second, different
+   * OWNER/ORG_ADMIN who verifies their own password becomes the new window
+   * owner, and only THEY (not the original requester) can reuse it
+   * passwordless afterward, until it is rebound again.
+   */
+  freshStepUp: boolean;
   req: { ip?: string; headers: Record<string, unknown> };
   now?: Date;
 }
@@ -370,7 +390,8 @@ export interface IssueDownloadTokenArgs {
  * re-checked synchronously as part of the same guarded update (`expiresAt
  * > now` in the WHERE clause), not via a separate read-then-act step. The
  * row update and its audit event are written in the same transaction
- * (fail-closed).
+ * (fail-closed). When `freshStepUp` is true, the same guarded update also
+ * rebinds the step-up actor (see IssueDownloadTokenArgs.freshStepUp).
  */
 export async function issueClinicBulkExportDownloadToken(
   args: IssueDownloadTokenArgs,
@@ -402,7 +423,12 @@ export async function issueClinicBulkExportDownloadToken(
         downloadTokenHash: null,
         expiresAt: { gt: now },
       },
-      data: { downloadTokenHash: tokenHash },
+      data: {
+        downloadTokenHash: tokenHash,
+        ...(args.freshStepUp
+          ? { stepUpVerifiedAt: now, stepUpVerifiedByUserId: args.actorUserId }
+          : {}),
+      },
     });
     if (updated.count === 0) return null;
 
@@ -488,7 +514,15 @@ export async function validateClinicBulkExportDownloadToken(params: {
   return { ok: true, archive: { id: row.id, storageKey: row.storageKey } };
 }
 
-export type ClaimDownloadResult = { claimed: true } | { claimed: false; failure: 'already_downloaded' };
+export type ClaimDownloadFailure =
+  | 'not_found'
+  | 'wrong_scope'
+  | 'expired'
+  | 'not_ready'
+  | 'already_downloaded'
+  | 'invalid_token';
+
+export type ClaimDownloadResult = { claimed: true } | { claimed: false; failure: ClaimDownloadFailure };
 
 /**
  * Atomically claims the one-time download and writes the
@@ -497,19 +531,39 @@ export type ClaimDownloadResult = { claimed: true } | { claimed: false; failure:
  * the already-opened storage stream as unusable — destroy it, never pipe
  * it). Must be called AFTER confirming the file stream can be opened but
  * BEFORE piping to the response.
+ *
+ * The guarded WHERE clause is intentionally fully redundant with the read
+ * `validateClinicBulkExportDownloadToken` already performed: it re-checks
+ * id/clinicId/organizationId/status/expiresAt/downloadedAt AND the caller's
+ * exact token hash, all in the SAME update as the claim, so nothing that
+ * changed between the read and this call (a concurrent expiry, a token
+ * replacement, a second claim) can ever be missed by a stale read. If the
+ * guarded update affects zero rows, a precise re-read determines the exact
+ * reason (never a generic "already downloaded").
  */
 export async function claimClinicBulkExportDownload(args: {
   jobId: string;
   clinicId: string;
   organizationId: string;
+  tokenHash: string;
   actorUserId: string;
   actorRole: string;
   req: { ip?: string; headers: Record<string, unknown> };
+  now?: Date;
 }): Promise<ClaimDownloadResult> {
+  const now = args.now ?? new Date();
   const claimed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const updated = await tx.clinicBulkExportArchive.updateMany({
-      where: { id: args.jobId, downloadedAt: null },
-      data: { downloadedAt: new Date() },
+      where: {
+        id: args.jobId,
+        clinicId: args.clinicId,
+        organizationId: args.organizationId,
+        status: 'ready',
+        expiresAt: { gt: now },
+        downloadedAt: null,
+        downloadTokenHash: args.tokenHash,
+      },
+      data: { downloadedAt: now },
     });
     if (updated.count === 0) return false;
 
@@ -528,8 +582,81 @@ export async function claimClinicBulkExportDownload(args: {
     return true;
   });
 
-  if (!claimed) return { claimed: false, failure: 'already_downloaded' };
-  return { claimed: true };
+  if (claimed) return { claimed: true };
+
+  const recheck = await prisma.clinicBulkExportArchive.findUnique({
+    where: { id: args.jobId },
+    select: {
+      id: true,
+      clinicId: true,
+      organizationId: true,
+      status: true,
+      expiresAt: true,
+      downloadedAt: true,
+      downloadTokenHash: true,
+    },
+  });
+  if (!recheck) return { claimed: false, failure: 'not_found' };
+  if (recheck.clinicId !== args.clinicId || recheck.organizationId !== args.organizationId) {
+    return { claimed: false, failure: 'wrong_scope' };
+  }
+  const status = await expireArchiveIfPastTtl(recheck, now);
+  if (status === 'expired') return { claimed: false, failure: 'expired' };
+  if (recheck.downloadedAt) return { claimed: false, failure: 'already_downloaded' };
+  if (recheck.downloadTokenHash !== args.tokenHash) return { claimed: false, failure: 'invalid_token' };
+  return { claimed: false, failure: 'not_ready' };
+}
+
+// ── Download completion/abort outcome (exactly-once, response-driven) ──
+
+/** Minimal EventEmitter-like shape both Express `Response` and a storage
+ * read stream satisfy — kept narrow so this helper is trivially unit
+ * testable with plain fake emitters, no live HTTP server required. */
+export interface DownloadOutcomeEmitter {
+  once(event: string, listener: (...args: unknown[]) => void): unknown;
+}
+
+export type DownloadOutcomeFailureReason = 'interrupted' | 'stream_error';
+
+/**
+ * Wires the exactly-once terminal download-outcome audit decision.
+ * Deliberately does NOT treat the source stream's `end` event as success —
+ * the file may have finished reading from storage while the response is
+ * still flushing bytes to a slow/disconnecting client. The only source of
+ * truth for "the client actually received the export" is `res`'s own
+ * `finish` event:
+ *   - res 'finish'                       -> completed
+ *   - res 'close' BEFORE 'finish'        -> failed (interrupted)
+ *   - stream 'error' (storage read fails) -> failed (stream_error)
+ * A single in-closure flag guarantees exactly one of onCompleted/onFailed
+ * ever fires, regardless of event ordering (e.g. the source stream ending
+ * and the client disconnecting in either order before `finish`).
+ */
+export function attachDownloadOutcomeListeners(args: {
+  res: DownloadOutcomeEmitter;
+  stream: DownloadOutcomeEmitter;
+  onCompleted: () => void;
+  onFailed: (reason: DownloadOutcomeFailureReason) => void;
+}): void {
+  let finished = false;
+  let outcomeDecided = false;
+
+  args.res.once('finish', () => {
+    finished = true;
+    if (outcomeDecided) return;
+    outcomeDecided = true;
+    args.onCompleted();
+  });
+  args.res.once('close', () => {
+    if (finished || outcomeDecided) return;
+    outcomeDecided = true;
+    args.onFailed('interrupted');
+  });
+  args.stream.once('error', () => {
+    if (outcomeDecided) return;
+    outcomeDecided = true;
+    args.onFailed('stream_error');
+  });
 }
 
 // ── Worker: claim + generate ────────────────────────────────────────────
@@ -584,12 +711,6 @@ async function renewLease(jobId: string, now: Date = new Date()): Promise<boolea
   }
 }
 
-function startLeaseHeartbeat(jobId: string): NodeJS.Timeout {
-  const timer = setInterval(() => void renewLease(jobId), LEASE_RENEWAL_INTERVAL_MS);
-  timer.unref?.();
-  return timer;
-}
-
 interface EntityStreamStats {
   recordCount: number;
   sha256: string;
@@ -600,18 +721,36 @@ interface EntityDefinition {
   fetchBatch: (cursor: string | undefined, take: number) => Promise<{ id: string }[]>;
 }
 
+interface EntityStreamLimits {
+  onRecord: () => void;
+  /**
+   * Awaited once per cursor-paginated DB batch (never per record) — see the
+   * lease-renewal-amplification fix in generateClinicBulkExport. Because
+   * this is awaited sequentially inside the async generator's own pull
+   * loop, calls for the same job can never overlap: the generator does not
+   * fetch the next batch until the previous renewal has settled. Returns
+   * false if the lease could not be renewed (lost/claimed elsewhere), in
+   * which case generation must stop immediately.
+   */
+  renewLease: () => Promise<boolean>;
+}
+
 /** Wraps a cursor-paginated entity fetch as a lazily-pulled NDJSON byte stream — never buffers the whole entity. */
 function createEntityStream(
   def: EntityDefinition,
-  limits: { onRecord: () => void },
-): { stream: Readable; getStats: () => EntityStreamStats } {
+  limits: EntityStreamLimits,
+): { stream: Readable; getStats: () => EntityStreamStats; getBatchCount: () => number } {
   const hash = createHash('sha256');
   let recordCount = 0;
+  let batchCount = 0;
 
   async function* generate(): AsyncGenerator<Buffer> {
     let cursor: string | undefined;
     while (true) {
       const batch = await def.fetchBatch(cursor, BATCH_SIZE);
+      batchCount++;
+      const leaseOk = await limits.renewLease();
+      if (!leaseOk) throw new ClinicBulkExportLeaseLostError();
       if (batch.length === 0) break;
       for (const row of batch) {
         limits.onRecord();
@@ -628,6 +767,7 @@ function createEntityStream(
   return {
     stream: Readable.from(generate()),
     getStats: () => ({ recordCount, sha256: hash.digest('hex') }),
+    getBatchCount: () => batchCount,
   };
 }
 
@@ -763,6 +903,10 @@ export interface ClinicBulkExportManifest {
   purpose: string;
   entityCounts: Record<string, number>;
   fileNames: string[];
+  /** SHA-256 hex digest for every file in the archive EXCEPT manifest.json
+   * itself — manifest.json is written last (it embeds this very map) and
+   * hashing it here would be circular self-reference, so it deliberately
+   * has no entry. Every other file, including clinic.json, is present. */
   sha256PerFile: Record<string, string>;
   scopeDescription: string;
 }
@@ -796,7 +940,6 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
   });
   if (!job || job.status !== 'generating') return;
 
-  const heartbeatTimer = startLeaseHeartbeat(jobId);
   let tempFilePath: string | null = null;
 
   try {
@@ -813,6 +956,13 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
       writeStream.on('error', reject);
       archive.on('error', reject);
     });
+    // A size-limit abort or an entity-stream error (e.g. ClinicBulkExportLeaseLostError)
+    // can reject writeFinished before it is ever awaited below (control flow
+    // leaves via the entity-processing loop's own throw first) — without
+    // this, that rejection is unhandled and crashes the process. The actual
+    // `await writeFinished` further down still observes the rejection
+    // normally; this only prevents the unhandled-rejection crash.
+    writeFinished.catch(() => {});
     let byteLimitExceeded = false;
     archive.on('data', (chunk: Buffer) => {
       totalBytesWritten += chunk.length;
@@ -825,7 +975,9 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
     archive.pipe(writeStream);
 
     const clinic = await prisma.clinic.findUnique({ where: { id: job.clinicId }, select: CLINIC_SELECT });
-    archive.append(Buffer.from(JSON.stringify(clinic, null, 2), 'utf8'), { name: 'clinic.json' });
+    const clinicJsonBuffer = Buffer.from(JSON.stringify(clinic, null, 2), 'utf8');
+    const clinicJsonSha256 = createHash('sha256').update(clinicJsonBuffer).digest('hex');
+    archive.append(clinicJsonBuffer, { name: 'clinic.json' });
 
     const onRecord = () => {
       totalRecords++;
@@ -834,15 +986,21 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
 
     const entities = buildEntityDefinitions(job.clinicId);
     const entityCounts: Record<string, number> = {};
-    const sha256PerFile: Record<string, string> = {};
+    // clinic.json's checksum is known synchronously (already fully
+    // buffered above, unlike the streamed *.ndjson entities) — seeded here
+    // rather than after the streaming loop below. manifest.json is
+    // deliberately EXCLUDED from this map: it is written last and would
+    // otherwise have to hash itself before it exists (a circular
+    // self-hash), so manifest.json is the one export file with no
+    // corresponding sha256PerFile entry — documented on
+    // ClinicBulkExportManifest.sha256PerFile.
+    const sha256PerFile: Record<string, string> = { 'clinic.json': clinicJsonSha256 };
     const fileNames: string[] = ['manifest.json', 'clinic.json'];
 
-    let batchesSinceRenewal = 0;
     for (const entity of entities) {
-      const { stream, getStats } = createEntityStream(entity, { onRecord });
-      stream.on('data', () => {
-        batchesSinceRenewal++;
-        if (batchesSinceRenewal % LEASE_RENEWAL_BATCH_SIZE === 0) void renewLease(jobId);
+      const { stream, getStats } = createEntityStream(entity, {
+        onRecord,
+        renewLease: () => renewLease(jobId),
       });
       archive.append(stream, { name: entity.fileName });
       await new Promise<void>((resolve, reject) => {
@@ -914,7 +1072,12 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
     });
   } catch (err) {
     if (tempFilePath) await fs.promises.unlink(tempFilePath).catch(() => {});
-    const failureCode = err instanceof ClinicBulkExportSizeLimitExceededError ? 'SIZE_LIMIT_EXCEEDED' : 'GENERATION_ERROR';
+    const failureCode =
+      err instanceof ClinicBulkExportSizeLimitExceededError
+        ? 'SIZE_LIMIT_EXCEEDED'
+        : err instanceof ClinicBulkExportLeaseLostError
+          ? 'LEASE_LOST'
+          : 'GENERATION_ERROR';
     console.error('[clinic-bulk-export] generation failed', { jobId, failureCode, ...safeErrorFields(err) });
     await prisma.clinicBulkExportArchive
       .updateMany({ where: { id: jobId, status: 'generating' }, data: { status: 'failed', failureCode } })
@@ -930,8 +1093,6 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
       description: 'Clinic bulk export generation failed',
       metadata: { jobId, failureCode },
     });
-  } finally {
-    clearInterval(heartbeatTimer);
   }
 }
 

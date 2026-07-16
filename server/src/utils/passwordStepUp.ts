@@ -115,3 +115,26 @@ export function isWithinStepUpWindow(stepUpVerifiedAt: Date | null, now: Date): 
   if (!stepUpVerifiedAt) return false;
   return now.getTime() - stepUpVerifiedAt.getTime() < STEP_UP_WINDOW_MS;
 }
+
+/**
+ * Actor-bound step-up window reuse check (KVKK-HIGH-004 remediation): a
+ * still-fresh step-up window may only be reused WITHOUT a fresh password by
+ * the exact user who most recently satisfied it. Without this, any
+ * OWNER/ORG_ADMIN on the same archive could reuse a DIFFERENT user's recent
+ * password verification just by knowing the jobId. A null
+ * `stepUpVerifiedByUserId` (e.g. the original verifier was later
+ * deactivated/deleted, per the SetNull relation) can never satisfy
+ * passwordless reuse for anyone — it must fail closed, not open.
+ */
+export function isStepUpWindowReusableBy(
+  row: { stepUpVerifiedAt: Date | null; stepUpVerifiedByUserId: string | null } | null,
+  actorUserId: string,
+  now: Date,
+): boolean {
+  return Boolean(
+    row &&
+      row.stepUpVerifiedByUserId !== null &&
+      row.stepUpVerifiedByUserId === actorUserId &&
+      isWithinStepUpWindow(row.stepUpVerifiedAt, now),
+  );
+}

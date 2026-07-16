@@ -28,10 +28,13 @@ const router = express.Router();
 // authenticate already runs globally for the /api prefix (see index.ts) —
 // req.user is populated before this handler runs. No `authorize` here: every
 // authenticated role gets the same disabled response.
-router.get('/clinic/export-data', (req: AuthRequest, res: Response) => {
+router.get('/clinic/export-data', async (req: AuthRequest, res: Response) => {
   const user = req.user;
   if (user) {
-    void writeAuditLog({
+    // Non-critical event (writeAuditLog swallows insert failures) — still
+    // awaited so the response is never sent before the audit attempt has
+    // completed.
+    await writeAuditLog({
       organizationId: user.organizationId,
       clinicId: user.clinicId,
       actorUserId: user.id,

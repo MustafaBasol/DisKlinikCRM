@@ -10,22 +10,20 @@
  * first-attempts for a brand-new key cannot both observe "no row" and both
  * insert — the lock forces one to wait, so the second sees the first's row.
  *
- * Redis (createRateLimiter) is used ONLY as an optional fast pre-check that
- * can skip the (comparatively expensive) bcrypt.compare call when a caller
- * is very likely already locked out — it never changes the outcome. The
- * Postgres transaction below always runs and is always the final arbiter of
- * whether a request is locked out; there is exactly one authoritative
- * counter, never two independent ones with ambiguous state. If Redis is
- * unavailable, createRateLimiter's underlying counterStore already fails
- * open to an in-process Map (see utils/counterStore.ts) — that's fine here
- * specifically because this path is non-authoritative optimization only,
- * not the security boundary itself.
+ * PostgreSQL is the SOLE authority here — there is no Redis pre-check on
+ * this path. An earlier draft added a Redis fast-pre-check that could skip
+ * bcrypt.compare (and record a failed attempt) purely because Redis
+ * *suggested* the key was over threshold, even when the PostgreSQL row had
+ * no active lockedUntil — that could reject a correct password based on a
+ * second, non-authoritative counter. Redis must never cause a correct
+ * password to be rejected, so that pre-check was removed entirely:
+ * bcrypt.compare always runs unless the PostgreSQL row itself currently has
+ * an unexpired lockedUntil.
  */
 
 import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import prisma from '../../db.js';
-import { createRateLimiter } from '../../utils/helpers.js';
 import {
   assertIpHashSecretConfigured,
   hashClientIp,
@@ -41,12 +39,6 @@ export const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 export const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 /** ClinicBulkExportPasswordAttempt rows untouched this long are deleted by the cleanup job. */
 export const ATTEMPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-
-const precheckLimiter = createRateLimiter(
-  LOCKOUT_MAX_ATTEMPTS,
-  LOCKOUT_WINDOW_MS,
-  'clinic-bulk-export-pw-precheck',
-);
 
 export type PasswordAttemptResult =
   | { outcome: 'locked'; lockedUntil: Date }
@@ -92,19 +84,6 @@ export async function verifyStepUpPasswordWithLockout(args: {
   const now = args.now ?? new Date();
   const client = args.client ?? prisma;
   const ipHash = hashClientIp(args.ip);
-  const precheckKey = `${args.userId}:${args.clinicId}:${ipHash}`;
-
-  // Non-authoritative optimization only: if Redis strongly suggests this key
-  // is already over threshold, skip the bcrypt.compare call below (it would
-  // fail regardless once the authoritative Postgres check runs). The
-  // Postgres transaction still always executes and always decides the
-  // returned lockedUntil.
-  let likelyLockedOut = false;
-  try {
-    likelyLockedOut = !(await precheckLimiter.check(precheckKey));
-  } catch {
-    likelyLockedOut = false;
-  }
 
   return client.$transaction(async (tx: Prisma.TransactionClient) => {
     const [key1, key2] = computePasswordAttemptLockKey(args.userId, args.clinicId, ipHash);
@@ -118,31 +97,23 @@ export async function verifyStepUpPasswordWithLockout(args: {
       return { outcome: 'locked', lockedUntil: existing.lockedUntil } as const;
     }
 
-    if (!likelyLockedOut) {
-      const verification = await verifyCurrentPassword(args.userId, args.suppliedPassword);
-      if (verification.ok) {
-        await tx.clinicBulkExportPasswordAttempt.upsert({
-          where: { userId_clinicId_ipHash: { userId: args.userId, clinicId: args.clinicId, ipHash } },
-          create: { userId: args.userId, clinicId: args.clinicId, ipHash, attemptCount: 0, windowStartedAt: now },
-          update: { attemptCount: 0, windowStartedAt: now, lockedUntil: null },
-        });
-        await precheckLimiter.reset(precheckKey).catch(() => {});
-        return { outcome: 'verified' } as const;
-      }
-      // Fall through to record the failed attempt below, but still surface
-      // the specific rejection reason for callers that need it internally
-      // (never exposed to the client beyond the generic STEP_UP_FAILED code).
-      await recordFailedAttempt(tx, args.userId, args.clinicId, ipHash, existing, now);
-      void precheckLimiter.record(precheckKey).catch(() => {});
-      return { outcome: 'rejected', failure: verification.failure! } as const;
+    // PostgreSQL says this key is not currently locked — bcrypt.compare
+    // always runs. There is no non-authoritative pre-check here that could
+    // skip it and reject a correct password.
+    const verification = await verifyCurrentPassword(args.userId, args.suppliedPassword);
+    if (verification.ok) {
+      await tx.clinicBulkExportPasswordAttempt.upsert({
+        where: { userId_clinicId_ipHash: { userId: args.userId, clinicId: args.clinicId, ipHash } },
+        create: { userId: args.userId, clinicId: args.clinicId, ipHash, attemptCount: 0, windowStartedAt: now },
+        update: { attemptCount: 0, windowStartedAt: now, lockedUntil: null },
+      });
+      return { outcome: 'verified' } as const;
     }
-
-    // likelyLockedOut: skip bcrypt, still record as a failed attempt so the
-    // Postgres-authoritative counter reflects reality even under the fast
-    // pre-check path.
+    // Fall through to record the failed attempt below, but still surface
+    // the specific rejection reason for callers that need it internally
+    // (never exposed to the client beyond the generic STEP_UP_FAILED code).
     await recordFailedAttempt(tx, args.userId, args.clinicId, ipHash, existing, now);
-    void precheckLimiter.record(precheckKey).catch(() => {});
-    return { outcome: 'rejected', failure: 'mismatch' } as const;
+    return { outcome: 'rejected', failure: verification.failure! } as const;
   });
 }
 
