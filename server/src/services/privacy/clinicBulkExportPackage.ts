@@ -64,8 +64,38 @@ export function getDownloadTokenTtlMs(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 60 * 60 * 1000;
 }
 
-/** Lease duration for both "queued awaiting a worker" and "generating" states. */
-export const LEASE_DURATION_MS = 10 * 60 * 1000; // 10 minutes without a claim/renewal = abandoned
+/**
+ * Queued-backlog deadline — deliberately SEPARATE from, and substantially
+ * longer than, the generating lease below. A queued row's `leaseExpiresAt`
+ * is set once, at creation, to `createdAt + this value`, and is never
+ * renewed while it sits in the queue (nothing is "heartbeating" a row no
+ * worker has claimed yet). Normal backlog under bounded worker concurrency
+ * must not be mistaken for an abandoned job merely because it waited a few
+ * cron ticks — that would previously have shared the much shorter
+ * generating lease and could spuriously fail a perfectly healthy queue.
+ */
+export function getQueueTimeoutMs(): number {
+  const raw = Number(process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 60 * 60 * 1000; // 1 hour default queued deadline
+}
+
+/**
+ * Generating-lease duration. Claiming a queued row (claimQueuedClinicBulkExportJobs)
+ * REPLACES its queue-timeout deadline with `now + this value`, and the
+ * heartbeat/per-batch renewal keep sliding it forward while generation is
+ * actually in flight. Only a worker that stops renewing (crash, lost lease)
+ * lets this expire.
+ */
+export function getGenerationLeaseMs(): number {
+  const raw = Number(process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 10 * 60 * 1000; // 10 minutes without a renewal = abandoned
+}
+
+/** Background heartbeat tick interval during generation — see startClinicBulkExportLeaseHeartbeat(). */
+export function getHeartbeatIntervalMs(): number {
+  const raw = Number(process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 60 * 1000; // 1 minute, well under the generation lease
+}
 
 /** Step-up remains reusable (no re-prompt) for this long after verification. */
 export { STEP_UP_WINDOW_MS } from '../../utils/passwordStepUp.js';
@@ -220,7 +250,10 @@ export async function reserveClinicBulkExport(args: ReserveClinicBulkExportArgs)
           // starts with.
           stepUpVerifiedByUserId: args.requestedByUserId,
           heartbeatAt: now,
-          leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS),
+          // Queued deadline, NOT the (much shorter) generating lease — see
+          // getQueueTimeoutMs(). claimQueuedClinicBulkExportJobs() replaces
+          // this with the generating lease the moment a worker claims it.
+          leaseExpiresAt: new Date(now.getTime() + getQueueTimeoutMs()),
         },
       });
 
@@ -666,9 +699,14 @@ export function attachDownloadOutcomeListeners(args: {
  * per-row updateMany — correctness comes from the WHERE-guarded update
  * (only one of N concurrent worker replicas polling the same row wins), so
  * multiple replicas can claim different rows concurrently without a
- * cross-replica lock. Also sweeps rows (queued or generating) whose lease
- * has expired to 'failed' first — a crashed/absent worker never
- * permanently blocks a clinic.
+ * cross-replica lock. A winning claim also replaces the row's queue-timeout
+ * deadline with the (shorter) generating lease (see getGenerationLeaseMs())
+ * and records exactly one `clinic_bulk_export_generation_started` audit
+ * event — a replica that loses the claim race never writes that event.
+ * Also sweeps rows (queued or generating) whose lease has expired to
+ * 'failed' first — a crashed/absent worker never permanently blocks a
+ * clinic, and a queued row that merely outlived the (separate, longer)
+ * queue timeout is the only queued row ever swept this way.
  */
 export async function claimQueuedClinicBulkExportJobs(limit: number, now: Date = new Date()): Promise<string[]> {
   await prisma.clinicBulkExportArchive.updateMany({
@@ -691,24 +729,127 @@ export async function claimQueuedClinicBulkExportJobs(limit: number, now: Date =
     if (claimedIds.length >= limit) break;
     const result = await prisma.clinicBulkExportArchive.updateMany({
       where: { id: candidate.id, status: 'queued' },
-      data: { status: 'generating', heartbeatAt: now, leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS) },
+      // Claiming REPLACES the queue-timeout deadline with the (shorter)
+      // generating lease — a job that just spent 40 minutes healthily
+      // waiting behind other clinics' jobs must not inherit that elapsed
+      // time against its generation budget.
+      data: { status: 'generating', heartbeatAt: now, leaseExpiresAt: new Date(now.getTime() + getGenerationLeaseMs()) },
     });
-    if (result.count > 0) claimedIds.push(candidate.id);
+    if (result.count > 0) {
+      claimedIds.push(candidate.id);
+      await recordGenerationStartedAudit(candidate.id);
+    }
   }
   return claimedIds;
+}
+
+/**
+ * Exactly one `clinic_bulk_export_generation_started` event per successfully
+ * claimed job — called only after the guarded per-row claim above actually
+ * won (result.count > 0), so a replica that loses the claim race never
+ * writes this event. Awaited (like every other worker-lifecycle audit event
+ * in this file — generation_completed/generation_failed), but uses the
+ * regular fire-and-forget-safe `writeAuditLog`, not the transactional
+ * `writeAuditLogInTx`: a failing insert here must never roll back or block
+ * the claim itself, it only logs and swallows. Only stable identifiers are
+ * recorded — never restrictedNote, patient data, storageKey, or exception
+ * text.
+ */
+async function recordGenerationStartedAudit(jobId: string): Promise<void> {
+  const job = await prisma.clinicBulkExportArchive.findUnique({
+    where: { id: jobId },
+    select: { organizationId: true, clinicId: true, requestedByUserId: true },
+  });
+  if (!job) return;
+  await writeAuditLog({
+    organizationId: job.organizationId,
+    clinicId: job.clinicId,
+    actorUserId: job.requestedByUserId,
+    actorRole: 'system',
+    action: 'clinic_bulk_export_generation_started',
+    entityType: 'clinic',
+    entityId: job.clinicId,
+    description: 'Clinic bulk export generation started',
+    metadata: { jobId, schemaVersion: EXPORT_SCHEMA_VERSION },
+  });
 }
 
 async function renewLease(jobId: string, now: Date = new Date()): Promise<boolean> {
   try {
     const result = await prisma.clinicBulkExportArchive.updateMany({
       where: { id: jobId, status: 'generating' },
-      data: { heartbeatAt: now, leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS) },
+      data: { heartbeatAt: now, leaseExpiresAt: new Date(now.getTime() + getGenerationLeaseMs()) },
     });
     return result.count > 0;
   } catch (err) {
     console.error('[clinic-bulk-export] lease renewal failed', { jobId, ...safeErrorFields(err) });
     return false;
   }
+}
+
+/**
+ * Non-overlapping per-job lease heartbeat (KVKK-HIGH-004 remediation): the
+ * previous design only renewed the lease once per cursor-paginated DB
+ * batch, so a large export could exceed the generating lease during
+ * archive.finalize(), the write-stream flush, or the storage upload — none
+ * of which are batch-shaped. This background timer keeps the SAME
+ * `renewLease()` call alive for the entire generation lifecycle, from the
+ * moment generation starts until the caller stops it in a `finally` block.
+ *
+ * `renewCheckpoint()` lets the entity-stream's own per-batch await share the
+ * exact same in-flight guard as the background tick — `inFlight` guarantees
+ * at most one renewal query for this job is ever outstanding at a time, so
+ * the awaited per-batch checkpoint and the timer-driven tick can never
+ * overlap, regardless of timing.
+ */
+interface ClinicBulkExportLeaseHeartbeat {
+  renewCheckpoint: () => Promise<boolean>;
+  isLeaseLost: () => boolean;
+  stop: () => void;
+}
+
+function startClinicBulkExportLeaseHeartbeat(jobId: string): ClinicBulkExportLeaseHeartbeat {
+  const intervalMs = getHeartbeatIntervalMs();
+  let leaseLost = false;
+  let stopped = false;
+  let inFlight: Promise<boolean> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  async function renew(): Promise<boolean> {
+    if (leaseLost || stopped) return false;
+    if (inFlight) return inFlight;
+    const promise = renewLease(jobId)
+      .then((ok) => {
+        if (!ok) leaseLost = true;
+        return ok;
+      })
+      .catch(() => {
+        leaseLost = true;
+        return false;
+      })
+      .finally(() => {
+        inFlight = null;
+      });
+    inFlight = promise;
+    return promise;
+  }
+
+  function scheduleNext(): void {
+    if (stopped || leaseLost) return;
+    timer = setTimeout(() => {
+      void renew().finally(scheduleNext);
+    }, intervalMs);
+  }
+  scheduleNext();
+
+  return {
+    renewCheckpoint: renew,
+    isLeaseLost: () => leaseLost,
+    stop: () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
 }
 
 interface EntityStreamStats {
@@ -725,12 +866,14 @@ interface EntityStreamLimits {
   onRecord: () => void;
   /**
    * Awaited once per cursor-paginated DB batch (never per record) — see the
-   * lease-renewal-amplification fix in generateClinicBulkExport. Because
-   * this is awaited sequentially inside the async generator's own pull
-   * loop, calls for the same job can never overlap: the generator does not
-   * fetch the next batch until the previous renewal has settled. Returns
-   * false if the lease could not be renewed (lost/claimed elsewhere), in
-   * which case generation must stop immediately.
+   * lease-renewal-amplification fix in generateClinicBulkExport. In
+   * practice this is `heartbeat.renewCheckpoint()`, which shares its
+   * in-flight guard with the background heartbeat tick started for the
+   * whole generation lifecycle — so this per-batch checkpoint can never
+   * overlap the heartbeat's own renewal, and at most one renewal query for
+   * this job is ever in flight. Returns false if the lease could not be
+   * renewed (lost/claimed elsewhere), in which case generation must stop
+   * immediately.
    */
   renewLease: () => Promise<boolean>;
 }
@@ -925,8 +1068,18 @@ const SCOPE_DESCRIPTION =
  * streaming: on breach, generation stops immediately, all temp/partial
  * artifacts are deleted, and the job fails with the stable
  * 'SIZE_LIMIT_EXCEEDED' code — never a partial/misleading ZIP.
+ *
+ * `uploadForTest` is a test-only override for the storage upload call,
+ * never passed by any production call site (jobs/clinicBulkExportWorker.ts
+ * always omits it, so production always uses the real `saveFileFromPath`).
+ * It exists solely so scripts/verify-clinic-bulk-export-lifecycle.ts can
+ * deterministically wrap the real upload with an artificial delay (and,
+ * separately, simulate a concurrent lease steal) to prove the lease
+ * heartbeat survives a slow upload — reassigning fileStorage.ts's
+ * `saveFileFromPath` export directly is not possible (it is a live,
+ * read-only ES-module binding under this package's `"type": "module"`).
  */
-export async function generateClinicBulkExport(jobId: string): Promise<void> {
+export async function generateClinicBulkExport(jobId: string, uploadForTest?: typeof saveFileFromPath): Promise<void> {
   const job = await prisma.clinicBulkExportArchive.findUnique({
     where: { id: jobId },
     select: {
@@ -941,6 +1094,12 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
   if (!job || job.status !== 'generating') return;
 
   let tempFilePath: string | null = null;
+  // Active from the moment generation starts until the final guarded
+  // ready/failed transition below — covers DB pagination (via
+  // renewCheckpoint, shared with the per-batch awaited renewal), archiver
+  // finalization, and the storage upload, none of which are batch-shaped
+  // and so were previously un-covered by the old per-batch-only renewal.
+  const heartbeat = startClinicBulkExportLeaseHeartbeat(jobId);
 
   try {
     const maxRecords = getMaxRecords();
@@ -1000,7 +1159,7 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
     for (const entity of entities) {
       const { stream, getStats } = createEntityStream(entity, {
         onRecord,
-        renewLease: () => renewLease(jobId),
+        renewLease: () => heartbeat.renewCheckpoint(),
       });
       archive.append(stream, { name: entity.fileName });
       await new Promise<void>((resolve, reject) => {
@@ -1033,8 +1192,18 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
     await writeFinished;
 
     const storageKey = buildExportStorageKey(job.clinicId, jobId);
-    await saveFileFromPath(storageKey, tempFilePath, 'application/zip');
+    const doUpload = uploadForTest ?? saveFileFromPath;
+    await doUpload(storageKey, tempFilePath, 'application/zip');
     tempFilePath = null;
+
+    if (heartbeat.isLeaseLost()) {
+      // The lease was lost sometime during finalize/upload (after the last
+      // per-batch checkpoint) — the artifact we just uploaded must never
+      // become reachable via a 'ready' row. Delete it and fail with the
+      // stable LEASE_LOST code, exactly like a mid-streaming lease loss.
+      await deleteFile(storageKey).catch(() => {});
+      throw new ClinicBulkExportLeaseLostError();
+    }
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + getDownloadTokenTtlMs());
@@ -1093,6 +1262,8 @@ export async function generateClinicBulkExport(jobId: string): Promise<void> {
       description: 'Clinic bulk export generation failed',
       metadata: { jobId, failureCode },
     });
+  } finally {
+    heartbeat.stop();
   }
 }
 

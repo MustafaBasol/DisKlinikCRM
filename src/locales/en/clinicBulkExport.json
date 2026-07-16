@@ -5,6 +5,10 @@
   "loading": "Loading...",
   "disabledNotice": "Clinic data export is not currently available for your organization.",
   "scopeWarning": "This export contains structured clinic records only (patients, appointments, treatment cases, payments, tasks, messages, activity logs, insurance provisions, inventory). It does NOT include physical attachment or imaging files and must not be treated as a complete backup.",
+  "clinicSelectorLabel": "Clinic",
+  "clinicSelectorPlaceholder": "Select a clinic",
+  "clinicSelectorAllClinicsNotice": "\"All clinics\" is selected. Choose one specific clinic below to export its data.",
+  "selectedClinicPrefix": "Exporting data for",
   "purposeLabel": "Purpose",
   "purposePlaceholder": "Select a purpose",
   "purposeOptions": {
@@ -16,7 +20,7 @@
   },
   "restrictedNoteLabel": "Internal note (optional, not included in audit logs)",
   "passwordLabel": "Confirm your current password",
-  "confirmLabel": "I understand this exports highly sensitive clinic data and confirm this request.",
+  "confirmLabel": "I understand this exports highly sensitive clinic data for {{clinicName}} and confirm this request.",
   "submit": "Start export",
   "submitting": "Starting export...",
   "polling": "Generating export...",
@@ -33,6 +37,7 @@
     "timedOut": "Still not finished after 30 minutes — please check back later or contact support."
   },
   "errors": {
+    "clinicRequired": "Please select a specific clinic before starting an export.",
     "purposeRequired": "Please select a purpose.",
     "confirmRequired": "Please confirm before starting the export.",
     "passwordRequired": "Please enter your current password.",

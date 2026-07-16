@@ -24,6 +24,7 @@
  *   4.  isClinicBulkExportEnabled fail-closed: absent/false/garbage -> false, only 'true' -> true
  *   5.  isClinicBulkExportCleanupEnabled fail-open: absent/true -> true, only 'false' -> false
  *   6.  Client cannot override the flag via any request field (source inspection)
+ *   6b. getClinicBulkExportAllowedOrganizationIds / isClinicBulkExportEnabledForOrganization (tenant rollout allowlist, P1)
  *
  *   Authorization:
  *   7.  clinicBulkExport.ts only ever authorizes OWNER/ORG_ADMIN — CLINIC_MANAGER never appears
@@ -62,6 +63,17 @@
  *
  *   Error types:
  *   28. ClinicBulkExportAlreadyRunningError / RateLimitedError / SizeLimitExceededError are real Error subclasses
+ *
+ *   Queue timeout / generation lease / heartbeat (P0 remediation round 2):
+ *   29. getQueueTimeoutMs / getGenerationLeaseMs / getHeartbeatIntervalMs default and respect env overrides, and the queue timeout default is substantially longer than the generation lease default
+ *   30. reserveClinicBulkExport's created-row lease uses getQueueTimeoutMs, never getGenerationLeaseMs (source inspection; real-DB proof lives in scripts/verify-clinic-bulk-export-lifecycle.ts)
+ *   31. ClinicBulkExportLeaseLostError is a real Error subclass
+ *
+ * The REAL concurrent-Postgres proof for the queue-timeout-vs-generation-
+ * lease split, the full-lifecycle heartbeat (through archive.finalize() and
+ * the storage upload), and lease-loss deleting the uploaded artifact is in
+ * scripts/verify-clinic-bulk-export-lifecycle.ts (not this file) — see
+ * docs/compliance/54-kvkk-secure-clinic-bulk-export.md.
  *
  * Run with: tsx src/tests/clinicBulkExport.test.ts
  */
@@ -124,9 +136,12 @@ async function main() {
 
   section('2. Feature flags (fail-closed creation, fail-open cleanup)');
 
-  const { isClinicBulkExportEnabled, isClinicBulkExportCleanupEnabled } = await import(
-    '../services/privacy/clinicBulkExportConfig.js'
-  );
+  const {
+    isClinicBulkExportEnabled,
+    isClinicBulkExportCleanupEnabled,
+    getClinicBulkExportAllowedOrganizationIds,
+    isClinicBulkExportEnabledForOrganization,
+  } = await import('../services/privacy/clinicBulkExportConfig.js');
 
   await test('isClinicBulkExportEnabled is fail-closed', () => {
     const original = process.env.CLINIC_BULK_EXPORT_ENABLED;
@@ -162,12 +177,67 @@ async function main() {
     }
   });
 
+  await test('getClinicBulkExportAllowedOrganizationIds is null (no allowlist) when unset/empty, a Set of ids when set', () => {
+    const original = process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+    try {
+      delete process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+      assert.equal(getClinicBulkExportAllowedOrganizationIds(), null, 'unset must mean no allowlist (every org allowed)');
+      process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = '';
+      assert.equal(getClinicBulkExportAllowedOrganizationIds(), null, 'empty string must also mean no allowlist');
+      process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = 'org-a, org-b ,org-c';
+      const ids = getClinicBulkExportAllowedOrganizationIds();
+      assert.ok(ids && ids.has('org-a') && ids.has('org-b') && ids.has('org-c'), 'must parse a comma-separated list, trimming whitespace');
+      assert.equal(ids!.size, 3);
+    } finally {
+      if (original === undefined) delete process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+      else process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = original;
+    }
+  });
+
+  await test('isClinicBulkExportEnabledForOrganization combines the global flag and the allowlist correctly', () => {
+    const originalEnabled = process.env.CLINIC_BULK_EXPORT_ENABLED;
+    const originalAllowlist = process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+    try {
+      process.env.CLINIC_BULK_EXPORT_ENABLED = 'false';
+      delete process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+      assert.equal(isClinicBulkExportEnabledForOrganization('org-a'), false, 'global flag off must disable every org, allowlist or not');
+
+      process.env.CLINIC_BULK_EXPORT_ENABLED = 'true';
+      delete process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+      assert.equal(isClinicBulkExportEnabledForOrganization('org-a'), true, 'no allowlist configured must mean every org is enabled once the global flag is on');
+
+      process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = 'org-a,org-b';
+      assert.equal(isClinicBulkExportEnabledForOrganization('org-a'), true, 'listed org must be enabled');
+      assert.equal(isClinicBulkExportEnabledForOrganization('org-z'), false, 'unlisted org must be disabled even though the global flag is on');
+    } finally {
+      if (originalEnabled === undefined) delete process.env.CLINIC_BULK_EXPORT_ENABLED;
+      else process.env.CLINIC_BULK_EXPORT_ENABLED = originalEnabled;
+      if (originalAllowlist === undefined) delete process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+      else process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = originalAllowlist;
+    }
+  });
+
   await test('creation route checks the flag before parsing password/confirmation fields', async () => {
     const source = await readSource('routes/clinicBulkExport.ts');
-    const flagCheckIndex = source.indexOf('isClinicBulkExportEnabled()');
+    const flagCheckIndex = source.indexOf('isClinicBulkExportEnabledForOrganization(');
     const passwordFieldIndex = source.indexOf('body.currentPassword');
     assert.ok(flagCheckIndex > -1 && passwordFieldIndex > -1);
     assert.ok(flagCheckIndex < passwordFieldIndex, 'the flag check must occur before any password field is read');
+  });
+
+  await test('creation route resolves+validates clinic scope BEFORE checking the disabled-feature flag (P0-1)', async () => {
+    const source = await readSource('routes/clinicBulkExport.ts');
+    const createSectionStart = source.indexOf("POST / — create job");
+    const nextSectionStart = source.indexOf('GET /:jobId — status');
+    assert.ok(createSectionStart > -1 && nextSectionStart > createSectionStart);
+    const createHandlerSource = source.slice(createSectionStart, nextSectionStart);
+    const scopeCallIndex = createHandlerSource.indexOf('resolveClinicScope(req, res)');
+    const flagCheckIndex = createHandlerSource.indexOf('isClinicBulkExportEnabledForOrganization(');
+    assert.ok(scopeCallIndex > -1 && flagCheckIndex > -1);
+    assert.ok(
+      scopeCallIndex < flagCheckIndex,
+      'clinic scope must be resolved+validated before the feature-flag check, so a raw/cross-org clinicId can never reach the disabled-feature audit write',
+    );
   });
 
   section('3. Authorization — OWNER/ORG_ADMIN only, clinicScope-validated');
@@ -650,6 +720,74 @@ async function main() {
     const source = await readSource('routes/gdprExport.ts');
     assert.ok(!/void\s+writeAuditLog\(/.test(source));
     assert.ok(/await\s+writeAuditLog\(/.test(source));
+  });
+
+  section('18. Remediation round — queue timeout vs. generation lease vs. heartbeat (P0)');
+
+  const {
+    getQueueTimeoutMs,
+    getGenerationLeaseMs,
+    getHeartbeatIntervalMs,
+    ClinicBulkExportLeaseLostError: LeaseLostErrorCtor,
+  } = await import('../services/privacy/clinicBulkExportPackage.js');
+
+  await test('getQueueTimeoutMs / getGenerationLeaseMs / getHeartbeatIntervalMs default sanely and respect env overrides', () => {
+    const originalQueue = process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS;
+    const originalLease = process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS;
+    const originalHeartbeat = process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS;
+    try {
+      delete process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS;
+      delete process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS;
+      delete process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS;
+      const defaultQueueTimeout = getQueueTimeoutMs();
+      const defaultGenerationLease = getGenerationLeaseMs();
+      const defaultHeartbeat = getHeartbeatIntervalMs();
+      assert.ok(defaultQueueTimeout > defaultGenerationLease, 'the queue timeout default must be substantially longer than the generation lease default');
+      assert.ok(defaultHeartbeat < defaultGenerationLease, 'the heartbeat interval default must be well under the generation lease so multiple renewals happen before it could expire');
+
+      process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS = '123000';
+      assert.equal(getQueueTimeoutMs(), 123000);
+      process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS = '45000';
+      assert.equal(getGenerationLeaseMs(), 45000);
+      process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS = '5000';
+      assert.equal(getHeartbeatIntervalMs(), 5000);
+
+      process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS = 'not-a-number';
+      assert.equal(getQueueTimeoutMs(), defaultQueueTimeout, 'garbage input must fall back to the default, never NaN/0/negative');
+    } finally {
+      if (originalQueue === undefined) delete process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS;
+      else process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS = originalQueue;
+      if (originalLease === undefined) delete process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS;
+      else process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS = originalLease;
+      if (originalHeartbeat === undefined) delete process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS;
+      else process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS = originalHeartbeat;
+    }
+  });
+
+  await test('reservation writes the queue timeout, never the generation lease, into the new row (source inspection)', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const reserveFnStart = source.indexOf('export async function reserveClinicBulkExport');
+    const claimFnStart = source.indexOf('export async function claimQueuedClinicBulkExportJobs');
+    assert.ok(reserveFnStart > -1 && claimFnStart > reserveFnStart);
+    const reserveBody = source.slice(reserveFnStart, claimFnStart);
+    assert.ok(reserveBody.includes('getQueueTimeoutMs()'), 'the created queued row must use the queue-timeout deadline');
+    assert.ok(!reserveBody.includes('getGenerationLeaseMs()'), 'creation must never use the (shorter) generation lease');
+  });
+
+  await test('claiming a queued row writes the generation lease, replacing the queue timeout (source inspection)', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const claimFnStart = source.indexOf('export async function claimQueuedClinicBulkExportJobs');
+    const renewLeaseFnStart = source.indexOf('async function renewLease');
+    assert.ok(claimFnStart > -1 && renewLeaseFnStart > claimFnStart);
+    const claimBody = source.slice(claimFnStart, renewLeaseFnStart);
+    assert.ok(claimBody.includes('getGenerationLeaseMs()'), 'claiming a queued row must set the generation lease');
+    assert.ok(claimBody.includes('clinic_bulk_export_generation_started'), 'claiming must record the generation_started audit event exactly once per successful claim');
+  });
+
+  await test('ClinicBulkExportLeaseLostError is a real Error subclass', () => {
+    const err = new LeaseLostErrorCtor();
+    assert.ok(err instanceof Error);
+    assert.equal(err.name, 'ClinicBulkExportLeaseLostError');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

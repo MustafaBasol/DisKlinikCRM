@@ -780,6 +780,472 @@ async function main() {
   await prisma.clinic.delete({ where: { id: clinicR.id } });
   await prisma.organization.delete({ where: { id: orgR.id } });
 
+  console.log('\nRoute-level: clinic scope is validated BEFORE the disabled-feature check, using the REAL Express handler (P0-1)');
+
+  const { default: clinicBulkExportRouter } = await import('../src/routes/clinicBulkExport.js');
+
+  /** Extracts the real registered route handler (last layer in the route's
+   * own stack, i.e. past the authorize() middleware) directly off the
+   * Express Router instance — no HTTP server needed, but this is the actual
+   * production handler function, not a reimplementation or source-string
+   * check. */
+  function getRouteHandler(method: 'get' | 'post', routePath: string): (req: any, res: any) => Promise<void> {
+    const stack = (clinicBulkExportRouter as any).stack as any[];
+    const layer = stack.find((l) => l.route?.path === routePath && l.route.methods[method]);
+    if (!layer) throw new Error(`route not found: ${method.toUpperCase()} ${routePath}`);
+    const routeStack = layer.route.stack as any[];
+    return routeStack[routeStack.length - 1].handle;
+  }
+
+  function makeFakeRes() {
+    const res: any = { statusCode: 200, jsonBody: undefined };
+    res.status = (code: number) => {
+      res.statusCode = code;
+      return res;
+    };
+    res.json = (body: unknown) => {
+      res.jsonBody = body;
+      return res;
+    };
+    res.setHeader = () => res;
+    return res;
+  }
+
+  const createHandler = getRouteHandler('post', '/clinic/:clinicId/bulk-export');
+
+  const orgP = await prisma.organization.create({ data: { name: `Verify Org P0-1 ${suffix}`, slug: `verify-org-p01-${suffix}` } });
+  const clinicP = await prisma.clinic.create({ data: { name: `Verify Clinic P0-1 ${suffix}`, slug: `verify-clinic-p01-${suffix}`, organizationId: orgP.id } });
+  const otherOrg = await prisma.organization.create({ data: { name: `Verify Other Org P0-1 ${suffix}`, slug: `verify-other-org-p01-${suffix}` } });
+  const otherClinic = await prisma.clinic.create({ data: { name: `Verify Other Clinic P0-1 ${suffix}`, slug: `verify-other-clinic-p01-${suffix}`, organizationId: otherOrg.id } });
+  const userP = await prisma.user.create({
+    data: {
+      clinicId: clinicP.id,
+      organizationId: orgP.id,
+      firstName: 'Verify',
+      lastName: 'ScopeUser',
+      email: `verify-scope-${suffix}@example.test`,
+      role: 'OWNER',
+      passwordHash: 'x',
+    },
+  });
+
+  const authUser = {
+    id: userP.id,
+    clinicId: clinicP.id,
+    role: 'OWNER',
+    normalizedRole: 'OWNER',
+    organizationId: orgP.id,
+    allowedClinicIds: [clinicP.id],
+    canAccessAllClinics: false,
+  };
+
+  assert.notEqual(process.env.CLINIC_BULK_EXPORT_ENABLED, 'true', 'this script must run with creation left disabled — exercising the disabled-feature audit path');
+
+  await test('a cross-org clinicId is rejected before the flag check, with no audit row ever referencing it', async () => {
+    const req: any = { user: authUser, params: { clinicId: otherClinic.id }, body: {}, headers: {}, ip: '203.0.113.201' };
+    const res = makeFakeRes();
+    await createHandler(req, res);
+    assert.equal(res.statusCode, 403, 'cross-org clinicId must get the generic forbidden response, never reach the flag check');
+    assert.notEqual(res.jsonBody?.error, 'CLINIC_BULK_EXPORT_DISABLED', 'must fail on scope, not on the feature flag');
+
+    const stray = await prisma.auditLog.findFirst({ where: { OR: [{ clinicId: otherClinic.id }, { entityId: otherClinic.id }] } });
+    assert.equal(stray, null, 'a raw/cross-org clinicId must never be persisted into AuditLog, even on the disabled-feature path');
+  });
+
+  await test('an inaccessible same-org clinicId is rejected before the flag check, with no audit row ever referencing it', async () => {
+    const inaccessibleClinic = await prisma.clinic.create({
+      data: { name: `Verify Inaccessible Clinic P0-1 ${suffix}`, slug: `verify-inaccessible-clinic-p01-${suffix}`, organizationId: orgP.id },
+    });
+    const req: any = { user: authUser, params: { clinicId: inaccessibleClinic.id }, body: {}, headers: {}, ip: '203.0.113.202' };
+    const res = makeFakeRes();
+    await createHandler(req, res);
+    assert.equal(res.statusCode, 403);
+
+    const stray = await prisma.auditLog.findFirst({ where: { OR: [{ clinicId: inaccessibleClinic.id }, { entityId: inaccessibleClinic.id }] } });
+    assert.equal(stray, null, 'an inaccessible same-org clinic must never be persisted into AuditLog either');
+
+    await prisma.clinic.delete({ where: { id: inaccessibleClinic.id } });
+  });
+
+  await test('a valid, accessible clinicId reaches the disabled-feature audit using only the VALIDATED clinicId/organizationId, without reading the password', async () => {
+    const req: any = {
+      user: authUser,
+      params: { clinicId: clinicP.id },
+      body: { currentPassword: 'must-never-be-read-while-disabled' },
+      headers: {},
+      ip: '203.0.113.203',
+    };
+    const res = makeFakeRes();
+    await createHandler(req, res);
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.jsonBody?.error, 'CLINIC_BULK_EXPORT_DISABLED');
+
+    const auditRow = await prisma.auditLog.findFirst({
+      where: { action: 'clinic_bulk_export_feature_disabled_attempt', clinicId: clinicP.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    assert.ok(auditRow, 'the disabled-feature audit event must still be recorded for a validated, accessible clinic');
+    assert.equal(auditRow!.organizationId, orgP.id, 'audit organizationId must be the DB-validated one');
+    assert.equal(auditRow!.entityId, clinicP.id, 'audit entityId must be the DB-validated clinicId, never a raw route param taken on faith');
+  });
+
+  await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgP.id, otherOrg.id] } } });
+  await prisma.user.delete({ where: { id: userP.id } });
+  await prisma.clinic.delete({ where: { id: clinicP.id } });
+  await prisma.clinic.delete({ where: { id: otherClinic.id } });
+  await prisma.organization.delete({ where: { id: orgP.id } });
+  await prisma.organization.delete({ where: { id: otherOrg.id } });
+
+  console.log('\nQueue timeout is separate from, and longer than, the generation lease (P0-4)');
+
+  const {
+    getGenerationLeaseMs,
+    getQueueTimeoutMs,
+  } = await import('../src/services/privacy/clinicBulkExportPackage.js');
+
+  await test('a queued job older than the generation lease, but younger than the queue timeout, remains claimable', async () => {
+    const orgQ = await prisma.organization.create({ data: { name: `Verify Org Q ${suffix}`, slug: `verify-org-q-${suffix}` } });
+    const clinicQ = await prisma.clinic.create({ data: { name: `Verify Clinic Q ${suffix}`, slug: `verify-clinic-q-${suffix}`, organizationId: orgQ.id } });
+    const userQ = await prisma.user.create({
+      data: {
+        clinicId: clinicQ.id,
+        organizationId: orgQ.id,
+        firstName: 'Verify',
+        lastName: 'QueueUser',
+        email: `verify-queue-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+
+    const originalLease = process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS;
+    const originalQueueTimeout = process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS;
+    try {
+      // Generation lease deliberately tiny (2s); queue timeout generously
+      // long (60s) — a real bounded-concurrency backlog delay of a few
+      // seconds must survive on the queue timeout even though it already
+      // exceeds the (separate, shorter) generation lease.
+      process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS = '2000';
+      process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS = '60000';
+      assert.equal(getGenerationLeaseMs(), 2000);
+      assert.equal(getQueueTimeoutMs(), 60000);
+
+      const { jobId } = await reserveClinicBulkExport({
+        clinicId: clinicQ.id,
+        organizationId: orgQ.id,
+        requestedByUserId: userQ.id,
+        purpose: 'other',
+        restrictedNote: null,
+        stepUpVerifiedAt: new Date(),
+        actorRole: 'OWNER',
+        req: fakeReq,
+      });
+
+      const queuedRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+      assert.equal(queuedRow.status, 'queued');
+      const remainingMs = queuedRow.leaseExpiresAt!.getTime() - Date.now();
+      assert.ok(remainingMs > 30_000, 'a freshly queued row must carry the (long) queue-timeout deadline, not the short generation lease');
+
+      // Real wall-clock wait — deliberately longer than the 2s generation
+      // lease but nowhere near the 60s queue timeout, proving this is a
+      // genuine backlog delay, not a fabricated timestamp.
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const claimedIds = await claimQueuedClinicBulkExportJobs(5);
+      assert.ok(claimedIds.includes(jobId), 'a queued job older than the generation lease must still be claimable while within the queue timeout');
+
+      const claimedRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+      assert.equal(claimedRow.status, 'generating', 'must not have been swept to failed/LEASE_EXPIRED merely for outliving the generation lease while still queued');
+
+      const startedAudit = await prisma.auditLog.findFirst({
+        where: { action: 'clinic_bulk_export_generation_started', clinicId: clinicQ.id },
+      });
+      assert.ok(startedAudit, 'exactly-once generation_started audit event must be recorded on a successful claim (P1)');
+
+      // Claiming must REPLACE the deadline with the (now tiny, 2s) generation lease.
+      const claimRemainingMs = claimedRow.leaseExpiresAt!.getTime() - Date.now();
+      assert.ok(claimRemainingMs <= 2000 && claimRemainingMs > -1000, 'claiming must replace the queue-timeout deadline with the (shorter) generation lease');
+    } finally {
+      if (originalLease === undefined) delete process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS;
+      else process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS = originalLease;
+      if (originalQueueTimeout === undefined) delete process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS;
+      else process.env.CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS = originalQueueTimeout;
+    }
+
+    await prisma.auditLog.deleteMany({ where: { organizationId: orgQ.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { organizationId: orgQ.id } });
+    await prisma.user.delete({ where: { id: userQ.id } });
+    await prisma.clinic.delete({ where: { id: clinicQ.id } });
+    await prisma.organization.delete({ where: { id: orgQ.id } });
+  });
+
+  console.log('\nFull-lifecycle heartbeat survives a deliberately delayed storage upload (P0-3)');
+
+  const { generateClinicBulkExport: generateWithUploadHook } = await import('../src/services/privacy/clinicBulkExportPackage.js');
+  const { saveFileFromPath: realSaveFileFromPath, deleteFile: realDeleteFile } = await import('../src/services/fileStorage.js');
+
+  await test('the lease is renewed by the background heartbeat during a slow storage upload, and generation still completes', async () => {
+    const orgH = await prisma.organization.create({ data: { name: `Verify Org H ${suffix}`, slug: `verify-org-h-${suffix}` } });
+    const clinicH = await prisma.clinic.create({ data: { name: `Verify Clinic H ${suffix}`, slug: `verify-clinic-h-${suffix}`, organizationId: orgH.id } });
+    const userH = await prisma.user.create({
+      data: {
+        clinicId: clinicH.id,
+        organizationId: orgH.id,
+        firstName: 'Verify',
+        lastName: 'HeartbeatUser',
+        email: `verify-heartbeat-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicH.id, organizationId: orgH.id, firstName: 'Heartbeat', lastName: 'Patient' } });
+
+    const originalLease = process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS;
+    const originalHeartbeat = process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS;
+    try {
+      // A lease shorter than the artificial upload delay below would have
+      // expired mid-upload under the OLD per-batch-only renewal design
+      // (nothing renewed during saveFileFromPath). With the heartbeat
+      // running throughout, the lease must survive.
+      process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS = '3000';
+      process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS = '500';
+
+      const { jobId } = await reserveClinicBulkExport({
+        clinicId: clinicH.id,
+        organizationId: orgH.id,
+        requestedByUserId: userH.id,
+        purpose: 'other',
+        restrictedNote: null,
+        stepUpVerifiedAt: new Date(),
+        actorRole: 'OWNER',
+        req: fakeReq,
+      });
+      await claimQueuedClinicBulkExportJobs(5);
+
+      const beforeHeartbeatAt = (await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId }, select: { heartbeatAt: true } })).heartbeatAt;
+
+      // Wraps the REAL upload call with an artificial delay (> the 3s
+      // generation lease) — this is the production `generateClinicBulkExport`
+      // function, exercising the real archiver/finalize/upload path; only
+      // the timing of the upload step itself is instrumented.
+      await generateWithUploadHook(jobId, async (key: string, tempPath: string, contentType: string) => {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        return realSaveFileFromPath(key, tempPath, contentType);
+      });
+
+      const finalRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+      assert.equal(finalRow.status, 'ready', 'generation must complete successfully — the heartbeat must have kept the lease alive through the slow upload');
+      assert.ok(
+        finalRow.heartbeatAt && beforeHeartbeatAt && finalRow.heartbeatAt.getTime() > beforeHeartbeatAt.getTime(),
+        'heartbeatAt must have advanced during the artificially delayed upload, not just during DB pagination',
+      );
+
+      if (finalRow.storageKey) await realDeleteFile(finalRow.storageKey).catch(() => {});
+    } finally {
+      if (originalLease === undefined) delete process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS;
+      else process.env.CLINIC_BULK_EXPORT_GENERATION_LEASE_MS = originalLease;
+      if (originalHeartbeat === undefined) delete process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS;
+      else process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS = originalHeartbeat;
+    }
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicH.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { organizationId: orgH.id } });
+    await prisma.user.delete({ where: { id: userH.id } });
+    await prisma.clinic.delete({ where: { id: clinicH.id } });
+    await prisma.organization.delete({ where: { id: orgH.id } });
+  });
+
+  console.log('\nLease loss during storage upload prevents ready and deletes the artifact (P0-3)');
+
+  await test('if the lease is lost during the storage upload, the row never becomes ready and the uploaded artifact is deleted', async () => {
+    const orgLL = await prisma.organization.create({ data: { name: `Verify Org LL ${suffix}`, slug: `verify-org-ll-${suffix}` } });
+    const clinicLL = await prisma.clinic.create({ data: { name: `Verify Clinic LL ${suffix}`, slug: `verify-clinic-ll-${suffix}`, organizationId: orgLL.id } });
+    const userLL = await prisma.user.create({
+      data: {
+        clinicId: clinicLL.id,
+        organizationId: orgLL.id,
+        firstName: 'Verify',
+        lastName: 'LeaseLostUser',
+        email: `verify-leaselost-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicLL.id, organizationId: orgLL.id, firstName: 'LeaseLost', lastName: 'Patient' } });
+
+    const originalHeartbeat = process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS;
+    let uploadedStorageKey: string | null = null;
+    try {
+      // A short-but-not-instant heartbeat interval so the delayed upload
+      // below has time to let at least one tick observe the stolen lease.
+      process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS = '150';
+
+      const { jobId } = await reserveClinicBulkExport({
+        clinicId: clinicLL.id,
+        organizationId: orgLL.id,
+        requestedByUserId: userLL.id,
+        purpose: 'other',
+        restrictedNote: null,
+        stepUpVerifiedAt: new Date(),
+        actorRole: 'OWNER',
+        req: fakeReq,
+      });
+      await claimQueuedClinicBulkExportJobs(5);
+
+      await generateWithUploadHook(jobId, async (key: string, tempPath: string, contentType: string) => {
+        uploadedStorageKey = key;
+        // Simulate a TRANSIENT renewal failure — e.g. a brief DB hiccup on
+        // one heartbeat tick — rather than a real external reassignment
+        // that would have ALREADY recorded its own terminal failureCode
+        // (in which case that writer's code, not this one, legitimately
+        // owns the final status/code — generateClinicBulkExport correctly
+        // never resurrects/overwrites an already-terminal row, by design).
+        // Momentarily flipping status away from 'generating' makes the
+        // in-flight heartbeat tick's renewLease() guarded update affect 0
+        // rows, which is exactly how a real renewal failure is observed;
+        // restoring 'generating' before upload finishes means NO other
+        // writer has claimed a terminal state, so this job's own catch
+        // block is the one that gets to record the stable LEASE_LOST code
+        // — the specific invariant this test exists to prove.
+        await prisma.clinicBulkExportArchive.updateMany({ where: { id: jobId, status: 'generating' }, data: { status: 'queued' } });
+        await new Promise((resolve) => setTimeout(resolve, 400)); // let a heartbeat tick (150ms interval) observe the failed renewal
+        await prisma.clinicBulkExportArchive.updateMany({ where: { id: jobId, status: 'queued' }, data: { status: 'generating' } });
+        return realSaveFileFromPath(key, tempPath, contentType);
+      });
+
+      const finalRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+      assert.equal(finalRow.status, 'failed', 'a job that loses its lease during the storage upload must never transition to ready');
+      assert.equal(finalRow.failureCode, 'LEASE_LOST', 'the stable LEASE_LOST failure code must be recorded (not a generic GENERATION_ERROR)');
+      assert.equal(finalRow.storageKey, null, 'a lease-lost job must never retain a storageKey pointing at a reachable artifact');
+
+      if (uploadedStorageKey) {
+        const localPath = resolveLocalStoragePath(uploadedStorageKey);
+        assert.ok(!fs.existsSync(localPath), 'the uploaded artifact must actually be deleted from storage once the lease-loss is detected, not just unlinked in the DB');
+      }
+    } finally {
+      if (originalHeartbeat === undefined) delete process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS;
+      else process.env.CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS = originalHeartbeat;
+    }
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicLL.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { organizationId: orgLL.id } });
+    await prisma.user.delete({ where: { id: userLL.id } });
+    await prisma.clinic.delete({ where: { id: clinicLL.id } });
+    await prisma.organization.delete({ where: { id: orgLL.id } });
+  });
+
+  console.log('\nTenant rollout allowlist is server-enforced via the REAL Express handler (P1)');
+
+  await test('an organization NOT on the allowlist gets the identical disabled response, even with the global flag on', async () => {
+    const orgAllow = await prisma.organization.create({ data: { name: `Verify Org Allow ${suffix}`, slug: `verify-org-allow-${suffix}` } });
+    const clinicAllow = await prisma.clinic.create({ data: { name: `Verify Clinic Allow ${suffix}`, slug: `verify-clinic-allow-${suffix}`, organizationId: orgAllow.id } });
+    const userAllow = await prisma.user.create({
+      data: {
+        clinicId: clinicAllow.id,
+        organizationId: orgAllow.id,
+        firstName: 'Verify',
+        lastName: 'AllowlistUser',
+        email: `verify-allowlist-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+
+    const originalEnabled = process.env.CLINIC_BULK_EXPORT_ENABLED;
+    const originalAllowlist = process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+    try {
+      process.env.CLINIC_BULK_EXPORT_ENABLED = 'true';
+      // Allowlist configured, but deliberately does NOT include orgAllow.
+      process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = `${crypto.randomUUID()},${crypto.randomUUID()}`;
+
+      const req: any = {
+        user: {
+          id: userAllow.id,
+          clinicId: clinicAllow.id,
+          role: 'OWNER',
+          normalizedRole: 'OWNER',
+          organizationId: orgAllow.id,
+          allowedClinicIds: [clinicAllow.id],
+          canAccessAllClinics: false,
+        },
+        params: { clinicId: clinicAllow.id },
+        body: {},
+        headers: {},
+        ip: '203.0.113.210',
+      };
+      const res = makeFakeRes();
+      await createHandler(req, res);
+      assert.equal(res.statusCode, 403);
+      assert.equal(res.jsonBody?.error, 'CLINIC_BULK_EXPORT_DISABLED', 'an org not on the allowlist must get the SAME response as the global flag being off');
+    } finally {
+      if (originalEnabled === undefined) delete process.env.CLINIC_BULK_EXPORT_ENABLED;
+      else process.env.CLINIC_BULK_EXPORT_ENABLED = originalEnabled;
+      if (originalAllowlist === undefined) delete process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+      else process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = originalAllowlist;
+    }
+
+    await prisma.user.delete({ where: { id: userAllow.id } });
+    await prisma.clinic.delete({ where: { id: clinicAllow.id } });
+    await prisma.organization.delete({ where: { id: orgAllow.id } });
+  });
+
+  await test('an organization ON the allowlist is NOT blocked by the disabled-feature check (proceeds to step-up)', async () => {
+    const orgAllow2 = await prisma.organization.create({ data: { name: `Verify Org Allow2 ${suffix}`, slug: `verify-org-allow2-${suffix}` } });
+    const clinicAllow2 = await prisma.clinic.create({ data: { name: `Verify Clinic Allow2 ${suffix}`, slug: `verify-clinic-allow2-${suffix}`, organizationId: orgAllow2.id } });
+    const userAllow2 = await prisma.user.create({
+      data: {
+        clinicId: clinicAllow2.id,
+        organizationId: orgAllow2.id,
+        firstName: 'Verify',
+        lastName: 'AllowlistUser2',
+        email: `verify-allowlist2-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+
+    const originalEnabled = process.env.CLINIC_BULK_EXPORT_ENABLED;
+    const originalAllowlist = process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+    try {
+      process.env.CLINIC_BULK_EXPORT_ENABLED = 'true';
+      process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = `${crypto.randomUUID()},${orgAllow2.id},${crypto.randomUUID()}`;
+
+      const req: any = {
+        user: {
+          id: userAllow2.id,
+          clinicId: clinicAllow2.id,
+          role: 'OWNER',
+          normalizedRole: 'OWNER',
+          organizationId: orgAllow2.id,
+          allowedClinicIds: [clinicAllow2.id],
+          canAccessAllClinics: false,
+        },
+        params: { clinicId: clinicAllow2.id },
+        body: { purpose: 'other', confirm: true, currentPassword: '' }, // empty password -> step-up 'empty' rejection, never the disabled path
+        headers: {},
+        ip: '203.0.113.211',
+      };
+      const res = makeFakeRes();
+      await createHandler(req, res);
+      assert.notEqual(res.jsonBody?.error, 'CLINIC_BULK_EXPORT_DISABLED', 'an allowlisted org must pass the disabled-feature check entirely');
+      assert.equal(res.statusCode, 401, 'must reach step-up verification and fail there (empty password), proving the allowlist did not block it');
+      assert.equal(res.jsonBody?.error, 'CLINIC_BULK_EXPORT_STEP_UP_FAILED');
+    } finally {
+      if (originalEnabled === undefined) delete process.env.CLINIC_BULK_EXPORT_ENABLED;
+      else process.env.CLINIC_BULK_EXPORT_ENABLED = originalEnabled;
+      if (originalAllowlist === undefined) delete process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS;
+      else process.env.CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS = originalAllowlist;
+    }
+
+    // The empty-password step-up rejection above recorded a failed attempt
+    // (clinicBulkExportPasswordAttempts.ts's recordFailedAttempt) — must be
+    // cleared before the clinic FK can be deleted.
+    await prisma.clinicBulkExportPasswordAttempt.deleteMany({ where: { clinicId: clinicAllow2.id } });
+    await prisma.user.delete({ where: { id: userAllow2.id } });
+    await prisma.clinic.delete({ where: { id: clinicAllow2.id } });
+    await prisma.organization.delete({ where: { id: orgAllow2.id } });
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   await prisma.$disconnect();
   if (failed > 0) process.exit(1);

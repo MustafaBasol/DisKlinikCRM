@@ -5,6 +5,10 @@
   "loading": "Yükleniyor...",
   "disabledNotice": "Klinik veri dışa aktarımı şu anda kuruluşunuz için kullanılamıyor.",
   "scopeWarning": "Bu dışa aktarım yalnızca yapılandırılmış klinik kayıtlarını içerir (hastalar, randevular, tedavi vakaları, ödemeler, görevler, mesajlar, aktivite kayıtları, sigorta provizyonları, envanter). Fiziksel ek dosyaları veya görüntüleme dosyalarını İÇERMEZ ve eksiksiz bir yedek olarak kabul edilmemelidir.",
+  "clinicSelectorLabel": "Klinik",
+  "clinicSelectorPlaceholder": "Bir klinik seçin",
+  "clinicSelectorAllClinicsNotice": "\"Tüm klinikler\" seçili. Verilerini dışa aktarmak için aşağıdan belirli bir klinik seçin.",
+  "selectedClinicPrefix": "Şu klinik için dışa aktarılıyor",
   "purposeLabel": "Amaç",
   "purposePlaceholder": "Bir amaç seçin",
   "purposeOptions": {
@@ -16,7 +20,7 @@
   },
   "restrictedNoteLabel": "Dahili not (isteğe bağlı, denetim kayıtlarına dahil edilmez)",
   "passwordLabel": "Mevcut şifrenizi onaylayın",
-  "confirmLabel": "Bunun son derece hassas klinik verilerini dışa aktardığını anlıyorum ve bu talebi onaylıyorum.",
+  "confirmLabel": "Bunun {{clinicName}} için son derece hassas klinik verilerini dışa aktardığını anlıyorum ve bu talebi onaylıyorum.",
   "submit": "Dışa aktarımı başlat",
   "submitting": "Dışa aktarım başlatılıyor...",
   "polling": "Dışa aktarım oluşturuluyor...",
@@ -33,6 +37,7 @@
     "timedOut": "30 dakika sonra hâlâ tamamlanmadı — lütfen daha sonra tekrar kontrol edin veya destek ekibiyle iletişime geçin."
   },
   "errors": {
+    "clinicRequired": "Dışa aktarımı başlatmadan önce lütfen belirli bir klinik seçin.",
     "purposeRequired": "Lütfen bir amaç seçin.",
     "confirmRequired": "Dışa aktarımı başlatmadan önce lütfen onaylayın.",
     "passwordRequired": "Lütfen mevcut şifrenizi girin.",

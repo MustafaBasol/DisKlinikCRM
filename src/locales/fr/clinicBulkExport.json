@@ -5,6 +5,10 @@
   "loading": "Chargement...",
   "disabledNotice": "L'export de données de la clinique n'est actuellement pas disponible pour votre organisation.",
   "scopeWarning": "Cet export contient uniquement des enregistrements structurés de la clinique (patients, rendez-vous, dossiers de traitement, paiements, tâches, messages, journaux d'activité, provisions d'assurance, inventaire). Il n'inclut PAS les pièces jointes physiques ni les fichiers d'imagerie et ne doit pas être considéré comme une sauvegarde complète.",
+  "clinicSelectorLabel": "Clinique",
+  "clinicSelectorPlaceholder": "Sélectionner une clinique",
+  "clinicSelectorAllClinicsNotice": "\"Toutes les cliniques\" est sélectionné. Choisissez une clinique spécifique ci-dessous pour exporter ses données.",
+  "selectedClinicPrefix": "Export des données pour",
   "purposeLabel": "Objet",
   "purposePlaceholder": "Sélectionner un objet",
   "purposeOptions": {
@@ -16,7 +20,7 @@
   },
   "restrictedNoteLabel": "Note interne (facultatif, non inclus dans les journaux d'audit)",
   "passwordLabel": "Confirmez votre mot de passe actuel",
-  "confirmLabel": "Je comprends que ceci exporte des données de clinique hautement sensibles et je confirme cette demande.",
+  "confirmLabel": "Je comprends que ceci exporte des données hautement sensibles de la clinique {{clinicName}} et je confirme cette demande.",
   "submit": "Démarrer l'export",
   "submitting": "Démarrage de l'export...",
   "polling": "Génération de l'export...",
@@ -33,6 +37,7 @@
     "timedOut": "Toujours pas terminé après 30 minutes — veuillez vérifier plus tard ou contacter le support."
   },
   "errors": {
+    "clinicRequired": "Veuillez sélectionner une clinique spécifique avant de démarrer un export.",
     "purposeRequired": "Veuillez sélectionner un objet.",
     "confirmRequired": "Veuillez confirmer avant de démarrer l'export.",
     "passwordRequired": "Veuillez saisir votre mot de passe actuel.",

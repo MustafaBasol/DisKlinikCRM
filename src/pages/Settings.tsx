@@ -1229,7 +1229,11 @@ const Settings: React.FC = () => {
             />
           )}
           {canSeeBulkExport && activeTab === 'bulkExport' && (
-            <ClinicBulkExportSection clinicId={selectedClinic?.id} canEdit={canSeeBulkExport} />
+            <ClinicBulkExportSection
+              availableClinics={availableClinics}
+              globalSelectedClinicId={selectedClinicId}
+              canEdit={canSeeBulkExport}
+            />
           )}
         </div>
       </div>

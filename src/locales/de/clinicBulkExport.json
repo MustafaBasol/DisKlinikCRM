@@ -5,6 +5,10 @@
   "loading": "Wird geladen...",
   "disabledNotice": "Der Klinik-Datenexport ist für Ihre Organisation derzeit nicht verfügbar.",
   "scopeWarning": "Dieser Export enthält nur strukturierte Klinikdaten (Patienten, Termine, Behandlungsfälle, Zahlungen, Aufgaben, Nachrichten, Aktivitätsprotokolle, Versicherungsleistungen, Inventar). Er enthält KEINE physischen Anhänge oder Bilddateien und darf nicht als vollständiges Backup betrachtet werden.",
+  "clinicSelectorLabel": "Klinik",
+  "clinicSelectorPlaceholder": "Klinik auswählen",
+  "clinicSelectorAllClinicsNotice": "\"Alle Kliniken\" ist ausgewählt. Wählen Sie unten eine bestimmte Klinik aus, um deren Daten zu exportieren.",
+  "selectedClinicPrefix": "Export der Daten für",
   "purposeLabel": "Zweck",
   "purposePlaceholder": "Zweck auswählen",
   "purposeOptions": {
@@ -16,7 +20,7 @@
   },
   "restrictedNoteLabel": "Interner Vermerk (optional, nicht in Prüfprotokollen enthalten)",
   "passwordLabel": "Bestätigen Sie Ihr aktuelles Passwort",
-  "confirmLabel": "Ich verstehe, dass hierbei hochsensible Klinikdaten exportiert werden, und bestätige diese Anfrage.",
+  "confirmLabel": "Ich verstehe, dass hierbei hochsensible Klinikdaten für {{clinicName}} exportiert werden, und bestätige diese Anfrage.",
   "submit": "Export starten",
   "submitting": "Export wird gestartet...",
   "polling": "Export wird erstellt...",
@@ -33,6 +37,7 @@
     "timedOut": "Nach 30 Minuten immer noch nicht abgeschlossen — bitte später erneut prüfen oder den Support kontaktieren."
   },
   "errors": {
+    "clinicRequired": "Bitte wählen Sie eine bestimmte Klinik aus, bevor Sie einen Export starten.",
     "purposeRequired": "Bitte wählen Sie einen Zweck aus.",
     "confirmRequired": "Bitte bestätigen Sie, bevor Sie den Export starten.",
     "passwordRequired": "Bitte geben Sie Ihr aktuelles Passwort ein.",

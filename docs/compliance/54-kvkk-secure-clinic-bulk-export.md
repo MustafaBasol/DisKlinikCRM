@@ -23,9 +23,13 @@ occurs and that no parameter can change the outcome.
 
 | Variable | Default | Fail mode | Purpose |
 |---|---|---|---|
-| `CLINIC_BULK_EXPORT_ENABLED` | unset = disabled | **fail-closed** (`=== 'true'` only) | Gates creation of new export jobs. Checked before password/confirmation parsing. |
+| `CLINIC_BULK_EXPORT_ENABLED` | unset = disabled | **fail-closed** (`=== 'true'` only) | Gates creation of new export jobs. Checked (together with the allowlist below, via `isClinicBulkExportEnabledForOrganization`) before password/confirmation parsing, and only after the route's clinicId has already been scope-validated (see Section 3). |
+| `CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS` | unset/empty = no allowlist (every organization in scope) | **fail-closed when set** (comma-separated list; an org not listed is treated exactly like the flag being off) | Server-enforced tenant rollout control — see Section 14. |
 | `CLINIC_BULK_EXPORT_CLEANUP_ENABLED` | unset = **enabled** (`!== 'false'`) | fail-open (cleanup keeps running) | Independent of the creation flag — expired artifacts/rows and abandoned jobs keep being swept even while creation is off. |
 | `CLINIC_BULK_EXPORT_IP_HASH_SECRET` | **required when `CLINIC_BULK_EXPORT_ENABLED=true`** | fail-closed | Dedicated HMAC key for hashing client IPs in the brute-force lockout table. Never reused from `JWT_SECRET`/`ENCRYPTION_KEY`/webhook secrets. |
+| `CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS` | 1 hour | fail-open to the default on garbage input | Deadline for a `queued` row that no worker has claimed yet. Deliberately separate from, and much longer than, the generating lease — see Section 7. |
+| `CLINIC_BULK_EXPORT_GENERATION_LEASE_MS` | 10 minutes | fail-open to the default on garbage input | Deadline for a `generating` row between heartbeat renewals. Claiming a queued row replaces its queue-timeout deadline with this (shorter) value. |
+| `CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS` | 1 minute | fail-open to the default on garbage input | Background renewal tick interval during generation — well under the generation lease so multiple renewals happen before it could expire. |
 
 **Emergency disable**: set `CLINIC_BULK_EXPORT_ENABLED=false` (or unset it)
 and redeploy/restart. No runtime Platform Admin toggle exists in this PR —
@@ -73,24 +77,39 @@ legal_request | other`). An optional `restrictedNote` is stored only on the
 archive row — never copied into `AuditLog`, `OperationalEvent`, or any log
 line.
 
-**Brute-force lockout is PostgreSQL-authoritative**
-(`server/src/services/privacy/clinicBulkExportPasswordAttempts.ts`), not
-Redis. Every check-and-increment for a given `(userId, clinicId, ipHash)` key
-is serialized with `pg_advisory_xact_lock` (same key-derivation shape as
+**Brute-force lockout is PostgreSQL-authoritative, with no Redis involvement
+at all**
+(`server/src/services/privacy/clinicBulkExportPasswordAttempts.ts`). Every
+check-and-increment for a given `(userId, clinicId, ipHash)` key is
+serialized with `pg_advisory_xact_lock` (same key-derivation shape as
 `appointmentRequestSafety.ts`), acquired **before** reading or creating the
 `ClinicBulkExportPasswordAttempt` row — this is what makes the
-"row-doesn't-exist-yet" race safe. Redis (`createRateLimiter`) is used only
-as an optional fast pre-check that can skip a redundant `bcrypt.compare`
-call; it never changes the outcome and Postgres is always the final
-arbiter. IPs are stored only as an HMAC-SHA256 hash. Rows untouched for >30
-days are deleted by the cleanup job.
+"row-doesn't-exist-yet" race safe. `bcrypt.compare` always runs unless the
+PostgreSQL row itself currently has an unexpired `lockedUntil`; there is no
+non-authoritative pre-check (Redis or otherwise) on this path that could
+reject a correct password (an earlier draft had one — see Section 17,
+remediation item 3 — it was removed entirely, not merely made
+non-authoritative). IPs are stored only as an HMAC-SHA256 hash. Rows
+untouched for >30 days are deleted by the cleanup job.
 
-**Fresh step-up window**: the archive row's `stepUpVerifiedAt` is set at
-creation. Issuing the download token accepts either a freshly supplied
-password (re-verified) or, if `now - stepUpVerifiedAt < 5 minutes`
-(server-clock only, never a client-supplied timestamp), no password. The
-frontend always prompts for a password before download regardless, but the
-backend implements and tests both paths.
+**Fresh step-up window, bound to the actor who verified it**: the archive
+row's `stepUpVerifiedAt` AND `stepUpVerifiedByUserId` are set together, both
+at creation (binding the requester) and whenever a caller supplies and
+verifies a fresh password at download-token-issuance time (rebinding to
+that verifier). Issuing the download token accepts either a freshly
+supplied password (re-verified, which atomically rebinds both fields to the
+verifying user in the same guarded update that issues the token) or, if
+`now - stepUpVerifiedAt < 5 minutes` (server-clock only, never a
+client-supplied timestamp) **and** the requesting user is exactly
+`stepUpVerifiedByUserId`, no password. A different OWNER/ORG_ADMIN on the
+same archive can never passwordlessly reuse another user's recent
+verification — they must supply their own password, which then becomes the
+new window owner (`utils/passwordStepUp.ts`'s `isStepUpWindowReusableBy()`).
+A null `stepUpVerifiedByUserId` (e.g. the original verifier was later
+deactivated/deleted, per the model's `onDelete: SetNull`) can never satisfy
+passwordless reuse for anyone — it fails closed. The frontend always prompts
+for a password before download regardless, but the backend implements and
+tests both paths.
 
 ## 5. Rate limiting and concurrency
 
@@ -180,15 +199,31 @@ bounded concurrency (`Promise.all` over at most that many claimed jobs —
 never unbounded). Abandoned rows (lease expired, i.e. a worker crashed or
 never claimed a queued row in time) are swept to `failed`
 (`LEASE_EXPIRED`) at the start of every tick, so a crashed worker never
-permanently blocks a clinic.
+permanently blocks a clinic. A winning claim also records exactly one
+`clinic_bulk_export_generation_started` audit event — a replica that loses
+the guarded per-row claim race never writes it (Section 12).
 
-**Graceful shutdown**: the specific `ScheduledTask` handle for *this*
-worker's cron is retained and only that task is stopped on
-`SIGTERM`/`SIGINT` — not every cron task in the process (which would also
-kill unrelated jobs like reminders/meta-sync). In-flight claimed jobs are
-left to finish within the process's normal shutdown grace period; if that
-deadline is hit anyway, the lease-expiry sweep on the next surviving
-replica's tick picks the row back up.
+**Queue timeout vs. generation lease are two separate, differently-sized
+deadlines (P0 remediation)** — sharing one 10-minute lease between "queued,
+waiting for a worker" and "actively generating" meant ordinary backlog under
+bounded worker concurrency could be mistaken for an abandoned job. Now:
+
+- A newly `reserveClinicBulkExport`'d row's `leaseExpiresAt` is set to
+  `createdAt + CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS` (default 1 hour) and is
+  never renewed while queued — nothing "heartbeats" a row no worker has
+  claimed yet.
+- `claimQueuedClinicBulkExportJobs` REPLACES that deadline with
+  `now + CLINIC_BULK_EXPORT_GENERATION_LEASE_MS` (default 10 minutes) the
+  moment a worker claims the row into `generating`.
+- The same sweep query (rows in `queued` or `generating` whose
+  `leaseExpiresAt` has passed → `failed`/`LEASE_EXPIRED`) runs unchanged in
+  three places (reservation, claim, cleanup cron) — it is correct for both
+  states because each state's row always carries the *right* deadline for
+  whatever state it is currently in, never the other state's value.
+- Verified against a real, disposable Postgres database: a queued row
+  artificially aged past the (short, test-configured) generation lease but
+  still within the (long) queue timeout remains claimable and is not
+  incorrectly failed (`scripts/verify-clinic-bulk-export-lifecycle.ts`).
 
 **Generation** streams a ZIP (`archiver`, piped to a temp file — never a
 Buffer) containing `manifest.json`, `clinic.json`, and one `*.ndjson` file
@@ -196,8 +231,31 @@ per entity (`users`, `patients`, `appointments`, `treatment-cases`,
 `payments`, `tasks`, `sent-messages`, `activity-logs`,
 `insurance-provisions`, `inventory-items`), each written via Prisma
 cursor pagination (batch size 500) as a lazily-pulled Node `Readable`, so no
-table and no whole archive is ever fully materialized in memory. Lease
-heartbeat is renewed periodically during generation.
+table and no whole archive is ever fully materialized in memory.
+
+**Full-lifecycle heartbeat (P0 remediation)** — the previous design only
+renewed the lease once per cursor-paginated DB batch, so a large export
+could exceed the generation lease during `archive.finalize()`, the
+write-stream flush, or the storage upload, none of which are batch-shaped.
+`generateClinicBulkExport` now starts a background heartbeat
+(`startClinicBulkExportLeaseHeartbeat`, ticking every
+`CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS`, default 1 minute) the moment
+generation begins and stops it in a `finally` block only after the final
+ready/failed transition — covering DB pagination, `archive.finalize()`, the
+write-stream close, and the storage upload uniformly. The per-batch awaited
+renewal remains as an additional checkpoint (`renewCheckpoint()`), sharing
+the heartbeat's own in-flight guard so at most one renewal query for a job
+is ever outstanding — the checkpoint and the background tick can never
+overlap. A failed renewal sets an in-memory `leaseLost` flag; immediately
+after the storage upload completes and before the row is ever flipped to
+`ready`, `leaseLost` is checked one final time — if set, the just-uploaded
+artifact is deleted, no `ready` transition ever happens, and the job fails
+with the stable `LEASE_LOST` code, identical to a lease lost mid-streaming.
+Verified against a real, disposable Postgres database: an artificially
+delayed upload proves the heartbeat keeps the lease alive well past what
+the old per-batch-only design would have survived, and a lease stolen
+mid-upload proves the artifact is deleted and the row never reaches
+`ready` (`scripts/verify-clinic-bulk-export-lifecycle.ts`).
 
 `CLINIC_BULK_EXPORT_MAX_RECORDS` (default 500,000) and
 `CLINIC_BULK_EXPORT_MAX_BYTES` (default 2 GB) are enforced while streaming.
@@ -261,10 +319,16 @@ is out of scope for this PR.
   already-opened storage stream is explicitly `.destroy()`'d — never piped
   after a failed/lost claim, never left open. Replay of an already-claimed
   download returns `409 CLINIC_BULK_EXPORT_ALREADY_DOWNLOADED`.
-  `download_completed`/`download_failed` are recorded separately depending
-  on whether the stream finished, errored, or the client disconnected before
-  the stream ended. Response headers: `Cache-Control: no-store`, `Pragma:
-  no-cache`, `X-Content-Type-Options: nosniff`.
+  `download_completed`/`download_failed` are decided exclusively by the HTTP
+  **response**'s own events, never the source storage stream's `'end'`
+  event (which can fire while the response is still flushing bytes to a
+  slow/disconnecting client): `res` `'finish'` → completed; `res` `'close'`
+  fired before `'finish'` → failed (`interrupted`); the storage stream's own
+  `'error'` → failed (`stream_error`). A single in-closure flag
+  (`attachDownloadOutcomeListeners()`) guarantees exactly one outcome is
+  ever recorded regardless of event ordering. Response headers:
+  `Cache-Control: no-store`, `Pragma: no-cache`, `X-Content-Type-Options:
+  nosniff`.
 
 ## 11. Cleanup lifecycle
 
@@ -304,7 +368,12 @@ All other events (`step_up_failed`, `rate_limited`,
 `generation_started/completed/failed`, `download_completed/failed`,
 `legacy_endpoint_attempted`, `feature_disabled_attempt`) use the regular
 fire-and-forget-safe `writeAuditLog` (still always `await`ed, unlike the
-legacy route).
+legacy route). `generation_started` is written exactly once per
+successfully claimed job, immediately after the guarded per-row claim in
+`claimQueuedClinicBulkExportJobs` wins (`result.count > 0`) — a replica that
+loses the claim race for a given row never writes it. Its metadata is
+limited to `jobId` and `schemaVersion`, the same stable-identifiers-only
+rule as every other event below.
 
 Audit metadata is limited to `clinicId, jobId, purpose, schemaVersion,
 counts, resultCode, ip/userAgent` — never `restrictedNote`, the password,
@@ -323,11 +392,38 @@ check-then-insert).
 `src/pages/Settings.tsx` gained a new `'bulkExport'` tab, visible only when
 `canExportClinicBulkData(user)` (OWNER/ORG_ADMIN, `src/utils/permissions.ts`)
 is true, delegating to `src/components/settings/ClinicBulkExportSection.tsx`.
+
+**Explicit clinic selection (P0 remediation)**: the page passes the
+component the user's full `availableClinics` list and the global clinic
+switcher's raw `selectedClinicId` ("all" or a specific id) — never a
+pre-resolved single clinic (the old code silently fell back to the user's
+default/first clinic whenever the global switcher was "all", which could
+export the wrong clinic's data without the user ever explicitly choosing
+it). The component owns its own explicit selection (`clinicId` state,
+resolved via `src/components/settings/clinicBulkExportSelectionHelpers.ts`'s
+pure `resolveExplicitClinicId`): it is seeded from the global switcher only
+when the switcher already names one specific, currently-accessible clinic;
+when the switcher is "all", the section starts with no selection and shows
+its own dropdown (populated only from `availableClinics`) plus a notice
+that one specific clinic must be chosen. The selected clinic's name is
+shown prominently above the form and interpolated into the confirmation
+sentence (`confirmLabel` with `{{clinicName}}`). Submission is impossible
+without a selected clinic — the purpose/password/confirm form itself does
+not render until one is chosen, and the create handler additionally guards
+and surfaces `errors.clinicRequired` defensively. Changing the clinic — via
+the in-section dropdown or the global switcher changing to a different
+specific clinic — resets every piece of transient/sensitive state in one
+place (`initialClinicBulkExportState()`/`resetForClinicChange`): the active
+job id, polled job state, both password fields, download/token state, the
+confirmation checkbox, and any submit/download errors.
+
 When the backend reports the feature disabled (via a dedicated,
 OWNER/ORG_ADMIN-authorized `GET .../bulk-export/config` endpoint that
-returns only `{enabled}`), no active button is shown — only a localized
-explanation. When enabled: purpose selection → password → explicit
-confirmation checkbox → submit (disabled while pending, preventing duplicate
+returns only `{enabled}`, now driven by
+`isClinicBulkExportEnabledForOrganization` — see Section 14), no active
+button is shown — only a localized explanation. When enabled: purpose
+selection → password → explicit confirmation checkbox → submit (disabled
+while pending or while no clinic is selected, preventing duplicate
 submissions) → `202` creates the job → a dedicated bounded-backoff polling
 hook (`src/hooks/useClinicBulkExportStatus.ts`, **not** built on
 `src/components/imaging/pairingPoller.ts` — deliberately not coupling the
@@ -361,8 +457,25 @@ Do **not** enable this in production until all of the following are true:
 - [ ] At least one end-to-end production run performed: create → poll →
       ready → download → cleanup, with the resulting archive row and
       storage object inspected directly.
-- [ ] Only then: flip `CLINIC_BULK_EXPORT_ENABLED=true` for a pilot
-      organization first, not globally.
+- [ ] Only then: flip `CLINIC_BULK_EXPORT_ENABLED=true`. This flag is
+      **global** — every authorized (correct role, correct clinic scope)
+      organization is enabled the moment it is set, EXCEPT organizations
+      deliberately excluded via the server-enforced
+      `CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS` rollout allowlist
+      (comma-separated organization ids; unset/empty = no allowlist = every
+      organization). For a controlled pilot rollout, set
+      `CLINIC_BULK_EXPORT_ENABLED=true` together with
+      `CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS` populated with only the
+      pilot organization's id(s); every other organization gets the
+      identical `CLINIC_BULK_EXPORT_DISABLED` response an org gets when the
+      flag itself is off — the allowlist is never a distinguishable error
+      class from "feature off". Widen or clear the allowlist to progress the
+      rollout; clearing it entirely (or leaving it unset) is what makes the
+      flag truly global. Both the config endpoint (`GET .../bulk-export/config`)
+      and the create route consult the same combined decision
+      (`isClinicBulkExportEnabledForOrganization`), so the frontend's
+      disabled notice and the server's actual enforcement can never drift
+      apart.
 - [ ] Legal/compliance sign-off on the `purpose` codes and the
       structured-data-only scope statement, independent of this PR.
 
@@ -493,3 +606,78 @@ See `server/src/tests/clinicBulkExport.test.ts` sections 11–17 (34 new
 tests) and `server/scripts/verify-clinic-bulk-export-lifecycle.ts` (10 new
 disposable-Postgres tests, including the full real-ZIP lifecycle) for the
 verification coverage.
+
+## 18. Remediation round (2026-07-16, third pass — PR #165 further review)
+
+A further review found six issues in the second-pass remediation itself,
+all fixed on the same branch. Status remains **Implemented — awaiting
+deployment/operational verification**; the feature flag remains `false`.
+
+1. **The disabled-feature check ran BEFORE clinic-scope validation.** The
+   create route checked `CLINIC_BULK_EXPORT_ENABLED` first, using the raw,
+   unvalidated route `:clinicId` for the disabled-feature audit write — a
+   cross-org or otherwise inaccessible clinicId could reach `AuditLog`
+   before `validateAndGetScope` ever ran. Fixed by moving scope
+   resolution+validation to happen first; the disabled-feature audit now
+   only ever uses the DB-validated `clinicId`/`organizationId`, and
+   password/purpose/confirmation are still not parsed on the disabled path.
+   Proven with a real Express-handler-level test against a real Postgres
+   database (not just source inspection): a cross-org and an inaccessible
+   same-org clinicId both get the generic forbidden response with **zero**
+   matching `AuditLog` rows, while a validated clinic still gets the
+   disabled-feature audit event using only the validated fields
+   (`scripts/verify-clinic-bulk-export-lifecycle.ts`).
+2. **The frontend could silently export the wrong clinic.** `Settings.tsx`
+   resolved a single "selected clinic" that fell back to the user's
+   default/first clinic whenever the global clinic switcher was "all",
+   and the export section never displayed which clinic would be exported.
+   Fixed with an explicit, dedicated in-section clinic selector (Section
+   13) that never auto-selects on "all", shows the chosen clinic's name
+   prominently and in the confirmation sentence, blocks submission until
+   one specific accessible clinic is chosen, and resets every
+   transient/sensitive piece of state on any clinic change.
+3. **The lease was not covered for the entire generation lifecycle.**
+   The awaited per-batch renewal (from the second-pass remediation) only
+   ran during DB pagination — `archive.finalize()`, the write-stream
+   flush, and the storage upload had no renewal at all, so a large export
+   could lose its lease during exactly those phases. Fixed with a
+   non-overlapping background heartbeat covering the whole generation
+   lifecycle, checked one final time (with artifact deletion on loss)
+   immediately before the `ready` transition (Section 7).
+4. **Queued backlog shared the same short lease as active generation.**
+   Normal backlog under bounded worker concurrency could be swept to
+   `LEASE_EXPIRED` merely for waiting a few cron ticks. Fixed by splitting
+   queue timeout and generation lease into separate, independently
+   configurable durations, with claiming a queued row explicitly replacing
+   the longer queue deadline with the shorter generation lease (Section 7).
+5. **No audit trail for generation actually starting.** Only
+   `requested`/`completed`/`failed` were recorded; there was no signal that
+   a claimed job had actually begun generating. Fixed: exactly one
+   `clinic_bulk_export_generation_started` event per successfully claimed
+   job (Section 12).
+6. **Documentation had drifted from the actual second-pass code.** The
+   main Step-up section still described Redis as an optional
+   non-authoritative pre-check (Redis was in fact removed entirely, not
+   merely demoted — the accurate description only appeared in this
+   section's own remediation-round-2 appendix) and did not describe
+   actor-bound step-up reuse in its main body; the production checklist
+   said "pilot organization first" while the flag was, and remained,
+   global with no server-enforced way to actually restrict a rollout.
+   Fixed: Section 4 now documents actor-bound step-up and the Redis-free
+   design directly; a new server-enforced
+   `CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS` rollout allowlist was
+   added (Section 2, Section 14) so "pilot first" is now a true statement
+   backed by code, not aspirational prose; and the download-completion
+   wording (Section 10) now describes the actual `res`
+   `'finish'`/`'close'` semantics instead of "whether the stream finished".
+
+See `server/src/tests/clinicBulkExport.test.ts` section 18 (new tests for
+the queue-timeout/generation-lease/heartbeat config functions and the
+tenant allowlist) and `server/scripts/verify-clinic-bulk-export-lifecycle.ts`
+(new real-Postgres, real-handler tests for scope-before-flag ordering, the
+queue-timeout-vs-generation-lease claim race, the full-lifecycle heartbeat
+under a delayed upload, lease-loss-during-upload artifact deletion, and the
+tenant allowlist) for the verification coverage. The frontend's explicit
+clinic-selection logic is covered by
+`src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts`
+(pure-logic tests — this repo has no DOM/React Testing Library harness).

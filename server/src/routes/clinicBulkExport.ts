@@ -22,7 +22,7 @@ import { validateAndGetScope } from '../utils/clinicScope.js';
 import { getParam } from '../utils/helpers.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { safeErrorFields } from '../utils/safeError.js';
-import { isClinicBulkExportEnabled } from '../services/privacy/clinicBulkExportConfig.js';
+import { isClinicBulkExportEnabledForOrganization } from '../services/privacy/clinicBulkExportConfig.js';
 import {
   assertIpHashSecretConfigured,
   isStepUpWindowReusableBy,
@@ -81,7 +81,7 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     const scope = await resolveClinicScope(req, res);
     if (!scope) return;
-    res.json({ enabled: isClinicBulkExportEnabled() });
+    res.json({ enabled: isClinicBulkExportEnabledForOrganization(scope.organizationId) });
   },
 );
 
@@ -93,27 +93,37 @@ router.post(
   async (req: AuthRequest, res: Response) => {
     const user = req.user!;
 
-    if (!isClinicBulkExportEnabled()) {
-      const clinicId = getParam(req, 'clinicId');
+    // Scope must be validated BEFORE the feature-flag check: only a clinicId
+    // confirmed to belong to the caller's org and be accessible to them may
+    // ever be persisted into AuditLog, even on the disabled-feature path.
+    // resolveClinicScope() already sends the generic 403 CLINIC_BULK_EXPORT_FORBIDDEN
+    // for cross-org/inaccessible clinics — a raw, unvalidated route param is
+    // never written anywhere below this point.
+    const scope = await resolveClinicScope(req, res);
+    if (!scope) return;
+
+    if (!isClinicBulkExportEnabledForOrganization(scope.organizationId)) {
       // Non-critical event (writeAuditLog swallows insert failures) — still
       // awaited so the response is never sent before the audit attempt has
-      // completed.
+      // completed. Password/purpose/confirmation are deliberately not parsed
+      // yet — the disabled path must never read or check the password. The
+      // response/audit action are identical whether the global flag is off
+      // or this organization simply isn't on the rollout allowlist — the
+      // allowlist must never be distinguishable from "feature off" by a
+      // caller.
       await writeAuditLog({
-        organizationId: user.organizationId,
-        clinicId,
+        organizationId: scope.organizationId,
+        clinicId: scope.clinicId,
         actorUserId: user.id,
         actorRole: user.role,
         action: 'clinic_bulk_export_feature_disabled_attempt',
         entityType: 'clinic',
-        entityId: clinicId,
+        entityId: scope.clinicId,
         description: 'Clinic bulk export creation attempted while feature disabled',
         ...extractRequestMeta(req),
       });
       return res.status(403).json({ error: 'CLINIC_BULK_EXPORT_DISABLED' });
     }
-
-    const scope = await resolveClinicScope(req, res);
-    if (!scope) return;
 
     const body = req.body ?? {};
     const purpose = typeof body.purpose === 'string' ? body.purpose : '';
