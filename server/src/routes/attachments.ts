@@ -104,7 +104,6 @@ router.post(
   handleUpload,
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
-    const clinicId = req.user!.clinicId;
 
     if (!req.file) {
       // req.file is undefined only when Content-Type boundary is missing
@@ -118,13 +117,22 @@ router.post(
 
     let storageKey: string | null = null;
     try {
-      // Verify patient belongs to clinic
+      // Resolve scope via validateAndGetClinicIdScope (multi-branch clinic
+      // scope helper — see imaging.ts) rather than req.user.clinicId, then
+      // find the patient *within that scope*. The patient's own clinicId is
+      // the only clinicId ever used below — a client cannot influence which
+      // clinic the attachment/storage key end up in beyond selecting which
+      // (already-authorized) clinic's patient to upload to.
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const patient = await prisma.patient.findFirst({
-        where: { id: patientId, clinicId, deletedAt: null },
+        where: { id: patientId, deletedAt: null, ...scope },
       });
       if (!patient) {
         return res.status(404).json({ error: 'Patient not found' });
       }
+      const clinicId = patient.clinicId;
 
       if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {
         return res.status(400).json({
@@ -177,11 +185,13 @@ router.get(
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
-    const clinicId = req.user!.clinicId;
 
     try {
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const attachments = await prisma.patientAttachment.findMany({
-        where: { patientId, clinicId },
+        where: { patientId, ...scope },
         include: { uploadedBy: { select: { firstName: true, lastName: true } } },
         orderBy: { createdAt: 'desc' },
       });
@@ -201,11 +211,13 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
-    const clinicId = req.user!.clinicId;
 
     try {
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const attachment = await prisma.patientAttachment.findFirst({
-        where: { id, patientId, clinicId },
+        where: { id, patientId, ...scope },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
 
@@ -234,11 +246,13 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
-    const clinicId = req.user!.clinicId;
 
     try {
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const attachment = await prisma.patientAttachment.findFirst({
-        where: { id, patientId, clinicId },
+        where: { id, patientId, ...scope },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
 

@@ -336,6 +336,93 @@ async function main() {
     assert.equal((row.metadata as any)?.newLegalHold, true);
   });
 
+  // ── 5. Upload/list/download/preview scope resolution (real patient lookup) ─
+  // Mirrors the fixed routes' pattern: resolve validateAndGetClinicIdScope
+  // first, THEN look up the patient/attachment *within that scope* — never
+  // via req.user.clinicId directly. Proves the patient's own clinicId (not
+  // the acting user's default clinicId) is what ends up governing storage.
+  section('5. Attachment upload/list/download/preview scope resolution (PR #163 round-3 remediation)');
+
+  const patientB1 = await prisma.patient.create({
+    data: { clinic: { connect: { id: clinicB1.id } }, organization: { connect: { id: orgB.id } }, firstName: 'Verify', lastName: 'PatientB1' },
+  });
+
+  await test('OWNER-equivalent user acting on an authorized non-default clinic resolves the patient\'s ACTUAL clinicId, never their own default clinicId', async () => {
+    // managerBothClinics's own default clinicId is clinicA1, but the patient
+    // lives in clinicA2 — mirrors an OWNER/ORG_ADMIN uploading for a patient
+    // in a non-default branch they are authorized for.
+    const res = fakeRes();
+    const scope = await validateAndGetClinicIdScope(managerBothClinics as any, clinicA2.id, res);
+    assert.notEqual(scope, false);
+    const found = await prisma.patient.findFirst({ where: { id: patient.id, deletedAt: null, ...(scope as object) } });
+    assert.ok(found, 'patient in the authorized non-default clinic must resolve');
+    assert.equal(found!.clinicId, clinicA2.id, 'the resolved clinicId must be the PATIENT\'s actual clinic');
+    assert.notEqual(found!.clinicId, managerBothClinics.clinicId, 'must never fall back to the acting user\'s own default clinicId');
+  });
+
+  await test('user without access to the patient\'s clinic cannot resolve the patient at all (upload/list/download/preview all 404, not leak)', async () => {
+    const res = fakeRes();
+    const scope = await validateAndGetClinicIdScope(managerA1Only as any, undefined, res);
+    assert.notEqual(scope, false, 'default-clinic scope for this user must still resolve (to clinicA1 only)');
+    const found = await prisma.patient.findFirst({ where: { id: patient.id, deletedAt: null, ...(scope as object) } });
+    assert.equal(found, null, 'a patient in an inaccessible clinic must never be found through the resolved scope');
+  });
+
+  await test('cross-organization patient lookup is rejected at the scope-resolution step, before any patient/attachment query runs', async () => {
+    const res = fakeRes();
+    const scope = await validateAndGetClinicIdScope(managerA1Only as any, clinicB1.id, res);
+    assert.equal(scope, false, 'a cross-org clinic id must never resolve to a usable scope');
+    assert.equal(res.statusCode, 403);
+  });
+
+  await test('default clinic (no selectedClinicId) behavior is unchanged for a single-clinic user: they still resolve their own clinic\'s patients', async () => {
+    const res = fakeRes();
+    const scope = await validateAndGetClinicIdScope(managerA1Only as any, undefined, res);
+    assert.notEqual(scope, false);
+    const patientA1 = await prisma.patient.create({
+      data: { clinic: { connect: { id: clinicA1.id } }, organization: { connect: { id: orgA.id } }, firstName: 'Verify', lastName: 'PatientA1' },
+    });
+    const found = await prisma.patient.findFirst({ where: { id: patientA1.id, deletedAt: null, ...(scope as object) } });
+    assert.ok(found, 'default-clinic behavior for a single-clinic user must be unchanged');
+    await prisma.patient.deleteMany({ where: { id: patientA1.id } });
+  });
+
+  const scopedAttachment = await prisma.patientAttachment.create({
+    data: {
+      clinicId: clinicA2.id, patientId: patient.id, fileName: 'scoped-download.pdf', originalName: 'scoped-download.pdf',
+      fileSize: 10, mimeType: 'application/pdf', filePath: `verify/${clinicA2.id}/scoped-download.pdf`, uploadedById: ownerUser.id,
+    },
+  });
+
+  await test('download/preview: attachmentId + patientId + resolved scope must ALL match for an authorized non-default clinic', async () => {
+    const res = fakeRes();
+    const scope = await validateAndGetClinicIdScope(managerBothClinics as any, clinicA2.id, res);
+    assert.notEqual(scope, false);
+    const found = await prisma.patientAttachment.findFirst({ where: { id: scopedAttachment.id, patientId: patient.id, ...(scope as object) } });
+    assert.ok(found, 'attachment must resolve when id+patientId+scope all match');
+
+    const wrongPatient = await prisma.patientAttachment.findFirst({ where: { id: scopedAttachment.id, patientId: 'not-the-real-patient-id', ...(scope as object) } });
+    assert.equal(wrongPatient, null, 'a patientId mismatch must not resolve the attachment even with a correct scope');
+  });
+
+  await test('download/preview: unauthorized clinic access does not reveal whether the attachment exists', async () => {
+    const res = fakeRes();
+    const scope = await validateAndGetClinicIdScope(managerA1Only as any, undefined, res);
+    assert.notEqual(scope, false, 'this user still has a valid (narrower) scope for their own clinic');
+    const found = await prisma.patientAttachment.findFirst({ where: { id: scopedAttachment.id, patientId: patient.id, ...(scope as object) } });
+    assert.equal(found, null, 'an attachment outside the resolved scope must come back not-found, same as a nonexistent id — no existence leak');
+  });
+
+  await test('cross-organization download/preview attempt is rejected before any attachment query runs', async () => {
+    const res = fakeRes();
+    const scope = await validateAndGetClinicIdScope(managerA1Only as any, clinicB1.id, res);
+    assert.equal(scope, false);
+    assert.equal(res.statusCode, 403);
+  });
+
+  await prisma.patientAttachment.deleteMany({ where: { id: scopedAttachment.id } });
+  await prisma.patient.deleteMany({ where: { id: patientB1.id } });
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgA.id, orgB.id] } } });
   await prisma.imagingStudy.deleteMany({ where: { clinicId: { in: [clinicA1.id, clinicA2.id, clinicB1.id] } } });

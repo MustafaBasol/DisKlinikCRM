@@ -93,10 +93,11 @@ async function main() {
     assert.ok(routeSrc.includes('attachment.mimeType'), 'preview route must echo the stored mimeType as Content-Type');
   });
 
-  await test('preview route scopes the attachment lookup by id + patientId + clinicId (same as download)', () => {
+  await test('preview route scopes the attachment lookup by id + patientId + resolved multi-branch clinic scope (same as download)', () => {
     const match = attachmentsSrc.match(/router\.get\(\s*'\/patients\/:patientId\/attachments\/:id\/preview'[\s\S]*?\n\);/);
     const routeSrc = match![0];
-    assert.ok(/findFirst\(\{\s*where:\s*\{\s*id,\s*patientId,\s*clinicId\s*\}/.test(routeSrc), 'preview must not skip clinic scoping');
+    assert.ok(/validateAndGetClinicIdScope\(req\.user!, req\.query\.clinicId/.test(routeSrc), 'preview must resolve scope via the multi-branch helper, not req.user.clinicId');
+    assert.ok(/findFirst\(\{\s*where:\s*\{\s*id,\s*patientId,\s*\.\.\.scope\s*\}/.test(routeSrc), 'preview must not skip clinic scoping');
   });
 
   await test('GET .../attachments/:id/download still sets attachment disposition (unchanged)', () => {

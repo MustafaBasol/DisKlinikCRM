@@ -1423,6 +1423,60 @@ await test('a genuine disposable-Postgres concurrency/scope/redaction/audit-PII 
   assert.ok(src.includes('validateAndGetClinicIdScope'), 'script must exercise the real multi-branch scope helper');
 });
 
+section('63. attachments.ts upload/list/download/preview routes use validateAndGetClinicIdScope, never req.user.clinicId (PR #163 round-3 remediation)');
+
+function getRouteBlock(src: string, marker: string, len = 2200): string {
+  const start = src.indexOf(marker);
+  assert.ok(start > -1, `could not locate route block for marker: ${marker}`);
+  return src.slice(start, start + len);
+}
+
+await test('POST upload route resolves scope via validateAndGetClinicIdScope and looks up the patient inside that scope, not via req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "router.post(", 3000);
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'upload route must resolve scope via the multi-branch helper');
+  assert.ok(/prisma\.patient\.findFirst\(\{\s*where: \{ id: patientId, deletedAt: null, \.\.\.scope \}/.test(block), 'upload route must look up the patient inside the resolved scope');
+  assert.ok(!/const clinicId = req\.user!\.clinicId;/.test(block), 'upload route must never take clinicId directly off req.user');
+  assert.ok(block.includes('const clinicId = patient.clinicId;'), 'upload route must use the patient\'s own resolved clinicId for storage/DB/audit');
+});
+
+await test('GET attachment list route resolves scope via validateAndGetClinicIdScope, not req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "// ── GET /api/patients/:patientId/attachments ─");
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'list route must resolve scope via the multi-branch helper');
+  assert.ok(/findMany\(\{\s*where: \{ patientId, \.\.\.scope \}/.test(block), 'list route must filter attachments through the resolved scope');
+  assert.ok(!block.includes('const clinicId = req.user!.clinicId;'), 'list route must never take clinicId directly off req.user');
+});
+
+await test('GET download route resolves scope via validateAndGetClinicIdScope, not req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "'/patients/:patientId/attachments/:id/download'");
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'download route must resolve scope via the multi-branch helper');
+  assert.ok(/findFirst\(\{\s*where: \{ id, patientId, \.\.\.scope \}/.test(block), 'download route must look up the attachment by id+patientId+resolved scope');
+  assert.ok(!block.includes('const clinicId = req.user!.clinicId;'), 'download route must never take clinicId directly off req.user');
+});
+
+await test('GET preview route resolves scope via validateAndGetClinicIdScope, not req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "'/patients/:patientId/attachments/:id/preview'");
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'preview route must resolve scope via the multi-branch helper');
+  assert.ok(/findFirst\(\{\s*where: \{ id, patientId, \.\.\.scope \}/.test(block), 'preview route must look up the attachment by id+patientId+resolved scope');
+  assert.ok(!block.includes('const clinicId = req.user!.clinicId;'), 'preview route must never take clinicId directly off req.user');
+});
+
+await test('no attachment route in this file still reads req.user!.clinicId directly as an authorization scope', () => {
+  const src = readAttachmentsSrc();
+  assert.ok(!/req\.user!\.clinicId/.test(src), 'attachments.ts must not reference req.user!.clinicId anywhere anymore (DELETE and legal-hold PATCH already used the scope helper; upload/list/download/preview are now aligned)');
+});
+
+await test('the disposable-Postgres verify script also exercises upload/list/download/preview scope resolution against real patient/attachment rows', () => {
+  const scriptPath = path.resolve(import.meta.dirname, '../../scripts/verify-attachment-legal-hold-lifecycle.ts');
+  const src = fs.readFileSync(scriptPath, 'utf8');
+  assert.ok(src.includes("resolves the patient\\'s ACTUAL clinicId, never their own default clinicId"), 'verify script must prove upload resolves the patient\'s actual clinic, not the user\'s default clinic');
+  assert.ok(src.includes('patientId + resolved scope must ALL match') || src.includes('attachmentId + patientId + resolved scope must ALL match'), 'verify script must prove attachmentId+patientId+scope must all match for download/preview');
+  assert.ok(src.includes('cross-organization download/preview attempt is rejected'), 'verify script must prove cross-org download/preview is rejected');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
