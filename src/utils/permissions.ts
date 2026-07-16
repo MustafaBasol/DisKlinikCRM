@@ -224,6 +224,17 @@ export function canManageLegalHold(user: UserForPermission | null | undefined): 
 }
 
 /**
+ * KVKK-HIGH-004: clinic bulk/structured-data export — OWNER/ORG_ADMIN only.
+ * Backend'deki authorize(['OWNER', 'ORG_ADMIN']) (routes/clinicBulkExport.ts)
+ * ile birebir eşleşir; canManageLegalHold gibi burada da permissions
+ * override'ı yoktur çünkü bu bir uyumluluk sınırıdır.
+ */
+export function canExportClinicBulkData(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+/**
  * Şube yönetimi (oluştur / düzenle / durum değiştir):
  * Yalnızca OWNER ve ORG_ADMIN.
  */

@@ -1,0 +1,50 @@
+{
+  "nav": "Veri Dışa Aktarımı",
+  "title": "Klinik Veri Dışa Aktarımı",
+  "description": "Bu kliniğin yapılandırılmış kayıtlarını yasal, göç veya hukuki amaçlarla dışa aktarın.",
+  "loading": "Yükleniyor...",
+  "disabledNotice": "Klinik veri dışa aktarımı şu anda kuruluşunuz için kullanılamıyor.",
+  "scopeWarning": "Bu dışa aktarım yalnızca yapılandırılmış klinik kayıtlarını içerir (hastalar, randevular, tedavi vakaları, ödemeler, görevler, mesajlar, aktivite kayıtları, sigorta provizyonları, envanter). Fiziksel ek dosyaları veya görüntüleme dosyalarını İÇERMEZ ve eksiksiz bir yedek olarak kabul edilmemelidir.",
+  "purposeLabel": "Amaç",
+  "purposePlaceholder": "Bir amaç seçin",
+  "purposeOptions": {
+    "regulatory_request": "Düzenleyici kurum talebi",
+    "clinic_migration": "Klinik göçü",
+    "contract_termination": "Sözleşme feshi",
+    "legal_request": "Hukuki talep",
+    "other": "Diğer"
+  },
+  "restrictedNoteLabel": "Dahili not (isteğe bağlı, denetim kayıtlarına dahil edilmez)",
+  "passwordLabel": "Mevcut şifrenizi onaylayın",
+  "confirmLabel": "Bunun son derece hassas klinik verilerini dışa aktardığını anlıyorum ve bu talebi onaylıyorum.",
+  "submit": "Dışa aktarımı başlat",
+  "submitting": "Dışa aktarım başlatılıyor...",
+  "polling": "Dışa aktarım oluşturuluyor...",
+  "downloadPasswordLabel": "İndirmek için mevcut şifrenizi onaylayın",
+  "downloadButton": "İndir",
+  "startNew": "Yeni bir dışa aktarım başlat",
+  "failureCodePrefix": "Hata kodu",
+  "status": {
+    "queued": "Sırada — başlaması bekleniyor",
+    "generating": "Dışa aktarım oluşturuluyor...",
+    "ready": "Dışa aktarım indirilmeye hazır",
+    "failed": "Dışa aktarım başarısız oldu",
+    "expired": "Dışa aktarımın süresi doldu",
+    "timedOut": "30 dakika sonra hâlâ tamamlanmadı — lütfen daha sonra tekrar kontrol edin veya destek ekibiyle iletişime geçin."
+  },
+  "errors": {
+    "purposeRequired": "Lütfen bir amaç seçin.",
+    "confirmRequired": "Dışa aktarımı başlatmadan önce lütfen onaylayın.",
+    "passwordRequired": "Lütfen mevcut şifrenizi girin.",
+    "CLINIC_BULK_EXPORT_DISABLED": "Klinik veri dışa aktarımı şu anda devre dışı.",
+    "CLINIC_BULK_EXPORT_FORBIDDEN": "Bu kliniğin verilerini dışa aktarma yetkiniz yok.",
+    "CLINIC_BULK_EXPORT_STEP_UP_FAILED": "Şifre doğrulaması başarısız oldu.",
+    "CLINIC_BULK_EXPORT_RATE_LIMITED": "Çok fazla deneme yapıldı. Lütfen tekrar denemeden önce bekleyin.",
+    "CLINIC_BULK_EXPORT_ALREADY_RUNNING": "Bu klinik için zaten devam eden bir dışa aktarım var.",
+    "CLINIC_BULK_EXPORT_NOT_READY": "Bu dışa aktarım henüz indirilmeye hazır değil.",
+    "CLINIC_BULK_EXPORT_ALREADY_DOWNLOADED": "Bu dışa aktarım zaten indirildi.",
+    "CLINIC_BULK_EXPORT_EXPIRED": "Bu dışa aktarımın süresi doldu. Lütfen yeni bir tane başlatın.",
+    "CLINIC_BULK_EXPORT_TOKEN_ALREADY_ISSUED": "Bu dışa aktarım için zaten bir indirme bağlantısı oluşturuldu.",
+    "generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin."
+  }
+}

@@ -15,6 +15,8 @@ import { startInboundEventRetryJob } from './inboundEventRetryJob.js';
 import { startImagingBridgeOfflineJob } from './imagingBridgeOfflineJob.js';
 import { startPublicBookingNoticeEvidenceCleanupJob } from './publicBookingNoticeEvidenceCleanupJob.js';
 import { startPatientPrivacyExportCleanupJob } from './patientPrivacyExportCleanupJob.js';
+import { startClinicBulkExportWorker } from './clinicBulkExportWorker.js';
+import { startClinicBulkExportCleanupJob } from './clinicBulkExportCleanupJob.js';
 
 export function startBackgroundJobs(): void {
   startReminderJobs();
@@ -24,4 +26,6 @@ export function startBackgroundJobs(): void {
   startImagingBridgeOfflineJob();
   startPublicBookingNoticeEvidenceCleanupJob();
   startPatientPrivacyExportCleanupJob();
+  startClinicBulkExportWorker();
+  startClinicBulkExportCleanupJob();
 }

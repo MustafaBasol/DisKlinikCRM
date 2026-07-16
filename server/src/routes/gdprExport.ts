@@ -1,80 +1,50 @@
+/**
+ * gdprExport.ts — LEGACY, PERMANENTLY DISABLED (KVKK-HIGH-004).
+ *
+ * The old GET /api/clinic/export-data endpoint used to run 11 unbounded
+ * Promise.all findMany calls synchronously in the request, scoped by
+ * req.user.clinicId (a UI default, never a validated authorization scope),
+ * with no step-up auth, no rate limit, no feature flag, and a fire-and-
+ * forget (unawaited) audit log write. It has been replaced by the
+ * asynchronous, tenant-isolated, step-up-authenticated flow in
+ * routes/clinicBulkExport.ts (see docs/compliance/54-kvkk-secure-clinic-
+ * bulk-export.md).
+ *
+ * This route is kept mounted ONLY to return a stable, non-sensitive
+ * "permanently disabled" response — it must never query clinic/patient/
+ * business data, never generate a file, and cannot be reactivated by any
+ * query or body parameter. `authenticate` still runs (so we know who hit
+ * it, for the audit trail) but `authorize` is intentionally removed since
+ * every authenticated user gets the same disabled response regardless of
+ * role.
+ */
+
 import express, { Response } from 'express';
-import prisma from '../db.js';
-import { authorize, AuthRequest } from '../middleware/auth.js';
+import { AuthRequest } from '../middleware/auth.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
 const router = express.Router();
 
-// GET /api/clinic/export-data — GDPR: Klinik verisinin tamamını JSON olarak indir
-router.get(
-  '/clinic/export-data',
-  authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']),
-  async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId;
+// authenticate already runs globally for the /api prefix (see index.ts) —
+// req.user is populated before this handler runs. No `authorize` here: every
+// authenticated role gets the same disabled response.
+router.get('/clinic/export-data', (req: AuthRequest, res: Response) => {
+  const user = req.user;
+  if (user) {
+    void writeAuditLog({
+      organizationId: user.organizationId,
+      clinicId: user.clinicId,
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: 'clinic_bulk_export_legacy_endpoint_attempted',
+      entityType: 'clinic',
+      entityId: user.clinicId,
+      description: 'Legacy GET /api/clinic/export-data attempted (permanently disabled)',
+      ...extractRequestMeta(req),
+    });
+  }
 
-    try {
-      const [
-        clinic,
-        users,
-        patients,
-        appointments,
-        treatmentCases,
-        payments,
-        tasks,
-        sentMessages,
-        activityLogs,
-        insuranceProvisions,
-        inventoryItems,
-      ] = await Promise.all([
-        prisma.clinic.findUnique({ where: { id: clinicId } }),
-        prisma.user.findMany({ where: { clinicId }, select: { id: true, firstName: true, lastName: true, email: true, role: true, createdAt: true } }),
-        prisma.patient.findMany({ where: { clinicId, deletedAt: null } }),
-        prisma.appointment.findMany({ where: { clinicId, deletedAt: null } }),
-        prisma.treatmentCase.findMany({ where: { clinicId, deletedAt: null } }),
-        prisma.payment.findMany({ where: { clinicId } }),
-        prisma.task.findMany({ where: { clinicId } }),
-        prisma.sentMessage.findMany({ where: { clinicId } }),
-        prisma.activityLog.findMany({ where: { clinicId }, orderBy: { createdAt: 'desc' }, take: 10000 }),
-        prisma.insuranceProvision.findMany({ where: { clinicId } }),
-        prisma.inventoryItem.findMany({ where: { clinicId } }),
-      ]);
-
-      const exportData = {
-        exportedAt: new Date().toISOString(),
-        exportedBy: req.user!.id,
-        clinic,
-        users,
-        patients,
-        appointments,
-        treatmentCases,
-        payments,
-        tasks,
-        sentMessages,
-        activityLogs,
-        insuranceProvisions,
-        inventoryItems,
-      };
-
-      res.setHeader('Content-Disposition', `attachment; filename="clinic-export-${clinicId}-${Date.now()}.json"`);
-      res.setHeader('Content-Type', 'application/json');
-
-      writeAuditLog({
-        organizationId: req.user!.organizationId,
-        clinicId,
-        actorUserId: req.user!.id,
-        actorRole: req.user!.role,
-        action: 'gdpr_export',
-        entityType: 'clinic',
-        entityId: clinicId,
-        description: `GDPR data export triggered for clinic`,
-        ...extractRequestMeta(req),
-      });
-
-      res.json(exportData);
-    } catch {
-      res.status(500).json({ error: 'Export failed. Please try again.' });
-    }
-  },
-);
+  res.status(410).json({ error: 'CLINIC_BULK_EXPORT_LEGACY_DISABLED' });
+});
 
 export default router;

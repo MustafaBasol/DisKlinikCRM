@@ -1,0 +1,50 @@
+{
+  "nav": "Data Export",
+  "title": "Clinic Data Export",
+  "description": "Export this clinic's structured records for regulatory, migration, or legal purposes.",
+  "loading": "Loading...",
+  "disabledNotice": "Clinic data export is not currently available for your organization.",
+  "scopeWarning": "This export contains structured clinic records only (patients, appointments, treatment cases, payments, tasks, messages, activity logs, insurance provisions, inventory). It does NOT include physical attachment or imaging files and must not be treated as a complete backup.",
+  "purposeLabel": "Purpose",
+  "purposePlaceholder": "Select a purpose",
+  "purposeOptions": {
+    "regulatory_request": "Regulatory request",
+    "clinic_migration": "Clinic migration",
+    "contract_termination": "Contract termination",
+    "legal_request": "Legal request",
+    "other": "Other"
+  },
+  "restrictedNoteLabel": "Internal note (optional, not included in audit logs)",
+  "passwordLabel": "Confirm your current password",
+  "confirmLabel": "I understand this exports highly sensitive clinic data and confirm this request.",
+  "submit": "Start export",
+  "submitting": "Starting export...",
+  "polling": "Generating export...",
+  "downloadPasswordLabel": "Confirm your current password to download",
+  "downloadButton": "Download",
+  "startNew": "Start a new export",
+  "failureCodePrefix": "Failure code",
+  "status": {
+    "queued": "Queued — waiting to start",
+    "generating": "Generating export...",
+    "ready": "Export ready for download",
+    "failed": "Export failed",
+    "expired": "Export expired",
+    "timedOut": "Still not finished after 30 minutes — please check back later or contact support."
+  },
+  "errors": {
+    "purposeRequired": "Please select a purpose.",
+    "confirmRequired": "Please confirm before starting the export.",
+    "passwordRequired": "Please enter your current password.",
+    "CLINIC_BULK_EXPORT_DISABLED": "Clinic data export is currently disabled.",
+    "CLINIC_BULK_EXPORT_FORBIDDEN": "You do not have access to export this clinic's data.",
+    "CLINIC_BULK_EXPORT_STEP_UP_FAILED": "Password verification failed.",
+    "CLINIC_BULK_EXPORT_RATE_LIMITED": "Too many attempts. Please wait before trying again.",
+    "CLINIC_BULK_EXPORT_ALREADY_RUNNING": "An export is already in progress for this clinic.",
+    "CLINIC_BULK_EXPORT_NOT_READY": "This export is not ready for download yet.",
+    "CLINIC_BULK_EXPORT_ALREADY_DOWNLOADED": "This export has already been downloaded.",
+    "CLINIC_BULK_EXPORT_EXPIRED": "This export has expired. Please start a new one.",
+    "CLINIC_BULK_EXPORT_TOKEN_ALREADY_ISSUED": "A download link was already issued for this export.",
+    "generic": "Something went wrong. Please try again."
+  }
+}
