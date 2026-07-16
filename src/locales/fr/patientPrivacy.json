@@ -22,6 +22,16 @@
     "attachmentsSummary": "Total : {{total}} · Rétention légale : {{legalHold}} · En attente de révision (non classées) : {{unclassifiedRetained}}",
     "imagingLabel": "Imagerie",
     "imagingSummary": "Total : {{total}} · Rétention légale : {{legalHold}} · Conservées (cliniques) : {{retainedClinical}}",
-    "footnote": "Remarque : ceci est un aperçu (dry-run) et il n'existe aucun point de terminaison de suppression en direct/automatisé dans cette version. Les pièces jointes non classées (aucune distinction de catégorie administrative n'existe encore) et les données cliniques/imagerie ne peuvent pas être supprimées via cette vue tant qu'une future version n'ajoute pas une énumération de catégories de cycle de vie et un point de terminaison de suppression lié à un flux de demande."
+    "footnote": "Remarque : ceci est un aperçu (dry-run) et il n'existe aucun point de terminaison de suppression en direct/automatisé dans cette version. Les pièces jointes non classées (aucune distinction de catégorie administrative n'existe encore) et les données cliniques/imagerie ne peuvent pas être supprimées via cette vue tant qu'une future version n'ajoute pas une énumération de catégories de cycle de vie et un point de terminaison de suppression lié à un flux de demande.",
+    "blockers": {
+      "DRY_RUN_ONLY": "Ceci est uniquement un inventaire en aperçu (dry-run) — aucun point de terminaison de suppression automatisé n'existe dans cette version. La suppression en direct nécessite une future version implémentant une énumération de catégories de cycle de vie et un point de terminaison de suppression lié à un flux de demande de confidentialité.",
+      "ATTACHMENTS_LEGAL_HOLD": "{{count}} pièce(s) jointe(s) sous rétention légale — exclue(s) de toute suppression.",
+      "IMAGING_RETENTION_NOT_APPROVED": "La politique de rétention de l'imagerie clinique/DICOM n'est pas encore légalement approuvée — aucune suppression d'imagerie n'est autorisée (conservation par défaut).",
+      "IMAGING_LEGAL_HOLD": "{{count}} image(s) d'imagerie également sous rétention légale via leur examen."
+    }
+  },
+  "systemNotes": {
+    "dataExportRequestedViaApi": "Export de données demandé via l'API.",
+    "exportDelivered": "Export livré."
   }
 }

@@ -139,6 +139,27 @@ function isPrismaKnownError(err: unknown, code: string): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === code;
 }
 
+// ── KVKK legal-hold response redaction (docs/compliance/53) ───────────
+// legalHold (boolean) is safe for every IMAGING_CLINICAL_ROLES role;
+// legalHoldReason is a free-text justification and must only ever reach
+// OWNER/ORG_ADMIN, mirroring the OWNER/ORG_ADMIN-only authorize gate on
+// the legal-hold PATCH route itself. studyInclude below intentionally
+// selects all study scalars (Prisma `include` cannot restrict them), so
+// every response that returns a study/list of studies must be passed
+// through this before res.json().
+export function roleCanSeeLegalHoldReason(role: string): boolean {
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+function canSeeLegalHoldReason(req: AuthRequest): boolean {
+  return roleCanSeeLegalHoldReason(req.user!.role);
+}
+
+export function redactStudyLegalHoldReason<T extends { legalHoldReason?: string | null }>(study: T, allowed: boolean): T {
+  if (allowed) return study;
+  return { ...study, legalHoldReason: null };
+}
+
 const studyImageSelect = {
   id: true,
   originalName: true,
@@ -657,7 +678,7 @@ router.post('/imaging/studies', authorize([...IMAGING_CLINICAL_ROLES]), handleUp
       });
     }
 
-    res.status(201).json(full);
+    res.status(201).json(redactStudyLegalHoldReason(full!, canSeeLegalHoldReason(req)));
   } catch (err: any) {
     // Depoya yazıldıktan sonra DB işlemi başarısız olduysa dosyayı geri sil.
     if (storageKey) await deleteFile(storageKey).catch(() => {});
@@ -679,7 +700,8 @@ router.get('/imaging/unlinked', authorize([...IMAGING_CLINICAL_ROLES]), async (r
       orderBy: { createdAt: 'desc' },
       take: 500,
     });
-    res.json(studies);
+    const canSeeReason = canSeeLegalHoldReason(req);
+    res.json(studies.map((s) => redactStudyLegalHoldReason(s, canSeeReason)));
   } catch {
     res.status(500).json({ error: 'Failed to fetch unlinked imaging studies' });
   }
@@ -704,7 +726,8 @@ router.get('/patients/:patientId/imaging', authorize([...IMAGING_CLINICAL_ROLES]
       include: studyInclude,
       orderBy: { studyDate: 'desc' },
     });
-    res.json(studies);
+    const canSeeReason = canSeeLegalHoldReason(req);
+    res.json(studies.map((s) => redactStudyLegalHoldReason(s, canSeeReason)));
   } catch {
     res.status(500).json({ error: 'Failed to fetch patient imaging' });
   }
@@ -715,7 +738,7 @@ router.get('/imaging/studies/:id', authorize([...IMAGING_CLINICAL_ROLES]), async
   try {
     const study = await findStudyInScope(req, res, getParam(req, 'id'));
     if (!study) return;
-    res.json(study);
+    res.json(redactStudyLegalHoldReason(study, canSeeLegalHoldReason(req)));
   } catch {
     res.status(500).json({ error: 'Failed to fetch imaging study' });
   }
@@ -824,7 +847,7 @@ router.patch('/imaging/studies/:id/link', authorize([...IMAGING_CLINICAL_ROLES])
       description: `Görüntüleme çalışması hastaya bağlandı (${study.modality})`,
     });
 
-    res.json(updated);
+    res.json(redactStudyLegalHoldReason(updated, canSeeLegalHoldReason(req)));
   } catch {
     res.status(500).json({ error: 'Failed to link imaging study' });
   }
@@ -862,7 +885,7 @@ router.patch('/imaging/studies/:id/unlink', authorize([...IMAGING_CLINICAL_ROLES
       });
     }
 
-    res.json(updated);
+    res.json(redactStudyLegalHoldReason(updated, canSeeLegalHoldReason(req)));
   } catch {
     res.status(500).json({ error: 'Failed to unlink imaging study' });
   }
@@ -874,7 +897,8 @@ async function setStudyStatus(req: AuthRequest, res: Response, status: 'active' 
   try {
     const study = await findStudyInScope(req, res, id);
     if (!study) return;
-    if (study.status === status) return res.json(study);
+    const canSeeReason = canSeeLegalHoldReason(req);
+    if (study.status === status) return res.json(redactStudyLegalHoldReason(study, canSeeReason));
 
     const updated = await prisma.imagingStudy.update({ where: { id }, data: { status }, include: studyInclude });
 
@@ -882,7 +906,7 @@ async function setStudyStatus(req: AuthRequest, res: Response, status: 'active' 
       modality: study.modality,
     });
 
-    res.json(updated);
+    res.json(redactStudyLegalHoldReason(updated, canSeeReason));
   } catch {
     res.status(500).json({ error: 'Failed to update imaging study status' });
   }
@@ -930,13 +954,15 @@ router.patch('/imaging/studies/:id/legal-hold', authorize(['OWNER', 'ORG_ADMIN']
       select: { id: true, legalHold: true, legalHoldReason: true },
     });
 
+    // No filename/reason in the audit trail — legalHoldReason is retained on
+    // the ImagingStudy row itself; the audit log only needs the before/after
+    // boolean state (docs/compliance/53 P1 — no PII in audit log).
     await auditImaging(req, study.clinicId, 'imaging_study_legal_hold_updated', 'imaging_study', id, {
       legalHold,
       previousLegalHold,
-      reason: trimmedReason,
     });
 
-    res.json(updated);
+    res.json(redactStudyLegalHoldReason(updated, canSeeLegalHoldReason(req)));
   } catch (err: any) {
     console.error('[imaging] legal-hold error:', err?.message ?? err);
     res.status(500).json({ error: 'Failed to update legal hold' });

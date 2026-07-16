@@ -22,6 +22,16 @@
     "attachmentsSummary": "Gesamt: {{total}} · Aufbewahrungspflicht: {{legalHold}} · Zur Prüfung ausstehend (nicht klassifiziert): {{unclassifiedRetained}}",
     "imagingLabel": "Bildgebung",
     "imagingSummary": "Gesamt: {{total}} · Aufbewahrungspflicht: {{legalHold}} · Aufbewahrt (klinisch): {{retainedClinical}}",
-    "footnote": "Hinweis: Dies ist nur eine Vorschau (Dry-Run); in dieser Version gibt es keinen Live-/automatisierten Löschendpunkt. Nicht klassifizierte Anhänge (es gibt noch keine Unterscheidung nach Verwaltungskategorie) sowie klinische/Bildgebungsdaten können über diese Ansicht erst gelöscht werden, wenn eine zukünftige Version eine Lebenszyklus-Kategorie-Enum und einen an einen Anfrage-Workflow gebundenen Löschendpunkt einführt."
+    "footnote": "Hinweis: Dies ist nur eine Vorschau (Dry-Run); in dieser Version gibt es keinen Live-/automatisierten Löschendpunkt. Nicht klassifizierte Anhänge (es gibt noch keine Unterscheidung nach Verwaltungskategorie) sowie klinische/Bildgebungsdaten können über diese Ansicht erst gelöscht werden, wenn eine zukünftige Version eine Lebenszyklus-Kategorie-Enum und einen an einen Anfrage-Workflow gebundenen Löschendpunkt einführt.",
+    "blockers": {
+      "DRY_RUN_ONLY": "Dies ist nur ein Vorschau-Inventar (Dry-Run) — in dieser Version gibt es keinen automatisierten Löschendpunkt. Eine Live-Löschung erfordert eine zukünftige Version mit einer Lebenszyklus-Kategorie-Enum und einem an einen Datenschutzanfrage-Workflow gebundenen Löschendpunkt.",
+      "ATTACHMENTS_LEGAL_HOLD": "{{count}} Anhang/Anhänge unter Aufbewahrungspflicht — von jeglicher Löschung ausgeschlossen.",
+      "IMAGING_RETENTION_NOT_APPROVED": "Die Aufbewahrungsrichtlinie für klinische/DICOM-Bildgebung ist noch nicht rechtlich genehmigt — eine Löschung von Bildgebungsdaten ist nicht zulässig (standardmäßig konservative Aufbewahrung).",
+      "IMAGING_LEGAL_HOLD": "{{count}} Bildgebungsbild(er) zusätzlich über ihre Aufnahme unter Aufbewahrungspflicht."
+    }
+  },
+  "systemNotes": {
+    "dataExportRequestedViaApi": "Datenexport über die API angefordert.",
+    "exportDelivered": "Export bereitgestellt."
   }
 }

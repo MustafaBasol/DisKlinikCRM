@@ -1089,6 +1089,394 @@ await test('copy-fallback success: no stray .partial-* sibling file is left behi
   await deleteFile(key);
 });
 
+// ── 58: attachments.ts DELETE route enforces legalHold ──────────────────────
+// hotfix/kvkk-legal-hold-enforcement-and-ui: DELETE /patients/:patientId/attachments/:id
+// previously did not check legalHold at all, so a held attachment could be
+// deleted through the ordinary delete route (bypassing the compliance
+// guarantee the legal-hold PATCH endpoint exists to provide). This file has
+// no DB harness, so — consistent with test 49/41 above — this is a source-scan
+// proof that the fix is structurally correct: the legalHold check runs before
+// any prisma.patientAttachment.delete/deleteFile call, on both branches
+// (held/not held) of the SAME route, with a stable 409 code and an audit log
+// for the rejected attempt. grep confirms this route is the ONLY
+// prisma.patientAttachment.delete call site in the whole server (verified
+// during implementation), so hardening it here closes every path.
+
+section('58. attachments.ts DELETE route enforces legalHold atomically, in the resolved multi-branch scope (PR #163 remediation)');
+// Real DB proof of the atomicity/concurrency/scope/redaction/audit-PII
+// properties lives in scripts/verify-attachment-legal-hold-lifecycle.ts
+// (disposable Postgres, real writes, a genuine concurrent race) — this
+// section only checks the route's static structure (imports, ordering,
+// which fields end up in which branch), which a DB-backed test cannot see
+// as directly as a source scan can.
+
+function readAttachmentsSrc(): string {
+  return fs.readFileSync(path.resolve(import.meta.dirname, '../routes/attachments.ts'), 'utf8');
+}
+
+function getDeleteRouteBlock(): string {
+  const src = readAttachmentsSrc();
+  // There are two routes mentioning this path segment (the legal-hold PATCH
+  // and this DELETE); anchor on the DELETE-specific role list immediately
+  // following the path to land on the right one regardless of line-ending style.
+  const anchor = "'/patients/:patientId/attachments/:id',";
+  let routeStart = src.indexOf(anchor);
+  while (routeStart > -1 && !src.slice(routeStart, routeStart + 200).includes("'RECEPTIONIST'")) {
+    routeStart = src.indexOf(anchor, routeStart + 1);
+  }
+  assert.ok(routeStart > -1, 'attachment DELETE route must exist');
+  return src.slice(routeStart, routeStart + 3500);
+}
+
+await test('DELETE route\'s authorization decision is a single conditional deleteMany with legalHold: false, not a separate read-then-delete', () => {
+  const block = getDeleteRouteBlock();
+  const deleteManyIdx = block.indexOf('prisma.patientAttachment.deleteMany(');
+  assert.ok(deleteManyIdx > -1, 'route must call deleteMany for the atomic gate');
+  const deleteManyCall = block.slice(deleteManyIdx, block.indexOf(');', deleteManyIdx));
+  assert.ok(deleteManyCall.includes('legalHold: false'), 'deleteMany WHERE must require legalHold: false — this is the atomic gate');
+  assert.ok(deleteManyCall.includes('id, patientId'), 'deleteMany WHERE must still scope by id + patientId');
+  assert.ok(!block.includes('prisma.patientAttachment.delete({ where: { id } })'), 'the old single-row delete-after-read-check must be gone — it had a TOCTOU window');
+});
+
+await test('DELETE route inspects deleteMany\'s affected-row count before touching physical storage', () => {
+  const block = getDeleteRouteBlock();
+  const countCheckIdx = block.indexOf('result.count === 0');
+  const deleteFileIdx = block.indexOf('deleteFile(attachment.filePath)');
+  assert.ok(countCheckIdx > -1, 'route must branch on the deleteMany result count');
+  assert.ok(deleteFileIdx > -1, 'non-held path must still remove the physical file');
+  assert.ok(countCheckIdx < deleteFileIdx, 'the count===0 branch must be checked before any physical storage deletion');
+});
+
+await test('the count===0 (blocked) branch never reaches physical delete or the DB delete call', () => {
+  const block = getDeleteRouteBlock();
+  const branchStart = block.indexOf('if (result.count === 0)');
+  const branchEnd = block.indexOf('// The DB row is confirmed gone');
+  assert.ok(branchStart > -1 && branchEnd > branchStart);
+  const branch = block.slice(branchStart, branchEnd);
+  assert.ok(!branch.includes('deleteFile('), 'the blocked branch must never call physical storage deletion');
+  assert.ok(!branch.includes('prisma.patientAttachment.delete'), 'the blocked branch must never call any DB delete');
+});
+
+await test('DELETE route returns a stable ATTACHMENT_LEGAL_HOLD code with a 409 status', () => {
+  const block = getDeleteRouteBlock();
+  const branchStart = block.indexOf('if (result.count === 0)');
+  const branchEnd = block.indexOf('// The DB row is confirmed gone');
+  const branch = block.slice(branchStart, branchEnd);
+  assert.ok(branch.includes('res.status(409)'), 'must reject with 409 (or 423 — this impl uses 409) consistently');
+  assert.ok(branch.includes("error: 'ATTACHMENT_LEGAL_HOLD'"), 'must return a stable machine-readable code');
+});
+
+await test('DELETE route writes a PII-free audit log entry for the rejected attempt', () => {
+  const block = getDeleteRouteBlock();
+  const branchStart = block.indexOf('if (result.count === 0)');
+  const branchEnd = block.indexOf('// The DB row is confirmed gone');
+  const branch = block.slice(branchStart, branchEnd);
+  assert.ok(branch.includes('writeAuditLog'), 'rejected-hold branch must write an audit log entry');
+  assert.ok(branch.includes("'patient_attachment_delete_blocked_legal_hold'"), 'audit action must be a stable, descriptive code');
+  assert.ok(!branch.includes('attachment.originalName'), 'audit description/metadata must never include the file name (PII)');
+  assert.ok(!branch.includes('${trimmedReason}'), 'audit description/metadata must never include free-text reason');
+  assert.ok(branch.includes('metadata: { patientId }'), 'audit metadata must carry only stable references (patientId), nothing else');
+});
+
+await test('DELETE route only exposes legalHoldReason to OWNER/ORG_ADMIN', () => {
+  const block = getDeleteRouteBlock();
+  const branchStart = block.indexOf('if (result.count === 0)');
+  const branchEnd = block.indexOf('// The DB row is confirmed gone');
+  const branch = block.slice(branchStart, branchEnd);
+  assert.ok(branch.includes('canSeeLegalHoldReason(req)'), 'legalHoldReason exposure must be gated through the shared role-check helper');
+  assert.ok(
+    branch.includes('...(canSeeReason ? { legalHoldReason: stillThere.legalHoldReason } : {})'),
+    'legalHoldReason must be conditionally spread, never unconditionally included in the response',
+  );
+});
+
+await test('DELETE route resolves the attachment via validateAndGetClinicIdScope, not req.user.clinicId (multi-branch scope fix)', () => {
+  const block = getDeleteRouteBlock();
+  assert.ok(
+    block.includes('validateAndGetClinicIdScope(req.user!, undefined, res)'),
+    'DELETE route must resolve scope through the established multi-branch clinic-scope helper',
+  );
+  assert.ok(!block.includes('const clinicId = req.user!.clinicId'), 'DELETE route must no longer trust req.user.clinicId directly for authorization');
+  assert.ok(block.includes('where: { id, patientId, ...scope }'), 'attachment lookup must be filtered by the resolved scope, not a raw clinicId');
+});
+
+await test('DELETE route uses the attachment\'s own resolved clinicId for storage/audit, never the acting user\'s default clinic', () => {
+  const block = getDeleteRouteBlock();
+  assert.ok(block.includes('clinicId: attachment.clinicId'), 'activity log must reference the attachment\'s actual clinic');
+  assert.ok(block.includes('clinicId: stillThere.clinicId'), 'the rejected-delete audit entry must reference the attachment\'s actual clinic');
+});
+
+await test('non-held attachment DELETE still deletes the DB row and physical file (unchanged behavior)', () => {
+  const block = getDeleteRouteBlock();
+  const afterCountCheck = block.slice(block.indexOf('// The DB row is confirmed gone'));
+  assert.ok(afterCountCheck.includes('deleteFile(attachment.filePath)'), 'non-held delete must still remove the physical file');
+  assert.ok(afterCountCheck.includes("res.json({ success: true })"), 'non-held delete must still report success');
+});
+
+await test('GET attachment list and POST upload responses are redacted through the same role-gated helper', () => {
+  const src = readAttachmentsSrc();
+  assert.ok(src.includes('attachments.map((a) => redactLegalHoldReason(a, canSeeReason))'), 'attachment list must redact legalHoldReason per-role before responding');
+  assert.ok(src.includes('redactLegalHoldReason(attachment, canSeeLegalHoldReason(req))'), 'attachment create response must redact legalHoldReason per-role before responding');
+});
+
+// ── 59: attachments.ts legal-hold PATCH is the only attachment mutation route
+// gated to OWNER/ORG_ADMIN; no other route can set/clear legalHold ──────────
+
+section('59. legal-hold mutation is restricted to OWNER/ORG_ADMIN on both attachment and imaging routes');
+
+await test('attachments.ts legal-hold PATCH route authorizes only OWNER/ORG_ADMIN', () => {
+  const src = readAttachmentsSrc();
+  const routeStart = src.indexOf("'/patients/:patientId/attachments/:id/legal-hold'");
+  const block = src.slice(routeStart, routeStart + 200);
+  assert.ok(block.includes("authorize(['OWNER', 'ORG_ADMIN'])"));
+});
+
+await test('imaging.ts study legal-hold PATCH route authorizes only OWNER/ORG_ADMIN', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../routes/imaging.ts'), 'utf8');
+  const routeStart = src.indexOf("'/imaging/studies/:id/legal-hold'");
+  assert.ok(routeStart > -1, 'imaging study legal-hold route must exist');
+  const block = src.slice(routeStart, routeStart + 200);
+  assert.ok(block.includes("authorize(['OWNER', 'ORG_ADMIN'])"));
+});
+
+await test('imaging images have no independent legal-hold field — they inherit their study\'s hold', () => {
+  const schemaSrc = fs.readFileSync(path.resolve(import.meta.dirname, '../../prisma/schema.prisma'), 'utf8');
+  const imageModelStart = schemaSrc.indexOf('model ImagingImage ');
+  assert.ok(imageModelStart > -1);
+  const imageModelBlock = schemaSrc.slice(imageModelStart, schemaSrc.indexOf('\n}\n', imageModelStart));
+  assert.ok(!imageModelBlock.includes('legalHold'), 'ImagingImage must not carry its own legalHold field');
+});
+
+await test('no imaging deletion route exists (imaging.ts) — images/studies are never hard-deleted', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../routes/imaging.ts'), 'utf8');
+  assert.ok(!/router\.delete\('\\?\/imaging\/studies/.test(src), 'no DELETE route for imaging studies may exist');
+  assert.ok(!/router\.delete\('\\?\/imaging\/studies\/:id\/images/.test(src), 'no DELETE route for imaging images may exist');
+});
+
+await test('no live patient-privacy deletion-execute endpoint exists', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../routes/patientPrivacy.ts'), 'utf8');
+  assert.ok(!src.includes("'/patients/:id/privacy/deletion-review/execute'"), 'live deletion-review execute endpoint must not exist');
+});
+
+// ── 60: deletionReviewInventory returns structured blocker codes, not English prose ──
+
+section('60. deletionReviewInventory blockers are stable codes (docs/compliance/53 P1 — no hardcoded English UI text)');
+
+type DeletionReviewBlocker = { code: string; count?: number };
+
+function buildInventoryV2(params: {
+  attachments: { legalHold: boolean; fileSize: number }[];
+  imagingImages: { studyLegalHold: boolean; fileSize: number }[];
+}) {
+  const attachmentLegalHold = params.attachments.filter((a) => a.legalHold).length;
+  const imagingLegalHold = params.imagingImages.filter((i) => i.studyLegalHold).length;
+  const blockers: DeletionReviewBlocker[] = [{ code: 'DRY_RUN_ONLY' }];
+  if (attachmentLegalHold > 0) blockers.push({ code: 'ATTACHMENTS_LEGAL_HOLD', count: attachmentLegalHold });
+  if (params.imagingImages.length > 0) blockers.push({ code: 'IMAGING_RETENTION_NOT_APPROVED' });
+  if (imagingLegalHold > 0) blockers.push({ code: 'IMAGING_LEGAL_HOLD', count: imagingLegalHold });
+  return { blockers, dryRun: true as const };
+}
+
+await test('dryRun is always true (blocker-code shape)', () => {
+  const inv = buildInventoryV2({ attachments: [], imagingImages: [] });
+  assert.equal(inv.dryRun, true);
+  assert.deepEqual(inv.blockers, [{ code: 'DRY_RUN_ONLY' }]);
+});
+
+await test('legal-hold attachments produce an ATTACHMENTS_LEGAL_HOLD code with a count, not a prose string', () => {
+  const inv = buildInventoryV2({ attachments: [{ legalHold: true, fileSize: 100 }], imagingImages: [] });
+  const blocker = inv.blockers.find((b) => b.code === 'ATTACHMENTS_LEGAL_HOLD');
+  assert.ok(blocker, 'ATTACHMENTS_LEGAL_HOLD blocker must be present');
+  assert.equal(blocker!.count, 1);
+  assert.ok(inv.blockers.every((b) => typeof b.code === 'string' && !('message' in b)), 'blockers must never carry a pre-rendered message field');
+});
+
+await test('any imaging rows produce IMAGING_RETENTION_NOT_APPROVED (no count)', () => {
+  const inv = buildInventoryV2({ attachments: [], imagingImages: [{ studyLegalHold: false, fileSize: 50 }] });
+  assert.ok(inv.blockers.some((b) => b.code === 'IMAGING_RETENTION_NOT_APPROVED'));
+});
+
+await test('real deletionReviewInventory.ts module defines exactly the four documented blocker codes', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../services/privacy/deletionReviewInventory.ts'), 'utf8');
+  assert.ok(src.includes("| 'DRY_RUN_ONLY'"));
+  assert.ok(src.includes("| 'ATTACHMENTS_LEGAL_HOLD'"));
+  assert.ok(src.includes("| 'IMAGING_RETENTION_NOT_APPROVED'"));
+  assert.ok(src.includes("| 'IMAGING_LEGAL_HOLD';"));
+  assert.ok(!/blockers:\s*string\[\]/.test(src), 'blockers must no longer be typed as raw string[] (that was the pre-fix English-prose shape)');
+});
+
+await test('patientPrivacy.json deletionReview.blockers keys exist for all four codes across tr/en/fr/de', () => {
+  const locales = ['tr', 'en', 'fr', 'de'];
+  const codes = ['DRY_RUN_ONLY', 'ATTACHMENTS_LEGAL_HOLD', 'IMAGING_RETENTION_NOT_APPROVED', 'IMAGING_LEGAL_HOLD'];
+  for (const locale of locales) {
+    const p = path.resolve(import.meta.dirname, `../../../src/locales/${locale}/patientPrivacy.json`);
+    const json = JSON.parse(fs.readFileSync(p, 'utf8'));
+    for (const code of codes) {
+      assert.ok(json.deletionReview?.blockers?.[code], `${locale}/patientPrivacy.json missing deletionReview.blockers.${code}`);
+    }
+    assert.ok(json.systemNotes?.dataExportRequestedViaApi, `${locale}/patientPrivacy.json missing systemNotes.dataExportRequestedViaApi`);
+    assert.ok(json.systemNotes?.exportDelivered, `${locale}/patientPrivacy.json missing systemNotes.exportDelivered`);
+  }
+});
+
+// ── 61: frontend legal-hold UI permission gating (source scan — no React harness in this file) ──
+
+section('61. frontend legal-hold controls are gated to OWNER/ORG_ADMIN, delete is hidden while held');
+
+await test('canManageLegalHold permission helper allows only OWNER/ORG_ADMIN', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/utils/permissions.ts'), 'utf8');
+  const fnStart = src.indexOf('export function canManageLegalHold');
+  assert.ok(fnStart > -1, 'canManageLegalHold must exist');
+  const block = src.slice(fnStart, fnStart + 300);
+  assert.ok(block.includes("role === 'OWNER' || role === 'ORG_ADMIN'"));
+  assert.ok(!block.includes('CLINIC_MANAGER'), 'must not extend to CLINIC_MANAGER — only OWNER/ORG_ADMIN per docs/compliance/53');
+});
+
+await test('PatientDetail.tsx hides the delete button while an attachment is under legal hold', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/pages/PatientDetail.tsx'), 'utf8');
+  assert.ok(
+    src.includes('!att.legalHold && ([\'OWNER\', \'ORG_ADMIN\', \'CLINIC_MANAGER\', \'RECEPTIONIST\'] as const).includes(userCanonicalRole as any)'),
+    'delete button must be gated on !att.legalHold in addition to role',
+  );
+});
+
+await test('PatientDetail.tsx maps the ATTACHMENT_LEGAL_HOLD backend error to a localized message', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/pages/PatientDetail.tsx'), 'utf8');
+  assert.ok(src.includes("err?.response?.data?.error === 'ATTACHMENT_LEGAL_HOLD'"));
+  assert.ok(src.includes("t('patients:detail.files.deleteBlockedLegalHold')"));
+});
+
+await test('PatientImagingTab.tsx gates legal-hold controls behind a canManageLegalHold prop', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../../../src/components/imaging/PatientImagingTab.tsx'), 'utf8');
+  assert.ok(src.includes('canManageLegalHold = false'), 'prop must default closed (hidden) for all other roles');
+  assert.ok(src.includes('imagingService.setStudyLegalHold('), 'must call the existing imaging legal-hold endpoint, no new endpoint introduced');
+});
+
+await test('patients.json and imaging.json legal-hold keys match across tr/en/fr/de', () => {
+  const locales = ['tr', 'en', 'fr', 'de'];
+  for (const file of ['patients.json', 'imaging.json']) {
+    const keySets = locales.map((locale) => {
+      const p = path.resolve(import.meta.dirname, `../../../src/locales/${locale}/${file}`);
+      const json = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return { locale, keys: flattenKeys(json).sort() };
+    });
+    const [first, ...rest] = keySets;
+    for (const other of rest) {
+      assert.deepEqual(other.keys, first.keys, `${other.locale}/${file} keys must match ${first.locale}/${file}`);
+    }
+  }
+});
+
+// ── 62: imaging.ts study responses redact legalHoldReason per-role; both
+// legal-hold audit calls (attachment + imaging) are PII-free ────────────────
+// (PR #163 remediation — real DB proof of the redaction functions'
+// behavior across all seven roles, and of the audit rows' actual shape,
+// lives in scripts/verify-attachment-legal-hold-lifecycle.ts; this section
+// checks the call sites exist in source, which the DB-backed script cannot
+// see directly since it only calls the exported functions, not the routes.)
+
+section('62. imaging.ts study responses redact legalHoldReason per-role; legal-hold audit entries are PII-free');
+
+function readImagingSrc(): string {
+  return fs.readFileSync(path.resolve(import.meta.dirname, '../routes/imaging.ts'), 'utf8');
+}
+
+await test('every imaging study response site (upload, unlinked list, patient list, get-by-id, link, unlink, archive/unarchive, legal-hold) redacts through redactStudyLegalHoldReason', () => {
+  const src = readImagingSrc();
+  const occurrences = src.split('redactStudyLegalHoldReason(').length - 1;
+  // 1 definition + 1 usage inside the helper itself + 8 call sites (POST upload,
+  // GET unlinked, GET patient imaging, GET by id, PATCH link, PATCH unlink,
+  // setStudyStatus (used by both archive & unarchive), PATCH legal-hold).
+  assert.ok(occurrences >= 9, `expected at least 9 references to redactStudyLegalHoldReason (definition + call sites), found ${occurrences}`);
+  assert.ok(src.includes('res.status(201).json(redactStudyLegalHoldReason(full!'), 'POST /imaging/studies response must be redacted');
+  assert.ok(src.includes('res.json(studies.map((s) => redactStudyLegalHoldReason(s, canSeeReason)))'), 'study list responses must be redacted');
+  assert.ok(src.includes('res.json(redactStudyLegalHoldReason(study, canSeeLegalHoldReason(req)))'), 'GET /imaging/studies/:id must be redacted');
+  assert.ok(src.includes('res.json(redactStudyLegalHoldReason(updated, canSeeLegalHoldReason(req)))'), 'PATCH /link response must be redacted');
+});
+
+await test('imaging.ts legal-hold PATCH audit entry no longer includes the free-text reason (PII removal)', () => {
+  const src = readImagingSrc();
+  const routeStart = src.indexOf("router.patch('/imaging/studies/:id/legal-hold'");
+  assert.ok(routeStart > -1);
+  const block = src.slice(routeStart, routeStart + 2000);
+  const auditStart = block.indexOf("auditImaging(req, study.clinicId, 'imaging_study_legal_hold_updated'");
+  const auditCall = block.slice(auditStart, block.indexOf('});', auditStart));
+  assert.ok(!auditCall.includes('reason: trimmedReason'), 'imaging legal-hold audit metadata must not carry the free-text reason');
+  assert.ok(auditCall.includes('previousLegalHold'), 'audit metadata must still carry the before/after boolean state');
+});
+
+await test('attachments.ts legal-hold PATCH audit entry no longer includes the free-text reason (PII removal)', () => {
+  const src = readAttachmentsSrc();
+  const routeStart = src.indexOf("'/patients/:patientId/attachments/:id/legal-hold'");
+  const block = src.slice(routeStart, routeStart + 2500);
+  assert.ok(!block.includes('reason: trimmedReason'), 'attachment legal-hold audit metadata must not carry the free-text reason');
+  assert.ok(!/description:\s*`Patient attachment legal hold \$\{legalHold \? 'set' : 'released'\}: \$\{trimmedReason\}`/.test(block), 'audit description must not interpolate the free-text reason');
+});
+
+await test('a genuine disposable-Postgres concurrency/scope/redaction/audit-PII verification script exists (not source-scan-only proof)', () => {
+  const scriptPath = path.resolve(import.meta.dirname, '../../scripts/verify-attachment-legal-hold-lifecycle.ts');
+  assert.ok(fs.existsSync(scriptPath), 'scripts/verify-attachment-legal-hold-lifecycle.ts must exist');
+  const src = fs.readFileSync(scriptPath, 'utf8');
+  assert.ok(src.includes('DATABASE_URL must point at a disposable database'), 'script must refuse to run without an explicit disposable DATABASE_URL');
+  assert.ok(src.includes('Promise.allSettled(['), 'script must fire genuinely concurrent operations, not sequential calls');
+  assert.ok(src.includes('deleteMany({') && src.includes('legalHold: false'), 'script must exercise the real atomic deleteMany gate');
+  assert.ok(src.includes('validateAndGetClinicIdScope'), 'script must exercise the real multi-branch scope helper');
+});
+
+section('63. attachments.ts upload/list/download/preview routes use validateAndGetClinicIdScope, never req.user.clinicId (PR #163 round-3 remediation)');
+
+function getRouteBlock(src: string, marker: string, len = 2200): string {
+  const start = src.indexOf(marker);
+  assert.ok(start > -1, `could not locate route block for marker: ${marker}`);
+  return src.slice(start, start + len);
+}
+
+await test('POST upload route resolves scope via validateAndGetClinicIdScope and looks up the patient inside that scope, not via req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "router.post(", 3000);
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'upload route must resolve scope via the multi-branch helper');
+  assert.ok(/prisma\.patient\.findFirst\(\{\s*where: \{ id: patientId, deletedAt: null, \.\.\.scope \}/.test(block), 'upload route must look up the patient inside the resolved scope');
+  assert.ok(!/const clinicId = req\.user!\.clinicId;/.test(block), 'upload route must never take clinicId directly off req.user');
+  assert.ok(block.includes('const clinicId = patient.clinicId;'), 'upload route must use the patient\'s own resolved clinicId for storage/DB/audit');
+});
+
+await test('GET attachment list route resolves scope via validateAndGetClinicIdScope, not req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "// ── GET /api/patients/:patientId/attachments ─");
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'list route must resolve scope via the multi-branch helper');
+  assert.ok(/findMany\(\{\s*where: \{ patientId, \.\.\.scope \}/.test(block), 'list route must filter attachments through the resolved scope');
+  assert.ok(!block.includes('const clinicId = req.user!.clinicId;'), 'list route must never take clinicId directly off req.user');
+});
+
+await test('GET download route resolves scope via validateAndGetClinicIdScope, not req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "'/patients/:patientId/attachments/:id/download'");
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'download route must resolve scope via the multi-branch helper');
+  assert.ok(/findFirst\(\{\s*where: \{ id, patientId, \.\.\.scope \}/.test(block), 'download route must look up the attachment by id+patientId+resolved scope');
+  assert.ok(!block.includes('const clinicId = req.user!.clinicId;'), 'download route must never take clinicId directly off req.user');
+});
+
+await test('GET preview route resolves scope via validateAndGetClinicIdScope, not req.user.clinicId', () => {
+  const src = readAttachmentsSrc();
+  const block = getRouteBlock(src, "'/patients/:patientId/attachments/:id/preview'");
+  assert.ok(block.includes('validateAndGetClinicIdScope(req.user!, req.query.clinicId'), 'preview route must resolve scope via the multi-branch helper');
+  assert.ok(/findFirst\(\{\s*where: \{ id, patientId, \.\.\.scope \}/.test(block), 'preview route must look up the attachment by id+patientId+resolved scope');
+  assert.ok(!block.includes('const clinicId = req.user!.clinicId;'), 'preview route must never take clinicId directly off req.user');
+});
+
+await test('no attachment route in this file still reads req.user!.clinicId directly as an authorization scope', () => {
+  const src = readAttachmentsSrc();
+  assert.ok(!/req\.user!\.clinicId/.test(src), 'attachments.ts must not reference req.user!.clinicId anywhere anymore (DELETE and legal-hold PATCH already used the scope helper; upload/list/download/preview are now aligned)');
+});
+
+await test('the disposable-Postgres verify script also exercises upload/list/download/preview scope resolution against real patient/attachment rows', () => {
+  const scriptPath = path.resolve(import.meta.dirname, '../../scripts/verify-attachment-legal-hold-lifecycle.ts');
+  const src = fs.readFileSync(scriptPath, 'utf8');
+  assert.ok(src.includes("resolves the patient\\'s ACTUAL clinicId, never their own default clinicId"), 'verify script must prove upload resolves the patient\'s actual clinic, not the user\'s default clinic');
+  assert.ok(src.includes('patientId + resolved scope must ALL match') || src.includes('attachmentId + patientId + resolved scope must ALL match'), 'verify script must prove attachmentId+patientId+scope must all match for download/preview');
+  assert.ok(src.includes('cross-organization download/preview attempt is rejected'), 'verify script must prove cross-org download/preview is rejected');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

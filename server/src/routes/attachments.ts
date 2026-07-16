@@ -16,6 +16,24 @@ import {
 
 const router = express.Router();
 
+// ── KVKK legal-hold response redaction (docs/compliance/53) ───────────
+// legalHold (boolean) is safe for every clinical role that can see the
+// attachment; legalHoldReason is a free-text justification and must only
+// ever reach OWNER/ORG_ADMIN, mirroring the OWNER/ORG_ADMIN-only authorize
+// gate on the legal-hold PATCH route itself.
+export function roleCanSeeLegalHoldReason(role: string): boolean {
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+function canSeeLegalHoldReason(req: AuthRequest): boolean {
+  return roleCanSeeLegalHoldReason(req.user!.role);
+}
+
+export function redactLegalHoldReason<T extends { legalHoldReason?: string | null }>(row: T, allowed: boolean): T {
+  if (allowed) return row;
+  return { ...row, legalHoldReason: null };
+}
+
 // ── İzin verilen MIME tipleri ─────────────────────────────────────────
 const ALLOWED_MIME = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -86,7 +104,6 @@ router.post(
   handleUpload,
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
-    const clinicId = req.user!.clinicId;
 
     if (!req.file) {
       // req.file is undefined only when Content-Type boundary is missing
@@ -100,13 +117,22 @@ router.post(
 
     let storageKey: string | null = null;
     try {
-      // Verify patient belongs to clinic
+      // Resolve scope via validateAndGetClinicIdScope (multi-branch clinic
+      // scope helper — see imaging.ts) rather than req.user.clinicId, then
+      // find the patient *within that scope*. The patient's own clinicId is
+      // the only clinicId ever used below — a client cannot influence which
+      // clinic the attachment/storage key end up in beyond selecting which
+      // (already-authorized) clinic's patient to upload to.
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const patient = await prisma.patient.findFirst({
-        where: { id: patientId, clinicId, deletedAt: null },
+        where: { id: patientId, deletedAt: null, ...scope },
       });
       if (!patient) {
         return res.status(404).json({ error: 'Patient not found' });
       }
+      const clinicId = patient.clinicId;
 
       if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {
         return res.status(400).json({
@@ -143,7 +169,7 @@ router.post(
         },
       });
 
-      res.status(201).json(attachment);
+      res.status(201).json(redactLegalHoldReason(attachment, canSeeLegalHoldReason(req)));
     } catch (err: any) {
       // Depoya yazıldıktan sonra DB kaydı başarısız olduysa dosyayı geri sil.
       if (storageKey) await deleteFile(storageKey).catch(() => {});
@@ -159,15 +185,18 @@ router.get(
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
-    const clinicId = req.user!.clinicId;
 
     try {
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const attachments = await prisma.patientAttachment.findMany({
-        where: { patientId, clinicId },
+        where: { patientId, ...scope },
         include: { uploadedBy: { select: { firstName: true, lastName: true } } },
         orderBy: { createdAt: 'desc' },
       });
-      res.json(attachments);
+      const canSeeReason = canSeeLegalHoldReason(req);
+      res.json(attachments.map((a) => redactLegalHoldReason(a, canSeeReason)));
     } catch (err: any) {
       console.error('[attachments] list error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to fetch attachments' });
@@ -182,11 +211,13 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
-    const clinicId = req.user!.clinicId;
 
     try {
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const attachment = await prisma.patientAttachment.findFirst({
-        where: { id, patientId, clinicId },
+        where: { id, patientId, ...scope },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
 
@@ -215,11 +246,13 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
-    const clinicId = req.user!.clinicId;
 
     try {
+      const scope = await validateAndGetClinicIdScope(req.user!, req.query.clinicId as string | undefined, res);
+      if (scope === false) return;
+
       const attachment = await prisma.patientAttachment.findFirst({
-        where: { id, patientId, clinicId },
+        where: { id, patientId, ...scope },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
 
@@ -305,17 +338,16 @@ router.patch(
         action: legalHold ? 'patient_attachment_legal_hold_set' : 'patient_attachment_legal_hold_released',
         entityType: 'patient_attachment',
         entityId: id,
-        description: `Patient attachment legal hold ${legalHold ? 'set' : 'released'}: ${trimmedReason}`,
-        metadata: {
-          patientId,
-          previousLegalHold,
-          newLegalHold: legalHold,
-          reason: trimmedReason,
-        },
+        // Do not put the free-text reason into the audit log — it is
+        // retained on the PatientAttachment row itself (legalHoldReason);
+        // the audit trail only needs the before/after state, not the
+        // justification text (docs/compliance/53 P1 — no PII in audit log).
+        description: `Patient attachment legal hold ${legalHold ? 'set' : 'released'}`,
+        metadata: { patientId, previousLegalHold, newLegalHold: legalHold },
         ...extractRequestMeta(req),
       });
 
-      res.json(updated);
+      res.json(redactLegalHoldReason(updated, canSeeLegalHoldReason(req)));
     } catch (err: any) {
       console.error('[attachments] legal-hold error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to update legal hold' });
@@ -324,22 +356,86 @@ router.patch(
 );
 
 // ── DELETE /api/patients/:patientId/attachments/:id ───────────────────
+// KVKK lifecycle (docs/compliance/53): a legalHold=true attachment can never
+// be deleted through this route — this is the ONLY attachment-delete path in
+// the codebase (verified: no other route/service calls
+// prisma.patientAttachment.delete or deleteFile() on a PatientAttachment
+// row).
+//
+// Atomicity (closes a TOCTOU window): the authorization decision is made by
+// a single conditional `deleteMany` whose WHERE clause includes
+// `legalHold: false`, not by a separate read-then-delete. Postgres evaluates
+// that WHERE clause and performs the row delete within one statement, so a
+// concurrent legal-hold PATCH either (a) commits first and the row no
+// longer matches `legalHold: false` → deleteMany affects 0 rows, nothing is
+// deleted, or (b) the delete commits first and the row is gone, so the
+// concurrent PATCH's `update` (single-row, by id) subsequently fails to find
+// it. There is never a window where a row with legalHold=true (committed) is
+// still deleted. Physical storage deletion only ever runs after the DB
+// delete has been confirmed to have affected exactly one row.
+//
+// Scope: resolved via validateAndGetClinicIdScope (the established
+// multi-branch clinic-scope helper — see PATCH legal-hold above and
+// imaging.ts's findStudyInScope) rather than req.user.clinicId, so
+// OWNER/ORG_ADMIN acting on an authorized non-default clinic are scoped
+// correctly and cross-clinic/cross-org access is rejected.
 router.delete(
   '/patients/:patientId/attachments/:id',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const id = String(req.params.id);
-    const clinicId = req.user!.clinicId;
 
     try {
+      const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+      if (scope === false) return;
+
+      // Pre-read for metadata only (originalName/filePath for storage cleanup
+      // + activity log) — NOT the authorization decision. The decision is the
+      // atomic deleteMany below, so a hold placed after this read still
+      // blocks the delete.
       const attachment = await prisma.patientAttachment.findFirst({
-        where: { id, patientId, clinicId },
+        where: { id, patientId, ...scope },
       });
       if (!attachment) return res.status(404).json({ error: 'Not found' });
 
-      await prisma.patientAttachment.delete({ where: { id } });
+      const result = await prisma.patientAttachment.deleteMany({
+        where: { id, patientId, ...scope, legalHold: false },
+      });
 
+      if (result.count === 0) {
+        // Either a concurrent hold committed after our read (TOCTOU window,
+        // now closed), or the row already carried legalHold=true. Re-read,
+        // scoped, to report the correct outcome.
+        const stillThere = await prisma.patientAttachment.findFirst({
+          where: { id, patientId, ...scope },
+        });
+        if (!stillThere) return res.status(404).json({ error: 'Not found' });
+
+        const canSeeReason = canSeeLegalHoldReason(req);
+        await writeAuditLog({
+          organizationId: req.user!.organizationId,
+          clinicId: stillThere.clinicId,
+          actorUserId: req.user!.id,
+          actorRole: req.user!.role,
+          action: 'patient_attachment_delete_blocked_legal_hold',
+          entityType: 'patient_attachment',
+          entityId: id,
+          // No filename/reason in the audit trail — entityId + patientId are
+          // sufficient references (docs/compliance/53 P1 — no PII in audit log).
+          description: 'Attachment deletion rejected — under legal hold',
+          metadata: { patientId },
+          ...extractRequestMeta(req),
+        });
+        return res.status(409).json({
+          error: 'ATTACHMENT_LEGAL_HOLD',
+          message: 'This attachment is under legal hold and cannot be deleted.',
+          ...(canSeeReason ? { legalHoldReason: stillThere.legalHoldReason } : {}),
+        });
+      }
+
+      // The DB row is confirmed gone (deleted while legalHold=false) — safe
+      // to remove the physical file using the pre-read metadata.
       await deleteFile(attachment.filePath).catch((deleteErr) => {
         // DB kaydı silindi; depo silme hatası indirmeyi bozmaz, logla ve devam et.
         console.error('[attachments] storage delete error:', deleteErr?.message ?? deleteErr);
@@ -347,7 +443,7 @@ router.delete(
 
       await prisma.activityLog.create({
         data: {
-          clinicId,
+          clinicId: attachment.clinicId,
           userId: req.user!.id,
           action: 'delete',
           entityType: 'patient',

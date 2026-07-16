@@ -303,6 +303,8 @@ export const attachmentService = {
     }),
   delete: (patientId: string, attachmentId: string) =>
     api.delete(`/patients/${patientId}/attachments/${attachmentId}`),
+  setLegalHold: (patientId: string, attachmentId: string, legalHold: boolean, reason: string) =>
+    api.patch(`/patients/${patientId}/attachments/${attachmentId}/legal-hold`, { legalHold, reason }),
   download: async (patientId: string, attachmentId: string, fileName: string) => {
     const response = await api.get(
       `/patients/${patientId}/attachments/${attachmentId}/download`,
@@ -377,6 +379,8 @@ export const imagingService = {
   unlinkStudy: (id: string) => api.patch(`/imaging/studies/${id}/unlink`),
   archiveStudy: (id: string) => api.patch(`/imaging/studies/${id}/archive`),
   unarchiveStudy: (id: string) => api.patch(`/imaging/studies/${id}/unarchive`),
+  setStudyLegalHold: (id: string, legalHold: boolean, reason: string) =>
+    api.patch(`/imaging/studies/${id}/legal-hold`, { legalHold, reason }),
 
   // ── Görüntü stream'leri (kimlik doğrulamalı blob; public URL asla yok) ──
   downloadImage: async (studyId: string, imageId: string, fileName: string) => {

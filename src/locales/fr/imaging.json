@@ -23,7 +23,8 @@
     "images": "{{count}} image(s)",
     "archivedBadge": "Archivé",
     "noDescription": "Aucune description",
-    "uploadedBy": "Téléversé par"
+    "uploadedBy": "Téléversé par",
+    "legalHoldBadge": "Rétention légale"
   },
   "actions": {
     "upload": "Téléverser une image",
@@ -32,11 +33,26 @@
     "archive": "Archiver",
     "unarchive": "Désarchiver",
     "unlink": "Dissocier",
-    "link": "Associer au patient"
+    "link": "Associer au patient",
+    "setLegalHold": "Placer sous rétention légale",
+    "releaseLegalHold": "Lever la rétention légale"
   },
   "confirm": {
     "unlink": "Cet examen sera détaché du patient et renvoyé dans la file non associée. Continuer ?",
     "archive": "Cet examen sera archivé. Les images originales ne sont jamais supprimées. Continuer ?"
+  },
+  "legalHold": {
+    "setTitle": "Placer l'examen sous rétention légale",
+    "releaseTitle": "Lever la rétention légale de l'examen",
+    "reason": "Motif",
+    "reasonPlaceholder": "Expliquez le motif de la rétention légale...",
+    "reasonTooShort": "Veuillez saisir un motif valide (au moins 3 caractères).",
+    "releaseConfirm": "La rétention légale de cet examen (et de toutes ses images) sera levée. Continuer ?",
+    "setSuccess": "Rétention légale placée",
+    "releaseSuccess": "Rétention légale levée",
+    "failed": "Échec de la mise à jour de la rétention légale",
+    "setSubmit": "Placer la rétention",
+    "releaseSubmit": "Lever la rétention"
   },
   "upload": {
     "title": "Téléverser une image",

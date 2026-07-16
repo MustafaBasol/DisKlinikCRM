@@ -23,7 +23,8 @@
     "images": "{{count}} Bild(er)",
     "archivedBadge": "Archiviert",
     "noDescription": "Keine Beschreibung",
-    "uploadedBy": "Hochgeladen von"
+    "uploadedBy": "Hochgeladen von",
+    "legalHoldBadge": "Aufbewahrungspflicht"
   },
   "actions": {
     "upload": "Bild hochladen",
@@ -32,11 +33,26 @@
     "archive": "Archivieren",
     "unarchive": "Wiederherstellen",
     "unlink": "Verknüpfung lösen",
-    "link": "Mit Patient verknüpfen"
+    "link": "Mit Patient verknüpfen",
+    "setLegalHold": "Aufbewahrungspflicht setzen",
+    "releaseLegalHold": "Aufbewahrungspflicht aufheben"
   },
   "confirm": {
     "unlink": "Diese Aufnahme wird vom Patienten getrennt und in die unverknüpfte Warteschlange zurückgelegt. Fortfahren?",
     "archive": "Diese Aufnahme wird archiviert. Originalbilder werden nie gelöscht. Fortfahren?"
+  },
+  "legalHold": {
+    "setTitle": "Aufbewahrungspflicht für Aufnahme setzen",
+    "releaseTitle": "Aufbewahrungspflicht für Aufnahme aufheben",
+    "reason": "Grund",
+    "reasonPlaceholder": "Grund für die Aufbewahrungspflicht erläutern...",
+    "reasonTooShort": "Bitte geben Sie einen gültigen Grund ein (mindestens 3 Zeichen).",
+    "releaseConfirm": "Die Aufbewahrungspflicht für diese Aufnahme (und alle ihre Bilder) wird aufgehoben. Fortfahren?",
+    "setSuccess": "Aufbewahrungspflicht gesetzt",
+    "releaseSuccess": "Aufbewahrungspflicht aufgehoben",
+    "failed": "Aufbewahrungspflicht konnte nicht aktualisiert werden",
+    "setSubmit": "Sperre setzen",
+    "releaseSubmit": "Sperre aufheben"
   },
   "upload": {
     "title": "Bild hochladen",

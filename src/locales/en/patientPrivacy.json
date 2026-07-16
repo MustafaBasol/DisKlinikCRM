@@ -22,6 +22,16 @@
     "attachmentsSummary": "Total: {{total}} · Legal hold: {{legalHold}} · Pending review (unclassified): {{unclassifiedRetained}}",
     "imagingLabel": "Imaging",
     "imagingSummary": "Total: {{total}} · Legal hold: {{legalHold}} · Retained (clinical): {{retainedClinical}}",
-    "footnote": "Note: this is a dry-run preview, and there is no live/automated deletion endpoint in this release. Unclassified (no administrative-category distinction exists yet) attachments and clinical/imaging data cannot be deleted through this view until a future release adds a lifecycle-category enum and a request-workflow-bound deletion endpoint."
+    "footnote": "Note: this is a dry-run preview, and there is no live/automated deletion endpoint in this release. Unclassified (no administrative-category distinction exists yet) attachments and clinical/imaging data cannot be deleted through this view until a future release adds a lifecycle-category enum and a request-workflow-bound deletion endpoint.",
+    "blockers": {
+      "DRY_RUN_ONLY": "This is a dry-run inventory only — no automated deletion endpoint exists in this release. Live deletion requires a future release implementing a lifecycle-category enum and a privacy-request-workflow-bound deletion endpoint.",
+      "ATTACHMENTS_LEGAL_HOLD": "{{count}} attachment(s) under legal hold — excluded from any deletion.",
+      "IMAGING_RETENTION_NOT_APPROVED": "Clinical/DICOM imaging retention policy not yet legally approved — no imaging deletion permitted (conservative retain by default).",
+      "IMAGING_LEGAL_HOLD": "{{count}} imaging image(s) additionally under legal hold via their study."
+    }
+  },
+  "systemNotes": {
+    "dataExportRequestedViaApi": "Data export requested via API.",
+    "exportDelivered": "Export delivered."
   }
 }
