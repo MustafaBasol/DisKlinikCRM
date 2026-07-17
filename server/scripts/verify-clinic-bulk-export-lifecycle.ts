@@ -50,7 +50,12 @@ import {
   getExportTempDir,
   buildExportTempFilePath,
   ensureExportTempDir,
+  cleanupStaleLocalExportPartialFiles,
 } from '../src/services/fileStorage.js';
+import {
+  stopClinicBulkExportWorker,
+  trackActiveGenerationJobForTest,
+} from '../src/jobs/clinicBulkExportWorker.js';
 
 /**
  * Minimal ZIP central-directory reader for verification purposes only (no
@@ -2293,6 +2298,170 @@ async function main() {
     await prisma.user.delete({ where: { id: userPM.id } });
     await prisma.clinic.delete({ where: { id: clinicPM.id } });
     await prisma.organization.delete({ where: { id: orgPM.id } });
+  });
+
+  console.log('\nActive partial-file protection is DB-gated against a REAL database, not merely age-gated (final review round, P1)');
+
+  await test('a real, live generating row with an unexpired lease protects its old cross-device partial file from deletion; it is deleted once the row is no longer active', async () => {
+    const orgPP = await prisma.organization.create({ data: { name: `Verify Org PP ${suffix}`, slug: `verify-org-pp-${suffix}` } });
+    const clinicPP = await prisma.clinic.create({ data: { name: `Verify Clinic PP ${suffix}`, slug: `verify-clinic-pp-${suffix}`, organizationId: orgPP.id } });
+    const userPP = await prisma.user.create({
+      data: { clinicId: clinicPP.id, organizationId: orgPP.id, firstName: 'Verify', lastName: 'PartialProtectUser', email: `verify-partialprotect-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicPP.id,
+      organizationId: orgPP.id,
+      requestedByUserId: userPP.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5); // status -> 'generating', real unexpired lease
+
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicPP.id);
+    await fs.promises.mkdir(clinicDir, { recursive: true });
+    const partialPath = path.join(clinicDir, `${jobId}.zip.partial-${crypto.randomUUID()}`);
+    await fs.promises.writeFile(partialPath, Buffer.from('a legitimately slow cross-device copy still in progress'));
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.promises.utimes(partialPath, past, past); // old by age alone — must still be protected by the real DB row
+
+    const deletedWhileActive = await cleanupStaleLocalExportPartialFiles(1000); // tiny maxAgeMs — age alone would allow deletion
+    assert.equal(deletedWhileActive, 0, 'a real, live generating row with an unexpired lease must protect its partial file');
+    assert.ok(fs.existsSync(partialPath), 'the partial file must still exist on disk');
+
+    // Make the row provably inactive (real DB write) and re-run — must now be deleted.
+    await prisma.clinicBulkExportArchive.update({ where: { id: jobId }, data: { status: 'failed', failureCode: 'GENERATION_ERROR' } });
+    const deletedAfterInactive = await cleanupStaleLocalExportPartialFiles(1000);
+    assert.ok(deletedAfterInactive >= 1, 'once the real row is no longer actively generating, the old partial file must actually be deleted');
+    assert.ok(!fs.existsSync(partialPath), 'the partial file must actually be gone from disk');
+
+    await fs.promises.rmdir(clinicDir).catch(() => {});
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicPP.id } });
+    await prisma.user.delete({ where: { id: userPP.id } });
+    await prisma.clinic.delete({ where: { id: clinicPP.id } });
+    await prisma.organization.delete({ where: { id: orgPP.id } });
+  });
+
+  console.log('\nWorker-shutdown cancellation: the REAL SIGTERM/PM2-bound path stops in-flight generation and cleans up (final review round, P0)');
+
+  await test('a real shutdown mid-generation (via the actual stopClinicBulkExportWorker() function) fails the job as WORKER_SHUTDOWN, removes the temp ZIP through the existing cleanup lifecycle, records a durable audit, and a later re-claim (flag off, simulating a fresh process) never resurrects it', async () => {
+    const orgWS = await prisma.organization.create({ data: { name: `Verify Org WS ${suffix}`, slug: `verify-org-ws-${suffix}` } });
+    const clinicWS = await prisma.clinic.create({ data: { name: `Verify Clinic WS ${suffix}`, slug: `verify-clinic-ws-${suffix}`, organizationId: orgWS.id } });
+    const userWS = await prisma.user.create({
+      data: { clinicId: clinicWS.id, organizationId: orgWS.id, firstName: 'Verify', lastName: 'ShutdownUser', email: `verify-shutdown-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    // A small fixture is fine — the deterministic beforePlannedKeyPersistForTest
+    // pause below (not real-time timing) is what synchronizes this test, so
+    // there is no need for a large dataset to "buy time".
+    const SHUTDOWN_TEST_PATIENT_COUNT = 5;
+    await prisma.patient.createMany({
+      data: Array.from({ length: SHUTDOWN_TEST_PATIENT_COUNT }, (_, i) => ({ clinicId: clinicWS.id, organizationId: orgWS.id, firstName: `Shutdown${i}`, lastName: 'Patient' })),
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicWS.id,
+      organizationId: orgWS.id,
+      requestedByUserId: userWS.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+
+    // trackActiveGenerationJobForTest bypasses ONLY node-cron's real
+    // minute-granularity schedule (this test cannot reasonably wait a full
+    // minute for a real tick to claim this job) — everything else here is
+    // the actual production code: real generateClinicBulkExport, and the
+    // REAL stopClinicBulkExportWorker() function that process.once('SIGTERM'/
+    // 'SIGINT', ...) is bound to in clinicBulkExportWorker.ts.
+    //
+    // Deterministic synchronization (not real-time polling): a real,
+    // per-batch-guarded lease-renewal call happens throughout entity
+    // streaming — with a small/fast fixture, generation can race past that
+    // point and reach its OWN next lease checkpoint before a merely
+    // best-effort "poll until the temp file appears, then fire" approach
+    // gets to call stopClinicBulkExportWorker(), making the outcome
+    // genuinely nondeterministic (either write can legitimately win a fair
+    // DB race). Instead, `beforePlannedKeyPersistForTest` (fired by
+    // generateClinicBulkExport strictly after entity streaming/finalize/the
+    // real temp ZIP close, strictly before its own planned-key persist) is
+    // used to PAUSE generation at a known point and block it there until
+    // this test's own stopClinicBulkExportWorker() call has fully resolved
+    // — guaranteeing the shutdown's guarded status transition is the first
+    // (and, per its own guard, only) write that can ever change this row's
+    // status, with no timing ambiguity.
+    let markGenerationReachedHook: () => void;
+    const generationReachedHook = new Promise<void>((resolve) => {
+      markGenerationReachedHook = resolve;
+    });
+    let releaseGeneration: () => void;
+    const shutdownFullyApplied = new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
+
+    trackActiveGenerationJobForTest(jobId);
+    const genPromise = generateClinicBulkExport(jobId, undefined, async () => {
+      markGenerationReachedHook();
+      await shutdownFullyApplied;
+    });
+
+    await generationReachedHook;
+    const tempDir = getExportTempDir();
+    const tempFileName = fs.readdirSync(tempDir).find((f) => f.includes(jobId));
+    assert.ok(tempFileName, 'the real temp ZIP must exist on disk once generation has reached the pre-planned-key-persist checkpoint');
+    const tempFilePath = path.join(tempDir, tempFileName!);
+    assert.ok(fs.existsSync(tempFilePath), 'sanity check: the real temp ZIP file must actually be present before shutdown is triggered');
+
+    await stopClinicBulkExportWorker(); // the REAL SIGTERM/SIGINT-bound function — guaranteed to run and fully resolve before generation is allowed to proceed any further
+    releaseGeneration!();
+    await genPromise; // let the now-unblocked in-flight generation observe the cancellation and settle through its own existing catch-block cleanup
+
+    const finalRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(finalRow.status, 'failed', 'the row must never become ready once cancelled by a worker shutdown');
+    assert.equal(finalRow.failureCode, 'WORKER_SHUTDOWN', 'the shutdown cancellation\'s guarded update must be the one and only write that ever changes this row\'s status — deterministically guaranteed by pausing generation at the hook until this write has completed');
+    assert.equal(finalRow.storageKey, null, 'no artifact may remain referenced once the shutdown-cancellation cleanup runs');
+
+    assert.ok(!fs.existsSync(tempFilePath), 'the real temp ZIP must actually be removed from disk, through the existing (unchanged) cleanup lifecycle');
+    const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicWS.id);
+    assert.ok(!fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0, 'no final artifact may ever exist for a shutdown-cancelled job');
+
+    // Two 'clinic_bulk_export_generation_failed' audit rows are expected
+    // here, by design predating this round: the shutdown cancellation's own
+    // durable audit write (metadata failureCode='WORKER_SHUTDOWN'), AND the
+    // in-flight generateClinicBulkExport call's own catch block — which
+    // always logs/audits its OWN locally-observed failure reason
+    // (LEASE_LOST, since its own guarded DB update lost the race and found
+    // the row already terminal) regardless of whether that update actually
+    // won. This does not affect the ARCHIVE ROW itself (already asserted
+    // above to be WORKER_SHUTDOWN) — only find the specific audit this test
+    // cares about rather than assuming the latest one is it.
+    const shutdownAudits = await prisma.auditLog.findMany({
+      where: { action: 'clinic_bulk_export_generation_failed', clinicId: clinicWS.id },
+    });
+    const shutdownAudit = shutdownAudits.find((a) => (a.metadata as any)?.failureCode === 'WORKER_SHUTDOWN');
+    assert.ok(shutdownAudit, 'a durable generation_failed audit event with the WORKER_SHUTDOWN code must be recorded for the shutdown cancellation');
+    assert.equal((shutdownAudit!.metadata as any)?.restrictedNote, undefined, 'no patient/clinic data may ever appear in this audit metadata');
+
+    // "a new process with the flag false does not resurrect the job": the
+    // row is a terminal 'failed' status, so claimQueuedClinicBulkExportJobs
+    // (which only ever selects status='queued') can structurally never
+    // reclaim it, regardless of the flag — proven explicitly with the flag
+    // off, simulating exactly what a fresh process started after the reload
+    // would see.
+    const claimedAfterShutdown = await withEnvOverride({ CLINIC_BULK_EXPORT_ENABLED: 'false' }, () => claimQueuedClinicBulkExportJobs(5));
+    assert.ok(!claimedAfterShutdown.includes(jobId), 'a job cancelled by worker shutdown must never be resurrected by a later process/tick');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicWS.id } });
+    await prisma.auditLog.deleteMany({ where: { clinicId: clinicWS.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicWS.id } });
+    await prisma.user.delete({ where: { id: userWS.id } });
+    await prisma.clinic.delete({ where: { id: clinicWS.id } });
+    await prisma.organization.delete({ where: { id: orgWS.id } });
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

@@ -1644,6 +1644,70 @@ export async function generateClinicBulkExport(
   }
 }
 
+// ── Worker-shutdown cancellation (final review round, P0) ───────────────
+
+/**
+ * Atomically fails ONE actively-`generating` job as part of a graceful
+ * worker shutdown (SIGTERM/SIGINT — see `clinicBulkExportWorker.ts`'s
+ * `stopClinicBulkExportWorker`). This exists because the feature's kill
+ * switch (`CLINIC_BULK_EXPORT_ENABLED`) is read from `process.env`: during a
+ * rolling deploy/PM2 reload, an OLD worker process keeps its OLD env in
+ * memory and would otherwise keep renewing/finishing an in-flight
+ * generation for up to `CLINIC_BULK_EXPORT_GENERATION_LEASE_MS` even after a
+ * NEW process has already started with the flag disabled.
+ *
+ * Guarded on `status: 'generating'` — idempotent and safe to call more than
+ * once (a second call, a second worker replica, or this same job's own
+ * in-flight `generateClinicBulkExport` catch block all racing to write a
+ * terminal status) affects zero rows once ANY of them has already won, so
+ * this can never double-write or clobber a different terminal code. A job
+ * already `ready`, or already `failed`/`expired` for any other reason, is
+ * left completely untouched.
+ *
+ * Deliberately does NOT call `attemptArtifactDeletion` itself — that stays
+ * owned by `generateClinicBulkExport`'s own existing catch block, which the
+ * in-flight call for this job reaches on its own once its next heartbeat/
+ * per-batch lease-renewal checkpoint observes the guarded update below has
+ * already moved the row off `generating` (see `renewLease`/
+ * `renewCheckpoint`, both guarded on `status: 'generating'` themselves).
+ * Reusing that single existing cleanup path — rather than a second, parallel
+ * one here — is what "removed through the existing cleanup lifecycle" means
+ * for this remediation.
+ */
+export async function failActiveGenerationForWorkerShutdown(jobId: string, now: Date = new Date()): Promise<void> {
+  let result: { count: number };
+  try {
+    result = await prisma.clinicBulkExportArchive.updateMany({
+      where: { id: jobId, status: 'generating' },
+      data: { status: 'failed', failureCode: 'WORKER_SHUTDOWN' },
+    });
+  } catch (err) {
+    console.error('[clinic-bulk-export] worker-shutdown status transition failed', { jobId, ...safeErrorFields(err) });
+    return;
+  }
+  // Already terminal (won by another path — a concurrent call, another
+  // replica, or the job's own in-flight failure handling) — nothing further
+  // to do; the audit event for whichever path actually won already exists.
+  if (result.count === 0) return;
+
+  const row = await prisma.clinicBulkExportArchive
+    .findUnique({ where: { id: jobId }, select: { organizationId: true, clinicId: true, requestedByUserId: true } })
+    .catch(() => null);
+  if (!row) return;
+
+  await writeAuditLog({
+    organizationId: row.organizationId,
+    clinicId: row.clinicId,
+    actorUserId: row.requestedByUserId,
+    actorRole: 'system',
+    action: 'clinic_bulk_export_generation_failed',
+    entityType: 'clinic',
+    entityId: row.clinicId,
+    description: 'Clinic bulk export generation failed',
+    metadata: { jobId, failureCode: 'WORKER_SHUTDOWN' },
+  }).catch(() => {});
+}
+
 // ── Cleanup ──────────────────────────────────────────────────────────────
 
 /**
@@ -1790,8 +1854,20 @@ export async function sweepStaleClinicBulkExportTempFiles(
       continue;
     }
 
-    await fs.promises.unlink(filePath).catch(() => {});
-    deleted++;
+    // Counted as deleted ONLY once the unlink itself has actually succeeded
+    // (final review round, P1) — a file that is still on disk after a failed
+    // unlink must never be reported as removed. A stable failure code is
+    // logged (never the raw path/exception) so an operator can tell a
+    // sweep's reported count apart from files it merely attempted.
+    try {
+      await fs.promises.unlink(filePath);
+      deleted++;
+    } catch (err) {
+      console.error('[clinic-bulk-export] stale-temp sweep: unlink failed', {
+        fileName: name,
+        ...safeErrorFields(err),
+      });
+    }
   }
   return deleted;
 }

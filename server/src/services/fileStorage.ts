@@ -35,6 +35,8 @@ import {
   HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
+import prisma from '../db.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 
@@ -225,20 +227,122 @@ export function getExportTempDir(): string {
   return EXPORT_TEMP_DIR;
 }
 
+const EXPORT_TEMP_DIR_MODE = 0o700;
+
+/**
+ * Stable, internal-only error for a private-temp-directory fail-closed
+ * verification failure (final review round, P0). Never carries the raw
+ * filesystem path or the underlying OS error in its message — callers/logs
+ * must key off `code` (`'TEMP_STORAGE_UNSAFE'`) only, never free text, so a
+ * log line can never leak a local path. Thrown instead of silently
+ * proceeding: no ZIP may ever be created, no storageKey ever persisted, and
+ * no upload ever attempted against an unverified temp directory.
+ */
+export class ExportTempStorageUnsafeError extends Error {
+  readonly code = 'TEMP_STORAGE_UNSAFE';
+  constructor() {
+    super('Export temp storage failed fail-closed verification.');
+    this.name = 'ExportTempStorageUnsafeError';
+  }
+}
+
+/**
+ * Rejects anything that is not itself a real, safely-owned directory —
+ * called both on a pre-existing path (BEFORE it is ever chmod'd — chmod
+ * follows a symlink to its target on POSIX, so a symlink must be rejected
+ * here rather than "corrected") and again on the final state after
+ * mkdir/chmod, so the function never returns having merely assumed success.
+ */
+function assertSafeExportTempDirStat(stat: fs.Stats): void {
+  if (stat.isSymbolicLink()) {
+    console.error('[fileStorage] TEMP_STORAGE_UNSAFE (symlink)');
+    throw new ExportTempStorageUnsafeError();
+  }
+  if (!stat.isDirectory()) {
+    console.error('[fileStorage] TEMP_STORAGE_UNSAFE (not-a-directory)');
+    throw new ExportTempStorageUnsafeError();
+  }
+  if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) {
+    console.error('[fileStorage] TEMP_STORAGE_UNSAFE (unsafe-ownership)');
+    throw new ExportTempStorageUnsafeError();
+  }
+}
+
 /**
  * Creates (idempotently) the private export temp directory with mode 0700
- * and verifies it server-side afterward. `fs.promises.mkdir`'s own `mode`
- * option is skipped by Node when the directory already exists (a prior
- * process run, a differently-configured umask, etc.), so this always
- * re-asserts 0700 via an explicit chmod rather than trusting mkdir alone.
- * On Windows, POSIX mode bits are synthesized/ignored by the OS — this call
- * is still correct and a no-op-equivalent there; the real guarantee applies
- * on the POSIX hosts this server actually deploys to.
+ * and verifies it server-side, fail-closed, both before and after
+ * mkdir/chmod (final review round, P0). The fixed path itself
+ * (`EXPORT_TEMP_DIR`) is built entirely from server-controlled segments
+ * (`os.tmpdir()` + a literal subdirectory name) — no client input ever
+ * reaches it.
+ *
+ * Verification uses `lstat`, never `stat`, so a symlink at this fixed path
+ * is inspected as itself, not silently followed to whatever it points at —
+ * a symlink, any non-directory object, or (on POSIX, where
+ * `process.getuid()` exists) a directory owned by a different user is
+ * rejected outright rather than "fixed" by chmod'ing through it. An
+ * existing, safe (real-directory, correctly-owned) path has its mode
+ * re-asserted via an UNCAUGHT `chmod` — a `chmod` failure must fail this
+ * call closed, never be swallowed. After mkdir/chmod, the path is `lstat`'d
+ * again and re-verified (POSIX-only mode assertion; Windows synthesizes
+ * mode bits from the read-only attribute only, so mode is not literally
+ * meaningful there, though the symlink/non-directory/ownership checks still
+ * apply on every OS).
+ *
+ * On any failure this throws `ExportTempStorageUnsafeError` — callers
+ * (`generateClinicBulkExport`) must let this propagate to their ordinary
+ * failure path (no ZIP created, no storageKey persisted, no upload
+ * attempted), and log only the stable `TEMP_STORAGE_UNSAFE` code.
+ *
+ * `chmodForTest` is a test-only override for the chmod call, never passed
+ * by any production call site (mirrors `uploadForTest`/`deleteForTest`
+ * elsewhere in this feature) — it exists so a unit test can deterministically
+ * force a chmod failure and prove this fails closed, without needing root or
+ * a second OS user to construct a real permission-denied chmod.
  */
-export async function ensureExportTempDir(): Promise<string> {
-  await fs.promises.mkdir(EXPORT_TEMP_DIR, { recursive: true, mode: 0o700 });
-  await fs.promises.chmod(EXPORT_TEMP_DIR, 0o700).catch(() => {});
-  return EXPORT_TEMP_DIR;
+export async function ensureExportTempDir(
+  chmodForTest?: (targetPath: string, mode: number) => Promise<void>,
+): Promise<string> {
+  const chmod = chmodForTest ?? ((targetPath: string, mode: number) => fs.promises.chmod(targetPath, mode));
+  const dirPath = EXPORT_TEMP_DIR;
+
+  let existingStat: fs.Stats | null;
+  try {
+    existingStat = await fs.promises.lstat(dirPath);
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') {
+      console.error('[fileStorage] TEMP_STORAGE_UNSAFE (lstat failed)', safeErrorFields(err));
+      throw new ExportTempStorageUnsafeError();
+    }
+    existingStat = null;
+  }
+
+  if (!existingStat) {
+    await fs.promises.mkdir(dirPath, { recursive: true, mode: EXPORT_TEMP_DIR_MODE });
+  } else {
+    // Reject a symlink/non-directory/unsafe-owner target BEFORE ever
+    // chmod'ing it — chmod(2) follows a symlink to its target on POSIX, so
+    // "correcting" a symlink's mode would silently chmod whatever it points
+    // at instead of rejecting the unsafe path outright.
+    assertSafeExportTempDirStat(existingStat);
+    // Never swallowed: a chmod failure must fail this call closed, not
+    // silently proceed with whatever mode the directory already had.
+    try {
+      await chmod(dirPath, EXPORT_TEMP_DIR_MODE);
+    } catch (err) {
+      console.error('[fileStorage] TEMP_STORAGE_UNSAFE (chmod failed)', safeErrorFields(err));
+      throw new ExportTempStorageUnsafeError();
+    }
+  }
+
+  const finalStat = await fs.promises.lstat(dirPath);
+  assertSafeExportTempDirStat(finalStat);
+  if (process.platform !== 'win32' && (finalStat.mode & 0o777) !== EXPORT_TEMP_DIR_MODE) {
+    console.error('[fileStorage] TEMP_STORAGE_UNSAFE (final mode mismatch)');
+    throw new ExportTempStorageUnsafeError();
+  }
+
+  return dirPath;
 }
 
 /**
@@ -370,21 +474,71 @@ export async function deleteFile(ref: string): Promise<void> {
 }
 
 /**
+ * Recognized filename pattern for a `saveFileFromPath` local-mode partial
+ * artifact: `<jobId>.zip.partial-<uuid>`, where `<jobId>` is the archive
+ * row's own id (a `crypto.randomUUID()` value — see `reserveClinicBulkExport`)
+ * and the trailing uuid is the random partial-file suffix `saveFileFromPath`
+ * generates. Capturing `jobId` here (final review round, P1) is what lets
+ * the sweep below look up the corresponding `ClinicBulkExportArchive` row
+ * before ever deleting a candidate, instead of relying on file age alone —
+ * a slow cross-device copy can legitimately still be writing this file well
+ * past the age threshold.
+ */
+const EXPORT_PARTIAL_FILE_PATTERN = /^([0-9a-f-]{36})\.zip\.partial-[0-9a-f-]{36}$/i;
+
+function parseExportPartialFileName(fileName: string): { jobId: string } | null {
+  const match = EXPORT_PARTIAL_FILE_PATTERN.exec(fileName);
+  return match ? { jobId: match[1]! } : null;
+}
+
+type ClinicBulkExportArchiveLookup = { clinicId: string; status: string; leaseExpiresAt: Date | null } | null;
+
+/**
  * Sweeps `uploads/exports/<clinicId>/*.partial-*` for orphaned partial
  * artifacts (KVKK-HIGH-004 crash-safety remediation): saveFileFromPath's
  * local-mode promotion is a rename immediately after the partial file is
- * fully written, so any `.partial-*` file surviving longer than `maxAgeMs`
- * can only be the result of a crash between creating it and promoting it —
- * never a legitimately in-progress write. Local-storage-only: in S3 mode
- * there is no local partial state to sweep (a killed process leaves an
- * incomplete multipart upload in the bucket instead — see
+ * fully written, so a `.partial-*` file surviving past `maxAgeMs` is
+ * *usually* the result of a crash between creating it and promoting it —
+ * but a legitimately slow cross-device (`EXDEV`) copy can also still be
+ * mid-write past that same age threshold, so age alone is never sufficient
+ * (final review round, P1). Before deleting a recognized candidate, this
+ * derives its clinic id (the containing directory) and job id (the
+ * filename — see `parseExportPartialFileName`) and confirms the
+ * corresponding `ClinicBulkExportArchive` row is not still actively
+ * `generating` with an unexpired lease; a DB lookup failure is treated as
+ * "cannot confirm inactive" and fails closed (skips deletion this run,
+ * never deletes on an unconfirmed guess), exactly like the sibling
+ * `sweepStaleClinicBulkExportTempFiles` (`clinicBulkExportPackage.ts`) does
+ * for in-progress temp ZIPs. Local-storage-only: in S3 mode there is no
+ * local partial state to sweep (a killed process leaves an incomplete
+ * multipart upload in the bucket instead — see
  * docs/compliance/54-kvkk-secure-clinic-bulk-export.md for the required
  * AbortIncompleteMultipartUpload bucket lifecycle rule, which a hard process
  * kill cannot execute client-side). Never touches a file that isn't inside
- * `exports/` or doesn't match the `.partial-<uuid>` suffix.
+ * `exports/` or doesn't match the recognized `<jobId>.zip.partial-<uuid>`
+ * naming pattern. The returned count only ever reflects files actually
+ * removed from disk — a candidate whose `unlink` itself fails is logged
+ * (a stable code, never the raw path/exception) and NOT counted as deleted.
+ *
+ * `findArchiveForTest` is a test-only override for the archive-row lookup,
+ * never passed by any production call site (mirrors `uploadForTest`/
+ * `deleteForTest` elsewhere in this feature) — it exists so a unit test can
+ * exercise the DB-gated protect/allow/fail-closed contract deterministically
+ * without a live database.
  */
-export async function cleanupStaleLocalExportPartialFiles(maxAgeMs: number, now: Date = new Date()): Promise<number> {
+export async function cleanupStaleLocalExportPartialFiles(
+  maxAgeMs: number,
+  now: Date = new Date(),
+  findArchiveForTest?: (jobId: string) => Promise<ClinicBulkExportArchiveLookup>,
+): Promise<number> {
   if (isRemoteStorageEnabled()) return 0;
+  const findArchive =
+    findArchiveForTest ??
+    ((jobId: string) =>
+      prisma.clinicBulkExportArchive.findUnique({
+        where: { id: jobId },
+        select: { clinicId: true, status: true, leaseExpiresAt: true },
+      }));
   const exportsRoot = path.join(BASE_UPLOAD_DIR, 'exports');
   let clinicDirs: string[];
   try {
@@ -402,17 +556,40 @@ export async function cleanupStaleLocalExportPartialFiles(maxAgeMs: number, now:
       continue;
     }
     for (const entry of entries) {
-      if (!entry.includes('.partial-')) continue;
+      const parsed = parseExportPartialFileName(entry);
+      if (!parsed) continue; // never touch a file this sweep doesn't recognize as its own naming pattern
       const filePath = path.join(fullDir, entry);
+      let stat: fs.Stats;
       try {
-        const stat = await fs.promises.stat(filePath);
-        if (!stat.isFile()) continue;
-        if (now.getTime() - stat.mtimeMs < maxAgeMs) continue;
-        await fs.promises.unlink(filePath);
-        deleted++;
+        stat = await fs.promises.stat(filePath);
       } catch {
-        // Vanished between readdir and stat/unlink, or a transient FS
-        // error — never fatal to the sweep, just skip this one entry.
+        continue; // vanished between readdir and stat — nothing to do
+      }
+      if (!stat.isFile()) continue;
+      if (now.getTime() - stat.mtimeMs < maxAgeMs) continue;
+
+      try {
+        const row = await findArchive(parsed.jobId);
+        if (row && row.clinicId !== clinicDir) {
+          // The filename's job id resolves to a DIFFERENT clinic than the
+          // directory it was found in — never plausible for a real
+          // saveFileFromPath-produced file. Treat as unconfirmed, skip.
+          console.error('[fileStorage] stale-partial sweep: clinicId/jobId mismatch, skipping this run');
+          continue;
+        }
+        const activelyGenerating =
+          row?.status === 'generating' && row.leaseExpiresAt !== null && row.leaseExpiresAt.getTime() > now.getTime();
+        if (activelyGenerating) continue; // never delete a live in-progress (e.g. slow cross-device) copy
+      } catch (err) {
+        console.error('[fileStorage] stale-partial sweep: DB lookup failed, skipping file this run', safeErrorFields(err));
+        continue; // fail closed — never delete without a confirmed-inactive DB row
+      }
+
+      try {
+        await fs.promises.unlink(filePath);
+        deleted++; // only counted once the unlink itself has actually succeeded
+      } catch (err) {
+        console.error('[fileStorage] stale-partial sweep: unlink failed', safeErrorFields(err));
       }
     }
   }

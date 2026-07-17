@@ -993,29 +993,155 @@ async function main() {
     assert.ok(fallbackBlock.includes("chmod(partialPath, 0o600)"), 'must also re-assert 0600 on the partial file before promoting it, regardless of which code path produced it');
   });
 
-  await test('cleanupStaleLocalExportPartialFiles deletes a real, old .partial-<uuid> file but leaves a fresh one alone, and is a no-op under S3 storage', async () => {
-    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
-    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', `unit-test-partial-${Date.now()}`);
-    await fs.mkdir(clinicDir, { recursive: true });
-    const oldPartial = path.join(clinicDir, `job-old.zip.partial-${crypto.randomUUID()}`);
-    const freshPartial = path.join(clinicDir, `job-fresh.zip.partial-${crypto.randomUUID()}`);
-    await fs.writeFile(oldPartial, Buffer.from('old'));
-    await fs.writeFile(freshPartial, Buffer.from('fresh'));
-    const past = new Date(Date.now() - 60 * 60 * 1000);
-    await fs.utimes(oldPartial, past, past);
+  await test('cleanupStaleLocalExportPartialFiles is a no-op under S3/remote storage', async () => {
+    const source = await readSource('services/fileStorage.ts');
+    const fnStart = source.indexOf('export async function cleanupStaleLocalExportPartialFiles');
+    const fnBody = source.slice(fnStart, fnStart + 600);
+    assert.ok(fnBody.includes('if (isRemoteStorageEnabled()) return 0;'), 'must be a no-op under S3/remote storage — see the AbortIncompleteMultipartUpload bucket-lifecycle-rule requirement in the compliance doc instead');
+  });
 
-    const deleted = await cleanupStaleLocalExportPartialFiles(30 * 60 * 1000);
-    assert.ok(deleted >= 1, 'at least the old partial file must have been counted as deleted');
-    assert.ok(!fsSync.existsSync(oldPartial), 'the old partial file must actually be gone from disk');
+  await test('a fresh recognized partial file is never deleted regardless of DB state (age gate runs before any DB lookup)', async () => {
+    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
+    const clinicId = `unit-test-partial-fresh-${Date.now()}`;
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicId);
+    await fs.mkdir(clinicDir, { recursive: true });
+    const jobId = crypto.randomUUID();
+    const freshPartial = path.join(clinicDir, `${jobId}.zip.partial-${crypto.randomUUID()}`);
+    await fs.writeFile(freshPartial, Buffer.from('fresh'));
+    // Deliberately never called — a fresh file must never even reach the DB lookup.
+    const findArchiveForTest = async (): Promise<never> => {
+      throw new Error('must not be called for a file younger than maxAgeMs');
+    };
+
+    const deleted = await cleanupStaleLocalExportPartialFiles(30 * 60 * 1000, new Date(), findArchiveForTest as any);
+    assert.equal(deleted, 0);
     assert.ok(fsSync.existsSync(freshPartial), 'the fresh partial file must be left alone');
 
     await fs.unlink(freshPartial).catch(() => {});
     await fs.rmdir(clinicDir).catch(() => {});
+  });
 
-    const source = await readSource('services/fileStorage.ts');
+  await test('an old recognized partial file is deleted once the archive row confirms it is not actively generating', async () => {
+    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
+    const clinicId = `unit-test-partial-old-${Date.now()}`;
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicId);
+    await fs.mkdir(clinicDir, { recursive: true });
+    const jobId = crypto.randomUUID();
+    const oldPartial = path.join(clinicDir, `${jobId}.zip.partial-${crypto.randomUUID()}`);
+    await fs.writeFile(oldPartial, Buffer.from('old'));
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.utimes(oldPartial, past, past);
+
+    const deleted = await cleanupStaleLocalExportPartialFiles(30 * 60 * 1000, new Date(), async (id) => {
+      assert.equal(id, jobId, 'must derive the job id from the recognized filename, not guess it');
+      return { clinicId, status: 'failed', leaseExpiresAt: null }; // no longer active — provably safe to delete
+    });
+    assert.equal(deleted, 1);
+    assert.ok(!fsSync.existsSync(oldPartial), 'the old, confirmed-inactive partial file must actually be gone from disk');
+
+    await fs.rmdir(clinicDir).catch(() => {});
+  });
+
+  await test('an old recognized partial file for a row still actively generating with an unexpired lease is NEVER deleted (P1 — protects a legitimately slow cross-device copy)', async () => {
+    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
+    const clinicId = `unit-test-partial-active-${Date.now()}`;
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicId);
+    await fs.mkdir(clinicDir, { recursive: true });
+    const jobId = crypto.randomUUID();
+    const activePartial = path.join(clinicDir, `${jobId}.zip.partial-${crypto.randomUUID()}`);
+    await fs.writeFile(activePartial, Buffer.from('still being copied'));
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.utimes(activePartial, past, past); // old by age alone — must still be protected
+
+    const deleted = await cleanupStaleLocalExportPartialFiles(1000, new Date(), async () => ({
+      clinicId,
+      status: 'generating',
+      leaseExpiresAt: new Date(Date.now() + 60 * 60 * 1000), // unexpired
+    }));
+    assert.equal(deleted, 0, 'a live, actively-generating job\'s partial file must never be counted as deleted');
+    assert.ok(fsSync.existsSync(activePartial), 'the partial file must still exist — the DB shows it as actively generating with an unexpired lease');
+
+    await fs.unlink(activePartial).catch(() => {});
+    await fs.rmdir(clinicDir).catch(() => {});
+  });
+
+  await test('a DB lookup failure fails closed — the candidate is skipped, never deleted, and never counted', async () => {
+    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
+    const clinicId = `unit-test-partial-dbfail-${Date.now()}`;
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicId);
+    await fs.mkdir(clinicDir, { recursive: true });
+    const jobId = crypto.randomUUID();
+    const filePath = path.join(clinicDir, `${jobId}.zip.partial-${crypto.randomUUID()}`);
+    await fs.writeFile(filePath, Buffer.from('old, but DB is unreachable'));
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.utimes(filePath, past, past);
+
+    const deleted = await cleanupStaleLocalExportPartialFiles(1000, new Date(), async () => {
+      throw new Error('simulated DB connection failure');
+    });
+    assert.equal(deleted, 0, 'a DB lookup failure must never authorize deletion');
+    assert.ok(fsSync.existsSync(filePath), 'the file must still exist on disk — fail-closed, not fail-open');
+
+    await fs.unlink(filePath).catch(() => {});
+    await fs.rmdir(clinicDir).catch(() => {});
+  });
+
+  await test('a recognized-filename-shaped file whose clinicId does not match its containing directory is skipped, never deleted', async () => {
+    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
+    const clinicId = `unit-test-partial-mismatch-${Date.now()}`;
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicId);
+    await fs.mkdir(clinicDir, { recursive: true });
+    const jobId = crypto.randomUUID();
+    const filePath = path.join(clinicDir, `${jobId}.zip.partial-${crypto.randomUUID()}`);
+    await fs.writeFile(filePath, Buffer.from('clinicId mismatch'));
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.utimes(filePath, past, past);
+
+    const deleted = await cleanupStaleLocalExportPartialFiles(1000, new Date(), async () => ({
+      clinicId: `some-other-clinic-${Date.now()}`, // does NOT match clinicId (the containing directory)
+      status: 'failed',
+      leaseExpiresAt: null,
+    }));
+    assert.equal(deleted, 0, 'a clinicId/jobId mismatch must never be treated as confirmed-safe-to-delete');
+    assert.ok(fsSync.existsSync(filePath));
+
+    await fs.unlink(filePath).catch(() => {});
+    await fs.rmdir(clinicDir).catch(() => {});
+  });
+
+  await test('an unrecognized filename shape (no valid uuid-jobId prefix) is never touched, even if old', async () => {
+    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
+    const clinicId = `unit-test-partial-unrecognized-${Date.now()}`;
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicId);
+    await fs.mkdir(clinicDir, { recursive: true });
+    const oddPartial = path.join(clinicDir, `not-a-uuid.zip.partial-${crypto.randomUUID()}`);
+    await fs.writeFile(oddPartial, Buffer.from('unrecognized shape'));
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.utimes(oddPartial, past, past);
+
+    const deleted = await cleanupStaleLocalExportPartialFiles(1000, new Date(), async (): Promise<never> => {
+      throw new Error('must never be called for a filename this sweep does not recognize');
+    });
+    assert.equal(deleted, 0);
+    assert.ok(fsSync.existsSync(oddPartial), 'an unrecognized filename must never be touched');
+
+    await fs.unlink(oddPartial).catch(() => {});
+    await fs.rmdir(clinicDir).catch(() => {});
+  });
+
+  await test('the production cleanup job never passes the test-only findArchiveForTest override', async () => {
+    const source = stripComments(await readSource('jobs/clinicBulkExportCleanupJob.ts'));
+    assert.ok(!source.includes('findArchiveForTest'), 'the production cleanup job must never pass the test-only DB-lookup override');
+  });
+
+  await test('cleanupStaleLocalExportPartialFiles only counts a candidate as deleted once its unlink actually succeeds', async () => {
+    const source = stripComments(await readSource('services/fileStorage.ts'));
     const fnStart = source.indexOf('export async function cleanupStaleLocalExportPartialFiles');
-    const fnBody = source.slice(fnStart, fnStart + 400);
-    assert.ok(fnBody.includes('if (isRemoteStorageEnabled()) return 0;'), 'must be a no-op under S3/remote storage — see the AbortIncompleteMultipartUpload bucket-lifecycle-rule requirement in the compliance doc instead');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 3000);
+    const unlinkTryIndex = fnBody.indexOf('await fs.promises.unlink(filePath);');
+    const deletedIncrementIndex = fnBody.indexOf('deleted++;');
+    assert.ok(unlinkTryIndex > -1 && deletedIncrementIndex > unlinkTryIndex, 'deleted++ must come strictly after the unlink call, inside the same try block, never before/independent of it');
   });
 
   section('23. Byte-ceiling remediation — post-finalize ZIP structural integrity validator (P0)');
@@ -1229,7 +1355,8 @@ async function main() {
     const source = stripComments(await readSource('jobs/clinicBulkExportWorker.ts'));
     assert.ok(source.includes('sweepStaleClinicBulkExportTempFiles'), 'the worker must import/use the sweep');
     const startFnStart = source.indexOf('export function startClinicBulkExportWorker');
-    const startFnBody = source.slice(startFnStart, startFnStart + 900);
+    const startFnEnd = source.indexOf('/**\n * Stops only this worker');
+    const startFnBody = source.slice(startFnStart, startFnEnd > -1 ? startFnEnd : startFnStart + 2000);
     assert.ok(startFnBody.includes('runStaleTempSweep()'), 'must run the sweep at startup');
     const tickFnStart = source.indexOf('async function runTick');
     const tickFnEnd = source.indexOf('export function startClinicBulkExportWorker');
@@ -1243,6 +1370,193 @@ async function main() {
   await test('clinicBulkExportCleanupJob.ts sweeps stale local .partial-* export artifacts on every run', async () => {
     const source = stripComments(await readSource('jobs/clinicBulkExportCleanupJob.ts'));
     assert.ok(source.includes('cleanupStaleLocalExportPartialFiles'));
+  });
+
+  section('28. Final review round — fail-closed private temp-directory verification (P0)');
+
+  await test('ensureExportTempDir creates a fresh directory with mode 0700 when none exists', async () => {
+    const { ensureExportTempDir, getExportTempDir } = await import('../services/fileStorage.js');
+    const dir = getExportTempDir();
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    const result = await ensureExportTempDir();
+    assert.equal(result, dir);
+    if (process.platform !== 'win32') {
+      const stat = await fs.lstat(dir);
+      assert.ok(stat.isDirectory());
+      assert.equal(stat.mode & 0o777, 0o700, `freshly created temp dir must be mode 0700, got ${(stat.mode & 0o777).toString(8)}`);
+    }
+  });
+
+  await test('ensureExportTempDir accepts an existing, already-safe directory unchanged', async () => {
+    const { ensureExportTempDir, getExportTempDir } = await import('../services/fileStorage.js');
+    const dir = getExportTempDir();
+    await assert.doesNotReject(ensureExportTempDir());
+    if (process.platform !== 'win32') {
+      const stat = await fs.lstat(dir);
+      assert.equal(stat.mode & 0o777, 0o700);
+    }
+  });
+
+  await test('ensureExportTempDir corrects a pre-existing directory with an unsafe (0777) mode back to 0700', async () => {
+    if (process.platform === 'win32') {
+      console.log('    (skipped on win32 — POSIX chmod semantics do not apply; verified for real in the Linux container run)');
+      return;
+    }
+    const { ensureExportTempDir, getExportTempDir } = await import('../services/fileStorage.js');
+    const dir = getExportTempDir();
+    await fs.chmod(dir, 0o777);
+    await ensureExportTempDir();
+    const stat = await fs.lstat(dir);
+    assert.equal(stat.mode & 0o777, 0o700, `must correct an unsafe pre-existing mode back to 0700, got ${(stat.mode & 0o777).toString(8)}`);
+  });
+
+  await test('ensureExportTempDir fails closed when chmod fails (test-only injected chmod failure — never a swallowed error)', async () => {
+    const { ensureExportTempDir, ExportTempStorageUnsafeError } = await import('../services/fileStorage.js');
+    await assert.rejects(
+      ensureExportTempDir(async () => {
+        throw new Error('simulated chmod failure');
+      }),
+      ExportTempStorageUnsafeError,
+    );
+  });
+
+  await test('ensureExportTempDir rejects a pre-existing symbolic link at the fixed temp path', async () => {
+    if (process.platform === 'win32') {
+      console.log('    (skipped on win32 — creating a directory symlink requires elevated privileges; verified for real in the Linux container run)');
+      return;
+    }
+    const { ensureExportTempDir, getExportTempDir, ExportTempStorageUnsafeError } = await import('../services/fileStorage.js');
+    const dir = getExportTempDir();
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    const decoyTarget = path.join(os.tmpdir(), `decoy-export-tmp-target-${Date.now()}`);
+    await fs.mkdir(decoyTarget, { recursive: true });
+    try {
+      await fs.symlink(decoyTarget, dir, 'dir');
+      await assert.rejects(ensureExportTempDir(), ExportTempStorageUnsafeError);
+    } finally {
+      await fs.unlink(dir).catch(() => {});
+      await fs.rm(decoyTarget, { recursive: true, force: true }).catch(() => {});
+    }
+    await ensureExportTempDir(); // restore a real, safe directory for any subsequent test
+  });
+
+  await test('ensureExportTempDir rejects a pre-existing regular file at the fixed temp path', async () => {
+    const { ensureExportTempDir, getExportTempDir, ExportTempStorageUnsafeError } = await import('../services/fileStorage.js');
+    const dir = getExportTempDir();
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    await fs.writeFile(dir, 'not a directory');
+    try {
+      await assert.rejects(ensureExportTempDir(), ExportTempStorageUnsafeError);
+    } finally {
+      await fs.unlink(dir).catch(() => {});
+    }
+    await ensureExportTempDir(); // restore a real, safe directory for any subsequent test
+  });
+
+  await test('ensureExportTempDir uses lstat (never stat) so a symlink target is inspected as itself, not silently followed', async () => {
+    const source = await readSource('services/fileStorage.ts');
+    const fnStart = source.indexOf('export async function ensureExportTempDir');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 1600);
+    assert.ok(!/[^.]\bfs\.promises\.stat\(/.test(fnBody), 'must never call fs.promises.stat on the temp dir path (only lstat)');
+    assert.ok((fnBody.match(/fs\.promises\.lstat\(/g) ?? []).length >= 2, 'must lstat both the pre-existing path and the final state after mkdir/chmod');
+  });
+
+  await test('generation funnels a temp-storage-unsafe failure through the ordinary catch-block cleanup, never creating a ZIP/storageKey/upload', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const ensureCallIndex = source.indexOf('await ensureExportTempDir()', genFnStart);
+    const tempPathAssignIndex = source.indexOf('tempFilePath = buildExportTempFilePath(jobId)', genFnStart);
+    assert.ok(ensureCallIndex > -1 && tempPathAssignIndex > ensureCallIndex, 'ensureExportTempDir() must be awaited strictly before any temp file path is even computed, so a thrown ExportTempStorageUnsafeError leaves tempFilePath null (nothing to unlink) and never reaches archiver/upload');
+  });
+
+  section('29. Final review round — worker-shutdown cancels in-flight generation (P0)');
+
+  await test('failActiveGenerationForWorkerShutdown is guarded on status="generating", records a generation_failed audit with WORKER_SHUTDOWN, and never calls attemptArtifactDeletion itself (reuses the existing in-flight cleanup path instead)', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('export async function failActiveGenerationForWorkerShutdown');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 1600);
+    assert.ok(fnBody.includes("status: 'generating'"), 'the guarded status transition must require status=generating, so it can never clobber a different terminal state');
+    assert.ok(fnBody.includes("data: { status: 'failed', failureCode: 'WORKER_SHUTDOWN' }"));
+    assert.ok(fnBody.includes("action: 'clinic_bulk_export_generation_failed'"));
+    assert.ok(fnBody.includes("failureCode: 'WORKER_SHUTDOWN'"));
+    assert.ok(!fnBody.includes('attemptArtifactDeletion'), 'must not duplicate artifact cleanup — the in-flight generateClinicBulkExport call\'s own existing catch block owns that once it observes the lease loss');
+    assert.ok(!/restrictedNote|purpose:/.test(fnBody), 'the audit metadata must never include patient/clinic-specific content');
+  });
+
+  await test('ClinicBulkExportArchive is never resurrected by re-running the shutdown cancellation: a second call is a guaranteed no-op (count 0)', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('export async function failActiveGenerationForWorkerShutdown');
+    const fnBody = source.slice(fnStart, fnStart + 1600);
+    assert.ok(fnBody.includes('if (result.count === 0) return;'), 'a second/racing call that loses the guarded update must return early with no further side effects');
+  });
+
+  await test('clinicBulkExportWorker.ts tracks claimed job ids synchronously (no intervening await) before generation starts', async () => {
+    const source = stripComments(await readSource('jobs/clinicBulkExportWorker.ts'));
+    const tickFnStart = source.indexOf('async function runTick');
+    const tickFnEnd = source.indexOf('export function startClinicBulkExportWorker');
+    const tickBody = source.slice(tickFnStart, tickFnEnd);
+    assert.ok(tickBody.includes('activeGenerationJobIds.add(jobId)'), 'claimed ids must be tracked in the active-generation set');
+    const trackIndex = tickBody.indexOf('activeGenerationJobIds.add(jobId)');
+    const generateCallIndex = tickBody.indexOf('generateClinicBulkExport(jobId)');
+    assert.ok(trackIndex > -1 && generateCallIndex > trackIndex, 'tracking must happen strictly before generateClinicBulkExport is ever called');
+    assert.ok(tickBody.includes('activeGenerationJobIds.delete(jobId)'), 'a settled job (success or failure) must be untracked so it is never cancelled twice');
+  });
+
+  await test('runTick fails newly-claimed jobs as WORKER_SHUTDOWN instead of starting generation when shutdown began while claiming was in flight', async () => {
+    const source = stripComments(await readSource('jobs/clinicBulkExportWorker.ts'));
+    const tickFnStart = source.indexOf('async function runTick');
+    const tickFnEnd = source.indexOf('export function startClinicBulkExportWorker');
+    const tickBody = source.slice(tickFnStart, tickFnEnd);
+    const claimIndex = tickBody.indexOf('claimQueuedClinicBulkExportJobs(concurrency)');
+    const shutdownCheckIndex = tickBody.indexOf('if (shuttingDown) {', claimIndex);
+    assert.ok(claimIndex > -1 && shutdownCheckIndex > claimIndex, 'the post-claim shuttingDown re-check must occur strictly after the claim call');
+    const guardBlockEnd = tickBody.indexOf('return;', shutdownCheckIndex);
+    assert.ok(guardBlockEnd > shutdownCheckIndex);
+    const guardBlock = tickBody.slice(shutdownCheckIndex, guardBlockEnd);
+    assert.ok(guardBlock.includes('failActiveGenerationForWorkerShutdown'), 'newly-claimed rows must be failed the same stable way, never handed to generateClinicBulkExport');
+    assert.ok(!guardBlock.includes('generateClinicBulkExport('), 'generation must never be started once shuttingDown is observed post-claim');
+  });
+
+  await test('stopClinicBulkExportWorker is idempotent (repeated calls return the same promise) and is exported for SIGTERM/SIGINT', async () => {
+    const source = await readSource('jobs/clinicBulkExportWorker.ts');
+    assert.ok(source.includes("process.once('SIGTERM', stopClinicBulkExportWorker)"));
+    assert.ok(source.includes("process.once('SIGINT', stopClinicBulkExportWorker)"));
+    const fnStart = source.indexOf('export function stopClinicBulkExportWorker');
+    const fnBody = source.slice(fnStart, fnStart + 700);
+    assert.ok(fnBody.includes('if (shutdownPromise) return shutdownPromise;'), 'a repeated call must return the SAME in-flight/settled promise, never re-run cancellation');
+  });
+
+  await test('stopClinicBulkExportWorker before start does not throw and resolves cleanly', async () => {
+    const { stopClinicBulkExportWorker, isClinicBulkExportWorkerTickRunning } = await import('../jobs/clinicBulkExportWorker.js');
+    let result: Promise<void>;
+    assert.doesNotThrow(() => {
+      result = stopClinicBulkExportWorker();
+    });
+    await assert.doesNotReject(result!);
+    assert.equal(isClinicBulkExportWorkerTickRunning(), false);
+  });
+
+  await test('trackActiveGenerationJobForTest is a test-only hook, never used by any production call site', async () => {
+    const source = await readSource('jobs/clinicBulkExportWorker.ts');
+    assert.ok(source.includes('export function trackActiveGenerationJobForTest'));
+    const productionSource = stripComments(source).replace(/export function trackActiveGenerationJobForTest[\s\S]*$/, '');
+    assert.ok(!productionSource.includes('trackActiveGenerationJobForTest('), 'must never be called by production code — only exported for tests to call directly');
+  });
+
+  section('30. Final review round — cleanup observability corrections (P1)');
+
+  await test('sweepStaleClinicBulkExportTempFiles only counts a candidate as deleted once its unlink actually succeeds, and logs a stable code on unlink failure', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const fnStart = source.indexOf('export async function sweepStaleClinicBulkExportTempFiles');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 3000);
+    const unlinkTryIndex = fnBody.indexOf('await fs.promises.unlink(filePath);');
+    const deletedIncrementIndex = fnBody.indexOf('deleted++;');
+    assert.ok(unlinkTryIndex > -1 && deletedIncrementIndex > unlinkTryIndex, 'deleted++ must come strictly after a real (non-swallowed) unlink call');
+    assert.ok(fnBody.includes("stale-temp sweep: unlink failed"), 'an unlink failure must be logged with a stable message/code, never silently swallowed');
+    assert.ok(!/fs\.promises\.unlink\(filePath\)\.catch\(\(\) => \{\}\);\s*\n\s*deleted\+\+/.test(fnBody), 'must never increment deleted from a swallowed (fire-and-forget) unlink call');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

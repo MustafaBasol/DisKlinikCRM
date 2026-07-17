@@ -779,6 +779,15 @@ of `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md`.
   deleting any artifact already uploaded. No manual intervention is needed
   for either case; a manual `failed` update remains available only for an
   operator who wants to bypass waiting for the next worker tick entirely.
+  **Extended (sixth-pass remediation, Section 21)**: a PM2 rolling
+  reload/restart is a distinct scenario from an env-only flag flip — the OLD
+  worker process keeps its OLD in-memory `process.env` snapshot until it
+  actually exits, so the flag-recheck behavior above only helps once that old
+  process is gone. `stopClinicBulkExportWorker()` (bound to
+  `process.once('SIGTERM'/'SIGINT', ...)`) now atomically cancels every job
+  the old process is still actively generating the moment it receives the
+  reload's shutdown signal, rather than leaving it to keep running until its
+  own next flag re-check or lease expiry.
 - **Code rollback**: revert to the pre-merge commit. The legacy
   `gdprExport.ts` route stays permanently disabled either way (it is not
   restored by a rollback of this PR — reverting only removes the new secure
@@ -1208,3 +1217,259 @@ verification**; the feature flag remains `false`, not merged, not deployed.
   rounds, each finding real issues — including, this round, a genuine
   latent hang bug in code that predates this PR's own review history. Treat
   any "done" status as provisional until a human/security review signs off.
+
+## 21. Remediation round (2026-07-17, sixth pass / final review)
+
+A sixth review found two P0 gaps and two P1 gaps in the fifth-pass
+remediation. All fixed on this same branch. Status remains **Implemented —
+awaiting deployment/operational verification**; the feature flag remains
+`false`, not merged, not deployed.
+
+1. **Fail-closed private temp-directory verification (P0).** `ensureExportTempDir`
+   called `mkdir` then swallowed `chmod` errors (`.catch(() => {})`) and never
+   verified the fixed path was actually a real, safely-owned directory rather
+   than a symlink or some other filesystem object — a symlink placed at
+   `os.tmpdir()/diskliniks-export-tmp` (by another local process/user, or a
+   stale leftover from a prior, differently-configured deployment) would have
+   been silently `chmod`'d *through* to whatever it pointed at, and a failed
+   `chmod` would have been ignored entirely, leaving generation to proceed
+   against an unverified directory. Fixed with a fail-closed verification
+   lifecycle in `fileStorage.ts`: `lstat` (never `stat`, so a symlink is
+   inspected as itself, never silently followed) both BEFORE any
+   `chmod`/`mkdir` and again on the final state; a symlink, any non-directory
+   object, or (on POSIX, where `process.getuid()` exists) a directory owned by
+   a different user is rejected outright — never "corrected" by chmod'ing
+   through it; the `chmod` call is no longer swallowed (a failure now throws);
+   and a new stable, internal-only `ExportTempStorageUnsafeError` (`code:
+   'TEMP_STORAGE_UNSAFE'`) is thrown on any verification failure, logged only
+   as the stable code (never the raw path or OS error), letting the failure
+   funnel through `generateClinicBulkExport`'s existing catch-block cleanup —
+   since the throw happens strictly before `tempFilePath` is ever assigned, no
+   ZIP is created, no `storageKey` is ever persisted, and no upload is ever
+   attempted. Proved with real `fs` operations (POSIX-strict where the
+   assertion is platform-meaningful, explicitly skipped with a note on
+   Windows): a freshly-created directory is mode `0700`; an existing safe
+   directory is accepted unchanged; an existing `0777` directory is corrected
+   back to `0700`; a test-only injected `chmod` failure (via a new
+   `chmodForTest` DI seam, mirroring every other test-only override in this
+   feature — never passed by any production call site) fails closed with
+   `ExportTempStorageUnsafeError`; a pre-existing symbolic link at the fixed
+   path is rejected; a pre-existing regular file at the fixed path is
+   rejected. **Run for real inside a Linux Docker container** this round (see
+   the updated test plan below) — the Windows skip in every prior round's
+   test run was never treated as production evidence.
+2. **Reload/shutdown did not stop in-flight generation (P0).** The feature
+   flag is read from `process.env`, and during a PM2 rolling reload an OLD
+   worker process retains its OLD in-memory environment — nothing before this
+   round stopped that old process from finishing (or even resurrecting) an
+   in-flight export well after a NEW process had already started with
+   `CLINIC_BULK_EXPORT_ENABLED=false`. Fixed with worker-shutdown
+   cancellation: `clinicBulkExportWorker.ts` now tracks every job id this
+   process has actually claimed and is actively running
+   `generateClinicBulkExport` for (`activeGenerationJobIds`, populated
+   synchronously the instant a claim succeeds, before any further `await`, so
+   there is no window a shutdown snapshot could miss). `stopClinicBulkExportWorker`
+   — the exact function `process.once('SIGTERM'/'SIGINT', ...)` is bound to —
+   now sets `shuttingDown`, stops the worker's own cron task (unchanged), and
+   atomically fails every currently-tracked job id via a new
+   `failActiveGenerationForWorkerShutdown(jobId)` (`clinicBulkExportPackage.ts`):
+   a guarded `updateMany({ where: { id, status: 'generating' }, data: {
+   status: 'failed', failureCode: 'WORKER_SHUTDOWN' } })`, followed by a
+   durable audit event (`clinic_bulk_export_generation_failed`, metadata
+   limited to `jobId`/`failureCode` — no patient data, no `storageKey`, no
+   exception text). Guarded on `status: 'generating'` makes this naturally
+   idempotent and safe across multiple worker replicas: a second call, a
+   second replica, or the job's own in-flight failure handling racing to
+   write a terminal status all affect zero rows once any one of them has
+   already won — no double-write, no clobbering a different terminal code.
+   `runTick` additionally re-checks `shuttingDown` immediately after
+   `claimQueuedClinicBulkExportJobs` returns: if shutdown began while a claim
+   was in flight, the newly-claimed (already-`generating`) rows are failed the
+   identical way instead of ever being handed to `generateClinicBulkExport`.
+   Deliberately does NOT duplicate artifact cleanup itself — the already-owned
+   single cleanup path stays exactly where it already was: the in-flight
+   `generateClinicBulkExport` call for a cancelled job observes the guarded
+   status transition on its very next heartbeat/per-batch lease-renewal
+   checkpoint (both already guarded on `status: 'generating'`, so they
+   naturally start failing once shutdown wins the race), throws
+   `ClinicBulkExportLeaseLostError`, and its own existing `catch` block deletes
+   the temp file and any already-uploaded artifact exactly as it already did
+   for every other lease-loss scenario. No runtime Platform Admin toggle was
+   added (unchanged design decision, consistent with Section 2/14). Proved
+   against a real disposable Postgres database with real generation: a job
+   tracked via a new test-only `trackActiveGenerationJobForTest(jobId)` hook
+   (bypasses only `node-cron`'s real minute-granularity schedule — everything
+   else is production code) is started with the real `generateClinicBulkExport`,
+   deterministically PAUSED at the existing `beforePlannedKeyPersistForTest`
+   hook (fired strictly after the real temp ZIP is fully written/closed,
+   strictly before the planned-key persist) until the test's own
+   `stopClinicBulkExportWorker()` call — the same function bound to
+   SIGTERM/SIGINT — has fully resolved, and only then released. This
+   eliminates any timing ambiguity about which of two independently-guarded
+   writers reaches Postgres first (an earlier draft of this test polled for
+   the temp file to appear in real time and then raced a plain call to
+   `stopClinicBulkExportWorker()` against the small fixture's own natural
+   per-batch lease-renewal checkpoints — genuinely nondeterministic, since a
+   small/fast fixture could let generation's own next checkpoint reach
+   Postgres before the shutdown call did on some runs, is a fair race either
+   way, and was corrected before this round's verification results below).
+   Proves: the row ends `failed`/`WORKER_SHUTDOWN`, never `ready`; the real
+   temp ZIP is actually gone from disk; no final artifact exists; a durable
+   audit event with the `WORKER_SHUTDOWN` code was recorded (a second,
+   pre-existing-pattern audit event with the in-flight generation's own
+   locally-observed `LEASE_LOST` code is also expected and is not itself a
+   bug — see the note below); and a subsequent re-claim attempt with the
+   flag off (simulating exactly what a fresh process started after the
+   reload would see) never resurrects the job, since the claim query only
+   ever selects `status: 'queued'`.
+
+   **Pre-existing, unchanged cosmetic note observed while building this
+   test**: `generateClinicBulkExport`'s catch block always logs and audits
+   its own LOCALLY-COMPUTED failure code, even when its own guarded DB
+   update actually lost the race to a different writer (this predates this
+   round — the same thing already happened for e.g. a lease genuinely stolen
+   by another replica). The ARCHIVE ROW itself is never affected (the losing
+   writer's guarded update is a real no-op), only an extra, harmless
+   `AuditLog` row with a locally-accurate-but-not-what-actually-persisted
+   `failureCode` can appear alongside the winning writer's own audit event.
+   Not treated as a gap in this round (out of the narrow scope given), but
+   worth a follow-up if audit-trail precision here ever matters operationally.
+3. **A slow cross-device partial-file copy could be deleted mid-write (P1).**
+   `cleanupStaleLocalExportPartialFiles` gated deletion on file age alone — a
+   legitimately slow `EXDEV` cross-device copy (`saveFileFromPath`'s fallback
+   path) could still be genuinely in progress past the fixed 30-minute
+   threshold, and nothing stopped it from being deleted out from under the
+   write. Fixed: the recognized `<jobId>.zip.partial-<uuid>` filename pattern
+   (`EXPORT_PARTIAL_FILE_PATTERN`) now derives the job id, and before deleting
+   any old candidate the function looks up the corresponding
+   `ClinicBulkExportArchive` row — never deleting when `status === 'generating'`
+   and `leaseExpiresAt > now`; treating a `clinicId`/directory mismatch as
+   unconfirmed (skip); and, critically, treating a DB lookup failure as "cannot
+   confirm inactive" and failing closed (skips deletion this run, never
+   deletes on an unconfirmed guess) — mirroring the exact same DB-gated
+   contract `sweepStaleClinicBulkExportTempFiles` already used for in-progress
+   temp ZIPs (Section 7b). A new `findArchiveForTest` DI seam (never passed by
+   the production cleanup job) lets the unit-test suite exercise every branch
+   of this contract deterministically without a live database; a real
+   disposable-Postgres test proves the same protect/allow behavior against an
+   actual `ClinicBulkExportArchive` row.
+4. **Cleanup observability could overstate what was actually deleted (P1).**
+   Both `sweepStaleClinicBulkExportTempFiles` and (now)
+   `cleanupStaleLocalExportPartialFiles` previously called
+   `fs.promises.unlink(filePath).catch(() => {})` and incremented their
+   `deleted` counter unconditionally, immediately after — a failed unlink
+   (permissions, a concurrent process, a transient FS error) was silently
+   swallowed AND counted as a successful deletion, so an operator reading the
+   sweep's logged count could believe a file was gone when it was still on
+   disk. Fixed in both functions: `unlink` is no longer swallowed at the point
+   of counting — the counter is incremented only inside the same `try` block,
+   strictly after `unlink` has itself resolved without throwing; a failure
+   logs a stable message (`"...unlink failed"`, plus `safeErrorFields(err)` —
+   never the raw path or full exception) and is NOT counted. The stale
+   `clinicBulkExportWorker.ts` module-comment claiming
+   `CLINIC_BULK_EXPORT_ENABLED` "only gates whether new jobs can be CREATED,
+   not whether existing queued jobs get processed" — accurate when originally
+   written, but contradicted by the fifth-pass remediation's generation
+   kill-switch (Section 20, item 3) — was also corrected to describe the
+   actual current per-candidate flag re-check and worker-shutdown cancellation
+   behavior.
+
+The two untracked local scratch files used to reproduce the `archiver`
+`finalize()`/`abort()` hang investigated in the fifth-pass remediation
+(`server/archiver_abort_repro.mjs`, `server/archiver_abort_repro2.mjs`) were
+deleted — they were never tracked by git and were not part of any commit.
+
+### Updated test plan
+
+- [x] `npx prisma validate` clean (no schema changes this round)
+- [x] `npx prisma generate` clean
+- [x] `npm run typecheck` (server) clean
+- [x] Frontend `npx tsc -b` clean
+- [x] Frontend `npm run build` clean
+- [x] Focused suite: **117/117** (`npm run test:clinic-bulk-export`, +24 new
+      tests this round: fail-closed temp-directory verification (fresh
+      dir/existing-safe/0777-correction/chmod-failure/symlink-rejection/
+      regular-file-rejection/lstat-only-usage/funnels-through-existing-
+      cleanup), DB-gated partial-file protection (fresh-file-never-touches-DB/
+      old-file-deleted-once-confirmed-inactive/live-generating-protected/
+      DB-failure-fails-closed/clinicId-mismatch-skipped/unrecognized-filename-
+      never-touched/production-never-passes-the-DI-seam/counts-only-on-real-
+      unlink), and worker-shutdown cancellation (guarded-status-transition-
+      with-audit/no-duplicate-artifact-cleanup/idempotent-no-op-on-repeat/
+      synchronous-tracking-before-generation/post-claim-shuttingDown-guard/
+      idempotent-stopClinicBulkExportWorker/test-only-tracking-hook-never-
+      used-by-production/sweep-observability-source-checks)
+- [x] `npm run test:roles` 142/142
+- [x] `npm run test:kvkk-lifecycle` 110/110
+- [x] `npm run test:patient-privacy` 38/38
+- [x] `npm run test:msg-safety` 36/36
+- [x] Full `npm test` (server, 40+ suites) — all green, exit 0
+- [x] Frontend pure-logic suite: **24/24** (`npm run test:clinic-bulk-export-selection`,
+      unchanged this round — no frontend files touched)
+- [x] **Linux Docker container** (not Windows): fresh `node:20` container
+      (network-isolated from the host, a throwaway copy of the working tree,
+      `npm ci` against Linux-native dependencies — never the Windows-installed
+      `node_modules`), confirming the `0700`/`0600` permission assertions this
+      round adds/relies on for real POSIX semantics rather than the
+      Windows-skipped assertions every prior round's session recorded:
+      **117/117** (`npm run test:clinic-bulk-export`), with every
+      previously-Windows-skipped assertion (fresh-dir mode, 0777-correction,
+      symlink-rejection, regular-file-rejection, 0600 temp/partial/final
+      files) actually exercised and passing for real, not skipped.
+- [x] Fresh disposable Postgres (Docker, throwaway container/DB, reached from
+      inside the same Linux container over a dedicated Docker network):
+      `prisma migrate deploy` (all 60 migrations applied cleanly to a
+      brand-new, empty database) + `prisma migrate status` ("Database schema
+      is up to date!", no drift)
+- [x] `scripts/verify-clinic-bulk-export-lifecycle.ts` against that real
+      disposable Postgres, **run twice** (once against the freshly-migrated
+      DB, once again against the same DB with accumulated state from the
+      first run) — **48/48 both times**, including 2 tests new this round:
+      the real worker-shutdown cancellation proof (real generation,
+      deterministically paused via the existing `beforePlannedKeyPersistForTest`
+      hook so the real `stopClinicBulkExportWorker()` call is guaranteed to
+      be the only writer that can ever change the row's status before
+      generation is released to observe it, real cleanup, real
+      re-claim-does-not-resurrect proof) and the real DB-gated
+      active-partial-file-protection proof (a real `generating` row with an
+      unexpired lease protects its old partial file; the same file is deleted
+      once the row is no longer active). An earlier, real-time-polling
+      version of the shutdown test was found to be genuinely racy against a
+      small fixture's own natural per-batch lease-renewal checkpoint (a fair,
+      two-sided DB race with no ordering guarantee) and was replaced with the
+      deterministic pause described above before these numbers were recorded.
+- [ ] CI checks (pending — no general CI workflow exists for this repo/branch)
+- [ ] Production deployment + operational verification (still explicitly out
+      of scope)
+
+### Remaining risks
+
+- No production/browser verification has been performed (unchanged from every
+  prior round).
+- Worker-shutdown cancellation relies on `stopClinicBulkExportWorker()` (bound
+  to `process.once('SIGTERM'/'SIGINT', ...)` inside `clinicBulkExportWorker.ts`)
+  actually being allowed to run to completion before the process exits. Both
+  `server/src/index.ts` (single-process mode) and `server/src/worker.ts`
+  (dedicated worker process) register their OWN, independent `SIGTERM`/`SIGINT`
+  listeners that call `prisma.$disconnect()` and `process.exit(0)` — neither
+  currently `await`s this feature's own shutdown listener before doing so. In
+  practice Node runs all listeners for the same signal and the existing 10-second
+  forced-exit timeout in both files gives real, if not formally guaranteed,
+  headroom for a small number of in-flight cancellations to complete
+  concurrently; this was not restructured into a single, explicitly sequenced
+  shutdown chain in this round, since `index.ts`/`worker.ts` were outside this
+  round's inspect-only file list. Operators relying on this cancellation for
+  strict correctness during a rolling reload should confirm in their own
+  deployment that shutdown-time DB writes reliably complete before the process
+  actually exits, or file a follow-up to sequence the two shutdown paths
+  explicitly.
+- `cleanupStaleLocalExportPartialFiles`'s DB-gated protection (this round) uses
+  the same "job id not found in the archive table = provably inactive" logic
+  `sweepStaleClinicBulkExportTempFiles` already established (Section 7b/20) —
+  intentional consistency, but worth a one-line note in code review since a
+  row deleted from the table for any OTHER reason (there is currently no such
+  code path, but none is structurally prevented either) would also be treated
+  as safe-to-delete.
+- As in every prior round: this PR has now been through six remediation
+  rounds, each finding real issues. Treat any "done" status as provisional
+  until a human/security review signs off.
