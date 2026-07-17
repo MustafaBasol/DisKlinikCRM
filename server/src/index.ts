@@ -33,6 +33,7 @@ import inventoryRoutes from './routes/inventory.js';
 import publicBookingRoutes from './routes/publicBooking.js';
 import treatmentPlanProceduresRoutes from './routes/treatmentPlanProcedures.js';
 import platformAdminRoutes from './routes/platformAdmin.js';
+import platformSecurityIncidentsRoutes from './routes/platformSecurityIncidents.js';
 import clinicRegistrationRoutes from './routes/clinicRegistration.js';
 import gdprExportRoutes from './routes/gdprExport.js';
 import clinicBulkExportRoutes from './routes/clinicBulkExport.js';
@@ -180,6 +181,10 @@ app.use('/api/public', imagingBridgePublicRoutes); // köprü heartbeat — Bear
 
 // Platform admin routes (kendi JWT'si var, global auth dışında)
 app.use('/api/platform', platformAdminRoutes);
+// KVKK-CRIT-003 security incident foundation — own authenticatePlatformAdmin
+// gate, kept in a separate file/router from platformAdmin.ts's already-large
+// route surface.
+app.use('/api/platform', platformSecurityIncidentsRoutes);
 
 // Self-service klinik kaydı (public)
 app.use('/api/register', clinicRegistrationRoutes);

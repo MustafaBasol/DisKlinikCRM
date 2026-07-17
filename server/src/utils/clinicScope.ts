@@ -10,6 +10,35 @@
 import { Response } from 'express';
 import prisma from '../db.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { evaluateCrossTenantDenialSignal } from '../services/security/securityDetectionRules.js';
+
+/**
+ * KVKK-CRIT-003 Rule 2 (cross-tenant access suspicion) — fired from the
+ * shared scope-rejection path (this file + clinicAccess.ts middleware),
+ * never from individual routes. Only fires when a SPECIFIC clinicId was
+ * requested and denied — a bare "no clinics assigned at all" (selectedClinicId
+ * undefined/'all') is an account-configuration state, not a targeted probe,
+ * so it is intentionally excluded here to avoid noise.
+ */
+function recordCrossTenantDenialIfTargeted(
+  user: NonNullable<AuthRequest['user']>,
+  res: Response,
+  selectedClinicId: string | undefined,
+): void {
+  if (!selectedClinicId || selectedClinicId === 'all') return;
+  const req = res.req;
+  evaluateCrossTenantDenialSignal({
+    actorUserId: user.id,
+    actorOrganizationId: user.organizationId,
+    actorClinicId: user.clinicId ?? null,
+    attemptedResourceType: 'clinic',
+    attemptedResourceId: selectedClinicId,
+    method: req?.method ?? 'unknown',
+    routeTemplate: req?.route?.path ? `${req.baseUrl ?? ''}${req.route.path}` : (req?.path ?? 'unknown'),
+    ip: req?.ip ?? null,
+    userAgent: req?.headers['user-agent'] as string | undefined,
+  });
+}
 
 export type ClinicScopeWhere =
   | { organizationId: string }                               // OWNER/ORG_ADMIN, selectedClinicId=all
@@ -62,6 +91,7 @@ export async function validateAndGetScope(
 ): Promise<ClinicScopeWhere | false> {
   const scope = await buildClinicScopeWhere(user, selectedClinicId);
   if (scope === null) {
+    recordCrossTenantDenialIfTargeted(user, res, selectedClinicId);
     res.status(403).json({ error: 'Access denied to requested clinic' });
     return false;
   }
@@ -184,6 +214,7 @@ export async function validateAndGetClinicIdScope(
 ): Promise<ClinicIdScopeWhere | false> {
   const scope = await buildClinicIdScope(user, selectedClinicId);
   if (scope === null) {
+    recordCrossTenantDenialIfTargeted(user, res, selectedClinicId);
     res.status(403).json({ error: 'Access denied to requested clinic' });
     return false;
   }

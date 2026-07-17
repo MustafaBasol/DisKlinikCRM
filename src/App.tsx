@@ -41,6 +41,7 @@ const PlatformPlans = React.lazy(() => import('./pages/platform/PlatformPlans'))
 const PlatformSystem = React.lazy(() => import('./pages/platform/PlatformSystem'));
 const PlatformPrivacy = React.lazy(() => import('./pages/platform/PlatformPrivacy'));
 const PlatformBackups = React.lazy(() => import('./pages/platform/PlatformBackups'));
+const PlatformSecurityIncidents = React.lazy(() => import('./pages/platform/PlatformSecurityIncidents'));
 const BookingWidget = React.lazy(() => import('./pages/BookingWidget'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 const PaymentPlans = React.lazy(() => import('./pages/PaymentPlans'));
@@ -170,6 +171,7 @@ const ProductApplication: React.FC = () => {
                 <Route path="system" element={<PlatformSystem />} />
                 <Route path="privacy" element={<PlatformPrivacy />} />
                 <Route path="backups" element={<PlatformBackups />} />
+                <Route path="security-incidents" element={<PlatformSecurityIncidents />} />
               </Route>
             </Route>
 

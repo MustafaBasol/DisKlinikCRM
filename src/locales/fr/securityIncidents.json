@@ -1,0 +1,108 @@
+{
+  "title": "Incidents de sécurité",
+  "legalDisclaimer": "Cette classification technique ne constitue pas une détermination juridique. La classification de la violation, les obligations de notification, les délais et la formulation nécessitent l'examen d'un conseil juridique turc.",
+  "summary": {
+    "openCritical": "Critiques ouverts",
+    "openHigh": "Élevés ouverts",
+    "unacknowledged": "Non confirmés",
+    "investigating": "En cours d'investigation",
+    "last24h": "Détectés dans les dernières 24h"
+  },
+  "filters": {
+    "status": "Statut",
+    "severity": "Gravité",
+    "category": "Catégorie",
+    "organizationId": "ID organisation",
+    "clinicId": "ID clinique",
+    "assignedTo": "Assigné (ID admin)",
+    "from": "Du",
+    "to": "Au",
+    "all": "Tous",
+    "apply": "Appliquer les filtres",
+    "clear": "Effacer"
+  },
+  "status": {
+    "open": "Ouvert",
+    "acknowledged": "Confirmé",
+    "investigating": "En investigation",
+    "contained": "Contenu",
+    "resolved": "Résolu",
+    "closed": "Fermé",
+    "false_positive": "Faux positif"
+  },
+  "severity": {
+    "low": "Faible",
+    "medium": "Moyenne",
+    "high": "Élevée",
+    "critical": "Critique"
+  },
+  "category": {
+    "auth_brute_force": "Force brute d'authentification",
+    "cross_tenant_access": "Accès inter-cliniques",
+    "export_anomaly": "Anomalie d'exportation",
+    "webhook_signature": "Signature webhook"
+  },
+  "table": {
+    "severity": "Gravité",
+    "status": "Statut",
+    "category": "Catégorie",
+    "title": "Titre",
+    "organization": "Organisation",
+    "clinic": "Clinique",
+    "firstDetected": "Première détection",
+    "lastDetected": "Dernière détection",
+    "occurrences": "Occurrences",
+    "assignee": "Assigné à",
+    "unassigned": "Non assigné"
+  },
+  "list": {
+    "loading": "Chargement des incidents…",
+    "error": "Échec du chargement des incidents.",
+    "empty": "Aucun incident de sécurité ne correspond aux filtres actuels.",
+    "pageInfo": "Page {{page}} sur {{totalPages}} ({{total}} au total)",
+    "prev": "Précédent",
+    "next": "Suivant"
+  },
+  "detail": {
+    "title": "Détail de l'incident",
+    "close": "Fermer",
+    "summary": "Résumé",
+    "metadata": "Métadonnées sécurisées",
+    "noMetadata": "Aucune métadonnée enregistrée.",
+    "occurrenceCount": "Nombre d'occurrences",
+    "sourceRule": "Règle de détection",
+    "affectedResource": "Ressource affectée",
+    "activityTitle": "Historique d'activité",
+    "activityLoading": "Chargement de l'activité…",
+    "activityEmpty": "Aucune activité enregistrée pour le moment.",
+    "legalReview": "Examen juridique",
+    "legalReviewRequired": "Requis",
+    "legalReviewStatus": {
+      "pending": "En attente",
+      "in_review": "En cours d'examen",
+      "not_required": "Non requis",
+      "advised": "Avis du conseil juridique reçu"
+    }
+  },
+  "actions": {
+    "acknowledge": "Confirmer",
+    "investigate": "Démarrer l'investigation",
+    "assign": "Assigner",
+    "unassign": "Désassigner",
+    "contain": "Marquer comme contenu",
+    "resolve": "Résoudre",
+    "close": "Fermer l'incident",
+    "falsePositive": "Marquer comme faux positif",
+    "reopen": "Rouvrir",
+    "addNote": "Ajouter une note",
+    "note": "Note",
+    "containmentSummary": "Résumé du confinement",
+    "resolutionSummary": "Résumé de la résolution",
+    "reasonRequired": "Une justification est requise",
+    "submit": "Envoyer",
+    "cancel": "Annuler",
+    "assigneeIdPlaceholder": "ID admin plateforme",
+    "success": "Incident mis à jour.",
+    "error": "Échec de la mise à jour de l'incident."
+  }
+}
