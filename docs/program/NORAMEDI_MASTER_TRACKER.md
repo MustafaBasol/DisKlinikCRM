@@ -72,8 +72,10 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 |---|---|
 | Repository | `DisKlinikCRM` (yerel yol: `E:\Ek Gelir\Siteler\DisKlinikCRM-git`; remote: `github.com/MustafaBasol/DisKlinikCRM`) |
 | Default branch | `main` |
-| Current branch (bu dokümantasyon çalışması) | `docs/f0-001-program-tracker-foundation` (base: `origin/main`) |
-| Main commit (base) | `6872155` (`68721554eb622837f67f956d571723192d628eaf`, origin/main @ 2026-07-17) |
+| Current branch (bu dokümantasyon çalışması) | `docs/f0-001-program-tracker-foundation` |
+| Documentation branch creation base | `68721554eb622837f67f956d571723192d628eaf` (branch oluşturulduğu andaki `origin/main`, 2026-07-17) |
+| PR base branch | `main` |
+| Current main commit | `UNVERIFIED` — F0-002 bu kanıtı toplayacaktır |
 | Production commit | `UNVERIFIED` |
 | Backend deployment | `UNVERIFIED` |
 | Frontend deployment | `UNVERIFIED` |
@@ -82,7 +84,9 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 | Last backup | `UNVERIFIED` |
 | Last restore test | `UNVERIFIED` |
 | Last production verification | `UNVERIFIED` |
-| Active KVKK branch/work | `feature/kvkk-high-004-secure-clinic-bulk-export` (dışarıdan doğrulanmamış / devam ediyor; PR #165 açık, merge edilmemiş) |
+| Last confirmed merged KVKK work | [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) — KVKK-HIGH-004 secure clinic bulk export — `MERGED` (2026-07-17) |
+| Currently active KVKK work | `UNVERIFIED` |
+| Local observation (KVKK) | Ana çalışma ağacında `feature/kvkk-crit-003-security-incident-foundation` branch'i gözlemlendi; remote branch, PR, kapsam, uygulama ve tamamlanma durumu `UNVERIFIED` |
 | Known blockers | Bkz. §12 |
 
 ## 4. Phase summary (Faz özeti)
@@ -108,18 +112,18 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 |---|---|
 | ID | F0-001 |
 | Title | Program Control and Master Tracker Foundation |
-| Status | `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) (`main` hedefli, 2026-07-17; merge kararı dış incelemeye aittir) |
+| Status | `CHANGES_REQUESTED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesinde bayat KVKK taban çizgisi ifadeleri bulundu; düzeltmeler uygulanıyor (2026-07-17) |
 | Branch | `docs/f0-001-program-tracker-foundation` |
 | Scope | Yalnızca dokümantasyon: program takip temeli (`docs/program/`) |
 | Out of scope | Tüm uygulama ve veritabanı değişiklikleri |
 | Dependency | Yok |
 | Reviewer | ChatGPT / kullanıcı |
-| Ajan için izinli sonraki durum | Yok — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir |
+| Ajan için izinli sonraki durum | `PR_OPEN` — düzeltmeler mevcut açık PR'a (#166) push edildikten sonra |
 
 ## 6. Current F0 task backlog (F0 görev listesi)
 
 ### F0-001 — Program Control and Master Tracker Foundation
-- **Status:** `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) (2026-07-17)
+- **Status:** `CHANGES_REQUESTED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi düzeltme istedi (2026-07-17)
 - **Purpose:** Depo-tabanlı yetkili program takip sistemini (`docs/program/`) oluşturmak.
 - **Dependencies:** Yok.
 - **Deliverables:** 24 Markdown dosyası (12 kök + 12 faz dokümanı).
@@ -239,7 +243,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme sonrası [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı (2026-07-17); merge kararı dış incelemeye aittir. |
+| F0-001 | Program Control and Master Tracker Foundation | `CHANGES_REQUESTED` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi bayat KVKK taban çizgisi ifadeleri için düzeltme istedi (2026-07-17); merge kararı dış incelemeye aittir. |
 
 ## 8. Blocked tasks (Bloklu işler)
 
@@ -306,7 +310,7 @@ Henüz bu program kapsamında production doğrulaması yapılmamıştır.
 
 ## 12. Current blockers (Güncel blokajlar)
 
-1. Aktif KVKK çalışması henüz dışarıdan "tamamlandı" olarak teyit edilmedi.
+1. KVKK taban çizgisi henüz dışarıdan kararlı olarak teyit edilmedi. KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi (2026-07-17); ancak bu, tüm KVKK programının tamamlandığı anlamına gelmez — devam eden KVKK/güvenlik çalışmasının durumu `UNVERIFIED` (F0-007 kanıt toplayacaktır).
 2. Depo taban çizgisi (baseline) henüz toplanmadı (F0-002).
 3. Production topolojisi bu program kapsamında henüz doğrulanmadı (F0-006).
 4. RLS / Prisma / PgBouncer uyumluluğu henüz kanıtlanmadı (F0-009 → F5).

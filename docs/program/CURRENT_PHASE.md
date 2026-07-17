@@ -21,7 +21,7 @@ Kurumsal mimari programına başlamadan önce:
 
 ## KVKK geliştirmesi sürerken F0 neden çalışıyor?
 
-Aktif KVKK çalışması (`feature/kvkk-high-004-secure-clinic-bulk-export`, dışarıdan doğrulanmamış / devam ediyor) uygulama kodunda ilerlemektedir. F0'ın işleri **invaziv olmayan** dokümantasyon ve analizdir; KVKK koduna dokunmaz, onunla çakışmaz. Bu sayede program temeli, KVKK teslimini bekletmeden kurulur; fiziksel mimari değişiklikleri ise KVKK taban çizgisi dışarıdan teyit edilene kadar **donmuş** kalır.
+KVKK-HIGH-004 (secure clinic bulk export) çalışması [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile `main`'e **merge edilmiştir** (2026-07-17). Bu, tüm KVKK programının tamamlandığı anlamına gelmez; ek KVKK/güvenlik çalışmaları hâlâ aktif olabilir. Yerel gözlem: ana çalışma ağacında `feature/kvkk-crit-003-security-incident-foundation` branch'i gözlemlenmiştir; ancak bu branch'in remote branch, PR, kapsam ve tamamlanma durumu `UNVERIFIED`'dır. F0'ın işleri **invaziv olmayan** dokümantasyon ve analizdir; KVKK koduna dokunmaz, onunla çakışmaz. Fiziksel mimari değişiklikleri, kullanıcı/ChatGPT kararlı bir KVKK taban çizgisini dışarıdan teyit edene kadar **donmuş** kalır.
 
 ## Şu an ilerleyebilecek işler
 
@@ -49,7 +49,7 @@ Aktif KVKK çalışması (`feature/kvkk-high-004-secure-clinic-bulk-export`, dı
 
 ## Aktif görev
 
-**F0-001 — Program Control and Master Tracker Foundation** → `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) (merge kararı dış incelemeye aittir)
+**F0-001 — Program Control and Master Tracker Foundation** → `CHANGES_REQUESTED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi bayat KVKK taban çizgisi ifadeleri için düzeltme istedi (merge kararı dış incelemeye aittir)
 
 ## Sonraki görev
 
@@ -73,7 +73,7 @@ G0, F0-013 konsolide raporunun; baseline kanıtları, harita doğrulamaları, Po
 
 Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blockers-güncel-blokajlar). Özet:
 
-- KVKK çalışması dışarıdan teyit edilmedi.
+- KVKK taban çizgisi dışarıdan kararlı olarak teyit edilmedi (KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışması `UNVERIFIED`).
 - Baseline, production topolojisi, RLS/PgBouncer, storage ve queue/outbox kanıtları henüz yok.
 
 ## Tarih ve güncelleme geçmişi
@@ -83,3 +83,4 @@ Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blo
 | 2026-07-17 | F0-001 | Doküman oluşturuldu; F0 `IN_PROGRESS`, F0-001 `AGENT_COMPLETED`, F0-002 `READY`. |
 | 2026-07-17 | F0-001 | Dış inceleme başladı: F0-001 → `REVIEW_REQUIRED`; kalite düzeltmeleri (PR_OPEN kural netleştirmesi) uygulandı. |
 | 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
+| 2026-07-17 | F0-001 | Dış inceleme düzeltme istedi (bayat KVKK taban çizgisi ifadeleri): F0-001 → `CHANGES_REQUESTED`; PR #165'in merge edildiği kaydedildi, aktif KVKK çalışması `UNVERIFIED`'a döndürüldü. |

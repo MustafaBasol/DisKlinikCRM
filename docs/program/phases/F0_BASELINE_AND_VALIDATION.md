@@ -54,7 +54,7 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 
 | ID | Başlık | Durum |
 |---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)) |
+| F0-001 | Program Control and Master Tracker Foundation | `CHANGES_REQUESTED` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi) |
 | F0-002 | Repository and Deployment Baseline Inventory | `READY` |
 | F0-003 | Domain and Module Ownership Map | `TODO` |
 | F0-004 | Cross-Module Dependency Map | `TODO` |
@@ -107,7 +107,7 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 
 ## Open questions (Açık sorular)
 
-- KVKK çalışmasının dış teyidi ne zaman gelecek? (F0-007 girdisi)
+- KVKK taban çizgisinin dış teyidi ne zaman gelecek? KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışmasının durumu `UNVERIFIED` (F0-007 girdisi)
 - Production ortam kanıtlarına erişim yöntemi (F0-002/F0-006 için kullanıcıdan beklenen bilgiler)
 - F8'in (AI Gateway) F2 sonrası paralelleştirilme kararı (F0-013'te netleşecek)
 
@@ -118,3 +118,4 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 | 2026-07-17 | F0-001 | Faz dokümanı oluşturuldu; backlog F0-001…F0-013 tanımlandı. |
 | 2026-07-17 | F0-001 | Dış inceleme başladı: F0-001 → `REVIEW_REQUIRED`. |
 | 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
+| 2026-07-17 | F0-001 | Dış inceleme düzeltmesi: bayat KVKK ifadeleri giderildi (PR #165 `MERGED`, aktif KVKK çalışması `UNVERIFIED`); F0-001 → `CHANGES_REQUESTED`. |
