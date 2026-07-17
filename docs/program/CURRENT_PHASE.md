@@ -1,0 +1,84 @@
+# CURRENT_PHASE — Aktif Faz Durumu
+
+Son güncelleme: 2026-07-17 (F0-001)
+
+## Aktif faz
+
+**F0 — Baseline, Program Control, and Architecture Validation**
+
+Faz dokümanı: [phases/F0_BASELINE_AND_VALIDATION.md](phases/F0_BASELINE_AND_VALIDATION.md)
+Faz durumu: `IN_PROGRESS`
+
+## Faz amacı
+
+Kurumsal mimari programına başlamadan önce:
+
+- Depo-tabanlı yetkili takip sistemini kurmak (F0-001),
+- Depo, deployment ve test taban çizgisini **kanıtla** çıkarmak,
+- Modül/bağımlılık/test sahipliği haritalarını hazırlamak,
+- Kritik mimari kararlar (RLS, PgBouncer, outbox, object storage) için PoC **tasarımlarını** üretmek,
+- G0 kapısına sunulacak konsolide doğrulama raporunu (F0-013) hazırlamak.
+
+## KVKK geliştirmesi sürerken F0 neden çalışıyor?
+
+Aktif KVKK çalışması (`feature/kvkk-high-004-secure-clinic-bulk-export`, dışarıdan doğrulanmamış / devam ediyor) uygulama kodunda ilerlemektedir. F0'ın işleri **invaziv olmayan** dokümantasyon ve analizdir; KVKK koduna dokunmaz, onunla çakışmaz. Bu sayede program temeli, KVKK teslimini bekletmeden kurulur; fiziksel mimari değişiklikleri ise KVKK taban çizgisi dışarıdan teyit edilene kadar **donmuş** kalır.
+
+## Şu an ilerleyebilecek işler
+
+- Dokümantasyon ve program takibi
+- Depo envanteri ve taban çizgisi toplama
+- Modül ve bağımlılık haritalama
+- Test envanteri ve sahiplik haritası
+- ADR taslak çalışması
+- İnvaziv olmayan analiz ve PoC **tasarımı**
+
+## KVKK taban çizgisine kadar DONMUŞ işler
+
+1. Geniş Prisma şema değişiklikleri
+2. Tenant `organizationId` backfill'leri
+3. RLS migration'ları
+4. Prisma tenant extension rollout'u
+5. Fiziksel modül refactoring'i
+6. Privacy modeli taşıma
+7. Consent modeli taşıma
+8. Retention modeli taşıma
+9. Anonimleştirme iş akışı yeniden yapılandırması
+10. Attachment fiziksel-silme iş akışı değişiklikleri
+11. Storage-key migrasyonu
+12. Geniş authentication middleware yeniden yapılandırması
+
+## Aktif görev
+
+**F0-001 — Program Control and Master Tracker Foundation** → `REVIEW_REQUIRED` (dış inceleme 2026-07-17'de başladı; kalite düzeltmeleri uygulandı, PR aşamasına geçiliyor)
+
+## Sonraki görev
+
+**F0-002 — Repository and Deployment Baseline Inventory** → `READY` (yalnızca analiz/dokümantasyon; uygulama davranışı değiştirilemez)
+
+## Giriş koşulları
+
+- Program başlangıç kararı (verildi — bu program promptu ile).
+- Başka ön koşul yok.
+
+## Çıkış koşulları
+
+- F0-001…F0-013 görevlerinin tamamlanması,
+- [RELEASE_GATES.md](RELEASE_GATES.md) içindeki **G0 — F0 Architecture Validation Complete** kapısının dış onayı.
+
+## F0 doğrulama kapısı (G0)
+
+G0, F0-013 konsolide raporunun; baseline kanıtları, harita doğrulamaları, PoC tasarımları ve risk değerlendirmesiyle birlikte dış inceleyici (ChatGPT/kullanıcı) tarafından onaylanmasını gerektirir. Ayrıntı: [RELEASE_GATES.md](RELEASE_GATES.md).
+
+## Bilinen blokajlar
+
+Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blockers-güncel-blokajlar). Özet:
+
+- KVKK çalışması dışarıdan teyit edilmedi.
+- Baseline, production topolojisi, RLS/PgBouncer, storage ve queue/outbox kanıtları henüz yok.
+
+## Tarih ve güncelleme geçmişi
+
+| Tarih | Görev | Değişiklik |
+|---|---|---|
+| 2026-07-17 | F0-001 | Doküman oluşturuldu; F0 `IN_PROGRESS`, F0-001 `AGENT_COMPLETED`, F0-002 `READY`. |
+| 2026-07-17 | F0-001 | Dış inceleme başladı: F0-001 → `REVIEW_REQUIRED`; kalite düzeltmeleri (PR_OPEN kural netleştirmesi) uygulandı. |
