@@ -112,18 +112,18 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 |---|---|
 | ID | F0-001 |
 | Title | Program Control and Master Tracker Foundation |
-| Status | `CHANGES_REQUESTED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesinde bayat KVKK taban çizgisi ifadeleri bulundu; düzeltmeler uygulanıyor (2026-07-17) |
+| Status | `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; dış inceleme düzeltmeleri commit `ef11d2d` ile push edildi (2026-07-17; merge kararı dış incelemeye aittir) |
 | Branch | `docs/f0-001-program-tracker-foundation` |
 | Scope | Yalnızca dokümantasyon: program takip temeli (`docs/program/`) |
 | Out of scope | Tüm uygulama ve veritabanı değişiklikleri |
 | Dependency | Yok |
 | Reviewer | ChatGPT / kullanıcı |
-| Ajan için izinli sonraki durum | `PR_OPEN` — düzeltmeler mevcut açık PR'a (#166) push edildikten sonra |
+| Ajan için izinli sonraki durum | Yok — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir |
 
 ## 6. Current F0 task backlog (F0 görev listesi)
 
 ### F0-001 — Program Control and Master Tracker Foundation
-- **Status:** `CHANGES_REQUESTED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi düzeltme istedi (2026-07-17)
+- **Status:** `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; düzeltmeler push edildi (2026-07-17)
 - **Purpose:** Depo-tabanlı yetkili program takip sistemini (`docs/program/`) oluşturmak.
 - **Dependencies:** Yok.
 - **Deliverables:** 24 Markdown dosyası (12 kök + 12 faz dokümanı).
@@ -243,7 +243,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `CHANGES_REQUESTED` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi bayat KVKK taban çizgisi ifadeleri için düzeltme istedi (2026-07-17); merge kararı dış incelemeye aittir. |
+| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme düzeltmeleri (bayat KVKK taban çizgisi ifadeleri) commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi (2026-07-17); PR açık, merge kararı dış incelemeye aittir. |
 
 ## 8. Blocked tasks (Bloklu işler)
 

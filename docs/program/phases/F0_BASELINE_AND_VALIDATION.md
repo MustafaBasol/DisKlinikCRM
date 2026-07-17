@@ -54,7 +54,7 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 
 | ID | Başlık | Durum |
 |---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `CHANGES_REQUESTED` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi) |
+| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166); düzeltmeler push edildi) |
 | F0-002 | Repository and Deployment Baseline Inventory | `READY` |
 | F0-003 | Domain and Module Ownership Map | `TODO` |
 | F0-004 | Cross-Module Dependency Map | `TODO` |
@@ -119,3 +119,4 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 | 2026-07-17 | F0-001 | Dış inceleme başladı: F0-001 → `REVIEW_REQUIRED`. |
 | 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
 | 2026-07-17 | F0-001 | Dış inceleme düzeltmesi: bayat KVKK ifadeleri giderildi (PR #165 `MERGED`, aktif KVKK çalışması `UNVERIFIED`); F0-001 → `CHANGES_REQUESTED`. |
+| 2026-07-17 | F0-001 | Düzeltmeler commit `ef11d2d` ile PR #166'ya push edildi; PR açık: F0-001 → `PR_OPEN`. |

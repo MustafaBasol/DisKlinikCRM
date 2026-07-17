@@ -49,7 +49,7 @@ KVKK-HIGH-004 (secure clinic bulk export) çalışması [PR #165](https://github
 
 ## Aktif görev
 
-**F0-001 — Program Control and Master Tracker Foundation** → `CHANGES_REQUESTED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) dış incelemesi bayat KVKK taban çizgisi ifadeleri için düzeltme istedi (merge kararı dış incelemeye aittir)
+**F0-001 — Program Control and Master Tracker Foundation** → `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; dış inceleme düzeltmeleri push edildi (merge kararı dış incelemeye aittir)
 
 ## Sonraki görev
 
@@ -84,3 +84,4 @@ Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blo
 | 2026-07-17 | F0-001 | Dış inceleme başladı: F0-001 → `REVIEW_REQUIRED`; kalite düzeltmeleri (PR_OPEN kural netleştirmesi) uygulandı. |
 | 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
 | 2026-07-17 | F0-001 | Dış inceleme düzeltme istedi (bayat KVKK taban çizgisi ifadeleri): F0-001 → `CHANGES_REQUESTED`; PR #165'in merge edildiği kaydedildi, aktif KVKK çalışması `UNVERIFIED`'a döndürüldü. |
+| 2026-07-17 | F0-001 | Düzeltmeler commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi; PR açık: F0-001 → `PR_OPEN`. |
