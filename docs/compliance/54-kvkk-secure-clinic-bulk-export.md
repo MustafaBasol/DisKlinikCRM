@@ -23,7 +23,7 @@ occurs and that no parameter can change the outcome.
 
 | Variable | Default | Fail mode | Purpose |
 |---|---|---|---|
-| `CLINIC_BULK_EXPORT_ENABLED` | unset = disabled | **fail-closed** (`=== 'true'` only) | Gates creation of new export jobs. Checked (together with the allowlist below, via `isClinicBulkExportEnabledForOrganization`) before password/confirmation parsing, and only after the route's clinicId has already been scope-validated (see Section 3). |
+| `CLINIC_BULK_EXPORT_ENABLED` | unset = disabled | **fail-closed** (`=== 'true'` only) | Gates creation of new export jobs AND generation of already-queued ones (fifth-pass remediation — see Section 20). Checked (together with the allowlist below, via `isClinicBulkExportEnabledForOrganization`) before password/confirmation parsing on the create route, and separately re-checked by the worker before claiming a queued row and three more times inside `generateClinicBulkExport` itself (generation start, before the planned-key persist/upload, before the ready transition) — a job that becomes disabled while still `queued` or `generating` is moved atomically to `failed`/`FEATURE_DISABLED`, never silently generated to completion. |
 | `CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS` | unset/empty = no allowlist (every organization in scope) | **fail-closed when set** (comma-separated list; an org not listed is treated exactly like the flag being off) | Server-enforced tenant rollout control — see Section 14. |
 | `CLINIC_BULK_EXPORT_CLEANUP_ENABLED` | unset = **enabled** (`!== 'false'`) | fail-open (cleanup keeps running) | Independent of the creation flag — expired artifacts/rows and abandoned jobs keep being swept even while creation is off. |
 | `CLINIC_BULK_EXPORT_IP_HASH_SECRET` | **required when `CLINIC_BULK_EXPORT_ENABLED=true`** | fail-closed | Dedicated HMAC key for hashing client IPs in the brute-force lockout table. Never reused from `JWT_SECRET`/`ENCRYPTION_KEY`/webhook secrets. |
@@ -324,14 +324,17 @@ written, not what it is. `generateClinicBulkExport` now:
    gone.
 5. A worker **process crash** between step 1 (planned key persisted) and a
    real upload landing is not something any in-process `catch` block can
-   ever run for. This is closed by two pre-existing, unrelated mechanisms
-   composing correctly: the abandoned-lease sweep (already existed) flips
-   the orphaned `generating` row to `failed` once its lease expires, and the
-   cleanup cron's *expanded* retry-deletion sweep (Section 11) now covers
-   `failed` rows with a non-null `storageKey`, not only `expired` ones — so
-   the row is found and its (possibly-nonexistent, idempotently-handled)
-   artifact is cleaned up on a later cleanup tick, with no manual
-   intervention.
+   ever run for. This is closed by two mechanisms composing correctly: the
+   abandoned-lease sweep flips the orphaned `generating` row to `failed`
+   once its lease expires, and the cleanup cron's *expanded* retry-deletion
+   sweep (Section 11) covers `failed` rows with a non-null `storageKey`, not
+   only `expired` ones — so the row is found and its (possibly-nonexistent,
+   idempotently-handled) artifact is cleaned up with no manual intervention.
+   **Fifth-pass remediation (Section 20)**: the cleanup cron now runs these
+   two steps — the abandoned-lease sweep, then the artifact-deletion
+   retry — strictly in that order within **one** call, so a row needing
+   both is fully cleaned up in the SAME cleanup run rather than requiring a
+   second 15-minute tick as in the fourth-pass version of this document.
 
 The planned `storageKey` is never exposed through any API/status response
 (the status DTO explicitly excludes it, unchanged) or logged — it is purely
@@ -348,6 +351,87 @@ expanded cleanup sweep across two cleanup ticks; and an immediate delete
 failure that is preserved with `cleanupFailureCode` and successfully
 retried, and actually removed from disk, on a later run) — proving no
 scenario leaves a reachable, untracked artifact.
+
+### 7b. Crash-safe private temp lifecycle and post-finalize byte/integrity ceiling (fifth-pass, P0 remediation)
+
+Two gaps found by a fifth review round, both closed on the same branch (see
+Section 20):
+
+**Private temp directory, exclusive-create, 0600 permissions.** The ZIP was
+previously built at a fixed, predictable path directly under `os.tmpdir()`
+(`clinic-bulk-export-<jobId>.zip`) — a shared, world-readable-by-convention
+location. A hard process kill between the write stream opening and the final
+`ready`/`failed` transition could leave a complete, unencrypted clinic ZIP
+sitting there indefinitely with no DB-based cleanup able to discover it (the
+database has no column recording a local scratch path — by design, since
+that path is meaningless on every host except the one that crashed).
+`server/src/services/fileStorage.ts` now provides a dedicated subdirectory
+(`ensureExportTempDir`/`getExportTempDir`, `os.tmpdir()/diskliniks-export-tmp`,
+created and `chmod`'d to `0700`, fully server-derived path with no client
+input) and a deterministic-but-unpredictable naming scheme
+(`buildExportTempFilePath`: `export-<jobId>-<16 hex random>.zip`) that a
+stale-file sweep can recognize without a DB lookup by path. The temp ZIP's
+write stream is opened with `{ mode: 0o600, flags: 'wx' }` (exclusive
+create — never silently overwrites/truncates an existing path). Local-mode
+final and `.partial-*` artifacts produced by `saveFileFromPath` are 0600 too
+(the same-filesystem rename path preserves the temp file's own mode; the
+cross-device `EXDEV` streamed-copy fallback opens its destination with an
+explicit `{ mode: 0o600, flags: 'wx' }` and the partial file is re-`chmod`'d
+to 0600 immediately before promotion regardless of which path produced it).
+
+**Process-local stale-temp sweep**, independent of the singleton, DB-locked
+cleanup cron (which cannot see any individual host's local filesystem at
+all): `sweepStaleClinicBulkExportTempFiles` runs at worker startup and again
+on every worker tick (`clinicBulkExportWorker.ts`). It only ever considers
+files matching the recognized naming pattern, and deletes one only when
+**both** it is older than a configurable threshold (default twice the
+generation lease) **and** the job id encoded in its filename does not
+currently belong to a `generating` row with a still-valid lease — a DB
+lookup failure is treated as "cannot confirm inactive" and never authorizes
+deletion by itself. This is what actually recovers a hard-killed process's
+temp file: verified with a **real child process**
+(`server/scripts/_clinicBulkExportCrashChild.ts`, spawned via `node --import
+tsx`), `SIGKILL`ed the instant its real temp ZIP is observed on disk (no
+`catch`/`finally` in that process ever runs), with the sweep — run in the
+parent verify-script process, i.e. a genuinely separate OS process — proving
+the file is found and deleted afterward, and that no final/partial artifact
+was ever created (`scripts/verify-clinic-bulk-export-lifecycle.ts`).
+
+Local-mode `exports/<clinicId>/*.partial-<uuid>` artifacts (the narrow
+window `saveFileFromPath`'s cross-device fallback can leave behind if killed
+mid-copy) get a matching sweep,
+`cleanupStaleLocalExportPartialFiles` (`fileStorage.ts`), wired into the
+existing DB-locked cleanup cron (age-gated, 30 minutes) — a no-op under S3
+storage, since remote uploads have no local partial state; see the
+production-checklist requirement for a bucket `AbortIncompleteMultipartUpload`
+lifecycle rule in Section 14, which is the S3-mode equivalent (a hard kill
+cannot execute the SDK's own `leavePartsOnError: false` client-side cleanup).
+
+**Post-finalize byte-ceiling and ZIP structural-integrity re-check.** The
+existing `CLINIC_BULK_EXPORT_MAX_BYTES` streaming check (unchanged, still
+aborts generation early on egregious overage) runs on the `archive.on('data')`
+accumulator **before** `manifest.json` is appended and **before**
+`archive.finalize()` writes the ZIP's own central directory/EOCD record —
+both add real bytes on top of whatever the entity streams alone produced, so
+a payload that looked within budget mid-stream could still finish over the
+ceiling. `generateClinicBulkExport` now re-checks, strictly after
+`finalize()`/the write-stream close and strictly before the planned-key
+persist: the **real on-disk size** of the completed temp file (ground
+truth, not the async event accumulator) against `CLINIC_BULK_EXPORT_MAX_BYTES`,
+failing with the same stable `SIZE_LIMIT_EXCEEDED` code on overage; and a
+structural-integrity check (`validateZipStructuralIntegrity`, exported for
+unit testing) that locates the EOCD record, reads only the central-directory
+region it points to (never the whole file, preserving this module's
+never-buffer-the-whole-archive design even for the validation step), and
+confirms the resulting entry-name set exactly matches what was actually
+written — failing with the stable `ZIP_INTEGRITY_FAILED` code otherwise.
+Both failures funnel through the ordinary catch-block cleanup (temp file
+unlinked; no `storageKey` ever persisted; nothing uploaded). Verified with a
+self-calibrating test (generates once unconstrained to measure the real
+final size for the exact payload/environment, then caps the limit to one
+byte under that measured size for a second run) proving the entity payload
+alone stays under budget while the real completed file — manifest.json and
+ZIP overhead included — still gets rejected.
 
 ## 8. Versioned export data contract
 
@@ -417,31 +501,45 @@ is out of scope for this PR.
 
 `server/src/jobs/clinicBulkExportCleanupJob.ts`, gated by
 `CLINIC_BULK_EXPORT_CLEANUP_ENABLED` (default on), `withJobLock`-guarded
-singleton cron every 15 minutes. Each run:
+singleton cron every 15 minutes. Each run, **in this order** (fifth-pass
+remediation — see Section 20; the order matters, see step 2/3 below):
 
 1. Calls `expireArchiveIfPastTtl` across all `ready` rows past `expiresAt` —
    the exact same function request-time routes use, so there is one
    definition of "expired," not two.
-2. For every `expired` **or `failed`** row still holding a non-null
-   `storageKey` (P0 remediation — previously only `expired` rows were
-   retried; a `failed` row can now legitimately carry a `storageKey` too,
-   see Section 7a's planned-storageKey lifecycle), attempts storage
-   deletion via the same `attemptArtifactDeletion` function generation's own
-   failure path uses. **This is a separate, non-atomic, retryable step** —
-   a Postgres transaction cannot span an S3/local filesystem delete. On
-   success, `storageKey` is cleared and `artifactDeletedAt` is set. On
-   failure, `storageKey` is **preserved** (never nulled) and
-   `cleanupFailureCode: 'STORAGE_DELETE_FAILED'` is set so the next run
-   retries — deletion is never silently abandoned, and the row's `status`
-   stays whatever non-downloadable terminal value it already was throughout
-   (only the storage-related fields change across retries). A missing
-   storage object is treated as an idempotent success, never retried
-   forever (Section 7a, point 4).
-3. Sweeps abandoned `queued`/`generating` rows past their lease to `failed`
+2. Sweeps abandoned `queued`/`generating` rows past their lease to `failed`
    — a backstop; the worker's own per-tick sweep normally does this first.
-4. Deletes `ClinicBulkExportPasswordAttempt` rows untouched for >30 days.
-5. Continues past individual row failures; logs only stable
+   Deliberately runs **before** step 3 below (previously ran after it) so a
+   row this very sweep just terminated is already eligible for artifact
+   deletion in the same call, rather than requiring a second 15-minute tick.
+3. For every `expired` **or `failed`** row still holding a non-null
+   `storageKey` (a `failed` row can legitimately carry a `storageKey` too,
+   see Section 7a's planned-storageKey lifecycle — including one this same
+   call's step 2 just produced), attempts storage deletion via the same
+   `attemptArtifactDeletion` function generation's own failure path uses.
+   **This is a separate, non-atomic, retryable step** — a Postgres
+   transaction cannot span an S3/local filesystem delete. On success,
+   `storageKey` is cleared and `artifactDeletedAt` is set. On failure,
+   `storageKey` is **preserved** (never nulled) and `cleanupFailureCode:
+   'STORAGE_DELETE_FAILED'` is set so the next run retries — deletion is
+   never silently abandoned, and the row's `status` stays whatever
+   non-downloadable terminal value it already was throughout (only the
+   storage-related fields change across retries). A missing storage object
+   is treated as an idempotent success, never retried forever (Section 7a,
+   point 4).
+4. Sweeps stale local-mode `exports/<clinicId>/*.partial-<uuid>` artifacts
+   older than 30 minutes (`cleanupStaleLocalExportPartialFiles`, Section 7b)
+   — a no-op under S3 storage.
+5. Deletes `ClinicBulkExportPasswordAttempt` rows untouched for >30 days.
+6. Continues past individual row failures; logs only stable
    identifiers/codes, never raw paths or payloads.
+
+Separately, and NOT part of this DB-locked singleton job: each worker
+replica also sweeps its OWN host's local OS temp directory for orphaned
+in-progress ZIPs (`sweepStaleClinicBulkExportTempFiles`, Section 7b) — a
+temp file a crashed process left behind is invisible to any other host and
+invisible to `storageKey`-based cleanup entirely, so it needs a
+process-local mechanism, not a cluster-wide one.
 
 ## 12. Audit and alerting
 
@@ -541,7 +639,13 @@ clinicBulkExportSelectionHelpers.ts`, pure and independently unit-tested)
 before `setActiveJobId` is called, before an error/status update is
 applied, before the follow-up download request is even issued, and before
 an object URL is created or a browser download is triggered. A mismatch
-silently discards the response. The global-switcher-sync effect itself was
+silently discards the response. **Fifth-pass remediation (Section 20)**: the
+same guard now also gates each handler's own `finally` block —
+`setSubmitting(false)`/`setDownloading(false)` fire only when the captured
+`{clinicId, epoch}` still match live, so a stale clinic-A request settling
+after the user has already switched to (and started a new request for)
+clinic B can never clear B's own in-flight loading indicator. The
+global-switcher-sync effect itself was
 also fixed to stop nesting `resetForClinicChange`'s multiple `setState`
 calls inside a `setClinicId` functional updater (state updates must stay
 side-effect free) — it now reads the previous selection via a ref and
@@ -616,6 +720,18 @@ Do **not** enable this in production until all of the following are true:
       production; `prisma migrate status` shows no drift; the partial
       unique index confirmed present via `\d "ClinicBulkExportArchive"` (or
       equivalent) in production.
+- [ ] On every worker/API host, confirm the process can create and `chmod`
+      `os.tmpdir()/diskliniks-export-tmp` (Section 7b) — a host with a
+      read-only or non-standard `TMPDIR` would otherwise fail generation
+      loudly (caught, `GENERATION_ERROR`), not silently.
+- [ ] If `S3_BUCKET` is configured (remote storage mode): the bucket has an
+      **`AbortIncompleteMultipartUpload`** lifecycle rule configured (a short
+      window, e.g. 1–7 days, is sufficient). This is the S3-mode equivalent
+      of the local-mode stale-partial-file sweep (Section 7b/11) — a hard
+      process kill mid-upload cannot execute the SDK's own
+      `leavePartsOnError: false` client-side abort, so without a
+      bucket-level rule, incomplete multipart parts would accumulate
+      (billed, never cleaned up) indefinitely.
 - [ ] At least one end-to-end production run performed: create → poll →
       ready → download → cleanup, with the resulting archive row and
       storage object inspected directly.
@@ -649,9 +765,20 @@ of `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md`.
 
 - **Flag rollback (no deploy needed for a stuck-open flag)**: set
   `CLINIC_BULK_EXPORT_ENABLED=false` and restart — immediately blocks new
-  job creation. In-flight `queued`/`generating` jobs simply age out via the
-  existing lease-expiry sweep (no manual intervention needed) or can be
-  manually set to `failed` if immediate halt is required.
+  job creation. **Corrected (fifth-pass remediation, Section 20)**: prior
+  versions of this document claimed in-flight `queued`/`generating` jobs
+  "simply age out via the existing lease-expiry sweep" while the worker
+  keeps running — that was never accurate once the worker is still
+  configured and polling, since nothing in the pre-fifth-pass code ever
+  stopped it from claiming/continuing those jobs regardless of the flag. As
+  of this remediation the flag is a genuine kill switch: the worker will not
+  claim a still-`queued` job once the flag is off (it is moved atomically to
+  `failed`/`FEATURE_DISABLED` on the very next tick, well before any queue
+  timeout), and `generateClinicBulkExport` re-checks the flag at three
+  points during an already-`generating` job and stops it the same way,
+  deleting any artifact already uploaded. No manual intervention is needed
+  for either case; a manual `failed` update remains available only for an
+  operator who wants to bypass waiting for the next worker tick entirely.
 - **Code rollback**: revert to the pre-merge commit. The legacy
   `gdprExport.ts` route stays permanently disabled either way (it is not
   restored by a rollback of this PR — reverting only removes the new secure
@@ -926,3 +1053,158 @@ verification coverage. The frontend epoch guard and start-new reset are
 covered by 14 new pure-logic + source-inspection tests in
 `src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts`
 sections 6–9 (still no DOM/React Testing Library harness in this repo).
+
+## 20. Remediation round (2026-07-17, fifth pass — PR #165 further review)
+
+A fifth review found two further P0 gaps and two P1 gaps, all fixed on this
+same branch. Status remains **Implemented — awaiting deployment/operational
+verification**; the feature flag remains `false`, not merged, not deployed.
+
+1. **Crash-safe private temp lifecycle (P0).** The generation ZIP was built
+   at a predictable, shared `os.tmpdir()` path with default (loose) file
+   permissions, and nothing on any worker host ever swept it — a hard
+   process kill could leave a complete, unencrypted clinic ZIP there
+   indefinitely. Fixed with a dedicated private (`0700`) temp directory,
+   exclusive-create (`wx`) `0600` temp/partial/final local files, and a new
+   process-local sweep (`sweepStaleClinicBulkExportTempFiles`, run at worker
+   startup and on every tick) that recognizes only this feature's own temp
+   files and deletes one only when it is both old enough AND its job is
+   provably no longer actively generating. Proved with a **real child
+   process**, `SIGKILL`ed the instant its real temp file is observed on
+   disk (no `catch`/`finally` in that process ever runs), recovered by the
+   sweep running in a genuinely separate process. Full detail: Section 7b.
+2. **Post-finalize byte-ceiling and ZIP-integrity check (P0).** The existing
+   `CLINIC_BULK_EXPORT_MAX_BYTES` check ran on the streaming byte
+   accumulator *before* `manifest.json` and the ZIP's own central
+   directory/EOCD were written — a payload within budget mid-stream could
+   still finish over the ceiling. Fixed with a second, authoritative check
+   on the real completed file's on-disk size, plus a structural-integrity
+   validator, both strictly after `finalize()`/write-stream close and
+   strictly before the planned-key persist. **A genuine pre-existing latent
+   bug was found and fixed while building this check's own test**:
+   `archiver`'s `abort()` (called from the byte-limit 'data' listener) can
+   be invoked while `archive.finalize()` is still flushing the central
+   directory — in that interleaving, the awaited `archive.finalize()`
+   promise can hang **forever**, even though the underlying write stream
+   still closes normally. Since nothing before this round ever exercised a
+   byte-limit breach that lands during/after `finalize()` (the only
+   pre-existing byte-limit-adjacent test breaches via record count, not
+   bytes, and trips synchronously inside the streaming loop, well before
+   `finalize()` is ever reached), this hang was previously unreachable by
+   any test or, apparently, any real export — but it was a real risk for
+   any future export whose overage is dominated by ZIP/manifest overhead
+   rather than entity data. Fixed by no longer awaiting `archive.finalize()`
+   directly — `writeFinished` (the write stream's own `'close'` event,
+   which already listens to the same `'error'` source) is the authoritative
+   completion signal and reliably resolves/rejects regardless of when
+   `abort()` fires. Full detail: Section 7b.
+3. **The feature flag did not stop generation, only creation (P0).** The
+   worker kept claiming and generating already-`queued` jobs even with
+   `CLINIC_BULK_EXPORT_ENABLED=false` — the flag was a genuine creation gate
+   but not a generation kill switch, and the rollback documentation
+   (Section 15) incorrectly implied flipping it off was sufficient on its
+   own to stop in-flight jobs "aging out" harmlessly. Fixed: the worker's
+   claim function now re-checks `isClinicBulkExportEnabledForOrganization`
+   per candidate before claiming, atomically failing an ineligible `queued`
+   row as `FEATURE_DISABLED` instead; `generateClinicBulkExport` re-checks
+   the same decision three more times (generation start, before the
+   planned-key persist/upload, before the ready transition), funneling a
+   mid-flight disable through the ordinary catch-block cleanup exactly like
+   a lost lease — deleting any artifact already uploaded and never allowing
+   the `ready` transition. A `failed`/`FEATURE_DISABLED` row is never
+   resurrected merely by re-enabling the flag (the claim query only ever
+   selects `status: 'queued'`). Decision, stated explicitly: disabling does
+   **not** revoke an already-`ready` artifact or its download — the flag
+   stops new artifact *creation*, consistent with how a kill switch is
+   expected to behave; an existing download remains available until its
+   normal TTL expiry either way. Full detail: Section 2, Section 15.
+4. **Two P1 gaps.** (a) The epoch guard protecting async create/download
+   responses (fourth-pass remediation, Section 13) did not extend to each
+   handler's own `finally` block — a stale clinic-A request's `finally`
+   could unconditionally clear `submitting`/`downloading` state that
+   actually belonged to a newer, still-in-flight clinic-B request. Fixed by
+   gating both `finally` blocks behind the same `isStillCurrentSelection`
+   check; no additional per-operation request id was needed since the
+   existing `{clinicId, epoch}` pair, combined with the pre-existing
+   same-clinic double-submit guards (`if (submitting) return`/`if
+   (downloading) return`), already fully covers the required invariant. (b)
+   The cleanup cron ran its artifact-deletion retry query *before* its
+   abandoned-lease sweep, so a process-crashed `generating` row (already
+   carrying a planned `storageKey`) needed a full extra 15-minute cron tick
+   before it was even eligible for deletion. Fixed by reordering to
+   expire → sweep-abandoned → delete-artifacts within one call. Full
+   detail: Section 11, Section 13.
+
+### Updated test plan
+
+- [x] `npx prisma validate` clean (no schema changes this round)
+- [x] `npx prisma generate` clean
+- [x] `npm run typecheck` (server) clean
+- [x] Frontend `npx tsc -b` clean
+- [x] Frontend `npm run build` clean
+- [x] Focused suite: **93/93** (`npm run test:clinic-bulk-export`, +20 new
+      tests: the private temp-dir/naming-pattern helpers, the temp/partial/
+      final-file 0600 permission enforcement (real fs, POSIX-strict
+      assertions skipped on win32 with an explicit note), the local stale-
+      partial-file sweep (real fs), the ZIP structural-integrity validator
+      against a real generated ZIP (accept/reject-mismatch/reject-truncated),
+      the post-finalize check's source-level ordering, all three flag/
+      allowlist generation-kill-switch re-check sites plus the queued-job
+      fail-fast path, the cleanup reordering, the finally-block epoch guard,
+      and the stale-temp-sweep's worker wiring)
+- [x] `npm run test:roles` 142/142
+- [x] `npm run test:kvkk-lifecycle` 110/110
+- [x] `npm run test:patient-privacy` 38/38
+- [x] `npm run test:msg-safety` 36/36
+- [x] Full `npm test` (server, 40+ suites) — all green, exit 0
+- [x] Frontend pure-logic suite: **24/24** (`npm run test:clinic-bulk-export-selection`,
+      unchanged this round — the finally-block fix does not alter any
+      pre-existing observable behavior these tests assert on)
+- [x] Fresh disposable Postgres (Docker, throwaway container/DB): `prisma
+      migrate deploy` (all 60 migrations applied cleanly) + `prisma migrate
+      status` ("Database schema is up to date!", no drift)
+- [x] `scripts/verify-clinic-bulk-export-lifecycle.ts` against that real
+      disposable Postgres + real local file storage, **run twice** (once
+      against a freshly-migrated DB, once again against the same DB with
+      accumulated state from the first run) — **46/46 both times**,
+      including new tests this round covering the real child-process
+      hard-crash recovery, the
+      process-local stale-temp sweep's age/status/lease gating (including a
+      recognized-vs-unrecognized-filename regression guard), the
+      self-calibrating post-finalize byte-ceiling proof, all five feature-
+      flag generation-kill-switch scenarios, and the reordered one-pass
+      cleanup proof (rewritten in place from the fourth-pass version, which
+      required two cleanup ticks).
+- [ ] CI checks (pending — no general CI workflow exists for this repo/branch)
+- [ ] Production deployment + operational verification (still explicitly out
+      of scope)
+
+### Remaining risks
+
+- No production/browser verification has been performed (unchanged from
+  every prior round).
+- The exact-`0600`-mode filesystem assertions are skipped on Windows in this
+  round's test run (this development environment) — Windows synthesizes a
+  file's reported `mode` from its read-only attribute only, so a strict
+  `0600` assertion would be either meaningless or flaky there. The
+  mode-setting code itself (`{ mode: 0o600, flags: 'wx' }` at every relevant
+  `createWriteStream`/`chmod` call site) is unconditional and correct for
+  the POSIX hosts this server actually deploys to; the skip is a test-
+  verification limitation of this session's environment, not a gap in the
+  production code path. A POSIX CI run or a manual Linux smoke test would
+  close this gap.
+- `sweepStaleClinicBulkExportTempFiles`'s default staleness threshold (twice
+  the generation lease) is a judgment call, not something this remediation
+  round load-tested against realistic worst-case generation durations —
+  operators with very large exports should confirm this default comfortably
+  exceeds their real generation time before relying on it.
+- The `_clinicBulkExportCrashChild.ts` script added this round is test-only
+  infrastructure (spawned exclusively by the verify script), not part of
+  the 9 originally-targeted files — it exists because "add a real
+  child-process crash test" structurally requires a real, separate,
+  killable OS process running real generation code; it is documented here
+  for full transparency about the file list this round actually touched.
+- As in every prior round: this PR has now been through five remediation
+  rounds, each finding real issues — including, this round, a genuine
+  latent hang bug in code that predates this PR's own review history. Treat
+  any "done" status as provisional until a human/security review signs off.

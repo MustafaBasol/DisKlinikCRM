@@ -31,15 +31,24 @@
 
 import crypto, { createHash } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import archiver from 'archiver';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import prisma from '../../db.js';
-import { buildExportStorageKey, saveFileFromPath, deleteFile, fileExists } from '../fileStorage.js';
+import {
+  buildExportStorageKey,
+  saveFileFromPath,
+  deleteFile,
+  fileExists,
+  ensureExportTempDir,
+  buildExportTempFilePath,
+  getExportTempDir,
+  parseExportTempFileName,
+} from '../fileStorage.js';
 import { safeErrorFields } from '../../utils/safeError.js';
 import { writeAuditLogInTx, writeAuditLog, extractRequestMeta } from '../../utils/auditLog.js';
+import { isClinicBulkExportEnabledForOrganization } from './clinicBulkExportConfig.js';
 import {
   CLINIC_SELECT,
   USER_SELECT,
@@ -151,6 +160,36 @@ export class ClinicBulkExportLeaseLostError extends Error {
   constructor() {
     super('Clinic bulk export worker lease was lost or could not be renewed mid-generation.');
     this.name = 'ClinicBulkExportLeaseLostError';
+  }
+}
+
+/**
+ * Thrown by assertClinicBulkExportGenerationAllowed() whenever the global
+ * kill switch or the organization rollout allowlist turns this job off
+ * mid-flight (KVKK-HIGH-004 remediation: the flag must be a genuine
+ * generation kill switch, not just a creation gate). Deliberately funnels
+ * through generateClinicBulkExport's ordinary catch block — the SAME
+ * temp-file/artifact cleanup and 'failed' transition every other mid-
+ * generation failure gets, just with a distinct, stable failureCode.
+ */
+export class ClinicBulkExportFeatureDisabledError extends Error {
+  constructor() {
+    super('Clinic bulk export generation stopped: the feature was disabled for this organization mid-flight.');
+    this.name = 'ClinicBulkExportFeatureDisabledError';
+  }
+}
+
+/**
+ * Thrown by validateZipStructuralIntegrity() when the just-finalized temp
+ * ZIP's own central directory cannot be located/parsed, or its entry set
+ * does not exactly match what generateClinicBulkExport actually wrote —
+ * catches a truncated/corrupted write the write-stream's 'close' event alone
+ * would not detect (KVKK-HIGH-004 remediation).
+ */
+export class ClinicBulkExportZipIntegrityError extends Error {
+  constructor() {
+    super('Clinic bulk export ZIP failed post-finalize structural integrity validation.');
+    this.name = 'ClinicBulkExportZipIntegrityError';
   }
 }
 
@@ -784,12 +823,23 @@ export async function claimQueuedClinicBulkExportJobs(
     where: { status: 'queued' },
     orderBy: { createdAt: 'asc' },
     take: Math.max(limit * 3, limit),
-    select: { id: true },
+    select: { id: true, organizationId: true, clinicId: true, requestedByUserId: true },
   });
 
   const claimedIds: string[] = [];
   for (const candidate of candidates) {
     if (claimedIds.length >= limit) break;
+    // KVKK-HIGH-004 remediation (P0): the global kill switch / organization
+    // rollout allowlist must be a genuine GENERATION gate, not merely a
+    // creation-time gate — a job created while enabled, still sitting queued
+    // when the flag is later flipped off (or the org is dropped from the
+    // allowlist), must never silently get claimed and generated anyway. Such
+    // a row is moved atomically to a stable, non-downloadable terminal
+    // status instead of being claimed at all.
+    if (!isClinicBulkExportEnabledForOrganization(candidate.organizationId)) {
+      await failQueuedJobAsFeatureDisabled(candidate);
+      continue;
+    }
     try {
       const claimed = await claimSingleQueuedJobWithAudit(candidate.id, now, writeStartedAuditForTest);
       if (claimed) claimedIds.push(candidate.id);
@@ -804,6 +854,64 @@ export async function claimQueuedClinicBulkExportJobs(
     }
   }
   return claimedIds;
+}
+
+/**
+ * Atomically moves ONE still-queued row (never claimed into 'generating') to
+ * the stable 'failed'/FEATURE_DISABLED terminal status because the feature
+ * is currently off for its organization. Guarded on `status: 'queued'` so a
+ * row a concurrent replica claimed in the same instant is left untouched —
+ * this can only ever affect a row nobody has started generating yet. Writes
+ * the same `clinic_bulk_export_generation_failed` audit action used for
+ * every other worker-side generation failure, with no patient data in its
+ * metadata (only the stable jobId/failureCode), so FEATURE_DISABLED is
+ * indistinguishable in shape from LEASE_LOST/SIZE_LIMIT_EXCEEDED in the
+ * audit trail.
+ */
+async function failQueuedJobAsFeatureDisabled(candidate: {
+  id: string;
+  organizationId: string;
+  clinicId: string;
+  requestedByUserId: string | null;
+}): Promise<void> {
+  try {
+    const result = await prisma.clinicBulkExportArchive.updateMany({
+      where: { id: candidate.id, status: 'queued' },
+      data: { status: 'failed', failureCode: 'FEATURE_DISABLED' },
+    });
+    if (result.count === 0) return; // lost to a concurrent claim/sweep — nothing to audit
+    await writeAuditLog({
+      organizationId: candidate.organizationId,
+      clinicId: candidate.clinicId,
+      actorUserId: candidate.requestedByUserId,
+      actorRole: 'system',
+      action: 'clinic_bulk_export_generation_failed',
+      entityType: 'clinic',
+      entityId: candidate.clinicId,
+      description: 'Clinic bulk export generation failed',
+      metadata: { jobId: candidate.id, failureCode: 'FEATURE_DISABLED' },
+    });
+  } catch (err) {
+    console.error('[clinic-bulk-export] failed to fail queued job as FEATURE_DISABLED', {
+      jobId: candidate.id,
+      ...safeErrorFields(err),
+    });
+  }
+}
+
+/**
+ * The single decision generateClinicBulkExport re-checks at every stage
+ * boundary (generation start, immediately before the planned-storageKey
+ * persist/upload, and immediately before the ready transition) — see
+ * ClinicBulkExportFeatureDisabledError's doc comment. Reuses the SAME
+ * isClinicBulkExportEnabledForOrganization the create route and the queued-
+ * job claim gate above both use, so all three enforcement points can never
+ * drift apart on what "enabled" means.
+ */
+function assertClinicBulkExportGenerationAllowed(organizationId: string): void {
+  if (!isClinicBulkExportEnabledForOrganization(organizationId)) {
+    throw new ClinicBulkExportFeatureDisabledError();
+  }
 }
 
 /**
@@ -1142,6 +1250,82 @@ const SCOPE_DESCRIPTION =
   'it does NOT include physical attachment or imaging files and must not be ' +
   'treated as a complete backup.';
 
+const ZIP_EOCD_SIGNATURE = 0x06054b50;
+const ZIP_CENTRAL_DIR_SIGNATURE = 0x02014b50;
+/** Max EOCD comment length (uint16) — bounds how far back from EOF the EOCD record can be. */
+const ZIP_MAX_COMMENT_LENGTH = 0xffff;
+const ZIP_EOCD_FIXED_SIZE = 22;
+
+/**
+ * Post-finalize structural-integrity check on the real completed temp ZIP
+ * (KVKK-HIGH-004 remediation, P0): locates the End-Of-Central-Directory
+ * record, reads ONLY the central-directory region it points to (never the
+ * whole file — a multi-GB export must not be pulled into memory just to
+ * validate it), and confirms the resulting filename set is EXACTLY the
+ * expected file list (same count, same names). This is a structural
+ * sanity check, not full content extraction/decompression — archiver's own
+ * finalize() + the write-stream's 'close' event already guarantee the
+ * writer side completed without error; this additionally catches a
+ * truncated/corrupted file on the READ side (e.g. a bug in this bounds
+ * logic itself, or filesystem-level corruption) before the file is ever
+ * uploaded or referenced by a persisted storageKey.
+ *
+ * Exported for unit testing (see server/src/tests/clinicBulkExport.test.ts)
+ * — never called directly by any route.
+ */
+export async function validateZipStructuralIntegrity(
+  filePath: string,
+  fileSize: number,
+  expectedFileNames: string[],
+): Promise<void> {
+  if (fileSize < ZIP_EOCD_FIXED_SIZE) throw new ClinicBulkExportZipIntegrityError();
+
+  const handle = await fs.promises.open(filePath, 'r');
+  try {
+    const tailSize = Math.min(fileSize, ZIP_EOCD_FIXED_SIZE + ZIP_MAX_COMMENT_LENGTH);
+    const tailStart = fileSize - tailSize;
+    const tailBuf = Buffer.alloc(tailSize);
+    await handle.read(tailBuf, 0, tailSize, tailStart);
+
+    let eocdOffsetInTail = -1;
+    for (let i = tailBuf.length - ZIP_EOCD_FIXED_SIZE; i >= 0; i--) {
+      if (tailBuf.readUInt32LE(i) === ZIP_EOCD_SIGNATURE) {
+        eocdOffsetInTail = i;
+        break;
+      }
+    }
+    if (eocdOffsetInTail === -1) throw new ClinicBulkExportZipIntegrityError();
+
+    const cdEntryCount = tailBuf.readUInt16LE(eocdOffsetInTail + 10);
+    const cdSize = tailBuf.readUInt32LE(eocdOffsetInTail + 12);
+    const cdOffset = tailBuf.readUInt32LE(eocdOffsetInTail + 16);
+    if (cdEntryCount !== expectedFileNames.length) throw new ClinicBulkExportZipIntegrityError();
+    if (cdOffset < 0 || cdSize < 0 || cdOffset + cdSize > fileSize) throw new ClinicBulkExportZipIntegrityError();
+
+    const cdBuf = Buffer.alloc(cdSize);
+    await handle.read(cdBuf, 0, cdSize, cdOffset);
+
+    const foundNames = new Set<string>();
+    let offset = 0;
+    for (let i = 0; i < cdEntryCount; i++) {
+      if (offset + 46 > cdBuf.length) throw new ClinicBulkExportZipIntegrityError();
+      if (cdBuf.readUInt32LE(offset) !== ZIP_CENTRAL_DIR_SIGNATURE) throw new ClinicBulkExportZipIntegrityError();
+      const fileNameLength = cdBuf.readUInt16LE(offset + 28);
+      const extraFieldLength = cdBuf.readUInt16LE(offset + 30);
+      const fileCommentLength = cdBuf.readUInt16LE(offset + 32);
+      if (offset + 46 + fileNameLength > cdBuf.length) throw new ClinicBulkExportZipIntegrityError();
+      foundNames.add(cdBuf.toString('utf8', offset + 46, offset + 46 + fileNameLength));
+      offset += 46 + fileNameLength + extraFieldLength + fileCommentLength;
+    }
+
+    for (const name of expectedFileNames) {
+      if (!foundNames.has(name)) throw new ClinicBulkExportZipIntegrityError();
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
 /**
  * Generates the ZIP for an already-claimed ('generating') job. Streams
  * manifest.json, clinic.json, and one *.ndjson file per entity via
@@ -1202,14 +1386,28 @@ export async function generateClinicBulkExport(
   const heartbeat = startClinicBulkExportLeaseHeartbeat(jobId);
 
   try {
+    // KVKK-HIGH-004 remediation (P0): first of three re-checks that the
+    // global kill switch / organization allowlist hasn't turned this job off
+    // since it was claimed — see assertClinicBulkExportGenerationAllowed and
+    // ClinicBulkExportFeatureDisabledError. Nothing has been written to disk
+    // yet at this point, so the catch block below has only the ordinary
+    // 'generating' -> 'failed' row transition to perform.
+    assertClinicBulkExportGenerationAllowed(job.organizationId);
+
     const maxRecords = getMaxRecords();
     const maxBytes = getMaxBytes();
     let totalRecords = 0;
     let totalBytesWritten = 0;
 
-    tempFilePath = path.join(os.tmpdir(), `clinic-bulk-export-${jobId}.zip`);
+    await ensureExportTempDir();
+    tempFilePath = buildExportTempFilePath(jobId);
     const archive = archiver('zip', { zlib: { level: 9 } });
-    const writeStream = fs.createWriteStream(tempFilePath);
+    // Private temp dir (0700) + exclusive-create (`wx`, never overwrites an
+    // existing path) + 0600 file mode — KVKK-HIGH-004 crash-safety
+    // remediation: a hard process kill between here and the final
+    // ready/failed transition can no longer leave a complete, sensitive
+    // clinic ZIP sitting under a shared, loosely-permissioned temp root.
+    const writeStream = fs.createWriteStream(tempFilePath, { mode: 0o600, flags: 'wx' });
     const writeFinished = new Promise<void>((resolve, reject) => {
       writeStream.on('close', resolve);
       writeStream.on('error', reject);
@@ -1288,8 +1486,39 @@ export async function generateClinicBulkExport(
     };
     archive.append(Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'), { name: 'manifest.json' });
 
-    await archive.finalize();
+    // Deliberately NOT awaited directly: archiver's `abort()` (called from
+    // the 'data' listener above on a byte-limit breach) can be invoked WHILE
+    // finalize() is still flushing the ZIP's central directory/EOCD — in
+    // that interleaving, finalize()'s own returned promise can hang forever
+    // and never settle, even though the underlying write stream still
+    // closes normally. `writeFinished` (below) is the authoritative
+    // completion signal regardless: it already resolves on the write
+    // stream's 'close' event and rejects on the SAME 'error' event finalize()
+    // would have rejected with, so nothing is lost by not awaiting this
+    // promise directly — only the hang risk is removed. The `.catch` exists
+    // solely to prevent an unhandled-rejection crash if finalize() ever
+    // rejects independently of the 'error' event archive/writeFinished
+    // already listen for.
+    archive.finalize().catch(() => {});
     await writeFinished;
+
+    // KVKK-HIGH-004 remediation (P0): the streaming byteLimitExceeded check
+    // above runs BEFORE manifest.json is appended and BEFORE archive.finalize()
+    // writes the ZIP's own central directory/EOCD — both add real bytes on
+    // top of whatever the entity streams alone produced, so a payload that
+    // looked within budget mid-stream can still finish over the ceiling.
+    // This second check uses the REAL completed file's on-disk size (ground
+    // truth, not the async 'data'-event accumulator) as the authoritative
+    // final gate, strictly before anything is persisted or uploaded.
+    const finalStat = await fs.promises.stat(tempFilePath);
+    if (byteLimitExceeded || finalStat.size > maxBytes) {
+      throw new ClinicBulkExportSizeLimitExceededError();
+    }
+    // Structural sanity check on the real bytes just written — see
+    // ClinicBulkExportZipIntegrityError. Runs on the same real file the
+    // upload below would otherwise ship, so a truncated/corrupted temp ZIP
+    // can never reach storage.
+    await validateZipStructuralIntegrity(tempFilePath, finalStat.size, fileNames);
 
     // Deterministic from clinicId+jobId alone — computing it here (before
     // upload even begins) and persisting it to the row NOW, while still
@@ -1302,6 +1531,9 @@ export async function generateClinicBulkExport(
     // status==='ready', never on storageKey alone.
     const storageKey = buildExportStorageKey(job.clinicId, jobId);
     if (beforePlannedKeyPersistForTest) await beforePlannedKeyPersistForTest();
+    // Second of three flag/allowlist re-checks — strictly before the planned
+    // key is persisted and strictly before any bytes are uploaded.
+    assertClinicBulkExportGenerationAllowed(job.organizationId);
     const plannedKeyResult = await prisma.clinicBulkExportArchive.updateMany({
       where: {
         id: jobId,
@@ -1332,6 +1564,13 @@ export async function generateClinicBulkExport(
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + getDownloadTokenTtlMs());
+
+    // Third and final flag/allowlist re-check — strictly before the row can
+    // ever become 'ready'. storageKey is already persisted at this point, so
+    // throwing here routes through the catch block's orphan-artifact
+    // cleanup exactly like a lost lease would, deleting the real artifact
+    // that was just uploaded.
+    assertClinicBulkExportGenerationAllowed(job.organizationId);
 
     const result = await prisma.clinicBulkExportArchive.updateMany({
       where: {
@@ -1369,9 +1608,13 @@ export async function generateClinicBulkExport(
     const failureCode =
       err instanceof ClinicBulkExportSizeLimitExceededError
         ? 'SIZE_LIMIT_EXCEEDED'
-        : err instanceof ClinicBulkExportLeaseLostError
-          ? 'LEASE_LOST'
-          : 'GENERATION_ERROR';
+        : err instanceof ClinicBulkExportZipIntegrityError
+          ? 'ZIP_INTEGRITY_FAILED'
+          : err instanceof ClinicBulkExportLeaseLostError
+            ? 'LEASE_LOST'
+            : err instanceof ClinicBulkExportFeatureDisabledError
+              ? 'FEATURE_DISABLED'
+              : 'GENERATION_ERROR';
     console.error('[clinic-bulk-export] generation failed', { jobId, failureCode, ...safeErrorFields(err) });
     await prisma.clinicBulkExportArchive
       .updateMany({ where: { id: jobId, status: 'generating' }, data: { status: 'failed', failureCode } })
@@ -1421,6 +1664,16 @@ export async function cleanupExpiredClinicBulkExportArchives(
   deleted: number;
   sweptAbandoned: number;
 }> {
+  // KVKK-HIGH-004 remediation (P1): three passes, strictly in this order, so
+  // a row that needs BOTH the abandoned-lease sweep AND artifact deletion
+  // (a process-crashed 'generating' row already carrying a planned
+  // storageKey) is fully cleaned up in this SAME run — previously the
+  // abandoned-lease sweep ran last, so such a row was still 'generating'
+  // (not yet 'expired'/'failed') when the artifact-deletion query above ran
+  // moments earlier in the same tick, silently deferring its cleanup to the
+  // NEXT cron tick (15 minutes later) for no reason.
+  //
+  // 1) Expire ready rows past their TTL.
   const readyPastTtl = await prisma.clinicBulkExportArchive.findMany({
     where: { status: 'ready', expiresAt: { lt: now } },
     select: { id: true, status: true, expiresAt: true },
@@ -1431,13 +1684,26 @@ export async function cleanupExpiredClinicBulkExportArchives(
     if (status === 'expired') expired++;
   }
 
-  // Retries artifact deletion for EVERY terminal, non-downloadable row still
+  // 2) Sweep abandoned queued/generating rows (lease expired, no worker
+  // renewing it) to 'failed' BEFORE the artifact-deletion pass below, so a
+  // row this sweep just terminated is already eligible for step 3 in the
+  // very same call.
+  const sweptAbandoned = await prisma.clinicBulkExportArchive.updateMany({
+    where: {
+      status: { in: ['queued', 'generating'] },
+      OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }],
+    },
+    data: { status: 'failed', failureCode: 'LEASE_EXPIRED' },
+  });
+
+  // 3) Retry artifact deletion for EVERY terminal, non-downloadable row still
   // holding a storageKey — not just 'expired'. A 'failed' row can carry a
   // storageKey too (the P0 orphan-artifact fix persists it on the row
   // BEFORE upload begins, so a failure after that point — including a
-  // process crash the in-process catch block never got to run for — still
-  // leaves the row findable here). attemptArtifactDeletion itself is gated
-  // on status !== 'ready', so this can never touch a downloadable artifact.
+  // process crash the in-process catch block never got to run for, or the
+  // abandoned-lease sweep in step 2 above — still leaves the row findable
+  // here, in the SAME pass). attemptArtifactDeletion itself is gated on
+  // status !== 'ready', so this can never touch a downloadable artifact.
   const needingDeletion = await prisma.clinicBulkExportArchive.findMany({
     where: { status: { in: ['expired', 'failed'] }, storageKey: { not: null } },
     select: { id: true },
@@ -1447,13 +1713,85 @@ export async function cleanupExpiredClinicBulkExportArchives(
     if (await attemptArtifactDeletion(row.id, now, deleteForTest)) deleted++;
   }
 
-  const sweptAbandoned = await prisma.clinicBulkExportArchive.updateMany({
-    where: {
-      status: { in: ['queued', 'generating'] },
-      OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }],
-    },
-    data: { status: 'failed', failureCode: 'LEASE_EXPIRED' },
-  });
-
   return { expired, deleted, sweptAbandoned: sweptAbandoned.count };
+}
+
+// ── Process-local stale temp-file sweep (crash-safety remediation) ────────
+
+/**
+ * Process-local (NOT DB-locked, NOT part of cleanupExpiredClinicBulkExportArchives
+ * above) sweep of THIS HOST's own OS temp directory for orphaned bulk-export
+ * temp ZIPs. The DB-based cleanup only ever knows about `storageKey` (final
+ * storage) — it has no way to discover a local scratch file a crashed
+ * process left behind before ever reaching the planned-storageKey persist
+ * (or one left behind by any bug that skips the ordinary catch-block
+ * unlink). Must run on EVERY worker replica independently (each has its own
+ * local temp dir, invisible to any other replica or to the singleton
+ * DB-locked cleanup job) — see clinicBulkExportWorker.ts, which calls this
+ * once at startup (recovers from a crash that happened before this process
+ * last exited) and again on every subsequent tick (recovers from a crash of
+ * a sibling worker instance on the same host, or of this same process
+ * between ticks).
+ *
+ * Safety: only ever considers files matching the recognized bulk-export temp
+ * naming pattern (parseExportTempFileName) inside the dedicated private temp
+ * directory — never any other file that might happen to live alongside it.
+ * A recognized file is deleted ONLY when BOTH:
+ *   - it is older than `maxAgeMs` (default: double the generation lease, so
+ *     a legitimately still-writing job's temp file is never touched purely
+ *     because the sweep happened to run mid-write); AND
+ *   - the job id encoded in its filename is NOT currently a 'generating' row
+ *     with an unexpired lease (i.e. it is provably not still being actively
+ *     written by any worker holding a live claim).
+ * A DB lookup failure for a candidate file is treated as "cannot confirm
+ * inactive" and does NOT authorize deletion by itself — the file is simply
+ * skipped this tick and reconsidered on the next one.
+ */
+export async function sweepStaleClinicBulkExportTempFiles(
+  now: Date = new Date(),
+  maxAgeMs: number = getGenerationLeaseMs() * 2,
+): Promise<number> {
+  const dir = getExportTempDir();
+  let entries: string[];
+  try {
+    entries = await fs.promises.readdir(dir);
+  } catch {
+    return 0; // directory doesn't exist yet (nothing has ever generated on this host) — nothing to sweep
+  }
+
+  let deleted = 0;
+  for (const name of entries) {
+    const parsed = parseExportTempFileName(name);
+    if (!parsed) continue; // never touch a file this sweep doesn't recognize as its own
+
+    const filePath = path.join(dir, name);
+    let stat: fs.Stats;
+    try {
+      stat = await fs.promises.stat(filePath);
+    } catch {
+      continue; // vanished between readdir and stat — nothing to do
+    }
+    if (!stat.isFile()) continue;
+    if (now.getTime() - stat.mtimeMs < maxAgeMs) continue;
+
+    try {
+      const row = await prisma.clinicBulkExportArchive.findUnique({
+        where: { id: parsed.jobId },
+        select: { status: true, leaseExpiresAt: true },
+      });
+      const activelyGenerating =
+        row?.status === 'generating' && row.leaseExpiresAt !== null && row.leaseExpiresAt.getTime() > now.getTime();
+      if (activelyGenerating) continue; // never delete the temp file of an actively generating job
+    } catch (err) {
+      console.error('[clinic-bulk-export] stale-temp sweep: DB lookup failed, skipping file this tick', {
+        fileName: name,
+        ...safeErrorFields(err),
+      });
+      continue;
+    }
+
+    await fs.promises.unlink(filePath).catch(() => {});
+    deleted++;
+  }
+  return deleted;
 }

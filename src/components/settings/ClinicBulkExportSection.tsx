@@ -208,7 +208,11 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
       if (!isStillCurrentSelection(requestClinicId, requestEpoch)) return;
       setSubmitError(t(`errors.${errorKeyFromResponse(err)}`, { defaultValue: t('errors.generic') }));
     } finally {
-      setSubmitting(false);
+      // P1: the epoch guard must also apply to the finally block — an old
+      // clinic-A request's own finally must never clear clinic-B's loading
+      // state just because a create for B started (and is possibly still
+      // pending) after A's request began but before A's promise settled.
+      if (isStillCurrentSelection(requestClinicId, requestEpoch)) setSubmitting(false);
     }
   }, [clinicId, submitting, purpose, confirmChecked, password, restrictedNote, t, isStillCurrentSelection]);
 
@@ -254,7 +258,10 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
       if (!isStillCurrentSelection(requestClinicId, requestEpoch)) return;
       setDownloadError(t(`errors.${errorKeyFromResponse(err)}`, { defaultValue: t('errors.generic') }));
     } finally {
-      setDownloading(false);
+      // P1: same finally-block epoch guard as handleCreate above — a stale
+      // clinic-A download's finally must never re-enable the download
+      // button while a clinic-B download is still in flight.
+      if (isStillCurrentSelection(requestClinicId, requestEpoch)) setDownloading(false);
     }
   }, [clinicId, job, downloading, downloadPassword, t, isStillCurrentSelection]);
 

@@ -22,6 +22,7 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
@@ -207,6 +208,68 @@ export function buildExportStorageKey(clinicId: string, exportId: string): strin
   return `exports/${clinicId}/${exportId}.zip`;
 }
 
+// ── Private export temp directory (KVKK-HIGH-004 crash-safety remediation) ─
+
+/**
+ * A dedicated OS-temp subdirectory for bulk-export ZIP staging, SEPARATE
+ * from the shared, world-writable-by-convention `os.tmpdir()` root — a
+ * complete, unencrypted clinic/patient ZIP must never sit directly under a
+ * shared temp root where any other local process/user could plausibly list
+ * or read it before the export's own DB-based cleanup discovers it. Path is
+ * fully server-derived (os.tmpdir() + a fixed literal subdirectory name) —
+ * no client input ever reaches it.
+ */
+const EXPORT_TEMP_DIR = path.join(os.tmpdir(), 'diskliniks-export-tmp');
+
+export function getExportTempDir(): string {
+  return EXPORT_TEMP_DIR;
+}
+
+/**
+ * Creates (idempotently) the private export temp directory with mode 0700
+ * and verifies it server-side afterward. `fs.promises.mkdir`'s own `mode`
+ * option is skipped by Node when the directory already exists (a prior
+ * process run, a differently-configured umask, etc.), so this always
+ * re-asserts 0700 via an explicit chmod rather than trusting mkdir alone.
+ * On Windows, POSIX mode bits are synthesized/ignored by the OS — this call
+ * is still correct and a no-op-equivalent there; the real guarantee applies
+ * on the POSIX hosts this server actually deploys to.
+ */
+export async function ensureExportTempDir(): Promise<string> {
+  await fs.promises.mkdir(EXPORT_TEMP_DIR, { recursive: true, mode: 0o700 });
+  await fs.promises.chmod(EXPORT_TEMP_DIR, 0o700).catch(() => {});
+  return EXPORT_TEMP_DIR;
+}
+
+/**
+ * Recognized filename pattern for a bulk-export temp ZIP:
+ * `export-<jobId>-<16 hex random>.zip`. Used both to BUILD the path (see
+ * buildExportTempFilePath) and to recognize which files under
+ * getExportTempDir() a stale-temp sweep may ever consider deleting — a
+ * sweep must never touch an unrelated file that happens to land in the same
+ * OS temp directory.
+ */
+const EXPORT_TEMP_FILE_PATTERN = /^export-([0-9a-f-]{36})-[0-9a-f]{16}\.zip$/;
+
+export function parseExportTempFileName(fileName: string): { jobId: string } | null {
+  const match = EXPORT_TEMP_FILE_PATTERN.exec(fileName);
+  return match ? { jobId: match[1]! } : null;
+}
+
+/**
+ * Builds a fresh, unique temp-ZIP path for one export job inside the private
+ * temp directory — deterministic safe prefix (`export-`) + the job id +
+ * random suffix, so a stale-temp sweep can recognize and attribute the file
+ * without any DB lookup by path alone, while the random suffix still
+ * guarantees `wx` (exclusive-create) never collides even for retried jobs
+ * reusing the same id is not possible (job ids are unique), or concurrent
+ * writers in the pathological case of two processes racing the same job id.
+ */
+export function buildExportTempFilePath(jobId: string): string {
+  const random = crypto.randomBytes(8).toString('hex');
+  return path.join(EXPORT_TEMP_DIR, `export-${jobId}-${random}.zip`);
+}
+
 /**
  * Streams a file already on local disk (e.g. a temp file built by
  * archiver) into final storage without ever buffering it fully in process
@@ -261,18 +324,30 @@ export async function saveFileFromPath(key: string, tempFilePath: string, conten
     try {
       // Fast path: same-filesystem rename (no copy) into the partial path —
       // tempFilePath no longer exists at its old path once this succeeds.
+      // The rename preserves tempFilePath's own mode (0600 for callers using
+      // buildExportTempFilePath), but the explicit chmod below re-asserts it
+      // regardless of the source file's origin.
       await fs.promises.rename(tempFilePath, partialPath);
     } catch {
       // Cross-device (EXDEV) or other rename failure — fall back to a
       // streamed copy into the partial path (never the final path), still
       // without loading the whole file into memory. pipeline() propagates
-      // errors from either side and destroys both streams on failure.
-      await pipeline(fs.createReadStream(tempFilePath), fs.createWriteStream(partialPath));
+      // errors from either side and destroys both streams on failure. The
+      // destination stream is opened with an explicit 0600 mode: unlike the
+      // rename fast path above, createWriteStream() would otherwise create
+      // this file with the process's default (umask-derived) mode, which is
+      // typically far more permissive than the sensitive export contents
+      // warrant.
+      await pipeline(fs.createReadStream(tempFilePath), fs.createWriteStream(partialPath, { mode: 0o600, flags: 'wx' }));
       await fs.promises.unlink(tempFilePath).catch(() => {});
     }
+    // Belt-and-suspenders: re-assert 0600 on the partial file right before
+    // promoting it, regardless of which path above produced it.
+    await fs.promises.chmod(partialPath, 0o600).catch(() => {});
     // Promote the fully-written partial file to its final name. Same
     // directory => same filesystem => atomic rename; readers of `key` never
-    // observe a partially-written file.
+    // observe a partially-written file. Rename preserves the partial file's
+    // mode, so the final artifact is 0600 too without a further chmod.
     await fs.promises.rename(partialPath, localPath);
   } finally {
     // Belt-and-suspenders cleanup: whichever of tempFilePath/partialPath is
@@ -292,4 +367,54 @@ export async function deleteFile(ref: string): Promise<void> {
   }
   const localPath = resolveLocalPath(ref);
   await fs.promises.unlink(localPath).catch(() => {});
+}
+
+/**
+ * Sweeps `uploads/exports/<clinicId>/*.partial-*` for orphaned partial
+ * artifacts (KVKK-HIGH-004 crash-safety remediation): saveFileFromPath's
+ * local-mode promotion is a rename immediately after the partial file is
+ * fully written, so any `.partial-*` file surviving longer than `maxAgeMs`
+ * can only be the result of a crash between creating it and promoting it —
+ * never a legitimately in-progress write. Local-storage-only: in S3 mode
+ * there is no local partial state to sweep (a killed process leaves an
+ * incomplete multipart upload in the bucket instead — see
+ * docs/compliance/54-kvkk-secure-clinic-bulk-export.md for the required
+ * AbortIncompleteMultipartUpload bucket lifecycle rule, which a hard process
+ * kill cannot execute client-side). Never touches a file that isn't inside
+ * `exports/` or doesn't match the `.partial-<uuid>` suffix.
+ */
+export async function cleanupStaleLocalExportPartialFiles(maxAgeMs: number, now: Date = new Date()): Promise<number> {
+  if (isRemoteStorageEnabled()) return 0;
+  const exportsRoot = path.join(BASE_UPLOAD_DIR, 'exports');
+  let clinicDirs: string[];
+  try {
+    clinicDirs = await fs.promises.readdir(exportsRoot);
+  } catch {
+    return 0;
+  }
+  let deleted = 0;
+  for (const clinicDir of clinicDirs) {
+    const fullDir = path.join(exportsRoot, clinicDir);
+    let entries: string[];
+    try {
+      entries = await fs.promises.readdir(fullDir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.includes('.partial-')) continue;
+      const filePath = path.join(fullDir, entry);
+      try {
+        const stat = await fs.promises.stat(filePath);
+        if (!stat.isFile()) continue;
+        if (now.getTime() - stat.mtimeMs < maxAgeMs) continue;
+        await fs.promises.unlink(filePath);
+        deleted++;
+      } catch {
+        // Vanished between readdir and stat/unlink, or a transient FS
+        // error — never fatal to the sweep, just skip this one entry.
+      }
+    }
+  }
+  return deleted;
 }

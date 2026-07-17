@@ -30,7 +30,11 @@
  */
 
 import cron, { type ScheduledTask } from 'node-cron';
-import { claimQueuedClinicBulkExportJobs, generateClinicBulkExport } from '../services/privacy/clinicBulkExportPackage.js';
+import {
+  claimQueuedClinicBulkExportJobs,
+  generateClinicBulkExport,
+  sweepStaleClinicBulkExportTempFiles,
+} from '../services/privacy/clinicBulkExportPackage.js';
 
 function getWorkerConcurrency(): number {
   const raw = Number(process.env.CLINIC_BULK_EXPORT_WORKER_CONCURRENCY);
@@ -41,10 +45,35 @@ let isTickRunning = false;
 let scheduledTask: ScheduledTask | null = null;
 let shuttingDown = false;
 
+/**
+ * Process-local (this host only) sweep of orphaned bulk-export temp ZIPs —
+ * see sweepStaleClinicBulkExportTempFiles's own doc comment. Deliberately
+ * swallows its own errors and never throws: a sweep failure must never
+ * abort claiming/generating in the same tick, and must never stop the
+ * worker's own cron from being scheduled at startup.
+ */
+async function runStaleTempSweep(): Promise<void> {
+  try {
+    const deleted = await sweepStaleClinicBulkExportTempFiles();
+    if (deleted > 0) {
+      console.log(`[clinic-bulk-export-worker] stale-temp sweep deleted ${deleted} orphaned temp file(s) on this host.`);
+    }
+  } catch (err) {
+    console.error('[clinic-bulk-export-worker] stale-temp sweep failed', err instanceof Error ? err.message : String(err));
+  }
+}
+
 async function runTick(): Promise<void> {
   if (isTickRunning || shuttingDown) return;
   isTickRunning = true;
   try {
+    // Runs every tick (not only at startup) — recovers from a crash of a
+    // sibling worker instance on the same host, or of this same process
+    // between ticks, without waiting on the separate DB-locked cleanup
+    // cron's own 15-minute schedule (which cannot see this host's local
+    // filesystem at all).
+    await runStaleTempSweep();
+
     const concurrency = getWorkerConcurrency();
     const claimedIds = await claimQueuedClinicBulkExportJobs(concurrency);
     if (claimedIds.length === 0) return;
@@ -67,6 +96,11 @@ export function startClinicBulkExportWorker(): void {
     void runTick();
   });
   console.log('[clinic-bulk-export-worker] Scheduled worker cron="*/1 * * * *".');
+
+  // Startup sweep, independent of the first cron tick — recovers from a
+  // crash that happened before this process last exited as early as
+  // possible, rather than waiting up to a minute for the first tick.
+  void runStaleTempSweep();
 
   process.once('SIGTERM', stopClinicBulkExportWorker);
   process.once('SIGINT', stopClinicBulkExportWorker);

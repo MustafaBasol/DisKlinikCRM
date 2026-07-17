@@ -18,10 +18,11 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -37,12 +38,19 @@ import {
   attemptArtifactDeletion,
   expireArchiveIfPastTtl,
   hashDownloadToken,
+  sweepStaleClinicBulkExportTempFiles,
   ClinicBulkExportAlreadyRunningError,
   ClinicBulkExportRateLimitedError,
 } from '../src/services/privacy/clinicBulkExportPackage.js';
 import { verifyStepUpPasswordWithLockout } from '../src/services/privacy/clinicBulkExportPasswordAttempts.js';
 import { isStepUpWindowReusableBy } from '../src/utils/passwordStepUp.js';
-import { buildExportStorageKey, deleteFile } from '../src/services/fileStorage.js';
+import {
+  buildExportStorageKey,
+  deleteFile,
+  getExportTempDir,
+  buildExportTempFilePath,
+  ensureExportTempDir,
+} from '../src/services/fileStorage.js';
 
 /**
  * Minimal ZIP central-directory reader for verification purposes only (no
@@ -95,6 +103,33 @@ function resolveLocalStoragePath(storageKey: string): string {
   return path.resolve(process.cwd(), 'uploads', storageKey);
 }
 
+/** Any temp file left behind for a given job under the dedicated private export temp directory. */
+function listExportTempFilesFor(jobId: string): string[] {
+  try {
+    return fs.readdirSync(getExportTempDir()).filter((f) => f.includes(jobId));
+  } catch {
+    return []; // directory doesn't exist yet — trivially nothing left behind
+  }
+}
+
+/** Saves/restores a set of env vars around `fn` — used throughout for CLINIC_BULK_EXPORT_* overrides. */
+async function withEnvOverride<T>(overrides: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
+  const original: Record<string, string | undefined> = {};
+  for (const key of Object.keys(overrides)) original[key] = process.env[key];
+  try {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    return await fn();
+  } finally {
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must point at a disposable database — refusing to run without one.');
 }
@@ -120,6 +155,25 @@ async function test(name: string, fn: () => Promise<void>) {
 }
 
 async function main() {
+  // KVKK-HIGH-004 remediation (P0): the flag/allowlist is now a real
+  // GENERATION kill switch, re-checked inside claimQueuedClinicBulkExportJobs
+  // and generateClinicBulkExport themselves — not just a creation-time gate
+  // the way it was when this script was first written. Almost every test
+  // below exercises real generation and expects it to actually proceed, so
+  // the operator-supplied env is asserted OFF here (preserving the original
+  // safety intent — this script must be started without accidentally having
+  // creation left enabled) and then the script takes over managing the flag
+  // itself for the remainder of the run. The two places that specifically
+  // need it OFF (the disabled-feature-route test below, and the dedicated
+  // "real GENERATION kill switch" section near the end) save/restore it
+  // around just their own scope.
+  assert.notEqual(
+    process.env.CLINIC_BULK_EXPORT_ENABLED,
+    'true',
+    'this script must be started with CLINIC_BULK_EXPORT_ENABLED unset/false in the operator shell',
+  );
+  process.env.CLINIC_BULK_EXPORT_ENABLED = 'true';
+
   const suffix = Date.now();
   const org = await prisma.organization.create({ data: { name: `Verify Org ${suffix}`, slug: `verify-org-${suffix}` } });
   const clinicA = await prisma.clinic.create({ data: { name: `Verify Clinic A ${suffix}`, slug: `verify-clinic-a-${suffix}`, organizationId: org.id } });
@@ -682,7 +736,7 @@ async function main() {
     const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicS.id);
     assert.ok(!fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0, 'no final artifact may be left in storage for this clinic');
 
-    const leftoverTempFiles = fs.readdirSync(os.tmpdir()).filter((f) => f.includes(jobId));
+    const leftoverTempFiles = listExportTempFilesFor(jobId);
     assert.equal(leftoverTempFiles.length, 0, 'the temp ZIP file must be unlinked on failure, never left behind');
 
     await prisma.patient.deleteMany({ where: { clinicId: clinicS.id } });
@@ -841,7 +895,12 @@ async function main() {
     canAccessAllClinics: false,
   };
 
-  assert.notEqual(process.env.CLINIC_BULK_EXPORT_ENABLED, 'true', 'this script must run with creation left disabled — exercising the disabled-feature audit path');
+  // This section specifically needs the flag OFF (it exercises the
+  // disabled-feature route/audit path) — saved and restored around just
+  // this block; every other section in this script relies on the ambient
+  // 'true' set at the top of main().
+  const savedFlagForDisabledRouteTest = process.env.CLINIC_BULK_EXPORT_ENABLED;
+  process.env.CLINIC_BULK_EXPORT_ENABLED = 'false';
 
   await test('a cross-org clinicId is rejected before the flag check, with no audit row ever referencing it', async () => {
     const req: any = { user: authUser, params: { clinicId: otherClinic.id }, body: {}, headers: {}, ip: '203.0.113.201' };
@@ -890,6 +949,9 @@ async function main() {
     assert.equal(auditRow!.organizationId, orgP.id, 'audit organizationId must be the DB-validated one');
     assert.equal(auditRow!.entityId, clinicP.id, 'audit entityId must be the DB-validated clinicId, never a raw route param taken on faith');
   });
+
+  if (savedFlagForDisabledRouteTest === undefined) delete process.env.CLINIC_BULK_EXPORT_ENABLED;
+  else process.env.CLINIC_BULK_EXPORT_ENABLED = savedFlagForDisabledRouteTest;
 
   await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgP.id, otherOrg.id] } } });
   await prisma.user.delete({ where: { id: userP.id } });
@@ -1296,7 +1358,7 @@ async function main() {
 
     const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicPK.id);
     assert.ok(!fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0, 'no artifact may ever be written to storage when the planned-key persist itself fails');
-    const leftoverTempFiles = fs.readdirSync(os.tmpdir()).filter((f) => f.includes(jobId));
+    const leftoverTempFiles = listExportTempFilesFor(jobId);
     assert.equal(leftoverTempFiles.length, 0, 'the temp ZIP file must be unlinked, never left behind');
 
     await prisma.patient.deleteMany({ where: { clinicId: clinicPK.id } });
@@ -1413,7 +1475,7 @@ async function main() {
     await prisma.organization.delete({ where: { id: orgSF.id } });
   });
 
-  await test('a worker crash after the planned key is persisted but before upload leaves a recoverable row the cleanup sweep finds and clears', async () => {
+  await test('a worker crash after the planned key is persisted but before upload leaves a recoverable row cleanup fully clears in ONE pass (P1: expire -> sweep-abandoned -> delete-artifacts reordered into a single call)', async () => {
     const orgCR = await prisma.organization.create({ data: { name: `Verify Org CR ${suffix}`, slug: `verify-org-cr-${suffix}` } });
     const clinicCR = await prisma.clinic.create({ data: { name: `Verify Clinic CR ${suffix}`, slug: `verify-clinic-cr-${suffix}`, organizationId: orgCR.id } });
     const userCR = await prisma.user.create({
@@ -1442,34 +1504,32 @@ async function main() {
 
     // Simulate exactly the moment generateClinicBulkExport's own guarded
     // pre-upload persist would have run — the row is 'generating' with the
-    // deterministic planned key set — then the process is imagined to crash
-    // right there (nothing else in this test ever calls
-    // generateClinicBulkExport for this job, so nothing more happens
-    // in-process; there is deliberately no catch block to run).
+    // deterministic planned key set, and a REAL dummy artifact already sits
+    // at that key (so deletion below has something real to remove) — then
+    // the process is imagined to crash right there (nothing else in this
+    // test ever calls generateClinicBulkExport for this job, so nothing more
+    // happens in-process; there is deliberately no catch block to run).
     const plannedKey = buildExportStorageKey(clinicCR.id, jobId);
+    const plannedLocalPath = resolveLocalStoragePath(plannedKey);
+    await fs.promises.mkdir(path.dirname(plannedLocalPath), { recursive: true });
+    await fs.promises.writeFile(plannedLocalPath, Buffer.from('real dummy export bytes for the one-pass cleanup test'));
     await prisma.clinicBulkExportArchive.update({ where: { id: jobId }, data: { storageKey: plannedKey, leaseExpiresAt: new Date(Date.now() - 1000) } });
 
-    // First cleanup tick: the abandoned-lease sweep (which already existed
-    // before this remediation) flips the row generating -> failed. In THIS
-    // SAME call, the artifact-retry-deletion query already ran BEFORE that
-    // sweep, so it does not yet see this row as 'failed'.
-    const firstCleanup = await cleanupExpiredClinicBulkExportArchives();
-    assert.ok(firstCleanup.sweptAbandoned >= 1);
-    const afterSweep = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
-    assert.equal(afterSweep.status, 'failed');
-    assert.equal(afterSweep.storageKey, plannedKey, 'the planned key must survive the abandoned-lease sweep itself — only artifact deletion clears it');
+    // KVKK-HIGH-004 remediation (P1): cleanupExpiredClinicBulkExportArchives
+    // now runs expire -> sweep-abandoned -> delete-artifacts strictly in
+    // that order within ONE call, specifically so a row needing BOTH the
+    // abandoned-lease sweep AND artifact deletion (this exact scenario) is
+    // fully cleaned up here — no second cleanup tick required.
+    const cleanup = await cleanupExpiredClinicBulkExportArchives();
+    assert.ok(cleanup.sweptAbandoned >= 1, 'the abandoned-lease sweep must have run');
+    assert.ok(cleanup.deleted >= 1, 'the SAME call must also have deleted the artifact, in the same pass as the sweep');
 
-    // Second cleanup tick: the row is NOW 'failed' with a non-null
-    // storageKey — the expanded retry-deletion query (P0 remediation) picks
-    // it up. Nothing was ever actually uploaded to plannedKey, so the
-    // idempotent-missing-object path applies: treated as an already-deleted
-    // success, never retried forever.
-    const secondCleanup = await cleanupExpiredClinicBulkExportArchives();
-    assert.ok(secondCleanup.deleted >= 1, 'the previously-crashed, now-failed row must be picked up by the expanded failed+storageKey retry sweep');
-    const afterSecondCleanup = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
-    assert.equal(afterSecondCleanup.storageKey, null);
-    assert.ok(afterSecondCleanup.artifactDeletedAt);
-    assert.equal(afterSecondCleanup.cleanupFailureCode, null);
+    const afterCleanup = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(afterCleanup.status, 'failed');
+    assert.equal(afterCleanup.storageKey, null, 'storageKey must be cleared in this same single pass, not deferred to a later tick');
+    assert.ok(afterCleanup.artifactDeletedAt);
+    assert.equal(afterCleanup.cleanupFailureCode, null);
+    assert.ok(!fs.existsSync(plannedLocalPath), 'the real dummy artifact must actually be gone from disk after just ONE cleanup call');
 
     await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicCR.id } });
     await prisma.user.delete({ where: { id: userCR.id } });
@@ -1658,6 +1718,581 @@ async function main() {
     await prisma.user.delete({ where: { id: userC2.id } });
     await prisma.clinic.delete({ where: { id: clinicC2.id } });
     await prisma.organization.delete({ where: { id: orgC2.id } });
+  });
+
+  console.log('\nFeature flag / organization allowlist is a real GENERATION kill switch, not just a creation gate (P0)');
+
+  await test('the global flag being off stops a queued job from ever being generated — atomically failed as FEATURE_DISABLED, with an audit event', async () => {
+    const orgFD1 = await prisma.organization.create({ data: { name: `Verify Org FD1 ${suffix}`, slug: `verify-org-fd1-${suffix}` } });
+    const clinicFD1 = await prisma.clinic.create({ data: { name: `Verify Clinic FD1 ${suffix}`, slug: `verify-clinic-fd1-${suffix}`, organizationId: orgFD1.id } });
+    const userFD1 = await prisma.user.create({
+      data: { clinicId: clinicFD1.id, organizationId: orgFD1.id, firstName: 'Verify', lastName: 'FlagOffUser', email: `verify-flagoff-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicFD1.id,
+      organizationId: orgFD1.id,
+      requestedByUserId: userFD1.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+
+    const claimedIds = await withEnvOverride({ CLINIC_BULK_EXPORT_ENABLED: 'false' }, () => claimQueuedClinicBulkExportJobs(5));
+    assert.ok(!claimedIds.includes(jobId), 'a queued job must never be claimed while the global flag is off');
+
+    const row = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(row.status, 'failed');
+    assert.equal(row.failureCode, 'FEATURE_DISABLED');
+    assert.equal(row.storageKey, null, 'a job stopped before ever generating must never carry a storageKey');
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'clinic_bulk_export_generation_failed', clinicId: clinicFD1.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    assert.ok(audit, 'a generation_failed audit event must still be recorded for a flag-disabled queued job');
+    assert.equal((audit!.metadata as any)?.failureCode, 'FEATURE_DISABLED');
+    assert.equal((audit!.metadata as any)?.restrictedNote, undefined, 'no patient/clinic data may ever appear in this audit metadata');
+
+    await prisma.auditLog.deleteMany({ where: { clinicId: clinicFD1.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicFD1.id } });
+    await prisma.user.delete({ where: { id: userFD1.id } });
+    await prisma.clinic.delete({ where: { id: clinicFD1.id } });
+    await prisma.organization.delete({ where: { id: orgFD1.id } });
+  });
+
+  await test('an organization dropped from the rollout allowlist is stopped identically — no artifact is ever created', async () => {
+    const orgFD2 = await prisma.organization.create({ data: { name: `Verify Org FD2 ${suffix}`, slug: `verify-org-fd2-${suffix}` } });
+    const clinicFD2 = await prisma.clinic.create({ data: { name: `Verify Clinic FD2 ${suffix}`, slug: `verify-clinic-fd2-${suffix}`, organizationId: orgFD2.id } });
+    const userFD2 = await prisma.user.create({
+      data: { clinicId: clinicFD2.id, organizationId: orgFD2.id, firstName: 'Verify', lastName: 'AllowlistUser', email: `verify-allowlist-fd-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicFD2.id, organizationId: orgFD2.id, firstName: 'Allowlist', lastName: 'Patient' } });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicFD2.id,
+      organizationId: orgFD2.id,
+      requestedByUserId: userFD2.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+
+    // Flag globally ON, but the allowlist deliberately names a different,
+    // unrelated organization — orgFD2 itself is excluded.
+    const claimedIds = await withEnvOverride(
+      { CLINIC_BULK_EXPORT_ENABLED: 'true', CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS: `not-${orgFD2.id}` },
+      () => claimQueuedClinicBulkExportJobs(5),
+    );
+    assert.ok(!claimedIds.includes(jobId), 'an organization excluded from the allowlist must never be claimed even while the global flag is true');
+
+    const row = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(row.status, 'failed');
+    assert.equal(row.failureCode, 'FEATURE_DISABLED');
+
+    const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicFD2.id);
+    assert.ok(!fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0, 'no artifact may ever be created for an allowlist-excluded organization');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicFD2.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicFD2.id } });
+    await prisma.user.delete({ where: { id: userFD2.id } });
+    await prisma.clinic.delete({ where: { id: clinicFD2.id } });
+    await prisma.organization.delete({ where: { id: orgFD2.id } });
+  });
+
+  await test('disabling the flag strictly before the planned-key persist leaves no temp or final artifact — the row fails FEATURE_DISABLED', async () => {
+    const orgFD3 = await prisma.organization.create({ data: { name: `Verify Org FD3 ${suffix}`, slug: `verify-org-fd3-${suffix}` } });
+    const clinicFD3 = await prisma.clinic.create({ data: { name: `Verify Clinic FD3 ${suffix}`, slug: `verify-clinic-fd3-${suffix}`, organizationId: orgFD3.id } });
+    const userFD3 = await prisma.user.create({
+      data: { clinicId: clinicFD3.id, organizationId: orgFD3.id, firstName: 'Verify', lastName: 'MidGenUser', email: `verify-midgen-fd-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicFD3.id, organizationId: orgFD3.id, firstName: 'MidGen', lastName: 'Patient' } });
+
+    let jobId = '';
+    const originalFlag3 = process.env.CLINIC_BULK_EXPORT_ENABLED;
+    process.env.CLINIC_BULK_EXPORT_ENABLED = 'true';
+    try {
+      const reserved = await reserveClinicBulkExport({
+        clinicId: clinicFD3.id,
+        organizationId: orgFD3.id,
+        requestedByUserId: userFD3.id,
+        purpose: 'other',
+        restrictedNote: null,
+        stepUpVerifiedAt: new Date(),
+        actorRole: 'OWNER',
+        req: fakeReq,
+      });
+      jobId = reserved.jobId;
+      await claimQueuedClinicBulkExportJobs(5);
+
+      await generateClinicBulkExport(jobId, undefined, async () => {
+        // Fires immediately before the second flag re-check (right after
+        // this hook, strictly before the planned-key persist) — flips the
+        // flag off in exactly the narrow window that checkpoint must catch.
+        process.env.CLINIC_BULK_EXPORT_ENABLED = 'false';
+      });
+    } finally {
+      if (originalFlag3 === undefined) delete process.env.CLINIC_BULK_EXPORT_ENABLED;
+      else process.env.CLINIC_BULK_EXPORT_ENABLED = originalFlag3;
+    }
+
+    const row = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(row.status, 'failed');
+    assert.equal(row.failureCode, 'FEATURE_DISABLED');
+    assert.equal(row.storageKey, null, 'the planned key must never be persisted once disabled mid-flight, strictly before the persist');
+
+    const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicFD3.id);
+    assert.ok(!fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0, 'no final artifact may ever be written once disabled before upload');
+    assert.equal(listExportTempFilesFor(jobId).length, 0, 'the temp ZIP must be unlinked, never left behind');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicFD3.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicFD3.id } });
+    await prisma.user.delete({ where: { id: userFD3.id } });
+    await prisma.clinic.delete({ where: { id: clinicFD3.id } });
+    await prisma.organization.delete({ where: { id: orgFD3.id } });
+  });
+
+  await test('disabling the flag after a real upload (before the ready transition) deletes the just-uploaded real artifact and never sets ready', async () => {
+    const orgFD4 = await prisma.organization.create({ data: { name: `Verify Org FD4 ${suffix}`, slug: `verify-org-fd4-${suffix}` } });
+    const clinicFD4 = await prisma.clinic.create({ data: { name: `Verify Clinic FD4 ${suffix}`, slug: `verify-clinic-fd4-${suffix}`, organizationId: orgFD4.id } });
+    const userFD4 = await prisma.user.create({
+      data: { clinicId: clinicFD4.id, organizationId: orgFD4.id, firstName: 'Verify', lastName: 'PostUploadUser', email: `verify-postupload-fd-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicFD4.id, organizationId: orgFD4.id, firstName: 'PostUpload', lastName: 'Patient' } });
+
+    let jobId = '';
+    let uploadedKey = '';
+    const originalFlag4 = process.env.CLINIC_BULK_EXPORT_ENABLED;
+    process.env.CLINIC_BULK_EXPORT_ENABLED = 'true';
+    try {
+      const reserved = await reserveClinicBulkExport({
+        clinicId: clinicFD4.id,
+        organizationId: orgFD4.id,
+        requestedByUserId: userFD4.id,
+        purpose: 'other',
+        restrictedNote: null,
+        stepUpVerifiedAt: new Date(),
+        actorRole: 'OWNER',
+        req: fakeReq,
+      });
+      jobId = reserved.jobId;
+      await claimQueuedClinicBulkExportJobs(5);
+
+      await generateClinicBulkExport(jobId, async (key: string, tempPath: string, contentType: string) => {
+        uploadedKey = key;
+        const { saveFileFromPath: realSave } = await import('../src/services/fileStorage.js');
+        await realSave(key, tempPath, contentType); // real bytes really land in storage
+        process.env.CLINIC_BULK_EXPORT_ENABLED = 'false'; // disabled strictly AFTER the real upload completes
+      });
+    } finally {
+      if (originalFlag4 === undefined) delete process.env.CLINIC_BULK_EXPORT_ENABLED;
+      else process.env.CLINIC_BULK_EXPORT_ENABLED = originalFlag4;
+    }
+
+    const row = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(row.status, 'failed', 'disabling mid-flight must never allow the ready transition');
+    assert.equal(row.failureCode, 'FEATURE_DISABLED');
+    assert.equal(row.storageKey, null, 'the orphaned real artifact must have been found and deleted via its pre-persisted storageKey');
+    assert.ok(uploadedKey, 'sanity check: the real upload must actually have happened');
+    assert.ok(!fs.existsSync(resolveLocalStoragePath(uploadedKey)), 'the real uploaded artifact must actually be gone from disk');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicFD4.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicFD4.id } });
+    await prisma.user.delete({ where: { id: userFD4.id } });
+    await prisma.clinic.delete({ where: { id: clinicFD4.id } });
+    await prisma.organization.delete({ where: { id: orgFD4.id } });
+  });
+
+  await test('re-enabling the flag does not resurrect an already FEATURE_DISABLED job — it stays failed and is never claimed', async () => {
+    const orgFD5 = await prisma.organization.create({ data: { name: `Verify Org FD5 ${suffix}`, slug: `verify-org-fd5-${suffix}` } });
+    const clinicFD5 = await prisma.clinic.create({ data: { name: `Verify Clinic FD5 ${suffix}`, slug: `verify-clinic-fd5-${suffix}`, organizationId: orgFD5.id } });
+    const userFD5 = await prisma.user.create({
+      data: { clinicId: clinicFD5.id, organizationId: orgFD5.id, firstName: 'Verify', lastName: 'ReEnableUser', email: `verify-reenable-fd-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicFD5.id,
+      organizationId: orgFD5.id,
+      requestedByUserId: userFD5.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await withEnvOverride({ CLINIC_BULK_EXPORT_ENABLED: 'false' }, () => claimQueuedClinicBulkExportJobs(5));
+    const disabledRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(disabledRow.status, 'failed');
+    assert.equal(disabledRow.failureCode, 'FEATURE_DISABLED');
+
+    // Re-enable and try again — a terminal 'failed' row is never claimable by
+    // definition (the claim query only ever selects status: 'queued'), but
+    // this proves that explicitly rather than relying on it incidentally.
+    const claimedAfterReenable = await withEnvOverride({ CLINIC_BULK_EXPORT_ENABLED: 'true' }, () => claimQueuedClinicBulkExportJobs(5));
+    assert.ok(
+      !claimedAfterReenable.includes(jobId),
+      'a job already terminated as FEATURE_DISABLED must never be resurrected merely by re-enabling the flag',
+    );
+    const finalRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(finalRow.status, 'failed', 'the row must remain in its terminal failed state');
+
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicFD5.id } });
+    await prisma.user.delete({ where: { id: userFD5.id } });
+    await prisma.clinic.delete({ where: { id: clinicFD5.id } });
+    await prisma.organization.delete({ where: { id: orgFD5.id } });
+  });
+
+  console.log('\nFinal-ZIP byte ceiling is enforced on the REAL completed file, after manifest.json + ZIP central-directory overhead (P0)');
+
+  await test('entity payload alone stays within budget, but manifest.json + ZIP overhead pushes the real final file over the ceiling — the post-finalize check still fails cleanly', async () => {
+    const orgBC = await prisma.organization.create({ data: { name: `Verify Org BC ${suffix}`, slug: `verify-org-bc-${suffix}` } });
+    const clinicBC = await prisma.clinic.create({ data: { name: `Verify Clinic BC ${suffix}`, slug: `verify-clinic-bc-${suffix}`, organizationId: orgBC.id } });
+    const userBC = await prisma.user.create({
+      data: { clinicId: clinicBC.id, organizationId: orgBC.id, firstName: 'Verify', lastName: 'ByteCeilingUser', email: `verify-byteceiling-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicBC.id, organizationId: orgBC.id, firstName: 'ByteCeiling', lastName: 'Patient' } });
+
+    // Calibration run: generate once with no byte-limit override, to learn
+    // the REAL final ZIP size for this exact payload in this exact
+    // environment (zlib/archiver version) — avoids guessing a magic
+    // threshold that would be fragile across environments.
+    const { jobId: calibJobId } = await reserveClinicBulkExport({
+      clinicId: clinicBC.id,
+      organizationId: orgBC.id,
+      requestedByUserId: userBC.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+    await generateClinicBulkExport(calibJobId);
+    const calibRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: calibJobId } });
+    assert.equal(calibRow.status, 'ready', 'the calibration run must succeed unconstrained');
+    const realFinalSize = fs.statSync(resolveLocalStoragePath(calibRow.storageKey!)).size;
+    await deleteFile(calibRow.storageKey!);
+    await prisma.clinicBulkExportArchive.delete({ where: { id: calibJobId } });
+
+    // Real test run: cap MAX_BYTES to one byte under the real final size just
+    // measured. The entity payload (one tiny patient record) is flushed
+    // through archiver's 'data' event well before manifest.json is appended
+    // and long before finalize() emits the ZIP's own central directory/EOCD
+    // — so the OLD streaming-only check (which ran before manifest.json and
+    // finalize()) would not have seen enough bytes yet to trip. Only the NEW
+    // post-finalize, real-file-size check can catch this.
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicBC.id,
+      organizationId: orgBC.id,
+      requestedByUserId: userBC.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+    const originalMaxBytes = process.env.CLINIC_BULK_EXPORT_MAX_BYTES;
+    try {
+      process.env.CLINIC_BULK_EXPORT_MAX_BYTES = String(realFinalSize - 1);
+      await generateClinicBulkExport(jobId);
+    } finally {
+      if (originalMaxBytes === undefined) delete process.env.CLINIC_BULK_EXPORT_MAX_BYTES;
+      else process.env.CLINIC_BULK_EXPORT_MAX_BYTES = originalMaxBytes;
+    }
+
+    const failedRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(failedRow.status, 'failed');
+    assert.equal(failedRow.failureCode, 'SIZE_LIMIT_EXCEEDED');
+    assert.equal(failedRow.storageKey, null, 'no artifact may ever be persisted once the post-finalize size check fails');
+
+    const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicBC.id);
+    assert.ok(!fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0, 'no final artifact may be left in storage');
+    assert.equal(listExportTempFilesFor(jobId).length, 0, 'the temp ZIP must be unlinked, never left behind');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicBC.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicBC.id } });
+    await prisma.user.delete({ where: { id: userBC.id } });
+    await prisma.clinic.delete({ where: { id: clinicBC.id } });
+    await prisma.organization.delete({ where: { id: orgBC.id } });
+  });
+
+  console.log('\nProcess-local stale-temp-file sweep: age AND DB status/lease both gate deletion (P0)');
+
+  await test('a recognized temp file for a still-ACTIVELY-GENERATING row with a live lease is never deleted, no matter how old', async () => {
+    const orgST1 = await prisma.organization.create({ data: { name: `Verify Org ST1 ${suffix}`, slug: `verify-org-st1-${suffix}` } });
+    const clinicST1 = await prisma.clinic.create({ data: { name: `Verify Clinic ST1 ${suffix}`, slug: `verify-clinic-st1-${suffix}`, organizationId: orgST1.id } });
+    const userST1 = await prisma.user.create({
+      data: { clinicId: clinicST1.id, organizationId: orgST1.id, firstName: 'Verify', lastName: 'SweepActiveUser', email: `verify-sweepactive-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicST1.id,
+      organizationId: orgST1.id,
+      requestedByUserId: userST1.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5); // status -> 'generating', live lease
+
+    await ensureExportTempDir();
+    const tempFilePath = buildExportTempFilePath(jobId);
+    await fs.promises.writeFile(tempFilePath, Buffer.from('pretend in-progress temp zip bytes'));
+    const veryOld = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.promises.utimes(tempFilePath, veryOld, veryOld);
+
+    const deleted = await sweepStaleClinicBulkExportTempFiles(new Date(), 1000); // tiny maxAgeMs — age alone would allow deletion
+    assert.equal(deleted, 0, 'a live, actively-generating job\'s temp file must never be counted as deleted');
+    assert.ok(fs.existsSync(tempFilePath), 'the temp file must still exist — it belongs to a row the DB shows as actively generating with an unexpired lease');
+
+    await fs.promises.unlink(tempFilePath).catch(() => {});
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicST1.id } });
+    await prisma.user.delete({ where: { id: userST1.id } });
+    await prisma.clinic.delete({ where: { id: clinicST1.id } });
+    await prisma.organization.delete({ where: { id: orgST1.id } });
+  });
+
+  await test('a recognized temp file old enough, for a row that is no longer generating (failed) OR has no row at all, IS deleted', async () => {
+    const orgST2 = await prisma.organization.create({ data: { name: `Verify Org ST2 ${suffix}`, slug: `verify-org-st2-${suffix}` } });
+    const clinicST2 = await prisma.clinic.create({ data: { name: `Verify Clinic ST2 ${suffix}`, slug: `verify-clinic-st2-${suffix}`, organizationId: orgST2.id } });
+    const userST2 = await prisma.user.create({
+      data: { clinicId: clinicST2.id, organizationId: orgST2.id, firstName: 'Verify', lastName: 'SweepStaleUser', email: `verify-sweepstale-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    const { jobId: failedJobId } = await reserveClinicBulkExport({
+      clinicId: clinicST2.id,
+      organizationId: orgST2.id,
+      requestedByUserId: userST2.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+    await prisma.clinicBulkExportArchive.update({ where: { id: failedJobId }, data: { status: 'failed', failureCode: 'GENERATION_ERROR' } });
+
+    await ensureExportTempDir();
+    const failedTempPath = buildExportTempFilePath(failedJobId);
+    await fs.promises.writeFile(failedTempPath, Buffer.from('orphaned temp zip for a failed job'));
+    const missingRowJobId = crypto.randomUUID();
+    const missingRowTempPath = buildExportTempFilePath(missingRowJobId);
+    await fs.promises.writeFile(missingRowTempPath, Buffer.from('orphaned temp zip with no DB row at all'));
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.promises.utimes(failedTempPath, old, old);
+    await fs.promises.utimes(missingRowTempPath, old, old);
+
+    const deleted = await sweepStaleClinicBulkExportTempFiles(new Date(), 5 * 60 * 1000);
+    assert.ok(deleted >= 2, 'both the failed-row and the no-row-at-all temp files must be deleted');
+    assert.ok(!fs.existsSync(failedTempPath), 'a temp file for a terminal (failed) row must actually be gone from disk');
+    assert.ok(!fs.existsSync(missingRowTempPath), 'a temp file whose job id has no DB row at all must actually be gone from disk');
+
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicST2.id } });
+    await prisma.user.delete({ where: { id: userST2.id } });
+    await prisma.clinic.delete({ where: { id: clinicST2.id } });
+    await prisma.organization.delete({ where: { id: orgST2.id } });
+  });
+
+  await test('a recognized temp file younger than maxAgeMs is never deleted, even for a row that is already terminal', async () => {
+    const orgST3 = await prisma.organization.create({ data: { name: `Verify Org ST3 ${suffix}`, slug: `verify-org-st3-${suffix}` } });
+    const clinicST3 = await prisma.clinic.create({ data: { name: `Verify Clinic ST3 ${suffix}`, slug: `verify-clinic-st3-${suffix}`, organizationId: orgST3.id } });
+    const userST3 = await prisma.user.create({
+      data: { clinicId: clinicST3.id, organizationId: orgST3.id, firstName: 'Verify', lastName: 'SweepYoungUser', email: `verify-sweepyoung-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicST3.id,
+      organizationId: orgST3.id,
+      requestedByUserId: userST3.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+    await prisma.clinicBulkExportArchive.update({ where: { id: jobId }, data: { status: 'failed', failureCode: 'GENERATION_ERROR' } });
+
+    await ensureExportTempDir();
+    const tempFilePath = buildExportTempFilePath(jobId);
+    await fs.promises.writeFile(tempFilePath, Buffer.from('a very fresh temp file'));
+    // Deliberately NOT backdated — its mtime is "now".
+
+    const deleted = await sweepStaleClinicBulkExportTempFiles(new Date(), 60 * 60 * 1000); // 1 hour
+    assert.equal(deleted, 0, 'a fresh file must never be deleted purely because its row is already terminal');
+    assert.ok(fs.existsSync(tempFilePath), 'the fresh temp file must still exist');
+
+    await fs.promises.unlink(tempFilePath).catch(() => {});
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicST3.id } });
+    await prisma.user.delete({ where: { id: userST3.id } });
+    await prisma.clinic.delete({ where: { id: clinicST3.id } });
+    await prisma.organization.delete({ where: { id: orgST3.id } });
+  });
+
+  await test('the sweep never touches a file in the same directory that does not match the recognized naming pattern', async () => {
+    await ensureExportTempDir();
+    const unrelatedPath = path.join(getExportTempDir(), `unrelated-file-${suffix}.txt`);
+    await fs.promises.writeFile(unrelatedPath, Buffer.from('not an export temp file'));
+    const veryOld = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.promises.utimes(unrelatedPath, veryOld, veryOld);
+
+    await sweepStaleClinicBulkExportTempFiles(new Date(), 1000);
+    assert.ok(fs.existsSync(unrelatedPath), 'a file the sweep does not recognize as its own naming pattern must never be touched');
+
+    await fs.promises.unlink(unrelatedPath).catch(() => {});
+  });
+
+  console.log('\nReal child-process hard crash: no catch/finally ever runs in the crashed process, yet the temp ZIP is still cleaned up (P0)');
+
+  await test('a real child process is SIGKILLed mid-generation; a separate process (this one) later recognizes and deletes its real temp ZIP, with no final/partial artifact ever created', async () => {
+    const orgCH = await prisma.organization.create({ data: { name: `Verify Org CH ${suffix}`, slug: `verify-org-ch-${suffix}` } });
+    const clinicCH = await prisma.clinic.create({ data: { name: `Verify Clinic CH ${suffix}`, slug: `verify-clinic-ch-${suffix}`, organizationId: orgCH.id } });
+    const userCH = await prisma.user.create({
+      data: { clinicId: clinicCH.id, organizationId: orgCH.id, firstName: 'Verify', lastName: 'CrashChildUser', email: `verify-crashchild-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    // Enough records that generation takes measurably longer than an
+    // instant, widening the real window in which the temp ZIP exists on
+    // disk before the (never-reached, in this test) completion.
+    await prisma.patient.createMany({
+      data: Array.from({ length: 3000 }, (_, i) => ({ clinicId: clinicCH.id, organizationId: orgCH.id, firstName: `Crash${i}`, lastName: 'Patient' })),
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicCH.id,
+      organizationId: orgCH.id,
+      requestedByUserId: userCH.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+
+    const childScriptPath = fileURLToPath(new URL('./_clinicBulkExportCrashChild.ts', import.meta.url));
+    const child = spawn(process.execPath, ['--import', 'tsx', childScriptPath, jobId], {
+      cwd: process.cwd(),
+      // The parent script itself must keep running with creation disabled
+      // (asserted earlier), but the CHILD needs the flag on to actually
+      // reach real generation — this is what generateClinicBulkExport's own
+      // first re-check would otherwise stop before any file is even
+      // created.
+      env: { ...process.env, CLINIC_BULK_EXPORT_ENABLED: 'true' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let childOutput = '';
+    child.stdout?.on('data', (d: Buffer) => {
+      childOutput += d.toString();
+    });
+    child.stderr?.on('data', (d: Buffer) => {
+      childOutput += d.toString();
+    });
+
+    // Poll for the child's real temp ZIP to appear on disk — proves the
+    // child actually reached real file creation before being killed, rather
+    // than this test racing a process that never got that far.
+    const tempDir = getExportTempDir();
+    const deadline = Date.now() + 20000;
+    let tempFileName: string | null = null;
+    while (Date.now() < deadline) {
+      try {
+        const found = fs.readdirSync(tempDir).find((f) => f.includes(jobId));
+        if (found) {
+          tempFileName = found;
+          break;
+        }
+      } catch {
+        // Directory may not exist yet on the very first poll(s).
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(tempFileName, `the child process's real temp ZIP must appear on disk within the deadline (child output so far: ${childOutput})`);
+    const tempFilePath = path.join(tempDir, tempFileName!);
+    assert.ok(fs.existsSync(tempFilePath), 'sanity check: the temp file must really exist on disk before the kill');
+
+    // SIGKILL cannot be caught or trapped — no catch/finally in the CHILD
+    // process is ever given a chance to run.
+    child.kill('SIGKILL');
+    await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    assert.ok(
+      !childOutput.includes('CRASH_CHILD_UNEXPECTED_COMPLETION'),
+      `the child must actually have been killed mid-generation, not completed first (output: ${childOutput})`,
+    );
+
+    // The crashed child can no longer renew its lease or unlink its own temp
+    // file. Simulate the real-world passage of time deterministically (a
+    // real production wait would be up to getGenerationLeaseMs() for the
+    // lease, and the sweep's own maxAgeMs for the file) via direct writes,
+    // exactly like every other timing-dependent test in this script.
+    await prisma.clinicBulkExportArchive.update({ where: { id: jobId }, data: { leaseExpiresAt: new Date(Date.now() - 1000) } });
+    const past = new Date(Date.now() - 10 * 60 * 1000);
+    await fs.promises.utimes(tempFilePath, past, past);
+
+    // Cleanup runs HERE, in the verify script's OWN process — a process
+    // distinct from the one that was just SIGKILLed above.
+    const deletedCount = await sweepStaleClinicBulkExportTempFiles(new Date(), 5 * 60 * 1000);
+    assert.ok(deletedCount >= 1, "the stale-temp sweep must have deleted at least the crashed child's temp file");
+    assert.ok(!fs.existsSync(tempFilePath), 'the real temp ZIP must actually be gone from disk after the sweep');
+
+    // No final/partial artifact was ever created either — the crash
+    // happened strictly before the planned-storageKey persist step.
+    const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicCH.id);
+    assert.ok(
+      !fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0,
+      'no final or partial artifact may exist for a job that crashed before ever uploading',
+    );
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicCH.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicCH.id } });
+    await prisma.user.delete({ where: { id: userCH.id } });
+    await prisma.clinic.delete({ where: { id: clinicCH.id } });
+    await prisma.organization.delete({ where: { id: orgCH.id } });
+  });
+
+  console.log('\nLocal-mode temp/partial/final export files are created with mode 0600 (POSIX only — Windows has no equivalent permission model)');
+
+  await test('a real end-to-end generation run produces a final local artifact with mode 0600', async () => {
+    if (process.platform === 'win32') {
+      console.log('    (skipped strict mode assertion on win32 — Node synthesizes file mode from the read-only attribute only; verified on POSIX in CI/production instead)');
+      return;
+    }
+    const orgPM = await prisma.organization.create({ data: { name: `Verify Org PM ${suffix}`, slug: `verify-org-pm-${suffix}` } });
+    const clinicPM = await prisma.clinic.create({ data: { name: `Verify Clinic PM ${suffix}`, slug: `verify-clinic-pm-${suffix}`, organizationId: orgPM.id } });
+    const userPM = await prisma.user.create({
+      data: { clinicId: clinicPM.id, organizationId: orgPM.id, firstName: 'Verify', lastName: 'PermsUser', email: `verify-perms-${suffix}@example.test`, role: 'OWNER', passwordHash: 'x' },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicPM.id, organizationId: orgPM.id, firstName: 'Perms', lastName: 'Patient' } });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicPM.id,
+      organizationId: orgPM.id,
+      requestedByUserId: userPM.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+    await generateClinicBulkExport(jobId);
+
+    const row = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(row.status, 'ready');
+    const finalPath = resolveLocalStoragePath(row.storageKey!);
+    const mode = fs.statSync(finalPath).mode & 0o777;
+    assert.equal(mode, 0o600, `final local export artifact must be mode 0600, got ${mode.toString(8)}`);
+
+    await deleteFile(row.storageKey!);
+    await prisma.patient.deleteMany({ where: { clinicId: clinicPM.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicPM.id } });
+    await prisma.user.delete({ where: { id: userPM.id } });
+    await prisma.clinic.delete({ where: { id: clinicPM.id } });
+    await prisma.organization.delete({ where: { id: orgPM.id } });
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

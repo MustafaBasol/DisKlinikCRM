@@ -80,6 +80,10 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
 
 let passed = 0;
 let failed = 0;
@@ -870,7 +874,7 @@ async function main() {
     const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
     const fnStart = source.indexOf('export async function cleanupExpiredClinicBulkExportArchives');
     assert.ok(fnStart > -1);
-    const fnBody = source.slice(fnStart, fnStart + 2000);
+    const fnBody = source.slice(fnStart, fnStart + 3500);
     assert.ok(fnBody.includes("status: { in: ['expired', 'failed'] }"), 'must sweep both terminal statuses for retryable storage deletion, not just expired');
   });
 
@@ -909,6 +913,336 @@ async function main() {
     assert.ok(packageSource.includes('writeStartedAuditForTest?: typeof writeAuditLogInTx'), 'must expose the same test-only-override pattern already used by uploadForTest');
     const workerSource = stripComments(await readSource('jobs/clinicBulkExportWorker.ts'));
     assert.ok(!workerSource.includes('writeStartedAuditForTest'), 'the production worker must never pass the test-only override');
+  });
+
+  section('21. Crash-safety remediation — private export temp directory (P0)');
+
+  await test('ensureExportTempDir creates the directory with mode 0700 (POSIX only) and getExportTempDir/buildExportTempFilePath/parseExportTempFileName are consistent', async () => {
+    const { ensureExportTempDir, getExportTempDir, buildExportTempFilePath, parseExportTempFileName } =
+      await import('../services/fileStorage.js');
+    const dir = await ensureExportTempDir();
+    assert.equal(dir, getExportTempDir());
+    if (process.platform !== 'win32') {
+      const stat = await fs.stat(dir);
+      assert.equal(stat.mode & 0o777, 0o700, `temp dir must be mode 0700, got ${(stat.mode & 0o777).toString(8)}`);
+    }
+
+    const jobId = '11111111-1111-1111-1111-111111111111';
+    const tempPath = buildExportTempFilePath(jobId);
+    assert.ok(tempPath.startsWith(dir), 'the temp file path must live inside the dedicated private temp directory');
+    const fileName = tempPath.slice(dir.length + 1);
+    const parsed = parseExportTempFileName(fileName);
+    assert.ok(parsed, 'the generated file name must itself be recognized by the naming pattern parser');
+    assert.equal(parsed!.jobId, jobId);
+
+    assert.equal(parseExportTempFileName('not-a-recognized-file.zip'), null, 'an unrelated file name must never be recognized');
+    assert.equal(
+      parseExportTempFileName(`clinic-bulk-export-${jobId}.zip`),
+      null,
+      'the OLD (pre-remediation) shared-os-tmpdir naming scheme must no longer be recognized',
+    );
+  });
+
+  await test('buildExportTempFilePath produces a fresh, unique path on every call for the same job id (random suffix)', async () => {
+    const { buildExportTempFilePath } = await import('../services/fileStorage.js');
+    const jobId = '22222222-2222-2222-2222-222222222222';
+    const a = buildExportTempFilePath(jobId);
+    const b = buildExportTempFilePath(jobId);
+    assert.notEqual(a, b, 'two calls for the same job id must never collide');
+  });
+
+  await test('generateClinicBulkExport creates its temp ZIP inside the private export temp dir with mode 0600 and flags "wx"', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const catchStart = source.indexOf('} catch (err) {', genFnStart);
+    const genBody = source.slice(genFnStart, catchStart);
+    assert.ok(genBody.includes('await ensureExportTempDir()'), 'must ensure the private temp directory exists before writing to it');
+    assert.ok(genBody.includes('tempFilePath = buildExportTempFilePath(jobId)'), 'must use the dedicated private temp-path builder, never a raw os.tmpdir() path');
+    assert.ok(
+      /createWriteStream\(tempFilePath, \{ mode: 0o600, flags: 'wx' \}\)/.test(genBody),
+      'the temp ZIP write stream must request mode 0600 and exclusive-create (wx)',
+    );
+  });
+
+  section('22. Crash-safety remediation — local-mode temp/partial/final files are mode 0600 (P0)');
+
+  await test('saveFileFromPath (local mode, same-filesystem rename path) produces a final artifact with mode 0600', async () => {
+    const { saveFileFromPath, deleteFile } = await import('../services/fileStorage.js');
+    const tempPath = path.join(os.tmpdir(), `clinic-bulk-export-unit-test-${Date.now()}.zip`);
+    await fs.writeFile(tempPath, Buffer.from('dummy export bytes'), { mode: 0o600 });
+    const key = `exports/unit-test-clinic-${Date.now()}/perm-test.zip`;
+    await saveFileFromPath(key, tempPath, 'application/zip');
+    try {
+      if (process.platform !== 'win32') {
+        const localPath = path.resolve(process.cwd(), 'uploads', key);
+        const stat = fsSync.statSync(localPath);
+        assert.equal(stat.mode & 0o777, 0o600, `final local artifact must be mode 0600, got ${(stat.mode & 0o777).toString(8)}`);
+      }
+    } finally {
+      await deleteFile(key);
+    }
+  });
+
+  await test("saveFileFromPath's cross-device (EXDEV) streamed-copy fallback explicitly requests mode 0600 and exclusive-create (source inspection — a real EXDEV cannot be forced portably in a unit test)", async () => {
+    const source = await readSource('services/fileStorage.ts');
+    const fallbackStart = source.indexOf('Cross-device (EXDEV)');
+    assert.ok(fallbackStart > -1);
+    const fallbackBlock = source.slice(fallbackStart, fallbackStart + 1100);
+    assert.ok(fallbackBlock.includes('mode: 0o600'), 'the streamed-copy fallback destination stream must explicitly request mode 0600');
+    assert.ok(fallbackBlock.includes("flags: 'wx'"), 'the streamed-copy fallback must also use exclusive create');
+    assert.ok(fallbackBlock.includes("chmod(partialPath, 0o600)"), 'must also re-assert 0600 on the partial file before promoting it, regardless of which code path produced it');
+  });
+
+  await test('cleanupStaleLocalExportPartialFiles deletes a real, old .partial-<uuid> file but leaves a fresh one alone, and is a no-op under S3 storage', async () => {
+    const { cleanupStaleLocalExportPartialFiles } = await import('../services/fileStorage.js');
+    const clinicDir = path.resolve(process.cwd(), 'uploads', 'exports', `unit-test-partial-${Date.now()}`);
+    await fs.mkdir(clinicDir, { recursive: true });
+    const oldPartial = path.join(clinicDir, `job-old.zip.partial-${crypto.randomUUID()}`);
+    const freshPartial = path.join(clinicDir, `job-fresh.zip.partial-${crypto.randomUUID()}`);
+    await fs.writeFile(oldPartial, Buffer.from('old'));
+    await fs.writeFile(freshPartial, Buffer.from('fresh'));
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await fs.utimes(oldPartial, past, past);
+
+    const deleted = await cleanupStaleLocalExportPartialFiles(30 * 60 * 1000);
+    assert.ok(deleted >= 1, 'at least the old partial file must have been counted as deleted');
+    assert.ok(!fsSync.existsSync(oldPartial), 'the old partial file must actually be gone from disk');
+    assert.ok(fsSync.existsSync(freshPartial), 'the fresh partial file must be left alone');
+
+    await fs.unlink(freshPartial).catch(() => {});
+    await fs.rmdir(clinicDir).catch(() => {});
+
+    const source = await readSource('services/fileStorage.ts');
+    const fnStart = source.indexOf('export async function cleanupStaleLocalExportPartialFiles');
+    const fnBody = source.slice(fnStart, fnStart + 400);
+    assert.ok(fnBody.includes('if (isRemoteStorageEnabled()) return 0;'), 'must be a no-op under S3/remote storage — see the AbortIncompleteMultipartUpload bucket-lifecycle-rule requirement in the compliance doc instead');
+  });
+
+  section('23. Byte-ceiling remediation — post-finalize ZIP structural integrity validator (P0)');
+
+  async function buildTinyValidZip(): Promise<{ tempPath: string; size: number }> {
+    const archiverModule = (await import('archiver')).default;
+    const tempPath = path.join(os.tmpdir(), `zip-integrity-unit-test-${Date.now()}-${Math.random().toString(36).slice(2)}.zip`);
+    await new Promise<void>((resolve, reject) => {
+      const archive = archiverModule('zip', { zlib: { level: 9 } });
+      const writeStream = fsSync.createWriteStream(tempPath);
+      writeStream.on('close', () => resolve());
+      writeStream.on('error', reject);
+      archive.on('error', reject);
+      archive.pipe(writeStream);
+      archive.append(Buffer.from('{}'), { name: 'manifest.json' });
+      archive.append(Buffer.from('{}'), { name: 'clinic.json' });
+      void archive.finalize();
+    });
+    const stat = await fs.stat(tempPath);
+    return { tempPath, size: stat.size };
+  }
+
+  await test('validateZipStructuralIntegrity accepts a real, valid small ZIP whose entries exactly match the expected list', async () => {
+    const { validateZipStructuralIntegrity } = await import('../services/privacy/clinicBulkExportPackage.js');
+    const { tempPath, size } = await buildTinyValidZip();
+    try {
+      await validateZipStructuralIntegrity(tempPath, size, ['manifest.json', 'clinic.json']);
+    } finally {
+      await fs.unlink(tempPath).catch(() => {});
+    }
+  });
+
+  await test('validateZipStructuralIntegrity rejects a mismatched expected-entry list (a name the real ZIP does not contain)', async () => {
+    const { validateZipStructuralIntegrity, ClinicBulkExportZipIntegrityError } = await import(
+      '../services/privacy/clinicBulkExportPackage.js'
+    );
+    const { tempPath, size } = await buildTinyValidZip();
+    try {
+      await assert.rejects(
+        validateZipStructuralIntegrity(tempPath, size, ['manifest.json', 'clinic.json', 'missing-entity.ndjson']),
+        ClinicBulkExportZipIntegrityError,
+      );
+    } finally {
+      await fs.unlink(tempPath).catch(() => {});
+    }
+  });
+
+  await test('validateZipStructuralIntegrity rejects a truncated/corrupted file with no locatable EOCD record', async () => {
+    const { validateZipStructuralIntegrity, ClinicBulkExportZipIntegrityError } = await import(
+      '../services/privacy/clinicBulkExportPackage.js'
+    );
+    const { tempPath, size } = await buildTinyValidZip();
+    try {
+      const full = await fs.readFile(tempPath);
+      const truncated = full.subarray(0, Math.max(0, full.length - 30));
+      await fs.writeFile(tempPath, truncated);
+      await assert.rejects(
+        validateZipStructuralIntegrity(tempPath, truncated.length, ['manifest.json', 'clinic.json']),
+        ClinicBulkExportZipIntegrityError,
+      );
+    } finally {
+      await fs.unlink(tempPath).catch(() => {});
+    }
+  });
+
+  await test('generateClinicBulkExport re-checks the byte ceiling against the REAL final file size and validates ZIP structure, strictly after finalize/writeFinished and strictly before the planned-key persist', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const writeFinishedAwaitIndex = source.indexOf('await writeFinished;', genFnStart);
+    const finalStatIndex = source.indexOf('finalStat.size > maxBytes', genFnStart);
+    const validateCallIndex = source.indexOf('await validateZipStructuralIntegrity(', genFnStart);
+    const plannedKeyIndex = source.indexOf('const storageKey = buildExportStorageKey', genFnStart);
+    assert.ok(writeFinishedAwaitIndex > -1 && finalStatIndex > -1 && validateCallIndex > -1 && plannedKeyIndex > -1);
+    assert.ok(
+      writeFinishedAwaitIndex < finalStatIndex && finalStatIndex < validateCallIndex && validateCallIndex < plannedKeyIndex,
+      'ordering must be: finalize/writeFinished -> real-file-size byte-ceiling re-check -> ZIP structural validation -> planned-key persist',
+    );
+  });
+
+  section('24. Feature-flag remediation — the flag/allowlist is a real GENERATION kill switch, not just a creation gate (P0)');
+
+  await test('claimQueuedClinicBulkExportJobs checks isClinicBulkExportEnabledForOrganization before ever attempting to claim a candidate', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const fnStart = source.indexOf('export async function claimQueuedClinicBulkExportJobs');
+    const fnEnd = source.indexOf('async function failQueuedJobAsFeatureDisabled');
+    assert.ok(fnStart > -1 && fnEnd > fnStart);
+    const fnBody = source.slice(fnStart, fnEnd);
+    assert.ok(fnBody.includes('isClinicBulkExportEnabledForOrganization(candidate.organizationId)'));
+    assert.ok(fnBody.includes('failQueuedJobAsFeatureDisabled(candidate)'));
+  });
+
+  await test('failQueuedJobAsFeatureDisabled is guarded on status="queued" and records a generation_failed audit with FEATURE_DISABLED and no patient data', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('async function failQueuedJobAsFeatureDisabled');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 1200);
+    assert.ok(fnBody.includes("status: 'queued'"), 'must never touch a row a concurrent replica already claimed');
+    assert.ok(fnBody.includes("failureCode: 'FEATURE_DISABLED'"));
+    assert.ok(fnBody.includes("action: 'clinic_bulk_export_generation_failed'"));
+    assert.ok(!/restrictedNote|purpose:/.test(fnBody), 'the audit metadata must never include patient/clinic-specific content');
+  });
+
+  await test('generateClinicBulkExport re-checks the flag/allowlist at exactly three checkpoints: generation start, before the planned-key persist/upload, and before the ready transition', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const catchStart = source.indexOf('} catch (err) {', genFnStart);
+    const genBody = source.slice(genFnStart, catchStart);
+
+    const occurrences = genBody.split('assertClinicBulkExportGenerationAllowed(job.organizationId)').length - 1;
+    assert.equal(occurrences, 3, 'must re-check exactly 3 times: generation start, before planned-key persist/upload, before the ready transition');
+
+    const firstCheckIndex = genBody.indexOf('assertClinicBulkExportGenerationAllowed');
+    const plannedKeyIndex = genBody.indexOf('const storageKey = buildExportStorageKey');
+    const doUploadIndex = genBody.indexOf('await doUpload(storageKey');
+    const readyUpdateIndex = genBody.indexOf("data: { status: 'ready'");
+    assert.ok(firstCheckIndex > -1 && firstCheckIndex < plannedKeyIndex, 'the first re-check must sit before the planned-key computation');
+
+    const secondCheckIndex = genBody.indexOf('assertClinicBulkExportGenerationAllowed', plannedKeyIndex);
+    assert.ok(
+      secondCheckIndex > plannedKeyIndex && secondCheckIndex < doUploadIndex,
+      'the second re-check must sit between the planned-key computation and the upload call',
+    );
+
+    const thirdCheckIndex = genBody.lastIndexOf('assertClinicBulkExportGenerationAllowed', readyUpdateIndex);
+    assert.ok(
+      thirdCheckIndex > doUploadIndex && thirdCheckIndex < readyUpdateIndex,
+      'the third re-check must sit strictly between the upload call and the ready transition',
+    );
+  });
+
+  await test('ClinicBulkExportFeatureDisabledError maps to the stable FEATURE_DISABLED failure code in generateClinicBulkExport\'s catch block, funneling through the same cleanup as every other failure', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const catchStart = source.indexOf('} catch (err) {', genFnStart);
+    const finallyStart = source.indexOf('} finally {', catchStart);
+    const catchBody = source.slice(catchStart, finallyStart);
+    assert.ok(catchBody.includes('ClinicBulkExportFeatureDisabledError') && catchBody.includes("'FEATURE_DISABLED'"));
+    assert.ok(catchBody.includes('await attemptArtifactDeletion(jobId)'), 'must still funnel through the SAME awaited orphan-cleanup as every other failure path');
+  });
+
+  await test('ClinicBulkExportFeatureDisabledError / ClinicBulkExportZipIntegrityError are real Error subclasses', async () => {
+    const { ClinicBulkExportFeatureDisabledError, ClinicBulkExportZipIntegrityError } = await import(
+      '../services/privacy/clinicBulkExportPackage.js'
+    );
+    assert.ok(new ClinicBulkExportFeatureDisabledError() instanceof Error);
+    assert.ok(new ClinicBulkExportZipIntegrityError() instanceof Error);
+  });
+
+  section('25. Cleanup-ordering remediation — expire -> sweep-abandoned -> delete-artifacts in ONE pass (P1)');
+
+  await test('cleanupExpiredClinicBulkExportArchives runs the abandoned-lease sweep BEFORE the artifact-deletion retry query', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('export async function cleanupExpiredClinicBulkExportArchives');
+    assert.ok(fnStart > -1);
+    const sweepIndex = source.indexOf("data: { status: 'failed', failureCode: 'LEASE_EXPIRED' }", fnStart);
+    const deletionQueryIndex = source.indexOf('const needingDeletion = await prisma.clinicBulkExportArchive.findMany', fnStart);
+    assert.ok(sweepIndex > -1 && deletionQueryIndex > -1);
+    assert.ok(
+      sweepIndex < deletionQueryIndex,
+      'the abandoned-lease sweep must run before the artifact-deletion retry query so a row swept THIS tick is eligible for deletion in the SAME call',
+    );
+  });
+
+  section('26. Async-selection remediation — the epoch guard also applies to finally-block state clearing (P1)');
+
+  await test("handleCreate's and handleDownload's finally blocks only clear their own loading flag when the request is still current — never unconditionally", async () => {
+    const source = stripComments(await readSource('../../src/components/settings/ClinicBulkExportSection.tsx'));
+    const handleCreateStart = source.indexOf('const handleCreate = useCallback');
+    const handleDownloadStart = source.indexOf('const handleDownload = useCallback');
+    const handleStartNewStart = source.indexOf('const handleStartNew = useCallback');
+    assert.ok(handleCreateStart > -1 && handleDownloadStart > handleCreateStart && handleStartNewStart > handleDownloadStart);
+
+    const handleCreateBody = source.slice(handleCreateStart, handleDownloadStart);
+    assert.ok(
+      handleCreateBody.includes('if (isStillCurrentSelection(requestClinicId, requestEpoch)) setSubmitting(false)'),
+      "handleCreate's finally block must guard setSubmitting(false) behind the epoch check",
+    );
+    assert.ok(
+      !/finally\s*\{\s*setSubmitting\(false\);\s*\}/.test(handleCreateBody),
+      'must never unconditionally call setSubmitting(false) in the finally block',
+    );
+
+    const handleDownloadBody = source.slice(handleDownloadStart, handleStartNewStart);
+    assert.ok(
+      handleDownloadBody.includes('if (isStillCurrentSelection(requestClinicId, requestEpoch)) setDownloading(false)'),
+      "handleDownload's finally block must guard setDownloading(false) behind the epoch check",
+    );
+    assert.ok(
+      !/finally\s*\{\s*setDownloading\(false\);\s*\}/.test(handleDownloadBody),
+      'must never unconditionally call setDownloading(false) in the finally block',
+    );
+  });
+
+  section('27. Crash-safety remediation — process-local stale-temp sweep, worker wiring (P0)');
+
+  await test('sweepStaleClinicBulkExportTempFiles gates deletion on BOTH file age and DB status/lease, and only ever considers recognized file names', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('export async function sweepStaleClinicBulkExportTempFiles');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 2500);
+    assert.ok(fnBody.includes('parseExportTempFileName(name)'), 'must only ever consider recognized file names');
+    assert.ok(fnBody.includes('now.getTime() - stat.mtimeMs < maxAgeMs'), 'must gate on file age');
+    assert.ok(
+      fnBody.includes("row?.status === 'generating'") && fnBody.includes('leaseExpiresAt'),
+      "must gate on the DB row's live generating status/lease, never age alone",
+    );
+    assert.ok(fnBody.includes('continue; // never delete the temp file of an actively generating job'));
+  });
+
+  await test('clinicBulkExportWorker.ts runs the stale-temp sweep at startup AND on every tick, never letting a sweep failure abort the tick', async () => {
+    const source = stripComments(await readSource('jobs/clinicBulkExportWorker.ts'));
+    assert.ok(source.includes('sweepStaleClinicBulkExportTempFiles'), 'the worker must import/use the sweep');
+    const startFnStart = source.indexOf('export function startClinicBulkExportWorker');
+    const startFnBody = source.slice(startFnStart, startFnStart + 900);
+    assert.ok(startFnBody.includes('runStaleTempSweep()'), 'must run the sweep at startup');
+    const tickFnStart = source.indexOf('async function runTick');
+    const tickFnEnd = source.indexOf('export function startClinicBulkExportWorker');
+    const tickFnBody = source.slice(tickFnStart, tickFnEnd);
+    assert.ok(tickFnBody.includes('runStaleTempSweep()'), 'must run the sweep on every tick, not only at startup');
+    const sweepFnStart = source.indexOf('async function runStaleTempSweep');
+    const sweepFnBody = source.slice(sweepFnStart, sweepFnStart + 600);
+    assert.ok(sweepFnBody.includes('try {') && sweepFnBody.includes('catch (err)'), 'the sweep call itself must never let a failure propagate and abort claim/generation in the same tick');
+  });
+
+  await test('clinicBulkExportCleanupJob.ts sweeps stale local .partial-* export artifacts on every run', async () => {
+    const source = stripComments(await readSource('jobs/clinicBulkExportCleanupJob.ts'));
+    assert.ok(source.includes('cleanupStaleLocalExportPartialFiles'));
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
