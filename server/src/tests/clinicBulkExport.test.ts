@@ -790,6 +790,127 @@ async function main() {
     assert.equal(err.name, 'ClinicBulkExportLeaseLostError');
   });
 
+  section('19. Remediation round — durable planned-artifact lifecycle, no post-upload orphans (P0)');
+
+  await test('the deterministic storageKey is persisted on the row via a guarded update BEFORE the upload call, not after', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const cleanupFnStart = source.indexOf('export async function cleanupExpiredClinicBulkExportArchives');
+    assert.ok(genFnStart > -1 && cleanupFnStart > genFnStart);
+    const genBody = source.slice(genFnStart, cleanupFnStart);
+
+    const plannedUpdateIndex = genBody.indexOf('data: { storageKey }');
+    const doUploadCallIndex = genBody.indexOf('await doUpload(storageKey');
+    assert.ok(plannedUpdateIndex > -1, 'must persist the planned storageKey via its own guarded update');
+    assert.ok(doUploadCallIndex > -1, 'must still call doUpload with the same storageKey');
+    assert.ok(plannedUpdateIndex < doUploadCallIndex, 'the planned-key persist must happen strictly before the upload call');
+
+    const plannedUpdateBlockStart = genBody.lastIndexOf('updateMany(', plannedUpdateIndex);
+    const plannedUpdateBlock = genBody.slice(plannedUpdateBlockStart, plannedUpdateIndex + 40);
+    assert.ok(plannedUpdateBlock.includes("status: 'generating'"), 'the planned-key guarded update must require status=generating');
+    assert.ok(plannedUpdateBlock.includes('leaseExpiresAt'), 'the planned-key guarded update must require a still-valid lease');
+  });
+
+  await test('a failed planned-key persist never uploads and fails with the stable LEASE_LOST code, not a partial artifact', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const plannedKeyResultIndex = source.indexOf('plannedKeyResult.count === 0', genFnStart);
+    const doUploadCallIndex = source.indexOf('await doUpload(storageKey', genFnStart);
+    assert.ok(plannedKeyResultIndex > -1 && doUploadCallIndex > -1);
+    assert.ok(plannedKeyResultIndex < doUploadCallIndex, 'the planned-key failure check must be resolved before ever reaching the upload call');
+    const checkBlock = source.slice(plannedKeyResultIndex, plannedKeyResultIndex + 200);
+    assert.ok(checkBlock.includes('throw new ClinicBulkExportLeaseLostError()'), 'a failed planned-key persist must throw, never fall through to doUpload');
+  });
+
+  await test('every post-planned-key failure path throws instead of ad hoc deleteFile-then-return, letting the catch block own cleanup uniformly', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const catchStart = source.indexOf('} catch (err) {', genFnStart);
+    assert.ok(genFnStart > -1 && catchStart > genFnStart);
+    const tryBody = source.slice(genFnStart, catchStart);
+    assert.ok(!/await deleteFile\(storageKey\)/.test(tryBody), 'the try block must not ad hoc delete the artifact itself — the catch block does it uniformly via attemptArtifactDeletion');
+  });
+
+  await test('the catch block awaits attemptArtifactDeletion so no failure path can return before orphan cleanup is attempted', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const genFnStart = source.indexOf('export async function generateClinicBulkExport');
+    const catchStart = source.indexOf('} catch (err) {', genFnStart);
+    const finallyStart = source.indexOf('} finally {', catchStart);
+    assert.ok(catchStart > -1 && finallyStart > catchStart);
+    const catchBody = source.slice(catchStart, finallyStart);
+    assert.ok(catchBody.includes('await attemptArtifactDeletion(jobId)'), 'the catch block must await an immediate orphan-artifact cleanup attempt, not fire-and-forget');
+  });
+
+  await test('attemptArtifactDeletion is gated on status !== "ready", not solely status === "expired" — covers failed/orphaned generating rows too', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const fnStart = source.indexOf('export async function attemptArtifactDeletion');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 800);
+    assert.ok(fnBody.includes("row.status === 'ready'"), 'must gate on the downloadable status directly, never assume expired is the only eligible status');
+    assert.ok(!/row\.status !== 'expired'/.test(fnBody), 'must not remain hard-gated to only the expired status');
+  });
+
+  await test('generateClinicBulkExport accepts a test-only hook fired immediately before the planned-key persist, never used by the production worker call site', async () => {
+    const packageSource = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.ok(packageSource.includes('beforePlannedKeyPersistForTest?: () => Promise<void>'));
+    const workerSource = stripComments(await readSource('jobs/clinicBulkExportWorker.ts'));
+    assert.ok(!workerSource.includes('beforePlannedKeyPersistForTest'), 'the production worker must never pass the test-only hook');
+  });
+
+  await test('deleteStorageObjectIdempotent treats a missing storage object as a successful delete, not a retry-forever failure', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('async function deleteStorageObjectIdempotent');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 700);
+    assert.ok(fnBody.includes('fileExists('), 'must check whether the object still exists after a delete error');
+    assert.ok(fnBody.includes('if (!stillExists) return true'), 'a confirmed-missing object must be treated as already deleted (idempotent success)');
+  });
+
+  await test('cleanup retries artifact deletion for BOTH expired and failed terminal rows carrying a storageKey', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('export async function cleanupExpiredClinicBulkExportArchives');
+    assert.ok(fnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 2000);
+    assert.ok(fnBody.includes("status: { in: ['expired', 'failed'] }"), 'must sweep both terminal statuses for retryable storage deletion, not just expired');
+  });
+
+  await test('attemptArtifactDeletion / cleanupExpiredClinicBulkExportArchives accept a test-only deleteForTest override never used by the production cleanup job', async () => {
+    const packageSource = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.ok(packageSource.includes('deleteForTest?: typeof deleteFile'), 'must expose the same test-only-override pattern already used by uploadForTest/writeStartedAuditForTest');
+    const cleanupJobSource = stripComments(await readSource('jobs/clinicBulkExportCleanupJob.ts'));
+    assert.ok(!cleanupJobSource.includes('deleteForTest'), 'the production cleanup job must never pass the test-only override');
+  });
+
+  section('20. Remediation round — transactional, exactly-once generation_started audit (P1)');
+
+  await test('claimSingleQueuedJobWithAudit wraps the claim update, job read, and audit write in one prisma.$transaction', async () => {
+    const source = stripComments(await readSource('services/privacy/clinicBulkExportPackage.ts'));
+    const fnStart = source.indexOf('async function claimSingleQueuedJobWithAudit');
+    const claimFnStart = source.indexOf('export async function claimQueuedClinicBulkExportJobs');
+    assert.ok(fnStart > -1 && claimFnStart > -1);
+    const fnBody = source.slice(fnStart, fnStart + 1500);
+    assert.ok(fnBody.includes('prisma.$transaction(async (tx'), 'the claim + audit must share one transaction');
+    assert.ok(fnBody.includes("status: 'queued'") , 'the guarded claim update must still require status=queued inside the transaction');
+    assert.ok(fnBody.includes('writeStartedAudit(tx,'), 'the audit write must use the SAME transaction client as the claim');
+    assert.ok(fnBody.includes('if (claim.count === 0) return false'), 'losing the claim race must return false with no audit write and no side effects');
+  });
+
+  await test('claimQueuedClinicBulkExportJobs isolates one candidate\'s transaction failure from the rest of the tick', async () => {
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    const fnStart = source.indexOf('export async function claimQueuedClinicBulkExportJobs');
+    const fnEnd = source.indexOf('async function claimSingleQueuedJobWithAudit');
+    assert.ok(fnStart > -1 && fnEnd > fnStart);
+    const fnBody = source.slice(fnStart, fnEnd);
+    assert.ok(fnBody.includes('try {') && fnBody.includes('catch (err) {'), 'the per-candidate claim call must be individually try/caught so one rollback does not abort the whole tick');
+  });
+
+  await test('claimQueuedClinicBulkExportJobs accepts a test-only audit override never used by the production worker call site', async () => {
+    const packageSource = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.ok(packageSource.includes('writeStartedAuditForTest?: typeof writeAuditLogInTx'), 'must expose the same test-only-override pattern already used by uploadForTest');
+    const workerSource = stripComments(await readSource('jobs/clinicBulkExportWorker.ts'));
+    assert.ok(!workerSource.includes('writeStartedAuditForTest'), 'the production worker must never pass the test-only override');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

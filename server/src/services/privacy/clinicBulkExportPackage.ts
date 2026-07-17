@@ -37,7 +37,7 @@ import { Readable } from 'node:stream';
 import archiver from 'archiver';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import prisma from '../../db.js';
-import { buildExportStorageKey, saveFileFromPath, deleteFile } from '../fileStorage.js';
+import { buildExportStorageKey, saveFileFromPath, deleteFile, fileExists } from '../fileStorage.js';
 import { safeErrorFields } from '../../utils/safeError.js';
 import { writeAuditLogInTx, writeAuditLog, extractRequestMeta } from '../../utils/auditLog.js';
 import {
@@ -345,38 +345,87 @@ export async function expireArchiveIfPastTtl(
 }
 
 /**
- * Two-step, non-atomic (cannot share a Postgres transaction with an
- * S3/local delete), retryable artifact deletion. The ready->expired status
- * flip must have ALREADY happened (blocking every download path) before
- * this runs. On success, storageKey is cleared and artifactDeletedAt is
- * set. On failure, storageKey is preserved (never nulled) and
- * cleanupFailureCode is set so the next cleanup run retries using the
- * still-present key — deletion is never silently abandoned.
+ * Deletes a storage object, treating "already gone" as success rather than
+ * a failure to retry forever — a provider-specific missing-object error (or,
+ * for local storage, simply nothing at that path) must never keep a row
+ * stuck with cleanupFailureCode set indefinitely for an artifact that no
+ * longer exists. `deleteFile` itself already swallows local-mode ENOENT, so
+ * this second check only matters for remote-storage (S3-compatible) errors;
+ * kept provider-agnostic rather than assuming a specific error shape.
  */
-export async function attemptArtifactDeletion(jobId: string, now: Date = new Date()): Promise<boolean> {
+async function deleteStorageObjectIdempotent(storageKey: string, deleteForTest?: typeof deleteFile): Promise<boolean> {
+  const doDelete = deleteForTest ?? deleteFile;
+  try {
+    await doDelete(storageKey);
+    return true;
+  } catch (err) {
+    try {
+      const stillExists = await fileExists(storageKey);
+      if (!stillExists) return true;
+    } catch {
+      // Existence check itself failed — fall through to the failure path
+      // below so this is retried, never silently swallowed.
+    }
+    console.error('[clinic-bulk-export-cleanup] storage delete failed, will retry', safeErrorFields(err));
+    return false;
+  }
+}
+
+async function finalizeArtifactDeletionOutcome(jobId: string, success: boolean, now: Date): Promise<void> {
+  if (success) {
+    await prisma.clinicBulkExportArchive
+      .updateMany({ where: { id: jobId }, data: { storageKey: null, artifactDeletedAt: now, cleanupFailureCode: null } })
+      .catch(() => {});
+  } else {
+    await prisma.clinicBulkExportArchive
+      .updateMany({ where: { id: jobId }, data: { cleanupFailureCode: 'STORAGE_DELETE_FAILED' } })
+      .catch(() => {});
+  }
+}
+
+/**
+ * Two-step, non-atomic (cannot share a Postgres transaction with an
+ * S3/local delete), retryable artifact deletion for ANY row (of any
+ * terminal status) that currently carries a non-null storageKey — gated
+ * only on `status !== 'ready'`, so a legitimately downloadable artifact can
+ * never be deleted out from under an in-flight download, but every
+ * non-downloadable status (`expired`, `failed`, or a `generating` row whose
+ * planned key never made it to a real upload) is eligible. Shared by:
+ *  - expireArchiveIfPastTtl's opportunistic post-transition cleanup and the
+ *    cleanup cron's retry sweep (P0 remediation: now covers BOTH `expired`
+ *    and `failed` rows, not just `expired` — see
+ *    cleanupExpiredClinicBulkExportArchives);
+ *  - generateClinicBulkExport's own failure path, invoked the moment ANY
+ *    failure occurs after the planned storageKey has been persisted to the
+ *    row (see the guarded pre-upload persist below) — this is what closes
+ *    the "artifact uploaded but never durably referenced" orphan window.
+ * On success, storageKey is cleared and artifactDeletedAt is set. On
+ * failure, storageKey is preserved (never nulled) and cleanupFailureCode is
+ * set so the next cleanup run retries using the still-present key —
+ * deletion is never silently abandoned.
+ *
+ * `deleteForTest` is a test-only override for the storage delete call
+ * (mirrors `uploadForTest` on generateClinicBulkExport / `writeStartedAuditForTest`
+ * on claimQueuedClinicBulkExportJobs), never passed by any production call
+ * site — it exists solely so scripts/verify-clinic-bulk-export-lifecycle.ts
+ * can deterministically force a single delete failure (real local-mode
+ * storage deletion otherwise always succeeds, even for an already-missing
+ * file) and prove the retry-on-a-later-run behavior.
+ */
+export async function attemptArtifactDeletion(
+  jobId: string,
+  now: Date = new Date(),
+  deleteForTest?: typeof deleteFile,
+): Promise<boolean> {
   const row = await prisma.clinicBulkExportArchive.findUnique({
     where: { id: jobId },
     select: { id: true, status: true, storageKey: true },
   });
-  if (!row || row.status !== 'expired' || !row.storageKey) return false;
+  if (!row || row.status === 'ready' || !row.storageKey) return false;
 
-  try {
-    await deleteFile(row.storageKey);
-    await prisma.clinicBulkExportArchive.update({
-      where: { id: jobId },
-      data: { storageKey: null, artifactDeletedAt: now, cleanupFailureCode: null },
-    });
-    return true;
-  } catch (err) {
-    console.error('[clinic-bulk-export-cleanup] storage delete failed, will retry', {
-      jobId,
-      ...safeErrorFields(err),
-    });
-    await prisma.clinicBulkExportArchive
-      .update({ where: { id: jobId }, data: { cleanupFailureCode: 'STORAGE_DELETE_FAILED' } })
-      .catch(() => {});
-    return false;
-  }
+  const success = await deleteStorageObjectIdempotent(row.storageKey, deleteForTest);
+  await finalizeArtifactDeletionOutcome(jobId, success, now);
+  return success;
 }
 
 // ── Download token issuance (atomic) ────────────────────────────────────
@@ -695,20 +744,34 @@ export function attachDownloadOutcomeListeners(args: {
 // ── Worker: claim + generate ────────────────────────────────────────────
 
 /**
- * Claims up to `limit` queued rows for this worker process via guarded
- * per-row updateMany — correctness comes from the WHERE-guarded update
- * (only one of N concurrent worker replicas polling the same row wins), so
- * multiple replicas can claim different rows concurrently without a
- * cross-replica lock. A winning claim also replaces the row's queue-timeout
- * deadline with the (shorter) generating lease (see getGenerationLeaseMs())
- * and records exactly one `clinic_bulk_export_generation_started` audit
- * event — a replica that loses the claim race never writes that event.
- * Also sweeps rows (queued or generating) whose lease has expired to
+ * Claims up to `limit` queued rows for this worker process. Each candidate
+ * is claimed via `claimSingleQueuedJobWithAudit` — one Prisma transaction
+ * per row containing BOTH the guarded claim update AND its
+ * `clinic_bulk_export_generation_started` audit write, so the claim is
+ * exactly-once and durable (P1 remediation: previously the claim, the job
+ * read, and the audit write were three separate, non-transactional steps —
+ * a crash or a failing audit insert between them could leave a row claimed
+ * with no audit trail). Multiple replicas can still claim different rows
+ * concurrently without any cross-replica lock — correctness comes entirely
+ * from the guarded per-row WHERE clause inside each transaction (only one
+ * of N concurrent transactions targeting the same row can win the row
+ * lock). Also sweeps rows (queued or generating) whose lease has expired to
  * 'failed' first — a crashed/absent worker never permanently blocks a
  * clinic, and a queued row that merely outlived the (separate, longer)
  * queue timeout is the only queued row ever swept this way.
+ *
+ * `writeStartedAuditForTest` is a test-only override for the transactional
+ * audit write, never passed by any production call site (mirrors
+ * `uploadForTest` on generateClinicBulkExport) — it exists solely so
+ * scripts/verify-clinic-bulk-export-lifecycle.ts can deterministically force
+ * an audit-write failure and prove the claim rolls back with the job left
+ * 'queued'.
  */
-export async function claimQueuedClinicBulkExportJobs(limit: number, now: Date = new Date()): Promise<string[]> {
+export async function claimQueuedClinicBulkExportJobs(
+  limit: number,
+  now: Date = new Date(),
+  writeStartedAuditForTest?: typeof writeAuditLogInTx,
+): Promise<string[]> {
   await prisma.clinicBulkExportArchive.updateMany({
     where: {
       status: { in: ['queued', 'generating'] },
@@ -727,50 +790,70 @@ export async function claimQueuedClinicBulkExportJobs(limit: number, now: Date =
   const claimedIds: string[] = [];
   for (const candidate of candidates) {
     if (claimedIds.length >= limit) break;
-    const result = await prisma.clinicBulkExportArchive.updateMany({
-      where: { id: candidate.id, status: 'queued' },
-      // Claiming REPLACES the queue-timeout deadline with the (shorter)
-      // generating lease — a job that just spent 40 minutes healthily
-      // waiting behind other clinics' jobs must not inherit that elapsed
-      // time against its generation budget.
-      data: { status: 'generating', heartbeatAt: now, leaseExpiresAt: new Date(now.getTime() + getGenerationLeaseMs()) },
-    });
-    if (result.count > 0) {
-      claimedIds.push(candidate.id);
-      await recordGenerationStartedAudit(candidate.id);
+    try {
+      const claimed = await claimSingleQueuedJobWithAudit(candidate.id, now, writeStartedAuditForTest);
+      if (claimed) claimedIds.push(candidate.id);
+    } catch (err) {
+      // The transaction (claim + audit) rolled back — the row is left
+      // exactly as it was ('queued'). One candidate's failure must never
+      // stop this tick from claiming OTHER healthy candidates.
+      console.error('[clinic-bulk-export] claim transaction failed, job remains queued', {
+        jobId: candidate.id,
+        ...safeErrorFields(err),
+      });
     }
   }
   return claimedIds;
 }
 
 /**
- * Exactly one `clinic_bulk_export_generation_started` event per successfully
- * claimed job — called only after the guarded per-row claim above actually
- * won (result.count > 0), so a replica that loses the claim race never
- * writes this event. Awaited (like every other worker-lifecycle audit event
- * in this file — generation_completed/generation_failed), but uses the
- * regular fire-and-forget-safe `writeAuditLog`, not the transactional
- * `writeAuditLogInTx`: a failing insert here must never roll back or block
- * the claim itself, it only logs and swallows. Only stable identifiers are
- * recorded — never restrictedNote, patient data, storageKey, or exception
- * text.
+ * Exactly-once, durable claim of ONE queued row: guarded claim update, a
+ * read of the stable job identifiers, and the
+ * `clinic_bulk_export_generation_started` audit write all happen inside a
+ * SINGLE Prisma transaction. If the guarded update matches zero rows (lost
+ * the claim race to another replica), returns `false` immediately with no
+ * audit write and no transaction side effects. If the audit insert throws
+ * for any reason, the entire transaction — including the claim itself —
+ * rolls back, so the row is left exactly as it was ('queued'), available
+ * for another replica (or a later tick of this same replica) to claim.
+ * Only stable identifiers are recorded in the audit metadata — never
+ * restrictedNote, patient data, storageKey, or exception text.
  */
-async function recordGenerationStartedAudit(jobId: string): Promise<void> {
-  const job = await prisma.clinicBulkExportArchive.findUnique({
-    where: { id: jobId },
-    select: { organizationId: true, clinicId: true, requestedByUserId: true },
-  });
-  if (!job) return;
-  await writeAuditLog({
-    organizationId: job.organizationId,
-    clinicId: job.clinicId,
-    actorUserId: job.requestedByUserId,
-    actorRole: 'system',
-    action: 'clinic_bulk_export_generation_started',
-    entityType: 'clinic',
-    entityId: job.clinicId,
-    description: 'Clinic bulk export generation started',
-    metadata: { jobId, schemaVersion: EXPORT_SCHEMA_VERSION },
+async function claimSingleQueuedJobWithAudit(
+  jobId: string,
+  now: Date,
+  writeStartedAuditForTest?: typeof writeAuditLogInTx,
+): Promise<boolean> {
+  const writeStartedAudit = writeStartedAuditForTest ?? writeAuditLogInTx;
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const claim = await tx.clinicBulkExportArchive.updateMany({
+      where: { id: jobId, status: 'queued' },
+      // Claiming REPLACES the queue-timeout deadline with the (shorter)
+      // generating lease — a job that just spent 40 minutes healthily
+      // waiting behind other clinics' jobs must not inherit that elapsed
+      // time against its generation budget.
+      data: { status: 'generating', heartbeatAt: now, leaseExpiresAt: new Date(now.getTime() + getGenerationLeaseMs()) },
+    });
+    if (claim.count === 0) return false;
+
+    const job = await tx.clinicBulkExportArchive.findUniqueOrThrow({
+      where: { id: jobId },
+      select: { organizationId: true, clinicId: true, requestedByUserId: true },
+    });
+
+    await writeStartedAudit(tx, {
+      organizationId: job.organizationId,
+      clinicId: job.clinicId,
+      actorUserId: job.requestedByUserId,
+      actorRole: 'system',
+      action: 'clinic_bulk_export_generation_started',
+      entityType: 'clinic',
+      entityId: job.clinicId,
+      description: 'Clinic bulk export generation started',
+      metadata: { jobId, schemaVersion: EXPORT_SCHEMA_VERSION },
+    });
+
+    return true;
   });
 }
 
@@ -1078,8 +1161,25 @@ const SCOPE_DESCRIPTION =
  * heartbeat survives a slow upload — reassigning fileStorage.ts's
  * `saveFileFromPath` export directly is not possible (it is a live,
  * read-only ES-module binding under this package's `"type": "module"`).
+ *
+ * `beforePlannedKeyPersistForTest` is the same kind of test-only override,
+ * fired immediately before the guarded planned-storageKey persist below.
+ * It exists because that guarded update is normally impossible to lose in
+ * practice: every cursor-paginated entity batch (including a zero-record
+ * one) already renews the lease forward via the SAME heartbeat mechanism
+ * before this point is ever reached, so an externally-stale `leaseExpiresAt`
+ * value gets self-healed long before the planned-key update runs. This hook
+ * lets the verify script simulate the one real-world case that still loses
+ * the race — a concurrent sweep (a different replica, or the cleanup cron)
+ * flips the row's status/lease in the narrow window between the last
+ * per-batch renewal and this update — deterministically rather than by
+ * timing.
  */
-export async function generateClinicBulkExport(jobId: string, uploadForTest?: typeof saveFileFromPath): Promise<void> {
+export async function generateClinicBulkExport(
+  jobId: string,
+  uploadForTest?: typeof saveFileFromPath,
+  beforePlannedKeyPersistForTest?: () => Promise<void>,
+): Promise<void> {
   const job = await prisma.clinicBulkExportArchive.findUnique({
     where: { id: jobId },
     select: {
@@ -1191,7 +1291,32 @@ export async function generateClinicBulkExport(jobId: string, uploadForTest?: ty
     await archive.finalize();
     await writeFinished;
 
+    // Deterministic from clinicId+jobId alone — computing it here (before
+    // upload even begins) and persisting it to the row NOW, while still
+    // 'generating', is the P0 orphan-artifact fix: every failure from this
+    // point on (upload throws, lease lost, the ready update itself throws,
+    // the ready update loses the race, or the process crashes outright) can
+    // find this row again via its storageKey and clean up — see the catch
+    // block below and cleanupExpiredClinicBulkExportArchives. Download stays
+    // impossible throughout because every download path gates on
+    // status==='ready', never on storageKey alone.
     const storageKey = buildExportStorageKey(job.clinicId, jobId);
+    if (beforePlannedKeyPersistForTest) await beforePlannedKeyPersistForTest();
+    const plannedKeyResult = await prisma.clinicBulkExportArchive.updateMany({
+      where: {
+        id: jobId,
+        status: 'generating',
+        OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { gte: new Date() } }],
+      },
+      data: { storageKey },
+    });
+    if (plannedKeyResult.count === 0) {
+      // Lost the row's generating claim before an upload was ever attempted
+      // — nothing was written to storage under this key, so there is
+      // nothing to clean up; just fail without uploading.
+      throw new ClinicBulkExportLeaseLostError();
+    }
+
     const doUpload = uploadForTest ?? saveFileFromPath;
     await doUpload(storageKey, tempFilePath, 'application/zip');
     tempFilePath = null;
@@ -1199,9 +1324,9 @@ export async function generateClinicBulkExport(jobId: string, uploadForTest?: ty
     if (heartbeat.isLeaseLost()) {
       // The lease was lost sometime during finalize/upload (after the last
       // per-batch checkpoint) — the artifact we just uploaded must never
-      // become reachable via a 'ready' row. Delete it and fail with the
-      // stable LEASE_LOST code, exactly like a mid-streaming lease loss.
-      await deleteFile(storageKey).catch(() => {});
+      // become reachable via a 'ready' row. The row already carries
+      // storageKey (persisted above), so the catch block's orphan cleanup
+      // below deletes it — no ad hoc delete needed here.
       throw new ClinicBulkExportLeaseLostError();
     }
 
@@ -1219,9 +1344,9 @@ export async function generateClinicBulkExport(jobId: string, uploadForTest?: ty
 
     if (result.count === 0) {
       // Lost the lease to a sweep between finalize and this update — never
-      // resurrect the row; discard the just-written artifact instead.
-      await deleteFile(storageKey).catch(() => {});
-      return;
+      // resurrect the row. storageKey is already persisted on the row, so
+      // the catch block's orphan cleanup discards the just-written artifact.
+      throw new ClinicBulkExportLeaseLostError();
     }
 
     // Background-worker event, not gating an HTTP success response — the
@@ -1251,6 +1376,15 @@ export async function generateClinicBulkExport(jobId: string, uploadForTest?: ty
     await prisma.clinicBulkExportArchive
       .updateMany({ where: { id: jobId, status: 'generating' }, data: { status: 'failed', failureCode } })
       .catch(() => {});
+    // Immediate, awaited (never fire-and-forget) orphan-artifact cleanup:
+    // if a storageKey was ever persisted on this row (the guarded pre-upload
+    // persist above), any failure from that point on must never leave a
+    // full sensitive clinic ZIP reachable in storage with no durable
+    // reference a future cleanup pass could find and delete. Reuses
+    // attemptArtifactDeletion (gated on status !== 'ready', which this row
+    // always satisfies here) so the retry/idempotent-missing-object
+    // semantics are identical to the cleanup cron's own sweep.
+    await attemptArtifactDeletion(jobId).catch(() => {});
     await writeAuditLog({
       organizationId: job.organizationId,
       clinicId: job.clinicId,
@@ -1275,8 +1409,14 @@ export async function generateClinicBulkExport(jobId: string, uploadForTest?: ty
  * expiry logic), retries any previously-failed storage deletion, and sweeps
  * abandoned queued/generating rows past their lease — a backstop, since the
  * worker's own tick already does this first in normal operation.
+ *
+ * `deleteForTest` is threaded straight through to attemptArtifactDeletion —
+ * see its doc comment. Never passed by any production caller.
  */
-export async function cleanupExpiredClinicBulkExportArchives(now: Date = new Date()): Promise<{
+export async function cleanupExpiredClinicBulkExportArchives(
+  now: Date = new Date(),
+  deleteForTest?: typeof deleteFile,
+): Promise<{
   expired: number;
   deleted: number;
   sweptAbandoned: number;
@@ -1291,13 +1431,20 @@ export async function cleanupExpiredClinicBulkExportArchives(now: Date = new Dat
     if (status === 'expired') expired++;
   }
 
+  // Retries artifact deletion for EVERY terminal, non-downloadable row still
+  // holding a storageKey — not just 'expired'. A 'failed' row can carry a
+  // storageKey too (the P0 orphan-artifact fix persists it on the row
+  // BEFORE upload begins, so a failure after that point — including a
+  // process crash the in-process catch block never got to run for — still
+  // leaves the row findable here). attemptArtifactDeletion itself is gated
+  // on status !== 'ready', so this can never touch a downloadable artifact.
   const needingDeletion = await prisma.clinicBulkExportArchive.findMany({
-    where: { status: 'expired', storageKey: { not: null } },
+    where: { status: { in: ['expired', 'failed'] }, storageKey: { not: null } },
     select: { id: true },
   });
   let deleted = 0;
   for (const row of needingDeletion) {
-    if (await attemptArtifactDeletion(row.id, now)) deleted++;
+    if (await attemptArtifactDeletion(row.id, now, deleteForTest)) deleted++;
   }
 
   const sweptAbandoned = await prisma.clinicBulkExportArchive.updateMany({

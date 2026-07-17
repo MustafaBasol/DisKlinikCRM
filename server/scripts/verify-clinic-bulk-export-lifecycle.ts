@@ -34,6 +34,7 @@ import {
   claimQueuedClinicBulkExportJobs,
   generateClinicBulkExport,
   cleanupExpiredClinicBulkExportArchives,
+  attemptArtifactDeletion,
   expireArchiveIfPastTtl,
   hashDownloadToken,
   ClinicBulkExportAlreadyRunningError,
@@ -41,6 +42,7 @@ import {
 } from '../src/services/privacy/clinicBulkExportPackage.js';
 import { verifyStepUpPasswordWithLockout } from '../src/services/privacy/clinicBulkExportPasswordAttempts.js';
 import { isStepUpWindowReusableBy } from '../src/utils/passwordStepUp.js';
+import { buildExportStorageKey, deleteFile } from '../src/services/fileStorage.js';
 
 /**
  * Minimal ZIP central-directory reader for verification purposes only (no
@@ -1244,6 +1246,418 @@ async function main() {
     await prisma.user.delete({ where: { id: userAllow2.id } });
     await prisma.clinic.delete({ where: { id: clinicAllow2.id } });
     await prisma.organization.delete({ where: { id: orgAllow2.id } });
+  });
+
+  console.log('\nDurable planned-artifact lifecycle — no post-upload orphan artifacts (P0)');
+
+  await test('a planned-key persist that loses its claim (lease already expired) never uploads anything — no artifact, no orphan', async () => {
+    const orgPK = await prisma.organization.create({ data: { name: `Verify Org PK ${suffix}`, slug: `verify-org-pk-${suffix}` } });
+    const clinicPK = await prisma.clinic.create({ data: { name: `Verify Clinic PK ${suffix}`, slug: `verify-clinic-pk-${suffix}`, organizationId: orgPK.id } });
+    const userPK = await prisma.user.create({
+      data: {
+        clinicId: clinicPK.id,
+        organizationId: orgPK.id,
+        firstName: 'Verify',
+        lastName: 'PlannedKeyUser',
+        email: `verify-plannedkey-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicPK.id, organizationId: orgPK.id, firstName: 'PlannedKey', lastName: 'Patient' } });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicPK.id,
+      organizationId: orgPK.id,
+      requestedByUserId: userPK.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+
+    // A plain pre-set stale leaseExpiresAt gets self-healed by the very
+    // first per-batch renewLease() call during entity streaming (which runs
+    // unconditionally, even for zero-record entities) long before the
+    // planned-key persist is ever reached — so this uses the dedicated
+    // test-only hook (fired at exactly the right instant, immediately
+    // before the guarded planned-key update) to simulate a concurrent sweep
+    // stealing the row in that narrow real window instead.
+    await generateClinicBulkExport(jobId, undefined, async () => {
+      await prisma.clinicBulkExportArchive.update({ where: { id: jobId }, data: { leaseExpiresAt: new Date(Date.now() - 1000) } });
+    });
+
+    const finalRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(finalRow.status, 'failed');
+    assert.equal(finalRow.failureCode, 'LEASE_LOST');
+    assert.equal(finalRow.storageKey, null, 'the planned key must never be persisted once its own guarded update loses the race');
+
+    const exportsDir = path.resolve(process.cwd(), 'uploads', 'exports', clinicPK.id);
+    assert.ok(!fs.existsSync(exportsDir) || fs.readdirSync(exportsDir).length === 0, 'no artifact may ever be written to storage when the planned-key persist itself fails');
+    const leftoverTempFiles = fs.readdirSync(os.tmpdir()).filter((f) => f.includes(jobId));
+    assert.equal(leftoverTempFiles.length, 0, 'the temp ZIP file must be unlinked, never left behind');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicPK.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicPK.id } });
+    await prisma.user.delete({ where: { id: userPK.id } });
+    await prisma.clinic.delete({ where: { id: clinicPK.id } });
+    await prisma.organization.delete({ where: { id: orgPK.id } });
+  });
+
+  await test('the final guarded ready update losing the race (lease expires between upload and the ready transition) deletes the real uploaded artifact', async () => {
+    const orgRT = await prisma.organization.create({ data: { name: `Verify Org RT ${suffix}`, slug: `verify-org-rt-${suffix}` } });
+    const clinicRT = await prisma.clinic.create({ data: { name: `Verify Clinic RT ${suffix}`, slug: `verify-clinic-rt-${suffix}`, organizationId: orgRT.id } });
+    const userRT = await prisma.user.create({
+      data: {
+        clinicId: clinicRT.id,
+        organizationId: orgRT.id,
+        firstName: 'Verify',
+        lastName: 'ReadyRaceUser',
+        email: `verify-readyrace-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicRT.id, organizationId: orgRT.id, firstName: 'ReadyRace', lastName: 'Patient' } });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicRT.id,
+      organizationId: orgRT.id,
+      requestedByUserId: userRT.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+
+    let uploadedKey = '';
+    await generateClinicBulkExport(jobId, async (key: string, tempPath: string, contentType: string) => {
+      uploadedKey = key;
+      const { saveFileFromPath: realSave } = await import('../src/services/fileStorage.js');
+      // Do the REAL upload first — proves a real artifact lands in storage —
+      // then, strictly AFTER upload completes but BEFORE generateClinicBulkExport
+      // reaches its own final guarded ready-transition update, simulate the
+      // lease expiring via a direct write (distinct from the heartbeat's own
+      // isLeaseLost() flag, which stays false here — this exercises the
+      // SEPARATE guard on the final updateMany's own WHERE clause).
+      await realSave(key, tempPath, contentType);
+      await prisma.clinicBulkExportArchive.update({ where: { id: jobId }, data: { leaseExpiresAt: new Date(Date.now() - 1000) } });
+    });
+
+    const finalRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(finalRow.status, 'failed', 'losing the final ready-transition race must never produce a ready row');
+    assert.equal(finalRow.failureCode, 'LEASE_LOST');
+    assert.equal(finalRow.storageKey, null, 'storageKey must be cleared once the orphaned artifact is deleted');
+    assert.ok(uploadedKey, 'sanity check: the real upload must actually have happened');
+    const localPath = resolveLocalStoragePath(uploadedKey);
+    assert.ok(!fs.existsSync(localPath), 'the real artifact that was uploaded must be deleted, not left as an untracked orphan');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicRT.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicRT.id } });
+    await prisma.user.delete({ where: { id: userRT.id } });
+    await prisma.clinic.delete({ where: { id: clinicRT.id } });
+    await prisma.organization.delete({ where: { id: orgRT.id } });
+  });
+
+  await test('upload succeeds for real but a subsequent failure occurs — the real artifact is found via its pre-persisted storageKey and deleted', async () => {
+    const orgSF = await prisma.organization.create({ data: { name: `Verify Org SF ${suffix}`, slug: `verify-org-sf-${suffix}` } });
+    const clinicSF = await prisma.clinic.create({ data: { name: `Verify Clinic SF ${suffix}`, slug: `verify-clinic-sf-${suffix}`, organizationId: orgSF.id } });
+    const userSF = await prisma.user.create({
+      data: {
+        clinicId: clinicSF.id,
+        organizationId: orgSF.id,
+        firstName: 'Verify',
+        lastName: 'SubsequentFailureUser',
+        email: `verify-subsequentfailure-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+    await prisma.patient.create({ data: { clinicId: clinicSF.id, organizationId: orgSF.id, firstName: 'SubsequentFailure', lastName: 'Patient' } });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicSF.id,
+      organizationId: orgSF.id,
+      requestedByUserId: userSF.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+
+    let uploadedKey = '';
+    await generateClinicBulkExport(jobId, async (key: string, tempPath: string, contentType: string) => {
+      uploadedKey = key;
+      const { saveFileFromPath: realSave } = await import('../src/services/fileStorage.js');
+      await realSave(key, tempPath, contentType); // real bytes really land in storage
+      throw new Error('simulated failure strictly after a successful real upload');
+    });
+
+    const finalRow = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(finalRow.status, 'failed');
+    assert.equal(finalRow.failureCode, 'GENERATION_ERROR');
+    assert.equal(finalRow.storageKey, null, 'the pre-persisted planned storageKey must have been used to find and delete the real artifact');
+    const localPath = resolveLocalStoragePath(uploadedKey);
+    assert.ok(!fs.existsSync(localPath), 'the real artifact must actually be gone from disk, not merely unlinked in the DB');
+
+    await prisma.patient.deleteMany({ where: { clinicId: clinicSF.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicSF.id } });
+    await prisma.user.delete({ where: { id: userSF.id } });
+    await prisma.clinic.delete({ where: { id: clinicSF.id } });
+    await prisma.organization.delete({ where: { id: orgSF.id } });
+  });
+
+  await test('a worker crash after the planned key is persisted but before upload leaves a recoverable row the cleanup sweep finds and clears', async () => {
+    const orgCR = await prisma.organization.create({ data: { name: `Verify Org CR ${suffix}`, slug: `verify-org-cr-${suffix}` } });
+    const clinicCR = await prisma.clinic.create({ data: { name: `Verify Clinic CR ${suffix}`, slug: `verify-clinic-cr-${suffix}`, organizationId: orgCR.id } });
+    const userCR = await prisma.user.create({
+      data: {
+        clinicId: clinicCR.id,
+        organizationId: orgCR.id,
+        firstName: 'Verify',
+        lastName: 'CrashUser',
+        email: `verify-crash-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicCR.id,
+      organizationId: orgCR.id,
+      requestedByUserId: userCR.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    await claimQueuedClinicBulkExportJobs(5);
+
+    // Simulate exactly the moment generateClinicBulkExport's own guarded
+    // pre-upload persist would have run — the row is 'generating' with the
+    // deterministic planned key set — then the process is imagined to crash
+    // right there (nothing else in this test ever calls
+    // generateClinicBulkExport for this job, so nothing more happens
+    // in-process; there is deliberately no catch block to run).
+    const plannedKey = buildExportStorageKey(clinicCR.id, jobId);
+    await prisma.clinicBulkExportArchive.update({ where: { id: jobId }, data: { storageKey: plannedKey, leaseExpiresAt: new Date(Date.now() - 1000) } });
+
+    // First cleanup tick: the abandoned-lease sweep (which already existed
+    // before this remediation) flips the row generating -> failed. In THIS
+    // SAME call, the artifact-retry-deletion query already ran BEFORE that
+    // sweep, so it does not yet see this row as 'failed'.
+    const firstCleanup = await cleanupExpiredClinicBulkExportArchives();
+    assert.ok(firstCleanup.sweptAbandoned >= 1);
+    const afterSweep = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(afterSweep.status, 'failed');
+    assert.equal(afterSweep.storageKey, plannedKey, 'the planned key must survive the abandoned-lease sweep itself — only artifact deletion clears it');
+
+    // Second cleanup tick: the row is NOW 'failed' with a non-null
+    // storageKey — the expanded retry-deletion query (P0 remediation) picks
+    // it up. Nothing was ever actually uploaded to plannedKey, so the
+    // idempotent-missing-object path applies: treated as an already-deleted
+    // success, never retried forever.
+    const secondCleanup = await cleanupExpiredClinicBulkExportArchives();
+    assert.ok(secondCleanup.deleted >= 1, 'the previously-crashed, now-failed row must be picked up by the expanded failed+storageKey retry sweep');
+    const afterSecondCleanup = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(afterSecondCleanup.storageKey, null);
+    assert.ok(afterSecondCleanup.artifactDeletedAt);
+    assert.equal(afterSecondCleanup.cleanupFailureCode, null);
+
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicCR.id } });
+    await prisma.user.delete({ where: { id: userCR.id } });
+    await prisma.clinic.delete({ where: { id: clinicCR.id } });
+    await prisma.organization.delete({ where: { id: orgCR.id } });
+  });
+
+  await test('an immediate delete failure preserves storageKey and sets cleanupFailureCode; a later cleanup run deletes the real file and clears it', async () => {
+    const orgDF = await prisma.organization.create({ data: { name: `Verify Org DF ${suffix}`, slug: `verify-org-df-${suffix}` } });
+    const clinicDF = await prisma.clinic.create({ data: { name: `Verify Clinic DF ${suffix}`, slug: `verify-clinic-df-${suffix}`, organizationId: orgDF.id } });
+    const userDF = await prisma.user.create({
+      data: {
+        clinicId: clinicDF.id,
+        organizationId: orgDF.id,
+        firstName: 'Verify',
+        lastName: 'DeleteFailUser',
+        email: `verify-deletefail-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+
+    const failedRowStorageKey = buildExportStorageKey(clinicDF.id, `${suffix}-delete-fail`);
+    const localPath = resolveLocalStoragePath(failedRowStorageKey);
+    await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+    await fs.promises.writeFile(localPath, Buffer.from('real dummy export bytes for the delete-retry test'));
+    assert.ok(fs.existsSync(localPath), 'sanity check: the dummy artifact must actually exist before the test begins');
+
+    const failedRow = await prisma.clinicBulkExportArchive.create({
+      data: {
+        organizationId: orgDF.id,
+        clinicId: clinicDF.id,
+        requestedByUserId: userDF.id,
+        status: 'failed',
+        purpose: 'other',
+        stepUpVerifiedAt: new Date(),
+        storageKey: failedRowStorageKey,
+        failureCode: 'GENERATION_ERROR',
+      },
+    });
+
+    let deleteAttempts = 0;
+    const flakyDelete: typeof deleteFile = async (key: string) => {
+      deleteAttempts++;
+      if (deleteAttempts === 1) throw new Error('simulated transient storage delete failure');
+      return deleteFile(key);
+    };
+
+    const firstRun = await attemptArtifactDeletion(failedRow.id, new Date(), flakyDelete);
+    assert.equal(firstRun, false, 'the first, forced-to-fail delete attempt must report failure');
+    const afterFirst = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: failedRow.id } });
+    assert.equal(afterFirst.status, 'failed', 'status must stay a non-downloadable terminal status');
+    assert.equal(afterFirst.storageKey, failedRowStorageKey, 'storageKey must be preserved (never nulled) after a failed delete attempt');
+    assert.equal(afterFirst.cleanupFailureCode, 'STORAGE_DELETE_FAILED');
+    assert.equal(afterFirst.artifactDeletedAt, null);
+    assert.ok(fs.existsSync(localPath), 'the real file must still exist on disk after the forced failure');
+
+    // A later cleanup run (no injected failure this time — the real deleteFile) succeeds.
+    const secondRun = await attemptArtifactDeletion(failedRow.id);
+    assert.equal(secondRun, true, 'a later, unforced retry must succeed');
+    const afterSecond = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: failedRow.id } });
+    assert.equal(afterSecond.storageKey, null);
+    assert.ok(afterSecond.artifactDeletedAt);
+    assert.equal(afterSecond.cleanupFailureCode, null);
+    assert.ok(!fs.existsSync(localPath), 'the real file must actually be gone from disk once the retry succeeds');
+
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicDF.id } });
+    await prisma.user.delete({ where: { id: userDF.id } });
+    await prisma.clinic.delete({ where: { id: clinicDF.id } });
+    await prisma.organization.delete({ where: { id: orgDF.id } });
+  });
+
+  console.log('\nTransactional, exactly-once generation_started audit (P1)');
+
+  await test('concurrent claim calls: exactly one claims a given queued job, and exactly one generation_started audit exists for it', async () => {
+    const orgC1 = await prisma.organization.create({ data: { name: `Verify Org C1 ${suffix}`, slug: `verify-org-c1-${suffix}` } });
+    const clinicC1 = await prisma.clinic.create({ data: { name: `Verify Clinic C1 ${suffix}`, slug: `verify-clinic-c1-${suffix}`, organizationId: orgC1.id } });
+    const userC1 = await prisma.user.create({
+      data: {
+        clinicId: clinicC1.id,
+        organizationId: orgC1.id,
+        firstName: 'Verify',
+        lastName: 'ClaimUser',
+        email: `verify-claim-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicC1.id,
+      organizationId: orgC1.id,
+      requestedByUserId: userC1.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+
+    // Two "replicas" racing to claim the SAME candidate set concurrently —
+    // correctness comes entirely from the guarded per-row transaction, not
+    // from any cross-replica lock.
+    const [claimedA, claimedB] = await Promise.all([claimQueuedClinicBulkExportJobs(5), claimQueuedClinicBulkExportJobs(5)]);
+    const claimCount = [...claimedA, ...claimedB].filter((id) => id === jobId).length;
+    assert.equal(claimCount, 1, 'exactly one of the two concurrent claim calls may have claimed this job');
+
+    const row = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(row.status, 'generating');
+
+    const startedAudits = await prisma.auditLog.findMany({
+      where: { action: 'clinic_bulk_export_generation_started', clinicId: clinicC1.id },
+    });
+    assert.equal(startedAudits.length, 1, 'exactly one generation_started audit event must exist — the losing replica must never write one');
+
+    await prisma.auditLog.deleteMany({ where: { clinicId: clinicC1.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicC1.id } });
+    await prisma.user.delete({ where: { id: userC1.id } });
+    await prisma.clinic.delete({ where: { id: clinicC1.id } });
+    await prisma.organization.delete({ where: { id: orgC1.id } });
+  });
+
+  await test('a forced generation_started audit failure rolls back the claim entirely — the job remains queued and no audit is written', async () => {
+    const orgC2 = await prisma.organization.create({ data: { name: `Verify Org C2 ${suffix}`, slug: `verify-org-c2-${suffix}` } });
+    const clinicC2 = await prisma.clinic.create({ data: { name: `Verify Clinic C2 ${suffix}`, slug: `verify-clinic-c2-${suffix}`, organizationId: orgC2.id } });
+    const userC2 = await prisma.user.create({
+      data: {
+        clinicId: clinicC2.id,
+        organizationId: orgC2.id,
+        firstName: 'Verify',
+        lastName: 'ForcedFailUser',
+        email: `verify-forcedfail-${suffix}@example.test`,
+        role: 'OWNER',
+        passwordHash: 'x',
+      },
+    });
+
+    const { jobId } = await reserveClinicBulkExport({
+      clinicId: clinicC2.id,
+      organizationId: orgC2.id,
+      requestedByUserId: userC2.id,
+      purpose: 'other',
+      restrictedNote: null,
+      stepUpVerifiedAt: new Date(),
+      actorRole: 'OWNER',
+      req: fakeReq,
+    });
+    // reserveClinicBulkExport already sets heartbeatAt/leaseExpiresAt at
+    // creation time (the queue-timeout deadline) — captured here so the
+    // post-rollback assertion below proves the claim's OWN update (which
+    // would overwrite both to the claim-time generation lease) never took
+    // effect, rather than incorrectly expecting these fields to be null.
+    const beforeClaim = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+
+    const forcedFailureAudit = async () => {
+      throw new Error('forced audit failure for verification');
+    };
+
+    const claimedIds = await claimQueuedClinicBulkExportJobs(5, new Date(), forcedFailureAudit as any);
+    assert.ok(!claimedIds.includes(jobId), 'a forced audit-write failure must roll back the whole transaction, including the claim itself');
+
+    const row = await prisma.clinicBulkExportArchive.findUniqueOrThrow({ where: { id: jobId } });
+    assert.equal(row.status, 'queued', 'the job must remain queued — available for another replica or a later tick — after the rollback');
+    assert.equal(
+      row.heartbeatAt?.getTime(),
+      beforeClaim.heartbeatAt?.getTime(),
+      'the claim update (heartbeatAt) must also have rolled back — still the reservation-time value, never bumped to the claim attempt',
+    );
+    assert.equal(
+      row.leaseExpiresAt?.getTime(),
+      beforeClaim.leaseExpiresAt?.getTime(),
+      'the claim update (leaseExpiresAt) must also have rolled back — still the queue-timeout deadline, never replaced with the generation lease',
+    );
+
+    const audits = await prisma.auditLog.findMany({
+      where: { action: 'clinic_bulk_export_generation_started', clinicId: clinicC2.id },
+    });
+    assert.equal(audits.length, 0, 'no generation_started audit may exist when its own transaction rolled back');
+
+    // A subsequent, normal (non-forced-failure) claim call must still be able to claim it.
+    const recoveredClaim = await claimQueuedClinicBulkExportJobs(5);
+    assert.ok(recoveredClaim.includes(jobId), 'the job must remain claimable normally after the earlier forced rollback');
+
+    await prisma.auditLog.deleteMany({ where: { clinicId: clinicC2.id } });
+    await prisma.clinicBulkExportArchive.deleteMany({ where: { clinicId: clinicC2.id } });
+    await prisma.user.delete({ where: { id: userC2.id } });
+    await prisma.clinic.delete({ where: { id: clinicC2.id } });
+    await prisma.organization.delete({ where: { id: orgC2.id } });
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

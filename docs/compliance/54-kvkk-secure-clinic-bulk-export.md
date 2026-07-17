@@ -116,8 +116,11 @@ tests both paths.
 - **Creation cooldown** (per user+clinic) and **daily cap** (per clinic) are
   enforced in PostgreSQL, from `ClinicBulkExportArchive` history, inside the
   same advisory-locked reservation transaction described next. Redis is not
-  used for these — only the password-attempt pre-check uses Redis, and only
-  as a non-authoritative optimization.
+  used for these, nor for the step-up brute-force lockout — PostgreSQL is
+  the sole authority for every rate/lockout decision on this feature; there
+  is no Redis pre-check anywhere on the password-verification path (see
+  Section 4 and Section 17, remediation item 3 — an earlier draft had one,
+  and it was removed entirely, not merely demoted to non-authoritative).
 - **Exactly one queued/generating job per clinic**, enforced twice:
   1. An advisory lock (`pg_advisory_xact_lock`, keyed by
      `clinic-bulk-export-slot:<clinicId>`) inside one `prisma.$transaction`
@@ -160,15 +163,18 @@ New models in `server/prisma/schema.prisma` (migration
 
 - **`ClinicBulkExportArchive`** — `id, organizationId, clinicId,
   requestedByUserId` (nullable, `onDelete: SetNull` — archive/audit history
-  survives user deactivation/deletion), `status` (`queued | generating |
-  ready | failed | expired`, default `queued`), `purpose, restrictedNote,
+  survives user deactivation/deletion), `stepUpVerifiedByUserId` (nullable,
+  `onDelete: SetNull` — the user whose password most recently satisfied
+  step-up for this archive; binds the passwordless step-up reuse window to a
+  specific actor, see Section 4), `status` (`queued | generating | ready |
+  failed | expired`, default `queued`), `purpose, restrictedNote,
   exportSchemaVersion, storageKey, manifestJson, downloadTokenHash` (unique),
   `stepUpVerifiedAt, expiresAt, downloadedAt, artifactDeletedAt,
   cleanupFailureCode, heartbeatAt, leaseExpiresAt, failureCode, createdAt,
   updatedAt`. Indexes on `[organizationId, clinicId]`, `[clinicId, status]`,
-  `[requestedByUserId, createdAt]`, `[expiresAt]`, `[leaseExpiresAt]`,
-  `[clinicId, status, leaseExpiresAt]`, plus the raw-SQL partial unique index
-  above.
+  `[requestedByUserId, createdAt]`, `[stepUpVerifiedByUserId]`,
+  `[expiresAt]`, `[leaseExpiresAt]`, `[clinicId, status, leaseExpiresAt]`,
+  plus the raw-SQL partial unique index above.
 - **`ClinicBulkExportPasswordAttempt`** — `id, userId, clinicId, ipHash,
   attemptCount, windowStartedAt, lockedUntil, updatedAt`, unique on
   `[userId, clinicId, ipHash]`.
@@ -260,11 +266,88 @@ mid-upload proves the artifact is deleted and the row never reaches
 `CLINIC_BULK_EXPORT_MAX_RECORDS` (default 500,000) and
 `CLINIC_BULK_EXPORT_MAX_BYTES` (default 2 GB) are enforced while streaming.
 On breach, generation stops immediately, the failure code
-`SIZE_LIMIT_EXCEEDED` is recorded, and — critically — **no manifest or
-storageKey is ever persisted for a failed job**: temp/partial files are
-always deleted (in every failure path, including S3 multipart abort via
+`SIZE_LIMIT_EXCEEDED` is recorded, and — critically — **`manifestJson` is
+never persisted for a failed job**: temp/partial files are always deleted
+(in every failure path, including S3 multipart abort via
 `leavePartsOnError: false`), so there is never a misleading "complete"
-artifact reachable from a failed job.
+artifact reachable from a failed job. `storageKey` can legitimately be
+present on a `failed` row (see the planned-storageKey lifecycle
+immediately below) — its presence never implies a downloadable artifact,
+since every download path gates strictly on `status === 'ready'`, never on
+`storageKey` alone.
+
+### 7a. Planned-storageKey lifecycle — no post-upload orphan artifacts (P0 remediation)
+
+The original design computed the ZIP's storage key and uploaded it in one
+step, only writing that key to the database as part of the final
+`ready`-transition update. This left a real gap: if the upload succeeded but
+the subsequent `ready` update then threw, lost the lease, or matched zero
+rows (a concurrent sweep), a full, sensitive clinic ZIP could be sitting in
+object storage with **no durable database reference to it at all** — the
+cleanup cron can only find and delete what a row's `storageKey` points to,
+so an artifact with no such reference could never be found and would remain
+in storage indefinitely.
+
+`storageKey` is deterministic from `clinicId` + `jobId` alone
+(`buildExportStorageKey`, unchanged) — the fix is *when* it is durably
+written, not what it is. `generateClinicBulkExport` now:
+
+1. Computes the deterministic key and, **before calling the storage upload
+   at all**, persists it to the row via a guarded update
+   (`id` matches, `status = 'generating'`, lease still valid). The row is
+   still `generating` at this point, so download stays impossible
+   regardless — every download path gates on `status === 'ready'`, never on
+   `storageKey` being non-null.
+2. If that guarded update itself loses the race (count `0`), generation
+   fails immediately with the stable `LEASE_LOST` code and the upload is
+   never attempted — nothing was ever written to storage under this key, so
+   there is nothing to clean up.
+3. From that point forward, **every** failure path — the upload itself
+   throwing, the post-upload heartbeat lease-loss check, the final
+   `ready`-transition update throwing, or that update losing the race
+   (count `0`) — is funneled through the same `catch` block, which
+   immediately (awaited, never fire-and-forget) attempts storage deletion
+   for whatever `storageKey` is already on the row via
+   `attemptArtifactDeletion`:
+   - On successful deletion: `storageKey` is cleared, `artifactDeletedAt`
+     is set, `cleanupFailureCode` is cleared.
+   - On failed deletion (e.g. a transient S3 error): `storageKey` is
+     **preserved** (never nulled) and `cleanupFailureCode:
+     'STORAGE_DELETE_FAILED'` is set, so a later cleanup pass retries using
+     the still-present key. The row's `status` is already a
+     non-downloadable terminal value (`failed`) throughout.
+4. A missing storage object (already deleted, or never actually written —
+   e.g. the planned-key-persist-lost-the-race case) is treated as an
+   **idempotent success**, not a failure to retry forever:
+   `deleteStorageObjectIdempotent` re-checks existence via `fileExists`
+   after a delete error and reports success if the object is confirmed
+   gone.
+5. A worker **process crash** between step 1 (planned key persisted) and a
+   real upload landing is not something any in-process `catch` block can
+   ever run for. This is closed by two pre-existing, unrelated mechanisms
+   composing correctly: the abandoned-lease sweep (already existed) flips
+   the orphaned `generating` row to `failed` once its lease expires, and the
+   cleanup cron's *expanded* retry-deletion sweep (Section 11) now covers
+   `failed` rows with a non-null `storageKey`, not only `expired` ones — so
+   the row is found and its (possibly-nonexistent, idempotently-handled)
+   artifact is cleaned up on a later cleanup tick, with no manual
+   intervention.
+
+The planned `storageKey` is never exposed through any API/status response
+(the status DTO explicitly excludes it, unchanged) or logged — it is purely
+an internal database bookkeeping field, identical in shape and visibility to
+how `storageKey` already behaved on a `ready` row.
+
+Verified against a real, disposable Postgres database + real local-file
+storage (`scripts/verify-clinic-bulk-export-lifecycle.ts`): all five
+production failure paths (planned-key persist itself losing the race before
+any upload; the final ready-transition losing the race after a real upload;
+a real upload succeeding but a subsequent step throwing; a simulated
+process-crash-after-planned-key-persist recovered purely by the sweep +
+expanded cleanup sweep across two cleanup ticks; and an immediate delete
+failure that is preserved with `cleanupFailureCode` and successfully
+retried, and actually removed from disk, on a later run) — proving no
+scenario leaves a reachable, untracked artifact.
 
 ## 8. Versioned export data contract
 
@@ -339,15 +422,21 @@ singleton cron every 15 minutes. Each run:
 1. Calls `expireArchiveIfPastTtl` across all `ready` rows past `expiresAt` —
    the exact same function request-time routes use, so there is one
    definition of "expired," not two.
-2. For every `expired` row still holding a non-null `storageKey`, attempts
-   storage deletion. **This is a separate, non-atomic, retryable step** —
+2. For every `expired` **or `failed`** row still holding a non-null
+   `storageKey` (P0 remediation — previously only `expired` rows were
+   retried; a `failed` row can now legitimately carry a `storageKey` too,
+   see Section 7a's planned-storageKey lifecycle), attempts storage
+   deletion via the same `attemptArtifactDeletion` function generation's own
+   failure path uses. **This is a separate, non-atomic, retryable step** —
    a Postgres transaction cannot span an S3/local filesystem delete. On
    success, `storageKey` is cleared and `artifactDeletedAt` is set. On
    failure, `storageKey` is **preserved** (never nulled) and
    `cleanupFailureCode: 'STORAGE_DELETE_FAILED'` is set so the next run
    retries — deletion is never silently abandoned, and the row's `status`
-   stays `expired` throughout (only the storage-related fields change across
-   retries).
+   stays whatever non-downloadable terminal value it already was throughout
+   (only the storage-related fields change across retries). A missing
+   storage object is treated as an idempotent success, never retried
+   forever (Section 7a, point 4).
 3. Sweeps abandoned `queued`/`generating` rows past their lease to `failed`
    — a backstop; the worker's own per-tick sweep normally does this first.
 4. Deletes `ClinicBulkExportPasswordAttempt` rows untouched for >30 days.
@@ -368,12 +457,32 @@ All other events (`step_up_failed`, `rate_limited`,
 `generation_started/completed/failed`, `download_completed/failed`,
 `legacy_endpoint_attempted`, `feature_disabled_attempt`) use the regular
 fire-and-forget-safe `writeAuditLog` (still always `await`ed, unlike the
-legacy route). `generation_started` is written exactly once per
-successfully claimed job, immediately after the guarded per-row claim in
-`claimQueuedClinicBulkExportJobs` wins (`result.count > 0`) — a replica that
-loses the claim race for a given row never writes it. Its metadata is
-limited to `jobId` and `schemaVersion`, the same stable-identifiers-only
-rule as every other event below.
+legacy route) — **except `generation_started`**, which is fail-closed like
+the three critical events above (P1 remediation). The original design
+performed the guarded claim update, a separate `findUnique` job read, and a
+separate fire-and-forget `writeAuditLog` call as three independent steps —
+a crash between them, or a failing (non-fail-closed) audit insert, could
+leave a row durably claimed into `generating` with no
+`generation_started` audit trail at all, which is not exactly-once. Fixed:
+`claimSingleQueuedJobWithAudit` now wraps the guarded claim update, the
+stable-job-identifier read, and the `writeAuditLogInTx`-based audit write in
+a single `prisma.$transaction` per candidate row. If the guarded claim loses
+the race (count `0`), the function returns immediately with no audit write
+and no side effects. If the audit insert itself throws for any reason, the
+**entire transaction rolls back, including the claim** — the row is left
+exactly as it was (`queued`), available for another replica or a later tick
+of the same replica to claim; the job is never silently claimed with no
+audit trail. One candidate's transaction failure is caught per-candidate in
+`claimQueuedClinicBulkExportJobs`'s own loop so it can never abort claiming
+other, healthy candidates in the same tick. Metadata is limited to `jobId`
+and `schemaVersion`, the same stable-identifiers-only rule as every other
+event below. Verified against a real, disposable Postgres database: two
+concurrent claim calls racing for the same queued job produce exactly one
+claim and exactly one `generation_started` audit row; a forced audit-write
+failure rolls back the claim entirely, leaves the job `queued` (its
+`heartbeatAt`/`leaseExpiresAt` unchanged from reservation time) with zero
+audit rows, and the job remains normally claimable afterward
+(`scripts/verify-clinic-bulk-export-lifecycle.ts`).
 
 Audit metadata is limited to `clinicId, jobId, purpose, schemaVersion,
 counts, resultCode, ip/userAgent` — never `restrictedNote`, the password,
@@ -417,6 +526,42 @@ place (`initialClinicBulkExportState()`/`resetForClinicChange`): the active
 job id, polled job state, both password fields, download/token state, the
 confirmation checkbox, and any submit/download errors.
 
+**Stale cross-clinic async-response guard (P0 remediation)**: the clinic
+selector can change while a create/token/download request is still in
+flight, and a response for the clinic the user has since navigated away
+from must never be applied. A monotonically increasing
+`selectionEpochRef`, bumped on every explicit clinic change (via
+`handleClinicChange`) or the selection becoming invalid (the
+global-switcher-sync effect), is captured together with the request's
+`clinicId` at the moment each async operation starts. After **every**
+`await` — the create response, the download-token response, and the blob
+download response — both captured values are re-checked against the live
+ones (`isRequestStillCurrent`, `src/components/settings/
+clinicBulkExportSelectionHelpers.ts`, pure and independently unit-tested)
+before `setActiveJobId` is called, before an error/status update is
+applied, before the follow-up download request is even issued, and before
+an object URL is created or a browser download is triggered. A mismatch
+silently discards the response. The global-switcher-sync effect itself was
+also fixed to stop nesting `resetForClinicChange`'s multiple `setState`
+calls inside a `setClinicId` functional updater (state updates must stay
+side-effect free) — it now reads the previous selection via a ref and
+performs the reset as a plain top-level effect body call. AbortController
+request cancellation was considered as an additional layer but not added in
+this round (it would require extending `clinicBulkExportService`'s method
+signatures in `src/services/api.ts`, out of this round's scope); the epoch
+guard alone is sufficient for correctness and is what the tests actually
+prove.
+
+**"Start new export" (P0 remediation)**: previously only cleared the active
+job id and the purpose/note fields, leaving stale password, confirmation,
+download-error, and object-URL state behind. `handleStartNew` now clears
+every password/confirmation/download/error field (mirroring
+`resetForClinicChange`'s list, minus the clinic-identity fields) while
+deliberately **retaining** the currently selected clinic and its current
+`enabled`/`configError` state, and also bumps the selection epoch so a
+download/create request still in flight for the abandoned export can never
+repopulate state this action just cleared.
+
 When the backend reports the feature disabled (via a dedicated,
 OWNER/ORG_ADMIN-authorized `GET .../bulk-export/config` endpoint that
 returns only `{enabled}`, now driven by
@@ -450,6 +595,23 @@ Do **not** enable this in production until all of the following are true:
       `CLINIC_BULK_EXPORT_MAX_RECORDS`, `CLINIC_BULK_EXPORT_MAX_BYTES`,
       `CLINIC_BULK_EXPORT_TOKEN_TTL_MS` reviewed against production data
       volumes.
+- [ ] `CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS` (default 1 hour — queued-backlog
+      deadline before an unclaimed job is swept to `failed`/`LEASE_EXPIRED`),
+      `CLINIC_BULK_EXPORT_GENERATION_LEASE_MS` (default 10 minutes — how long
+      an actively-`generating` row may go without a heartbeat renewal before
+      it is considered abandoned), and
+      `CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS` (default 1 minute —
+      background renewal tick interval during generation) reviewed against
+      production export sizes/durations. **The heartbeat interval must
+      remain safely below the generation lease** — it exists specifically so
+      multiple renewals happen before the lease could expire; setting it
+      close to or above the lease value defeats the whole mechanism and
+      risks a large, legitimately-still-generating export being swept as
+      abandoned mid-upload. The unit test suite asserts the *defaults*
+      satisfy `heartbeat < lease < queueTimeout`
+      (`server/src/tests/clinicBulkExport.test.ts`, section 18) — this is
+      not re-validated for custom overrides, so any operator-supplied values
+      must preserve that same ordering.
 - [ ] Migration `20260716120000_add_clinic_bulk_export` applied to
       production; `prisma migrate status` shows no drift; the partial
       unique index confirmed present via `\d "ClinicBulkExportArchive"` (or
@@ -681,3 +843,86 @@ tenant allowlist) for the verification coverage. The frontend's explicit
 clinic-selection logic is covered by
 `src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts`
 (pure-logic tests — this repo has no DOM/React Testing Library harness).
+
+## 19. Remediation round (2026-07-17, fourth pass — PR #165 further review)
+
+A further review found two P0 gaps and one P1 durability gap in the
+third-pass remediation, plus documentation drift. All fixed on the same
+branch. Status remains **Implemented — awaiting deployment/operational
+verification**; the feature flag remains `false`.
+
+1. **Post-upload orphan artifacts.** The generation flow uploaded the ZIP
+   before the guarded `ready` transition, writing `storageKey` to the
+   database only as part of that final update. A DB update throw, a lost
+   lease, or the final update losing its race left a real, sensitive ZIP in
+   object storage with no durable reference any cleanup pass could ever
+   find. Fixed with a durable planned-artifact lifecycle: the deterministic
+   `storageKey` is persisted to the row via its own guarded update BEFORE
+   upload begins (while still `generating` — download stays impossible
+   regardless, since it gates on `status`, not on `storageKey`), and every
+   failure from that point on is funneled through one `catch` block that
+   immediately (awaited) attempts idempotent storage deletion, clearing
+   `storageKey`/setting `artifactDeletedAt` on success or preserving
+   `storageKey`/setting `cleanupFailureCode` on failure. The cleanup cron's
+   retry-deletion sweep was expanded from `expired`-only to `expired OR
+   failed` rows carrying a `storageKey`, closing the one remaining gap (a
+   worker process crash between the planned-key persist and a real upload)
+   via the pre-existing abandoned-lease sweep plus this expanded retry.
+   Full detail and the real-database proof for all five distinct failure
+   paths: Section 7a.
+2. **Stale cross-clinic async UI results.** The clinic selector could change
+   while a create/token/download request was in flight, letting a response
+   for clinic A apply itself after the UI had already moved to clinic B —
+   up to and including triggering a browser download for the wrong,
+   already-abandoned clinic's export. Fixed with a selection-epoch guard
+   (`selectionEpochRef`, bumped on every explicit clinic change or the
+   selection becoming invalid) checked, together with the request's
+   captured `clinicId`, after every `await` before any state mutation or
+   download trigger. A latent state-purity bug was fixed alongside it: the
+   global-switcher-sync effect previously nested `resetForClinicChange`'s
+   several `setState` calls inside a `setClinicId` functional updater
+   (React state updates must stay side-effect free) — it now performs the
+   reset as a plain top-level effect body call. "Start new export" was also
+   found to leave stale password/confirmation/download-error state behind;
+   it now clears every sensitive field while retaining only the selected
+   clinic and its current enabled config. Full detail: Section 13.
+3. **`generation_started` was not exactly-once or durable (P1).** The claim
+   update, the job-identifier read, and the audit write were three
+   independent steps (a guarded `updateMany`, a separate `findUnique`, a
+   separate fire-and-forget `writeAuditLog`) — a crash or a failing insert
+   between them could leave a row durably claimed with no audit trail.
+   Fixed by wrapping the claim, the read, and a `writeAuditLogInTx`-based
+   audit write in a single `prisma.$transaction` per candidate row; a
+   failing audit insert now rolls back the claim itself, leaving the job
+   `queued` for another replica or a later tick. Full detail: Section 12.
+4. **Documentation drift.** Section 5 still stated a Redis password-attempt
+   pre-check existed as a "non-authoritative optimization" — Redis was in
+   fact removed entirely in the second-pass remediation (Section 17, item
+   3); PostgreSQL has been the sole lockout authority since then, and
+   Section 5 now says so consistently with Section 4. The
+   `ClinicBulkExportArchive` field summary (Section 6) omitted
+   `stepUpVerifiedByUserId`, added in the second-pass remediation — added.
+   The production checklist (Section 14) did not list
+   `CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS`,
+   `CLINIC_BULK_EXPORT_GENERATION_LEASE_MS`, or
+   `CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS`, and nowhere stated that the
+   heartbeat interval must remain safely below the generation lease —
+   added, along with an explicit note that the unit suite only validates
+   this ordering for the *defaults*, not for operator-supplied overrides.
+
+See `server/src/tests/clinicBulkExport.test.ts` sections 19–20 (12 new
+tests: the planned-key persist-before-upload ordering, every post-planned-
+key failure path throwing into the unified catch-block cleanup,
+`attemptArtifactDeletion`'s widened `status !== 'ready'` gate, the
+idempotent-missing-object delete helper, the expanded `expired`+`failed`
+cleanup sweep, the test-only `deleteForTest`/`beforePlannedKeyPersistForTest`
+override seams, and the transactional claim+audit wrapping) and
+`server/scripts/verify-clinic-bulk-export-lifecycle.ts` (7 new real-Postgres
++ real-local-storage tests: all five distinct orphan-artifact failure paths
+with real uploaded/deleted files on disk, a concurrent claim race proving
+exactly-one-claim and exactly-one-audit, and a forced audit-write failure
+proving the claim rolls back and the job remains queued) for the
+verification coverage. The frontend epoch guard and start-new reset are
+covered by 14 new pure-logic + source-inspection tests in
+`src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts`
+sections 6–9 (still no DOM/React Testing Library harness in this repo).

@@ -83,3 +83,28 @@ export function initialClinicBulkExportState(): ClinicBulkExportResettableState 
     configError: null,
   };
 }
+
+/**
+ * KVKK-HIGH-004 remediation (P0): the single equality check every in-flight
+ * create/token/download async operation in ClinicBulkExportSection.tsx runs
+ * after every `await`, before touching any state or triggering a download.
+ * `requestClinicId`/`requestEpoch` are captured by the caller at the moment
+ * the operation started; `liveClinicId`/`liveEpoch` are read fresh (via refs
+ * in the component, since a plain closure would be stale) at the point of
+ * the check. A response is "still current" only when BOTH match — the
+ * selection epoch is bumped on every explicit clinic change (or a selection
+ * becoming invalid), so any mismatch means the user has since navigated
+ * away from the clinic this response belongs to.
+ *
+ * Extracted as a pure function (no React, no refs) so the exact comparison
+ * the component relies on is independently unit-testable — this repo has no
+ * DOM/React Testing Library harness (see resolveExplicitClinicId above).
+ */
+export function isRequestStillCurrent(
+  requestClinicId: string,
+  requestEpoch: number,
+  liveClinicId: string,
+  liveEpoch: number,
+): boolean {
+  return requestClinicId === liveClinicId && requestEpoch === liveEpoch;
+}

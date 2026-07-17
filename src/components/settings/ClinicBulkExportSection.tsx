@@ -4,7 +4,12 @@ import { AlertTriangle, Download, Loader2, ShieldAlert } from 'lucide-react';
 import { clinicBulkExportService } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import { useClinicBulkExportStatus } from '../../hooks/useClinicBulkExportStatus';
-import { resolveExplicitClinicId, initialClinicBulkExportState, type ClinicOption } from './clinicBulkExportSelectionHelpers';
+import {
+  resolveExplicitClinicId,
+  initialClinicBulkExportState,
+  isRequestStillCurrent,
+  type ClinicOption,
+} from './clinicBulkExportSelectionHelpers';
 
 interface ClinicBulkExportSectionProps {
   /** Every clinic the authenticated user can access — the ONLY valid source for the in-section selector below. */
@@ -49,6 +54,28 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(initial.downloadError);
 
+  const objectUrlRef = useRef<string | null>(null);
+
+  /**
+   * KVKK-HIGH-004 remediation (P0): a monotonically increasing epoch, bumped
+   * every time the explicit clinic selection changes or becomes invalid
+   * (never for any other reason). Every in-flight create/token/download
+   * async operation captures {clinicId, epoch} at the moment it starts, and
+   * re-checks BOTH against the current, live values (via clinicIdRef below,
+   * since a plain closure over `clinicId` would be stale) after every
+   * `await` before touching any state or triggering a download — a response
+   * for a clinic the user has since navigated away from is silently
+   * discarded, never applied to the UI. AbortController would additionally
+   * cancel the underlying HTTP request, but the epoch guard alone is
+   * sufficient for correctness and is what makes this mandatory (see
+   * docs/compliance/54-kvkk-secure-clinic-bulk-export.md Section 13).
+   */
+  const selectionEpochRef = useRef(0);
+  const clinicIdRef = useRef(clinicId);
+  useEffect(() => {
+    clinicIdRef.current = clinicId;
+  }, [clinicId]);
+
   /** Resets every in-flight/sensitive piece of state — called whenever the explicit clinic selection changes. */
   const resetForClinicChange = useCallback(() => {
     const fresh = initialClinicBulkExportState();
@@ -62,25 +89,39 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
     setRestrictedNote(fresh.restrictedNote);
     setEnabled(fresh.enabled);
     setConfigError(fresh.configError);
+    setSubmitting(false);
+    setDownloading(false);
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    // Polling state itself lives inside useClinicBulkExportStatus, keyed on
+    // [clinicId, activeJobId] — resetting activeJobId to null above (plus
+    // clinicId changing) makes that hook's own effect tear down and restart
+    // its poll automatically; nothing further to do here.
   }, []);
 
   useEffect(() => {
     // React to the global switcher changing to a DIFFERENT, still-accessible
     // specific clinic — but never auto-select on "all". If the previously
     // selected clinic simply drops out of the accessible list, clear it
-    // rather than silently keeping a now-invalid selection. Either way,
-    // every piece of transient/sensitive state is reset alongside the id.
-    setClinicId((current) => {
-      const next = resolveExplicitClinicId(globalSelectedClinicId, availableClinics, current);
-      if (next !== current) resetForClinicChange();
-      return next;
-    });
+    // rather than silently keeping a now-invalid selection. Reads the
+    // current clinicId via a ref (not the `clinicId` state directly) so this
+    // effect's own dependency array can stay [globalSelectedClinicId,
+    // availableClinics] without re-fighting a manual in-section selection —
+    // and, per the P0 state-update-purity fix, the reset is a plain
+    // top-level call in the effect body, never nested inside a setState
+    // functional updater.
+    const next = resolveExplicitClinicId(globalSelectedClinicId, availableClinics, clinicIdRef.current);
+    if (next !== clinicIdRef.current) {
+      selectionEpochRef.current += 1;
+      setClinicId(next);
+      resetForClinicChange();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalSelectedClinicId, availableClinics]);
 
   const { job, timedOut } = useClinicBulkExportStatus(clinicId || null, activeJobId);
-
-  const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -94,11 +135,17 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
   const handleClinicChange = useCallback(
     (nextClinicId: string) => {
       if (nextClinicId === clinicId) return;
+      selectionEpochRef.current += 1;
       setClinicId(nextClinicId);
       resetForClinicChange();
     },
     [clinicId, resetForClinicChange],
   );
+
+  /** True only when the async op's captured {clinicId, epoch} still match the live selection. */
+  const isStillCurrentSelection = useCallback((requestClinicId: string, requestEpoch: number) => {
+    return isRequestStillCurrent(requestClinicId, requestEpoch, clinicIdRef.current, selectionEpochRef.current);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -141,23 +188,29 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
       return;
     }
 
+    // Captured now, checked again after every await below (P0 stale-response guard).
+    const requestClinicId = clinicId;
+    const requestEpoch = selectionEpochRef.current;
+
     setSubmitting(true);
     try {
-      const response = await clinicBulkExportService.createJob(clinicId, {
+      const response = await clinicBulkExportService.createJob(requestClinicId, {
         purpose,
         confirm: true,
         currentPassword: password,
         restrictedNote: restrictedNote.trim() || undefined,
       });
+      if (!isStillCurrentSelection(requestClinicId, requestEpoch)) return;
       setActiveJobId(response.data?.jobId ?? null);
       setPassword('');
       setConfirmChecked(false);
     } catch (err) {
+      if (!isStillCurrentSelection(requestClinicId, requestEpoch)) return;
       setSubmitError(t(`errors.${errorKeyFromResponse(err)}`, { defaultValue: t('errors.generic') }));
     } finally {
       setSubmitting(false);
     }
-  }, [clinicId, submitting, purpose, confirmChecked, password, restrictedNote, t]);
+  }, [clinicId, submitting, purpose, confirmChecked, password, restrictedNote, t, isStillCurrentSelection]);
 
   const handleDownload = useCallback(async () => {
     if (!clinicId || !job || downloading) return;
@@ -167,31 +220,70 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
       return;
     }
 
+    // Captured now, checked again after every await below (P0 stale-response
+    // guard) — including before ever ISSUING the follow-up download request,
+    // not just before applying its result.
+    const requestClinicId = clinicId;
+    const requestEpoch = selectionEpochRef.current;
+    const requestJobId = job.jobId;
+
     setDownloading(true);
     try {
-      const tokenResponse = await clinicBulkExportService.requestDownloadToken(clinicId, job.jobId, downloadPassword);
+      const tokenResponse = await clinicBulkExportService.requestDownloadToken(requestClinicId, requestJobId, downloadPassword);
+      if (!isStillCurrentSelection(requestClinicId, requestEpoch)) return;
+
       const token = tokenResponse.data?.token;
       setDownloadPassword('');
       if (!token) throw new Error('missing_token');
 
-      const fileResponse = await clinicBulkExportService.download(clinicId, job.jobId, token);
+      const fileResponse = await clinicBulkExportService.download(requestClinicId, requestJobId, token);
+      if (!isStillCurrentSelection(requestClinicId, requestEpoch)) return;
+
       const blob = fileResponse.data as Blob;
       const url = URL.createObjectURL(blob);
       objectUrlRef.current = url;
       const a = document.createElement('a');
       a.href = url;
-      a.download = `clinic-export-${clinicId}.zip`;
+      a.download = `clinic-export-${requestClinicId}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       objectUrlRef.current = null;
     } catch (err) {
+      if (!isStillCurrentSelection(requestClinicId, requestEpoch)) return;
       setDownloadError(t(`errors.${errorKeyFromResponse(err)}`, { defaultValue: t('errors.generic') }));
     } finally {
       setDownloading(false);
     }
-  }, [clinicId, job, downloading, downloadPassword, t]);
+  }, [clinicId, job, downloading, downloadPassword, t, isStillCurrentSelection]);
+
+  /**
+   * "Start new export" — clears every password/confirmation/download/error
+   * field (P0: requirement mirrors resetForClinicChange's list minus the
+   * clinic-identity fields) while retaining ONLY the currently selected
+   * clinic and its current enabled/configError state. Also bumps the
+   * selection epoch so a download/create request still in flight for the
+   * export being abandoned can never repopulate state this action just
+   * cleared.
+   */
+  const handleStartNew = useCallback(() => {
+    selectionEpochRef.current += 1;
+    setActiveJobId(null);
+    setPurpose('');
+    setRestrictedNote('');
+    setPassword('');
+    setConfirmChecked(false);
+    setDownloadPassword('');
+    setDownloadError(null);
+    setSubmitError(null);
+    setSubmitting(false);
+    setDownloading(false);
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
 
   if (!canEdit) return null;
 
@@ -344,15 +436,7 @@ const ClinicBulkExportSection: React.FC<ClinicBulkExportSectionProps> = ({ avail
               )}
 
               {(job.status === 'failed' || job.status === 'expired' || isReady) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveJobId(null);
-                    setPurpose('');
-                    setRestrictedNote('');
-                  }}
-                  className="text-sm text-primary-600 hover:underline"
-                >
+                <button type="button" onClick={handleStartNew} className="text-sm text-primary-600 hover:underline">
                   {t('startNew')}
                 </button>
               )}
