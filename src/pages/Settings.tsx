@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw, Send, ShieldCheck, ScanLine } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Activity, UserCog, Users, CalendarClock, Link as LinkIcon, Copy, Check, MessageCircle, Instagram, Bell, Clock, Save, MessageSquare, Monitor, Globe2, Coins, RotateCcw, Send, ShieldCheck, ShieldAlert, ScanLine } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import { CLINIC_OPERATING_PREFERENCES_UPDATED_EVENT } from '../context/ClinicPreferencesContext';
-import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole, canManageClinicLegalProfile, canManageImagingDevices } from '../utils/permissions';
+import { canManageUsers, canViewInstagramStatus, canViewWhatsAppStatus, normalizeRole, canManageClinicLegalProfile, canManageImagingDevices, canExportClinicBulkData } from '../utils/permissions';
 import { clinicOperatingPreferencesService, notificationPreferencesService } from '../services/api';
 import ClinicKvkkSection from '../components/settings/ClinicKvkkSection';
+import ClinicBulkExportSection from '../components/settings/ClinicBulkExportSection';
 import ImagingSettingsPanel from '../components/imaging/ImagingSettingsPanel';
 import SmsSettingsSection from '../components/settings/SmsSettingsSection';
 import {
@@ -57,7 +58,7 @@ type NotificationPreferences = {
   };
 };
 
-type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations' | 'sms' | 'imaging' | 'kvkk';
+type SettingsTab = 'general' | 'recall' | 'post-treatment' | 'users' | 'availability' | 'services' | 'integrations' | 'sms' | 'imaging' | 'kvkk' | 'bulkExport';
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   whatsapp: {
@@ -260,6 +261,8 @@ const Settings: React.FC = () => {
   const canSeeSms = !isDentist && canManageUsers(user);
   // Görüntüleme cihaz/köprü yönetimi: yalnızca OWNER/ORG_ADMIN/CLINIC_MANAGER
   const canSeeImaging = canManageImagingDevices(user);
+  // KVKK-HIGH-004: clinic bulk/structured-data export — yalnızca OWNER/ORG_ADMIN
+  const canSeeBulkExport = canExportClinicBulkData(user);
   const firstAllowedTab: SettingsTab = canSeeGeneral
     ? 'general'
     : canSeeAvailability
@@ -272,7 +275,9 @@ const Settings: React.FC = () => {
             ? 'integrations'
             : canSeeKvkk
               ? 'kvkk'
-              : 'general';
+              : canSeeBulkExport
+                ? 'bulkExport'
+                : 'general';
   const [activeTab, setActiveTab] = useState<SettingsTab>(firstAllowedTab);
   const [copied, setCopied] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(() => cloneNotificationPreferences());
@@ -306,7 +311,8 @@ const Settings: React.FC = () => {
       (activeTab === 'availability' && canSeeAvailability) ||
       (activeTab === 'sms' && canSeeSms) ||
       (activeTab === 'imaging' && canSeeImaging) ||
-      (activeTab === 'kvkk' && canSeeKvkk);
+      (activeTab === 'kvkk' && canSeeKvkk) ||
+      (activeTab === 'bulkExport' && canSeeBulkExport);
 
     if (!activeTabAllowed) {
       setActiveTab(firstAllowedTab);
@@ -319,6 +325,7 @@ const Settings: React.FC = () => {
     canSeeRecall,
     canSeeIntegrationsTab,
     canSeeKvkk,
+    canSeeBulkExport,
     canSeeServices,
     canSeeSms,
     canSeeUsers,
@@ -609,6 +616,17 @@ const Settings: React.FC = () => {
               >
                 <ShieldCheck size={18} />
                 {t('settings:kvkk.nav')}
+              </button>
+            )}
+            {canSeeBulkExport && (
+              <button
+                onClick={() => setActiveTab('bulkExport')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors font-medium text-sm ${
+                  activeTab === 'bulkExport' ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <ShieldAlert size={18} />
+                {t('clinicBulkExport:nav')}
               </button>
             )}
           </div>
@@ -1208,6 +1226,13 @@ const Settings: React.FC = () => {
               clinicSlug={('slug' in (selectedClinic ?? {})) ? (selectedClinic as any).slug as string : undefined}
               clinicName={selectedClinic?.name}
               canEdit={canManageClinicLegalProfile(user)}
+            />
+          )}
+          {canSeeBulkExport && activeTab === 'bulkExport' && (
+            <ClinicBulkExportSection
+              availableClinics={availableClinics}
+              globalSelectedClinicId={selectedClinicId}
+              canEdit={canSeeBulkExport}
             />
           )}
         </div>

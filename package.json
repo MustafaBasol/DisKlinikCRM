@@ -11,7 +11,8 @@
     "test:dicom-helpers": "tsx src/components/imaging/__tests__/dicomHelpers.test.ts",
     "test:onboarding-helpers": "tsx src/components/imaging/__tests__/onboardingHelpers.test.ts",
     "test:pairing-poller": "tsx src/components/imaging/__tests__/pairingPoller.test.ts",
-    "test:booking-widget-helpers": "tsx src/pages/__tests__/bookingWidgetHelpers.test.ts"
+    "test:booking-widget-helpers": "tsx src/pages/__tests__/bookingWidgetHelpers.test.ts",
+    "test:clinic-bulk-export-selection": "tsx src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.21",

@@ -97,6 +97,8 @@ model Clinic {
   imagingBridgeBindings         ImagingBridgeBinding[]
   publicBookingNoticeEvidences  PublicBookingNoticeEvidence[]
   privacyExportArchives         PatientPrivacyExportArchive[]
+  clinicBulkExportArchives      ClinicBulkExportArchive[]
+  clinicBulkExportPwAttempts    ClinicBulkExportPasswordAttempt[]
 
   @@unique([organizationId, slug])
 }
@@ -141,6 +143,8 @@ model User {
   activityLogs                 ActivityLog[]
   uploadedAttachments          PatientAttachment[]            @relation("AttachmentUploader")
   privacyExportsRequested      PatientPrivacyExportArchive[]  @relation("PrivacyExportRequester")
+  clinicBulkExportsRequested   ClinicBulkExportArchive[]      @relation("ClinicBulkExportRequester")
+  clinicBulkExportsStepUpVerified ClinicBulkExportArchive[]   @relation("ClinicBulkExportStepUpVerifier")
   toothRecordsCreated          ToothRecord[]                  @relation("ToothRecordCreator")
   paymentPlans                 PaymentPlan[]
   compensationRules            PractitionerCompensationRule[] @relation("PractitionerCompRules")
@@ -1544,6 +1548,12 @@ model OperationalEvent {
   resolvedById   String?
   createdAt      DateTime  @default(now())
 
+  /// Optional deterministic dedupe key (e.g. "clinic-bulk-export:<jobId>:export_requested").
+  /// Left null by every feature that doesn't need dedupe. When set, a create is performed
+  /// as an upsert on this unique key so duplicate-alert suppression is atomic (never
+  /// check-then-insert) — see clinicBulkExportPackage.ts.
+  dedupeKey      String?   @unique
+
   @@index([organizationId, severity])
   @@index([organizationId, source])
   @@index([organizationId, resolvedAt])
@@ -2483,4 +2493,145 @@ model PatientPrivacyExportArchive {
   @@index([expiresAt])
   @@index([clinicId, status])
   @@index([clinicId, status, leaseExpiresAt])
+}
+
+/// KVKK-HIGH-004 (docs/compliance/54): clinic-scoped structured-data bulk export.
+/// OWNER/ORG_ADMIN only, step-up authenticated, feature-flagged off by default,
+/// asynchronously generated and streamed. Never contains physical
+/// attachment/imaging bytes (see docs/compliance/54 scope decision).
+///
+/// Lifecycle: queued -> generating -> ready -> expired, or -> failed at any
+/// point before ready. "expired" is a real stored terminal status, never
+/// derived ad hoc from expiresAt — every route that reads this row (status,
+/// download-token issuance, download) calls the single shared
+/// expireArchiveIfPastTtl() helper first, so a ready row past its expiresAt
+/// is always caught synchronously, regardless of whether the 15-minute
+/// cleanup cron has run yet (cleanup-cron timing must never be part of the
+/// security decision — see clinicBulkExportPackage.ts).
+///
+/// Exactly one queued/generating row may exist per clinic at a time. This is
+/// enforced twice: (1) an advisory-lock-guarded reservation transaction in
+/// application code, and (2) as the final invariant, a hand-written partial
+/// unique index added via raw SQL in the migration (Prisma schema has no
+/// first-class partial-unique-index syntax without an unstable preview
+/// feature):
+///   CREATE UNIQUE INDEX "ClinicBulkExportArchive_one_active_per_clinic"
+///   ON "ClinicBulkExportArchive" ("clinicId")
+///   WHERE status IN ('queued', 'generating');
+/// See migration 20260716120000_clinic_bulk_export for the raw SQL and
+/// docs/compliance/54 for the fresh-DB drift validation notes.
+///
+/// Storage-object deletion is deliberately NOT part of the same operation as
+/// the ready->expired status transition (a Postgres transaction cannot span
+/// an S3/local filesystem delete). artifactDeletedAt/cleanupFailureCode
+/// track that separate, retryable step — see clinicBulkExportPackage.ts.
+model ClinicBulkExportArchive {
+  id                String        @id @default(uuid())
+  organizationId    String
+  clinicId          String
+  clinic            Clinic        @relation(fields: [clinicId], references: [id])
+  /// Nullable + SetNull (not a required relation): archive/audit history must
+  /// survive the requesting user being deactivated/deleted later.
+  requestedByUserId String?
+  requestedByUser   User?         @relation("ClinicBulkExportRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+
+  /// The user whose password most recently satisfied step-up for THIS
+  /// archive (creation, or a fresh re-verification at download-token
+  /// issuance). Binds the STEP_UP_WINDOW_MS reuse window to a specific
+  /// actor — download-token issuance without a fresh password is only
+  /// permitted when the current authenticated user matches this field AND
+  /// stepUpVerifiedAt is still within the window. A different OWNER/
+  /// ORG_ADMIN may still obtain a token, but only after verifying their OWN
+  /// current password (which then overwrites both fields). Nullable +
+  /// SetNull so archive history survives the verifying user being
+  /// deactivated/deleted — a null value can never satisfy passwordless
+  /// window reuse for anyone.
+  stepUpVerifiedByUserId String?
+  stepUpVerifiedByUser   User?         @relation("ClinicBulkExportStepUpVerifier", fields: [stepUpVerifiedByUserId], references: [id], onDelete: SetNull)
+
+  status String @default("queued") // queued | generating | ready | failed | expired
+
+  purpose        String // regulatory_request | clinic_migration | contract_termination | legal_request | other
+  /// Internal note only. Never copied into AuditLog, OperationalEvent, or any log line.
+  restrictedNote String?
+
+  exportSchemaVersion Int @default(1)
+
+  /// Object-storage key under exports/<clinicId>/<uuid>.zip. Never serialized
+  /// to any API response. Preserved (not nulled) on a failed storage-delete
+  /// attempt so the next cleanup run can retry — see cleanupFailureCode.
+  storageKey String?
+  /// Manifest (see docs/compliance/54): schemaVersion, entityCounts,
+  /// fileNames, sha256PerFile, scopeDescription. Only ever written for a
+  /// successfully completed job — never partially written on failure.
+  manifestJson Json?
+
+  /// SHA-256 hash of the opaque one-time download token. Raw token is
+  /// returned once and never persisted. Issuance is atomic: guarded by
+  /// status='ready' AND downloadTokenHash IS NULL so exactly one concurrent
+  /// issuance request can win (see clinicBulkExportPackage.ts).
+  downloadTokenHash String? @unique
+
+  /// Server-recorded step-up timestamp (creation time, or refreshed at
+  /// download-token issuance if a fresh password was supplied). Never a
+  /// client-supplied timestamp — see STEP_UP_WINDOW_MS in passwordStepUp.ts.
+  stepUpVerifiedAt DateTime?
+
+  expiresAt    DateTime?
+  downloadedAt DateTime?
+
+  /// Set once the storage object has actually been deleted (separate,
+  /// retryable step from the ready->expired status transition).
+  artifactDeletedAt  DateTime?
+  /// Set when a storage-delete attempt fails, so the next cleanup run knows
+  /// to retry using the still-present storageKey rather than assuming the
+  /// object is gone. Cleared once deletion succeeds. Stable code only
+  /// (e.g. "STORAGE_DELETE_FAILED") — never raw exception text.
+  cleanupFailureCode String?
+
+  /// Lease/heartbeat — an abandoned generating row (crashed worker) becomes
+  /// failed once leaseExpiresAt passes, never merely because it is old.
+  heartbeatAt    DateTime?
+  leaseExpiresAt DateTime?
+
+  /// Stable failure code only (e.g. "SIZE_LIMIT_EXCEEDED", "LEASE_EXPIRED",
+  /// "GENERATION_ERROR"). Never raw exception text, SQL, or a local path.
+  failureCode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, clinicId])
+  @@index([clinicId, status])
+  @@index([requestedByUserId, createdAt])
+  @@index([stepUpVerifiedByUserId])
+  @@index([expiresAt])
+  @@index([leaseExpiresAt])
+  @@index([clinicId, status, leaseExpiresAt])
+}
+
+/// KVKK-HIGH-004 step-up brute-force lockout — PostgreSQL-authoritative.
+/// Every check-and-increment for a given (userId, clinicId, ipHash) key is
+/// serialized with pg_advisory_xact_lock (same key-derivation shape as
+/// appointmentRequestSafety.ts) acquired BEFORE reading/creating the row, so
+/// concurrent first-attempts for a brand-new key cannot race. Redis
+/// (createRateLimiter) may add an optional fast pre-check ahead of this
+/// table, but this table is the single source of truth for lockout state —
+/// never a second independent counter. ipHash is HMAC-SHA256 of the client
+/// IP keyed by the dedicated CLINIC_BULK_EXPORT_IP_HASH_SECRET (never the
+/// raw IP, never a shared/reused app secret). Rows untouched for >30 days
+/// are deleted by the cleanup job.
+model ClinicBulkExportPasswordAttempt {
+  id              String    @id @default(uuid())
+  userId          String
+  clinicId        String
+  clinic          Clinic    @relation(fields: [clinicId], references: [id])
+  ipHash          String
+  attemptCount    Int       @default(0)
+  windowStartedAt DateTime  @default(now())
+  lockedUntil     DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, clinicId, ipHash])
+  @@index([updatedAt])
 }

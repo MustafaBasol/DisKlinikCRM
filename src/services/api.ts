@@ -809,6 +809,26 @@ export const publicClinicKvkkService = {
     api.get(`/public/clinics/${clinicSlug}/kvkk`),
 };
 
+// KVKK-HIGH-004: secure clinic bulk/structured-data export. OWNER/ORG_ADMIN
+// only (server-enforced). The download token is sent via a dedicated header
+// (X-Clinic-Export-Download-Token), never a query parameter — same reasoning
+// as patientPrivacyService.downloadExportPackage above.
+export const clinicBulkExportService = {
+  getConfig: (clinicId: string) => api.get(`/clinic/${clinicId}/bulk-export/config`),
+  createJob: (
+    clinicId: string,
+    data: { purpose: string; confirm: true; currentPassword: string; restrictedNote?: string },
+  ) => api.post(`/clinic/${clinicId}/bulk-export`, data),
+  getStatus: (clinicId: string, jobId: string) => api.get(`/clinic/${clinicId}/bulk-export/${jobId}`),
+  requestDownloadToken: (clinicId: string, jobId: string, currentPassword?: string) =>
+    api.post(`/clinic/${clinicId}/bulk-export/${jobId}/download-token`, currentPassword ? { currentPassword } : {}),
+  download: (clinicId: string, jobId: string, token: string) =>
+    api.get(`/clinic/${clinicId}/bulk-export/${jobId}/download`, {
+      headers: { 'X-Clinic-Export-Download-Token': token },
+      responseType: 'blob',
+    }),
+};
+
 export const smsService = {
   getSettings: (clinicId?: string) =>
     api.get('/sms/settings', { params: clinicId ? { clinicId } : undefined }),

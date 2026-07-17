@@ -40,6 +40,7 @@ import legalEn from '../locales/en/legal.json';
 import postTreatmentEn from '../locales/en/postTreatment.json';
 import smsEn from '../locales/en/sms.json';
 import patientPrivacyEn from '../locales/en/patientPrivacy.json';
+import clinicBulkExportEn from '../locales/en/clinicBulkExport.json';
 
 import commonTr from '../locales/tr/common.json';
 import authTr from '../locales/tr/auth.json';
@@ -78,6 +79,7 @@ import legalTr from '../locales/tr/legal.json';
 import postTreatmentTr from '../locales/tr/postTreatment.json';
 import smsTr from '../locales/tr/sms.json';
 import patientPrivacyTr from '../locales/tr/patientPrivacy.json';
+import clinicBulkExportTr from '../locales/tr/clinicBulkExport.json';
 
 import commonFr from '../locales/fr/common.json';
 import authFr from '../locales/fr/auth.json';
@@ -116,6 +118,7 @@ import legalFr from '../locales/fr/legal.json';
 import postTreatmentFr from '../locales/fr/postTreatment.json';
 import smsFr from '../locales/fr/sms.json';
 import patientPrivacyFr from '../locales/fr/patientPrivacy.json';
+import clinicBulkExportFr from '../locales/fr/clinicBulkExport.json';
 
 import commonDe from '../locales/de/common.json';
 import authDe from '../locales/de/auth.json';
@@ -154,6 +157,7 @@ import legalDe from '../locales/de/legal.json';
 import postTreatmentDe from '../locales/de/postTreatment.json';
 import smsDe from '../locales/de/sms.json';
 import patientPrivacyDe from '../locales/de/patientPrivacy.json';
+import clinicBulkExportDe from '../locales/de/clinicBulkExport.json';
 
 const namespaces = [
   'common',
@@ -191,6 +195,7 @@ const namespaces = [
   'postTreatment',
   'sms',
   'patientPrivacy',
+  'clinicBulkExport',
   'validation',
   'errors',
 ];
@@ -232,6 +237,7 @@ const resources = {
     postTreatment: postTreatmentEn,
     sms: smsEn,
     patientPrivacy: patientPrivacyEn,
+    clinicBulkExport: clinicBulkExportEn,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -271,6 +277,7 @@ const resources = {
     postTreatment: postTreatmentTr,
     sms: smsTr,
     patientPrivacy: patientPrivacyTr,
+    clinicBulkExport: clinicBulkExportTr,
     validation: validationTr,
     errors: errorsTr,
   },
@@ -310,6 +317,7 @@ const resources = {
     postTreatment: postTreatmentFr,
     sms: smsFr,
     patientPrivacy: patientPrivacyFr,
+    clinicBulkExport: clinicBulkExportFr,
     validation: validationFr,
     errors: errorsFr,
   },
@@ -349,6 +357,7 @@ const resources = {
     postTreatment: postTreatmentDe,
     sms: smsDe,
     patientPrivacy: patientPrivacyDe,
+    clinicBulkExport: clinicBulkExportDe,
     validation: validationDe,
     errors: errorsDe,
   }
