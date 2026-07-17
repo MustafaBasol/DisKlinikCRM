@@ -54,7 +54,7 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 
 | ID | Başlık | Durum |
 |---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `REVIEW_REQUIRED` |
+| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)) |
 | F0-002 | Repository and Deployment Baseline Inventory | `READY` |
 | F0-003 | Domain and Module Ownership Map | `TODO` |
 | F0-004 | Cross-Module Dependency Map | `TODO` |
@@ -117,3 +117,4 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 |---|---|---|
 | 2026-07-17 | F0-001 | Faz dokümanı oluşturuldu; backlog F0-001…F0-013 tanımlandı. |
 | 2026-07-17 | F0-001 | Dış inceleme başladı: F0-001 → `REVIEW_REQUIRED`. |
+| 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |

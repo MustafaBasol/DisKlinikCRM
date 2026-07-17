@@ -108,18 +108,18 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 |---|---|
 | ID | F0-001 |
 | Title | Program Control and Master Tracker Foundation |
-| Status | `REVIEW_REQUIRED` (dış inceleyici teslim raporunu inceledi ve bu durumu yetkilendirdi — 2026-07-17) |
+| Status | `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) (`main` hedefli, 2026-07-17; merge kararı dış incelemeye aittir) |
 | Branch | `docs/f0-001-program-tracker-foundation` |
 | Scope | Yalnızca dokümantasyon: program takip temeli (`docs/program/`) |
 | Out of scope | Tüm uygulama ve veritabanı değişiklikleri |
 | Dependency | Yok |
 | Reviewer | ChatGPT / kullanıcı |
-| Ajan için izinli sonraki durum | `PR_OPEN` (yalnızca gerçek PR açıldıktan sonra, PR referansıyla) |
+| Ajan için izinli sonraki durum | Yok — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir |
 
 ## 6. Current F0 task backlog (F0 görev listesi)
 
 ### F0-001 — Program Control and Master Tracker Foundation
-- **Status:** `REVIEW_REQUIRED` (dış inceleme başladı — 2026-07-17)
+- **Status:** `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) (2026-07-17)
 - **Purpose:** Depo-tabanlı yetkili program takip sistemini (`docs/program/`) oluşturmak.
 - **Dependencies:** Yok.
 - **Deliverables:** 24 Markdown dosyası (12 kök + 12 faz dokümanı).
@@ -239,7 +239,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `REVIEW_REQUIRED` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme 2026-07-17'de başladı; kalite düzeltmeleri uygulandı, PR aşamasına geçiliyor. |
+| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme sonrası [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı (2026-07-17); merge kararı dış incelemeye aittir. |
 
 ## 8. Blocked tasks (Bloklu işler)
 

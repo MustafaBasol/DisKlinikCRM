@@ -49,7 +49,7 @@ Aktif KVKK çalışması (`feature/kvkk-high-004-secure-clinic-bulk-export`, dı
 
 ## Aktif görev
 
-**F0-001 — Program Control and Master Tracker Foundation** → `REVIEW_REQUIRED` (dış inceleme 2026-07-17'de başladı; kalite düzeltmeleri uygulandı, PR aşamasına geçiliyor)
+**F0-001 — Program Control and Master Tracker Foundation** → `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) (merge kararı dış incelemeye aittir)
 
 ## Sonraki görev
 
@@ -82,3 +82,4 @@ Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blo
 |---|---|---|
 | 2026-07-17 | F0-001 | Doküman oluşturuldu; F0 `IN_PROGRESS`, F0-001 `AGENT_COMPLETED`, F0-002 `READY`. |
 | 2026-07-17 | F0-001 | Dış inceleme başladı: F0-001 → `REVIEW_REQUIRED`; kalite düzeltmeleri (PR_OPEN kural netleştirmesi) uygulandı. |
+| 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
