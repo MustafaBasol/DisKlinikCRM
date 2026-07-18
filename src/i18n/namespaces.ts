@@ -25,6 +25,7 @@ export const NS = {
   INSTAGRAM: 'instagram',
   POST_TREATMENT: 'postTreatment',
   PATIENT_PRIVACY: 'patientPrivacy',
+  COMMUNICATION_CONSENT: 'communicationConsent',
 } as const;
 
 export type Namespace = typeof NS[keyof typeof NS];

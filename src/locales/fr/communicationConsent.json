@@ -1,0 +1,103 @@
+{
+  "tab": "Préférences de communication",
+  "title": "Préférences de communication et registre de consentement",
+  "disclaimer": "Registre technique des préférences de communication — ne constitue pas une décision juridique.",
+  "warningBanner": "Le consentement marketing est distinct des communications de rendez-vous, de suivi clinique, de sécurité et de service obligatoire. Enregistrez avec précision la déclaration du patient et la version de la notice utilisée.",
+  "matrix": {
+    "channelHeader": "Canal"
+  },
+  "channels": {
+    "sms": "SMS",
+    "email": "E-mail",
+    "whatsapp": "WhatsApp",
+    "phone_call": "Appel téléphonique",
+    "push": "Notification push"
+  },
+  "purposes": {
+    "transactional": "Transactionnel",
+    "appointment_reminder": "Rappel de rendez-vous",
+    "appointment_followup": "Suivi de rendez-vous",
+    "clinical_followup": "Suivi clinique",
+    "recall": "Rappel (recall)",
+    "no_show_recovery": "Relance après absence",
+    "operational": "Opérationnel",
+    "marketing": "Marketing",
+    "campaign": "Campagne",
+    "survey": "Enquête",
+    "legal_notice": "Notice légale",
+    "security_notice": "Notification de sécurité"
+  },
+  "status": {
+    "allowed": "Accordé",
+    "denied": "Refusé",
+    "withdrawn": "Retiré",
+    "unknown": "Inconnu",
+    "not_required": "Non requis"
+  },
+  "actions": {
+    "export": "Exporter les preuves",
+    "grant": "Accorder",
+    "deny": "Refuser",
+    "withdraw": "Retirer",
+    "reset": "Réinitialiser à Inconnu",
+    "cancel": "Annuler",
+    "confirm": "Confirmer"
+  },
+  "confirm": {
+    "grantTitle": "Accorder le consentement pour {{channel}} / {{purpose}} ?",
+    "grantBody": "Vous confirmez que le patient a donné un consentement explicite pour ce canal et cet objectif. Veuillez enregistrer avec précision le type de preuve et la version de la notice utilisée.",
+    "denyTitle": "Refuser {{channel}} / {{purpose}} ?",
+    "denyBody": "Ce canal et cet objectif seront marqués de manière à ce que l'envoi soit refusé.",
+    "withdrawTitle": "Retirer le consentement pour {{channel}} / {{purpose}} ?",
+    "withdrawBody": "Tout consentement précédemment accordé sera retiré et l'envoi sera bloqué à partir de maintenant.",
+    "resetTitle": "Réinitialiser {{channel}} / {{purpose}} à « Inconnu » ?",
+    "resetBody": "Cette action réinitialise uniquement la décision actuelle ; l'historique n'est jamais supprimé — un nouvel état « inconnu » est simplement enregistré."
+  },
+  "fields": {
+    "evidenceType": "Type de preuve",
+    "source": "Source",
+    "noticeVersion": "Version de la notice",
+    "noticeVersionPlaceholder": "ex. v1.2 (facultatif)",
+    "notes": "Notes",
+    "notesPlaceholder": "Brève note sur la déclaration du patient (facultatif)"
+  },
+  "evidenceTypes": {
+    "verbal_staff_record": "Déclaration verbale (registre du personnel)",
+    "signed_form": "Formulaire signé",
+    "portal_click": "Confirmation via le portail patient",
+    "inbound_reply": "Réponse entrante",
+    "public_booking_checkbox": "Case de consentement à la réservation en ligne"
+  },
+  "sources": {
+    "staff": "Personnel",
+    "patient_portal": "Portail patient",
+    "public_booking": "Réservation en ligne",
+    "sms_keyword": "Mot-clé SMS",
+    "email_unsubscribe": "Désabonnement e-mail",
+    "api": "API",
+    "import": "Importation",
+    "whatsapp": "WhatsApp",
+    "legacy": "Registre existant",
+    "system": "Système"
+  },
+  "history": {
+    "title": "Historique {{channel}} / {{purpose}}",
+    "empty": "Aucun historique pour le moment.",
+    "initial": "Aucun enregistrement"
+  },
+  "errors": {
+    "loadFailed": "Échec du chargement des préférences de communication.",
+    "exportFailed": "Échec de l'exportation des preuves.",
+    "genericSave": "Impossible d'enregistrer cette modification. Veuillez réessayer.",
+    "invalid_channel": "Canal invalide.",
+    "invalid_purpose": "Objectif invalide.",
+    "invalid_transition": "Transition d'état invalide.",
+    "scope_denied": "Vous n'avez pas accès à ce patient.",
+    "evidence_required": "Un type de preuve est requis pour cette action.",
+    "notice_version_required": "Une version de la notice est requise.",
+    "unsafe_note": "La note a été rejetée car elle contient un contenu non autorisé.",
+    "preference_not_found": "Registre de préférence introuvable.",
+    "concurrent_update": "Cet enregistrement a été modifié simultanément. Veuillez réessayer.",
+    "consent_enforcement_disabled": "L'application du consentement est actuellement désactivée."
+  }
+}

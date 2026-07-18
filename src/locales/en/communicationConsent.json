@@ -1,0 +1,103 @@
+{
+  "tab": "Communication Preferences",
+  "title": "Communication Preferences and Consent Record",
+  "disclaimer": "Technical communication preference record — not a legal determination.",
+  "warningBanner": "Marketing consent is separate from appointment, clinical follow-up, security, and mandatory service communications. Record the patient's statement and the notice version used accurately.",
+  "matrix": {
+    "channelHeader": "Channel"
+  },
+  "channels": {
+    "sms": "SMS",
+    "email": "Email",
+    "whatsapp": "WhatsApp",
+    "phone_call": "Phone Call",
+    "push": "Push Notification"
+  },
+  "purposes": {
+    "transactional": "Transactional",
+    "appointment_reminder": "Appointment Reminder",
+    "appointment_followup": "Appointment Follow-up",
+    "clinical_followup": "Clinical Follow-up",
+    "recall": "Recall",
+    "no_show_recovery": "No-show Recovery",
+    "operational": "Operational",
+    "marketing": "Marketing",
+    "campaign": "Campaign",
+    "survey": "Survey",
+    "legal_notice": "Legal Notice",
+    "security_notice": "Security Notice"
+  },
+  "status": {
+    "allowed": "Granted",
+    "denied": "Denied",
+    "withdrawn": "Withdrawn",
+    "unknown": "Unknown",
+    "not_required": "Not Required"
+  },
+  "actions": {
+    "export": "Export Evidence",
+    "grant": "Grant",
+    "deny": "Deny",
+    "withdraw": "Withdraw",
+    "reset": "Reset to Unknown",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  },
+  "confirm": {
+    "grantTitle": "Grant consent for {{channel}} / {{purpose}}?",
+    "grantBody": "You are confirming that the patient gave explicit consent for this channel and purpose. Please record the evidence type and the notice version used accurately.",
+    "denyTitle": "Deny {{channel}} / {{purpose}}?",
+    "denyBody": "This channel and purpose will be marked so that sending is denied.",
+    "withdrawTitle": "Withdraw consent for {{channel}} / {{purpose}}?",
+    "withdrawBody": "Any previously granted consent will be withdrawn and sending will be blocked from this point forward.",
+    "resetTitle": "Reset {{channel}} / {{purpose}} to 'Unknown'?",
+    "resetBody": "This resets the current decision only; history is never deleted — a new 'unknown' state is simply recorded."
+  },
+  "fields": {
+    "evidenceType": "Evidence Type",
+    "source": "Source",
+    "noticeVersion": "Notice Version",
+    "noticeVersionPlaceholder": "e.g. v1.2 (optional)",
+    "notes": "Notes",
+    "notesPlaceholder": "Brief note on the patient's statement (optional)"
+  },
+  "evidenceTypes": {
+    "verbal_staff_record": "Verbal Statement (Staff Record)",
+    "signed_form": "Signed Form",
+    "portal_click": "Patient Portal Confirmation",
+    "inbound_reply": "Inbound Reply",
+    "public_booking_checkbox": "Public Booking Consent Checkbox"
+  },
+  "sources": {
+    "staff": "Staff",
+    "patient_portal": "Patient Portal",
+    "public_booking": "Public Booking",
+    "sms_keyword": "SMS Keyword",
+    "email_unsubscribe": "Email Unsubscribe",
+    "api": "API",
+    "import": "Import",
+    "whatsapp": "WhatsApp",
+    "legacy": "Legacy Record",
+    "system": "System"
+  },
+  "history": {
+    "title": "{{channel}} / {{purpose}} History",
+    "empty": "No history yet.",
+    "initial": "No record"
+  },
+  "errors": {
+    "loadFailed": "Failed to load communication preferences.",
+    "exportFailed": "Evidence export failed.",
+    "genericSave": "Could not save this change. Please try again.",
+    "invalid_channel": "Invalid channel.",
+    "invalid_purpose": "Invalid purpose.",
+    "invalid_transition": "Invalid status transition.",
+    "scope_denied": "You do not have access to this patient.",
+    "evidence_required": "An evidence type is required for this action.",
+    "notice_version_required": "A notice version is required.",
+    "unsafe_note": "The note was rejected because it contains disallowed content.",
+    "preference_not_found": "Preference record not found.",
+    "concurrent_update": "This record was updated concurrently. Please try again.",
+    "consent_enforcement_disabled": "Consent enforcement is currently disabled."
+  }
+}
