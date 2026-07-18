@@ -99,6 +99,8 @@ model Clinic {
   privacyExportArchives         PatientPrivacyExportArchive[]
   clinicBulkExportArchives      ClinicBulkExportArchive[]
   clinicBulkExportPwAttempts    ClinicBulkExportPasswordAttempt[]
+  communicationPreferences      PatientCommunicationPreference[]
+  communicationConsentEvents    PatientCommunicationConsentEvent[]
 
   @@unique([organizationId, slug])
 }
@@ -271,6 +273,8 @@ model Patient {
   labWorkOrders                 LabWorkOrder[]
   imagingRequests               ImagingRequest[]
   imagingStudies                ImagingStudy[]
+  communicationPreferences      PatientCommunicationPreference[]
+  communicationConsentEvents    PatientCommunicationConsentEvent[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -1978,6 +1982,118 @@ model ChannelConsentLog {
 
   @@index([clinicId, channel, contactIdentifier])
   @@index([clinicId, consentTextVersion])
+  @@index([organizationId])
+}
+
+// ── Communication Preference & Consent Management (KVKK-HIGH-007) ─────────────
+//
+// Technical control only — not a legal determination. See
+// docs/compliance/56-kvkk-communication-preference-and-consent-management.md.
+//
+// Two-table design:
+//  - PatientCommunicationPreference: current effective state, one row per
+//    patient+clinic+channel+purpose (fast lookup for every send decision;
+//    upserted atomically so concurrent grant/withdraw races resolve to a
+//    single deterministic row via the DB unique constraint).
+//  - PatientCommunicationConsentEvent: immutable append-only history/evidence
+//    of every state transition. Never updated or deleted by application code.
+//
+// This is separate from ChannelConsentLog, which records WhatsApp/Instagram
+// inbound-reply opt-in to the Meta 24h messaging window (contact-identifier
+// keyed, channel-only, no purpose dimension) — a narrower, provider-specific
+// concern that predates this general-purpose model.
+
+/// Current effective communication preference for one patient+clinic+channel+purpose.
+/// Looked up by the central decision service (communicationConsentPolicy.ts) on
+/// every send. A missing row means status = unknown (never implicitly granted).
+model PatientCommunicationPreference {
+  id             String   @id @default(uuid())
+  organizationId String
+  clinicId       String
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient  @relation(fields: [patientId], references: [id])
+
+  /// sms | email | whatsapp | phone_call | push
+  channel String
+  /// transactional | appointment_reminder | appointment_followup | clinical_followup |
+  /// recall | no_show_recovery | operational | marketing | campaign | survey |
+  /// legal_notice | security_notice
+  purpose String
+
+  /// granted | denied | withdrawn | unknown | not_required
+  status      String    @default("unknown")
+  effectiveAt DateTime  @default(now())
+  grantedAt   DateTime?
+  withdrawnAt DateTime?
+  expiresAt   DateTime?
+
+  /// patient_portal | public_booking | staff | import | api | whatsapp |
+  /// sms_keyword | email_unsubscribe | legacy | system
+  source String
+
+  /// Free-form evidence classification, e.g. verbal_staff_record | signed_form |
+  /// portal_click | inbound_reply | public_booking_checkbox
+  evidenceType String?
+  /// Legal notice / KVKK text version shown at the time of the decision
+  noticeVersion String?
+  /// Internal policy/config version applied by the decision service
+  policyVersion String?
+
+  actorUserId          String?
+  actorPlatformAdminId String?
+  /// Hashed with COMMUNICATION_CONSENT_EVIDENCE_HASH_SECRET — never raw
+  requestIpHash String?
+  /// Hashed with COMMUNICATION_CONSENT_EVIDENCE_HASH_SECRET — never raw
+  userAgentHash       String?
+  externalProviderRef String?
+  /// Sanitized, bounded free text — see consentEvidenceSanitizer.ts
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events PatientCommunicationConsentEvent[]
+
+  @@unique([patientId, clinicId, channel, purpose])
+  @@index([clinicId, channel, purpose, status])
+  @@index([organizationId])
+}
+
+/// Immutable history/evidence record. One row is inserted every time a
+/// PatientCommunicationPreference is created or its status changes. Rows are
+/// never updated or deleted by application code (append-only audit trail).
+model PatientCommunicationConsentEvent {
+  id             String                         @id @default(uuid())
+  organizationId String
+  clinicId       String
+  clinic         Clinic                         @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient                        @relation(fields: [patientId], references: [id])
+  preferenceId   String
+  preference     PatientCommunicationPreference @relation(fields: [preferenceId], references: [id])
+
+  channel String
+  purpose String
+
+  previousStatus String?
+  newStatus      String
+
+  source               String
+  evidenceType         String?
+  noticeVersion        String?
+  policyVersion        String?
+  actorUserId          String?
+  actorPlatformAdminId String?
+  requestIpHash        String?
+  userAgentHash        String?
+  externalProviderRef  String?
+  notes                String?
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId, clinicId, channel, purpose, createdAt])
+  @@index([clinicId, createdAt])
   @@index([organizationId])
 }
 
