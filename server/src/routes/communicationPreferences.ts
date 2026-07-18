@@ -12,6 +12,7 @@
  */
 
 import express, { Response } from 'express';
+import type { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { getParam } from '../utils/helpers.js';
@@ -35,6 +36,36 @@ import { hashEvidenceIp, hashEvidenceUserAgent } from '../services/communication
 const router = express.Router();
 
 const ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const;
+
+/**
+ * `revision` is only a global order *within* one channel+purpose key (see
+ * communicationConsentAdmin.ts). When both `channel` and `purpose` are
+ * supplied, exactly one preference chain is selected, so `revision desc`
+ * alone is the authoritative, gap-free order. When either is omitted, the
+ * result can span multiple independent chains — ordering by `revision` alone
+ * would interleave unrelated chains (e.g. sms/reminder revision 3 could sit
+ * between whatsapp/marketing revisions 5 and 6) and misrepresent the
+ * timeline. In that case order by `createdAt desc` with deterministic
+ * tie-breakers (channel, purpose, revision, id) so events from the same
+ * millisecond never come back in arbitrary order.
+ *
+ * Exported so tests can exercise this exact ordering against a real DB.
+ */
+export function resolveCommunicationHistoryOrderBy(
+  channel?: string,
+  purpose?: string,
+): Prisma.PatientCommunicationConsentEventOrderByWithRelationInput | Prisma.PatientCommunicationConsentEventOrderByWithRelationInput[] {
+  const singleChainSelected = Boolean(channel && purpose);
+  return singleChainSelected
+    ? { revision: 'desc' }
+    : [
+        { createdAt: 'desc' },
+        { channel: 'asc' },
+        { purpose: 'asc' },
+        { revision: 'desc' },
+        { id: 'asc' },
+      ];
+}
 
 const ADMIN_ERROR_STATUS: Record<string, number> = {
   invalid_channel: 400,
@@ -143,11 +174,7 @@ router.get(
 
       const events = await prisma.patientCommunicationConsentEvent.findMany({
         where,
-        // Ordered by the monotonic `revision`, not `createdAt` — Postgres
-        // TIMESTAMP(3) is millisecond-precision and can tie under
-        // concurrency; `revision` is the authoritative transition order
-        // (see communicationConsentAdmin.ts).
-        orderBy: { revision: 'desc' },
+        orderBy: resolveCommunicationHistoryOrderBy(channel, purpose),
         take: 200,
       });
 
@@ -178,13 +205,21 @@ router.get(
         prisma.patientCommunicationConsentEvent.findMany({
           where: { patientId: patient.id, clinicId: patient.clinicId },
           // This dump spans every channel/purpose key for the patient, so
-          // `revision` alone (only meaningful within one key) would interleave
-          // unrelated keys confusingly. createdAt gives a sensible
-          // cross-key chronological order; `revision` is the secondary sort
-          // to deterministically resolve any millisecond tie within the same
-          // key, so within a single key the effective order still matches
-          // the authoritative revision order.
-          orderBy: [{ createdAt: 'asc' }, { revision: 'asc' }],
+          // `revision` is NOT a global chronological sequence here — it is
+          // only authoritative *within* one channel+purpose chain (see
+          // communicationConsentAdmin.ts). createdAt gives a sensible
+          // cross-key chronological order; channel/purpose/revision/id are
+          // deterministic tie-breakers so two chains that tie on createdAt
+          // (or a chain's own revision, e.g. both at revision 1) always come
+          // back in the same order. Within a single key, this still matches
+          // that key's authoritative revision order.
+          orderBy: [
+            { createdAt: 'asc' },
+            { channel: 'asc' },
+            { purpose: 'asc' },
+            { revision: 'asc' },
+            { id: 'asc' },
+          ],
         }),
       ]);
 

@@ -73,6 +73,15 @@
  *   provider called; fully-supplied denied+enforce → blocked
  *   (BLOCKED_BY_CONSENT), provider never called.
  *
+ *   J. Cross-key history ordering: `revision` is authoritative only within
+ *   one channel+purpose key. Exercises resolveCommunicationHistoryOrderBy
+ *   (the exact ordering function the history endpoint uses) against two
+ *   independent chains for the same patient whose revisions overlap
+ *   (both independently reach revision 1-3) — filtered-by-single-key history
+ *   is exact revision desc; unfiltered/export-style history groups each
+ *   chain contiguously by createdAt (never interleaving by raw revision),
+ *   proving revision is not treated as a global sequence.
+ *
  * Run with: tsx src/tests/communicationConsent.test.ts
  * Requires DATABASE_URL to point at a disposable Postgres — no external test framework.
  */
@@ -100,6 +109,7 @@ import {
 } from '../services/whatsapp/whatsappOutboundMessaging.js';
 import { EvolutionWhatsAppProvider } from '../services/whatsapp/EvolutionWhatsAppProvider.js';
 import type { SendMessageResult } from '../services/whatsapp/WhatsAppProvider.js';
+import { resolveCommunicationHistoryOrderBy } from '../routes/communicationPreferences.js';
 
 let passed = 0;
 let failed = 0;
@@ -1326,6 +1336,156 @@ async function runWhatsAppIntegrationTests() {
   }
 }
 
+// ── J. Cross-key history ordering tests ─────────────────────────────────────────
+//
+// `revision` is authoritative only within one channel+purpose key. These
+// tests seed two independent chains for the same patient whose revisions
+// overlap (both reach revision 1, 2, 3 independently) and exercise the exact
+// ordering function the history endpoint uses
+// (resolveCommunicationHistoryOrderBy from routes/communicationPreferences.ts)
+// against a real DB, proving the unfiltered endpoint does not treat
+// `revision` as a global sequence.
+
+async function runCrossKeyHistoryOrderingTests() {
+  section('J. Cross-key history ordering tests');
+
+  await test('J1. filtered by channel+purpose (single chain): ordered by revision desc', async () => {
+    const fx = await createFixture();
+    for (let i = 0; i < 3; i++) {
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'sms', purpose: 'recall', action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+        source: 'staff', evidenceType: 'verbal_staff_record', notes: 'Front-desk verbal record.',
+      });
+    }
+    for (let i = 0; i < 3; i++) {
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'whatsapp', purpose: 'marketing', action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+        source: 'staff', evidenceType: 'verbal_staff_record', notes: 'Front-desk verbal record.',
+      });
+    }
+
+    const events = await prisma.patientCommunicationConsentEvent.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'recall' },
+      orderBy: resolveCommunicationHistoryOrderBy('sms', 'recall'),
+    });
+    assert.equal(events.length, 3);
+    assert.deepEqual(events.map((e) => e.revision), [3, 2, 1], 'single-chain filtered history must be exact revision desc order');
+    assert.ok(events.every((e) => e.channel === 'sms' && e.purpose === 'recall'));
+  });
+
+  await test('J2. unfiltered history (multiple chains, overlapping revisions) is NOT ordered as a global revision sequence', async () => {
+    const fx = await createFixture();
+    // Two independent chains for the same patient, each reaching revisions 1-3
+    // independently — if the endpoint ordered by `revision` globally, events
+    // from both chains at revision 1 (then both at 2, then both at 3) would
+    // interleave in an order that has nothing to do with when they actually
+    // happened.
+    for (let i = 0; i < 3; i++) {
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'sms', purpose: 'recall', action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+        source: 'staff', evidenceType: 'verbal_staff_record', notes: 'Front-desk verbal record.',
+      });
+    }
+    for (let i = 0; i < 3; i++) {
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'whatsapp', purpose: 'marketing', action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+        source: 'staff', evidenceType: 'verbal_staff_record', notes: 'Front-desk verbal record.',
+      });
+    }
+
+    const allEvents = await prisma.patientCommunicationConsentEvent.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId },
+      orderBy: resolveCommunicationHistoryOrderBy(undefined, undefined),
+    });
+    assert.equal(allEvents.length, 6, 'both chains combined');
+
+    // Both chains reach revision 3 last (they were written sequentially,
+    // sms/recall fully before whatsapp/marketing), so createdAt desc must
+    // surface the whatsapp/marketing chain (written later) entirely before
+    // the sms/recall chain — a pure `revision desc` order would instead
+    // repeat revision 3, 3, 2, 2, 1, 1 interleaved by insertion order, which
+    // does not correspond to any real chronological or per-chain sequence.
+    const revisionsInReturnedOrder = allEvents.map((e) => e.revision);
+    assert.notDeepEqual(
+      revisionsInReturnedOrder,
+      [3, 3, 2, 2, 1, 1],
+      'unfiltered history must not degrade to a naive global-revision interleave',
+    );
+
+    // Ordering is grouped by chain (no chain reappears once the list has
+    // moved past it) — asserted without assuming which chain's createdAt
+    // happens to sort first, so the test isn't sensitive to wall-clock
+    // timing precision.
+    const seenAndLeft = new Set<string>();
+    let currentKey: string | null = null;
+    for (const e of allEvents) {
+      const key = `${e.channel}/${e.purpose}`;
+      if (key !== currentKey) {
+        assert.ok(!seenAndLeft.has(key), `chain ${key} reappeared after the list moved on to another chain — revision must not be treated as a global sequence`);
+        if (currentKey !== null) seenAndLeft.add(currentKey);
+        currentKey = key;
+      }
+    }
+    for (const key of ['sms/recall', 'whatsapp/marketing']) {
+      const group = allEvents.filter((e) => `${e.channel}/${e.purpose}` === key);
+      assert.equal(group.length, 3, `chain ${key} must contribute exactly 3 events`);
+      assert.deepEqual(group.map((e) => e.revision), [3, 2, 1], `within chain ${key}, revision must still descend deterministically`);
+    }
+
+    // Each chain independently reached revision 1-3 — confirms the overlap
+    // precondition the task requires.
+    const smsRevisions = allEvents.filter((e) => e.channel === 'sms' && e.purpose === 'recall').map((e) => e.revision).sort();
+    const waRevisions = allEvents.filter((e) => e.channel === 'whatsapp' && e.purpose === 'marketing').map((e) => e.revision).sort();
+    assert.deepEqual(smsRevisions, [1, 2, 3]);
+    assert.deepEqual(waRevisions, [1, 2, 3]);
+  });
+
+  await test('J3. export-style ordering (createdAt asc, cross-key) also never degrades to a global revision sequence', async () => {
+    const fx = await createFixture();
+    for (let i = 0; i < 2; i++) {
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'email', purpose: 'recall', action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+        source: 'staff', evidenceType: 'verbal_staff_record', notes: 'Front-desk verbal record.',
+      });
+    }
+    for (let i = 0; i < 2; i++) {
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'sms', purpose: 'marketing', action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+        source: 'staff', evidenceType: 'verbal_staff_record', notes: 'Front-desk verbal record.',
+      });
+    }
+
+    const events = await prisma.patientCommunicationConsentEvent.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId },
+      orderBy: [{ createdAt: 'asc' }, { channel: 'asc' }, { purpose: 'asc' }, { revision: 'asc' }, { id: 'asc' }],
+    });
+    assert.equal(events.length, 4);
+    // createdAt asc must still group each chain contiguously (not interleave
+    // by raw revision — both chains independently reach revision 1 then 2),
+    // and each chain must ascend internally by revision.
+    const seenAndLeft = new Set<string>();
+    let currentKey: string | null = null;
+    for (const e of events) {
+      const key = `${e.channel}/${e.purpose}`;
+      if (key !== currentKey) {
+        assert.ok(!seenAndLeft.has(key), `chain ${key} reappeared — export ordering must not treat revision as a global sequence`);
+        if (currentKey !== null) seenAndLeft.add(currentKey);
+        currentKey = key;
+      }
+    }
+    for (const key of ['email/recall', 'sms/marketing']) {
+      const group = events.filter((e) => `${e.channel}/${e.purpose}` === key);
+      assert.deepEqual(group.map((e) => e.revision), [1, 2], `within chain ${key}, revision must ascend deterministically`);
+    }
+  });
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -1339,6 +1499,7 @@ async function main() {
     await runTimestampPolicyTests();
     await runNoticeVersionEvidenceTests();
     await runWhatsAppIntegrationTests();
+    await runCrossKeyHistoryOrderingTests();
   } finally {
     await cleanup();
     await prisma.$disconnect();

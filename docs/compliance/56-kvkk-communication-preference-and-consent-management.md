@@ -174,15 +174,28 @@ both the current row and the event row in the same transaction. Because
 writers for one key are fully serialized by the lock, revisions are
 contiguous and gap-free by construction; `@@unique([preferenceId, revision])`
 on the event table is a DB-enforced backstop, not the primary mechanism.
-**Every place that reads consent history for chain/authority purposes —
-the history/export API endpoints and all model tests — orders by `revision`,
-never by `createdAt` alone.** (The whole-patient evidence export endpoint,
-which aggregates events across multiple independent channel/purpose keys,
-orders by `createdAt` with `revision` as a tiebreaker — `revision` is only
-meaningful within one key, so a cross-key view needs `createdAt` as the
-primary sort for a sensible chronological read; the mixed-key ordering
-subtlety does not affect the single-key chain-authority guarantee, which is
-what `revision` alone protects.)
+**`revision` is authoritative only within one `patientId + clinicId + channel
++ purpose` key — it is never a global chronological sequence across
+different keys.** Two unrelated chains (e.g. `sms/reminder` and
+`whatsapp/marketing`) each start at revision 1 independently, so a query that
+returns events from more than one key must not order by `revision` alone —
+doing so would interleave unrelated chains and present a misleading
+timeline. Every place that reads consent history reflects this:
+- when the history endpoint is called with **both** `channel` and `purpose`
+  supplied, exactly one chain is selected and it orders by `revision desc`
+  — the authoritative, gap-free order for that key;
+- when either is omitted (the result may span multiple chains), it orders
+  by `createdAt desc` with deterministic tie-breakers (`channel`, `purpose`,
+  `revision`, `id`) instead;
+- the whole-patient evidence export endpoint always aggregates across every
+  channel/purpose key, so it always orders by `createdAt asc` with the same
+  tie-breakers (`channel`, `purpose`, `revision`, `id`) — never by `revision`
+  alone.
+
+Verified in `server/src/tests/communicationConsent.test.ts` with fixtures
+spanning at least two channel/purpose keys whose revisions overlap (e.g.
+both chains independently reaching revision 1–3), proving the unfiltered
+history endpoint does not treat `revision` as a global sequence.
 
 The transition timestamp (`effectiveAt`, `grantedAt`/`withdrawnAt` — see
 "Timestamp policy" below) is computed **after** the lock is acquired, so a
@@ -455,11 +468,13 @@ grant/deny/withdraw (not for reset), sanitizes notes, and writes an
 `scope_denied`, `evidence_required`, `notice_version_required`,
 `unsafe_note`.
 
-The history/export endpoints order events by the monotonic `revision`
-column (`history`: `orderBy: { revision: 'desc' }`; `export`, which
-aggregates every channel/purpose key for the patient in one list:
-`orderBy: [{ createdAt: 'asc' }, { revision: 'asc' }]`) — never by
-`createdAt` alone. See "Concurrency" above.
+The history endpoint orders by `revision desc` only when both `channel` and
+`purpose` are supplied (exactly one chain selected); otherwise — since the
+result may span multiple independent chains — it orders by `createdAt desc`
+with `channel`/`purpose`/`revision`/`id` tie-breakers. The export endpoint
+always aggregates every channel/purpose key for the patient, so it always
+orders by `createdAt asc` with the same tie-breakers. See "Concurrency"
+above for why `revision` alone is never used across more than one chain.
 
 ### 9.1 Notice-version / evidence matrix (Blocker 5 — technical policy, not a legal determination)
 
