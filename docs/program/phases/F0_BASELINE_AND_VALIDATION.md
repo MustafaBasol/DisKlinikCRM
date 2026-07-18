@@ -55,8 +55,8 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 | ID | Başlık | Durum |
 |---|---|---|
 | F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166); düzeltmeler push edildi) |
-| F0-002 | Repository and Deployment Baseline Inventory | `READY` |
-| F0-003 | Domain and Module Ownership Map | `TODO` |
+| F0-002 | Repository and Deployment Baseline Inventory | `READY` on `main` — Stage A work observed `AGENT_COMPLETED` on unmerged branch `docs/f0-002-repository-deployment-baseline` (no PR yet); Stage B blocked on user-supplied production evidence. See tracker §3/§12. |
+| F0-003 | Domain and Module Ownership Map | `AGENT_COMPLETED` — proceeded in parallel with F0-002 Stage B per explicit user direction (see tracker §5/§6 and delivery report "Parallel execution decision"); deliverables: [MODULE_MAP.md](../MODULE_MAP.md), [evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md](../evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md), [evidence/F0-003_module_ownership_inventory.json](../evidence/F0-003_module_ownership_inventory.json) |
 | F0-004 | Cross-Module Dependency Map | `TODO` |
 | F0-005 | Test Inventory, Runtime Measurement, and Ownership Map | `TODO` |
 | F0-006 | Production Topology and Configuration Verification | `TODO` |
@@ -120,3 +120,4 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 | 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
 | 2026-07-17 | F0-001 | Dış inceleme düzeltmesi: bayat KVKK ifadeleri giderildi (PR #165 `MERGED`, aktif KVKK çalışması `UNVERIFIED`); F0-001 → `CHANGES_REQUESTED`. |
 | 2026-07-17 | F0-001 | Düzeltmeler commit `ef11d2d` ile PR #166'ya push edildi; PR açık: F0-001 → `PR_OPEN`. |
+| 2026-07-18 | F0-003 | Depo-doğrulanmış domain/modül haritası tamamlandı; F0-003 → `AGENT_COMPLETED`. F0-002 Stage B hâlâ bloklu (dış VPS kanıtı bekleniyor) — bu görev F0-002'yi tamamlamadı, Stage B'ye dokunmadı. Ayrıntı: [../NORAMEDI_MASTER_TRACKER.md](../NORAMEDI_MASTER_TRACKER.md). |

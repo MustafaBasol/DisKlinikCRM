@@ -2,7 +2,7 @@
 
 Bu dosya, NoraMedi kurumsal mimari ve modülerleşme programının **yetkili canlı durum kaynağıdır**. Bkz. [README.md](README.md).
 
-Son güncelleme: 2026-07-17 (F0-001)
+Son güncelleme: 2026-07-18 (F0-003)
 
 ---
 
@@ -141,13 +141,14 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 - **Allowed next status:** `IN_PROGRESS` → `AGENT_COMPLETED`.
 
 ### F0-003 — Domain and Module Ownership Map
-- **Status:** `TODO`
+- **Status:** `AGENT_COMPLETED` — depo-doğrulanmış domain/modül haritası tamamlandı ve commit edildi.
 - **Purpose:** [MODULE_MAP.md](MODULE_MAP.md) içindeki geçici hedef haritayı gerçek dosya sahipliğiyle doğrulamak ve revize etmek.
-- **Dependencies:** F0-002.
-- **Deliverables:** Depo-doğrulanmış modül haritası.
-- **Evidence required:** Dosya/dizin → domain eşleme listesi.
-- **Blocking conditions:** Yok (analiz-yalnız).
-- **Allowed next status:** `READY` (F0-002 sonrası) → `IN_PROGRESS` → `AGENT_COMPLETED`.
+- **Dependencies:** F0-002 (tracker kuralı gereği).
+- **Parallel execution note:** Bu görev, F0-002'nin genel görev durumu `IN_PROGRESS`/`READY` iken (Stage B hâlâ bloklu) kullanıcının **açık talimatıyla** paralel başlatıldı. Bu, görevin orijinal yönlendirme metninin ("F0-003 paralel çalışmaya yetkilidir") **F0-002'nin kendi kanıt dokümanının** ("F0-003 bu tur içinde başlatılmadı") ile çeliştiği tespit edildikten ve kullanıcıya sorulduktan sonra yapıldı — kullanıcı "Proceed anyway" seçeneğini seçti. Bu istisna yalnızca bu göreve özgüdür; gelecekteki görevler için paralel-yetki emsali oluşturmaz.
+- **Deliverables:** [MODULE_MAP.md](MODULE_MAP.md) (revize edildi), [evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md](evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md) (yeni), [evidence/F0-003_module_ownership_inventory.json](evidence/F0-003_module_ownership_inventory.json) (yeni), [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) güncellemesi (yalnızca domain kümesi notu — matris hâlâ F0-004'ün işi), [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) ADR-001/ADR-015 kanıt işaretçileri.
+- **Evidence required:** Dosya/dizin → domain eşleme listesi. ✅ Karşılandı — 88/88 committed Prisma modeli, 56/56 route dosyası, 79/79 servis dosyası, 10/10 job dosyası, 5/5 middleware dosyası, 72/72 test dosyası, 64/64 frontend sayfası eşlendi.
+- **Blocking conditions:** Yok (analiz-yalnız). Bu görev VPS/production erişimi gerektirmedi ve kullanmadı.
+- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED`/`CHANGES_REQUESTED`/PR akışı — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir.
 
 ### F0-004 — Cross-Module Dependency Map
 - **Status:** `TODO`
@@ -244,6 +245,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
 | F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme düzeltmeleri (bayat KVKK taban çizgisi ifadeleri) commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi (2026-07-17); PR açık, merge kararı dış incelemeye aittir. |
+| F0-003 | Domain and Module Ownership Map | `AGENT_COMPLETED` | Depo-doğrulanmış domain/modül haritası; F0-002'nin genel görev durumu tamamlanmadan, kullanıcının açık talimatıyla paralel yürütüldü (bkz. §6 F0-003 "Parallel execution note"). Dış inceleme/merge henüz yapılmadı. |
 
 ## 8. Blocked tasks (Bloklu işler)
 
@@ -316,9 +318,10 @@ Henüz bu program kapsamında production doğrulaması yapılmamıştır.
 4. RLS / Prisma / PgBouncer uyumluluğu henüz kanıtlanmadı (F0-009 → F5).
 5. Object-storage sağlayıcısı ve migrasyon tasarımı henüz onaylanmadı (F0-011 → F4).
 6. Queue/outbox mimarisi henüz kanıtlanmadı (F0-010 → F6).
+7. F0-002'nin genel görev durumu bu dosyada (`main`) hâlâ `READY` görünüyor çünkü F0-002'nin çalışma branch'i (`docs/f0-002-repository-deployment-baseline`, worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline`) henüz `main`'e merge edilmedi ve PR'ı yok. O branch'in kendi tracker kopyası Stage A'yı `AGENT_COMPLETED`, Stage B'yi (production kanıtı) `BLOCKED` olarak kaydediyor. Bu gözlem F0-003 tarafından salt-okunur olarak yapıldı; F0-002'nin branch'ine hiçbir yazma işlemi uygulanmadı.
 
 ## 13. Exact next task (Kesin sonraki görev)
 
-**F0-002 — Repository and Deployment Baseline Inventory**
+**F0-002 Stage B — Production Topology, Commit, Migration, and Runtime Verification** (F0-002'nin kendi branch'indeki kanıtına göre) veya, birleştirilmemiş haliyle, **F0-002 — Repository and Deployment Baseline Inventory** bu dosyanın (`main`) kendi görünümünde.
 
-F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştiremez**.
+F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştiremez**. F0-003 bu turda tamamlandı (bkz. §6/§7) — kullanıcının açık talimatıyla F0-002'nin tamamlanmasını beklemeden paralel yürütüldü; bu, F0-002'nin durumunu veya sırasını değiştirmez.
