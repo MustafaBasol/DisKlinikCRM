@@ -1,0 +1,4171 @@
+{
+  "taskId": "F0-005",
+  "baselineCommit": "5ee0b6af30fff187b7190d649f1fc3e844362105",
+  "generatedAt": "2026-07-18",
+  "domainSource": "docs/program/MODULE_MAP.md + docs/program/evidence/F0-003_module_ownership_inventory.json (34 F0-003 domains; test→domain assignments reused directly from F0-003’s own `tests[]` field per domain where present, 68/70 backend files; 2 files absent from F0-003’s map (dataRetentionCleanupJob.test.ts, messageTemplatePurpose.test.ts) and all 5 frontend test files were assigned fresh by this task from direct file-content evidence; 10 multi-domain backend files had a canonical primary chosen by this task per the \"behavior principally protected\" rule — see evidence doc §3)",
+  "dependencySource": "docs/program/DEPENDENCY_MAP.md + docs/program/evidence/F0-004_dependency_inventory.json (9 HIGH_RISK_BOUNDARY_VIOLATION edges, F0004-E0608/E0608/E0670/E0674/E0675/E0684/E0695/E0696/E0702/E0703)",
+  "scopeNote": "windows-bridge C# tests are inventoried at project/script granularity (4 dotnet test projects + 4 installer PowerShell scripts), not per-.cs-file/per-method, given their volume (~354 Fact/Theory methods) — see evidence doc §6.",
+  "testFiles": [
+    {
+      "id": "BE-aiPrivacyBoundary",
+      "path": "server/src/tests/aiPrivacyBoundary.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [
+        "Messaging AI Orchestration"
+      ],
+      "testType": "PRIVACY_KVKK",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/privacy/redaction.ts",
+        "server/src/services/whatsappAgentPrompt.ts"
+      ],
+      "command": "npx tsx server/src/tests/aiPrivacyBoundary.test.ts",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none (only imports pure masking/redaction and prompt-building functions, no DB/deps injected)",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "None directly; tests that phone/email are masked and forbidden clinical/system terms never leak into the AI (WhatsApp agent) prompt text, but no provider call is made",
+      "envVarsRequired": [],
+      "orderSensitive": "no; each test builds its own isolated input data, no shared mutable state across test() blocks",
+      "timingSensitive": "no",
+      "lineCount": 273,
+      "testCaseCount": 15,
+      "observedRuntime": {
+        "passed": 15,
+        "failed": 0,
+        "note": "executed via direct `npx tsx src/tests/aiPrivacyBoundary.test.ts` — no package.json script wires this file"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-appointmentAvailabilityService",
+      "path": "server/src/tests/appointmentAvailabilityService.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [],
+      "testType": "APPLICATION_SERVICE",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/appointments/appointmentAvailabilityService.ts"
+      ],
+      "command": "npm run test:availability-service",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; uses an injected fake PrismaClient (mockPrisma() factory returning canned findFirst results), no real @prisma/client instantiated",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no; each test constructs its own fresh mockPrisma() instance",
+      "timingSensitive": "no",
+      "lineCount": 431,
+      "testCaseCount": 31,
+      "observedRuntime": {
+        "passed": 31,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-appointmentRequestOverlapSafety",
+      "path": "server/src/tests/appointmentRequestOverlapSafety.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [],
+      "testType": "APPLICATION_SERVICE",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/appointmentRequestSafety.ts"
+      ],
+      "command": "npm run test:overlap-safety",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; uses hand-built mock transaction clients (makeMockTx/makeMockTxWithCallOrder) instead of a real Prisma tx, only imports the `Prisma` type",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no; each test builds its own mock tx object",
+      "timingSensitive": "no",
+      "lineCount": 624,
+      "testCaseCount": 31,
+      "observedRuntime": {
+        "passed": 31,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-appointmentUpdateValidation",
+      "path": "server/src/tests/appointmentUpdateValidation.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/schemas/index.ts"
+      ],
+      "command": "npm run test:appointment-update-validation",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; only exercises Zod schemas (appointmentSchema/appointmentUpdateSchema)",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 165,
+      "testCaseCount": 11,
+      "observedRuntime": {
+        "passed": 11,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-billingFinancialTreatmentCaseSelect",
+      "path": "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+      "canonicalOwner": "Tenant Security and Scope",
+      "secondaryDomains": [
+        "Treatment Cases",
+        "Advanced Finance — Compensation and Payouts"
+      ],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY",
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:billing-financial-select",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; route logic (authorize + clinic/case/payment scoping) is reimplemented inline over hand-set mock arrays (mockOrgClinics/mockTreatmentCases/mockPayments), no real prisma import or invocation of routes/treatmentCases.ts",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no; module-level mock arrays are set once at top and never mutated by individual tests",
+      "timingSensitive": "no",
+      "lineCount": 196,
+      "testCaseCount": 13,
+      "observedRuntime": {
+        "passed": 13,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-billingPatientAccess",
+      "path": "server/src/tests/billingPatientAccess.test.ts",
+      "canonicalOwner": "Tenant Security and Scope",
+      "secondaryDomains": [
+        "Patients"
+      ],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:billing-patient-access",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; only imports normalizeRole and re-derives the same authorize() role-list logic inline (role lists copied from routes/patients.ts, payments.ts, tasks.ts, treatmentCases.ts as comments, not actually imported/invoked)",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 167,
+      "testCaseCount": 18,
+      "observedRuntime": {
+        "passed": 18,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-channelConsentFlowResume",
+      "path": "server/src/tests/channelConsentFlowResume.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "PRIVACY_KVKK",
+      "secondaryTypes": [
+        "PROVIDER_ADAPTER"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/whatsapp.ts",
+        "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+        "server/src/services/instagram/instagramAiConversationProcessor.ts",
+        "server/src/services/channelConsentGate.ts"
+      ],
+      "command": "npm run test:consent-resume",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; only calls the pure exported isConsentResumableStep/buildConsentResumeMessage helpers from the three channel processors, no prisma calls in the test file",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "Exercises real exported helper functions from Evolution WhatsApp, Meta WhatsApp Cloud, and Instagram processor modules directly (not through the network/webhook), so provider I/O itself is bypassed entirely — only the pure resume-state logic is under test",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY",
+        "APP_BASE_URL"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 215,
+      "testCaseCount": 17,
+      "observedRuntime": {
+        "passed": 17,
+        "failed": 0,
+        "note": "script exists but is NOT included in `npm run test` full chain (orphan script)"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-channelConsentGate",
+      "path": "server/src/tests/channelConsentGate.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "PRIVACY_KVKK",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/channelConsentGate.ts"
+      ],
+      "command": "npx tsx server/src/tests/channelConsentGate.test.ts",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; test explicitly states it avoids mocking Prisma and only exercises the pure parseConsentReply function plus exported text constants — checkChannelConsent/loadConsentMetadata/logChannelConsent are imported but never actually called",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none (consent text/parsing only, no channel send)",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY",
+        "APP_BASE_URL"
+      ],
+      "orderSensitive": "no; declared mockLegalProfiles/mockConsentLogs maps are never populated or mutated",
+      "timingSensitive": "no",
+      "lineCount": 313,
+      "testCaseCount": 28,
+      "observedRuntime": {
+        "passed": 28,
+        "failed": 0,
+        "note": "executed via direct `npx tsx src/tests/channelConsentGate.test.ts` — no package.json script wires this file"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-clinicBulkExport",
+      "path": "server/src/tests/clinicBulkExport.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "CONTRACT",
+      "secondaryTypes": [
+        "PRIVACY_KVKK",
+        "JOB_WORKER"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/clinicBulkExport.ts",
+        "server/src/routes/gdprExport.ts",
+        "server/src/services/privacy/clinicBulkExportPackage.ts",
+        "server/src/services/privacy/clinicBulkExportConfig.ts",
+        "server/src/jobs/clinicBulkExportWorker.ts",
+        "server/src/jobs/clinicBulkExportCleanupJob.ts"
+      ],
+      "command": "npm run test:clinic-bulk-export",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; explicitly 'no live database, no supertest/live Express server' — asserts on prisma.* call shape via string/source inspection (fs.readFile of the actual route/service files) rather than executing DB code; pure crypto/time functions (hashClientIp, hashDownloadToken, isWithinStepUpWindow, computeExportSlotLockKey) are exercised via dynamic `await import()`",
+      "redisRequired": "no (one test source-inspects that Redis is NOT used as an authority on a code path, but the test itself never imports ioredis)",
+      "filesystemRequired": "yes; heavily uses fs/promises.readFile to read production source files for structural assertions, plus fs.stat/os.tmpdir/path.join for a temp-file-path unit test",
+      "networkRequired": "no",
+      "externalProviderMode": "none directly touched; asserts (via source inspection) that S3/storage (services/fileStorage.ts) and audit logging paths never leak secret fields (password/token/storageKey) into logs",
+      "envVarsRequired": [
+        "CLINIC_BULK_EXPORT_ENABLED",
+        "CLINIC_BULK_EXPORT_CLEANUP_ENABLED",
+        "CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS",
+        "CLINIC_BULK_EXPORT_IP_HASH_SECRET",
+        "CLINIC_BULK_EXPORT_GENERATION_LEASE_MS",
+        "CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS",
+        "CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS"
+      ],
+      "orderSensitive": "no; uses Date.now()-suffixed unique clinicId/key values per test to avoid any cross-test collision",
+      "timingSensitive": "no; step-up window boundary test uses fixed Date arithmetic, not real delays",
+      "lineCount": 1569,
+      "testCaseCount": 115,
+      "observedRuntime": {
+        "passed": 116,
+        "failed": 1,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_FAIL (reproduced 2x, identical single failure both times)"
+    },
+    {
+      "id": "BE-clinicLegalProfile",
+      "path": "server/src/tests/clinicLegalProfile.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "PRIVACY_KVKK",
+      "secondaryTypes": [
+        "AUTH_SECURITY",
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/clinicLegalProfile.ts",
+        "server/src/routes/publicClinicKvkk.ts"
+      ],
+      "command": "npx tsx server/src/tests/clinicLegalProfile.test.ts",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; resolveEffectiveClinicId cross-org logic is reimplemented inline as a 'pure, no DB' helper; only LEGAL_PROFILE_ROLES/SAFE_SELECT/validatePublishFields/PUBLIC_PROFILE_SELECT constants and functions are imported for real",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 352,
+      "testCaseCount": 29,
+      "observedRuntime": {
+        "passed": 29,
+        "failed": 0,
+        "note": "executed via direct `npx tsx src/tests/clinicLegalProfile.test.ts` — no package.json script wires this file"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-contactRequests",
+      "path": "server/src/tests/contactRequests.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [],
+      "testType": "APPLICATION_SERVICE",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/appointmentRequests.ts",
+        "server/src/services/whatsappAgentSchema.ts",
+        "server/src/services/whatsappConversationAgent.ts"
+      ],
+      "command": "npm run test:contact-requests",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; only imports pure filter helpers (resolveAppointmentRequestSourceFilter, shouldIncludeLegacyWhatsappAppointmentRows) and the WhatsApp agent decision schema/fallback builder",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "Tests the AI agent's fallback decision logic (buildFallbackWhatsAppAgentDecision) and handoff-intent classification directly, no actual WhatsApp/Gemini call made",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 309,
+      "testCaseCount": 25,
+      "observedRuntime": {
+        "passed": 33,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-dashboard",
+      "path": "server/src/tests/dashboard.test.ts",
+      "canonicalOwner": "Reporting / Analytics",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/dashboard.ts"
+      ],
+      "command": "npm run test:dashboard",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; only buildSafeStats is imported for real; validateAndGetScope-style clinicId/organizationId scoping logic is simulated inline via reassignable mockClinicFindFirst/mockClinicFindMany closures set fresh per test",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no; mockClinicFindFirst/mockClinicFindMany are reassigned at the start of each test before use",
+      "timingSensitive": "no",
+      "lineCount": 777,
+      "testCaseCount": 38,
+      "observedRuntime": {
+        "passed": 38,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-dataRetentionCleanupJob",
+      "path": "server/src/tests/dataRetentionCleanupJob.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "JOB_WORKER",
+      "secondaryTypes": [
+        "PRIVACY_KVKK",
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/jobs/dataRetentionCleanupJob.ts",
+        "server/src/services/privacy/dataRetentionPolicy.ts"
+      ],
+      "command": "npm run test:data-retention",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; file header states 'All tests use injected deps (no DB, no cron, no real Prisma calls)' — runDataRetentionCleanup is called with fake DataRetentionCategoryDeps/DataRetentionDeps objects",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 646,
+      "testCaseCount": 39,
+      "observedRuntime": {
+        "passed": 39,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-emailVerification",
+      "path": "server/src/tests/emailVerification.test.ts",
+      "canonicalOwner": "Identity and Access",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY",
+        "PROVIDER_ADAPTER"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/helpers.ts",
+        "server/src/services/emailTemplates.ts",
+        "server/src/services/emailService.ts"
+      ],
+      "command": "npm run test:email-verification",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none; token/hash logic is pure crypto, checkResendVerificationAttempt/recordResendVerificationAttempt use a rate-limit counter store that transitively falls back to in-memory unless REDIS_URL is set (not set by this test)",
+      "redisRequired": "no (test itself never references ioredis/REDIS_URL; the underlying counterStore would use Redis only if REDIS_URL happens to be set in the environment)",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "sendMail is tested only with MAIL_ENABLED=false, gated to short-circuit and return sent=false without contacting a real SMTP server",
+      "envVarsRequired": [
+        "MAIL_ENABLED"
+      ],
+      "orderSensitive": "no; rate-limit test keys are suffixed with Date.now() to avoid cross-test/shared-counter collisions",
+      "timingSensitive": "no",
+      "lineCount": 189,
+      "testCaseCount": 18,
+      "observedRuntime": {
+        "passed": 18,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-excelImport",
+      "path": "server/src/tests/excelImport.test.ts",
+      "canonicalOwner": "Patients",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/excelImport.ts"
+      ],
+      "command": "npm run test:imports",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no (ExcelJS workbook built/parsed entirely in-memory buffers)",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no - each test is self-contained with local fixtures",
+      "timingSensitive": "no",
+      "lineCount": 702,
+      "testCaseCount": 69,
+      "observedRuntime": {
+        "passed": 69,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-filePreview",
+      "path": "server/src/tests/filePreview.test.ts",
+      "canonicalOwner": "Storage Abstraction",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/filePreview.ts",
+        "server/src/routes/attachments.ts",
+        "server/src/routes/labOrders.ts"
+      ],
+      "command": "npm run test:file-preview",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - clinic isolation is verified via source-text regression scan, not a live DB call",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync reads route source files for regression pattern-matching",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 145,
+      "testCaseCount": 12,
+      "observedRuntime": {
+        "passed": 12,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-financeDashboard",
+      "path": "server/src/tests/financeDashboard.test.ts",
+      "canonicalOwner": "Reporting / Analytics",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY",
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts",
+        "server/src/routes/organizationDashboard.ts"
+      ],
+      "command": "npm run test:finance",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - resolveClinicScope is mocked inline in the test rather than hitting Prisma",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 280,
+      "testCaseCount": 25,
+      "observedRuntime": {
+        "passed": 25,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-imaging",
+      "path": "server/src/tests/imaging.test.ts",
+      "canonicalOwner": "Imaging — Server Ingest and Viewer",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/fileSignature.ts",
+        "server/src/services/imaging/imagingRequestTransitions.ts",
+        "server/src/services/imaging/bridgeTokens.ts",
+        "server/src/routes/imaging.ts",
+        "server/src/routes/imagingBridgePublic.ts",
+        "server/src/jobs/imagingBridgeOfflineJob.ts"
+      ],
+      "command": "npm run test:imaging",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - clinic isolation and BILLING/ASSISTANT route exclusion asserted via source-text regression scan (mock-based per file header), no live Prisma calls",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync of route/job/schema source files and prisma/schema.prisma for regression scans",
+      "networkRequired": "no",
+      "externalProviderMode": "none (imaging bridge is a local Windows agent, not a third-party messaging/AI provider)",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 1023,
+      "testCaseCount": 103,
+      "observedRuntime": {
+        "passed": 103,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-imagingBridgeOnboarding",
+      "path": "server/src/tests/imagingBridgeOnboarding.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY",
+        "CONTRACT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/imaging/bridgeOnboardingConfig.ts",
+        "server/src/routes/imaging.ts"
+      ],
+      "command": "npm run test:imaging-bridge-onboarding",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync of route/service source for regression scan of IMAGING_MANAGE_ROLES gating",
+      "networkRequired": "no",
+      "externalProviderMode": "none (installer signing metadata, not a live network fetch)",
+      "envVarsRequired": [
+        "IMAGING_BRIDGE_ONBOARDING_ENABLED",
+        "IMAGING_BRIDGE_INSTALLER_DOWNLOAD_URL",
+        "IMAGING_BRIDGE_INSTALLER_VERSION",
+        "IMAGING_BRIDGE_INSTALLER_SHA256",
+        "IMAGING_BRIDGE_INSTALLER_SIGNED"
+      ],
+      "orderSensitive": "no - withEnv() helper saves/restores each env var around every test",
+      "timingSensitive": "no",
+      "lineCount": 236,
+      "testCaseCount": 14,
+      "observedRuntime": {
+        "passed": 14,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-imagingBridgePairing",
+      "path": "server/src/tests/imagingBridgePairing.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY",
+        "CONTRACT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/imaging/bridgePairing.ts",
+        "server/src/routes/imaging.ts",
+        "server/src/routes/imagingBridgePublic.ts"
+      ],
+      "command": "npm run test:imaging-bridge-pairing",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none (transactional locking / role authorization on redemption asserted via source scan, not live Prisma)",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync of route/service source for regression scan",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 485,
+      "testCaseCount": 50,
+      "observedRuntime": {
+        "passed": 50,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-imagingBridgeUpdate",
+      "path": "server/src/tests/imagingBridgeUpdate.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "CONTRACT",
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/imaging/bridgeUpdateConfig.ts",
+        "server/src/services/imaging/releaseMetadataValidation.ts",
+        "server/src/routes/imagingBridgePublic.ts",
+        "server/src/services/imaging/bridgeOnboardingConfig.ts"
+      ],
+      "command": "npm run test:imaging-bridge-update",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync of route/service source for regression scan",
+      "networkRequired": "no",
+      "externalProviderMode": "none (update descriptor validation is local; no live download URL is fetched)",
+      "envVarsRequired": [
+        "IMAGING_BRIDGE_UPDATE_MODE",
+        "IMAGING_BRIDGE_UPDATE_VERSION",
+        "IMAGING_BRIDGE_UPDATE_DOWNLOAD_URL",
+        "IMAGING_BRIDGE_UPDATE_SHA256",
+        "IMAGING_BRIDGE_UPDATE_SIGNED",
+        "IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT",
+        "IMAGING_BRIDGE_UPDATE_MIN_SOURCE_VERSION",
+        "IMAGING_BRIDGE_UPDATE_RELEASE_ID",
+        "IMAGING_BRIDGE_UPDATE_ROLLOUT_PERCENT",
+        "IMAGING_BRIDGE_UPDATE_CHANNEL",
+        "IMAGING_BRIDGE_UPDATE_FORCED",
+        "IMAGING_BRIDGE_ROLLBACK_VERSION",
+        "IMAGING_BRIDGE_ROLLBACK_DOWNLOAD_URL"
+      ],
+      "orderSensitive": "no - env vars saved/restored per test via withEnv() helper",
+      "timingSensitive": "no",
+      "lineCount": 512,
+      "testCaseCount": 44,
+      "observedRuntime": {
+        "passed": 44,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-instagramAssistantParity",
+      "path": "server/src/tests/instagramAssistantParity.test.ts",
+      "canonicalOwner": "Messaging — Instagram",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "PROVIDER_ADAPTER"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsappStepAwareNlu.ts",
+        "server/src/services/whatsappBookingFlow.ts",
+        "server/src/services/instagram/instagramAiConversationProcessor.ts"
+      ],
+      "command": "npm run test:instagram",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "unclear - file header states live Prisma paths in processInstagramIncomingMessage are NOT exercised; persistence/dedupe rules are reimplemented as a 'fake DB' style pure-logic mirror instead",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "Instagram/Gemini AI touch points deliberately disabled - deletes GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY so AI fallback path is gated off, tests only deterministic step-aware NLU logic",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY",
+        "GOOGLE_AI_STUDIO_API_KEY",
+        "GEMINI_API_KEY"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 364,
+      "testCaseCount": 28,
+      "observedRuntime": {
+        "passed": 28,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-instagramConversion",
+      "path": "server/src/tests/instagramConversion.test.ts",
+      "canonicalOwner": "Messaging — Instagram",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:instagram",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - only imports permission-check functions; payload/status validation logic is reimplemented locally in the test, not calling real route handlers",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 386,
+      "testCaseCount": 41,
+      "observedRuntime": {
+        "passed": 28,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-instagramProvider",
+      "path": "server/src/tests/instagramProvider.test.ts",
+      "canonicalOwner": "Messaging — Instagram",
+      "secondaryDomains": [],
+      "testType": "PROVIDER_ADAPTER",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/instagram/InstagramMessagingProvider.ts",
+        "server/src/utils/webhookVerification.ts",
+        "server/src/utils/webhookRouting.ts",
+        "server/src/services/instagram/instagramAiConversationProcessor.ts",
+        "server/src/services/whatsappBookingFlow.ts",
+        "server/src/routes/organizationInstagram.ts"
+      ],
+      "command": "npm run test:instagram",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no - globalThis.fetch is stubbed/replaced with an in-test fake before calling testConnection/sendMessage, then restored",
+      "externalProviderMode": "Instagram Graph API adapter (testConnection, sendMessage, parseWebhook) exercised against a stubbed globalThis.fetch, not a real Meta endpoint",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no - fetch stub is saved/restored per test",
+      "timingSensitive": "no",
+      "lineCount": 1032,
+      "testCaseCount": 63,
+      "observedRuntime": {
+        "passed": 28,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-kvkkAttachmentImagingLifecycle",
+      "path": "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "PRIVACY_KVKK",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/fileStorage.ts",
+        "server/src/services/privacy/patientPrivacyExportPackage.ts",
+        "server/src/routes/attachments.ts",
+        "server/src/jobs/patientPrivacyExportCleanupJob.ts"
+      ],
+      "command": "npm run test:kvkk-lifecycle",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "unclear - file header explicitly states 'no DB/S3 required, local disk mode'; export cleanup/anonymization logic uses injected fake deps rather than a real PrismaClient (real disposable-Postgres proof lives separately in scripts/verify-export-archive-lifecycle.ts)",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - real local disk writes/reads/deletes via fileStorage.ts under uploads/ and os.tmpdir() temp files for saveFileFromPath rename/copy-fallback tests",
+      "networkRequired": "no - S3 mode is tested by monkey-patching S3Client.prototype.send with a fake implementation, no real AWS calls",
+      "externalProviderMode": "S3 client mocked via S3Client.prototype.send override (success and failure paths) to test temp-file cleanup on upload; no real S3 bucket touched despite process.env.S3_BUCKET being set",
+      "envVarsRequired": [
+        "PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED",
+        "S3_BUCKET"
+      ],
+      "orderSensitive": "no - uses Date.now()-suffixed temp filenames per test to avoid collisions, and saves/restores S3Client.prototype.send around each mocked test",
+      "timingSensitive": "no",
+      "lineCount": 1483,
+      "testCaseCount": 110,
+      "observedRuntime": {
+        "passed": 110,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-labOrders",
+      "path": "server/src/tests/labOrders.test.ts",
+      "canonicalOwner": "Dental Laboratory / Prosthetics Tracking",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/labOrders/labOrderStatusTransitions.ts",
+        "server/src/services/labOrders/labOrderSummary.ts",
+        "server/src/routes/labOrders.ts",
+        "server/src/routes/laboratories.ts"
+      ],
+      "command": "npm run test:lab-orders",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - clinic isolation and BILLING route-exclusion are asserted via source-text regression scan (mock-based, mirrors treatmentCaseClinicScope.test.ts per file header), no live Prisma",
+      "redisRequired": "yes (matched on ioredis/redis keyword, likely within a notification-preferences source-scan string, not an actual Redis client instantiated in the test itself)",
+      "filesystemRequired": "yes - readFileSync of route/service source files for regression scans",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 359,
+      "testCaseCount": 32,
+      "observedRuntime": {
+        "passed": 32,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-messageSafetyHardening",
+      "path": "server/src/tests/messageSafetyHardening.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/messageSanitizer.ts",
+        "server/src/utils/inboundRateLimiter.ts",
+        "server/src/services/whatsappAgentPrompt.ts",
+        "server/src/services/whatsappAgentSchema.ts"
+      ],
+      "command": "npm run test:msg-safety",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none - tests pure sanitization/prompt-building/rate-limiting logic shared across Instagram/Evolution/Meta WhatsApp inbound paths, no live provider calls",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "yes - rate-limiter tests share a module-level in-memory store; each test explicitly calls _resetRateLimitStore() first to avoid cross-test pollution",
+      "timingSensitive": "no - rate limit window (60s) is verified by asserting the constant value, not by waiting real time",
+      "lineCount": 435,
+      "testCaseCount": 36,
+      "observedRuntime": {
+        "passed": 36,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-messageTemplatePurpose",
+      "path": "server/src/tests/messageTemplatePurpose.test.ts",
+      "canonicalOwner": "Cross-Domain Contract",
+      "secondaryDomains": [
+        "Automations / Reminders / Follow-up / Recall",
+        "Messaging — WhatsApp",
+        "Messaging — SMS"
+      ],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "PROVIDER_ADAPTER",
+        "CONTRACT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/schemas/index.ts",
+        "server/src/jobs/reminders.ts",
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts"
+      ],
+      "command": "npm run test:purpose",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync of jobs/reminders.ts and two frontend .tsx files for source regression checks",
+      "networkRequired": "no - globalThis.fetch is stubbed to detect (and assert against) any outbound call being made",
+      "externalProviderMode": "Meta WhatsApp Cloud outbound send path exercised with globalThis.fetch stubbed; asserts sendMessage is NOT called when no approved template exists (fail-safe behavior)",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no - fetch stub saved/restored within the single relevant test",
+      "timingSensitive": "no",
+      "lineCount": 238,
+      "testCaseCount": 17,
+      "observedRuntime": {
+        "passed": 17,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-messageTemplateWabaBinding",
+      "path": "server/src/tests/messageTemplateWabaBinding.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "CONTRACT",
+        "PROVIDER_ADAPTER"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsapp/templateBinding.ts",
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/utils/encryption.ts",
+        "server/src/routes/messages.ts"
+      ],
+      "command": "npm run test:template-waba-binding",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - reads real source files (routes/messages.ts, whatsappOutboundMessaging.ts) as text via readFileSync for source-regression string assertions, no writes",
+      "networkRequired": "no - globalThis.fetch is monkey-patched/mocked for outbound WhatsApp send simulation, not a real network call",
+      "externalProviderMode": "WhatsApp/Meta send flow fully mocked via globalThis.fetch stub and fake WhatsAppConnectionRecord fixtures",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no - each test is self-contained with local fixtures",
+      "timingSensitive": "no",
+      "lineCount": 288,
+      "testCaseCount": 20,
+      "observedRuntime": {
+        "passed": 20,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-metaTemplateService",
+      "path": "server/src/tests/metaTemplateService.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "PROVIDER_ADAPTER"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/metaTemplateService.ts",
+        "server/src/utils/encryption.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts"
+      ],
+      "command": "npm run test:meta-template",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no - globalThis.fetch is swapped with a fake async fn returning canned Response objects to simulate Meta API calls/errors",
+      "externalProviderMode": "Meta WhatsApp Template API mocked via globalThis.fetch monkey-patch (success, error status codes, network failure/ECONNREFUSED cases)",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no - each fetch mock is saved/restored (originalFetch) per test",
+      "timingSensitive": "no",
+      "lineCount": 384,
+      "testCaseCount": 25,
+      "observedRuntime": {
+        "passed": 25,
+        "failed": 0,
+        "note": "script exists but is NOT included in `npm run test` full chain (orphan script)"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-metaTemplateSyncJob",
+      "path": "server/src/tests/metaTemplateSyncJob.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "JOB_WORKER",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/jobs/metaTemplateSyncJob.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts",
+        "server/src/services/metaTemplateService.ts"
+      ],
+      "command": "npm run test:meta-template-sync",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - batch processor tested purely via injected SyncDeps (no DB, no real Meta API calls per file header comment)",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no - deps are injected fakes, no fetch/http calls",
+      "externalProviderMode": "Meta template sync simulated entirely through injected SyncDeps fakes, not a real provider call",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no - uses Date.now()-derived thresholds only as fixture values, not real delays",
+      "lineCount": 437,
+      "testCaseCount": 19,
+      "observedRuntime": {
+        "passed": 19,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-metaWhatsAppWebhook",
+      "path": "server/src/tests/metaWhatsAppWebhook.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "PROVIDER_ADAPTER",
+      "secondaryTypes": [
+        "UNIT",
+        "APPLICATION_SERVICE"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+        "server/src/routes/instagramWebhook.ts",
+        "server/src/utils/webhookVerification.ts",
+        "server/src/utils/webhookRouting.ts"
+      ],
+      "command": "npm run test:meta-wa",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - uses hand-rolled fake dependency counters (WebhookProcessingCounters) instead of Prisma",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "Meta WhatsApp/Instagram webhook flow simulated with fake deps/counters for inbound message, AI processing, and outbound reply calls, not a real Meta call",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no - fresh counters per test scenario",
+      "timingSensitive": "no",
+      "lineCount": 468,
+      "testCaseCount": 17,
+      "observedRuntime": {
+        "passed": 16,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-multiBranchAccess",
+      "path": "server/src/tests/multiBranchAccess.test.ts",
+      "canonicalOwner": "Tenant Security and Scope",
+      "secondaryDomains": [
+        "Organization / Clinic / User Membership"
+      ],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "UNIT"
+      ],
+      "sourceFilesProtected": [],
+      "command": "npm run test:roles",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - file imports only node:assert/strict; per its own comment it deliberately reimplements clinic-scope logic inline ('pure logic testleri', 'import mock yok') rather than importing server/src/utils/clinicScope.ts or route/middleware code, so it does not directly exercise production source",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no - each scenario builds its own makeUser fixture",
+      "timingSensitive": "no",
+      "lineCount": 1043,
+      "testCaseCount": 142,
+      "observedRuntime": {
+        "passed": 142,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-noShow",
+      "path": "server/src/tests/noShow.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:no-shows",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - tests pure role/permission functions and locally-defined fixtures, no Prisma import",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no - one Date.now() usage is only for computing a fixture date-diff assertion, not a real delay",
+      "lineCount": 1024,
+      "testCaseCount": 105,
+      "observedRuntime": {
+        "passed": 110,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-noShowFollowUpParity",
+      "path": "server/src/tests/noShowFollowUpParity.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [
+        "Automations / Reminders / Follow-up / Recall"
+      ],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/noShowFollowUp.ts"
+      ],
+      "command": "npm run test:no-show-follow-up-parity",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 160,
+      "testCaseCount": 12,
+      "observedRuntime": {
+        "passed": 12,
+        "failed": 0,
+        "note": "script exists but is NOT included in `npm run test` full chain (orphan script)"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-operationalMonitoring",
+      "path": "server/src/tests/operationalMonitoring.test.ts",
+      "canonicalOwner": "Observability / Operational Events",
+      "secondaryDomains": [],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:ops",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - pure role/permission and pagination/filter-shape logic, no Prisma import; clinicId/organizationId scoping asserted against locally-built fixtures",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no - tests pushed into a local `tests` array and run independently",
+      "timingSensitive": "no",
+      "lineCount": 682,
+      "testCaseCount": 65,
+      "observedRuntime": {
+        "passed": 65,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-organizationDashboard",
+      "path": "server/src/tests/organizationDashboard.test.ts",
+      "canonicalOwner": "Reporting / Analytics",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/organizationDashboard.ts",
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:orgdash",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no - Date.now() used only to compute expected date-range diffs against real 'now', not a real delay",
+      "lineCount": 303,
+      "testCaseCount": 35,
+      "observedRuntime": {
+        "passed": 35,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-overdueInstallments",
+      "path": "server/src/tests/overdueInstallments.test.ts",
+      "canonicalOwner": "Basic Payments",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/utils/overdueInstallments.ts"
+      ],
+      "command": "npm run test:overdue-installments",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no - Date usage is only for building fixture due-dates relative to 'now', not real delays",
+      "lineCount": 111,
+      "testCaseCount": 9,
+      "observedRuntime": {
+        "passed": 7,
+        "failed": 2,
+        "note": "script exists but is NOT included in `npm run test` full chain (orphan script)"
+      },
+      "repeatRunStatus": "STABLE_FAIL (reproduced 2x, identical 2 failures both times)"
+    },
+    {
+      "id": "BE-overdueReceivables",
+      "path": "server/src/tests/overdueReceivables.test.ts",
+      "canonicalOwner": "Basic Payments",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/utils/overdueInstallments.ts",
+        "server/src/utils/overdueReceivables.ts"
+      ],
+      "command": "npm run test:overdue-receivables",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 313,
+      "testCaseCount": 12,
+      "observedRuntime": {
+        "passed": 12,
+        "failed": 0,
+        "note": "script exists but is NOT included in `npm run test` full chain (orphan script)"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-passwordReset",
+      "path": "server/src/tests/passwordReset.test.ts",
+      "canonicalOwner": "Identity and Access",
+      "secondaryDomains": [],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/helpers.ts",
+        "server/src/services/emailTemplates.ts",
+        "server/src/services/emailService.ts"
+      ],
+      "command": "npm run test:password-reset",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no - sendMail is exercised only in its MAIL_ENABLED-disabled short-circuit path, no real SMTP call",
+      "externalProviderMode": "Email (SMTP) send gated/disabled via MAIL_ENABLED env var; tests only assert the disabled-mode ('sent=false') behavior, never a real send",
+      "envVarsRequired": [
+        "MAIL_ENABLED"
+      ],
+      "orderSensitive": "yes - mutates process.env.MAIL_ENABLED across test cases and restores/deletes it after each, so tests must run in sequence for env state to be correct",
+      "timingSensitive": "no",
+      "lineCount": 124,
+      "testCaseCount": 10,
+      "observedRuntime": {
+        "passed": 10,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-patientName",
+      "path": "server/src/tests/patientName.test.ts",
+      "canonicalOwner": "Patients",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/utils/patientName.ts"
+      ],
+      "command": "npm run test:patient-name",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 47,
+      "testCaseCount": 3,
+      "observedRuntime": {
+        "passed": 3,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-patientPrivacy",
+      "path": "server/src/tests/patientPrivacy.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "PRIVACY_KVKK",
+      "secondaryTypes": [
+        "UNIT",
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [],
+      "command": "npm run test:patient-privacy",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - anonymization service tested via injected AnonDeps (fake updateContactRequests/updateAppointmentRequests/updateWhatsAppMessages/etc. functions), no PrismaClient import; model/route-validation sections are pure logic too",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a - covers KVKK-style anonymization, export, deletion-review, and audit-log-safety logic entirely via injected fakes",
+      "envVarsRequired": [],
+      "orderSensitive": "no - each test builds fresh AnonDeps via makeNoop() overrides",
+      "timingSensitive": "no",
+      "lineCount": 600,
+      "testCaseCount": 38,
+      "observedRuntime": {
+        "passed": 38,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-patientSharedPhone",
+      "path": "server/src/tests/patientSharedPhone.test.ts",
+      "canonicalOwner": "Patients",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "none directly imported — reimplements a simplified in-memory mirror of patient phone/email duplicate-matching and WhatsApp auto-link logic (no ../ imports besides node:assert)"
+      ],
+      "command": "npx tsx server/src/tests/patientSharedPhone.test.ts",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "None — WhatsApp auto-link logic is reimplemented as a local pure-function mirror, not the real provider code",
+      "envVarsRequired": [],
+      "orderSensitive": "no — uses resetStore() with a fresh in-memory array/idCounter per scenario section",
+      "timingSensitive": "no",
+      "lineCount": 994,
+      "testCaseCount": 58,
+      "observedRuntime": {
+        "passed": 58,
+        "failed": 0,
+        "note": "executed via direct `npx tsx src/tests/patientSharedPhone.test.ts` — no package.json script wires this file"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-paymentBillingEdit",
+      "path": "server/src/tests/paymentBillingEdit.test.ts",
+      "canonicalOwner": "Basic Payments",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/schemas/index.ts",
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:payment-billing-edit",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none — uses mockFindTC() fake lookup instead of prisma",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no — each test is a self-contained pure-function assertion",
+      "timingSensitive": "no",
+      "lineCount": 333,
+      "testCaseCount": 25,
+      "observedRuntime": {
+        "passed": 25,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-paymentValidation",
+      "path": "server/src/tests/paymentValidation.test.ts",
+      "canonicalOwner": "Basic Payments",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/schemas/index.ts (paymentSchema; issue-mapping logic simulated from server/src/routes/payments.ts)"
+      ],
+      "command": "npm run test:payment-validation",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 151,
+      "testCaseCount": 9,
+      "observedRuntime": {
+        "passed": 9,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-platformAdmin",
+      "path": "server/src/tests/platformAdmin.test.ts",
+      "canonicalOwner": "Platform Administration",
+      "secondaryDomains": [],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "UNIT",
+        "PRIVACY_KVKK"
+      ],
+      "sourceFilesProtected": [
+        "server/src/middleware/platformAuth.ts",
+        "server/src/services/privacy/dataRetentionPolicy.ts"
+      ],
+      "command": "npm run test:auth",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none — mock Express req/res/next objects, no prisma import",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [
+        "PLATFORM_BEARER_FALLBACK_ENABLED",
+        "PLATFORM_JWT_SECRET",
+        "JWT_SECRET"
+      ],
+      "orderSensitive": "no — each test builds its own mock req/res and jwt token",
+      "timingSensitive": "no",
+      "lineCount": 520,
+      "testCaseCount": 38,
+      "observedRuntime": {
+        "passed": 39,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-platformBackup",
+      "path": "server/src/tests/platformBackup.test.ts",
+      "canonicalOwner": "Platform Administration",
+      "secondaryDomains": [],
+      "testType": "DATABASE_INTEGRATION",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/backupService.ts",
+        "server/src/middleware/platformAuth.ts"
+      ],
+      "command": "npx tsx server/src/tests/platformBackup.test.ts",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "unclear — no PrismaClient import; but dynamically imports real backupService functions (getBackupStatus/getBackupLogs/runRestoreTest) that hit the real filesystem/child_process paths, mostly exercised via early-reject validation branches so DB itself is not required",
+      "redisRequired": "no",
+      "filesystemRequired": "yes — getBackupStatus/getBackupLogs/runRestoreTest read real paths (BACKUP_DIR=/root/noramedi-backups, BACKUP_SCRIPT, BACKUP_LOG) and assert graceful handling when missing",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [
+        "PLATFORM_BEARER_FALLBACK_ENABLED",
+        "PLATFORM_BEARER_FALLBACK"
+      ],
+      "orderSensitive": "no — restores process.env.PLATFORM_BEARER_FALLBACK after mutating it",
+      "timingSensitive": "no",
+      "lineCount": 286,
+      "testCaseCount": 24,
+      "observedRuntime": {
+        "passed": 24,
+        "failed": 0,
+        "note": "executed via direct `npx tsx src/tests/platformBackup.test.ts` — no package.json script wires this file"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-postTreatmentMessaging",
+      "path": "server/src/tests/postTreatmentMessaging.test.ts",
+      "canonicalOwner": "Automations / Reminders / Follow-up / Recall",
+      "secondaryDomains": [],
+      "testType": "PROVIDER_ADAPTER",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts",
+        "server/src/utils/encryption.ts"
+      ],
+      "command": "npm run test:post-treatment",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none — uses sendPostTreatmentWhatsAppWithConnection, explicitly exported for unit testing without Prisma",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "yes but mocked — stubs globalThis.fetch per-test (saves/restores originalFetch) to intercept Meta Cloud/Evolution API calls, no real external host hit",
+      "externalProviderMode": "WhatsApp Meta Cloud and Evolution API providers, fully mocked via globalThis.fetch stub returning canned responses",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no — each test saves/restores globalThis.fetch",
+      "timingSensitive": "no",
+      "lineCount": 387,
+      "testCaseCount": 16,
+      "observedRuntime": {
+        "passed": 16,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-publicBookingAvailability",
+      "path": "server/src/tests/publicBookingAvailability.test.ts",
+      "canonicalOwner": "Public Booking",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "DATABASE_INTEGRATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/appointments/appointmentAvailabilityService.ts"
+      ],
+      "command": "npm run test:public-booking",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "unclear — imports type-only `import('@prisma/client').Prisma.TransactionClient` for casting; test provides a hand-built mockTx() fake transaction object, no real PrismaClient instantiated",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 347,
+      "testCaseCount": 19,
+      "observedRuntime": {
+        "passed": 19,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-publicBookingNoticeEvidence",
+      "path": "server/src/tests/publicBookingNoticeEvidence.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [
+        "Public Booking"
+      ],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "DATABASE_INTEGRATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/publicBookingNoticeEvidence.ts",
+        "server/src/routes/publicBooking.ts (source-scanned as text)"
+      ],
+      "command": "npm run test:notice-evidence",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "unclear — mockTx() fake Prisma-like transaction client built in-file, only type-cast to Prisma.TransactionClient; also reads server source files off disk to assert code patterns",
+      "redisRequired": "no",
+      "filesystemRequired": "yes — fs.readFileSync on schema/service source files to source-scan for expected code patterns",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 276,
+      "testCaseCount": 18,
+      "observedRuntime": {
+        "passed": 18,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-publicBookingSlotConsistency",
+      "path": "server/src/tests/publicBookingSlotConsistency.test.ts",
+      "canonicalOwner": "Public Booking",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "DATABASE_INTEGRATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsappAvailability.ts",
+        "server/src/services/appointments/appointmentAvailabilityService.ts",
+        "server/src/services/publicBookingNoticeEvidence.ts",
+        "server/src/routes/publicBooking.ts (source-scanned as text)"
+      ],
+      "command": "npm run test:public-booking-slots",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "unclear — mockPrisma()/mock transaction objects cast `as unknown as PrismaClient`/`Prisma.TransactionClient`; no real PrismaClient instantiated",
+      "redisRequired": "no",
+      "filesystemRequired": "yes — dynamic `import('node:fs/promises')` + readFile of routes/publicBooking.ts to source-scan for timezone-parsing regression pattern",
+      "networkRequired": "no",
+      "externalProviderMode": "none directly; comments reference the WhatsApp booking bot flow but only buildAvailableSlots() logic is exercised",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 599,
+      "testCaseCount": 17,
+      "observedRuntime": {
+        "passed": 17,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-publicBookingSlotRequired",
+      "path": "server/src/tests/publicBookingSlotRequired.test.ts",
+      "canonicalOwner": "Public Booking",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "ROUTE_API"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/publicBooking.ts (hasFullSlotInfo gate mirrored inline + source-scanned as text; no live Express server/supertest used)"
+      ],
+      "command": "npm run test:public-booking-slot-required",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none — no prisma import; uses a hand-built fake tx object ({appointmentRequest.create, publicBookingNoticeEvidence.updateMany}) to assert those methods are never called",
+      "redisRequired": "no",
+      "filesystemRequired": "yes — dynamic `import('node:fs/promises')` + readFile of routes/publicBooking.ts to source-scan for the SLOT_REQUIRED precedence/partial-create-removal regression",
+      "networkRequired": "no — explicitly documents 'no supertest anywhere in this repo's test suite'",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 305,
+      "testCaseCount": 17,
+      "observedRuntime": {
+        "passed": 17,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-scheduleAccess",
+      "path": "server/src/tests/scheduleAccess.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [
+        "Organization / Clinic / User Membership"
+      ],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:schedule",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none — computeSlots()/checkAppointmentAgainstHours() are local pure-function mirrors of the WhatsApp booking-bot slot logic, not the real implementation",
+      "envVarsRequired": [],
+      "orderSensitive": "no — accumulates pass/fail/errors in module-level counters but each test is independent",
+      "timingSensitive": "no",
+      "lineCount": 383,
+      "testCaseCount": 34,
+      "observedRuntime": {
+        "passed": 41,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-securityIncident",
+      "path": "server/src/tests/securityIncident.test.ts",
+      "canonicalOwner": "Security Incident Response and Detection",
+      "secondaryDomains": [],
+      "testType": "DATABASE_INTEGRATION",
+      "secondaryTypes": [
+        "TENANT_ISOLATION",
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/security/securitySignalService.ts",
+        "server/src/services/security/securityIncidentService.ts",
+        "server/src/services/security/securityDetectionRules.ts",
+        "server/src/db.ts",
+        "server/src/routes/platformSecurityIncidents.ts (source-scanned as text)"
+      ],
+      "command": "npm run test:security-incidents",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "disposable-postgres-required — imports the shared prisma singleton from ../db.js directly (no injected client seam per file comment) and calls prisma.platformAdmin.create/prisma.securityIncident.* etc.",
+      "redisRequired": "no",
+      "filesystemRequired": "yes — fs.readFileSync on routes/platformSecurityIncidents.ts for source-pattern assertions",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [
+        "SECURITY_SIGNAL_IP_HASH_SECRET",
+        "SECURITY_ALERT_AUTH_FAILURE_THRESHOLD",
+        "SECURITY_ALERT_CROSS_TENANT_THRESHOLD",
+        "NODE_ENV"
+      ],
+      "orderSensitive": "no — generates a RUN_ID = randomUUID() per run and scopes all created rows/cleanup by it to avoid cross-run collisions, plus an explicit cleanup() sweep",
+      "timingSensitive": "yes — awaits sleep(200) real delay for a threshold-crossing window and asserts Date.now() elapsed < 50ms for a synchronous-return guarantee",
+      "lineCount": 1067,
+      "testCaseCount": 52,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - requires disposable Postgres, not available"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BE-servicePricing",
+      "path": "server/src/tests/servicePricing.test.ts",
+      "canonicalOwner": "Appointments and Availability",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "none directly imported — reimplements pure-function mirrors of pricing logic from noShows.ts (estimatedLostRevenue) and services.ts (currency resolution)"
+      ],
+      "command": "npm run test:pricing",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 285,
+      "testCaseCount": 29,
+      "observedRuntime": {
+        "passed": 29,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-sessionCookieCsrf",
+      "path": "server/src/tests/sessionCookieCsrf.test.ts",
+      "canonicalOwner": "Identity and Access",
+      "secondaryDomains": [],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/middleware/csrf.ts",
+        "server/src/utils/authFallback.ts",
+        "server/src/utils/sessionCookies.ts"
+      ],
+      "command": "npm run test:auth",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none — one test references a WhatsApp/Evolution webhook URL path only as a fixture for CSRF-exempt-route matching, no real call made",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "yes — createCsrfToken tests use Date.now() offsets to simulate expired vs. valid session timestamps rather than real elapsed time",
+      "lineCount": 261,
+      "testCaseCount": 15,
+      "observedRuntime": {
+        "passed": 39,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-smsModule",
+      "path": "server/src/tests/smsModule.test.ts",
+      "canonicalOwner": "Messaging — SMS",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "PROVIDER_ADAPTER",
+        "CONTRACT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/sms/smsRouting.ts",
+        "server/src/services/sms/smsTemplating.ts",
+        "server/src/services/sms/smsProviders.ts",
+        "server/src/services/sms/platformSmsProviders.ts",
+        "server/src/services/sms/smsRoutingPolicy.ts",
+        "server/src/services/sms/smsEntitlement.ts"
+      ],
+      "command": "npm run test:sms",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync reads routes/sms.ts, routes/messages.ts, index.ts, routes/platformAdmin.ts, schemas/index.ts and prisma/schema.prisma for string-content regression checks",
+      "networkRequired": "no - SMS providers are the built-in mock_turkey/mock_europe fakes, no fetch/axios used",
+      "externalProviderMode": "SMS provider is the real registry's built-in mock_turkey/mock_europe fake providers; runPlatformSmsProviderTest exercised in mock mode with encrypted fake credentials, no real network",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no - sequential await test() calls with no cross-test mutable fixtures",
+      "timingSensitive": "no",
+      "lineCount": 654,
+      "testCaseCount": 77,
+      "observedRuntime": {
+        "passed": 77,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-staffOnboarding",
+      "path": "server/src/tests/staffOnboarding.test.ts",
+      "canonicalOwner": "Organization / Clinic / User Membership",
+      "secondaryDomains": [
+        "Identity and Access"
+      ],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "PRIVACY_KVKK"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/emailTemplates.ts",
+        "server/src/services/emailService.ts",
+        "server/src/utils/passwordResetToken.ts"
+      ],
+      "command": "npm run test:staff-onboarding",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no - real sendMail() is called but MAIL_ENABLED='false' short-circuits before any SMTP call",
+      "externalProviderMode": "SMTP via emailService.sendMail, gated off with process.env.MAIL_ENABLED='false' so no real network hit",
+      "envVarsRequired": [
+        "MAIL_ENABLED"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no - Date.now() used only as a fixed reference for a single relative-time assertion, no real delay",
+      "lineCount": 179,
+      "testCaseCount": 15,
+      "observedRuntime": {
+        "passed": 15,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-totp",
+      "path": "server/src/tests/totp.test.ts",
+      "canonicalOwner": "Identity and Access",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/utils/totp.ts"
+      ],
+      "command": "npm run test:totp",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no - Date.now() passed only as an arbitrary 'now' argument to a pure validity-window function",
+      "lineCount": 143,
+      "testCaseCount": 15,
+      "observedRuntime": {
+        "passed": 19,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-treatmentCaseClinicScope",
+      "path": "server/src/tests/treatmentCaseClinicScope.test.ts",
+      "canonicalOwner": "Tenant Security and Scope",
+      "secondaryDomains": [
+        "Treatment Cases"
+      ],
+      "testType": "TENANT_ISOLATION",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/routes/treatmentPlanProcedures.ts (referenced only in comments; NOT imported - logic fully reimplemented as local functions, so this test does not actually exercise the production file)"
+      ],
+      "command": "npm run test:treatment-case-scope",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - local mutable arrays mockOrgClinics/mockTreatmentCases act as fakes, no PrismaClient",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no - fixture arrays are set once at module load and never mutated by any test",
+      "timingSensitive": "no",
+      "lineCount": 252,
+      "testCaseCount": 11,
+      "observedRuntime": {
+        "passed": 11,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-treatmentPackagePermissions",
+      "path": "server/src/tests/treatmentPackagePermissions.test.ts",
+      "canonicalOwner": "Permissions / Roles",
+      "secondaryDomains": [
+        "Treatment Cases"
+      ],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npx tsx server/src/tests/treatmentPackagePermissions.test.ts",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 166,
+      "testCaseCount": 23,
+      "observedRuntime": {
+        "passed": 23,
+        "failed": 0,
+        "note": "executed via direct `npx tsx src/tests/treatmentPackagePermissions.test.ts` — no package.json script wires this file"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-userImportOnboarding",
+      "path": "server/src/tests/userImportOnboarding.test.ts",
+      "canonicalOwner": "Organization / Clinic / User Membership",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "PRIVACY_KVKK"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/emailTemplates.ts",
+        "server/src/utils/passwordResetToken.ts"
+      ],
+      "command": "npm run test:user-import-onboarding",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no - sendMail is a locally defined fake function, not the real emailService",
+      "externalProviderMode": "sendMail fully faked via a local sendMailFn closure returning {sent:true/false} or throwing, not the real emailService",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 138,
+      "testCaseCount": 10,
+      "observedRuntime": {
+        "passed": 10,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappAgentEvaluation",
+      "path": "server/src/tests/whatsappAgentEvaluation.test.ts",
+      "canonicalOwner": "Messaging AI Orchestration",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "CONTRACT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsappConversationAgent.ts",
+        "server/src/services/whatsappAgentSchema.ts"
+      ],
+      "command": "npm run test:agent",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none - exercises buildFallbackWhatsAppAgentDecision, the deterministic rule-based fallback (no Gemini/network call)",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 377,
+      "testCaseCount": 245,
+      "observedRuntime": {
+        "passed": 245,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappAwaitingServiceStep",
+      "path": "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+      "canonicalOwner": "Messaging AI Orchestration",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "APPLICATION_SERVICE"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsappBookingFlow.ts",
+        "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts"
+      ],
+      "command": "npm run test:meta-wa",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - handleAwaitingServiceStep is exercised via an injected fake deps object (makeDeps helper), confirmed dependency-injection pattern",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 172,
+      "testCaseCount": 9,
+      "observedRuntime": {
+        "passed": 16,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappConversationPersistence",
+      "path": "server/src/tests/whatsappConversationPersistence.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [
+        "TENANT_ISOLATION"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsapp/conversationMessageStore.ts"
+      ],
+      "command": "npm run test:wa-persistence",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - docstring states tests run 'against an in-memory fake of the prisma delegate' (makeFakeDb helper), no real PrismaClient",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none - tests the message-persistence/backfill layer, not a WhatsApp provider itself",
+      "envVarsRequired": [],
+      "orderSensitive": "no - each test() call creates its own fresh makeFakeDb() instance, no shared mutable fixture across tests",
+      "timingSensitive": "no",
+      "lineCount": 296,
+      "testCaseCount": 14,
+      "observedRuntime": {
+        "passed": 14,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappIdentityAndPostBooking",
+      "path": "server/src/tests/whatsappIdentityAndPostBooking.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/services/whatsappStepAwareNlu.ts",
+        "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+        "server/src/services/whatsappBookingFlow.ts"
+      ],
+      "command": "npm run test:meta-wa",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none - docstring explicitly states these are 'pure, DB-free unit tests'; the real Prisma-backed patient-creation paths in metaWhatsAppAiProcessor.ts are explicitly NOT covered here",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY explicitly deleted from env to force the deterministic rule-based NLU path, avoiding any real Gemini call",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY",
+        "GOOGLE_AI_STUDIO_API_KEY",
+        "GEMINI_API_KEY"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 206,
+      "testCaseCount": 16,
+      "observedRuntime": {
+        "passed": 16,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappInbox",
+      "path": "server/src/tests/whatsappInbox.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "AUTH_SECURITY",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/utils/roles.ts (only real import; docstring also claims coverage of getPhoneVariants and ClinicResolutionResult from services/whatsapp/clinicResolver.ts, but those are NOT imported - getPhoneVariants is reimplemented locally and ClinicResolutionResult is only locally type-asserted, so clinicResolver.ts is not actually exercised)"
+      ],
+      "command": "npm run test:inbox",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "none",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 226,
+      "testCaseCount": 25,
+      "observedRuntime": {
+        "passed": 25,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappOutboundMessaging",
+      "path": "server/src/tests/whatsappOutboundMessaging.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "PROVIDER_ADAPTER",
+      "secondaryTypes": [
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts",
+        "server/src/utils/encryption.ts"
+      ],
+      "command": "npm run test:outbound",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes - readFileSync used once (line 611) to check postTreatmentMessaging.ts source text does not import sendProactiveWhatsAppMessage",
+      "networkRequired": "no - globalThis.fetch is stubbed and restored per test for both Meta Cloud Graph API and Evolution API calls",
+      "externalProviderMode": "WhatsApp Meta Cloud API and Evolution API both mocked via globalThis.fetch override returning canned Response objects (success/HTTP-error/thrown-network-error scenarios)",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no - each test saves/restores originalFetch and builds fresh connection fixtures",
+      "timingSensitive": "no",
+      "lineCount": 653,
+      "testCaseCount": 28,
+      "observedRuntime": {
+        "passed": 28,
+        "failed": 0,
+        "note": "script exists but is NOT included in `npm run test` full chain (orphan script)"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappProvider",
+      "path": "server/src/tests/whatsappProvider.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "secondaryDomains": [],
+      "testType": "PROVIDER_ADAPTER",
+      "secondaryTypes": [
+        "AUTH_SECURITY",
+        "UNIT"
+      ],
+      "sourceFilesProtected": [
+        "server/src/services/whatsapp/whatsappProviderFactory.ts",
+        "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts",
+        "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts",
+        "server/src/utils/encryption.ts",
+        "server/src/utils/webhookRouting.ts",
+        "server/src/utils/roles.ts"
+      ],
+      "command": "npm run test:whatsapp",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no - globalThis.fetch is stubbed per test for Meta/Evolution API calls (auth errors, QR fetch, etc.)",
+      "externalProviderMode": "WhatsApp Meta Cloud API and Evolution API mocked via globalThis.fetch stub returning canned success/error Response objects; no real provider network calls",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 1942,
+      "testCaseCount": 143,
+      "observedRuntime": {
+        "passed": 143,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-whatsappStepAwareNlu",
+      "path": "server/src/tests/whatsappStepAwareNlu.test.ts",
+      "canonicalOwner": "Messaging AI Orchestration",
+      "secondaryDomains": [],
+      "testType": "UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "server/src/services/whatsappStepAwareNlu.ts",
+        "server/src/services/whatsappBookingFlow.ts",
+        "server/src/services/whatsappAvailability.ts"
+      ],
+      "command": "npm run test:meta-wa",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY deliberately deleted from env (documented in file header) to force the network-free rule-based classifier path (source: rule_fallback)",
+      "envVarsRequired": [
+        "ENCRYPTION_KEY",
+        "GOOGLE_AI_STUDIO_API_KEY",
+        "GEMINI_API_KEY"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": 231,
+      "testCaseCount": 12,
+      "observedRuntime": {
+        "passed": 16,
+        "failed": 0,
+        "note": "part of `npm run test` full chain"
+      },
+      "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "FE-dicomHelpers",
+      "path": "src/components/imaging/__tests__/dicomHelpers.test.ts",
+      "canonicalOwner": "Imaging — Server Ingest and Viewer",
+      "secondaryDomains": [],
+      "testType": "FRONTEND_UTILITY",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "src/components/imaging/dicomHelpers.ts",
+        "src/components/imaging/DicomViewer.tsx"
+      ],
+      "command": "npm run test:dicom-helpers",
+      "runner": "tsx (no test framework, no DOM/React Testing Library in repo — pure-logic tests only)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": 36,
+        "failed": 0,
+        "note": "36 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "FE-onboardingHelpers",
+      "path": "src/components/imaging/__tests__/onboardingHelpers.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "FRONTEND_UTILITY",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "src/components/imaging/onboardingHelpers.ts"
+      ],
+      "command": "npm run test:onboarding-helpers",
+      "runner": "tsx (no test framework, no DOM/React Testing Library in repo — pure-logic tests only)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": 21,
+        "failed": 0,
+        "note": "21 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "FE-pairingPoller",
+      "path": "src/components/imaging/__tests__/pairingPoller.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "FRONTEND_UTILITY",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "src/components/imaging/pairingPoller.ts"
+      ],
+      "command": "npm run test:pairing-poller",
+      "runner": "tsx (no test framework, no DOM/React Testing Library in repo — pure-logic tests only)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": 8,
+        "failed": 0,
+        "note": "8 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "FE-bookingWidgetHelpers",
+      "path": "src/pages/__tests__/bookingWidgetHelpers.test.ts",
+      "canonicalOwner": "Public Booking",
+      "secondaryDomains": [],
+      "testType": "FRONTEND_UTILITY",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "src/pages/BookingWidget.tsx"
+      ],
+      "command": "npm run test:booking-widget-helpers",
+      "runner": "tsx (no test framework, no DOM/React Testing Library in repo — pure-logic tests only)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": 26,
+        "failed": 0,
+        "note": "26 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "FE-clinicBulkExportSelectionHelpers",
+      "path": "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [
+        "Platform Administration"
+      ],
+      "testType": "FRONTEND_UTILITY",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [
+        "src/components/settings/ClinicBulkExportSection.tsx"
+      ],
+      "command": "npm run test:clinic-bulk-export-selection",
+      "runner": "tsx (no test framework, no DOM/React Testing Library in repo — pure-logic tests only)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": 24,
+        "failed": 0,
+        "note": "24 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-archiveStrategy",
+      "path": "bridge-agent/tests/archiveStrategy.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes (dynamic import of packaging script)",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "part of bridge-agent npm test (105 total passed, 0 failed)"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-config",
+      "path": "bridge-agent/tests/config.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "16 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-hash",
+      "path": "bridge-agent/tests/hash.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "9 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-installServiceAcl",
+      "path": "bridge-agent/tests/installServiceAcl.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [
+        "AUTH_SECURITY"
+      ],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes (source-regression grep of install-service.ps1)",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "part of bridge-agent npm test"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-lifecycle",
+      "path": "bridge-agent/tests/lifecycle.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_INTEGRATION",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes (temp queue dirs)",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "14 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-queue",
+      "path": "bridge-agent/tests/queue.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_INTEGRATION",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes (real atomic directory-rename queue on local disk)",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "17 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-textEncoding",
+      "path": "bridge-agent/tests/textEncoding.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes (dynamic import of packaging script)",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "part of bridge-agent npm test"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-uploader",
+      "path": "bridge-agent/tests/uploader.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [
+        "PROVIDER_ADAPTER"
+      ],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no (injected fake clock/HTTP, no real network)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "part of bridge-agent npm test"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "BRA-watcher",
+      "path": "bridge-agent/tests/watcher.test.ts",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "npm run test (bridge-agent workspace, chains all 9 files)",
+      "runner": "tsx (mirrors server/src/tests/* style — node:assert/strict + test()/section())",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "yes (real filesystem watch on temp dirs)",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": 0,
+        "note": "part of bridge-agent npm test"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "WB-NoraMedi.Bridge.Core.Tests",
+      "path": "windows-bridge/tests/NoraMedi.Bridge.Core.Tests",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "dotnet test tests/NoraMedi.Bridge.Core.Tests",
+      "runner": "xUnit (.NET)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": 247,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - .NET SDK 10.0.301 pinned by windows-bridge/global.json not installed (9.0.305 present)"
+      },
+      "repeatRunStatus": "BLOCKED"
+    },
+    {
+      "id": "WB-NoraMedi.Bridge.IntegrationTests",
+      "path": "windows-bridge/tests/NoraMedi.Bridge.IntegrationTests",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_INTEGRATION",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "dotnet test tests/NoraMedi.Bridge.IntegrationTests",
+      "runner": "xUnit (.NET)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": 2,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - same SDK mismatch"
+      },
+      "repeatRunStatus": "BLOCKED"
+    },
+    {
+      "id": "WB-NoraMedi.Bridge.Manager.Tests",
+      "path": "windows-bridge/tests/NoraMedi.Bridge.Manager.Tests",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "dotnet test tests/NoraMedi.Bridge.Manager.Tests",
+      "runner": "xUnit (.NET, WPF ViewModels)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": 91,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - same SDK mismatch"
+      },
+      "repeatRunStatus": "BLOCKED"
+    },
+    {
+      "id": "WB-NoraMedi.Bridge.Service.Tests",
+      "path": "windows-bridge/tests/NoraMedi.Bridge.Service.Tests",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_UNIT",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "dotnet test tests/NoraMedi.Bridge.Service.Tests",
+      "runner": "xUnit (.NET, Windows Service)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": 14,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - same SDK mismatch"
+      },
+      "repeatRunStatus": "BLOCKED"
+    },
+    {
+      "id": "WB-InstallerTestHelpers.Tests.ps1",
+      "path": "windows-bridge/tests/installer/InstallerTestHelpers.Tests.ps1",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_INTEGRATION",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "powershell -File InstallerTestHelpers.Tests.ps1",
+      "runner": "hand-rolled PowerShell (Add-Result pass/fail, not Pester)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "26/26 passed (run under Windows PowerShell 5.1; CI uses pwsh 7 but script is version-portable)"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "WB-StateMachine.Tests.ps1",
+      "path": "windows-bridge/tests/installer/StateMachine.Tests.ps1",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_INTEGRATION",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "powershell -File StateMachine.Tests.ps1",
+      "runner": "hand-rolled PowerShell",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "17/17 passed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "WB-MigrateLegacyConfigCommand.Tests.ps1",
+      "path": "windows-bridge/tests/installer/MigrateLegacyConfigCommand.Tests.ps1",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_INTEGRATION",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "powershell -File MigrateLegacyConfigCommand.Tests.ps1",
+      "runner": "hand-rolled PowerShell",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "8/8 passed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "WB-BuildReleaseScript.Tests.ps1",
+      "path": "windows-bridge/tests/installer/BuildReleaseScript.Tests.ps1",
+      "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
+      "secondaryDomains": [],
+      "testType": "BRIDGE_INTEGRATION",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "powershell -File BuildReleaseScript.Tests.ps1",
+      "runner": "hand-rolled PowerShell (source-regression on release script)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "unknown (not executed)",
+      "networkRequired": "unknown (not executed)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "unknown",
+      "timingSensitive": "unknown",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "7/7 passed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
+      "id": "VER-verify-attachment-legal-hold-lifecycle",
+      "path": "server/scripts/verify-attachment-legal-hold-lifecycle.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "MIGRATION",
+      "secondaryTypes": [
+        "DATABASE_INTEGRATION"
+      ],
+      "sourceFilesProtected": [],
+      "command": "DATABASE_URL=<disposable> npx tsx server/scripts/verify-attachment-legal-hold-lifecycle.ts (manual only, never wired into npm test by design)",
+      "runner": "tsx (node:assert/strict, real Postgres, no mocking)",
+      "dbRequired": "disposable-postgres-required (explicitly, requires prior `prisma migrate deploy`)",
+      "redisRequired": "no",
+      "filesystemRequired": "yes",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [
+        "DATABASE_URL"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - no committed disposable-DB provisioning; not wired into npm test by design"
+      },
+      "repeatRunStatus": "BLOCKED"
+    },
+    {
+      "id": "VER-verify-clinic-bulk-export-lifecycle",
+      "path": "server/scripts/verify-clinic-bulk-export-lifecycle.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "MIGRATION",
+      "secondaryTypes": [
+        "DATABASE_INTEGRATION"
+      ],
+      "sourceFilesProtected": [],
+      "command": "DATABASE_URL=<disposable> npx tsx server/scripts/verify-clinic-bulk-export-lifecycle.ts (manual only, never wired into npm test by design)",
+      "runner": "tsx (node:assert/strict, real Postgres, no mocking)",
+      "dbRequired": "disposable-postgres-required",
+      "redisRequired": "no",
+      "filesystemRequired": "yes",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [
+        "DATABASE_URL"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - same reason"
+      },
+      "repeatRunStatus": "BLOCKED"
+    },
+    {
+      "id": "VER-verify-export-archive-lifecycle",
+      "path": "server/scripts/verify-export-archive-lifecycle.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "MIGRATION",
+      "secondaryTypes": [
+        "DATABASE_INTEGRATION"
+      ],
+      "sourceFilesProtected": [],
+      "command": "DATABASE_URL=<disposable> npx tsx server/scripts/verify-export-archive-lifecycle.ts (manual only, never wired into npm test by design)",
+      "runner": "tsx (node:assert/strict, real Postgres, no mocking)",
+      "dbRequired": "disposable-postgres-required",
+      "redisRequired": "no",
+      "filesystemRequired": "yes",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [
+        "DATABASE_URL"
+      ],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "BLOCKED - same reason"
+      },
+      "repeatRunStatus": "BLOCKED"
+    },
+    {
+      "id": "SMK-noramedi-healthcheck.sh",
+      "path": "scripts/noramedi-healthcheck.sh",
+      "canonicalOwner": "Observability / Operational Events",
+      "secondaryDomains": [],
+      "testType": "SMOKE",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "manual invocation only, not a package.json script",
+      "runner": "bash",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "yes (live server required)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "yes (retry/interval based)",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "probes GET /api/health on a live local (--local) or production server with retry logic; requires a running server instance; not executed (out of scope: no production access, no live-server bring-up in this task)"
+      },
+      "repeatRunStatus": "NOT_ATTEMPTED (out of scope: requires live server / production access)"
+    },
+    {
+      "id": "SMK-noramedi-deploy.sh",
+      "path": "scripts/noramedi-deploy.sh",
+      "canonicalOwner": "Repository/Build Tooling",
+      "secondaryDomains": [],
+      "testType": "OTHER",
+      "secondaryTypes": [],
+      "sourceFilesProtected": [],
+      "command": "manual invocation only, not a package.json script",
+      "runner": "bash",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "yes (live server required)",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "yes (retry/interval based)",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": null,
+        "failed": null,
+        "note": "production deployment orchestration script (git pull, npm ci, prisma migrate deploy, pm2 reload, healthcheck) — not a test, deployment automation; not executed (deployment out of scope for F0-005)"
+      },
+      "repeatRunStatus": "NOT_ATTEMPTED (out of scope: requires live server / production access)"
+    }
+  ],
+  "commands": [
+    {
+      "script": "server/package.json:test",
+      "underlyingCommand": "54 chained tsx invocations (see file_to_scripts mapping)",
+      "filesReached": 54,
+      "prerequisites": "npx prisma generate must run first (not automatic)",
+      "overlapsWith": "every individual test:* script it chains",
+      "accuratelyNamed": true,
+      "inFullSuite": true,
+      "calledFromCi": false,
+      "orphaned": false
+    },
+    {
+      "script": "server/package.json:typecheck",
+      "underlyingCommand": "npx prisma generate && tsc --noEmit",
+      "filesReached": null,
+      "prerequisites": "network access to fetch Prisma engine binaries on first run (cached thereafter)",
+      "overlapsWith": "none",
+      "accuratelyNamed": true,
+      "inFullSuite": false,
+      "calledFromCi": true,
+      "orphaned": false
+    },
+    {
+      "script": "root package.json:build",
+      "underlyingCommand": "tsc -b && vite build",
+      "filesReached": null,
+      "prerequisites": "npm ci in repo root",
+      "overlapsWith": "none",
+      "accuratelyNamed": false,
+      "note": "named \"build\" not \"typecheck\" — the only frontend static-check script; also does a real bundle build, not just typechecking",
+      "inFullSuite": false,
+      "calledFromCi": true,
+      "orphaned": false
+    },
+    {
+      "script": "bridge-agent/package.json:test",
+      "underlyingCommand": "9 chained tsx invocations",
+      "filesReached": 9,
+      "prerequisites": "npm ci in bridge-agent/",
+      "overlapsWith": "none",
+      "accuratelyNamed": true,
+      "inFullSuite": false,
+      "calledFromCi": false,
+      "orphaned": true,
+      "note": "bridge-agent is never invoked by any GitHub Actions workflow"
+    },
+    {
+      "script": "6 orphan server test:* scripts",
+      "underlyingCommand": "test:consent-resume, test:meta-template, test:outbound, test:no-show-follow-up-parity, test:overdue-installments, test:overdue-receivables",
+      "filesReached": 6,
+      "overlapsWith": "none",
+      "accuratelyNamed": true,
+      "inFullSuite": false,
+      "calledFromCi": false,
+      "orphaned": true,
+      "note": "exist in package.json but never called from the \"test\" chain; overdue-installments genuinely fails (see failures)"
+    },
+    {
+      "script": "6 no-script backend test files",
+      "underlyingCommand": "no package.json script exists at all",
+      "filesReached": 6,
+      "overlapsWith": "none",
+      "accuratelyNamed": null,
+      "inFullSuite": false,
+      "calledFromCi": false,
+      "orphaned": true,
+      "note": "aiPrivacyBoundary, channelConsentGate, clinicLegalProfile, patientSharedPhone, platformBackup, treatmentPackagePermissions — only reachable via direct tsx invocation"
+    },
+    {
+      "script": ".github/workflows/windows-bridge-pr.yml",
+      "underlyingCommand": "imaging-path-scoped subset (4 backend, 3 frontend, 4 dotnet projects, 4 installer ps1)",
+      "filesReached": 15,
+      "overlapsWith": "partially overlaps server/typecheck and root/build",
+      "accuratelyNamed": true,
+      "inFullSuite": false,
+      "calledFromCi": true,
+      "orphaned": false,
+      "note": "the ONLY test-executing CI workflow in the repository; path-triggered, not run on every PR"
+    }
+  ],
+  "ownershipSummary": [
+    {
+      "domain": "Imaging — Device Bridge / Windows Bridge",
+      "ownedTestCount": 22
+    },
+    {
+      "domain": "Privacy / Consent / Retention / Data Subject Rights",
+      "ownedTestCount": 13
+    },
+    {
+      "domain": "Messaging — WhatsApp",
+      "ownedTestCount": 10
+    },
+    {
+      "domain": "Appointments and Availability",
+      "ownedTestCount": 8
+    },
+    {
+      "domain": "Tenant Security and Scope",
+      "ownedTestCount": 4
+    },
+    {
+      "domain": "Identity and Access",
+      "ownedTestCount": 4
+    },
+    {
+      "domain": "Basic Payments",
+      "ownedTestCount": 4
+    },
+    {
+      "domain": "Public Booking",
+      "ownedTestCount": 4
+    },
+    {
+      "domain": "Reporting / Analytics",
+      "ownedTestCount": 3
+    },
+    {
+      "domain": "Patients",
+      "ownedTestCount": 3
+    },
+    {
+      "domain": "Messaging — Instagram",
+      "ownedTestCount": 3
+    },
+    {
+      "domain": "Messaging AI Orchestration",
+      "ownedTestCount": 3
+    },
+    {
+      "domain": "Imaging — Server Ingest and Viewer",
+      "ownedTestCount": 2
+    },
+    {
+      "domain": "Observability / Operational Events",
+      "ownedTestCount": 2
+    },
+    {
+      "domain": "Platform Administration",
+      "ownedTestCount": 2
+    },
+    {
+      "domain": "Organization / Clinic / User Membership",
+      "ownedTestCount": 2
+    },
+    {
+      "domain": "Storage Abstraction",
+      "ownedTestCount": 1
+    },
+    {
+      "domain": "Dental Laboratory / Prosthetics Tracking",
+      "ownedTestCount": 1
+    },
+    {
+      "domain": "Cross-Domain Contract",
+      "ownedTestCount": 1
+    },
+    {
+      "domain": "Automations / Reminders / Follow-up / Recall",
+      "ownedTestCount": 1
+    },
+    {
+      "domain": "Security Incident Response and Detection",
+      "ownedTestCount": 1
+    },
+    {
+      "domain": "Messaging — SMS",
+      "ownedTestCount": 1
+    },
+    {
+      "domain": "Permissions / Roles",
+      "ownedTestCount": 1
+    },
+    {
+      "domain": "Repository/Build Tooling",
+      "ownedTestCount": 1
+    }
+  ],
+  "highRiskEdgeCoverage": [
+    {
+      "edgeId": "F0004-E0695",
+      "sourceTarget": "Messaging — WhatsApp → Patients",
+      "location": "server/src/routes/whatsapp.ts:1179 (Patient.create)",
+      "classification": "NOT_COVERED",
+      "evidence": "No test file exercises the real Patient.create call in routes/whatsapp.ts. channelConsentFlowResume.test.ts imports routes/whatsapp.ts but only for the narrow, unrelated isConsentResumableStep/buildConsentResumeMessage pure helpers.",
+      "missingBehavior": "Phone-based patient dedup/matching before create; validation parity with routes/patients.ts."
+    },
+    {
+      "edgeId": "F0004-E0696",
+      "sourceTarget": "Messaging — WhatsApp → Patients",
+      "location": "server/src/routes/whatsapp.ts:1212 (Patient.update)",
+      "classification": "NOT_COVERED",
+      "evidence": "Same file/reasoning as F0004-E0695 — no test reaches this write path.",
+      "missingBehavior": "Same as F0004-E0695."
+    },
+    {
+      "edgeId": "F0004-E0702",
+      "sourceTarget": "Messaging — WhatsApp → Patients",
+      "location": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:708 (Patient.update)",
+      "classification": "NOT_COVERED",
+      "evidence": "whatsappIdentityAndPostBooking.test.ts's own docstring explicitly states its tests are 'pure, DB-free unit tests' and that 'the real Prisma-backed patient-creation paths in metaWhatsAppAiProcessor.ts are explicitly NOT covered here'.",
+      "missingBehavior": "Real Patient.update call, dedup-by-phone matching correctness."
+    },
+    {
+      "edgeId": "F0004-E0703",
+      "sourceTarget": "Messaging — WhatsApp → Patients",
+      "location": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:724 (Patient.create)",
+      "classification": "NOT_COVERED",
+      "evidence": "Same explicit self-documented exclusion as F0004-E0702.",
+      "missingBehavior": "Real Patient.create call, dedup-by-phone matching correctness."
+    },
+    {
+      "edgeId": "F0004-E0608",
+      "sourceTarget": "Messaging — Instagram → Patients",
+      "location": "server/src/services/instagram/instagramAiConversationProcessor.ts:924 (Patient.create)",
+      "classification": "PARTIALLY_COVERED",
+      "evidence": "instagramAssistantParity.test.ts's own file header states the live Prisma paths in processInstagramIncomingMessage are NOT exercised; persistence/dedupe RULES are instead reimplemented as a separate in-test 'fake DB' logic mirror. The dedup/matching RULE is indirectly exercised via that mirror; the actual Patient.create call site and the absence of any cross-domain validation is not.",
+      "missingBehavior": "The real Prisma call and whether the reimplemented mirror actually matches routes/patients.ts validation."
+    },
+    {
+      "edgeId": "F0004-E0670",
+      "sourceTarget": "Messaging — WhatsApp → Appointments and Availability",
+      "location": "server/src/routes/whatsapp.ts:1518 (Appointment.update, status change)",
+      "classification": "NOT_COVERED",
+      "evidence": "No test file touches this line or the surrounding AI-conversation appointment-status-change handler.",
+      "missingBehavior": "Status-transition validity, concurrency behavior."
+    },
+    {
+      "edgeId": "F0004-E0674",
+      "sourceTarget": "Messaging — WhatsApp → Appointments and Availability",
+      "location": "server/src/routes/whatsapp.ts:2625 (Appointment.update)",
+      "classification": "NOT_COVERED",
+      "evidence": "No test file touches this line.",
+      "missingBehavior": "Same as above."
+    },
+    {
+      "edgeId": "F0004-E0675",
+      "sourceTarget": "Messaging — WhatsApp → Appointments and Availability",
+      "location": "server/src/routes/whatsapp.ts:2646 (Appointment.update)",
+      "classification": "NOT_COVERED",
+      "evidence": "No test file touches this line.",
+      "missingBehavior": "Same as above."
+    },
+    {
+      "edgeId": "F0004-E0684",
+      "sourceTarget": "Messaging — WhatsApp → Appointments and Availability",
+      "location": "server/src/routes/whatsappInbox.ts:757 (Appointment.create, route POST /whatsapp/inbox/:id/create-appointment) — F0-004's single most severe finding: this route re-implements its own overlap check and calls Appointment.create WITHOUT the pg_advisory_xact_lock concurrency guard used elsewhere in the Appointments domain (server/src/services/appointmentRequestSafety.ts, used by routes/publicBooking.ts)",
+      "classification": "NOT_COVERED",
+      "evidence": "whatsappInbox.test.ts exists (25 test cases) but per its own docstring only covers utils/roles.ts permission checks and a LOCALLY REIMPLEMENTED getPhoneVariants — it never imports or calls the actual routes/whatsappInbox.ts route handler. appointmentRequestOverlapSafety.test.ts (31 tests) is real and thorough, but it tests the SAFE pattern in appointmentRequestSafety.ts used by publicBooking.ts — a completely different code path from whatsappInbox.ts's unsafe re-implementation.",
+      "missingBehavior": "The double-booking race condition itself (two concurrent staff-facing WhatsApp-inbox appointment creations for the same slot) is completely untested. This is the highest-priority coverage gap this task found."
+    }
+  ],
+  "coverageGaps": {
+    "domainsWithNoOwnedTests": [
+      "Entitlements and Release Flags (F0-003 already found no dedicated bounded domain exists — no test expected)",
+      "Audit and Activity (write-path tested only incidentally inside many other domains’ tests, e.g. clinicBulkExport.test.ts §8; no dedicated AuditLog/ActivityLog-owned test file)",
+      "Configuration and Secrets (no dedicated test for routes/settings.ts, utils/secrets.ts, utils/encryption.ts as first-class behavior — encryption.ts is exercised only incidentally as a dependency inside ~15 Messaging tests)",
+      "Shared Events / Queue Contracts / Idempotency (messagingInboundIdempotency.ts, utils/jobLock.ts have no dedicated test)",
+      "Notifications (routes/notifications.ts, Notification model — no dedicated test found)",
+      "Treatment Cases (no test where Treatment Cases is the PRIMARY canonical owner — it appears only as a SECONDARY/protected-dependency domain in billingFinancialTreatmentCaseSelect.test.ts, treatmentCaseClinicScope.test.ts, and treatmentPackagePermissions.test.ts)",
+      "Dental Chart / Procedures (routes/dentalChart.ts, treatmentPlanProcedures.ts, ToothRecord/TreatmentPlanProcedure — no dedicated test; treatmentCaseClinicScope.test.ts references treatmentPlanProcedures.ts only in a comment, not an actual import)",
+      "Tasks and Follow-up (routes/tasks.ts, Task model — no dedicated test found)",
+      "Messaging — Email (services/emailTemplates.ts and emailService.ts are exercised only as a dependency inside Identity/Access tests — passwordReset.test.ts, emailVerification.test.ts, staffOnboarding.test.ts, userImportOnboarding.test.ts — never as Email’s own primary-owned test)",
+      "Inventory (routes/inventory.ts, InventoryItem/InventoryTransaction — no dedicated test; F0-004 flagged Inventory as a target of two independent cross-domain write paths from Treatment Cases and Dental Chart with zero test coverage of either)",
+      "Insurance (routes/insuranceProvisions.ts, InsuranceProvision — no dedicated test found)",
+      "Advanced Finance — Compensation and Payouts (routes/financeDashboard.ts, compensationRules.ts, practitionerEarnings.ts, earningService.ts — no dedicated test; only referenced as a secondary domain in billingFinancialTreatmentCaseSelect.test.ts)"
+    ],
+    "concurrencyGaps": [
+      "The single highest-priority gap: whatsappInbox.ts:757 Appointment.create has NO advisory-lock/overlap-safety test coverage at all — see F0004-E0684 above. This is the exact double-booking scenario the domain’s own safer pattern (appointmentRequestSafety.ts) already exists to prevent, just not on this path.",
+      "Inventory’s two independent cross-domain write paths (Treatment Cases’ routes/treatmentCases.ts and Dental Chart’s services/treatmentStockDeduction.ts both writing InventoryItem/InventoryTransaction) have no concurrency test proving they cannot double-deduct stock under simultaneous requests."
+    ],
+    "tenantSecurityGaps": [
+      "multiBranchAccess.test.ts (142 test cases, the single largest test file by case count) is a PURE reimplementation — it deliberately does not import server/src/utils/clinicScope.ts, middleware/clinicAccess.ts, or any route/middleware code (documented in its own header: “import mock yok”). The actual production tenant-scoping code path has ZERO direct test coverage; only a hand-written parallel mirror of its intended logic is tested. The same drift risk demonstrated by overdueInstallments.test.ts (see §9 Failures) applies here at much larger scale if clinicScope.ts/clinicAccess.ts ever changes without someone remembering to update this 1043-line mirror.",
+      "treatmentCaseClinicScope.test.ts similarly reimplements clinic-scope logic inline rather than importing the real route file."
+    ],
+    "providerFailureGaps": [
+      "WhatsApp/Instagram/SMS/Email provider FAILURE-path behavior (rate limiting, retries, partial outages) is tested only at the unit level via injected globalThis.fetch stubs returning canned error responses (whatsappProvider.test.ts, instagramProvider.test.ts, metaTemplateService.test.ts) — there is no test proving end-to-end behavior when a provider is genuinely unreachable in the full inbound/outbound pipeline."
+    ],
+    "migrationGaps": [
+      "No automated migration up/down test exists in the repository. The 3 server/scripts/verify-*.ts scripts are the closest equivalent (real-Postgres lifecycle proofs for specific KVKK features) but are explicitly NOT wired into any test runner and require a manually-provisioned disposable database — see §8 Runtime Results.",
+      "securityIncident.test.ts is the only .test.ts file that requires a real database connection, and it could not be executed in this task (see §8/§9) — meaning the security-incident domain’s DATABASE_INTEGRATION coverage is entirely unverified in this baseline."
+    ],
+    "frontendGaps": [
+      "The frontend has NO test runner, NO React Testing Library, and NO DOM/component-rendering test harness of any kind (confirmed by explicit statements in all 5 frontend test file headers). All 5 frontend tests are FRONTEND_UTILITY-only — pure extracted-function logic. There is zero FRONTEND_COMPONENT coverage anywhere in the repository.",
+      "Only 5 of the repository’s ~64 frontend pages/components (per F0-003’s inventory) have any test coverage at all."
+    ],
+    "bridgeGaps": [
+      "The 4 windows-bridge .NET test projects (354 approx. Fact/Theory test methods total) could NOT be executed in this task — windows-bridge/global.json pins .NET SDK 10.0.301, and only 9.0.305 is installed on this machine. This is a BLOCKED measurement, not a coverage judgment — see §8/§9.",
+      "The 4 installer PowerShell test scripts (58 cases) DID run successfully under Windows PowerShell 5.1, despite CI declaring `shell: pwsh` (PowerShell 7) — this is a positive finding (the scripts are more portable than CI assumes) but also means CI’s exact interpreter has never been cross-verified against 5.1 in this task."
+    ],
+    "loadChaosGaps": [
+      "No load or chaos test exists anywhere in the repository (confirmed absent — no k6/Artillery/Locust config, no chaos-engineering tooling, no fault-injection harness beyond the in-process fake-dependency-throws pattern used inside individual unit tests)."
+    ],
+    "ciEnforcementGap": [
+      "Exactly ONE GitHub Actions workflow exists that runs any tests at all: .github/workflows/windows-bridge-pr.yml, and it is scoped ONLY to paths touching windows-bridge/**, server/src/services/imaging/**, server/src/routes/imaging*.ts, server/src/tests/imaging*.ts, and src/components/imaging/**. It runs 4 of 70 backend test files (test:imaging, test:imaging-bridge-pairing/onboarding/update), 3 of 5 frontend test files (test:dicom-helpers/onboarding-helpers/pairing-poller — NOT test:booking-widget-helpers or test:clinic-bulk-export-selection), the 4 dotnet test projects, and the 4 installer PowerShell scripts.",
+      "NONE of the other 66 backend test files, NONE of the 9 bridge-agent test files, and 2 of the 5 frontend test files have ANY CI enforcement whatsoever. `npm run test` (the full 54-script backend chain) is never invoked by any workflow. This is the direct, repository-proven explanation for how overdueInstallments.test.ts’s genuine 2-assertion regression (see §9) went undetected: it is one of 6 backend .test.ts files reachable by NO package.json script at all, and even the 60 test files that DO have scripts are not run by CI unless they touch the imaging path."
+    ],
+    "fullSuiteOmissions": [
+      "`npm run test` (54 chained scripts) omits 6 orphan scripts that exist in package.json but are never called from the chain: test:consent-resume, test:meta-template, test:outbound, test:no-show-follow-up-parity, test:overdue-installments, test:overdue-receivables.",
+      "6 backend .test.ts files have NO package.json script at all and can only be invoked via direct `npx tsx src/tests/<file>.test.ts`: aiPrivacyBoundary.test.ts, channelConsentGate.test.ts, clinicLegalProfile.test.ts, patientSharedPhone.test.ts, platformBackup.test.ts, treatmentPackagePermissions.test.ts."
+    ]
+  },
+  "affectedTestRecommendations": [
+    {
+      "domain": "Imaging — Device Bridge / Windows Bridge",
+      "ownedTestCount": 22,
+      "ownedTestFiles": [
+        "server/src/tests/imagingBridgeOnboarding.test.ts",
+        "server/src/tests/imagingBridgePairing.test.ts",
+        "server/src/tests/imagingBridgeUpdate.test.ts",
+        "src/components/imaging/__tests__/onboardingHelpers.test.ts",
+        "src/components/imaging/__tests__/pairingPoller.test.ts",
+        "bridge-agent/tests/archiveStrategy.test.ts",
+        "bridge-agent/tests/config.test.ts",
+        "bridge-agent/tests/hash.test.ts",
+        "bridge-agent/tests/installServiceAcl.test.ts",
+        "bridge-agent/tests/lifecycle.test.ts",
+        "bridge-agent/tests/queue.test.ts",
+        "bridge-agent/tests/textEncoding.test.ts",
+        "bridge-agent/tests/uploader.test.ts",
+        "bridge-agent/tests/watcher.test.ts",
+        "windows-bridge/tests/NoraMedi.Bridge.Core.Tests",
+        "windows-bridge/tests/NoraMedi.Bridge.IntegrationTests",
+        "windows-bridge/tests/NoraMedi.Bridge.Manager.Tests",
+        "windows-bridge/tests/NoraMedi.Bridge.Service.Tests",
+        "windows-bridge/tests/installer/InstallerTestHelpers.Tests.ps1",
+        "windows-bridge/tests/installer/StateMachine.Tests.ps1",
+        "windows-bridge/tests/installer/MigrateLegacyConfigCommand.Tests.ps1",
+        "windows-bridge/tests/installer/BuildReleaseScript.Tests.ps1"
+      ],
+      "focusedCommand": [
+        "npm run test:imaging-bridge-onboarding",
+        "npm run test:imaging-bridge-pairing",
+        "npm run test:imaging-bridge-update",
+        "npm run test:onboarding-helpers",
+        "npm run test:pairing-poller",
+        "npm run test (bridge-agent workspace, chains all 9 files)",
+        "dotnet test tests/NoraMedi.Bridge.Core.Tests",
+        "dotnet test tests/NoraMedi.Bridge.IntegrationTests",
+        "dotnet test tests/NoraMedi.Bridge.Manager.Tests",
+        "dotnet test tests/NoraMedi.Bridge.Service.Tests",
+        "powershell -File InstallerTestHelpers.Tests.ps1",
+        "powershell -File StateMachine.Tests.ps1",
+        "powershell -File MigrateLegacyConfigCommand.Tests.ps1",
+        "powershell -File BuildReleaseScript.Tests.ps1"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "provider/adapter escalation: run this domain’s owned tests plus the shared fetch-stub-based provider tests in sibling Messaging domains (WhatsApp/Instagram/SMS share utils/webhookRouting.ts, utils/encryption.ts)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Privacy / Consent / Retention / Data Subject Rights",
+      "ownedTestCount": 13,
+      "ownedTestFiles": [
+        "server/src/tests/aiPrivacyBoundary.test.ts",
+        "server/src/tests/channelConsentFlowResume.test.ts",
+        "server/src/tests/channelConsentGate.test.ts",
+        "server/src/tests/clinicBulkExport.test.ts",
+        "server/src/tests/clinicLegalProfile.test.ts",
+        "server/src/tests/dataRetentionCleanupJob.test.ts",
+        "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+        "server/src/tests/patientPrivacy.test.ts",
+        "server/src/tests/publicBookingNoticeEvidence.test.ts",
+        "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
+        "server/scripts/verify-attachment-legal-hold-lifecycle.ts",
+        "server/scripts/verify-clinic-bulk-export-lifecycle.ts",
+        "server/scripts/verify-export-archive-lifecycle.ts"
+      ],
+      "focusedCommand": [
+        "npx tsx server/src/tests/aiPrivacyBoundary.test.ts",
+        "npm run test:consent-resume",
+        "npx tsx server/src/tests/channelConsentGate.test.ts",
+        "npm run test:clinic-bulk-export",
+        "npx tsx server/src/tests/clinicLegalProfile.test.ts",
+        "npm run test:data-retention",
+        "npm run test:kvkk-lifecycle",
+        "npm run test:patient-privacy",
+        "npm run test:notice-evidence",
+        "npm run test:clinic-bulk-export-selection",
+        "DATABASE_URL=<disposable> npx tsx server/scripts/verify-attachment-legal-hold-lifecycle.ts (manual only, never wired into npm test by design)",
+        "DATABASE_URL=<disposable> npx tsx server/scripts/verify-clinic-bulk-export-lifecycle.ts (manual only, never wired into npm test by design)",
+        "DATABASE_URL=<disposable> npx tsx server/scripts/verify-export-archive-lifecycle.ts (manual only, never wired into npm test by design)"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "regulatory/tenant-critical",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Messaging — WhatsApp",
+      "ownedTestCount": 10,
+      "ownedTestFiles": [
+        "server/src/tests/messageSafetyHardening.test.ts",
+        "server/src/tests/messageTemplateWabaBinding.test.ts",
+        "server/src/tests/metaTemplateService.test.ts",
+        "server/src/tests/metaTemplateSyncJob.test.ts",
+        "server/src/tests/metaWhatsAppWebhook.test.ts",
+        "server/src/tests/whatsappConversationPersistence.test.ts",
+        "server/src/tests/whatsappIdentityAndPostBooking.test.ts",
+        "server/src/tests/whatsappInbox.test.ts",
+        "server/src/tests/whatsappOutboundMessaging.test.ts",
+        "server/src/tests/whatsappProvider.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:msg-safety",
+        "npm run test:template-waba-binding",
+        "npm run test:meta-template",
+        "npm run test:meta-template-sync",
+        "npm run test:meta-wa",
+        "npm run test:wa-persistence",
+        "npm run test:inbox",
+        "npm run test:outbound",
+        "npm run test:whatsapp"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "provider/adapter escalation: run this domain’s owned tests plus the shared fetch-stub-based provider tests in sibling Messaging domains (WhatsApp/Instagram/SMS share utils/webhookRouting.ts, utils/encryption.ts)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Appointments and Availability",
+      "ownedTestCount": 8,
+      "ownedTestFiles": [
+        "server/src/tests/appointmentAvailabilityService.test.ts",
+        "server/src/tests/appointmentRequestOverlapSafety.test.ts",
+        "server/src/tests/appointmentUpdateValidation.test.ts",
+        "server/src/tests/contactRequests.test.ts",
+        "server/src/tests/noShow.test.ts",
+        "server/src/tests/noShowFollowUpParity.test.ts",
+        "server/src/tests/scheduleAccess.test.ts",
+        "server/src/tests/servicePricing.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:availability-service",
+        "npm run test:overlap-safety",
+        "npm run test:appointment-update-validation",
+        "npm run test:contact-requests",
+        "npm run test:no-shows",
+        "npm run test:no-show-follow-up-parity",
+        "npm run test:schedule",
+        "npm run test:pricing"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Tenant Security and Scope",
+      "ownedTestCount": 4,
+      "ownedTestFiles": [
+        "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+        "server/src/tests/billingPatientAccess.test.ts",
+        "server/src/tests/multiBranchAccess.test.ts",
+        "server/src/tests/treatmentCaseClinicScope.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:billing-financial-select",
+        "npm run test:billing-patient-access",
+        "npm run test:roles",
+        "npm run test:treatment-case-scope"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "core/security escalation: any change here should trigger the FULL backend `npm run test` chain plus multiBranchAccess.test.ts, treatmentCaseClinicScope.test.ts, billingPatientAccess.test.ts, and securityIncident.test.ts once DB-backed execution is unblocked",
+      "criticality": "regulatory/tenant-critical",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Identity and Access",
+      "ownedTestCount": 4,
+      "ownedTestFiles": [
+        "server/src/tests/emailVerification.test.ts",
+        "server/src/tests/passwordReset.test.ts",
+        "server/src/tests/sessionCookieCsrf.test.ts",
+        "server/src/tests/totp.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:email-verification",
+        "npm run test:password-reset",
+        "npm run test:auth",
+        "npm run test:totp"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "core/security escalation: any change here should trigger the FULL backend `npm run test` chain plus multiBranchAccess.test.ts, treatmentCaseClinicScope.test.ts, billingPatientAccess.test.ts, and securityIncident.test.ts once DB-backed execution is unblocked",
+      "criticality": "regulatory/tenant-critical",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Basic Payments",
+      "ownedTestCount": 4,
+      "ownedTestFiles": [
+        "server/src/tests/overdueInstallments.test.ts",
+        "server/src/tests/overdueReceivables.test.ts",
+        "server/src/tests/paymentBillingEdit.test.ts",
+        "server/src/tests/paymentValidation.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:overdue-installments",
+        "npm run test:overdue-receivables",
+        "npm run test:payment-billing-edit",
+        "npm run test:payment-validation"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Public Booking",
+      "ownedTestCount": 4,
+      "ownedTestFiles": [
+        "server/src/tests/publicBookingAvailability.test.ts",
+        "server/src/tests/publicBookingSlotConsistency.test.ts",
+        "server/src/tests/publicBookingSlotRequired.test.ts",
+        "src/pages/__tests__/bookingWidgetHelpers.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:public-booking",
+        "npm run test:public-booking-slots",
+        "npm run test:public-booking-slot-required",
+        "npm run test:booking-widget-helpers"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Reporting / Analytics",
+      "ownedTestCount": 3,
+      "ownedTestFiles": [
+        "server/src/tests/dashboard.test.ts",
+        "server/src/tests/financeDashboard.test.ts",
+        "server/src/tests/organizationDashboard.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:dashboard",
+        "npm run test:finance",
+        "npm run test:orgdash"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Patients",
+      "ownedTestCount": 3,
+      "ownedTestFiles": [
+        "server/src/tests/excelImport.test.ts",
+        "server/src/tests/patientName.test.ts",
+        "server/src/tests/patientSharedPhone.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:imports",
+        "npm run test:patient-name",
+        "npx tsx server/src/tests/patientSharedPhone.test.ts"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Messaging — Instagram",
+      "ownedTestCount": 3,
+      "ownedTestFiles": [
+        "server/src/tests/instagramAssistantParity.test.ts",
+        "server/src/tests/instagramConversion.test.ts",
+        "server/src/tests/instagramProvider.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:instagram"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "provider/adapter escalation: run this domain’s owned tests plus the shared fetch-stub-based provider tests in sibling Messaging domains (WhatsApp/Instagram/SMS share utils/webhookRouting.ts, utils/encryption.ts)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Messaging AI Orchestration",
+      "ownedTestCount": 3,
+      "ownedTestFiles": [
+        "server/src/tests/whatsappAgentEvaluation.test.ts",
+        "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+        "server/src/tests/whatsappStepAwareNlu.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:agent",
+        "npm run test:meta-wa"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "provider/adapter escalation: run this domain’s owned tests plus the shared fetch-stub-based provider tests in sibling Messaging domains (WhatsApp/Instagram/SMS share utils/webhookRouting.ts, utils/encryption.ts)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Imaging — Server Ingest and Viewer",
+      "ownedTestCount": 2,
+      "ownedTestFiles": [
+        "server/src/tests/imaging.test.ts",
+        "src/components/imaging/__tests__/dicomHelpers.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:imaging",
+        "npm run test:dicom-helpers"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "provider/adapter escalation: run this domain’s owned tests plus the shared fetch-stub-based provider tests in sibling Messaging domains (WhatsApp/Instagram/SMS share utils/webhookRouting.ts, utils/encryption.ts)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Observability / Operational Events",
+      "ownedTestCount": 2,
+      "ownedTestFiles": [
+        "server/src/tests/operationalMonitoring.test.ts",
+        "scripts/noramedi-healthcheck.sh"
+      ],
+      "focusedCommand": [
+        "npm run test:ops"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "yes — some owned files have no script"
+    },
+    {
+      "domain": "Platform Administration",
+      "ownedTestCount": 2,
+      "ownedTestFiles": [
+        "server/src/tests/platformAdmin.test.ts",
+        "server/src/tests/platformBackup.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:auth",
+        "npx tsx server/src/tests/platformBackup.test.ts"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Organization / Clinic / User Membership",
+      "ownedTestCount": 2,
+      "ownedTestFiles": [
+        "server/src/tests/staffOnboarding.test.ts",
+        "server/src/tests/userImportOnboarding.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:staff-onboarding",
+        "npm run test:user-import-onboarding"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "none flagged beyond general gaps",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Storage Abstraction",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "server/src/tests/filePreview.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:file-preview"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Dental Laboratory / Prosthetics Tracking",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "server/src/tests/labOrders.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:lab-orders"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Cross-Domain Contract",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "server/src/tests/messageTemplatePurpose.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:purpose"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Automations / Reminders / Follow-up / Recall",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "server/src/tests/postTreatmentMessaging.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:post-treatment"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Security Incident Response and Detection",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "server/src/tests/securityIncident.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:security-incidents"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "core/security escalation: any change here should trigger the FULL backend `npm run test` chain plus multiBranchAccess.test.ts, treatmentCaseClinicScope.test.ts, billingPatientAccess.test.ts, and securityIncident.test.ts once DB-backed execution is unblocked",
+      "criticality": "regulatory/tenant-critical",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Messaging — SMS",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "server/src/tests/smsModule.test.ts"
+      ],
+      "focusedCommand": [
+        "npm run test:sms"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "provider/adapter escalation: run this domain’s owned tests plus the shared fetch-stub-based provider tests in sibling Messaging domains (WhatsApp/Instagram/SMS share utils/webhookRouting.ts, utils/encryption.ts)",
+      "criticality": "standard",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Permissions / Roles",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "server/src/tests/treatmentPackagePermissions.test.ts"
+      ],
+      "focusedCommand": [
+        "npx tsx server/src/tests/treatmentPackagePermissions.test.ts"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "core/security escalation: any change here should trigger the FULL backend `npm run test` chain plus multiBranchAccess.test.ts, treatmentCaseClinicScope.test.ts, billingPatientAccess.test.ts, and securityIncident.test.ts once DB-backed execution is unblocked",
+      "criticality": "standard",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "no — existing scripts cover this domain’s owned files"
+    },
+    {
+      "domain": "Repository/Build Tooling",
+      "ownedTestCount": 1,
+      "ownedTestFiles": [
+        "scripts/noramedi-deploy.sh"
+      ],
+      "focusedCommand": [
+        "NONE — no owned test exists; F1 will need a new script"
+      ],
+      "fallbackCommand": "npm run test (server/) is the only existing \"run everything\" fallback; there is no equivalent aggregate script for frontend, bridge-agent, or windows-bridge",
+      "dependentContractSuites": "(see highRiskEdgeCoverage / evidence doc §10 for this domain’s F0-004 edges, where applicable)",
+      "escalationRule": "standard: owned tests only, unless the change also touches a Core Platform file (see DEPENDENCY_MAP.md §7)",
+      "criticality": "standard",
+      "missingCoverage": "thin — 1 owned test file only",
+      "newScriptNeededForF1": "yes — some owned files have no script"
+    },
+    {
+      "domain": "Entitlements and Release Flags",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Entitlements and Release Flags (F0-003 already found no dedicated bounded domain exists — no test expected)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Audit and Activity",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Audit and Activity (write-path tested only incidentally inside many other domains’ tests, e.g. clinicBulkExport.test.ts §8; no dedicated AuditLog/ActivityLog-owned test file)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Configuration and Secrets",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Configuration and Secrets (no dedicated test for routes/settings.ts, utils/secrets.ts, utils/encryption.ts as first-class behavior — encryption.ts is exercised only incidentally as a dependency inside ~15 Messaging tests)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Shared Events / Queue Contracts / Idempotency",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Shared Events / Queue Contracts / Idempotency (messagingInboundIdempotency.ts, utils/jobLock.ts have no dedicated test)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Notifications",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Notifications (routes/notifications.ts, Notification model — no dedicated test found)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Treatment Cases",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Treatment Cases (no test where Treatment Cases is the PRIMARY canonical owner — it appears only as a SECONDARY/protected-dependency domain in billingFinancialTreatmentCaseSelect.test.ts, treatmentCaseClinicScope.test.ts, and treatmentPackagePermissions.test.ts)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Dental Chart / Procedures",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Dental Chart / Procedures (routes/dentalChart.ts, treatmentPlanProcedures.ts, ToothRecord/TreatmentPlanProcedure — no dedicated test; treatmentCaseClinicScope.test.ts references treatmentPlanProcedures.ts only in a comment, not an actual import)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Tasks and Follow-up",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Tasks and Follow-up (routes/tasks.ts, Task model — no dedicated test found)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Messaging — Email",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Messaging — Email (services/emailTemplates.ts and emailService.ts are exercised only as a dependency inside Identity/Access tests — passwordReset.test.ts, emailVerification.test.ts, staffOnboarding.test.ts, userImportOnboarding.test.ts — never as Email’s own primary-owned test)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Inventory",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Inventory (routes/inventory.ts, InventoryItem/InventoryTransaction — no dedicated test; F0-004 flagged Inventory as a target of two independent cross-domain write paths from Treatment Cases and Dental Chart with zero test coverage of either)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Insurance",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Insurance (routes/insuranceProvisions.ts, InsuranceProvision — no dedicated test found)",
+      "newScriptNeededForF1": "yes"
+    },
+    {
+      "domain": "Advanced Finance — Compensation and Payouts",
+      "ownedTestCount": 0,
+      "ownedTestFiles": [],
+      "focusedCommand": [
+        "NONE"
+      ],
+      "fallbackCommand": "npm run test (server/) — runs everything, very coarse",
+      "dependentContractSuites": "n/a",
+      "escalationRule": "undefined — F1 must design from scratch",
+      "criticality": "unassessed",
+      "missingCoverage": "Advanced Finance — Compensation and Payouts (routes/financeDashboard.ts, compensationRules.ts, practitionerEarnings.ts, earningService.ts — no dedicated test; only referenced as a secondary domain in billingFinancialTreatmentCaseSelect.test.ts)",
+      "newScriptNeededForF1": "yes"
+    }
+  ],
+  "unresolved": [
+    {
+      "item": "billingFinancialTreatmentCaseSelect.test.ts / billingPatientAccess.test.ts / multiBranchAccess.test.ts / treatmentCaseClinicScope.test.ts canonical primary owner",
+      "resolution": "Assigned to Tenant Security and Scope (authorization/data-minimization behavior principally protected) with the endpoint-owning domain listed as secondary — see evidence doc §3 for full reasoning per file.",
+      "confidence": "medium — a reasonable reviewer could argue some of these belong primarily to their endpoint-owning domain instead"
+    },
+    {
+      "item": "messageTemplatePurpose.test.ts canonical primary owner",
+      "resolution": "Assigned to Cross-Domain Contract (MessageTemplate is F0-003’s own confirmed \"Shared Contract/Reference Data\" example) with Automations/Recall + Messaging-WhatsApp + Messaging-SMS as secondary.",
+      "confidence": "medium"
+    },
+    {
+      "item": "windows-bridge C# dotnet test runtime results",
+      "resolution": "BLOCKED — .NET SDK 10.0.301 pinned by windows-bridge/global.json is not installed on this machine (9.0.305 present). Static Fact/Theory counts only.",
+      "confidence": "high (blocker is a verified fact, not a judgment call)"
+    },
+    {
+      "item": "securityIncident.test.ts and 3 manual verify-*.ts scripts runtime results",
+      "resolution": "BLOCKED — no committed disposable-database provisioning (no docker-compose.yml or equivalent) exists in the repository; Docker CLI is present on this machine but standing up an ad-hoc container is not a committed repository convention and was deliberately not attempted per this task’s explicit prohibition on improvised setup.",
+      "confidence": "high"
+    }
+  ]
+}

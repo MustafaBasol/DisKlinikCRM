@@ -1,0 +1,236 @@
+{
+  "taskId": "F0-005",
+  "baselineCommit": "5ee0b6af30fff187b7190d649f1fc3e844362105",
+  "environment": {
+    "os": "Windows 10 (10.0.19045)",
+    "nodeVersion": "v24.18.0",
+    "npmVersion": "11.16.0",
+    "dotnetSdkInstalled": "9.0.305",
+    "dotnetSdkRequiredByRepo": "10.0.301 (windows-bridge/global.json)",
+    "databaseMode": "blocked",
+    "redisMode": "not-required (no test in this baseline requires a real Redis connection)"
+  },
+  "runs": [
+    {
+      "id": "server-npm-ci",
+      "command": "npm ci",
+      "workingDirectory": "server/",
+      "durationSeconds": 25,
+      "exitCode": 0,
+      "notes": [
+        "clean install from committed package-lock.json, 381 packages"
+      ]
+    },
+    {
+      "id": "server-prisma-generate",
+      "command": "npx prisma generate",
+      "workingDirectory": "server/",
+      "durationSeconds": 11,
+      "exitCode": 0,
+      "notes": [
+        "required before ANY test/typecheck can import @prisma/client — first attempt to run tests without this failed with \"SyntaxError: The requested module '@prisma/client' does not provide an export named 'PrismaClient'\""
+      ]
+    },
+    {
+      "id": "server-typecheck",
+      "command": "npm run typecheck",
+      "workingDirectory": "server/",
+      "durationSeconds": 45,
+      "exitCode": 0,
+      "notes": [
+        "npx prisma generate && tsc --noEmit; clean, zero errors"
+      ]
+    },
+    {
+      "id": "root-npm-ci",
+      "command": "npm ci",
+      "workingDirectory": "(repo root)",
+      "durationSeconds": 23,
+      "exitCode": 0,
+      "notes": [
+        "336 packages; npm audit reports 2 pre-existing vulnerabilities (1 moderate, 1 high) — observed, not remediated (out of scope)"
+      ]
+    },
+    {
+      "id": "root-build",
+      "command": "npm run build",
+      "workingDirectory": "(repo root)",
+      "durationSeconds": 54,
+      "exitCode": 0,
+      "notes": [
+        "tsc -b && vite build; clean, zero type errors; vite emits a pre-existing chunk-size warning (dicom-viewer-libs 2.77MB, index 814KB) — observed, not remediated"
+      ]
+    },
+    {
+      "id": "bridge-agent-npm-ci",
+      "command": "npm ci",
+      "workingDirectory": "bridge-agent/",
+      "durationSeconds": 6,
+      "exitCode": 0,
+      "notes": [
+        "23 packages"
+      ]
+    },
+    {
+      "id": "bridge-agent-test",
+      "command": "npm run test",
+      "workingDirectory": "bridge-agent/",
+      "durationSeconds": 9,
+      "exitCode": 0,
+      "suiteCount": 9,
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0,
+      "repeatability": "NOT_REPEATED (single run only)",
+      "notes": [
+        "chains all 9 bridge-agent/tests/*.test.ts files; 16+9+14+17+17+9+10+6+7=105"
+      ]
+    },
+    {
+      "id": "server-full-test-run-1",
+      "command": "npm run test",
+      "workingDirectory": "server/",
+      "durationSeconds": 107,
+      "exitCode": 1,
+      "suiteCount": 53,
+      "passed": 2481,
+      "failed": 1,
+      "skipped": 0,
+      "repeatability": "STABLE_FAIL for the one failing assertion (reproduced in run-2 below); the other 52 scripts were STABLE_PASS on their single run",
+      "notes": [
+        "Chains 54 scripts with && — chain stopped after test:clinic-bulk-export failed, so test:security-incidents (the 54th/last script) never ran in this invocation.",
+        "2481 = sum of all passed counts across the 53 scripts that ran (see per-script breakdown in scripts[] below).",
+        "The single failure is clinicBulkExport.test.ts \"status DTO never serializes sensitive fields\" — root-caused to a Windows/CRLF line-ending artifact (git core.autocrlf=true checks the file out with \\r\\n; the test does an exact-string indexOf() search containing a literal \\n), NOT a real product defect. Confirmed via byte-level inspection of server/src/routes/clinicBulkExport.ts."
+      ]
+    },
+    {
+      "id": "server-clinic-bulk-export-run-2",
+      "command": "npm run test:clinic-bulk-export",
+      "workingDirectory": "server/",
+      "durationSeconds": null,
+      "exitCode": 1,
+      "suiteCount": 1,
+      "passed": 116,
+      "failed": 1,
+      "skipped": 0,
+      "repeatability": "STABLE_FAIL — identical single failure reproduced",
+      "notes": [
+        "repeat run per task instructions for a failing suite; same test, same failure, confirms deterministic (CRLF-caused) rather than flaky"
+      ]
+    },
+    {
+      "id": "server-security-incidents-direct",
+      "command": "npm run test:security-incidents",
+      "workingDirectory": "server/",
+      "durationSeconds": null,
+      "exitCode": 1,
+      "suiteCount": 1,
+      "passed": 8,
+      "failed": 8,
+      "skipped": 0,
+      "repeatability": "BLOCKED",
+      "notes": [
+        "first 8 assertions (pure sanitization/hashing logic) pass; all subsequent assertions fail with \"Invalid `prisma.platformAdmin.create()` invocation\" — no reachable DATABASE_URL / disposable Postgres instance. Environment blocker, not a deterministic code defect."
+      ]
+    },
+    {
+      "id": "server-orphan-scripts",
+      "command": "6 individual npm run test:* invocations (consent-resume, meta-template, outbound, no-show-follow-up-parity, overdue-installments, overdue-receivables)",
+      "workingDirectory": "server/",
+      "durationSeconds": null,
+      "exitCode": null,
+      "suiteCount": 6,
+      "passed": 101,
+      "failed": 2,
+      "skipped": 0,
+      "repeatability": "overdue-installments STABLE_FAIL (reproduced 2x, identical 2 failures both times); other 5 STABLE_PASS on single run",
+      "notes": [
+        "These 6 scripts exist in server/package.json but are NEVER called from the `npm run test` chain — they were run individually to complete the inventory.",
+        "test:overdue-installments has 2 GENUINE deterministic failures (not environmental, not CRLF-related): the test asserts the production `overdueInstallmentWhere()` query filters status strictly to the literal value \"pending\" and that isInstallmentOverdue() treats a literal status=\"overdue\" value as never-written/always-false. The actual production code now queries `status: { in: ['pending', 'overdue'] }` and isInstallmentOverdue() returns true for status=\"overdue\". This is real behavioral drift between an orphaned test (never run by CI or the full `npm run test` chain) and the production code it was written to protect."
+      ]
+    },
+    {
+      "id": "server-no-script-files",
+      "command": "6 individual `npx tsx src/tests/<file>.test.ts` invocations (aiPrivacyBoundary, channelConsentGate, clinicLegalProfile, patientSharedPhone, platformBackup, treatmentPackagePermissions)",
+      "workingDirectory": "server/",
+      "durationSeconds": null,
+      "exitCode": 0,
+      "suiteCount": 6,
+      "passed": 177,
+      "failed": 0,
+      "skipped": 0,
+      "repeatability": "STABLE_PASS on single run",
+      "notes": [
+        "these 6 files have NO package.json script at all — the only way to run them is a direct tsx invocation; all pass cleanly"
+      ]
+    },
+    {
+      "id": "frontend-tests",
+      "command": "5 individual npm run test:* invocations (dicom-helpers, onboarding-helpers, pairing-poller, booking-widget-helpers, clinic-bulk-export-selection)",
+      "workingDirectory": "(repo root)",
+      "durationSeconds": null,
+      "exitCode": 0,
+      "suiteCount": 5,
+      "passed": 115,
+      "failed": 0,
+      "skipped": 0,
+      "repeatability": "STABLE_PASS on single run",
+      "notes": [
+        "36+21+8+26+24=115; no aggregate \"run all frontend tests\" script exists — each must be invoked individually"
+      ]
+    },
+    {
+      "id": "windows-bridge-dotnet-test",
+      "command": "dotnet test -c Debug",
+      "workingDirectory": "windows-bridge/",
+      "durationSeconds": null,
+      "exitCode": 1,
+      "notes": [
+        "BLOCKED before any test ran: \"Requested SDK version: 10.0.301 ... Installed SDKs: 9.0.305\". windows-bridge/global.json pins an SDK version not present on this machine. Not attempted to install a new SDK (outside this task’s repository-only, non-destructive scope). Static count only: 247+2+91+14=354 approx. [Fact]/[Theory] attributes across the 4 test projects (grep-counted, not executed)."
+      ]
+    },
+    {
+      "id": "windows-bridge-installer-ps1",
+      "command": "4 individual installer test scripts (InstallerTestHelpers.Tests.ps1, StateMachine.Tests.ps1, MigrateLegacyConfigCommand.Tests.ps1, BuildReleaseScript.Tests.ps1)",
+      "workingDirectory": "windows-bridge/tests/installer/",
+      "durationSeconds": null,
+      "exitCode": 0,
+      "suiteCount": 4,
+      "passed": 58,
+      "failed": 0,
+      "skipped": 0,
+      "repeatability": "STABLE_PASS on single run",
+      "notes": [
+        "26+17+8+7=58; run under Windows PowerShell 5.1 (powershell.exe) even though CI declares `shell: pwsh` (PowerShell 7) — all 4 scripts are hand-rolled Add-Result pass/fail harnesses (not Pester), and ran successfully on 5.1 without modification"
+      ]
+    }
+  ],
+  "blockedMeasurements": [
+    {
+      "item": "server/src/tests/securityIncident.test.ts (full DATABASE_INTEGRATION suite)",
+      "reason": "Requires a reachable PostgreSQL instance via DATABASE_URL. No committed docker-compose.yml or equivalent disposable-DB provisioning exists in the repository. Docker CLI (29.6.1) is present on this machine but was deliberately not used to improvise a database, per this task’s explicit instruction to classify as BLOCKED rather than invent setup when no committed convention exists.",
+      "exactMissingPrerequisite": "A committed, repository-documented disposable PostgreSQL provisioning method (e.g. docker-compose.yml + seed instructions), OR explicit user-provided DATABASE_URL to an already-running disposable instance."
+    },
+    {
+      "item": "3 server/scripts/verify-*.ts manual lifecycle scripts",
+      "reason": "Same as above — explicitly documented in each script’s own header as requiring `DATABASE_URL=postgresql://.../throwaway_db` and a prior `prisma migrate deploy`, and explicitly NOT wired into npm test by original design.",
+      "exactMissingPrerequisite": "Same as securityIncident.test.ts."
+    },
+    {
+      "item": "4 windows-bridge .NET test projects (dotnet test)",
+      "reason": "windows-bridge/global.json pins .NET SDK 10.0.301; only 9.0.305 is installed on this machine.",
+      "exactMissingPrerequisite": ".NET SDK 10.0.301 (or a global.json rollForward policy permitting 9.0.305 — not this task’s decision to change)."
+    },
+    {
+      "item": "scripts/noramedi-healthcheck.sh and scripts/noramedi-deploy.sh",
+      "reason": "Require a live running server instance (local or production); noramedi-deploy.sh additionally performs `prisma migrate deploy` and `pm2 reload` — both explicitly prohibited runtime/deployment actions for this task.",
+      "exactMissingPrerequisite": "A running NoraMedi server instance and, for the healthcheck script only, network reachability to it."
+    }
+  ],
+  "warnings": [
+    "This is a Windows checkout with git core.autocrlf=true — at least one test (clinicBulkExport.test.ts) is demonstrably sensitive to this and would need re-verification on a Linux/CI runner (its own comments state some of its sub-cases are \"skipped on win32 ... verified for real in the Linux container run\", confirming the test author already knew about Windows/Linux behavioral differences for OTHER cases in the same file).",
+    "Pass/fail counts for scripts that chain multiple .test.ts files (test:auth, test:instagram, test:meta-wa) are reported at the script level in this file; per-file breakdowns for those specific files are recorded in F0-005_test_inventory.json testFiles[].",
+    "Only ONE full-suite run of `npm run test` was performed, per this task’s 2-run cap for full suites; only the single failing suite (test:clinic-bulk-export) and the orphan test:overdue-installments were repeated a 2nd time to confirm stability.",
+    "No coverage percentage tool (nyc/c8/istanbul) exists in either package.json — no line/branch coverage numbers are reported anywhere in this task’s output, consistent with the task’s prohibition on claiming coverage percentages without an actual tool."
+  ]
+}
