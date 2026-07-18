@@ -2,7 +2,7 @@
 
 Bu dosya, NoraMedi kurumsal mimari ve modülerleşme programının **yetkili canlı durum kaynağıdır**. Bkz. [README.md](README.md).
 
-Son güncelleme: 2026-07-18 (F0-002 Stage A)
+Son güncelleme: 2026-07-18 (F0-002 Stage A — final remediation)
 
 ---
 
@@ -87,8 +87,8 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir. F0-002 Stage
 | Last restore test | `UNVERIFIED` — Stage B production evidence required |
 | Last production verification | `UNVERIFIED` — Stage B production evidence required |
 | Last confirmed merged KVKK work | [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) — KVKK-HIGH-004 secure clinic bulk export — `MERGED` (2026-07-17) |
-| Currently active KVKK work | `UNVERIFIED` |
-| Local observation (KVKK) | Yerel branch: `feature/kvkk-crit-003-security-incident-foundation`. Stage A başlangıcı (2026-07-18): temiz. Dış inceleme ara kontrolü (2026-07-18, aynı gün sonra): eşzamanlı değişmiş/untracked dosyalar mevcuttu (liste evidence dokümanında; F0-002 tarafından oluşturulmadı). Bu düzeltme kontrolü (2026-07-18, remediation): yeniden temiz, remote ile güncel. Tüm gözlemler **salt-okunur** (`git status`/`git branch`) — F0-002 bu ağaca hiçbir yazma/commit/reset/checkout komutu çalıştırmadı. Sınıflandırma: `OBSERVED_LOCAL_ONLY`. Remote branch'in PR/kapsam/tamamlanma/deployment durumu: `UNVERIFIED` (F0-007 kapsamı) |
+| Currently active KVKK work | [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) — KVKK-CRIT-003 (security incident response foundation). `OPEN`, not draft, mergeable snapshot `true` — `VERIFIED_GITHUB` (`gh pr view 167`, 2026-07-18). Head branch `feature/kvkk-crit-003-security-incident-foundation` @ `9c5c15512e1bc013340526a7f7c3792c32b0f408`, base `main`, 29 changed files, 3 commits. The PR body and commit messages report implementation/test activity (e.g. disposable-Postgres migration runs, `test:security-incidents` results), but these are **self-reported claims by the PR's own commits and are not independently accepted by F0-002** — F0-002 did not run, review, or verify any of that testing itself. PR #167 is **not** `MERGED`, **not** `DEPLOYED`, and has **no** `PRODUCTION_VERIFIED` status; acceptance and merge remain dış inceleme (ChatGPT/kullanıcı) kararı. |
+| Local observation (KVKK) | Yerel branch: `feature/kvkk-crit-003-security-incident-foundation`. Stage A başlangıcı (2026-07-18): temiz. Dış inceleme ara kontrolü (2026-07-18, aynı gün sonra): eşzamanlı değişmiş/untracked dosyalar mevcuttu (liste evidence dokümanında; F0-002 tarafından oluşturulmadı). Önceki düzeltme kontrolü (2026-07-18, remediation #1): yeniden temiz, remote ile güncel. Bu son düzeltme kontrolü (2026-07-18, remediation #2): 1 untracked dosya mevcut (`server/.env.pre-security-smoke-*`; F0-002 tarafından oluşturulmadı) — ağaç, eşzamanlı KVKK çalışması (bkz. PR #167 yukarıda) sürdüğü için zaman içinde değişmeye devam ediyor; bu **kararlı bir durum değildir**, yalnızca tek bir anlık gözlemdir. Tüm gözlemler **salt-okunur** (`git status`/`git branch`) — F0-002 bu ağaca hiçbir yazma/commit/reset/checkout komutu çalıştırmadı. Sınıflandırma: `OBSERVED_LOCAL_ONLY`. Remote branch'in scope/completion/deployment durumu (PR üzerinden dış onay/merge/deploy dışında): `UNVERIFIED` (F0-007 kapsamı) |
 | Known blockers | Bkz. §12 |
 
 ## 4. Phase summary (Faz özeti)
@@ -314,7 +314,7 @@ Henüz bu program kapsamında production doğrulaması yapılmamıştır.
 
 ## 12. Current blockers (Güncel blokajlar)
 
-1. KVKK taban çizgisi henüz dışarıdan kararlı olarak teyit edilmedi. KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi (2026-07-17); ancak bu, tüm KVKK programının tamamlandığı anlamına gelmez — devam eden KVKK/güvenlik çalışmasının durumu `UNVERIFIED` (F0-007 kanıt toplayacaktır).
+1. KVKK taban çizgisi henüz dışarıdan kararlı olarak teyit edilmedi. KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi (2026-07-17); ancak bu, tüm KVKK programının tamamlandığı anlamına gelmez. Devam eden KVKK çalışması artık [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) (KVKK-CRIT-003) olarak kanıtlandı — `OPEN`, merge edilmedi, deploy edilmedi, production doğrulaması yapılmadı (`VERIFIED_GITHUB`, bkz. §3). F0-007 bu PR'ın kapsamını ve mimari dondurma sınırıyla ilişkisini ayrıntılı olarak belgeleyecektir.
 2. Depo taban çizgisi (baseline) Stage A kapsamında **kanıtla toplandı** (F0-002 Stage A `AGENT_COMPLETED`, bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); production tarafı Stage B'nin kullanıcı tarafından salt-okunur VPS kanıtı sağlamasını bekliyor ([evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md)).
 3. Production topolojisi bu program kapsamında henüz doğrulanmadı (F0-002 Stage B, F0-006). Depoda iki çelişen deployment tanımı bulundu (Docker Compose runbook'u vs. gerçekte çalışan bare-VPS + PM2 script'i) — bkz. evidence §6.10.
 4. RLS / Prisma / PgBouncer uyumluluğu henüz kanıtlanmadı (F0-009 → F5).

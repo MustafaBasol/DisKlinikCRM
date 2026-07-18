@@ -1,6 +1,6 @@
 # CURRENT_PHASE — Aktif Faz Durumu
 
-Son güncelleme: 2026-07-18 (F0-002 Stage A)
+Son güncelleme: 2026-07-18 (F0-002 Stage A — final remediation)
 
 ## Aktif faz
 
@@ -21,7 +21,7 @@ Kurumsal mimari programına başlamadan önce:
 
 ## KVKK geliştirmesi sürerken F0 neden çalışıyor?
 
-KVKK-HIGH-004 (secure clinic bulk export) çalışması [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile `main`'e **merge edilmiştir** (2026-07-17). Bu, tüm KVKK programının tamamlandığı anlamına gelmez; ek KVKK/güvenlik çalışmaları hâlâ aktif olabilir. Yerel gözlem: ana çalışma ağacında `feature/kvkk-crit-003-security-incident-foundation` branch'i gözlemlenmiştir; ancak bu branch'in remote branch, PR, kapsam ve tamamlanma durumu `UNVERIFIED`'dır. F0'ın işleri **invaziv olmayan** dokümantasyon ve analizdir; KVKK koduna dokunmaz, onunla çakışmaz. Fiziksel mimari değişiklikleri, kullanıcı/ChatGPT kararlı bir KVKK taban çizgisini dışarıdan teyit edene kadar **donmuş** kalır.
+KVKK-HIGH-004 (secure clinic bulk export) çalışması [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile `main`'e **merge edilmiştir** (2026-07-17). Bu, tüm KVKK programının tamamlandığı anlamına gelmez; devam eden KVKK/güvenlik çalışması artık [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) (KVKK-CRIT-003, security incident response foundation) olarak kanıtlandı — `OPEN`, draft değil, `feature/kvkk-crit-003-security-incident-foundation` branch'inden `main`'e, 29 değişen dosya, 3 commit (`gh pr view 167` ile doğrulandı, `VERIFIED_GITHUB`). PR'ın kendi commit mesajları uygulama/test iddiaları içerir, ancak bunlar F0-002 tarafından bağımsız olarak doğrulanmadı/kabul edilmedi. PR #167 **merge edilmedi, deploy edilmedi, production'da doğrulanmadı**. F0'ın işleri **invaziv olmayan** dokümantasyon ve analizdir; KVKK koduna dokunmaz, onunla çakışmaz. Fiziksel mimari değişiklikleri, kullanıcı/ChatGPT kararlı bir KVKK taban çizgisini dışarıdan teyit edene (yani PR #167 merge/kabul kararı) kadar **donmuş** kalır.
 
 ## Şu an ilerleyebilecek işler
 
@@ -73,7 +73,7 @@ G0, F0-013 konsolide raporunun; baseline kanıtları, harita doğrulamaları, Po
 
 Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blockers-güncel-blokajlar). Özet:
 
-- KVKK taban çizgisi dışarıdan kararlı olarak teyit edilmedi (KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışması `UNVERIFIED`).
+- KVKK taban çizgisi dışarıdan kararlı olarak teyit edilmedi (KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışması [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) — `OPEN`, merge/deploy/production doğrulaması yok).
 - Depo baseline'ı kanıtla toplandı (F0-002 Stage A); production topolojisi, RLS/PgBouncer, storage ve queue/outbox kanıtları henüz yok (F0-002 Stage B, F0-006, F0-009, F0-010, F0-011).
 
 ## Tarih ve güncelleme geçmişi

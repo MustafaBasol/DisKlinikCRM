@@ -59,21 +59,30 @@ fi
 
 cd "$APP_DIR" || exit 1
 
-git status --short --branch
 git rev-parse HEAD
-git rev-parse --abbrev-ref HEAD   # branch name, or "HEAD" if detached
+BRANCH=$(git rev-parse --abbrev-ref HEAD)   # branch name, or "HEAD" if detached
+echo "branch: $BRANCH"
 git log -1 --format='%H %ci %s'
 
-# Sanitized remote URL only — never print the raw output, a remote could
-# embed a credential or token before the '@' in an https URL
-git remote get-url origin 2>/dev/null | sed -E 's#://[^/@]+@#://#'
+# Report only whether the origin remote is configured — never print its URL.
+# A remote URL could embed a credential or token before the '@'.
+if git remote get-url origin >/dev/null 2>&1; then
+  echo "origin remote: CONFIGURED"
+else
+  echo "origin remote: MISSING"
+fi
 
 # Compare against the real remote main WITHOUT fetching or modifying local refs
 git ls-remote origin refs/heads/main
 
-# Are there local modifications?
-git diff --stat
-git status --short
+# Working-tree cleanliness — metadata only, never individual file paths
+DIRTY_COUNT=$(git status --porcelain=v1 | wc -l)
+echo "working tree entries changed/untracked: $DIRTY_COUNT"
+if [ "$DIRTY_COUNT" -eq 0 ]; then
+  echo "working tree: CLEAN"
+else
+  echo "working tree: DIRTY"
+fi
 ```
 
 `APP_DIR` stays exported for the rest of this shell session — Sections E, G, H, I, and K below reuse it and will refuse to run if it isn't set.
@@ -165,7 +174,7 @@ export DB_NAME
 : "${DB_NAME:?DB_NAME not set — confirm the actual database name above before continuing}"
 
 sudo -u postgres psql -d "$DB_NAME" -c "SELECT version();"
-sudo -u postgres psql -d "$DB_NAME" -c "SELECT pg_size_pretty(pg_database_size('$DB_NAME'));"
+sudo -u postgres psql -d "$DB_NAME" -c "SELECT pg_size_pretty(pg_database_size(current_database()));"
 
 # Latest migration entries (name, timing, rollback state only — no row data)
 sudo -u postgres psql -d "$DB_NAME" -c "
@@ -267,24 +276,30 @@ test -x "$BACKUP_SCRIPT" && echo "backup script PRESENT and executable" || echo 
 test -f "$BACKUP_CRON" && echo "backup cron unit PRESENT" || echo "backup cron unit MISSING"
 test -f "$BACKUP_LOG" && echo "backup log PRESENT" || echo "backup log MISSING"
 
+# Only files matching the repository-declared backup filename pattern
+# (server/src/services/backupService.ts) count as database backups — do
+# not treat unrelated files in the backup directory as backups.
+BACKUP_PATTERN='noramedi_crm-????????-??????.dump'
+export BACKUP_PATTERN
+
 # Backup metadata only — count, latest age, latest size, total size.
 # No filenames are printed anywhere in this section.
-BACKUP_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
-echo "backup file count: $BACKUP_COUNT"
+BACKUP_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name "$BACKUP_PATTERN" 2>/dev/null | wc -l)
+echo "matching backup file count: $BACKUP_COUNT"
 
-LATEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -printf '%T@ %s\n' 2>/dev/null | sort -n | tail -1)
-if [ -n "$LATEST" ]; then
+if [ "$BACKUP_COUNT" -eq 0 ]; then
+  echo "no files matching the backup pattern were found"
+else
+  LATEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name "$BACKUP_PATTERN" -printf '%T@ %s\n' 2>/dev/null | sort -n | tail -1)
   LATEST_EPOCH=$(echo "$LATEST" | cut -d' ' -f1 | cut -d'.' -f1)
   LATEST_SIZE_BYTES=$(echo "$LATEST" | cut -d' ' -f2)
-  echo "latest backup age (seconds): $(( $(date +%s) - LATEST_EPOCH ))"
-  echo "latest backup size (bytes): $LATEST_SIZE_BYTES"
-else
-  echo "no backup files found"
+  echo "latest matching backup age (seconds): $(( $(date +%s) - LATEST_EPOCH ))"
+  echo "latest matching backup size (bytes): $LATEST_SIZE_BYTES"
 fi
 
 du -sh "$BACKUP_DIR" 2>/dev/null
 
-# Narrow cron/systemd check — does not print unrelated cron content
+# General backup cron/systemd presence — does not print unrelated cron content
 grep -l "noramedi" /etc/cron.d/* 2>/dev/null
 systemctl list-timers 2>/dev/null | grep -i noramedi
 
@@ -295,7 +310,22 @@ sudo -u postgres psql -c "SHOW wal_level;" 2>/dev/null
 
 Do not open, extract, or restore any backup file. Do not run the backup script. Do not list backup filenames.
 
-`BACKUP_DIR` stays exported for Section K below.
+### Restore-test evidence (explicit limitation)
+
+The repository contains a `runRestoreTest()` function (see `F0-002_REPOSITORY_BASELINE.md` §6.7), but the repository does **not** persist any durable "last restore test" ledger or result record anywhere. The existence of this function in the codebase is **not proof** that a restore test has ever actually been run.
+
+The check below can only confirm the narrow case of a *named*, automated cron/systemd job that references both "noramedi" and "restore" — it cannot detect a manual restore test, it does not read any log or job output, and its **absence does not prove** that a manual restore test never happened.
+
+```bash
+# Narrow restore-test job name check only — distinct from the general
+# backup cron/timer check above. Does not read logs or job output.
+systemctl list-timers 2>/dev/null | grep -Ei 'noramedi.*restore|restore.*noramedi'
+grep -lEi 'noramedi.*restore|restore.*noramedi' /etc/cron.d/* 2>/dev/null
+```
+
+Do not read application logs or backup contents as part of restore-test evidence. Unless the user separately provides a dated operational record (a manual log entry, ticket, or runbook sign-off — outside of this repository and outside of what these commands can produce), `Last restore test` in the tracker baseline (§3) remains `UNVERIFIED` regardless of what the two commands above return.
+
+`BACKUP_DIR` and `BACKUP_PATTERN` stay exported for Section K below.
 
 ---
 
@@ -333,8 +363,26 @@ echo "=== F0-002 Stage B evidence summary — $(date -Is) ==="
 echo "--- Host ---"
 hostname; uptime; free -h | head -2; df -h "$APP_DIR" 2>/dev/null
 
-echo "--- Git (sanitized) ---"
-( cd "$APP_DIR" && git rev-parse HEAD && git status --short --branch && git remote get-url origin 2>/dev/null | sed -E 's#://[^/@]+@#://#' )
+echo "--- Git (metadata only) ---"
+(
+  cd "$APP_DIR"
+  git rev-parse HEAD
+  K_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  echo "branch: $K_BRANCH"
+  if git remote get-url origin >/dev/null 2>&1; then
+    echo "origin remote: CONFIGURED"
+  else
+    echo "origin remote: MISSING"
+  fi
+  git ls-remote origin refs/heads/main
+  K_DIRTY_COUNT=$(git status --porcelain=v1 | wc -l)
+  echo "working tree entries changed/untracked: $K_DIRTY_COUNT"
+  if [ "$K_DIRTY_COUNT" -eq 0 ]; then
+    echo "working tree: CLEAN"
+  else
+    echo "working tree: DIRTY"
+  fi
+)
 
 echo "--- Runtime versions ---"
 node -v; npm -v; pm2 -v; nginx -v
@@ -368,11 +416,21 @@ test -d "$APP_DIR/server/uploads" && echo "local uploads dir EXISTS" || echo "lo
 check_var S3_BUCKET
 
 echo "--- Backup metadata (no filenames) ---"
-if [ -n "$BACKUP_DIR" ]; then
-  find "$BACKUP_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l | sed 's/^/backup file count: /'
+if [ -n "$BACKUP_DIR" ] && [ -n "$BACKUP_PATTERN" ]; then
+  K_BACKUP_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name "$BACKUP_PATTERN" 2>/dev/null | wc -l)
+  echo "matching backup file count: $K_BACKUP_COUNT"
+  if [ "$K_BACKUP_COUNT" -eq 0 ]; then
+    echo "no files matching the backup pattern were found"
+  else
+    K_LATEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name "$BACKUP_PATTERN" -printf '%T@ %s\n' 2>/dev/null | sort -n | tail -1)
+    K_LATEST_EPOCH=$(echo "$K_LATEST" | cut -d' ' -f1 | cut -d'.' -f1)
+    K_LATEST_SIZE=$(echo "$K_LATEST" | cut -d' ' -f2)
+    echo "latest matching backup age (seconds): $(( $(date +%s) - K_LATEST_EPOCH ))"
+    echo "latest matching backup size (bytes): $K_LATEST_SIZE"
+  fi
   du -sh "$BACKUP_DIR" 2>/dev/null
 else
-  echo "BACKUP_DIR not set (run Section I first)"
+  echo "BACKUP_DIR/BACKUP_PATTERN not set (run Section I first)"
 fi
 
 echo "--- PITR/WAL ---"
@@ -392,6 +450,6 @@ fi
 echo "=== end summary ==="
 ```
 
-It must not include: raw Git remote URL (only the sanitized form above), environment values, application logs, database rows outside `_prisma_migrations` and PostgreSQL metadata, backup filenames, upload filenames, object keys, or the full Nginx configuration.
+It must not include: any Git remote URL, sanitized or otherwise (only `CONFIGURED`/`MISSING` status), individual changed/untracked file paths (only the dirty-entry count and CLEAN/DIRTY status), environment values, application logs, database rows outside `_prisma_migrations` and PostgreSQL metadata, backup filenames, upload filenames, object keys, or the full Nginx configuration.
 
 > ⚠️ **Review the output before sharing.** Remove any secret, token, password, connection string, patient name, phone number, email address, clinical data, or private object path before pasting the results back into this conversation or into ChatGPT.

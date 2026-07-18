@@ -1,6 +1,6 @@
 # F0 — Baseline, Program Control, and Architecture Validation
 
-Faz durumu: `IN_PROGRESS` · Son güncelleme: 2026-07-18 (F0-002 Stage A)
+Faz durumu: `IN_PROGRESS` · Son güncelleme: 2026-07-18 (F0-002 Stage A — final remediation)
 
 ## Objective (Hedef)
 
@@ -107,7 +107,7 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 
 ## Open questions (Açık sorular)
 
-- KVKK taban çizgisinin dış teyidi ne zaman gelecek? KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışmasının durumu `UNVERIFIED` (F0-007 girdisi)
+- KVKK taban çizgisinin dış teyidi ne zaman gelecek? KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışması artık [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) (KVKK-CRIT-003) olarak kanıtlandı — `OPEN`, merge/deploy/production doğrulaması yok (`VERIFIED_GITHUB`); dış kabul/merge kararı bekleniyor (F0-007 girdisi)
 - Production ortam kanıtlarına erişim yöntemi netleşti: kullanıcı [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](../evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md) içindeki salt-okunur komut setini VPS'te çalıştırıp çıktıyı paylaşacak (F0-002 Stage B); henüz sağlanmadı
 - Production, depoda çelişen iki farklı topoloji tanımından (Docker Compose runbook'u vs. bare-VPS + PM2 script'i) hangisini gerçekten çalıştırıyor? Stage B'de netleşecek (bkz. evidence §6.10)
 - F8'in (AI Gateway) F2 sonrası paralelleştirilme kararı (F0-013'te netleşecek)
@@ -123,3 +123,5 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 | 2026-07-17 | F0-001 | Düzeltmeler commit `ef11d2d` ile PR #166'ya push edildi; PR açık: F0-001 → `PR_OPEN`. |
 | 2026-07-18 | F0-001 | PR #166 merge edildi (merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, `gh pr view` ile doğrulandı): F0-001 → `MERGED`. |
 | 2026-07-18 | F0-002 | Stage A tamamlandı: izole worktree/branch, depo/toolchain/script/Prisma/deployment/runtime-bağımlılık/CI envanteri, baseline kanıt matrisi, çelişki listesi ve production evidence request. F0-002 → `IN_PROGRESS` (Stage A `AGENT_COMPLETED`, Stage B kullanıcı girdisi bekliyor). |
+| 2026-07-18 | F0-002 | Dış inceleme düzeltmesi #1: tracker tutarsızlığı (bayat KVKK-temiz iddiası) ve production evidence komut güvenliği (8 madde) düzeltildi, push edildi. |
+| 2026-07-18 | F0-002 | Dış inceleme düzeltmesi #2 (final): [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) (KVKK-CRIT-003) `OPEN` olarak kanıtlandı ve tracker'a işlendi; production evidence request'te kalan 5 güvenlik maddesi (remote URL çıktısının tamamen kaldırılması, dosya yolu çıktısının kaldırılması, veritabanı boyutu sorgusunda `current_database()` kullanımı, yedek dosya adı deseninin daraltılması, restore-test kanıt sınırlamasının açıkça belgelenmesi) düzeltildi. |
