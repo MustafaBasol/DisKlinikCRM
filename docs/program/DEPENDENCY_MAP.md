@@ -1,8 +1,10 @@
 # DEPENDENCY_MAP — Modüller Arası Bağımlılık İlkeleri ve Matris
 
-Son güncelleme: 2026-07-17 (F0-001)
+Son güncelleme: 2026-07-18 (F0-003 — domain kümesi kesinleşti; matris henüz doldurulmadı)
 
 > Bu doküman **hedef** bağımlılık kurallarını tanımlar. Gerçek (mevcut) bağımlılıklar henüz depo kanıtıyla çıkarılmamıştır; matris **F0-004** tarafından doldurulacaktır.
+>
+> **F0-003 güncellemesi:** Satır/sütun kümesi artık kesinleşmiştir — bkz. [MODULE_MAP.md](MODULE_MAP.md) (29 domain: 13 Core Platform, 7 Core Clinical, 8 Optional Operational + 1 kanıt-tabanlı ek domain, 4 planned/not-implemented grup). F0-003 ayrıca birkaç gözlem (cross-domain doğrudan erişim örnekleri) kaydetti — bkz. [evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md §4](evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md#4-cross-domain-dependency-observations-light--full-matrix-is-f0-004s-deliverable). Aşağıdaki matris hücreleri kasıtlı olarak `UNVERIFIED` bırakılmıştır; tam import/çağrı-kanıtlı doldurma F0-004'ün işidir.
 
 ## 1. Bağımlılık ilkeleri
 

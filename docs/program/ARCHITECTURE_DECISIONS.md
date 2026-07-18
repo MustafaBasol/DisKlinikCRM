@@ -22,7 +22,7 @@ Son güncelleme: 2026-07-17 (F0-001)
 - **Decision required:** Modül tanımı, katmanlar, servis çıkarım kriterleri.
 - **Phase:** F2
 - **Dependencies:** F0-003, F0-004
-- **Evidence still needed:** Depo-doğrulanmış modül haritası ve bağımlılık matrisi.
+- **Evidence still needed:** Depo-doğrulanmış modül haritası ([MODULE_MAP.md](MODULE_MAP.md), F0-003 — sağlandı) ve bağımlılık matrisi (F0-004 — hâlâ bekliyor). F0-003 kanıtı bu kararı henüz **kabul etmez** — yalnızca girdi sağlar.
 
 ## ADR-002 — Tenant isolation layers
 - **Status:** `PROPOSED`
@@ -134,7 +134,7 @@ Son güncelleme: 2026-07-17 (F0-001)
 - **Decision required:** Contract sözdizimi/konumu, sürümleme, ihlal denetimi (lint/CI).
 - **Phase:** F2
 - **Dependencies:** F0-003, F0-004, ADR-001
-- **Evidence still needed:** Bağımlılık matrisi; pilot contract denemesi.
+- **Evidence still needed:** Bağımlılık matrisi (F0-004 — hâlâ bekliyor); pilot contract denemesi. F0-003 kanıt-tabanlı contract adayları listesi mevcut ([MODULE_MAP.md § Cross-domain dependencies and future contracts](MODULE_MAP.md#cross-domain-dependencies-and-future-contracts)) — hiçbiri henüz uygulanmadı veya kabul edilmedi.
 
 ## ADR-016 — Container and orchestration strategy
 - **Status:** `PROPOSED`
