@@ -1,6 +1,6 @@
 # F0 — Baseline, Program Control, and Architecture Validation
 
-Faz durumu: `IN_PROGRESS` · Son güncelleme: 2026-07-17 (F0-001)
+Faz durumu: `IN_PROGRESS` · Son güncelleme: 2026-07-18 (F0-002 Stage A)
 
 ## Objective (Hedef)
 
@@ -54,8 +54,8 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 
 | ID | Başlık | Durum |
 |---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166); düzeltmeler push edildi) |
-| F0-002 | Repository and Deployment Baseline Inventory | `READY` |
+| F0-001 | Program Control and Master Tracker Foundation | `MERGED` ([PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166), merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, 2026-07-18) |
+| F0-002 | Repository and Deployment Baseline Inventory | `IN_PROGRESS` — Stage A `AGENT_COMPLETED`, Stage B production kanıtı bekliyor |
 | F0-003 | Domain and Module Ownership Map | `TODO` |
 | F0-004 | Cross-Module Dependency Map | `TODO` |
 | F0-005 | Test Inventory, Runtime Measurement, and Ownership Map | `TODO` |
@@ -108,7 +108,8 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 ## Open questions (Açık sorular)
 
 - KVKK taban çizgisinin dış teyidi ne zaman gelecek? KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışmasının durumu `UNVERIFIED` (F0-007 girdisi)
-- Production ortam kanıtlarına erişim yöntemi (F0-002/F0-006 için kullanıcıdan beklenen bilgiler)
+- Production ortam kanıtlarına erişim yöntemi netleşti: kullanıcı [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](../evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md) içindeki salt-okunur komut setini VPS'te çalıştırıp çıktıyı paylaşacak (F0-002 Stage B); henüz sağlanmadı
+- Production, depoda çelişen iki farklı topoloji tanımından (Docker Compose runbook'u vs. bare-VPS + PM2 script'i) hangisini gerçekten çalıştırıyor? Stage B'de netleşecek (bkz. evidence §6.10)
 - F8'in (AI Gateway) F2 sonrası paralelleştirilme kararı (F0-013'te netleşecek)
 
 ## Change history (Değişiklik geçmişi)
@@ -120,3 +121,5 @@ Ayrıntılı alanlar (purpose, dependencies, deliverables, evidence, blocking, a
 | 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
 | 2026-07-17 | F0-001 | Dış inceleme düzeltmesi: bayat KVKK ifadeleri giderildi (PR #165 `MERGED`, aktif KVKK çalışması `UNVERIFIED`); F0-001 → `CHANGES_REQUESTED`. |
 | 2026-07-17 | F0-001 | Düzeltmeler commit `ef11d2d` ile PR #166'ya push edildi; PR açık: F0-001 → `PR_OPEN`. |
+| 2026-07-18 | F0-001 | PR #166 merge edildi (merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, `gh pr view` ile doğrulandı): F0-001 → `MERGED`. |
+| 2026-07-18 | F0-002 | Stage A tamamlandı: izole worktree/branch, depo/toolchain/script/Prisma/deployment/runtime-bağımlılık/CI envanteri, baseline kanıt matrisi, çelişki listesi ve production evidence request. F0-002 → `IN_PROGRESS` (Stage A `AGENT_COMPLETED`, Stage B kullanıcı girdisi bekliyor). |

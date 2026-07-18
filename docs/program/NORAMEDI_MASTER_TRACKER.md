@@ -2,7 +2,7 @@
 
 Bu dosya, NoraMedi kurumsal mimari ve modülerleşme programının **yetkili canlı durum kaynağıdır**. Bkz. [README.md](README.md).
 
-Son güncelleme: 2026-07-17 (F0-001)
+Son güncelleme: 2026-07-18 (F0-002 Stage A)
 
 ---
 
@@ -66,34 +66,36 @@ Word yol haritası **stratejik referanstır**, canlı durum kaynağı değildir.
 
 ## 3. Current baseline (Güncel taban çizgisi)
 
-Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu tabloyu kanıtla dolduracaktır. Değer **uydurulmaz**.
+Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir. F0-002 Stage A bu tabloyu **depo** kanıtıyla doldurdu (bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); production'a bağlı alanlar Stage B'ye kadar `UNVERIFIED` kalır — depo kapasitesi production kanıtı **yerine geçmez**. Değer **uydurulmaz**.
 
 | Alan | Değer |
 |---|---|
-| Repository | `DisKlinikCRM` (yerel yol: `E:\Ek Gelir\Siteler\DisKlinikCRM-git`; remote: `github.com/MustafaBasol/DisKlinikCRM`) |
+| Repository | `DisKlinikCRM` (yerel yol: `D:\Mustafa\Siteler\DisKlinikCRM`; remote: `github.com/MustafaBasol/DisKlinikCRM`). Not: önceki sürümde yerel yol `E:\Ek Gelir\Siteler\DisKlinikCRM-git` olarak kayıtlıydı — bu, F0-002 Stage A sırasında bayat olduğu tespit edilip düzeltildi; hiçbir Git/GitHub kanıtını etkilemez. |
 | Default branch | `main` |
-| Current branch (bu dokümantasyon çalışması) | `docs/f0-001-program-tracker-foundation` |
-| Documentation branch creation base | `68721554eb622837f67f956d571723192d628eaf` (branch oluşturulduğu andaki `origin/main`, 2026-07-17) |
+| Current branch (bu dokümantasyon çalışması) | `docs/f0-002-repository-deployment-baseline` |
+| F0-002 isolated worktree | `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline` — tercih edilen `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f0-002-baseline` yolundan sapma; bu ortamda `E:` sürücüsü bağlı değil (bkz. evidence dosyası "Deviations from instructions"). |
+| Documentation branch creation base | `4302825abcdf4f5dbb90b4ded92b2e44a947df18` (F0-002 branch'i oluşturulduğu andaki `origin/main`, 2026-07-18 — aynı zamanda PR #166 merge commit'i; `main` bu commit'in ötesine geçmemiş) |
 | PR base branch | `main` |
-| Current main commit | `UNVERIFIED` — F0-002 bu kanıtı toplayacaktır |
-| Production commit | `UNVERIFIED` |
-| Backend deployment | `UNVERIFIED` |
-| Frontend deployment | `UNVERIFIED` |
-| Worker deployment | `UNVERIFIED` |
-| Current database migration | `UNVERIFIED` |
-| Last backup | `UNVERIFIED` |
-| Last restore test | `UNVERIFIED` |
-| Last production verification | `UNVERIFIED` |
+| Current main commit | `4302825abcdf4f5dbb90b4ded92b2e44a947df18` — `VERIFIED_GIT` (refreshed `origin/main`, `git fetch` + `git rev-parse origin/main` ile doğrulandı, 2026-07-18) |
+| Repository migration head | `20260716120000_add_clinic_bulk_export` — `VERIFIED_REPOSITORY` (60 migration dizini, doğrusal, çakışma/eksik yok — bkz. evidence §6.5) |
+| Production commit | `UNVERIFIED` — Stage B production evidence required |
+| Backend deployment | `UNVERIFIED` — Stage B production evidence required |
+| Frontend deployment | `UNVERIFIED` — Stage B production evidence required |
+| Worker deployment | `UNVERIFIED` — Stage B production evidence required. Not: depoda `noramedi-worker` adında bir PM2 süreç tanımı **bulunamadı** (bkz. evidence §6.6/§6.10); bu isim görevin beklentisidir, depo kanıtı değildir. |
+| Current production database migration | `UNVERIFIED` — Stage B production evidence required |
+| Last backup | `UNVERIFIED` — Stage B production evidence required |
+| Last restore test | `UNVERIFIED` — Stage B production evidence required |
+| Last production verification | `UNVERIFIED` — Stage B production evidence required |
 | Last confirmed merged KVKK work | [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) — KVKK-HIGH-004 secure clinic bulk export — `MERGED` (2026-07-17) |
 | Currently active KVKK work | `UNVERIFIED` |
-| Local observation (KVKK) | Ana çalışma ağacında `feature/kvkk-crit-003-security-incident-foundation` branch'i gözlemlendi; remote branch, PR, kapsam, uygulama ve tamamlanma durumu `UNVERIFIED` |
+| Local observation (KVKK) | Ana çalışma ağacında `feature/kvkk-crit-003-security-incident-foundation` branch'i gözlemlendi (F0-002 sırasında **salt-okunur** olarak yeniden teyit edildi: `nothing to commit, working tree clean`, remote ile güncel); remote branch'in PR/kapsam/tamamlanma durumu hâlâ `UNVERIFIED` (F0-007 kapsamı) |
 | Known blockers | Bkz. §12 |
 
 ## 4. Phase summary (Faz özeti)
 
 | Faz | Ad | Durum | Giriş koşulu | Çıkış kapısı | Bloklayan bağımlılık | Son güncelleme |
 |---|---|---|---|---|---|---|
-| F0 | Baseline, Program Control, and Architecture Validation | `IN_PROGRESS` | Program başlangıcı | G0: F0 doğrulama raporu (F0-013) onayı | Aktif KVKK çalışması taban çizgisi (mimari değişiklikler için) | 2026-07-17 |
+| F0 | Baseline, Program Control, and Architecture Validation | `IN_PROGRESS` | Program başlangıcı | G0: F0 doğrulama raporu (F0-013) onayı | Aktif KVKK çalışması taban çizgisi (mimari değişiklikler için) | 2026-07-18 |
 | F1 | CI and Test Architecture | `TODO` | G0 onayı | Etki-bazlı CI modeli kanıtla çalışıyor | F0 | 2026-07-17 |
 | F2 | Modular Boundaries and Public Contracts | `TODO` | F1 çıkışı | Modül sınırları + public contract'lar kabul | F1 | 2026-07-17 |
 | F3 | Production Hardening | `TODO` | F2 çıkışı | Sertleştirme kanıtları + gözlemlenebilirlik | F2 | 2026-07-17 |
@@ -110,35 +112,37 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 
 | Alan | Değer |
 |---|---|
-| ID | F0-001 |
-| Title | Program Control and Master Tracker Foundation |
-| Status | `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; dış inceleme düzeltmeleri commit `ef11d2d` ile push edildi (2026-07-17; merge kararı dış incelemeye aittir) |
-| Branch | `docs/f0-001-program-tracker-foundation` |
-| Scope | Yalnızca dokümantasyon: program takip temeli (`docs/program/`) |
-| Out of scope | Tüm uygulama ve veritabanı değişiklikleri |
-| Dependency | Yok |
+| ID | F0-002 |
+| Title | Repository and Deployment Baseline Inventory |
+| Status | `IN_PROGRESS` — Stage A (depo kanıtı) `AGENT_COMPLETED`; Stage B (production kanıtı) `BLOCKED — dış (kullanıcı sağlayacak, salt-okunur VPS kanıtı) girdi bekleniyor`. Genel görev durumu ajan tarafından `AGENT_COMPLETED` olarak beyan **edilemez** çünkü production kanıtı toplanmadı. |
+| Branch | `docs/f0-002-repository-deployment-baseline` |
+| Worktree | `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline` (izole; ana KVKK çalışma ağacına dokunulmadı) |
+| Scope | Yalnızca analiz/dokümantasyon: depo/deployment/production-kanıt-talebi envanteri (`docs/program/`) |
+| Out of scope | Tüm uygulama, şema, migration, test, CI, deployment değişiklikleri; production'a bağlanma |
+| Dependency | F0-001 (`MERGED`) |
 | Reviewer | ChatGPT / kullanıcı |
-| Ajan için izinli sonraki durum | Yok — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir |
+| Evidence | [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md), [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md) |
+| Ajan için izinli sonraki durum | Stage B kanıtı geldikten sonra: dış inceleme + üretim mutabakatı; genel görev durumu yalnızca dış kanıtla `AGENT_COMPLETED`'ın ötesine geçebilir |
 
 ## 6. Current F0 task backlog (F0 görev listesi)
 
 ### F0-001 — Program Control and Master Tracker Foundation
-- **Status:** `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; düzeltmeler push edildi (2026-07-17)
+- **Status:** `MERGED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166), merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, merged at `2026-07-18T08:08:10Z` (`gh pr view 166` ile doğrulandı — `VERIFIED_GITHUB`).
 - **Purpose:** Depo-tabanlı yetkili program takip sistemini (`docs/program/`) oluşturmak.
 - **Dependencies:** Yok.
 - **Deliverables:** 24 Markdown dosyası (12 kök + 12 faz dokümanı).
-- **Evidence required:** Dosyaların depoda varlığı; uygulama/şema/CI/test dosyalarının değişmediğinin `git status` kanıtı.
+- **Evidence required:** Dosyaların depoda varlığı; uygulama/şema/CI/test dosyalarının değişmediğinin `git status` kanıtı. ✅ Karşılandı.
 - **Blocking conditions:** Yok.
-- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED` / `CHANGES_REQUESTED` / PR akışı.
+- **Allowed next status:** Yok — `MERGED` nihai durumdur.
 
 ### F0-002 — Repository and Deployment Baseline Inventory
-- **Status:** `READY`
+- **Status:** `IN_PROGRESS` — Stage A (`AGENT_COMPLETED`) tamamlandı: depo, toolchain, script, Prisma/migration, deployment, runtime-bağımlılık ve CI envanteri kanıtla dolduruldu (bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)). Stage B (production kanıtı) kullanıcının salt-okunur VPS kanıtı sağlamasını bekliyor (bkz. [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md)); genel görev durumu Stage B tamamlanana kadar `IN_PROGRESS` kalır.
 - **Purpose:** Depo, branch, migration, deployment ve ortam taban çizgisini **kanıtla** envanterlemek; §3'teki `UNVERIFIED` alanları doldurmak.
-- **Dependencies:** F0-001.
-- **Deliverables:** Güncellenmiş §3 baseline tablosu + envanter raporu.
-- **Evidence required:** Git referansları, migration listesi, deployment revizyon bilgileri (erişilebiliyorsa).
-- **Blocking conditions:** Yok. **Yalnızca analiz/dokümantasyon; uygulama davranışı değiştirilemez.**
-- **Allowed next status:** `IN_PROGRESS` → `AGENT_COMPLETED`.
+- **Dependencies:** F0-001 (`MERGED`).
+- **Deliverables:** Güncellenmiş §3 baseline tablosu + [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md) + [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md).
+- **Evidence required:** Git referansları ✅, migration listesi ✅, deployment tanımı ✅ (depo kapasitesi olarak); deployment revizyon/production kanıtı ⏳ Stage B.
+- **Blocking conditions:** Stage B, kullanıcının production VPS'te salt-okunur kanıt toplamasını gerektirir. **Yalnızca analiz/dokümantasyon; uygulama davranışı değiştirilemez.**
+- **Allowed next status:** Stage B kanıtı geldikten sonra dış mutabakat; genel görev ajan tarafından en fazla `AGENT_COMPLETED` (Stage A) durumuna getirilebilir — bu zaten yapıldı, üstü dış kanıt gerektirir.
 
 ### F0-003 — Domain and Module Ownership Map
 - **Status:** `TODO`
@@ -243,7 +247,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme düzeltmeleri (bayat KVKK taban çizgisi ifadeleri) commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi (2026-07-17); PR açık, merge kararı dış incelemeye aittir. |
+| F0-001 | Program Control and Master Tracker Foundation | `MERGED` | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166), merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, merged `2026-07-18T08:08:10Z` — `VERIFIED_GITHUB`. Yalnızca dokümantasyon; uygulama/mimari doğrulama F0-002+ kapsamındadır. |
 
 ## 8. Blocked tasks (Bloklu işler)
 
@@ -311,14 +315,16 @@ Henüz bu program kapsamında production doğrulaması yapılmamıştır.
 ## 12. Current blockers (Güncel blokajlar)
 
 1. KVKK taban çizgisi henüz dışarıdan kararlı olarak teyit edilmedi. KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi (2026-07-17); ancak bu, tüm KVKK programının tamamlandığı anlamına gelmez — devam eden KVKK/güvenlik çalışmasının durumu `UNVERIFIED` (F0-007 kanıt toplayacaktır).
-2. Depo taban çizgisi (baseline) henüz toplanmadı (F0-002).
-3. Production topolojisi bu program kapsamında henüz doğrulanmadı (F0-006).
+2. Depo taban çizgisi (baseline) Stage A kapsamında **kanıtla toplandı** (F0-002 Stage A `AGENT_COMPLETED`, bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); production tarafı Stage B'nin kullanıcı tarafından salt-okunur VPS kanıtı sağlamasını bekliyor ([evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md)).
+3. Production topolojisi bu program kapsamında henüz doğrulanmadı (F0-002 Stage B, F0-006). Depoda iki çelişen deployment tanımı bulundu (Docker Compose runbook'u vs. gerçekte çalışan bare-VPS + PM2 script'i) — bkz. evidence §6.10.
 4. RLS / Prisma / PgBouncer uyumluluğu henüz kanıtlanmadı (F0-009 → F5).
 5. Object-storage sağlayıcısı ve migrasyon tasarımı henüz onaylanmadı (F0-011 → F4).
 6. Queue/outbox mimarisi henüz kanıtlanmadı (F0-010 → F6).
 
 ## 13. Exact next task (Kesin sonraki görev)
 
-**F0-002 — Repository and Deployment Baseline Inventory**
+**F0-002 Stage B — Production Topology, Commit, Migration, and Runtime Verification**
 
-F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştiremez**.
+Stage A (depo kanıtı) tamamlandı. Stage B, kullanıcının [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md) içindeki salt-okunur komut setini production VPS'te çalıştırıp çıktıyı (sır/PII temizlenmiş olarak) paylaşmasını bekliyor. Bu geldikten sonra bir sonraki ajan turu §3 baseline tablosundaki `UNVERIFIED` production alanlarını kanıtla dolduracak ve F0-002'yi genel görev olarak sonuçlandıracaktır (yine de `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` **atanamaz** — bunlar dış teyit gerektirir).
+
+F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştiremez**. F0-003 bu tur içinde **başlatılmadı** — F0-002'nin genel görev durumu `IN_PROGRESS` kaldığı sürece sıradaki görev budur.

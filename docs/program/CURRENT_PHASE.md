@@ -1,6 +1,6 @@
 # CURRENT_PHASE — Aktif Faz Durumu
 
-Son güncelleme: 2026-07-17 (F0-001)
+Son güncelleme: 2026-07-18 (F0-002 Stage A)
 
 ## Aktif faz
 
@@ -49,11 +49,11 @@ KVKK-HIGH-004 (secure clinic bulk export) çalışması [PR #165](https://github
 
 ## Aktif görev
 
-**F0-001 — Program Control and Master Tracker Foundation** → `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; dış inceleme düzeltmeleri push edildi (merge kararı dış incelemeye aittir)
+**F0-002 — Repository and Deployment Baseline Inventory** → `IN_PROGRESS` — Stage A (depo kanıtı) `AGENT_COMPLETED` (bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); Stage B (production kanıtı) kullanıcının salt-okunur VPS kanıtı sağlamasını bekliyor ([evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md)). Genel görev durumu ajan tarafından bunun ötesine geçirilemez.
 
 ## Sonraki görev
 
-**F0-002 — Repository and Deployment Baseline Inventory** → `READY` (yalnızca analiz/dokümantasyon; uygulama davranışı değiştirilemez)
+**F0-002 Stage B — Production Topology, Commit, Migration, and Runtime Verification** → kullanıcı girdisi bekleniyor (production evidence request çıktısı). Ardından F0-003 sıraya girer (bu turda **başlatılmadı**).
 
 ## Giriş koşulları
 
@@ -74,7 +74,7 @@ G0, F0-013 konsolide raporunun; baseline kanıtları, harita doğrulamaları, Po
 Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blockers-güncel-blokajlar). Özet:
 
 - KVKK taban çizgisi dışarıdan kararlı olarak teyit edilmedi (KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışması `UNVERIFIED`).
-- Baseline, production topolojisi, RLS/PgBouncer, storage ve queue/outbox kanıtları henüz yok.
+- Depo baseline'ı kanıtla toplandı (F0-002 Stage A); production topolojisi, RLS/PgBouncer, storage ve queue/outbox kanıtları henüz yok (F0-002 Stage B, F0-006, F0-009, F0-010, F0-011).
 
 ## Tarih ve güncelleme geçmişi
 
@@ -85,3 +85,5 @@ Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blo
 | 2026-07-17 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açıldı: F0-001 → `PR_OPEN`. |
 | 2026-07-17 | F0-001 | Dış inceleme düzeltme istedi (bayat KVKK taban çizgisi ifadeleri): F0-001 → `CHANGES_REQUESTED`; PR #165'in merge edildiği kaydedildi, aktif KVKK çalışması `UNVERIFIED`'a döndürüldü. |
 | 2026-07-17 | F0-001 | Düzeltmeler commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi; PR açık: F0-001 → `PR_OPEN`. |
+| 2026-07-18 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) merge edildi (merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, `2026-07-18T08:08:10Z`, `gh pr view` ile doğrulandı): F0-001 → `MERGED`. |
+| 2026-07-18 | F0-002 | Stage A (depo kanıtı) tamamlandı: izole worktree/branch oluşturuldu, PR #166 merge-ancestry doğrulandı, depo/toolchain/script/Prisma/deployment/runtime-bağımlılık/CI envanteri kanıtla dolduruldu (bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); production evidence request hazırlandı ([evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md)). F0-002 → `IN_PROGRESS` (Stage A `AGENT_COMPLETED`, Stage B kullanıcı girdisi bekliyor). |
