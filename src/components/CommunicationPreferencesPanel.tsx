@@ -41,6 +41,11 @@ const EVIDENCE_TYPES = [
 
 const SOURCES = ['staff', 'patient_portal', 'public_booking', 'sms_keyword', 'email_unsubscribe', 'api', 'import'] as const;
 
+// Mirrors the backend notice-version/evidence matrix in
+// communicationConsentAdmin.ts (DIGITAL_GRANT_SOURCES / staff-source check) —
+// client-side hints only, the server remains the source of truth.
+const DIGITAL_GRANT_SOURCES = ['patient_portal', 'public_booking', 'whatsapp', 'sms_keyword', 'email_unsubscribe'];
+
 const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage }) => {
   const { t } = useTranslation('communicationConsent');
   const { formatDate } = useClinicPreferences();
@@ -78,6 +83,13 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage }
   useEffect(() => { loadMatrix(); }, [loadMatrix]);
 
   const index = buildMatrixIndex(matrix);
+
+  const isGrant = pendingAction?.action === 'grant';
+  const noticeVersionRequired = isGrant && DIGITAL_GRANT_SOURCES.includes(source);
+  const sourceDescriptionRequired = isGrant && source === 'staff';
+  const canSubmit =
+    (!noticeVersionRequired || noticeVersion.trim().length > 0) &&
+    (!sourceDescriptionRequired || notes.trim().length > 0);
 
   const openAction = (channel: string, purpose: string, action: PendingAction['action']) => {
     setPendingAction({ channel, purpose, action });
@@ -265,12 +277,22 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage }
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('fields.noticeVersion')}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('fields.noticeVersion')} {noticeVersionRequired && <span className="text-red-500">*</span>}
+                    </label>
                     <input value={noticeVersion} onChange={(e) => setNoticeVersion(e.target.value)} className="input-field" placeholder={t('fields.noticeVersionPlaceholder')} maxLength={64} />
+                    {noticeVersionRequired && !noticeVersion.trim() && (
+                      <p className="text-xs text-amber-600 mt-1">{t('fields.noticeVersionRequiredHint')}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('fields.notes')}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('fields.notes')} {sourceDescriptionRequired && <span className="text-red-500">*</span>}
+                    </label>
                     <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} className="input-field resize-none" placeholder={t('fields.notesPlaceholder')} />
+                    {sourceDescriptionRequired && !notes.trim() && (
+                      <p className="text-xs text-amber-600 mt-1">{t('fields.sourceDescriptionRequiredHint')}</p>
+                    )}
                   </div>
                 </>
               )}
@@ -284,7 +306,7 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage }
             </div>
             <div className="px-5 py-4 border-t flex justify-end gap-3">
               <button onClick={() => setPendingAction(null)} className="btn-secondary">{t('actions.cancel')}</button>
-              <button onClick={submitAction} disabled={submitting} className="btn-primary flex items-center gap-2">
+              <button onClick={submitAction} disabled={submitting || !canSubmit} className="btn-primary flex items-center gap-2">
                 {submitting && <Loader2 size={15} className="animate-spin" />}
                 {t('actions.confirm')}
               </button>

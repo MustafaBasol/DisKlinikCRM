@@ -114,6 +114,10 @@ async function main(): Promise<void> {
         if (!execute) continue;
 
         await prisma.$transaction(async (tx) => {
+          // Always a fresh row (the `existing` check above guarantees no
+          // prior row for this key), so revision is always 1 — no advisory
+          // lock needed here (this is a one-off batch migration, not a
+          // concurrent request path).
           const preference = await tx.patientCommunicationPreference.create({
             data: {
               organizationId: patient.organizationId,
@@ -124,6 +128,7 @@ async function main(): Promise<void> {
               status: 'withdrawn',
               effectiveAt: new Date(),
               withdrawnAt: new Date(),
+              revision: 1,
               source: BACKFILL_SOURCE,
               evidenceType: BACKFILL_EVIDENCE_TYPE,
               notes: 'Backfilled from legacy Patient.smsOptOut field.',
@@ -139,6 +144,7 @@ async function main(): Promise<void> {
               purpose,
               previousStatus: null,
               newStatus: 'withdrawn',
+              revision: 1,
               source: BACKFILL_SOURCE,
               evidenceType: BACKFILL_EVIDENCE_TYPE,
               notes: 'Backfilled from legacy Patient.smsOptOut field.',

@@ -143,7 +143,11 @@ router.get(
 
       const events = await prisma.patientCommunicationConsentEvent.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        // Ordered by the monotonic `revision`, not `createdAt` — Postgres
+        // TIMESTAMP(3) is millisecond-precision and can tie under
+        // concurrency; `revision` is the authoritative transition order
+        // (see communicationConsentAdmin.ts).
+        orderBy: { revision: 'desc' },
         take: 200,
       });
 
@@ -173,7 +177,14 @@ router.get(
         }),
         prisma.patientCommunicationConsentEvent.findMany({
           where: { patientId: patient.id, clinicId: patient.clinicId },
-          orderBy: { createdAt: 'asc' },
+          // This dump spans every channel/purpose key for the patient, so
+          // `revision` alone (only meaningful within one key) would interleave
+          // unrelated keys confusingly. createdAt gives a sensible
+          // cross-key chronological order; `revision` is the secondary sort
+          // to deterministically resolve any millisecond tie within the same
+          // key, so within a single key the effective order still matches
+          // the authoritative revision order.
+          orderBy: [{ createdAt: 'asc' }, { revision: 'asc' }],
         }),
       ]);
 

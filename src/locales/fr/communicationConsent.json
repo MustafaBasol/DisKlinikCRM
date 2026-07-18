@@ -58,8 +58,10 @@
     "source": "Source",
     "noticeVersion": "Version de la notice",
     "noticeVersionPlaceholder": "ex. v1.2 (facultatif)",
+    "noticeVersionRequiredHint": "Obligatoire pour un consentement enregistré depuis cette source.",
     "notes": "Notes",
-    "notesPlaceholder": "Brève note sur la déclaration du patient (facultatif)"
+    "notesPlaceholder": "Brève note sur la déclaration du patient (facultatif)",
+    "sourceDescriptionRequiredHint": "Une brève description de ce qui a été dit/montré est requise pour un consentement enregistré par le personnel."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Déclaration verbale (registre du personnel)",

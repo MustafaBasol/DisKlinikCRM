@@ -783,7 +783,7 @@ model SentMessage {
   recipient            String
   subject              String?
   body                 String
-  status               String              @default("prepared") // prepared, sent, failed, delivered, read
+  status               String              @default("prepared") // prepared, sent, failed, delivered, read, blocked_by_consent
   providerMessageId    String?
   sentAt               DateTime?
   createdById          String?
@@ -1795,7 +1795,7 @@ model PostTreatmentMessageQueue {
   channel                       String
   recipient                     String?
   messageBodyRendered           String
-  /// pending | sent | failed | cancelled | waiting_approval | no_recipient
+  /// pending | sent | failed | cancelled | waiting_approval | no_recipient | blocked_by_consent
   status                        String                       @default("pending")
   scheduledAt                   DateTime
   sentAt                        DateTime?
@@ -2028,6 +2028,15 @@ model PatientCommunicationPreference {
   withdrawnAt DateTime?
   expiresAt   DateTime?
 
+  /// Monotonic per-key revision counter, incremented under a
+  /// pg_advisory_xact_lock in setCommunicationPreference() (see
+  /// communicationConsentAdmin.ts). This — not createdAt/updatedAt, which are
+  /// only millisecond-precision and can tie under concurrency — is the
+  /// authoritative order for this row's transition history. Matches the
+  /// revision on the PatientCommunicationConsentEvent row written in the same
+  /// transaction.
+  revision Int @default(1)
+
   /// patient_portal | public_booking | staff | import | api | whatsapp |
   /// sms_keyword | email_unsubscribe | legacy | system
   source String
@@ -2079,6 +2088,12 @@ model PatientCommunicationConsentEvent {
   previousStatus String?
   newStatus      String
 
+  /// The PatientCommunicationPreference.revision this event corresponds to —
+  /// the authoritative, gap-free, deterministic order for this key's history.
+  /// Never infer order from createdAt alone (timestamp precision can tie
+  /// under concurrency); always order by revision.
+  revision Int
+
   source               String
   evidenceType         String?
   noticeVersion        String?
@@ -2092,6 +2107,7 @@ model PatientCommunicationConsentEvent {
 
   createdAt DateTime @default(now())
 
+  @@unique([preferenceId, revision])
   @@index([patientId, clinicId, channel, purpose, createdAt])
   @@index([clinicId, createdAt])
   @@index([organizationId])

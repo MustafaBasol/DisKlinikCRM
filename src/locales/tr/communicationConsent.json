@@ -58,8 +58,10 @@
     "source": "Kaynak",
     "noticeVersion": "Aydınlatma Metni Sürümü",
     "noticeVersionPlaceholder": "örn. v1.2 (isteğe bağlı)",
+    "noticeVersionRequiredHint": "Bu kaynaktan kaydedilen bir onay için zorunludur.",
     "notes": "Notlar",
-    "notesPlaceholder": "Hastanın beyanı hakkında kısa not (isteğe bağlı)"
+    "notesPlaceholder": "Hastanın beyanı hakkında kısa not (isteğe bağlı)",
+    "sourceDescriptionRequiredHint": "Personel tarafından kaydedilen sözlü onay için ne söylendiğine/gösterildiğine dair kısa bir açıklama zorunludur."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Sözlü Beyan (Personel Kaydı)",

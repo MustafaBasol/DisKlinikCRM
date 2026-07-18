@@ -58,8 +58,10 @@
     "source": "Quelle",
     "noticeVersion": "Fassung des Hinweises",
     "noticeVersionPlaceholder": "z. B. v1.2 (optional)",
+    "noticeVersionRequiredHint": "Erforderlich für eine aus dieser Quelle erfasste Zustimmung.",
     "notes": "Notizen",
-    "notesPlaceholder": "Kurze Notiz zur Erklärung des Patienten (optional)"
+    "notesPlaceholder": "Kurze Notiz zur Erklärung des Patienten (optional)",
+    "sourceDescriptionRequiredHint": "Für eine von Mitarbeitenden erfasste mündliche Zustimmung ist eine kurze Beschreibung dessen, was gesagt/gezeigt wurde, erforderlich."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Mündliche Erklärung (Mitarbeiterprotokoll)",

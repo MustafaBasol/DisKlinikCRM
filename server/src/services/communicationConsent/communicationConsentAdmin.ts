@@ -5,15 +5,27 @@
  *
  * Every mutation:
  *   - validates channel/purpose against the closed taxonomy
- *   - upserts the current-state row and inserts an immutable history event
- *     in a single transaction (upsert compiles to an atomic
- *     INSERT ... ON CONFLICT DO UPDATE, so concurrent grant/withdraw races on
- *     the same patient+clinic+channel+purpose resolve to exactly one row -
- *     see @@unique([patientId, clinicId, channel, purpose]) in schema.prisma)
+ *   - acquires a pg_advisory_xact_lock keyed to the patient+clinic+channel+
+ *     purpose tuple as the FIRST statement of its transaction (see
+ *     computeCommunicationPreferenceLockKey/acquireCommunicationPreferenceLock
+ *     below), so concurrent grant/withdraw/deny calls for the same key are
+ *     fully serialized — not just the final upsert. This makes the read of
+ *     the current row, the upsert, and the revision/event insert a true
+ *     critical section: previousStatus is always the actually-preceding
+ *     committed state, never a stale pre-lock read.
+ *   - assigns a monotonic per-key `revision` (see schema.prisma comments) to
+ *     both the current row and the event row written in the same
+ *     transaction. `revision`, not createdAt, is the authoritative order for
+ *     a key's history — Postgres TIMESTAMP(3) is millisecond-precision and
+ *     can tie under fast concurrent transitions.
  *   - sanitizes notes and never persists raw IP/user-agent
  *   - never overwrites or deletes prior PatientCommunicationConsentEvent rows
+ *   - enforces the notice-version/evidence matrix for `grant` (see
+ *     DIGITAL_GRANT_SOURCES below, plus the staff-source check inline) —
+ *     never for deny/withdraw, so an opt-out is never blocked on paperwork
  */
 
+import { createHash } from 'node:crypto';
 import prisma from '../../db.js';
 import type { Prisma } from '@prisma/client';
 import {
@@ -88,6 +100,7 @@ export type SetPreferenceResult = {
     evidenceType: string | null;
     noticeVersion: string | null;
     updatedAt: Date;
+    revision: number;
   };
   eventId: string;
 };
@@ -101,9 +114,113 @@ function validateTaxonomy(channel: string, purpose: string): void {
   }
 }
 
+// ── Advisory lock ─────────────────────────────────────────────────────────────
+
+/**
+ * Computes a deterministic [key1, key2] pair for pg_advisory_xact_lock(int4, int4),
+ * scoped to one patient+clinic+channel+purpose preference key.
+ *
+ * Domain-separated (a fixed "comm-consent-pref:" prefix) from other advisory
+ * locks in this codebase (e.g. appointmentRequestSafety.ts's slot lock) so the
+ * two lock domains can never collide even if their other components happened
+ * to match. Same clinic/channel/purpose/patient → same key pair; anything
+ * different → a different key pair (collision probability negligible).
+ *
+ * Exported for unit testing only.
+ */
+export function computeCommunicationPreferenceLockKey(
+  patientId: string,
+  clinicId: string,
+  channel: string,
+  purpose: string,
+): [number, number] {
+  const keyString = `comm-consent-pref:${patientId}:${clinicId}:${channel}:${purpose}`;
+  const hash = createHash('sha256').update(keyString, 'utf8').digest();
+  // readInt32BE returns signed values in [-2147483648, 2147483647] — valid PostgreSQL int4
+  const key1 = hash.readInt32BE(0);
+  const key2 = hash.readInt32BE(4);
+  return [key1, key2];
+}
+
+/**
+ * Acquires a PostgreSQL advisory transaction lock for one preference key.
+ *
+ * MUST be called as the FIRST statement inside setCommunicationPreference's
+ * $transaction callback, before any read of the current row. Concurrent
+ * transactions for the same key serialize here; the lock releases
+ * automatically on commit or rollback. Different keys never block each other.
+ */
+async function acquireCommunicationPreferenceLock(
+  tx: Prisma.TransactionClient,
+  patientId: string,
+  clinicId: string,
+  channel: string,
+  purpose: string,
+): Promise<void> {
+  const [key1, key2] = computeCommunicationPreferenceLockKey(patientId, clinicId, channel, purpose);
+  // pg_advisory_xact_lock(int4,int4): explicit casts required — Prisma binds
+  // JS numbers as int8 by default, but PostgreSQL has no (bigint,bigint) overload.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`;
+}
+
+// ── Timestamp policy (Blocker 4) ───────────────────────────────────────────────
+
+/**
+ * Exact, documented timestamp policy per status (see
+ * docs/compliance/56-kvkk-communication-preference-and-consent-management.md):
+ *
+ *  - granted:   grantedAt = now, withdrawnAt = null (never a stale prior withdrawal)
+ *  - withdrawn: withdrawnAt = now. grantedAt is PRESERVED on an update (evidence
+ *               of when the later-withdrawn consent was originally granted —
+ *               unambiguous once withdrawnAt + status='withdrawn' are set); on
+ *               a first-ever create (no prior grant on record), grantedAt = null.
+ *  - denied:    both null — a denial must never retain a stale withdrawnAt or a
+ *               misleading active grantedAt.
+ *  - unknown (reset): both null, same reasoning as denied.
+ *
+ * `not_required` is intentionally not handled here — ACTION_TO_STATUS never
+ * maps a user action to it, so it is structurally unreachable through this
+ * function.
+ */
+function statusTimestampFields(
+  newStatus: CommunicationPreferenceStatus,
+  nowDate: Date,
+  mode: 'create' | 'update',
+): { grantedAt?: Date | null; withdrawnAt?: Date | null } {
+  switch (newStatus) {
+    case 'granted':
+      return { grantedAt: nowDate, withdrawnAt: null };
+    case 'withdrawn':
+      return mode === 'create' ? { grantedAt: null, withdrawnAt: nowDate } : { withdrawnAt: nowDate };
+    case 'denied':
+    case 'unknown':
+      return { grantedAt: null, withdrawnAt: null };
+    default:
+      return {};
+  }
+}
+
+// ── Notice-version / evidence matrix (Blocker 5) ───────────────────────────────
+
+/**
+ * Digital/patient-facing sources — a `grant` recorded from one of these
+ * requires a `noticeVersion` (or documented-equivalent evidence reference).
+ * Deliberately narrower than the full source list: `api`/`import`/`legacy`/
+ * `system` grants are not forced to supply one (explicit scope decision, see
+ * the compliance doc's notice-version evidence matrix).
+ */
+const DIGITAL_GRANT_SOURCES: readonly string[] = [
+  'patient_portal',
+  'public_booking',
+  'whatsapp',
+  'sms_keyword',
+  'email_unsubscribe',
+];
+
 /**
  * Grant/deny/withdraw/reset a single patient+clinic+channel+purpose
- * preference. Runs the upsert + event insert in one transaction.
+ * preference. Runs the advisory lock + upsert + event insert in one
+ * transaction.
  */
 export async function setCommunicationPreference(
   args: SetPreferenceArgs,
@@ -150,8 +267,25 @@ export async function setCommunicationPreference(
     }
   }
 
+  // Notice-version / evidence matrix — grant only, and only once scope is
+  // confirmed; deny/withdraw/reset never require noticeVersion or a source
+  // description, so an opt-out is never blocked on paperwork.
+  if (args.action === 'grant') {
+    if (DIGITAL_GRANT_SOURCES.includes(args.source) && !args.noticeVersion?.trim()) {
+      throw new CommunicationConsentAdminError(
+        'notice_version_required',
+        `Recording a "grant" from source "${args.source}" requires a noticeVersion (the notice/KVKK text version shown at the time of the decision).`,
+      );
+    }
+    if (args.source === 'staff' && !sanitized.note) {
+      throw new CommunicationConsentAdminError(
+        'evidence_required',
+        'Recording a staff-verbal "grant" requires a bounded source description in notes (what was said/shown, and when).',
+      );
+    }
+  }
+
   const newStatus = ACTION_TO_STATUS[args.action];
-  const nowDate = new Date();
 
   const sharedFields = {
     source: args.source,
@@ -167,6 +301,16 @@ export async function setCommunicationPreference(
   };
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // MUST be the first statement: serializes every concurrent call for this
+    // exact patient+clinic+channel+purpose key. Everything below this line is
+    // now a true critical section for that key.
+    await acquireCommunicationPreferenceLock(tx, args.patientId, args.clinicId, args.channel, args.purpose);
+
+    // Computed only after the lock is held, so a caller that had to wait
+    // cannot record an earlier transition time than one that committed while
+    // it waited.
+    const nowDate = new Date();
+
     const existing = await tx.patientCommunicationPreference.findUnique({
       where: {
         patientId_clinicId_channel_purpose: {
@@ -176,8 +320,15 @@ export async function setCommunicationPreference(
           purpose: args.purpose,
         },
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, revision: true },
     });
+
+    // Serialized by the lock above, so no two concurrent callers for this key
+    // can ever read the same `existing.revision` — contiguous, gap-free,
+    // duplicate-free by construction (the @@unique([preferenceId, revision])
+    // constraint is defense in depth, not the primary mechanism).
+    const newRevision = (existing?.revision ?? 0) + 1;
+    const timestampFields = statusTimestampFields(newStatus, nowDate, existing ? 'update' : 'create');
 
     const preference = await tx.patientCommunicationPreference.upsert({
       where: {
@@ -196,15 +347,15 @@ export async function setCommunicationPreference(
         purpose: args.purpose,
         status: newStatus,
         effectiveAt: nowDate,
-        grantedAt: newStatus === 'granted' ? nowDate : null,
-        withdrawnAt: newStatus === 'withdrawn' ? nowDate : null,
+        revision: newRevision,
+        ...timestampFields,
         ...sharedFields,
       },
       update: {
         status: newStatus,
         effectiveAt: nowDate,
-        grantedAt: newStatus === 'granted' ? nowDate : undefined,
-        withdrawnAt: newStatus === 'withdrawn' ? nowDate : undefined,
+        revision: newRevision,
+        ...timestampFields,
         ...sharedFields,
       },
     });
@@ -219,12 +370,13 @@ export async function setCommunicationPreference(
         purpose: args.purpose,
         previousStatus: existing?.status ?? null,
         newStatus,
+        revision: newRevision,
         ...sharedFields,
       },
-      select: { id: true },
+      select: { id: true, revision: true },
     });
 
-    return { preference, eventId: event.id };
+    return { preference, eventId: event.id, revision: event.revision };
   });
 
   return {
@@ -240,6 +392,7 @@ export async function setCommunicationPreference(
       evidenceType: result.preference.evidenceType,
       noticeVersion: result.preference.noticeVersion,
       updatedAt: result.preference.updatedAt,
+      revision: result.preference.revision,
     },
     eventId: result.eventId,
   };

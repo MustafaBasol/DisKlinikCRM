@@ -58,8 +58,10 @@
     "source": "Source",
     "noticeVersion": "Notice Version",
     "noticeVersionPlaceholder": "e.g. v1.2 (optional)",
+    "noticeVersionRequiredHint": "Required for a grant recorded from this source.",
     "notes": "Notes",
-    "notesPlaceholder": "Brief note on the patient's statement (optional)"
+    "notesPlaceholder": "Brief note on the patient's statement (optional)",
+    "sourceDescriptionRequiredHint": "A brief description of what was said/shown is required for a staff-recorded grant."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Verbal Statement (Staff Record)",

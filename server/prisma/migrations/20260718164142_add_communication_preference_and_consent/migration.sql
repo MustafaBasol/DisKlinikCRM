@@ -11,6 +11,7 @@ CREATE TABLE "PatientCommunicationPreference" (
     "grantedAt" TIMESTAMP(3),
     "withdrawnAt" TIMESTAMP(3),
     "expiresAt" TIMESTAMP(3),
+    "revision" INTEGER NOT NULL DEFAULT 1,
     "source" TEXT NOT NULL,
     "evidenceType" TEXT,
     "noticeVersion" TEXT,
@@ -38,6 +39,7 @@ CREATE TABLE "PatientCommunicationConsentEvent" (
     "purpose" TEXT NOT NULL,
     "previousStatus" TEXT,
     "newStatus" TEXT NOT NULL,
+    "revision" INTEGER NOT NULL,
     "source" TEXT NOT NULL,
     "evidenceType" TEXT,
     "noticeVersion" TEXT,
@@ -61,6 +63,9 @@ CREATE INDEX "PatientCommunicationPreference_organizationId_idx" ON "PatientComm
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PatientCommunicationPreference_patientId_clinicId_channel_p_key" ON "PatientCommunicationPreference"("patientId", "clinicId", "channel", "purpose");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PatientCommunicationConsentEvent_preferenceId_revision_key" ON "PatientCommunicationConsentEvent"("preferenceId", "revision");
 
 -- CreateIndex
 CREATE INDEX "PatientCommunicationConsentEvent_patientId_clinicId_channel_idx" ON "PatientCommunicationConsentEvent"("patientId", "clinicId", "channel", "purpose", "createdAt");
