@@ -60,7 +60,6 @@ export type CommunicationPermissionDecision = {
   purpose: string;
   effectiveStatus: CommunicationPreferenceStatus | null;
   preferenceId?: string;
-  consentEventId?: string;
   evaluatedAt: string;
 };
 
@@ -117,10 +116,11 @@ export async function evaluateCommunicationPermission(
 
   const purpose = args.purpose as CommunicationPurpose;
 
-  if (isPolicyExceptionPurpose(purpose)) {
-    return decision(args, true, EXCEPTION_REASON_CODE[purpose] ?? 'consent_not_required', 'not_required');
-  }
-
+  // Scope validation (patient existence, organization, clinic/PatientClinic
+  // linkage) MUST run before the policy-exception branch below. A missing
+  // patient or a cross-org/cross-clinic identifier must never receive an
+  // "allowed" decision, even for transactional/legal_notice/security_notice —
+  // those are exceptions from the consent-preference lookup, never from scope.
   const patient = await prisma.patient.findFirst({
     where: { id: args.patientId, deletedAt: null },
     select: { id: true, clinicId: true, organizationId: true },
@@ -139,6 +139,10 @@ export async function evaluateCommunicationPermission(
     if (!linked || patient.organizationId !== args.organizationId) {
       return decision(args, false, 'clinic_scope_mismatch');
     }
+  }
+
+  if (isPolicyExceptionPurpose(purpose)) {
+    return decision(args, true, EXCEPTION_REASON_CODE[purpose] ?? 'consent_not_required', 'not_required');
   }
 
   const preference = await prisma.patientCommunicationPreference.findUnique({
@@ -174,6 +178,15 @@ export type AssertCommunicationPermissionResult = CommunicationPermissionDecisio
   /** true only when COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED=true and mode='enforce' actually blocked the send */
   blocked: boolean;
   enforcementMode: 'disabled' | 'audit' | 'enforce';
+  /**
+   * The real, mode-independent decision (what evaluateCommunicationPermission()
+   * actually returned). In 'audit' mode `allowed` is forced to true so the
+   * caller's send proceeds, but `evaluatedAllowed` still tells an observer
+   * "would this have been blocked in enforce mode" without losing that signal.
+   * In 'disabled' mode this always matches `allowed` (true) since the real
+   * decision is never computed.
+   */
+  evaluatedAllowed: boolean;
 };
 
 /**
@@ -193,6 +206,7 @@ export async function assertCommunicationPermission(
       ...decision(args, true, 'consent_enforcement_disabled'),
       blocked: false,
       enforcementMode: 'disabled',
+      evaluatedAllowed: true,
     };
   }
 
@@ -200,8 +214,8 @@ export async function assertCommunicationPermission(
   const mode = getCommunicationConsentEnforcementMode();
 
   if (mode === 'audit') {
-    return { ...real, allowed: true, blocked: false, enforcementMode: 'audit' };
+    return { ...real, allowed: true, blocked: false, enforcementMode: 'audit', evaluatedAllowed: real.allowed };
   }
 
-  return { ...real, blocked: !real.allowed, enforcementMode: 'enforce' };
+  return { ...real, blocked: !real.allowed, enforcementMode: 'enforce', evaluatedAllowed: real.allowed };
 }
