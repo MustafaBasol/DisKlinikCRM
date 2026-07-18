@@ -19,6 +19,9 @@
  *   11. legal_notice / security_notice are always allowed (policy exceptions)
  *   12. clinic scope mismatch → denied
  *   13. missing patient → denied
+ *   14a-d. scope validation runs BEFORE the policy-exception branch: missing
+ *       patient / wrong org / wrong clinic + a policy-exception purpose are
+ *       still denied; a real PatientClinic link still resolves to allowed
  *   14. unsupported purpose → denied
  *   15. disabled mode: always allowed, never touches the DB
  *   16. audit mode: evaluates the real decision but never blocks
@@ -44,6 +47,32 @@
  *   30. email/phone-like content is redacted, not merely accepted
  *   31. overlong note input is bounded
  *
+ *   F. Concurrency / revision-authoritative ordering (Blocker 3, real disposable
+ *   Postgres, run twice): 20 concurrent mixed grant/deny/withdraw calls against
+ *   an existing key and against a brand-new key — exactly one current row,
+ *   contiguous gap-free revisions, event[n].previousStatus === event[n-1].newStatus
+ *   ordered by revision (never createdAt), current revision === final event
+ *   revision, no unhandled rejection.
+ *
+ *   G. Timestamp policy (Blocker 4): withdrawn→granted clears withdrawnAt;
+ *   granted→denied nulls both grantedAt/withdrawnAt; withdrawn→unknown (reset)
+ *   clears both; grant→withdraw→grant preserves the original grantedAt across
+ *   the withdrawal and refreshes it on re-grant; history events retain their
+ *   evidence even after a later transition clears the current row's timestamps.
+ *
+ *   H. Notice-version / evidence matrix (Blocker 5): grant from each digital
+ *   source requires noticeVersion; staff-sourced grant requires a source
+ *   description (notes); deny/withdraw never require either, regardless of
+ *   source; raw notice text is never stored, only the noticeVersion reference.
+ *
+ *   I. WhatsApp send-time integration (Blocker 2, real DB-backed evolution_api
+ *   connection + EvolutionWhatsAppProvider.prototype.sendMessage spy, for all 4
+ *   public dispatchers): enforce+missing org/patient/purpose → blocked
+ *   (COMMUNICATION_CONSENT_CONTEXT_REQUIRED), provider never called; audit/
+ *   disabled+missing context → provider called; fully-supplied granted →
+ *   provider called; fully-supplied denied+enforce → blocked
+ *   (BLOCKED_BY_CONSENT), provider never called.
+ *
  * Run with: tsx src/tests/communicationConsent.test.ts
  * Requires DATABASE_URL to point at a disposable Postgres — no external test framework.
  */
@@ -62,6 +91,15 @@ import {
 } from '../services/communicationConsent/communicationConsentAdmin.js';
 import { sanitizeConsentNote } from '../services/communicationConsent/consentEvidenceSanitizer.js';
 import { sendClinicSms, type SmsSendDeps } from '../services/sms/smsService.js';
+import {
+  sendProactiveWhatsAppMessage,
+  sendNoShowRecoveryWhatsApp,
+  sendAppointmentConfirmationWhatsApp,
+  sendPostTreatmentWhatsApp,
+  OUTBOUND_ERRORS,
+} from '../services/whatsapp/whatsappOutboundMessaging.js';
+import { EvolutionWhatsAppProvider } from '../services/whatsapp/EvolutionWhatsAppProvider.js';
+import type { SendMessageResult } from '../services/whatsapp/WhatsAppProvider.js';
 
 let passed = 0;
 let failed = 0;
@@ -116,11 +154,62 @@ async function createFixture(): Promise<Fixture> {
   return { organizationId: org.id, clinicId: clinic.id, otherClinicId: otherClinic.id, patientId: patient.id };
 }
 
+/** Fixture + a real, active evolution_api WhatsAppConnection assigned as the clinic's default. */
+async function createWhatsAppFixture(): Promise<Fixture> {
+  const fx = await createFixture();
+  const suffix = randomUUID().slice(0, 8);
+  const connection = await prisma.whatsAppConnection.create({
+    data: {
+      organizationId: fx.organizationId,
+      name: `Test WA Connection ${suffix}`,
+      provider: 'evolution_api',
+      status: 'connected',
+      evolutionApiUrl: 'http://evo.invalid',
+      evolutionInstanceName: `test-instance-${suffix}`,
+      evolutionApiKeyEncrypted: 'raw-key',
+      isActive: true,
+    },
+  });
+  await prisma.clinicWhatsAppConnection.create({
+    data: {
+      organizationId: fx.organizationId,
+      clinicId: fx.clinicId,
+      whatsappConnectionId: connection.id,
+      isDefault: true,
+    },
+  });
+  return fx;
+}
+
+/**
+ * Patches EvolutionWhatsAppProvider.prototype.sendMessage to a spy for the
+ * duration of one test — a class-prototype patch, not an ESM export
+ * rebinding, so it works regardless of module export bindings. Always
+ * restore via the returned function (in a finally block).
+ */
+function spyOnEvolutionSendMessage(impl: () => Promise<SendMessageResult>): { calls: () => number; restore: () => void } {
+  const original = EvolutionWhatsAppProvider.prototype.sendMessage;
+  let callCount = 0;
+  EvolutionWhatsAppProvider.prototype.sendMessage = (async () => {
+    callCount++;
+    return impl();
+  }) as typeof EvolutionWhatsAppProvider.prototype.sendMessage;
+  return {
+    calls: () => callCount,
+    restore: () => {
+      EvolutionWhatsAppProvider.prototype.sendMessage = original;
+    },
+  };
+}
+
 async function cleanup() {
   if (createdOrgIds.length === 0) return;
   await prisma.patientCommunicationConsentEvent.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
   await prisma.patientCommunicationPreference.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
   await prisma.smsMessage.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
+  await prisma.patientClinic.deleteMany({ where: { clinic: { organizationId: { in: createdOrgIds } } } });
+  await prisma.clinicWhatsAppConnection.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
+  await prisma.whatsAppConnection.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
   await prisma.patient.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
   await prisma.clinic.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
   await prisma.organization.deleteMany({ where: { id: { in: createdOrgIds } } });
@@ -151,6 +240,7 @@ async function runModelTests() {
     await setCommunicationPreference({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
       channel: 'sms', purpose: 'marketing', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Patient verbally confirmed marketing SMS opt-in at check-in.',
     });
     await setCommunicationPreference({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
@@ -169,24 +259,27 @@ async function runModelTests() {
       await setCommunicationPreference({
         organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
         channel: 'whatsapp', purpose: 'recall', action, source: 'staff', evidenceType: 'verbal_staff_record',
+        notes: 'Patient verbal statement recorded by front-desk staff.',
       });
     }
     const events = await prisma.patientCommunicationConsentEvent.findMany({
       where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'whatsapp', purpose: 'recall' },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { revision: 'asc' },
     });
     assert.equal(events.length, 4);
     assert.deepEqual(events.map((e) => e.newStatus), ['granted', 'withdrawn', 'granted', 'denied']);
+    assert.deepEqual(events.map((e) => e.revision), [1, 2, 3, 4]);
     assert.equal(events[1].previousStatus, 'granted');
     assert.equal(events[3].previousStatus, 'granted');
   });
 
-  await test('3. simultaneous grant/withdraw race resolves to exactly one row', async () => {
+  await test('3. simultaneous grant/withdraw race resolves to exactly one row, revision-consistent', async () => {
     const fx = await createFixture();
     const [a, b] = await Promise.allSettled([
       setCommunicationPreference({
         organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
         channel: 'email', purpose: 'campaign', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+        notes: 'Patient verbal statement recorded by front-desk staff.',
       }),
       setCommunicationPreference({
         organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
@@ -201,14 +294,25 @@ async function runModelTests() {
     });
     assert.equal(rows.length, 1, 'exactly one current row must survive the race');
     assert.ok(['granted', 'withdrawn'].includes(rows[0].status), 'final state must be one of the two attempted transitions');
+    assert.equal(rows[0].revision, 2, 'the lock-serialized advisory-lock race must still produce contiguous revisions (1 then 2)');
+
+    const events = await prisma.patientCommunicationConsentEvent.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'email', purpose: 'campaign' },
+      orderBy: { revision: 'asc' },
+    });
+    assert.deepEqual(events.map((e) => e.revision), [1, 2]);
+    assert.equal(events[0].previousStatus, null, 'first revision must reflect the real pre-race state (no row existed)');
+    assert.equal(events[1].previousStatus, events[0].newStatus, 'event chain must be internally consistent');
+    assert.equal(rows[0].revision, events[events.length - 1].revision, 'current preference revision must equal the final event revision');
   });
 
-  await test('4. event count is exact after a race (both attempts recorded)', async () => {
+  await test('4. event count is exact after a race (both attempts recorded), previousStatus chain is authoritative', async () => {
     const fx = await createFixture();
     await Promise.allSettled([
       setCommunicationPreference({
         organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
         channel: 'sms', purpose: 'survey', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+        notes: 'Patient verbal statement recorded by front-desk staff.',
       }),
       setCommunicationPreference({
         organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
@@ -217,8 +321,11 @@ async function runModelTests() {
     ]);
     const events = await prisma.patientCommunicationConsentEvent.findMany({
       where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'survey' },
+      orderBy: { revision: 'asc' },
     });
     assert.equal(events.length, 2, 'both attempted transitions must be recorded as immutable history');
+    assert.deepEqual(events.map((e) => e.revision), [1, 2], 'revisions must be contiguous with no duplicates or gaps');
+    assert.equal(events[1].previousStatus, events[0].newStatus, 'event[n].previousStatus must equal event[n-1].newStatus');
   });
 
   await test('5. no duplicate effective rows (DB unique constraint enforced)', async () => {
@@ -226,6 +333,7 @@ async function runModelTests() {
     await setCommunicationPreference({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
       channel: 'whatsapp', purpose: 'marketing', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Patient verbal statement recorded by front-desk staff.',
     });
     await assert.rejects(
       prisma.patientCommunicationPreference.create({
@@ -264,6 +372,7 @@ async function runDecisionServiceTests() {
     await setCommunicationPreference({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
       channel: 'sms', purpose: 'marketing', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Patient verbal statement recorded by front-desk staff.',
     });
     const decision = await evaluateCommunicationPermission({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
@@ -288,6 +397,7 @@ async function runDecisionServiceTests() {
     await setCommunicationPreference({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
       channel: 'email', purpose: 'marketing', action: 'grant', source: 'staff', evidenceType: 'portal_click',
+      notes: 'Patient verbal statement recorded by front-desk staff.',
     });
     await setCommunicationPreference({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
@@ -345,6 +455,47 @@ async function runDecisionServiceTests() {
     });
     assert.equal(decision.allowed, false);
     assert.equal(decision.reasonCode, 'patient_missing');
+  });
+
+  await test('14a. nonexistent patient + transactional → denied patient_missing (scope before exception)', async () => {
+    const fx = await createFixture();
+    const decision = await evaluateCommunicationPermission({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: randomUUID(),
+      channel: 'sms', purpose: 'transactional',
+    });
+    assert.equal(decision.allowed, false, 'a missing patient must never receive an allowed decision, even for a policy-exception purpose');
+    assert.equal(decision.reasonCode, 'patient_missing');
+  });
+
+  await test('14b. wrong organization + transactional → denied clinic_scope_mismatch (scope before exception)', async () => {
+    const fx = await createFixture();
+    const decision = await evaluateCommunicationPermission({
+      organizationId: randomUUID(), clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'transactional',
+    });
+    assert.equal(decision.allowed, false, 'a cross-organization identifier must never receive an allowed decision, even for a policy-exception purpose');
+    assert.equal(decision.reasonCode, 'clinic_scope_mismatch');
+  });
+
+  await test('14c. wrong clinic + legal_notice → denied clinic_scope_mismatch (scope before exception)', async () => {
+    const fx = await createFixture();
+    const decision = await evaluateCommunicationPermission({
+      organizationId: fx.organizationId, clinicId: fx.otherClinicId, patientId: fx.patientId,
+      channel: 'email', purpose: 'legal_notice',
+    });
+    assert.equal(decision.allowed, false, 'an unlinked cross-clinic identifier must never receive an allowed decision, even for a policy-exception purpose');
+    assert.equal(decision.reasonCode, 'clinic_scope_mismatch');
+  });
+
+  await test('14d. valid PatientClinic-linked clinic + security_notice → allowed explicit exception', async () => {
+    const fx = await createFixture();
+    await prisma.patientClinic.create({ data: { patientId: fx.patientId, clinicId: fx.otherClinicId } });
+    const decision = await evaluateCommunicationPermission({
+      organizationId: fx.organizationId, clinicId: fx.otherClinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'security_notice',
+    });
+    assert.equal(decision.allowed, true, 'a real PatientClinic link must still resolve scope before the exception is applied');
+    assert.equal(decision.reasonCode, 'security_notice_exception');
   });
 
   await test('14. unsupported purpose → denied', async () => {
@@ -408,6 +559,7 @@ async function runDecisionServiceTests() {
     await setCommunicationPreference({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
       channel: 'whatsapp', purpose: 'campaign', action: 'grant', source: 'staff', evidenceType: 'signed_form',
+      notes: 'Patient verbal statement recorded by front-desk staff.',
     });
     const before = await evaluateCommunicationPermission({
       organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
@@ -611,6 +763,7 @@ async function runAdminValidationTests() {
       {
         organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
         source: 'staff', evidenceType: 'signed_form',
+        notes: 'Patient verbal statement recorded by front-desk staff.',
       },
       [
         { channel: 'sms', purpose: 'marketing', action: 'grant' },
@@ -654,6 +807,525 @@ async function runSanitizationTests() {
   });
 }
 
+// ── F. Concurrency / revision-authoritative ordering tests (Blocker 3) ─────────
+//
+// pg_advisory_xact_lock serializes concurrent setCommunicationPreference()
+// calls for one patient+clinic+channel+purpose key; `revision` (not
+// createdAt, which is only millisecond-precision and can tie) is the
+// authoritative, gap-free, deterministic transition order.
+
+const MIXED_ACTIONS = ['grant', 'deny', 'withdraw'] as const;
+
+async function runConcurrencyMixedMutationsOnExistingKey(runLabel: string) {
+  await test(`F. 20 concurrent mixed mutations on an existing key produce a contiguous revision chain (${runLabel})`, async () => {
+    const fx = await createFixture();
+    const seed = await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'recall', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Initial seed grant recorded by front-desk staff.',
+    });
+    assert.equal(seed.preference.revision, 1);
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        setCommunicationPreference({
+          organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+          channel: 'sms', purpose: 'recall',
+          action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+          source: 'staff', evidenceType: 'verbal_staff_record',
+          notes: 'Concurrent mutation recorded by front-desk staff.',
+        }),
+      ),
+    );
+    assert.equal(results.length, 20, 'no unhandled rejection — every call must resolve');
+
+    const rows = await prisma.patientCommunicationPreference.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'recall' },
+    });
+    assert.equal(rows.length, 1, 'exactly one current preference row');
+
+    const events = await prisma.patientCommunicationConsentEvent.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'recall' },
+      orderBy: { revision: 'asc' },
+    });
+    assert.equal(events.length, 21, 'exactly 1 seed + 20 concurrent events, no duplicate/missing event');
+    assert.deepEqual(
+      events.map((e) => e.revision),
+      Array.from({ length: 21 }, (_, i) => i + 1),
+      'revisions must be contiguous with no duplicates or gaps',
+    );
+    assert.equal(events[0].previousStatus, null, 'first revision previousStatus matches the real initial state (no row existed)');
+    for (let i = 1; i < events.length; i++) {
+      assert.equal(
+        events[i].previousStatus,
+        events[i - 1].newStatus,
+        `event[${i}].previousStatus must equal event[${i - 1}].newStatus`,
+      );
+    }
+    assert.equal(rows[0].revision, events[events.length - 1].revision, 'current preference revision must equal the final event revision');
+    assert.equal(rows[0].status, events[events.length - 1].newStatus, 'current status must equal the final event newStatus');
+  });
+}
+
+async function runConcurrencyFirstCreation(runLabel: string) {
+  await test(`F. 20 concurrent mixed mutations on a brand-new key produce a contiguous revision chain (${runLabel})`, async () => {
+    const fx = await createFixture();
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        setCommunicationPreference({
+          organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+          channel: 'whatsapp', purpose: 'clinical_followup',
+          action: MIXED_ACTIONS[i % MIXED_ACTIONS.length],
+          source: 'staff', evidenceType: 'verbal_staff_record',
+          notes: 'Concurrent first-creation mutation recorded by front-desk staff.',
+        }),
+      ),
+    );
+    assert.equal(results.length, 20, 'no unhandled rejection — every call must resolve');
+
+    const rows = await prisma.patientCommunicationPreference.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'whatsapp', purpose: 'clinical_followup' },
+    });
+    assert.equal(rows.length, 1, 'exactly one current preference row, even for simultaneous first creation');
+
+    const events = await prisma.patientCommunicationConsentEvent.findMany({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'whatsapp', purpose: 'clinical_followup' },
+      orderBy: { revision: 'asc' },
+    });
+    assert.equal(events.length, 20);
+    assert.deepEqual(events.map((e) => e.revision), Array.from({ length: 20 }, (_, i) => i + 1));
+    assert.equal(events[0].revision, 1);
+    assert.equal(events[0].previousStatus, null, 'first-ever revision has no previous state');
+    for (let i = 1; i < events.length; i++) {
+      assert.equal(events[i].previousStatus, events[i - 1].newStatus);
+    }
+    assert.equal(rows[0].revision, events[events.length - 1].revision);
+  });
+}
+
+async function runConcurrencyTests() {
+  section('F. Concurrency / revision-authoritative ordering tests');
+  // Required to run twice.
+  await runConcurrencyMixedMutationsOnExistingKey('run 1');
+  await runConcurrencyMixedMutationsOnExistingKey('run 2');
+  await runConcurrencyFirstCreation('run 1');
+  await runConcurrencyFirstCreation('run 2');
+}
+
+// ── G. Timestamp policy tests (Blocker 4) ───────────────────────────────────────
+
+async function runTimestampPolicyTests() {
+  section('G. Timestamp policy tests');
+
+  await test('G1. withdrawn → granted clears withdrawnAt', async () => {
+    const fx = await createFixture();
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'recall', action: 'withdraw', source: 'staff', evidenceType: 'verbal_staff_record',
+    });
+    const afterWithdraw = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'recall' } },
+    });
+    assert.ok(afterWithdraw?.withdrawnAt, 'sanity check: withdrawnAt set after withdraw');
+
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'recall', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Patient verbal statement recorded by front-desk staff.',
+    });
+    const afterGrant = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'recall' } },
+    });
+    assert.equal(afterGrant?.withdrawnAt, null, 'granting must clear a stale withdrawnAt');
+    assert.ok(afterGrant?.grantedAt, 'granting must set grantedAt');
+  });
+
+  await test('G2. granted → denied does not retain misleading active-grant timestamps', async () => {
+    const fx = await createFixture();
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'email', purpose: 'clinical_followup', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Patient verbal statement recorded by front-desk staff.',
+    });
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'email', purpose: 'clinical_followup', action: 'deny', source: 'staff', evidenceType: 'verbal_staff_record',
+    });
+    const row = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'email', purpose: 'clinical_followup' } },
+    });
+    assert.equal(row?.grantedAt, null, 'a denial must not retain a misleading active grantedAt');
+    assert.equal(row?.withdrawnAt, null, 'a denial must not retain a stale withdrawnAt');
+  });
+
+  await test('G3. withdrawn → unknown (reset) clears withdrawnAt', async () => {
+    const fx = await createFixture();
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'appointment_followup', action: 'withdraw', source: 'staff', evidenceType: 'verbal_staff_record',
+    });
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'appointment_followup', action: 'reset', source: 'staff',
+    });
+    const row = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'appointment_followup' } },
+    });
+    assert.equal(row?.status, 'unknown');
+    assert.equal(row?.withdrawnAt, null, 'reset must clear a stale withdrawnAt');
+    assert.equal(row?.grantedAt, null, 'reset must not leave a misleading active grantedAt');
+  });
+
+  await test('G4. grant → withdraw → grant produces coherent timestamps', async () => {
+    const fx = await createFixture();
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'whatsapp', purpose: 'operational', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'First grant recorded by front-desk staff.',
+    });
+    const firstGrant = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'whatsapp', purpose: 'operational' } },
+    });
+    const firstGrantedAt = firstGrant?.grantedAt?.getTime();
+    assert.ok(firstGrantedAt);
+    assert.equal(firstGrant?.withdrawnAt, null);
+
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'whatsapp', purpose: 'operational', action: 'withdraw', source: 'staff', evidenceType: 'verbal_staff_record',
+    });
+    const afterWithdraw = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'whatsapp', purpose: 'operational' } },
+    });
+    assert.ok(afterWithdraw?.withdrawnAt, 'withdrawnAt must be set');
+    assert.equal(afterWithdraw?.grantedAt?.getTime(), firstGrantedAt, 'grantedAt is preserved as evidence of the original grant time across a withdrawal');
+
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'whatsapp', purpose: 'operational', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Second grant recorded by front-desk staff.',
+    });
+    const secondGrant = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'whatsapp', purpose: 'operational' } },
+    });
+    assert.equal(secondGrant?.withdrawnAt, null, 'the re-grant must clear withdrawnAt');
+    assert.ok(secondGrant?.grantedAt, 'the re-grant must set a fresh grantedAt');
+  });
+
+  await test('G5. history events retain evidence even where current-row timestamps are cleared', async () => {
+    const fx = await createFixture();
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'no_show_recovery', action: 'withdraw', source: 'staff', evidenceType: 'verbal_staff_record',
+    });
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'no_show_recovery', action: 'reset', source: 'staff',
+    });
+    const row = await prisma.patientCommunicationPreference.findUnique({
+      where: { patientId_clinicId_channel_purpose: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'no_show_recovery' } },
+    });
+    assert.equal(row?.withdrawnAt, null, 'sanity check: current-row withdrawnAt was cleared by the subsequent reset');
+
+    const withdrawEvent = await prisma.patientCommunicationConsentEvent.findFirst({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'no_show_recovery', newStatus: 'withdrawn' },
+    });
+    assert.ok(withdrawEvent, 'the withdraw event itself must still exist');
+    assert.equal(withdrawEvent?.newStatus, 'withdrawn', 'the historical event retains its evidence regardless of later current-row clearing');
+    assert.ok(withdrawEvent?.createdAt, 'the historical event retains its timestamp');
+  });
+}
+
+// ── H. Notice-version / evidence matrix tests (Blocker 5) ───────────────────────
+
+async function runNoticeVersionEvidenceTests() {
+  section('H. Notice-version / evidence matrix tests');
+
+  const DIGITAL_SOURCES = ['patient_portal', 'public_booking', 'whatsapp', 'sms_keyword', 'email_unsubscribe'] as const;
+
+  for (const src of DIGITAL_SOURCES) {
+    await test(`H. grant from digital source "${src}" without noticeVersion is rejected`, async () => {
+      const fx = await createFixture();
+      await assert.rejects(
+        setCommunicationPreference({
+          organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+          channel: 'sms', purpose: 'marketing', action: 'grant', source: src, evidenceType: 'public_booking_checkbox',
+        }),
+        (err: unknown) => err instanceof CommunicationConsentAdminError && err.code === 'notice_version_required',
+      );
+    });
+
+    await test(`H. grant from digital source "${src}" with noticeVersion succeeds`, async () => {
+      const fx = await createFixture();
+      const outcome = await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'sms', purpose: 'marketing', action: 'grant', source: src, evidenceType: 'public_booking_checkbox',
+        noticeVersion: 'v1.0',
+      });
+      assert.equal(outcome.preference.status, 'granted');
+      assert.equal(outcome.preference.noticeVersion, 'v1.0');
+    });
+  }
+
+  await test('H. staff grant without a source description (notes) is rejected', async () => {
+    const fx = await createFixture();
+    await assert.rejects(
+      setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'sms', purpose: 'marketing', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      }),
+      (err: unknown) => err instanceof CommunicationConsentAdminError && err.code === 'evidence_required',
+    );
+  });
+
+  await test('H. staff grant with a source description (notes) succeeds', async () => {
+    const fx = await createFixture();
+    const outcome = await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'marketing', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Patient verbally confirmed marketing SMS opt-in during check-in call on this date.',
+    });
+    assert.equal(outcome.preference.status, 'granted');
+  });
+
+  await test('H. staff grant does NOT require noticeVersion', async () => {
+    const fx = await createFixture();
+    const outcome = await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'email', purpose: 'marketing', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+      notes: 'Patient verbally confirmed marketing email opt-in during check-in call.',
+    });
+    assert.equal(outcome.preference.status, 'granted');
+    assert.equal(outcome.preference.noticeVersion, null);
+  });
+
+  await test('H. deny from a digital source never requires noticeVersion', async () => {
+    const fx = await createFixture();
+    const outcome = await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'marketing', action: 'deny', source: 'public_booking', evidenceType: 'public_booking_checkbox',
+    });
+    assert.equal(outcome.preference.status, 'denied');
+  });
+
+  await test('H. withdraw from a digital source never requires noticeVersion (opt-out is never blocked on paperwork)', async () => {
+    const fx = await createFixture();
+    await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'email', purpose: 'marketing', action: 'grant', source: 'patient_portal', evidenceType: 'portal_click',
+      noticeVersion: 'v1.0',
+    });
+    const outcome = await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'email', purpose: 'marketing', action: 'withdraw', source: 'email_unsubscribe', evidenceType: 'inbound_reply',
+    });
+    assert.equal(outcome.preference.status, 'withdrawn');
+  });
+
+  await test('H. withdraw from staff source never requires a source description', async () => {
+    const fx = await createFixture();
+    const outcome = await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'marketing', action: 'withdraw', source: 'staff', evidenceType: 'verbal_staff_record',
+    });
+    assert.equal(outcome.preference.status, 'withdrawn');
+  });
+
+  await test('H. raw notice text is never stored — only noticeVersion', async () => {
+    const fx = await createFixture();
+    const outcome = await setCommunicationPreference({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      channel: 'sms', purpose: 'marketing', action: 'grant', source: 'public_booking', evidenceType: 'public_booking_checkbox',
+      noticeVersion: 'v2.3',
+    });
+    const event = await prisma.patientCommunicationConsentEvent.findFirst({
+      where: { patientId: fx.patientId, clinicId: fx.clinicId, channel: 'sms', purpose: 'marketing' },
+    });
+    assert.equal(outcome.preference.noticeVersion, 'v2.3');
+    assert.equal(event?.noticeVersion, 'v2.3');
+    // No field on either row ever holds the raw notice/KVKK text body — only
+    // this short version/reference string. Nothing further to assert beyond
+    // schema shape (no such field exists on either model).
+  });
+}
+
+// ── I. WhatsApp send-time integration tests (Blocker 2) ─────────────────────────
+//
+// Every public dispatcher's mandatory consent-context enforcement, exercised
+// against a real DB-backed evolution_api connection with
+// EvolutionWhatsAppProvider.prototype.sendMessage patched to a spy — so
+// "provider not called" / "provider called" is asserted directly, not merely
+// inferred from a WA_NO_CONNECTION structural code.
+
+type WhatsAppDispatcherCallArgs = {
+  clinicId: string;
+  phone: string;
+  organizationId?: string;
+  patientId?: string;
+  consentPurpose?: string;
+};
+
+const WHATSAPP_DISPATCHERS: Array<{ name: string; send: (a: WhatsAppDispatcherCallArgs) => Promise<{ success: boolean; code?: string }> }> = [
+  {
+    name: 'sendProactiveWhatsAppMessage',
+    send: (a) => sendProactiveWhatsAppMessage({
+      clinicId: a.clinicId, phone: a.phone, text: 'hello', variables: {},
+      organizationId: a.organizationId as any, patientId: a.patientId as any, consentPurpose: a.consentPurpose as any,
+    }),
+  },
+  {
+    name: 'sendNoShowRecoveryWhatsApp',
+    send: (a) => sendNoShowRecoveryWhatsApp({
+      clinicId: a.clinicId, phone: a.phone, evolutionPlainText: 'hello', variables: {},
+      organizationId: a.organizationId as any, patientId: a.patientId as any, consentPurpose: a.consentPurpose as any,
+    }),
+  },
+  {
+    name: 'sendAppointmentConfirmationWhatsApp',
+    send: (a) => sendAppointmentConfirmationWhatsApp({
+      clinicId: a.clinicId, phone: a.phone, evolutionPlainText: 'hello', variables: {},
+      organizationId: a.organizationId as any, patientId: a.patientId as any, consentPurpose: a.consentPurpose as any,
+    }),
+  },
+  {
+    name: 'sendPostTreatmentWhatsApp',
+    send: (a) => sendPostTreatmentWhatsApp({
+      clinicId: a.clinicId, phone: a.phone, evolutionPlainText: 'hello', variables: {},
+      organizationId: a.organizationId as any, patientId: a.patientId as any, consentPurpose: a.consentPurpose as any,
+    }),
+  },
+];
+
+async function runWhatsAppIntegrationTests() {
+  section('I. WhatsApp send-time integration tests (mandatory consent context)');
+
+  for (const dispatcher of WHATSAPP_DISPATCHERS) {
+    await test(`I. ${dispatcher.name}: enforce + missing organizationId → blocked, provider not called`, async () => {
+      const fx = await createWhatsAppFixture();
+      await withEnv({ COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED: 'true', COMMUNICATION_CONSENT_ENFORCEMENT_MODE: 'enforce' }, async () => {
+        const spy = spyOnEvolutionSendMessage(async () => ({ success: true, externalMessageId: 'x' }));
+        try {
+          const result = await dispatcher.send({
+            clinicId: fx.clinicId, phone: fx.patientId, patientId: fx.patientId, consentPurpose: 'appointment_reminder',
+          });
+          assert.equal(result.success, false);
+          assert.equal(result.code, OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED);
+          assert.equal(spy.calls(), 0, 'provider must never be called when consent context is missing under enforce mode');
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+
+    await test(`I. ${dispatcher.name}: enforce + missing patientId → blocked, provider not called`, async () => {
+      const fx = await createWhatsAppFixture();
+      await withEnv({ COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED: 'true', COMMUNICATION_CONSENT_ENFORCEMENT_MODE: 'enforce' }, async () => {
+        const spy = spyOnEvolutionSendMessage(async () => ({ success: true, externalMessageId: 'x' }));
+        try {
+          const result = await dispatcher.send({
+            clinicId: fx.clinicId, phone: '+905551112233', organizationId: fx.organizationId, consentPurpose: 'appointment_reminder',
+          });
+          assert.equal(result.success, false);
+          assert.equal(result.code, OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED);
+          assert.equal(spy.calls(), 0);
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+
+    await test(`I. ${dispatcher.name}: enforce + missing purpose → blocked, provider not called`, async () => {
+      const fx = await createWhatsAppFixture();
+      await withEnv({ COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED: 'true', COMMUNICATION_CONSENT_ENFORCEMENT_MODE: 'enforce' }, async () => {
+        const spy = spyOnEvolutionSendMessage(async () => ({ success: true, externalMessageId: 'x' }));
+        try {
+          const result = await dispatcher.send({
+            clinicId: fx.clinicId, phone: '+905551112233', organizationId: fx.organizationId, patientId: fx.patientId,
+          });
+          assert.equal(result.success, false);
+          assert.equal(result.code, OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED);
+          assert.equal(spy.calls(), 0);
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+
+    await test(`I. ${dispatcher.name}: audit + missing context → provider called (never blocks)`, async () => {
+      const fx = await createWhatsAppFixture();
+      await withEnv({ COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED: 'true', COMMUNICATION_CONSENT_ENFORCEMENT_MODE: 'audit' }, async () => {
+        const spy = spyOnEvolutionSendMessage(async () => ({ success: true, externalMessageId: 'x' }));
+        try {
+          const result = await dispatcher.send({ clinicId: fx.clinicId, phone: '+905551112233' });
+          assert.equal(spy.calls(), 1, 'audit mode must never block on missing context — the provider is still called');
+          assert.equal(result.success, true);
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+
+    await test(`I. ${dispatcher.name}: disabled + missing context → provider called (legacy behavior)`, async () => {
+      const fx = await createWhatsAppFixture();
+      await withEnv({ COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED: undefined }, async () => {
+        const spy = spyOnEvolutionSendMessage(async () => ({ success: true, externalMessageId: 'x' }));
+        try {
+          const result = await dispatcher.send({ clinicId: fx.clinicId, phone: '+905551112233' });
+          assert.equal(spy.calls(), 1, 'disabled mode is completely unchanged legacy behavior');
+          assert.equal(result.success, true);
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+
+    await test(`I. ${dispatcher.name}: fully supplied + granted → provider called`, async () => {
+      const fx = await createWhatsAppFixture();
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'whatsapp', purpose: 'appointment_reminder', action: 'grant', source: 'staff', evidenceType: 'verbal_staff_record',
+        notes: 'Patient verbal statement recorded by front-desk staff.',
+      });
+      await withEnv({ COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED: 'true', COMMUNICATION_CONSENT_ENFORCEMENT_MODE: 'enforce' }, async () => {
+        const spy = spyOnEvolutionSendMessage(async () => ({ success: true, externalMessageId: 'x' }));
+        try {
+          const result = await dispatcher.send({
+            clinicId: fx.clinicId, phone: '+905551112233',
+            organizationId: fx.organizationId, patientId: fx.patientId, consentPurpose: 'appointment_reminder',
+          });
+          assert.equal(spy.calls(), 1, 'a granted decision must reach the provider');
+          assert.equal(result.success, true);
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+
+    await test(`I. ${dispatcher.name}: fully supplied + denied + enforce → blocked, provider not called`, async () => {
+      const fx = await createWhatsAppFixture();
+      await setCommunicationPreference({
+        organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+        channel: 'whatsapp', purpose: 'appointment_reminder', action: 'deny', source: 'staff', evidenceType: 'verbal_staff_record',
+      });
+      await withEnv({ COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED: 'true', COMMUNICATION_CONSENT_ENFORCEMENT_MODE: 'enforce' }, async () => {
+        const spy = spyOnEvolutionSendMessage(async () => ({ success: true, externalMessageId: 'x' }));
+        try {
+          const result = await dispatcher.send({
+            clinicId: fx.clinicId, phone: '+905551112233',
+            organizationId: fx.organizationId, patientId: fx.patientId, consentPurpose: 'appointment_reminder',
+          });
+          assert.equal(result.success, false);
+          assert.equal(result.code, OUTBOUND_ERRORS.BLOCKED_BY_CONSENT);
+          assert.equal(spy.calls(), 0, 'a denied decision must never reach the provider');
+        } finally {
+          spy.restore();
+        }
+      });
+    });
+  }
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -663,6 +1335,10 @@ async function main() {
     await runSmsIntegrationTests();
     await runAdminValidationTests();
     await runSanitizationTests();
+    await runConcurrencyTests();
+    await runTimestampPolicyTests();
+    await runNoticeVersionEvidenceTests();
+    await runWhatsAppIntegrationTests();
   } finally {
     await cleanup();
     await prisma.$disconnect();
