@@ -1,0 +1,105 @@
+{
+  "tab": "Kommunikationspräferenzen",
+  "title": "Kommunikationspräferenzen und Einwilligungsprotokoll",
+  "disclaimer": "Technisches Kommunikationspräferenz-Protokoll — keine rechtliche Feststellung.",
+  "warningBanner": "Die Marketingeinwilligung ist getrennt von Termin-, klinischen Nachsorge-, Sicherheits- und Pflichtdienst-Mitteilungen zu betrachten. Erfassen Sie die Erklärung des Patienten und die verwendete Fassung der Datenschutzhinweise korrekt.",
+  "matrix": {
+    "channelHeader": "Kanal"
+  },
+  "channels": {
+    "sms": "SMS",
+    "email": "E-Mail",
+    "whatsapp": "WhatsApp",
+    "phone_call": "Telefonanruf",
+    "push": "Push-Benachrichtigung"
+  },
+  "purposes": {
+    "transactional": "Transaktional",
+    "appointment_reminder": "Terminerinnerung",
+    "appointment_followup": "Terminnachverfolgung",
+    "clinical_followup": "Klinische Nachsorge",
+    "recall": "Wiedereinbestellung (Recall)",
+    "no_show_recovery": "Nachverfolgung bei Nichterscheinen",
+    "operational": "Betrieblich",
+    "marketing": "Marketing",
+    "campaign": "Kampagne",
+    "survey": "Umfrage",
+    "legal_notice": "Rechtlicher Hinweis",
+    "security_notice": "Sicherheitshinweis"
+  },
+  "status": {
+    "allowed": "Erteilt",
+    "denied": "Abgelehnt",
+    "withdrawn": "Widerrufen",
+    "unknown": "Unbekannt",
+    "not_required": "Nicht erforderlich"
+  },
+  "actions": {
+    "export": "Nachweis exportieren",
+    "grant": "Erteilen",
+    "deny": "Ablehnen",
+    "withdraw": "Widerrufen",
+    "reset": "Auf Unbekannt zurücksetzen",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen"
+  },
+  "confirm": {
+    "grantTitle": "Einwilligung für {{channel}} / {{purpose}} erteilen?",
+    "grantBody": "Sie bestätigen, dass der Patient für diesen Kanal und Zweck ausdrücklich eingewilligt hat. Bitte erfassen Sie den Nachweistyp und die verwendete Fassung der Datenschutzhinweise korrekt.",
+    "denyTitle": "{{channel}} / {{purpose}} ablehnen?",
+    "denyBody": "Dieser Kanal und Zweck werden so markiert, dass der Versand abgelehnt wird.",
+    "withdrawTitle": "Einwilligung für {{channel}} / {{purpose}} widerrufen?",
+    "withdrawBody": "Eine zuvor erteilte Einwilligung wird widerrufen, und der Versand wird ab sofort blockiert.",
+    "resetTitle": "{{channel}} / {{purpose}} auf „Unbekannt“ zurücksetzen?",
+    "resetBody": "Dies setzt nur die aktuelle Entscheidung zurück; der Verlauf wird niemals gelöscht — es wird lediglich ein neuer Status „unbekannt“ erfasst."
+  },
+  "fields": {
+    "evidenceType": "Nachweistyp",
+    "source": "Quelle",
+    "noticeVersion": "Fassung des Hinweises",
+    "noticeVersionPlaceholder": "z. B. v1.2 (optional)",
+    "noticeVersionRequiredHint": "Erforderlich für eine aus dieser Quelle erfasste Zustimmung.",
+    "notes": "Notizen",
+    "notesPlaceholder": "Kurze Notiz zur Erklärung des Patienten (optional)",
+    "sourceDescriptionRequiredHint": "Für eine von Mitarbeitenden erfasste mündliche Zustimmung ist eine kurze Beschreibung dessen, was gesagt/gezeigt wurde, erforderlich."
+  },
+  "evidenceTypes": {
+    "verbal_staff_record": "Mündliche Erklärung (Mitarbeiterprotokoll)",
+    "signed_form": "Unterschriebenes Formular",
+    "portal_click": "Bestätigung über Patientenportal",
+    "inbound_reply": "Eingehende Antwort",
+    "public_booking_checkbox": "Einwilligungs-Checkbox bei Online-Buchung"
+  },
+  "sources": {
+    "staff": "Mitarbeiter",
+    "patient_portal": "Patientenportal",
+    "public_booking": "Online-Buchung",
+    "sms_keyword": "SMS-Schlüsselwort",
+    "email_unsubscribe": "E-Mail-Abmeldung",
+    "api": "API",
+    "import": "Import",
+    "whatsapp": "WhatsApp",
+    "legacy": "Altbestand",
+    "system": "System"
+  },
+  "history": {
+    "title": "Verlauf {{channel}} / {{purpose}}",
+    "empty": "Noch kein Verlauf vorhanden.",
+    "initial": "Kein Eintrag"
+  },
+  "errors": {
+    "loadFailed": "Kommunikationspräferenzen konnten nicht geladen werden.",
+    "exportFailed": "Export des Nachweises fehlgeschlagen.",
+    "genericSave": "Änderung konnte nicht gespeichert werden. Bitte erneut versuchen.",
+    "invalid_channel": "Ungültiger Kanal.",
+    "invalid_purpose": "Ungültiger Zweck.",
+    "invalid_transition": "Ungültiger Statuswechsel.",
+    "scope_denied": "Sie haben keinen Zugriff auf diesen Patienten.",
+    "evidence_required": "Für diese Aktion ist ein Nachweistyp erforderlich.",
+    "notice_version_required": "Eine Fassung des Hinweises ist erforderlich.",
+    "unsafe_note": "Die Notiz wurde abgelehnt, da sie unzulässige Inhalte enthält.",
+    "preference_not_found": "Präferenzeintrag nicht gefunden.",
+    "concurrent_update": "Dieser Eintrag wurde zeitgleich geändert. Bitte erneut versuchen.",
+    "consent_enforcement_disabled": "Die Einwilligungsdurchsetzung ist derzeit deaktiviert."
+  }
+}

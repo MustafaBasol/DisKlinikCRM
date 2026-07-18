@@ -1,0 +1,105 @@
+{
+  "tab": "İletişim Tercihleri",
+  "title": "İletişim Tercihleri ve Onay Kaydı",
+  "disclaimer": "Teknik iletişim tercih kaydı — hukuki bir belirleme değildir.",
+  "warningBanner": "Pazarlama izni ile randevu, tedavi takibi, güvenlik ve zorunlu hizmet mesajları aynı kapsamda değildir. Hastanın beyanını ve kullanılan aydınlatma metni sürümünü doğru kaydedin.",
+  "matrix": {
+    "channelHeader": "Kanal"
+  },
+  "channels": {
+    "sms": "SMS",
+    "email": "E-posta",
+    "whatsapp": "WhatsApp",
+    "phone_call": "Telefon Araması",
+    "push": "Push Bildirim"
+  },
+  "purposes": {
+    "transactional": "İşlemsel",
+    "appointment_reminder": "Randevu Hatırlatma",
+    "appointment_followup": "Randevu Takibi",
+    "clinical_followup": "Tedavi Sonrası Takip",
+    "recall": "Hatırlatma (Recall)",
+    "no_show_recovery": "Gelmeyen Hasta Takibi",
+    "operational": "Operasyonel",
+    "marketing": "Pazarlama",
+    "campaign": "Kampanya",
+    "survey": "Anket",
+    "legal_notice": "Yasal Bildirim",
+    "security_notice": "Güvenlik Bildirimi"
+  },
+  "status": {
+    "allowed": "İzin Verildi",
+    "denied": "Reddedildi",
+    "withdrawn": "Geri Çekildi",
+    "unknown": "Bilinmiyor",
+    "not_required": "Gerekli Değil"
+  },
+  "actions": {
+    "export": "Kanıtı Dışa Aktar",
+    "grant": "İzin Ver",
+    "deny": "Reddet",
+    "withdraw": "Geri Çek",
+    "reset": "Bilinmiyor Durumuna Sıfırla",
+    "cancel": "İptal",
+    "confirm": "Onayla"
+  },
+  "confirm": {
+    "grantTitle": "{{channel}} / {{purpose}} için izin verilsin mi?",
+    "grantBody": "Hastanın bu kanal ve amaç için açık izin verdiğini onaylıyorsunuz. Lütfen kanıt türünü ve kullanılan aydınlatma metni sürümünü doğru kaydedin.",
+    "denyTitle": "{{channel}} / {{purpose}} reddedilsin mi?",
+    "denyBody": "Bu kanal ve amaç için gönderim reddedilecek şekilde işaretlenecektir.",
+    "withdrawTitle": "{{channel}} / {{purpose}} izni geri çekilsin mi?",
+    "withdrawBody": "Daha önce verilmiş bir izin varsa geri çekilecek ve bu andan itibaren gönderim engellenecektir.",
+    "resetTitle": "{{channel}} / {{purpose}} 'Bilinmiyor' durumuna sıfırlansın mı?",
+    "resetBody": "Bu işlem mevcut kararı sıfırlar; geçmiş kayıtlar silinmez, yalnızca yeni bir 'bilinmiyor' durumu kaydedilir."
+  },
+  "fields": {
+    "evidenceType": "Kanıt Türü",
+    "source": "Kaynak",
+    "noticeVersion": "Aydınlatma Metni Sürümü",
+    "noticeVersionPlaceholder": "örn. v1.2 (isteğe bağlı)",
+    "noticeVersionRequiredHint": "Bu kaynaktan kaydedilen bir onay için zorunludur.",
+    "notes": "Notlar",
+    "notesPlaceholder": "Hastanın beyanı hakkında kısa not (isteğe bağlı)",
+    "sourceDescriptionRequiredHint": "Personel tarafından kaydedilen sözlü onay için ne söylendiğine/gösterildiğine dair kısa bir açıklama zorunludur."
+  },
+  "evidenceTypes": {
+    "verbal_staff_record": "Sözlü Beyan (Personel Kaydı)",
+    "signed_form": "İmzalı Form",
+    "portal_click": "Hasta Portalı Onayı",
+    "inbound_reply": "Gelen Mesaj Yanıtı",
+    "public_booking_checkbox": "Online Randevu Onay Kutusu"
+  },
+  "sources": {
+    "staff": "Personel",
+    "patient_portal": "Hasta Portalı",
+    "public_booking": "Online Randevu",
+    "sms_keyword": "SMS Anahtar Kelime",
+    "email_unsubscribe": "E-posta Aboneliği İptali",
+    "api": "API",
+    "import": "İçe Aktarma",
+    "whatsapp": "WhatsApp",
+    "legacy": "Eski Kayıt",
+    "system": "Sistem"
+  },
+  "history": {
+    "title": "{{channel}} / {{purpose}} Geçmişi",
+    "empty": "Henüz bir kayıt yok.",
+    "initial": "Kayıt yok"
+  },
+  "errors": {
+    "loadFailed": "İletişim tercihleri yüklenemedi.",
+    "exportFailed": "Kanıt dışa aktarımı başarısız oldu.",
+    "genericSave": "İşlem kaydedilemedi. Lütfen tekrar deneyin.",
+    "invalid_channel": "Geçersiz kanal.",
+    "invalid_purpose": "Geçersiz amaç.",
+    "invalid_transition": "Geçersiz durum geçişi.",
+    "scope_denied": "Bu hastaya erişim yetkiniz yok.",
+    "evidence_required": "Bu işlem için kanıt türü seçilmelidir.",
+    "notice_version_required": "Aydınlatma metni sürümü gereklidir.",
+    "unsafe_note": "Not, izin verilmeyen içerik barındırdığı için reddedildi.",
+    "preference_not_found": "Tercih kaydı bulunamadı.",
+    "concurrent_update": "Kayıt aynı anda başka bir işlemle güncellendi. Lütfen tekrar deneyin.",
+    "consent_enforcement_disabled": "Onay zorlaması şu anda devre dışı."
+  }
+}

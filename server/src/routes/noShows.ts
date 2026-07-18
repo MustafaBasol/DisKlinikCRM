@@ -477,6 +477,9 @@ router.post(
         phone: patient.phone,
         evolutionPlainText,
         variables,
+        organizationId: req.user!.organizationId,
+        patientId: patient.id,
+        consentPurpose: 'no_show_recovery',
       });
 
       if (!result.success) {
@@ -486,6 +489,18 @@ router.post(
         if (result.code === OUTBOUND_ERRORS.META_TEMPLATE_VARIABLE_MISSING) {
           return res.status(400).json({
             error: 'Şablon değişkeni eksik. Lütfen şablonunuzu kontrol edin.',
+            code: result.code,
+          });
+        }
+        if (
+          result.code === OUTBOUND_ERRORS.BLOCKED_BY_CONSENT ||
+          result.code === OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED
+        ) {
+          // Business-policy outcome, not a generic send failure — distinct
+          // status code so the UI/dashboards never conflate it with a
+          // technical WhatsApp send error.
+          return res.status(409).json({
+            error: 'İletişim izin politikası bu mesajın gönderilmesini engelliyor.',
             code: result.code,
           });
         }
