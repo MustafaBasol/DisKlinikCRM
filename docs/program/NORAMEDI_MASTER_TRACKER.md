@@ -141,7 +141,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 - **Allowed next status:** `IN_PROGRESS` → `AGENT_COMPLETED`.
 
 ### F0-003 — Domain and Module Ownership Map
-- **Status:** `AGENT_COMPLETED` — depo-doğrulanmış domain/modül haritası tamamlandı ve commit edildi.
+- **Status:** `PR_OPEN` — [PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168) açıldı (2026-07-18); depo-doğrulanmış domain/modül haritası commit `103afaf` ile push edildi. Merge kararı dış incelemeye aittir.
 - **Purpose:** [MODULE_MAP.md](MODULE_MAP.md) içindeki geçici hedef haritayı gerçek dosya sahipliğiyle doğrulamak ve revize etmek.
 - **Dependencies:** F0-002 (tracker kuralı gereği).
 - **Parallel execution note:** Bu görev, F0-002'nin genel görev durumu `IN_PROGRESS`/`READY` iken (Stage B hâlâ bloklu) kullanıcının **açık talimatıyla** paralel başlatıldı. Bu, görevin orijinal yönlendirme metninin ("F0-003 paralel çalışmaya yetkilidir") **F0-002'nin kendi kanıt dokümanının** ("F0-003 bu tur içinde başlatılmadı") ile çeliştiği tespit edildikten ve kullanıcıya sorulduktan sonra yapıldı — kullanıcı "Proceed anyway" seçeneğini seçti. Bu istisna yalnızca bu göreve özgüdür; gelecekteki görevler için paralel-yetki emsali oluşturmaz.
@@ -245,7 +245,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
 | F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme düzeltmeleri (bayat KVKK taban çizgisi ifadeleri) commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi (2026-07-17); PR açık, merge kararı dış incelemeye aittir. |
-| F0-003 | Domain and Module Ownership Map | `AGENT_COMPLETED` | Depo-doğrulanmış domain/modül haritası; F0-002'nin genel görev durumu tamamlanmadan, kullanıcının açık talimatıyla paralel yürütüldü (bkz. §6 F0-003 "Parallel execution note"). Dış inceleme/merge henüz yapılmadı. |
+| F0-003 | Domain and Module Ownership Map | `PR_OPEN` | Depo-doğrulanmış domain/modül haritası; F0-002'nin genel görev durumu tamamlanmadan, kullanıcının açık talimatıyla paralel yürütüldü (bkz. §6 F0-003 "Parallel execution note"). [PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168) açık; merge kararı dış incelemeye aittir. |
 
 ## 8. Blocked tasks (Bloklu işler)
 
