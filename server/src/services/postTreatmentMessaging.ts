@@ -6,10 +6,11 @@
  */
 
 import prisma from '../db.js';
-import { sendPostTreatmentWhatsApp } from './whatsapp/whatsappOutboundMessaging.js';
+import { sendPostTreatmentWhatsApp, OUTBOUND_ERRORS } from './whatsapp/whatsappOutboundMessaging.js';
 import { sendMessage as sendInstagramMessage } from './instagram/InstagramMessagingProvider.js';
 import type { InstagramConnectionRecord } from './instagram/InstagramMessagingProvider.js';
 import { logActivity } from '../utils/activity.js';
+import { logger } from '../utils/logger.js';
 
 // ── Template variable substitution ──────────────────────────────────────────
 
@@ -346,6 +347,7 @@ async function sendQueueEntry(entry: {
   service: { name: string } | null;
 }): Promise<void> {
   let success = false;
+  let blockedByConsent = false;
   let errorMsg: string | null = null;
 
   try {
@@ -407,13 +409,22 @@ async function sendQueueEntry(entry: {
         consentPurpose: 'clinical_followup',
       });
 
-      if (!sendResult.success) {
+      if (
+        !sendResult.success &&
+        (sendResult.code === OUTBOUND_ERRORS.BLOCKED_BY_CONSENT ||
+          sendResult.code === OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED)
+      ) {
+        // Business-policy outcome, not a provider failure — recorded and
+        // logged distinctly from a technical send failure.
+        blockedByConsent = true;
+      } else if (!sendResult.success) {
         const msg = sendResult.code
           ? `${sendResult.code}: ${sendResult.error ?? 'WhatsApp send failed'}`
           : (sendResult.error ?? 'WhatsApp send failed');
         throw new Error(msg);
+      } else {
+        success = true;
       }
-      success = true;
     } else if (entry.channel === 'instagram') {
       if (!entry.recipient) throw new Error('NO_INSTAGRAM_RECIPIENT');
 
@@ -443,12 +454,19 @@ async function sendQueueEntry(entry: {
     });
   }
 
+  if (blockedByConsent) {
+    logger.warn(
+      { queueId: entry.id, clinicId: entry.clinicId, channel: entry.channel, purpose: 'clinical_followup' },
+      'post-treatment: message blocked by communication consent policy',
+    );
+  }
+
   await prisma.postTreatmentMessageQueue.update({
     where: { id: entry.id },
     data: {
-      status: success ? 'sent' : 'failed',
+      status: success ? 'sent' : blockedByConsent ? 'blocked_by_consent' : 'failed',
       sentAt: success ? new Date() : null,
-      errorMessage: errorMsg,
+      errorMessage: blockedByConsent ? null : errorMsg,
     },
   });
 

@@ -11,8 +11,9 @@ import { getClinicOperatingPreferences } from '../services/clinicOperatingPrefer
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { getNotificationPreferences } from '../services/notificationPreferences.js';
 import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
-import { sendProactiveWhatsAppMessage } from '../services/whatsapp/whatsappOutboundMessaging.js';
+import { sendProactiveWhatsAppMessage, OUTBOUND_ERRORS } from '../services/whatsapp/whatsappOutboundMessaging.js';
 import { logActivity } from '../utils/activity.js';
+import { logger } from '../utils/logger.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { processScheduledPostTreatmentMessages } from '../services/postTreatmentMessaging.js';
 import { withJobLock } from '../utils/jobLock.js';
@@ -288,6 +289,25 @@ async function runPatientAppointmentRemindersForClinic(
         patientId: patient.id,
         consentPurpose: 'appointment_reminder',
       });
+
+      if (
+        !sendResult.success &&
+        (sendResult.code === OUTBOUND_ERRORS.BLOCKED_BY_CONSENT ||
+          sendResult.code === OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED)
+      ) {
+        // Business-policy outcome, not a provider failure — never counted
+        // against send-failure metrics/logs.
+        await prisma.sentMessage.update({
+          where: { id: sentMessage.id },
+          data: { status: 'blocked_by_consent' },
+        });
+        logger.warn(
+          { clinicId: clinic.id, code: sendResult.code, purpose: 'appointment_reminder' },
+          'reminders: appointment reminder blocked by communication consent policy',
+        );
+        continue;
+      }
+
       if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
 
       await prisma.sentMessage.update({
@@ -492,6 +512,23 @@ async function runPaymentRemindersForClinic(
         patientId: patient.id,
         consentPurpose: 'operational',
       });
+
+      if (
+        !sendResult.success &&
+        (sendResult.code === OUTBOUND_ERRORS.BLOCKED_BY_CONSENT ||
+          sendResult.code === OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED)
+      ) {
+        await prisma.sentMessage.update({
+          where: { id: sentMessage.id },
+          data: { status: 'blocked_by_consent' },
+        });
+        logger.warn(
+          { clinicId: clinic.id, code: sendResult.code, purpose: 'operational' },
+          'reminders: payment reminder blocked by communication consent policy',
+        );
+        continue;
+      }
+
       if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
 
       await prisma.sentMessage.update({
