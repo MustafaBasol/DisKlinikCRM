@@ -30,6 +30,11 @@ import { evaluateTemplateBinding } from './templateBinding.js';
 import type { WhatsAppConnectionRecord } from './WhatsAppProvider.js';
 import { assertCommunicationPermission } from '../communicationConsent/communicationConsentPolicy.js';
 import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';
+import {
+  isCommunicationConsentEnforcementEnabled,
+  getCommunicationConsentEnforcementMode,
+} from '../communicationConsent/enforcementConfig.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Error codes ──────────────────────────────────────────────────────────────
 
@@ -38,6 +43,9 @@ export const OUTBOUND_ERRORS = {
   META_APPROVED_TEMPLATE_REQUIRED: 'META_APPROVED_TEMPLATE_REQUIRED',
   META_TEMPLATE_VARIABLE_MISSING: 'META_TEMPLATE_VARIABLE_MISSING',
   BLOCKED_BY_CONSENT: 'BLOCKED_BY_CONSENT',
+  /** organizationId/patientId/consentPurpose missing under enforce mode — a
+   *  distinct business-policy outcome, never classified as a provider failure. */
+  CONSENT_CONTEXT_REQUIRED: 'COMMUNICATION_CONSENT_CONTEXT_REQUIRED',
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,29 +58,58 @@ export type ProactiveMessageResult = {
 };
 
 /**
- * Optional KVKK-HIGH-007 consent-check inputs, accepted by every public
- * dispatcher below. When all three fields are provided, the central
- * decision service (communicationConsentPolicy.ts) is consulted before the
- * provider is called. When omitted, behavior is completely unchanged
- * (backwards compatible with callers not yet updated). Even when provided,
- * this is a no-op unless COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED=true.
+ * Mandatory KVKK-HIGH-007 consent-check inputs, required by every public
+ * patient-facing dispatcher below. The central decision service
+ * (communicationConsentPolicy.ts) is always consulted before the provider is
+ * called. Every caller of these dispatchers must supply real identifiers —
+ * this is a compile-time forcing function (mirrors `SendClinicSmsArgs` in
+ * `services/sms/smsService.ts`, which has required these same 3 fields from
+ * day one). There is no optional-argument bypass: a caller cannot opt out of
+ * the consent check by omitting a field.
  */
 export type WhatsAppConsentCheckArgs = {
-  organizationId?: string;
-  patientId?: string;
-  consentPurpose?: CommunicationPurpose;
+  organizationId: string;
+  patientId: string;
+  consentPurpose: CommunicationPurpose;
 };
 
 /**
  * Returns a blocking ProactiveMessageResult when the central consent policy
- * denies the send in enforce mode; null when the send may proceed (either
- * allowed, or the consent args were not supplied by this caller yet).
+ * denies the send in enforce mode, or when required consent context is
+ * missing under enforce mode; null when the send may proceed.
+ *
+ * Rollout-mode behavior for missing context (defensive runtime check — the
+ * mandatory TS types above are the primary control, but do not stop an empty
+ * string or an `as any` cast from a caller):
+ *   - disabled: unchanged legacy behavior (flag check short-circuits first).
+ *   - audit: missing context logs an explicit, safe audit observation and
+ *     never blocks.
+ *   - enforce: missing context blocks BEFORE any connection resolution or
+ *     provider call, with a distinct code (COMMUNICATION_CONSENT_CONTEXT_REQUIRED)
+ *     — never classified as a provider failure.
  */
 async function checkWhatsAppConsent(
   clinicId: string,
   args: WhatsAppConsentCheckArgs,
 ): Promise<ProactiveMessageResult | null> {
-  if (!args.organizationId || !args.patientId || !args.consentPurpose) return null;
+  if (!isCommunicationConsentEnforcementEnabled()) return null;
+
+  const missingContext = !args.organizationId || !args.patientId || !args.consentPurpose;
+  if (missingContext) {
+    const mode = getCommunicationConsentEnforcementMode();
+    if (mode === 'enforce') {
+      return {
+        success: false,
+        code: OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED,
+        error: 'Communication consent context (organizationId/patientId/purpose) is required to send this WhatsApp message.',
+      };
+    }
+    logger.info(
+      { clinicId, purpose: args.consentPurpose ?? null },
+      'communication-consent: audit decision - consent context missing',
+    );
+    return null;
+  }
 
   const permission = await assertCommunicationPermission({
     organizationId: args.organizationId,

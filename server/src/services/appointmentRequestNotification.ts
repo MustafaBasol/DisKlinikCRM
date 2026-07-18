@@ -46,15 +46,13 @@ export async function sendAppointmentRequestConfirmationNotification(args: {
     practitioner: { firstName: string; lastName: string };
   };
   /**
-   * Optional KVKK-HIGH-007 consent-check identifiers. When provided, the
-   * WhatsApp confirmation send consults the central consent decision
-   * service (communicationConsentPolicy.ts); when omitted, behavior is
-   * unchanged. Not yet threaded through by every caller of this function —
-   * see docs/compliance/56-kvkk-communication-preference-and-consent-management.md
-   * "paths not integrated" for the known gap.
+   * Mandatory KVKK-HIGH-007 consent-check identifiers — the WhatsApp
+   * confirmation send always consults the central consent decision service
+   * (communicationConsentPolicy.ts) via the now-mandatory
+   * `WhatsAppConsentCheckArgs` on `sendAppointmentConfirmationWhatsApp`.
    */
-  organizationId?: string;
-  patientId?: string;
+  organizationId: string;
+  patientId: string;
 }): Promise<void> {
   const {
     clinicId,
