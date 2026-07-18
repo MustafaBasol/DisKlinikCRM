@@ -477,6 +477,9 @@ router.post(
         phone: patient.phone,
         evolutionPlainText,
         variables,
+        organizationId: req.user!.organizationId,
+        patientId: patient.id,
+        consentPurpose: 'no_show_recovery',
       });
 
       if (!result.success) {

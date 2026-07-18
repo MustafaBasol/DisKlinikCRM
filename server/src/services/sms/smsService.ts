@@ -33,6 +33,8 @@ import {
   type SmsPurpose,
   type SmsRenderContext,
 } from './smsTemplating.js';
+import { assertCommunicationPermission } from '../communicationConsent/communicationConsentPolicy.js';
+import { SMS_PURPOSE_TO_COMMUNICATION_PURPOSE } from './smsCommunicationPurposeMap.js';
 
 const MAX_SMS_BODY_LENGTH = 1000;
 
@@ -44,6 +46,7 @@ export type SmsBlockCode =
   | 'policy_conflict'
   | 'provider_not_configured'
   | 'consent_blocked'
+  | 'blocked_by_consent'
   | 'template_invalid'
   | 'unresolved_variables'
   | 'quota_exceeded'
@@ -175,6 +178,28 @@ export async function sendClinicSms(
       errorMessage: 'Patient consent rules block this SMS.',
     });
     return { ok: false, code: 'consent_blocked', error: 'Patient consent rules block this SMS.', messageId };
+  }
+
+  // 3b. Central KVKK-HIGH-007 communication consent decision (additive; disabled by
+  // default — see COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED/_MODE — and never queries
+  // the DB when the flag is off, so this is a no-op unless a future rollout enables it).
+  const centralPermission = await assertCommunicationPermission({
+    organizationId: args.organizationId,
+    clinicId: args.clinicId,
+    patientId: args.patientId,
+    channel: 'sms',
+    purpose: SMS_PURPOSE_TO_COMMUNICATION_PURPOSE[args.purpose],
+  });
+  if (centralPermission.blocked) {
+    const messageId = await recordBlocked({
+      ...args, recipient: normalized, body: '', status: 'blocked_by_consent',
+      region, errorCode: centralPermission.reasonCode,
+      errorMessage: 'Central communication consent policy blocks this SMS.',
+    });
+    return {
+      ok: false, code: 'blocked_by_consent',
+      error: 'Central communication consent policy blocks this SMS.', messageId,
+    };
   }
 
   // 4. Body: explicit or rendered template; unresolved variables block the send

@@ -28,6 +28,8 @@ import { resolveConnectionForClinic } from './whatsappService.js';
 import { getWhatsAppProvider } from './whatsappProviderFactory.js';
 import { evaluateTemplateBinding } from './templateBinding.js';
 import type { WhatsAppConnectionRecord } from './WhatsAppProvider.js';
+import { assertCommunicationPermission } from '../communicationConsent/communicationConsentPolicy.js';
+import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';
 
 // ─── Error codes ──────────────────────────────────────────────────────────────
 
@@ -35,6 +37,7 @@ export const OUTBOUND_ERRORS = {
   NO_CONNECTION: 'WA_NO_CONNECTION',
   META_APPROVED_TEMPLATE_REQUIRED: 'META_APPROVED_TEMPLATE_REQUIRED',
   META_TEMPLATE_VARIABLE_MISSING: 'META_TEMPLATE_VARIABLE_MISSING',
+  BLOCKED_BY_CONSENT: 'BLOCKED_BY_CONSENT',
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -45,6 +48,48 @@ export type ProactiveMessageResult = {
   error?: string;
   code?: string;
 };
+
+/**
+ * Optional KVKK-HIGH-007 consent-check inputs, accepted by every public
+ * dispatcher below. When all three fields are provided, the central
+ * decision service (communicationConsentPolicy.ts) is consulted before the
+ * provider is called. When omitted, behavior is completely unchanged
+ * (backwards compatible with callers not yet updated). Even when provided,
+ * this is a no-op unless COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED=true.
+ */
+export type WhatsAppConsentCheckArgs = {
+  organizationId?: string;
+  patientId?: string;
+  consentPurpose?: CommunicationPurpose;
+};
+
+/**
+ * Returns a blocking ProactiveMessageResult when the central consent policy
+ * denies the send in enforce mode; null when the send may proceed (either
+ * allowed, or the consent args were not supplied by this caller yet).
+ */
+async function checkWhatsAppConsent(
+  clinicId: string,
+  args: WhatsAppConsentCheckArgs,
+): Promise<ProactiveMessageResult | null> {
+  if (!args.organizationId || !args.patientId || !args.consentPurpose) return null;
+
+  const permission = await assertCommunicationPermission({
+    organizationId: args.organizationId,
+    clinicId,
+    patientId: args.patientId,
+    channel: 'whatsapp',
+    purpose: args.consentPurpose,
+  });
+
+  if (!permission.blocked) return null;
+
+  return {
+    success: false,
+    code: OUTBOUND_ERRORS.BLOCKED_BY_CONSENT,
+    error: 'Central communication consent policy blocks this WhatsApp message.',
+  };
+}
 
 export type MetaTemplateSnapshot = {
   metaTemplateName: string | null;
@@ -209,7 +254,7 @@ export async function sendProactiveWhatsAppMessage(args: {
   text: string;
   templateId?: string | null;
   variables?: Record<string, string>;
-}): Promise<ProactiveMessageResult> {
+} & WhatsAppConsentCheckArgs): Promise<ProactiveMessageResult> {
   const { clinicId, phone, text, templateId, variables = {} } = args;
 
   if (!clinicId || clinicId === 'all') {
@@ -219,6 +264,9 @@ export async function sendProactiveWhatsAppMessage(args: {
       code: OUTBOUND_ERRORS.NO_CONNECTION,
     };
   }
+
+  const consentBlock = await checkWhatsAppConsent(clinicId, args);
+  if (consentBlock) return consentBlock;
 
   const connection = await resolveConnectionForClinic(clinicId);
   if (!connection) {
@@ -316,7 +364,7 @@ export async function sendNoShowRecoveryWhatsApp(args: {
   phone: string;
   evolutionPlainText: string;
   variables: Record<string, string>;
-}): Promise<ProactiveMessageResult> {
+} & WhatsAppConsentCheckArgs): Promise<ProactiveMessageResult> {
   const { clinicId, phone, evolutionPlainText, variables } = args;
 
   if (!clinicId || clinicId === 'all') {
@@ -326,6 +374,9 @@ export async function sendNoShowRecoveryWhatsApp(args: {
       code: OUTBOUND_ERRORS.NO_CONNECTION,
     };
   }
+
+  const consentBlock = await checkWhatsAppConsent(clinicId, args);
+  if (consentBlock) return consentBlock;
 
   const connection = await resolveConnectionForClinic(clinicId);
   if (!connection) {
@@ -429,7 +480,7 @@ export async function sendAppointmentConfirmationWhatsApp(args: {
   evolutionPlainText: string;
   variables: Record<string, string>;
   connectionId?: string | null;
-}): Promise<ProactiveMessageResult> {
+} & WhatsAppConsentCheckArgs): Promise<ProactiveMessageResult> {
   const { clinicId, phone, evolutionPlainText, variables, connectionId } = args;
 
   if (!clinicId || clinicId === 'all') {
@@ -439,6 +490,9 @@ export async function sendAppointmentConfirmationWhatsApp(args: {
       code: OUTBOUND_ERRORS.NO_CONNECTION,
     };
   }
+
+  const consentBlock = await checkWhatsAppConsent(clinicId, args);
+  if (consentBlock) return consentBlock;
 
   let connection: WhatsAppConnectionRecord | null = null;
   if (connectionId) {
@@ -543,7 +597,7 @@ export async function sendPostTreatmentWhatsApp(args: {
   phone: string;
   evolutionPlainText: string;
   variables: Record<string, string>;
-}): Promise<ProactiveMessageResult> {
+} & WhatsAppConsentCheckArgs): Promise<ProactiveMessageResult> {
   const { clinicId, phone, evolutionPlainText, variables } = args;
 
   if (!clinicId || clinicId === 'all') {
@@ -553,6 +607,9 @@ export async function sendPostTreatmentWhatsApp(args: {
       code: OUTBOUND_ERRORS.NO_CONNECTION,
     };
   }
+
+  const consentBlock = await checkWhatsAppConsent(clinicId, args);
+  if (consentBlock) return consentBlock;
 
   const connection = await resolveConnectionForClinic(clinicId);
   if (!connection) {

@@ -284,6 +284,9 @@ async function runPatientAppointmentRemindersForClinic(
         text: body,
         templateId: reminderTemplate?.id,
         variables: vars,
+        organizationId: clinic.organizationId,
+        patientId: patient.id,
+        consentPurpose: 'appointment_reminder',
       });
       if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
 
@@ -485,6 +488,9 @@ async function runPaymentRemindersForClinic(
         text: body,
         templateId: safePaymentTemplate?.id,
         variables: vars,
+        organizationId: clinic.organizationId,
+        patientId: patient.id,
+        consentPurpose: 'operational',
       });
       if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');
 

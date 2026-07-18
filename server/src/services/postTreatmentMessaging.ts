@@ -402,6 +402,9 @@ async function sendQueueEntry(entry: {
         phone,
         evolutionPlainText: entry.messageBodyRendered,
         variables,
+        organizationId: entry.organizationId,
+        patientId: entry.patientId,
+        consentPurpose: 'clinical_followup',
       });
 
       if (!sendResult.success) {

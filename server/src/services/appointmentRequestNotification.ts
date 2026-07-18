@@ -45,6 +45,16 @@ export async function sendAppointmentRequestConfirmationNotification(args: {
     appointmentType: { name: string };
     practitioner: { firstName: string; lastName: string };
   };
+  /**
+   * Optional KVKK-HIGH-007 consent-check identifiers. When provided, the
+   * WhatsApp confirmation send consults the central consent decision
+   * service (communicationConsentPolicy.ts); when omitted, behavior is
+   * unchanged. Not yet threaded through by every caller of this function —
+   * see docs/compliance/56-kvkk-communication-preference-and-consent-management.md
+   * "paths not integrated" for the known gap.
+   */
+  organizationId?: string;
+  patientId?: string;
 }): Promise<void> {
   const {
     clinicId,
@@ -54,6 +64,8 @@ export async function sendAppointmentRequestConfirmationNotification(args: {
     sourceConnectionId,
     patientName,
     appointment,
+    organizationId,
+    patientId,
   } = args;
 
   const normalizedSource = String(source ?? '').toLowerCase();
@@ -126,6 +138,9 @@ export async function sendAppointmentRequestConfirmationNotification(args: {
     evolutionPlainText: plainText,
     variables,
     connectionId: sourceConnectionId,
+    organizationId,
+    patientId,
+    consentPurpose: 'appointment_reminder',
   });
   if (!result.success) {
     console.warn('[appointment-confirmation] whatsapp send failed', { code: result.code, error: result.error });
