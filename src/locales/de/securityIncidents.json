@@ -1,0 +1,109 @@
+{
+  "title": "Sicherheitsvorfälle",
+  "legalDisclaimer": "Diese technische Einstufung stellt keine rechtliche Feststellung dar. Die Einstufung der Verletzung, Meldepflichten, Fristen und Formulierungen erfordern die Prüfung durch türkischen Rechtsbeistand.",
+  "summary": {
+    "openCritical": "Offen kritisch",
+    "openHigh": "Offen hoch",
+    "unacknowledged": "Nicht bestätigt",
+    "investigating": "In Untersuchung",
+    "last24h": "In den letzten 24 Std. erkannt"
+  },
+  "filters": {
+    "status": "Status",
+    "severity": "Schweregrad",
+    "category": "Kategorie",
+    "organizationId": "Organisations-ID",
+    "clinicId": "Klinik-ID",
+    "assignedTo": "Zugewiesen (Admin-ID)",
+    "from": "Von",
+    "to": "Bis",
+    "all": "Alle",
+    "apply": "Filter anwenden",
+    "clear": "Zurücksetzen"
+  },
+  "status": {
+    "open": "Offen",
+    "acknowledged": "Bestätigt",
+    "investigating": "In Untersuchung",
+    "contained": "Eingedämmt",
+    "resolved": "Behoben",
+    "closed": "Geschlossen",
+    "false_positive": "Falsch positiv"
+  },
+  "severity": {
+    "low": "Niedrig",
+    "medium": "Mittel",
+    "high": "Hoch",
+    "critical": "Kritisch"
+  },
+  "category": {
+    "auth_brute_force": "Authentifizierung Brute-Force",
+    "cross_tenant_access": "Klinikübergreifender Zugriff",
+    "export_anomaly": "Export-Anomalie",
+    "webhook_signature": "Webhook-Signatur"
+  },
+  "table": {
+    "severity": "Schweregrad",
+    "status": "Status",
+    "category": "Kategorie",
+    "title": "Titel",
+    "organization": "Organisation",
+    "clinic": "Klinik",
+    "firstDetected": "Erstmals erkannt",
+    "lastDetected": "Zuletzt erkannt",
+    "occurrences": "Vorkommen",
+    "assignee": "Zugewiesen an",
+    "unassigned": "Nicht zugewiesen"
+  },
+  "list": {
+    "loading": "Vorfälle werden geladen…",
+    "error": "Vorfälle konnten nicht geladen werden.",
+    "empty": "Keine Sicherheitsvorfälle entsprechen den aktuellen Filtern.",
+    "pageInfo": "Seite {{page}} von {{totalPages}} ({{total}} insgesamt)",
+    "prev": "Zurück",
+    "next": "Weiter"
+  },
+  "detail": {
+    "title": "Vorfalldetails",
+    "close": "Schließen",
+    "summary": "Zusammenfassung",
+    "metadata": "Sichere Metadaten",
+    "noMetadata": "Keine Metadaten erfasst.",
+    "occurrenceCount": "Anzahl Vorkommen",
+    "sourceRule": "Erkennungsregel",
+    "affectedResource": "Betroffene Ressource",
+    "activityTitle": "Aktivitätsverlauf",
+    "activityLoading": "Aktivität wird geladen…",
+    "activityEmpty": "Noch keine Aktivität erfasst.",
+    "legalReview": "Rechtliche Prüfung",
+    "legalReviewRequired": "Erforderlich",
+    "legalReviewStatus": {
+      "pending": "Ausstehend",
+      "in_review": "In Prüfung",
+      "not_required": "Nicht erforderlich",
+      "advised": "Rechtsbeistand hat Stellung genommen"
+    }
+  },
+  "actions": {
+    "acknowledge": "Bestätigen",
+    "investigate": "Untersuchung starten",
+    "assign": "Zuweisen",
+    "unassign": "Zuweisung aufheben",
+    "contain": "Als eingedämmt markieren",
+    "resolve": "Beheben",
+    "close": "Vorfall schließen",
+    "falsePositive": "Als falsch positiv markieren",
+    "reopen": "Wieder öffnen",
+    "addNote": "Notiz hinzufügen",
+    "note": "Notiz",
+    "containmentSummary": "Zusammenfassung der Eindämmung",
+    "resolutionSummary": "Zusammenfassung der Behebung",
+    "reasonRequired": "Eine Begründung ist erforderlich",
+    "submit": "Absenden",
+    "cancel": "Abbrechen",
+    "assigneeIdPlaceholder": "Plattform-Admin-ID",
+    "success": "Vorfall aktualisiert.",
+    "error": "Vorfall konnte nicht aktualisiert werden.",
+    "sanitizationWarning": "Geben Sie keine Patientennamen, Telefonnummern, E-Mail-Adressen, klinische Informationen, Passwörter, Token oder andere vertrauliche Daten ein."
+  }
+}

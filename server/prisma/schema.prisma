@@ -1295,6 +1295,16 @@ model PlatformAdmin {
   totpEnabledAt       DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  // KVKK-CRIT-003 — security incident lifecycle back-relations. All
+  // onDelete: SetNull on the owning side so a deleted/deactivated Platform
+  // Admin never destroys incident history.
+  securityIncidentsAssigned     SecurityIncident[]         @relation("SecurityIncidentAssignee")
+  securityIncidentsAcknowledged SecurityIncident[]         @relation("SecurityIncidentAcknowledger")
+  securityIncidentsContained    SecurityIncident[]         @relation("SecurityIncidentContainer")
+  securityIncidentsResolved     SecurityIncident[]         @relation("SecurityIncidentResolver")
+  securityIncidentsClosed       SecurityIncident[]         @relation("SecurityIncidentCloser")
+  securityIncidentActivity      SecurityIncidentActivity[] @relation("SecurityIncidentActivityActor")
 }
 
 model ClinicInvitation {
@@ -2634,4 +2644,177 @@ model ClinicBulkExportPasswordAttempt {
 
   @@unique([userId, clinicId, ipHash])
   @@index([updatedAt])
+}
+
+// ── KVKK-CRIT-003: Security Incident Response Foundation ────────────────────
+//
+// This is a TECHNICAL foundation only. It does not constitute legal approval
+// of breach classification, notification obligations/deadlines/recipients,
+// legal wording, or regulator/data-subject communication — see
+// docs/compliance/55-kvkk-security-incident-response-foundation.md.
+//
+// Three models, three distinct jobs — never merge them:
+//   SecuritySignalEvent      — append-only raw detection evidence. Never
+//                              mutated. What windowed-threshold counting
+//                              reads FROM.
+//   SecurityIncident         — the mutable, deduplicated aggregate a
+//                              Platform Admin actually works. incidentKey
+//                              is unique so concurrent identical signals
+//                              can only ever produce one row (DB-level
+//                              upsert, never find-then-create).
+//   SecurityIncidentActivity — immutable per-incident history. Only ever
+//                              inserted, in the same transaction as the
+//                              SecurityIncident row it documents.
+
+/// Append-only raw security-signal evidence. Deliberately NOT layered onto
+/// the existing OperationalEvent model: OperationalEvent.organizationId is a
+/// required (non-nullable) column depended on by 8+ existing org-scoped call
+/// sites and the clinic-facing /api/ops/events route, but some security
+/// signals (a Platform Admin login failure, a cross-tenant probe with no
+/// resolvable target org) have no natural single organizationId — forcing
+/// them through OperationalEvent would mean either a risky nullability
+/// change to a widely-depended-on column or a fake placeholder org id, both
+/// worse than a dedicated table. Never contains secrets, tokens, raw IPs, or
+/// patient content — see securitySignalService.ts's allowlist sanitizer.
+model SecuritySignalEvent {
+  id String @id @default(uuid())
+
+  signalType String // e.g. "auth_login_failed", "clinic_scope_denied", "export_step_up_lockout"
+  category   String
+  severity   String
+  ruleKey    String
+
+  organizationId String?
+  clinicId       String?
+
+  actorUserId          String?
+  actorPlatformAdminId String?
+
+  /// HMAC-SHA256(SECURITY_SIGNAL_IP_HASH_SECRET, ip) — never a raw IP.
+  ipHash String?
+  /// Bounded/normalized user-agent fingerprint (hashed) — never the raw header.
+  userAgentFingerprint String?
+
+  resourceType String?
+  /// HMAC-hashed or otherwise safe resource identifier — never a raw guessed id.
+  resourceId   String?
+
+  /// Grouping key used to compute a durable windowed occurrence count for
+  /// threshold-based rules (e.g. an account-identifier hash, an ipHash, or a
+  /// resource-scope hash) — see securitySignalService.ts.
+  dedupeDimension String
+
+  /// Sanitized metadata only — allowlist-checked, see securitySignalService.ts.
+  safeMetadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([ruleKey, dedupeDimension, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([clinicId, createdAt])
+  @@index([createdAt])
+}
+
+/// Durable, deduplicated security incident record — the mutable aggregate a
+/// Platform Admin actually triages and works. legalReviewRequired/
+/// legalReviewStatus are technical placeholders recording that a human
+/// legal decision is pending; they are never set by this feature to imply a
+/// legal conclusion, classification, or notification deadline — see the
+/// runbook. onDelete: SetNull throughout so a deleted/deactivated Platform
+/// Admin never destroys incident history.
+model SecurityIncident {
+  id String @id @default(uuid())
+
+  /// Deterministic dedupe key derived from sourceRule + scope + affected
+  /// resource (see securitySignalService.ts buildIncidentKey). Unique at the
+  /// DB level so concurrent identical signals can only ever upsert the SAME
+  /// row — never a race-prone find-then-create.
+  incidentKey String @unique
+
+  organizationId String?
+  clinicId       String?
+
+  category String // auth_brute_force | cross_tenant_access | export_anomaly | webhook_signature
+  severity String // low | medium | high | critical
+  status   String @default("open") // open | acknowledged | investigating | contained | resolved | closed | false_positive
+
+  title   String
+  summary String
+
+  firstDetectedAt DateTime
+  lastDetectedAt  DateTime
+  occurrenceCount Int      @default(1)
+
+  sourceType String // e.g. "auth_login", "clinic_scope_denial", "clinic_bulk_export"
+  sourceRule String // stable rule key, e.g. "auth.brute_force.v1"
+
+  affectedResourceType String?
+  affectedResourceId   String?
+
+  assignedToPlatformAdminId String?
+  assignedToPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentAssignee", fields: [assignedToPlatformAdminId], references: [id], onDelete: SetNull)
+
+  acknowledgedAt                DateTime?
+  acknowledgedByPlatformAdminId String?
+  acknowledgedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentAcknowledger", fields: [acknowledgedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  containedAt                DateTime?
+  containedByPlatformAdminId String?
+  containedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentContainer", fields: [containedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  resolvedAt                DateTime?
+  resolvedByPlatformAdminId String?
+  resolvedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentResolver", fields: [resolvedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  closedAt                DateTime?
+  closedByPlatformAdminId String?
+  closedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentCloser", fields: [closedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  resolutionSummary  String?
+  containmentSummary String?
+
+  /// Technical placeholder only, default true. Never flipped by any
+  /// automated detection code — only ever changed via an explicit Platform
+  /// Admin action (recorded in SecurityIncidentActivity), and even then this
+  /// is not a legal determination.
+  legalReviewRequired Boolean @default(true)
+  legalReviewStatus   String  @default("pending") // pending | in_review | not_required | advised
+
+  /// Safe, sanitized metadata only — same allowlist as SecuritySignalEvent.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activity SecurityIncidentActivity[]
+
+  @@index([status, severity, lastDetectedAt])
+  @@index([organizationId, status])
+  @@index([clinicId, status])
+  @@index([category, lastDetectedAt])
+  @@index([assignedToPlatformAdminId, status])
+}
+
+/// Immutable incident lifecycle history — only ever created, never updated
+/// or deleted, and always inserted in the same DB transaction as the
+/// SecurityIncident row it documents. Never contains secrets or patient
+/// content — same allowlist/sanitizer as SecuritySignalEvent.
+model SecurityIncidentActivity {
+  id         String           @id @default(uuid())
+  incidentId String
+  incident   SecurityIncident @relation(fields: [incidentId], references: [id])
+
+  action         String // created | occurrence_recorded | severity_escalated | acknowledged | investigating | assigned | contained | resolved | closed | false_positive | reopened | note_added
+  previousStatus String?
+  newStatus      String?
+
+  actorPlatformAdminId String?
+  actorPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentActivityActor", fields: [actorPlatformAdminId], references: [id], onDelete: SetNull)
+
+  note     String?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([incidentId, createdAt])
 }

@@ -70,7 +70,8 @@
       "plans": "Plans",
       "system": "Système",
       "privacy": "Confidentialité / Données",
-      "backups": "Sauvegardes"
+      "backups": "Sauvegardes",
+      "securityIncidents": "Incidents de sécurité"
     }
   },
   "dashboard": {

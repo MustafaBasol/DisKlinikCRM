@@ -50,6 +50,10 @@ import { safeErrorFields } from '../../utils/safeError.js';
 import { writeAuditLogInTx, writeAuditLog, extractRequestMeta } from '../../utils/auditLog.js';
 import { isClinicBulkExportEnabledForOrganization } from './clinicBulkExportConfig.js';
 import {
+  evaluateExportGenerationIntegritySignal,
+  evaluateExportCleanupFailureSignal,
+} from '../security/securityDetectionRules.js';
+import {
   CLINIC_SELECT,
   USER_SELECT,
   PATIENT_SELECT,
@@ -419,6 +423,16 @@ async function finalizeArtifactDeletionOutcome(jobId: string, success: boolean, 
     await prisma.clinicBulkExportArchive
       .updateMany({ where: { id: jobId }, data: { cleanupFailureCode: 'STORAGE_DELETE_FAILED' } })
       .catch(() => {});
+    // KVKK-CRIT-003 Rule 3: recorded on every failed attempt (not just the
+    // first) — evaluateExportCleanupFailureSignal itself only escalates to
+    // an incident once the SAME jobId has failed repeatedly across retries
+    // (persistent, not a one-off transient error).
+    const row = await prisma.clinicBulkExportArchive
+      .findUnique({ where: { id: jobId }, select: { organizationId: true, clinicId: true } })
+      .catch(() => null);
+    if (row) {
+      evaluateExportCleanupFailureSignal({ organizationId: row.organizationId, clinicId: row.clinicId, jobId });
+    }
   }
 }
 
@@ -1619,6 +1633,20 @@ export async function generateClinicBulkExport(
     await prisma.clinicBulkExportArchive
       .updateMany({ where: { id: jobId, status: 'generating' }, data: { status: 'failed', failureCode } })
       .catch(() => {});
+    // KVKK-CRIT-003 Rule 3: a security-relevant integrity/config failure
+    // (unsafe temp storage, or a ZIP that fails its own integrity check) is
+    // rare and infra-level — never an "ordinary user mistake" — so it is
+    // surfaced immediately rather than gated behind a repeat-occurrence
+    // threshold. Never includes the storage path/key, only the stable code.
+    const integrityErrorCode = (err as { code?: unknown })?.code;
+    if (integrityErrorCode === 'TEMP_STORAGE_UNSAFE' || failureCode === 'ZIP_INTEGRITY_FAILED') {
+      evaluateExportGenerationIntegritySignal({
+        organizationId: job.organizationId,
+        clinicId: job.clinicId,
+        jobId,
+        failureCode: typeof integrityErrorCode === 'string' ? integrityErrorCode : failureCode,
+      });
+    }
     // Immediate, awaited (never fire-and-forget) orphan-artifact cleanup:
     // if a storageKey was ever persisted on this row (the guarded pre-upload
     // persist above), any failure from that point on must never leave a

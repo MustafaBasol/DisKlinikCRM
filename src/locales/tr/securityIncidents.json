@@ -1,0 +1,109 @@
+{
+  "title": "Güvenlik Olayları",
+  "legalDisclaimer": "Bu teknik sınıflandırma hukuki bir tespit değildir. İhlal sınıflandırması, bildirim yükümlülükleri, süreler ve metinler Türk hukuk danışmanlığı incelemesi gerektirir.",
+  "summary": {
+    "openCritical": "Açık kritik",
+    "openHigh": "Açık yüksek",
+    "unacknowledged": "Onaylanmamış",
+    "investigating": "İnceleniyor",
+    "last24h": "Son 24 saatte tespit edilen"
+  },
+  "filters": {
+    "status": "Durum",
+    "severity": "Önem derecesi",
+    "category": "Kategori",
+    "organizationId": "Organizasyon ID",
+    "clinicId": "Klinik ID",
+    "assignedTo": "Atanan (admin ID)",
+    "from": "Başlangıç",
+    "to": "Bitiş",
+    "all": "Tümü",
+    "apply": "Filtreleri uygula",
+    "clear": "Temizle"
+  },
+  "status": {
+    "open": "Açık",
+    "acknowledged": "Onaylandı",
+    "investigating": "İnceleniyor",
+    "contained": "Kontrol altında",
+    "resolved": "Çözüldü",
+    "closed": "Kapatıldı",
+    "false_positive": "Yanlış pozitif"
+  },
+  "severity": {
+    "low": "Düşük",
+    "medium": "Orta",
+    "high": "Yüksek",
+    "critical": "Kritik"
+  },
+  "category": {
+    "auth_brute_force": "Kimlik doğrulama kaba kuvvet",
+    "cross_tenant_access": "Klinikler arası erişim",
+    "export_anomaly": "Dışa aktarım anomalisi",
+    "webhook_signature": "Webhook imzası"
+  },
+  "table": {
+    "severity": "Önem derecesi",
+    "status": "Durum",
+    "category": "Kategori",
+    "title": "Başlık",
+    "organization": "Organizasyon",
+    "clinic": "Klinik",
+    "firstDetected": "İlk tespit",
+    "lastDetected": "Son tespit",
+    "occurrences": "Tekrar sayısı",
+    "assignee": "Atanan",
+    "unassigned": "Atanmamış"
+  },
+  "list": {
+    "loading": "Olaylar yükleniyor…",
+    "error": "Olaylar yüklenemedi.",
+    "empty": "Mevcut filtrelerle eşleşen güvenlik olayı yok.",
+    "pageInfo": "Sayfa {{page}} / {{totalPages}} (toplam {{total}})",
+    "prev": "Önceki",
+    "next": "Sonraki"
+  },
+  "detail": {
+    "title": "Olay detayı",
+    "close": "Kapat",
+    "summary": "Özet",
+    "metadata": "Güvenli meta veri",
+    "noMetadata": "Kayıtlı meta veri yok.",
+    "occurrenceCount": "Tekrar sayısı",
+    "sourceRule": "Tespit kuralı",
+    "affectedResource": "Etkilenen kaynak",
+    "activityTitle": "Aktivite geçmişi",
+    "activityLoading": "Aktivite yükleniyor…",
+    "activityEmpty": "Henüz kayıtlı aktivite yok.",
+    "legalReview": "Hukuki inceleme",
+    "legalReviewRequired": "Gerekli",
+    "legalReviewStatus": {
+      "pending": "Beklemede",
+      "in_review": "İncelemede",
+      "not_required": "Gerekli değil",
+      "advised": "Hukuk danışmanlığı görüş bildirdi"
+    }
+  },
+  "actions": {
+    "acknowledge": "Onayla",
+    "investigate": "İncelemeyi başlat",
+    "assign": "Ata",
+    "unassign": "Atamayı kaldır",
+    "contain": "Kontrol altına alındı olarak işaretle",
+    "resolve": "Çöz",
+    "close": "Olayı kapat",
+    "falsePositive": "Yanlış pozitif olarak işaretle",
+    "reopen": "Yeniden aç",
+    "addNote": "Not ekle",
+    "note": "Not",
+    "containmentSummary": "Kontrol altına alma özeti",
+    "resolutionSummary": "Çözüm özeti",
+    "reasonRequired": "Bir gerekçe girilmelidir",
+    "submit": "Gönder",
+    "cancel": "Vazgeç",
+    "assigneeIdPlaceholder": "Platform admin ID",
+    "success": "Olay güncellendi.",
+    "error": "Olay güncellenemedi.",
+    "sanitizationWarning": "Hasta adı, telefon, e-posta, klinik bilgi, şifre, token veya başka gizli bilgiler girmeyin."
+  }
+}
