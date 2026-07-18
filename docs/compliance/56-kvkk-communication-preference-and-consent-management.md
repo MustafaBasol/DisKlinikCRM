@@ -1,11 +1,18 @@
 # 56 — KVKK-HIGH-007: Communication Preference and Consent Management
 
-Status: **In progress — technical implementation complete, pending review,
-merge, deployment, production verification, and legal-policy validation.**
+Status: **In progress — code review blockers remediated (scope-before-exception
+ordering, mandatory WhatsApp consent context, advisory-lock + revision-based
+concurrent history, timestamp policy, notice-version/evidence matrix), pending
+further review, merge, deployment, production verification, and legal-policy
+validation.** Not marked completed, merged, deployed, production-verified,
+legally approved, KVKK-compliant, or İYS-compliant.
 
-Branch: `feature/kvkk-high-007-communication-consent-management` (based on
-`main` at merge commit `368bcc8d0a9f4c0ea185ca33d4dd1193d8def9ef` — PR #167,
-KVKK-CRIT-003). Not merged, not deployed.
+Branch: `feature/kvkk-high-007-communication-consent-management`, based on
+`main` at merge commit `368bcc8d0a9f4c0ea185ca33d4dd1193d8def9ef` (PR #167,
+KVKK-CRIT-003); current `main` has since advanced to `131c7cc` (PR #168,
+docs-only, no file overlap with this branch — not merged into this branch, as
+it is not needed for validation and there is no conflict). Not merged, not
+deployed.
 
 This document is **not** a legal compliance certificate and this PR is
 **not** legal approval of anything. It records a technical control only.
@@ -129,14 +136,67 @@ changes. Same evidence fields as above plus `previousStatus`/`newStatus`.
 
 ### Concurrency
 
-`setCommunicationPreference()` (`communicationConsentAdmin.ts`) upserts the
-current-state row and inserts the history event **in one
-`prisma.$transaction`**. The upsert compiles to `INSERT ... ON CONFLICT DO
-UPDATE`, which Postgres serializes at the row level — two concurrent
-grant/withdraw calls for the same key resolve to exactly one final row and
-both attempts are still recorded as separate immutable events. Verified in
-`server/src/tests/communicationConsent.test.ts` tests #3–#4 (race → exactly
-one row, exactly two events) against a real disposable Postgres instance.
+**Correction (post-review):** an earlier version of this document claimed
+that the atomic `INSERT ... ON CONFLICT DO UPDATE` upsert alone was
+sufficient to guarantee authoritative concurrent history. That claim was
+wrong: the upsert serializes the *current row* at the database level, but
+`setCommunicationPreference()` also reads the current row (to compute
+`previousStatus`) **before** the upsert runs. Without an explicit lock,
+two concurrent transactions can both read the same pre-transition
+`previousStatus`, and although exactly one row survives, the recorded
+`previousStatus` values would not reflect the actual serialized commit
+order.
+
+The fix: `setCommunicationPreference()` now acquires a
+`pg_advisory_xact_lock` keyed to the exact `(patientId, clinicId, channel,
+purpose)` tuple as the **first statement** inside its `$transaction` —
+before the read of the current row. `computeCommunicationPreferenceLockKey()`
+derives two signed int32 values from `SHA-256("comm-consent-pref:" +
+patientId + ":" + clinicId + ":" + channel + ":" + purpose)`, domain-separated
+from other advisory locks in this codebase (e.g. the appointment-slot lock in
+`appointmentRequestSafety.ts`) by the fixed `"comm-consent-pref:"` prefix.
+This is the same idiom already used for appointment-slot locking, clinic
+bulk export, security incidents, and public booking.
+
+The lock makes the read-current-row → upsert → insert-event sequence a true
+critical section for one key: concurrent callers for the same key fully
+serialize, so `previousStatus` is always the actually-preceding committed
+state.
+
+**Deterministic ordering — `revision`, not `createdAt`.** A lock alone still
+does not give the event history a deterministic order independent of
+timestamps: PostgreSQL `TIMESTAMP(3)` is millisecond-precision, and several
+lock-serialized transactions can commit within the same millisecond. Both
+`PatientCommunicationPreference` and `PatientCommunicationConsentEvent` carry
+a `revision` integer column. `setCommunicationPreference()` computes
+`newRevision = (existing?.revision ?? 0) + 1` under the lock and writes it to
+both the current row and the event row in the same transaction. Because
+writers for one key are fully serialized by the lock, revisions are
+contiguous and gap-free by construction; `@@unique([preferenceId, revision])`
+on the event table is a DB-enforced backstop, not the primary mechanism.
+**Every place that reads consent history for chain/authority purposes —
+the history/export API endpoints and all model tests — orders by `revision`,
+never by `createdAt` alone.** (The whole-patient evidence export endpoint,
+which aggregates events across multiple independent channel/purpose keys,
+orders by `createdAt` with `revision` as a tiebreaker — `revision` is only
+meaningful within one key, so a cross-key view needs `createdAt` as the
+primary sort for a sensible chronological read; the mixed-key ordering
+subtlety does not affect the single-key chain-authority guarantee, which is
+what `revision` alone protects.)
+
+The transition timestamp (`effectiveAt`, `grantedAt`/`withdrawnAt` — see
+"Timestamp policy" below) is computed **after** the lock is acquired, so a
+caller that had to wait cannot record an earlier timestamp than one that
+committed while it was waiting.
+
+Verified in `server/src/tests/communicationConsent.test.ts`:
+- tests #3–#4 (two-way race) now also assert the `revision` chain;
+- section F: 20 concurrent mixed grant/deny/withdraw calls against both an
+  already-seeded key and a brand-new key, each run twice — exactly one
+  current row, exactly the expected number of contiguous gap-free-revision
+  events, `event[n].previousStatus === event[n-1].newStatus` for the full
+  chain ordered by `revision`, current-row `revision` equals the final
+  event's `revision`, and no unhandled rejection.
 
 ## 4. Purpose and channel taxonomy
 
@@ -164,16 +224,37 @@ allowlist that could be silently widened.
 - `evaluateCommunicationPermission(args)` — pure decision, **always**
   computes the real answer from the current preference table, regardless
   of rollout flags. Returns `{ allowed, reasonCode, channel, purpose,
-  effectiveStatus, preferenceId?, evaluatedAt }`.
+  effectiveStatus, preferenceId?, evaluatedAt }`. (`consentEventId` was
+  removed from this contract post-review — it was declared but never
+  populated by any code path, a misleading dead field. This is a read-only
+  decision with no associated event to honestly reference without an extra
+  query on every send-time check.)
 - `assertCommunicationPermission(args)` — the flag-aware wrapper every
   outbound sender calls. Applies the rollout mode on top of the real
-  decision (see §6).
+  decision (see §6). Returns the above plus `blocked`, `enforcementMode`,
+  and `evaluatedAllowed` (the real, mode-independent `allowed` value — see
+  §6 "Audit-mode observability").
 
 Reason codes: `consent_granted`, `consent_denied`, `consent_withdrawn`,
 `consent_unknown`, `consent_not_required`, `transactional_exception`,
 `legal_notice_exception`, `security_notice_exception`, `patient_missing`,
 `clinic_scope_mismatch`, `channel_unavailable`, `purpose_not_supported`,
 `consent_enforcement_disabled`.
+
+**Scope-before-exception ordering (post-review fix).** `evaluateCommunicationPermission()`
+resolves channel/purpose validity, then the patient, then organization
+scope, then clinic/`PatientClinic` scope, and only *after* all of that
+passes does it check whether the purpose is a policy exception. An earlier
+version of this function checked the policy-exception branch first, which
+meant a missing patient or a cross-org/cross-clinic identifier could receive
+an `allowed` decision for `transactional`/`legal_notice`/`security_notice` —
+contradicting this module's own fail-closed design. Policy exceptions are
+now the last branch, reachable only once scope is confirmed. Verified by
+`communicationConsent.test.ts` tests #14a–d: nonexistent patient +
+`transactional` → `patient_missing`; wrong organization + `transactional` →
+`clinic_scope_mismatch`; wrong clinic + `legal_notice` →
+`clinic_scope_mismatch`; a real `PatientClinic`-linked clinic +
+`security_notice` → allowed (scope resolved, then the exception applies).
 
 Fail-closed guarantees (tests in §11):
 
@@ -182,7 +263,8 @@ Fail-closed guarantees (tests in §11):
 - Only the three fixed policy-exception purposes bypass the preference
   lookup; every other purpose, including `marketing`/`campaign`, requires
   an explicit `granted` row.
-- Clinic/organization scope mismatch and missing patient → denied.
+- Clinic/organization scope mismatch and missing patient → denied, **and
+  this is checked before the policy-exception branch**, never after.
 - Unsupported channel/purpose strings → denied (never silently coerced).
 
 ## 6. Feature flags and rollout modes
@@ -203,17 +285,69 @@ COMMUNICATION_CONSENT_ENFORCEMENT_MODE=audit|enforce   # only read when ENABLED=
 This PR does **not** enable enforcement in production and does not change
 `server/.env` in any deployed environment.
 
+### Audit-mode observability (post-review fix)
+
+`assertCommunicationPermission()`'s audit-mode branch overwrites `allowed`
+to `true` so the caller's send proceeds, but it was at risk of reading as
+"audit mode silently discards the real decision." It does not: `reasonCode`
+and `effectiveStatus` already reflected the real decision, and the result
+now additionally carries `evaluatedAllowed` — the real, mode-independent
+`allowed` value, present in all three modes (`disabled`→always `true`;
+`audit`/`enforce`→the real evaluated decision). A caller or a future
+dashboard can always answer "would this have been blocked" from
+`evaluatedAllowed`, independent of what `allowed`/`blocked` say for the
+current mode.
+
+### Missing consent-context behavior by rollout mode (WhatsApp, post-review fix)
+
+Before this fix, `checkWhatsAppConsent()` (`whatsappOutboundMessaging.ts`)
+returned "proceed" whenever any of `organizationId`/`patientId`/`consentPurpose`
+was missing, **regardless of rollout mode** — including `enforce` mode. Since
+all four public dispatchers declared these fields optional, any caller could
+silently bypass audit/enforcement simply by omitting one field, and this
+remained true even after a future production switch to `enforce`.
+
+Fixed: `WhatsAppConsentCheckArgs` now makes `organizationId`/`patientId`/
+`consentPurpose` **mandatory** at the TypeScript boundary (mirroring
+`SendClinicSmsArgs` in `services/sms/smsService.ts`, which has always
+required these three fields). `checkWhatsAppConsent()` additionally performs
+a defensive runtime check (TS-mandatory doesn't stop an empty string or an
+`as any` cast) with mode-specific behavior:
+
+| Mode | Missing consent context |
+|---|---|
+| `disabled` | Unchanged legacy behavior — the flag check short-circuits before the context check ever runs. |
+| `audit` | An explicit, safe audit observation is logged (`logger.info({ clinicId, purpose }, 'communication-consent: audit decision - consent context missing')` — clinicId/purpose only, no PII) and the send proceeds. Never blocks. |
+| `enforce` | Blocks **before** any connection resolution or provider call, with a dedicated code `COMMUNICATION_CONSENT_CONTEXT_REQUIRED` (`OUTBOUND_ERRORS.CONSENT_CONTEXT_REQUIRED`) — distinct from `BLOCKED_BY_CONSENT` (context supplied, decision was deny) and never classified as a provider failure. |
+
+**Caller audit.** Every current caller of the four public dispatchers
+(`sendProactiveWhatsAppMessage`, `sendNoShowRecoveryWhatsApp`,
+`sendAppointmentConfirmationWhatsApp`, `sendPostTreatmentWhatsApp`) already
+supplied full context — `jobs/reminders.ts` (both call sites),
+`routes/noShows.ts`, `services/postTreatmentMessaging.ts` — **except one real
+gap**: `services/appointmentRequestNotification.ts`'s only caller,
+`routes/appointmentRequests.ts` (the appointment-request approval flow), did
+not pass `organizationId`/`patientId` even though both were already in scope
+in that handler. Fixed: `organizationId`/`patientId` are now mandatory
+parameters on `sendAppointmentRequestConfirmationNotification`, and the
+approval-flow call site passes `req.user!.organizationId` and the resolved
+`patientId`. No patient-facing caller of these four dispatchers remains
+unplumbed. (`sendWhatsAppMessage` in `whatsappService.ts` — inbound AI
+replies and internal staff notifications — is a different function, out of
+this module's scope by the task's own definition of "patient communication";
+nothing there needed wiring.)
+
 ## 7. Outbound enforcement — paths integrated
 
 | Path | Integrated? | Purpose mapping |
 |---|---|---|
 | `sendClinicSms` (`smsService.ts`) | **Yes.** Central check runs after the existing legacy `evaluateSmsConsent()` gate (which is unchanged), additive and flag-gated. A blocked send is recorded with status `blocked_by_consent` (distinct from the legacy `blocked_consent`) and the provider is never called. | `SMS_PURPOSE_TO_COMMUNICATION_PURPOSE` map in `smsCommunicationPurposeMap.ts`. |
-| `sendProactiveWhatsAppMessage`, `sendNoShowRecoveryWhatsApp`, `sendAppointmentConfirmationWhatsApp`, `sendPostTreatmentWhatsApp` (`whatsappOutboundMessaging.ts`) | **Yes**, via new optional `{ organizationId, patientId, consentPurpose }` args (backwards compatible — omitted args mean no-op, unchanged behavior for any caller not yet updated). Blocked sends return `code: 'BLOCKED_BY_CONSENT'` and the provider is never called. | `appointment_reminder`, `no_show_recovery`, `clinical_followup`, `operational` per call site (see §7.1). |
+| `sendProactiveWhatsAppMessage`, `sendNoShowRecoveryWhatsApp`, `sendAppointmentConfirmationWhatsApp`, `sendPostTreatmentWhatsApp` (`whatsappOutboundMessaging.ts`) | **Yes**, via **mandatory** `{ organizationId, patientId, consentPurpose }` args (a compile-time forcing function, mirroring `SendClinicSmsArgs` — no optional-argument bypass exists). Blocked sends return `code: 'BLOCKED_BY_CONSENT'` (context supplied, denied) or `code: 'COMMUNICATION_CONSENT_CONTEXT_REQUIRED'` (context missing, enforce mode) and the provider is never called either way. See §6 "Missing consent-context behavior by rollout mode". | `appointment_reminder`, `no_show_recovery`, `clinical_followup`, `operational` per call site (see §7.1). |
 | `jobs/reminders.ts` → `runPatientAppointmentRemindersForClinic` (WhatsApp reminder) | **Wired.** `consentPurpose: 'appointment_reminder'`. |
 | `jobs/reminders.ts` → `runPaymentRemindersForClinic` (WhatsApp payment reminder) | **Wired.** `consentPurpose: 'operational'`. |
 | `routes/noShows.ts` → `POST /appointments/:id/no-show/send-message` | **Wired.** `consentPurpose: 'no_show_recovery'`. |
 | `services/postTreatmentMessaging.ts` → `sendQueueEntry` | **Wired.** `consentPurpose: 'clinical_followup'`. Re-evaluated at actual send time (queue processing time), not at enqueue time — see §7.2. |
-| `services/appointmentRequestNotification.ts` → `sendAppointmentRequestConfirmationNotification` | **Partially wired.** Accepts optional `organizationId`/`patientId` and passes `consentPurpose: 'appointment_reminder'` through to the WhatsApp send — but its own callers (appointment-request approval flow) do not yet pass those identifiers. See §12 "paths not integrated" for the specific gap and why it was left for a follow-up rather than expanded in this PR. |
+| `services/appointmentRequestNotification.ts` → `sendAppointmentRequestConfirmationNotification` | **Fully wired (gap closed post-review).** `organizationId`/`patientId` are now mandatory parameters and `routes/appointmentRequests.ts`'s approval-flow call site passes `req.user!.organizationId` and the resolved `patientId` through, alongside `consentPurpose: 'appointment_reminder'`. |
 | Email (`sendMail`) | **Not integrated — no patient-facing email path exists to integrate.** Only account/system emails exist (§2.2), which are the exact `transactional`/`security_notice` policy exceptions this PR's central service already always allows. Nothing to gate. |
 | Instagram outbound / manual staff replies / `sendWhatsAppMessage` (inbound-triggered) | **Not integrated** — see §12. |
 
@@ -242,11 +376,31 @@ two evaluations) by `communicationConsent.test.ts` tests #18–#19.
 
 Denied sends are never recorded as ordinary provider failures. SMS:
 `SmsMessage.status = 'blocked_by_consent'` (test #21). WhatsApp: the
-dispatcher returns `code: 'BLOCKED_BY_CONSENT'` without calling the
-provider — callers that persist history (e.g. `SentMessage`) see a
-`success: false` result and record it as their existing "blocked" path,
-distinct from a provider error, in exactly the same way they already
-handle `META_APPROVED_TEMPLATE_REQUIRED` etc.
+dispatcher returns `code: 'BLOCKED_BY_CONSENT'` (or
+`'COMMUNICATION_CONSENT_CONTEXT_REQUIRED'` for missing context) without
+calling the provider.
+
+**Correction (post-review).** Returning a distinct code from the dispatcher
+is necessary but was not sufficient: the three real WhatsApp callers that
+persist send history — `jobs/reminders.ts` (both call sites),
+`routes/noShows.ts`, and `services/postTreatmentMessaging.ts`'s
+`sendQueueEntry()` — all folded any `!result.success` outcome, including a
+consent block, into their generic `'failed'` status path. This polluted
+`platformAdmin.ts`'s `sentMessage.count({ where: { status: 'failed' } })`
+dashboard metric with policy blocks that are not technical failures. Fixed:
+all three now special-case `code === 'BLOCKED_BY_CONSENT'` /
+`'COMMUNICATION_CONSENT_CONTEXT_REQUIRED'` to record a distinct
+`'blocked_by_consent'` status (added to `SentMessage.status` and
+`PostTreatmentMessageQueue.status` — both plain Prisma `String` columns with
+no enum type or CHECK constraint, so no migration was needed, exactly like
+`SmsMessage.status` already works) and log via the structured `logger`
+instead of `console.error`, so it is never confused with a provider error in
+logs or on the dashboard. `routes/noShows.ts`'s synchronous send endpoint
+additionally returns a distinct `409` for these two codes instead of folding
+into the generic `400` branch. No queue/retry job in this codebase
+automatically reprocesses `status: 'failed'` rows (confirmed by repo-wide
+grep), so introducing the new status value changes no selection/retry
+behavior — it only removes the mislabeling.
 
 ## 8. Legacy-data strategy
 
@@ -301,6 +455,52 @@ grant/deny/withdraw (not for reset), sanitizes notes, and writes an
 `scope_denied`, `evidence_required`, `notice_version_required`,
 `unsafe_note`.
 
+The history/export endpoints order events by the monotonic `revision`
+column (`history`: `orderBy: { revision: 'desc' }`; `export`, which
+aggregates every channel/purpose key for the patient in one list:
+`orderBy: [{ createdAt: 'asc' }, { revision: 'asc' }]`) — never by
+`createdAt` alone. See "Concurrency" above.
+
+### 9.1 Notice-version / evidence matrix (Blocker 5 — technical policy, not a legal determination)
+
+`setCommunicationPreference()` enforces this matrix for `action: 'grant'`
+only — `deny`/`withdraw`/`reset` never require `noticeVersion` or a source
+description, regardless of source, so an opt-out is never blocked on
+paperwork:
+
+| Source (grant only) | Requirement | Error code if missing |
+|---|---|---|
+| `patient_portal`, `public_booking`, `whatsapp`, `sms_keyword`, `email_unsubscribe` (patient-facing digital sources) | Non-empty `noticeVersion` (the notice/KVKK text version shown at the time of the decision, or a documented-equivalent evidence reference) | `notice_version_required` |
+| `staff` (staff-recorded verbal decision) | Non-empty, sanitized `notes` (a bounded source description — what was said/shown, and when), in addition to the already-required `evidenceType` | `evidence_required` |
+| `api`, `import`, `legacy`, `system` | No additional requirement beyond the existing `evidenceType` check — an explicit, narrower scope decision (these are not patient-facing digital sources in the same sense) | — |
+
+Only the short `noticeVersion` reference/version string is ever stored —
+never the raw notice/KVKK text body — on both the current-state row and the
+immutable event row. `not_required` is not user-settable through this
+function: `ACTION_TO_STATUS` never maps any of `grant`/`deny`/`withdraw`/
+`reset` to it, so it is structurally unreachable here (it can only ever
+appear as a policy-exception decision from `evaluateCommunicationPermission()`).
+
+### 9.2 Timestamp policy (Blocker 4)
+
+Exact, tested policy for `grantedAt`/`withdrawnAt` on the current-state row
+(`communicationConsentAdmin.ts`'s `statusTimestampFields()`). An earlier
+version used `undefined` (a Prisma no-op that leaves the existing DB value
+untouched) for fields that should have been explicitly cleared, letting
+stale timestamps leak across transitions:
+
+| New status | `grantedAt` | `withdrawnAt` |
+|---|---|---|
+| `granted` | `now` | `null` (never a stale prior withdrawal) |
+| `withdrawn` (row already existed) | **preserved** — evidence of when the later-withdrawn consent was originally granted; unambiguous once `withdrawnAt` + `status='withdrawn'` are set | `now` |
+| `withdrawn` (first-ever row for this key) | `null` (there was no prior grant to preserve) | `now` |
+| `denied` | `null` — a denial must never retain a misleading active grantedAt | `null` — nor a stale withdrawnAt |
+| `unknown` (`reset`) | `null` | `null` |
+
+History events (`PatientCommunicationConsentEvent`) are never updated, so
+they retain their `previousStatus`/`newStatus`/`createdAt` evidence
+regardless of any later transition clearing the *current row's* timestamps.
+
 ## 10. Frontend
 
 `src/components/CommunicationPreferencesPanel.tsx`, added as a new
@@ -318,18 +518,20 @@ responsive (horizontally scrollable matrix table). Translations added for
 
 ## 11. Tests and results
 
-Backend (`server/src/tests/communicationConsent.test.ts`, 31 tests;
+Backend (`server/src/tests/communicationConsent.test.ts`, 89 tests;
 `communicationPreferenceBackfill.test.ts`, 7 tests) — all against a real
-disposable Postgres:
+disposable Postgres, all passing (run twice for the concurrency sections):
 
 - Model/transaction: exactly-one-row constraint, immutable history,
-  concurrent grant/withdraw race → exactly one row + exactly two events,
-  DB unique-constraint enforcement, rejected mutation leaves no partial
-  state.
+  concurrent grant/withdraw race → exactly one row + revision-consistent
+  events, DB unique-constraint enforcement, rejected mutation leaves no
+  partial state.
 - Decision service: granted/unknown/withdrawn outcomes, all three policy
   exceptions, clinic scope mismatch, missing patient, unsupported purpose,
   disabled/audit/enforce mode behavior, re-evaluation-not-caching, retry
-  does not bypass a block.
+  does not bypass a block, **scope-before-exception ordering** (§5: missing
+  patient / wrong org / wrong clinic + a policy-exception purpose are still
+  denied; a real `PatientClinic` link still resolves to allowed).
 - SMS send-time integration: enforce mode blocks and never calls the
   provider, blocked send gets `blocked_by_consent` status, disabled mode
   preserves existing (legacy-gate-only) behavior.
@@ -338,6 +540,30 @@ disposable Postgres:
   denial, bulk update applies independent items with per-item errors.
 - Evidence sanitization: secret-like content rejected, email/phone
   redaction, overlong input bounded.
+- **Concurrency / revision-authoritative ordering (§F, real disposable
+  Postgres, each run twice):** 20 concurrent mixed grant/deny/withdraw calls
+  against an existing key and against a brand-new key — exactly one current
+  row, contiguous gap-free revisions, `event[n].previousStatus ===
+  event[n-1].newStatus` ordered by `revision`, current-row revision equals
+  the final event's revision, no unhandled rejection.
+- **Timestamp policy (§G):** withdrawn→granted clears `withdrawnAt`;
+  granted→denied nulls both `grantedAt`/`withdrawnAt`; withdrawn→unknown
+  (reset) clears both; grant→withdraw→grant preserves the original
+  `grantedAt` across the withdrawal and refreshes it on re-grant; history
+  events retain their evidence after a later transition clears the current
+  row's timestamps.
+- **Notice-version / evidence matrix (§H):** grant from each of the 5
+  digital sources requires `noticeVersion`; staff-sourced grant requires a
+  source description; deny/withdraw never require either, regardless of
+  source; raw notice text is never stored.
+- **WhatsApp send-time integration (§I):** for all 4 public dispatchers,
+  against a real DB-backed `evolution_api` connection with
+  `EvolutionWhatsAppProvider.prototype.sendMessage` patched to a spy —
+  enforce+missing org/patient/purpose → blocked
+  (`COMMUNICATION_CONSENT_CONTEXT_REQUIRED`), provider never called;
+  audit/disabled+missing context → provider called; fully-supplied granted
+  → provider called; fully-supplied denied+enforce → blocked
+  (`BLOCKED_BY_CONSENT`), provider never called.
 - Backfill: dry-run makes no changes, `--execute` only touches
   `smsOptOut` patients, never sets `granted`, policy-exception purposes
   get no row, idempotent re-run, history event per created row.
@@ -370,16 +596,31 @@ static reference after the PR merges and CI re-runs.
   reviewing the message before sending, versus an automated batch job) is
   different, and wiring it requires UI-level consent visibility at
   compose time, deferred as a follow-up.
-- **`sendAppointmentRequestConfirmationNotification`'s callers** — the
-  function itself now accepts optional consent-check identifiers (§7,
-  table), but the appointment-request-approval call site does not yet
-  pass `patientId`/`organizationId` through. Left as a known, documented
-  gap rather than expanded further in this PR to keep the diff reviewable;
-  the function's backward-compatible optional-args design means this is a
-  pure addition to complete later, not a rework.
+- **`sendAppointmentRequestConfirmationNotification`'s callers — RESOLVED.**
+  This was previously a known, documented gap (the function accepted
+  optional consent-check identifiers but its only caller didn't pass them).
+  Fixed post-review: `organizationId`/`patientId` are now mandatory
+  parameters, and `routes/appointmentRequests.ts`'s approval-flow call site
+  passes them through (both were already resolved in scope there). No
+  patient-facing caller of the four WhatsApp dispatchers remains unplumbed.
 - **Bulk/campaign messaging** — does not exist in this codebase; not
   created, per explicit task instruction not to add campaign functionality
   that doesn't already exist.
+
+### 12.1 Unrelated items noted during review, explicitly deferred
+
+Code review of this PR also surfaced three items that are **not** caused by,
+or fixable within, the files this PR touches, and are recorded here as
+follow-up items rather than addressed in this PR (to keep the diff scoped to
+KVKK-HIGH-007):
+
+- Content-Security-Policy blocks the `fonts.googleapis.com` stylesheet.
+- Content-Security-Policy blocks an inline script.
+- Platform Admin performs an unnecessary `/api/auth/me` request that
+  receives a 401.
+
+These are pre-existing, unrelated to communication consent/preference
+management, and should be tracked as separate follow-up work.
 
 ## 13. Privacy and security controls
 
