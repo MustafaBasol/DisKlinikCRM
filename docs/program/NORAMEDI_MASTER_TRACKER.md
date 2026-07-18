@@ -88,7 +88,7 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir. F0-002 Stage
 | Last production verification | `UNVERIFIED` — Stage B production evidence required |
 | Last confirmed merged KVKK work | [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) — KVKK-HIGH-004 secure clinic bulk export — `MERGED` (2026-07-17) |
 | Currently active KVKK work | `UNVERIFIED` |
-| Local observation (KVKK) | Ana çalışma ağacında `feature/kvkk-crit-003-security-incident-foundation` branch'i gözlemlendi (F0-002 sırasında **salt-okunur** olarak yeniden teyit edildi: `nothing to commit, working tree clean`, remote ile güncel); remote branch'in PR/kapsam/tamamlanma durumu hâlâ `UNVERIFIED` (F0-007 kapsamı) |
+| Local observation (KVKK) | Yerel branch: `feature/kvkk-crit-003-security-incident-foundation`. Stage A başlangıcı (2026-07-18): temiz. Dış inceleme ara kontrolü (2026-07-18, aynı gün sonra): eşzamanlı değişmiş/untracked dosyalar mevcuttu (liste evidence dokümanında; F0-002 tarafından oluşturulmadı). Bu düzeltme kontrolü (2026-07-18, remediation): yeniden temiz, remote ile güncel. Tüm gözlemler **salt-okunur** (`git status`/`git branch`) — F0-002 bu ağaca hiçbir yazma/commit/reset/checkout komutu çalıştırmadı. Sınıflandırma: `OBSERVED_LOCAL_ONLY`. Remote branch'in PR/kapsam/tamamlanma/deployment durumu: `UNVERIFIED` (F0-007 kapsamı) |
 | Known blockers | Bkz. §12 |
 
 ## 4. Phase summary (Faz özeti)
