@@ -31,7 +31,13 @@
 import { createHash } from 'node:crypto';
 import type { Prisma, SecurityIncident } from '@prisma/client';
 import prisma from '../../db.js';
-import { sanitizeSecurityMetadata, type SecuritySignalSeverity } from './securitySignalService.js';
+import {
+  sanitizeSecurityMetadata,
+  sanitizeSecurityOperatorText,
+  sanitizeRuleMetadata,
+  INCIDENT_ACTIVITY_METADATA_SCHEMA,
+  type SecuritySignalSeverity,
+} from './securitySignalService.js';
 
 const SEVERITY_RANK: Record<string, number> = { low: 1, medium: 2, high: 3, critical: 4 };
 /** Exported (pure, no DB) so tests can verify the escalation ordering without a live database. */
@@ -107,6 +113,20 @@ export interface UpsertIncidentResult {
  * the final value — Postgres serializes the row-level UPDATE, and the WHERE
  * clause only ever allows a strictly-higher rank to win.
  */
+/**
+ * Deterministic pg_advisory_xact_lock key pair for an incident's targetKey
+ * (see upsertIncidentFromSignal). Same key-derivation shape as
+ * appointmentRequestSafety.ts's computeSlotLockKey — domain-separated by the
+ * "security-incident:" prefix so this lock namespace can never collide with
+ * the slot-booking or clinic-export advisory locks elsewhere in this
+ * codebase, even though all of them share PostgreSQL's single global
+ * (int4, int4) advisory-lock space.
+ */
+function computeIncidentUpsertLockKey(targetKey: string): [number, number] {
+  const hash = createHash('sha256').update(`security-incident:${targetKey}`, 'utf8').digest();
+  return [hash.readInt32BE(0), hash.readInt32BE(4)];
+}
+
 async function escalateSeverityAtomic(
   tx: Prisma.TransactionClient,
   incidentId: string,
@@ -127,10 +147,26 @@ async function escalateSeverityAtomic(
 
 /**
  * Deterministically upserts a SecurityIncident from a detection-rule
- * escalation. incidentKey is unique at the DB level; the create/increment
- * step uses Prisma's upsert (a single INSERT ... ON CONFLICT DO UPDATE), so
- * concurrent identical signals can only ever produce one row and one
- * correct occurrenceCount — never a race-prone find-then-create.
+ * escalation. incidentKey is unique at the DB level, so concurrent identical
+ * signals can only ever produce one row (Prisma's upsert — a single
+ * INSERT ... ON CONFLICT DO UPDATE — guarantees that part on its own).
+ *
+ * What the DB-level uniqueness does NOT protect on its own is deciding
+ * *which* caller gets to treat this as a "created" incident and write the
+ * one-and-only 'created' SecurityIncidentActivity row. `preUpsertExisting`
+ * is a plain SELECT: under READ COMMITTED, N concurrent transactions can
+ * all read `null` before any of them commits, so all N would (incorrectly)
+ * conclude `created = true` and insert N 'created' activities even though
+ * the DB-unique incidentKey only ever allowed one actual INSERT to happen.
+ * The fix is a pg_advisory_xact_lock keyed on `targetKey`, acquired BEFORE
+ * the read: it serializes every concurrent upsertIncidentFromSignal() call
+ * for the same incident so the read-then-upsert sequence below is no longer
+ * racing anything — the first transaction to acquire the lock is guaranteed
+ * to see `preUpsertExisting === null` correctly and be the sole creator;
+ * every later transaction (queued behind the lock, released only on commit)
+ * is guaranteed to see the row the first one just committed and correctly
+ * takes the increment path instead. Same key-derivation/locking shape as
+ * appointmentRequestSafety.ts's acquireAppointmentSlotLock.
  *
  * Reopen/new-incident policy: once an incident reaches a terminal status
  * (closed or false_positive), a Platform Admin has already explicitly
@@ -160,6 +196,13 @@ export async function upsertIncidentFromSignal(input: UpsertIncidentFromSignalIn
       reopenedFromIncidentId != null
         ? { ...(safeMetadata ?? {}), reopenedFromIncidentId }
         : safeMetadata;
+
+    // MUST be acquired before the read below — see the function-level
+    // comment. pg_advisory_xact_lock(int4,int4): explicit casts required,
+    // Prisma binds JS numbers as int8 by default and Postgres has no
+    // (bigint,bigint) overload.
+    const [lockKey1, lockKey2] = computeIncidentUpsertLockKey(targetKey);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey1}::int4, ${lockKey2}::int4)`;
 
     const preUpsertExisting = await tx.securityIncident.findUnique({ where: { incidentKey: targetKey } });
 
@@ -199,7 +242,9 @@ export async function upsertIncidentFromSignal(input: UpsertIncidentFromSignalIn
           action: 'created',
           newStatus: 'open',
           note: reopenedFromIncidentId ? 'Recurrence after a prior closed/false-positive incident.' : null,
-          metadata: reopenedFromIncidentId ? { reopenedFromIncidentId } : undefined,
+          metadata: reopenedFromIncidentId
+            ? ((sanitizeRuleMetadata(INCIDENT_ACTIVITY_METADATA_SCHEMA, { reopenedFromIncidentId }) as Prisma.InputJsonValue) ?? undefined)
+            : undefined,
         },
       });
     } else if (severityEscalated) {
@@ -207,7 +252,7 @@ export async function upsertIncidentFromSignal(input: UpsertIncidentFromSignalIn
         data: {
           incidentId: upserted.id,
           action: 'severity_escalated',
-          metadata: { newSeverity: input.severity },
+          metadata: (sanitizeRuleMetadata(INCIDENT_ACTIVITY_METADATA_SCHEMA, { newSeverity: input.severity }) as Prisma.InputJsonValue) ?? undefined,
         },
       });
     }
@@ -219,11 +264,28 @@ export async function upsertIncidentFromSignal(input: UpsertIncidentFromSignalIn
 
 // ── Lifecycle mutations ──────────────────────────────────────────────────
 
-export type LifecycleFailure = 'not_found' | 'invalid_transition' | 'summary_required';
+export type LifecycleFailure = 'not_found' | 'invalid_transition' | 'summary_required' | 'concurrent_transition';
 export type LifecycleResult =
   | { ok: true; incident: SecurityIncident }
   | { ok: false; error: LifecycleFailure };
 
+/**
+ * Compare-and-set status transition. Two concurrent requests reading the
+ * SAME starting status (e.g. both from "investigating") must never both
+ * succeed — under PostgreSQL READ COMMITTED, a plain read-then-update by id
+ * lets both writers overwrite each other and both insert contradictory
+ * activity rows. The fix: the UPDATE's WHERE clause is conditioned on the
+ * EXACT status value we just read (not merely "is this transition valid").
+ * Postgres locks the row on the first UPDATE that reaches it and, once that
+ * transaction commits, re-evaluates the second UPDATE's WHERE clause against
+ * the now-committed (changed) status — so the loser's UPDATE matches zero
+ * rows. That is detected via `count !== 1` and reported as
+ * 'concurrent_transition', a result distinct from 'invalid_transition'
+ * (which means the transition was never valid, race or not). The loser never
+ * gets a second attempt against the new status — retrying would require
+ * revalidating allowedFromStatuses from scratch, which the caller does not
+ * do here on purpose (see the blocker writeup this fixes).
+ */
 async function applyLifecycleTransition(params: {
   incidentId: string;
   actorPlatformAdminId: string;
@@ -240,10 +302,19 @@ async function applyLifecycleTransition(params: {
       return { ok: false, error: 'invalid_transition' };
     }
 
-    const updated = await tx.securityIncident.update({
-      where: { id: params.incidentId },
+    const casResult = await tx.securityIncident.updateMany({
+      where: { id: params.incidentId, status: existing.status },
       data: { status: params.targetStatus, ...params.extraData },
     });
+
+    if (casResult.count !== 1) {
+      // Another transaction already moved this incident off `existing.status`
+      // between our read and our conditional write. This request loses the
+      // race: it must not insert an activity row and must not retry.
+      return { ok: false, error: 'concurrent_transition' };
+    }
+
+    const updated = await tx.securityIncident.findUniqueOrThrow({ where: { id: params.incidentId } });
 
     await tx.securityIncidentActivity.create({
       data: {
@@ -267,7 +338,7 @@ export async function acknowledgeIncident(p: { incidentId: string; actorPlatform
     action: 'acknowledged',
     targetStatus: 'acknowledged',
     allowedFromStatuses: ['open'],
-    note: p.note,
+    note: sanitizeSecurityOperatorText(p.note),
     extraData: { acknowledgedAt: new Date(), acknowledgedByPlatformAdminId: p.actorPlatformAdminId },
   });
 }
@@ -279,7 +350,7 @@ export async function startInvestigation(p: { incidentId: string; actorPlatformA
     action: 'investigating',
     targetStatus: 'investigating',
     allowedFromStatuses: ['open', 'acknowledged', 'contained', 'resolved'],
-    note: p.note,
+    note: sanitizeSecurityOperatorText(p.note),
   });
 }
 
@@ -288,7 +359,7 @@ export async function containIncident(p: {
   actorPlatformAdminId: string;
   containmentSummary: string;
 }): Promise<LifecycleResult> {
-  const summary = p.containmentSummary?.trim();
+  const summary = sanitizeSecurityOperatorText(p.containmentSummary);
   if (!summary) return { ok: false, error: 'summary_required' };
   return applyLifecycleTransition({
     incidentId: p.incidentId,
@@ -300,7 +371,7 @@ export async function containIncident(p: {
     extraData: {
       containedAt: new Date(),
       containedByPlatformAdminId: p.actorPlatformAdminId,
-      containmentSummary: summary.slice(0, 2000),
+      containmentSummary: summary,
     },
   });
 }
@@ -310,7 +381,7 @@ export async function resolveIncident(p: {
   actorPlatformAdminId: string;
   resolutionSummary: string;
 }): Promise<LifecycleResult> {
-  const summary = p.resolutionSummary?.trim();
+  const summary = sanitizeSecurityOperatorText(p.resolutionSummary);
   if (!summary) return { ok: false, error: 'summary_required' };
   return applyLifecycleTransition({
     incidentId: p.incidentId,
@@ -322,7 +393,7 @@ export async function resolveIncident(p: {
     extraData: {
       resolvedAt: new Date(),
       resolvedByPlatformAdminId: p.actorPlatformAdminId,
-      resolutionSummary: summary.slice(0, 2000),
+      resolutionSummary: summary,
     },
   });
 }
@@ -334,13 +405,13 @@ export async function closeIncident(p: { incidentId: string; actorPlatformAdminI
     action: 'closed',
     targetStatus: 'closed',
     allowedFromStatuses: ['resolved'],
-    note: p.note,
+    note: sanitizeSecurityOperatorText(p.note),
     extraData: { closedAt: new Date(), closedByPlatformAdminId: p.actorPlatformAdminId },
   });
 }
 
 export async function markFalsePositive(p: { incidentId: string; actorPlatformAdminId: string; note: string }): Promise<LifecycleResult> {
-  const note = p.note?.trim();
+  const note = sanitizeSecurityOperatorText(p.note);
   if (!note) return { ok: false, error: 'summary_required' };
   return applyLifecycleTransition({
     incidentId: p.incidentId,
@@ -353,7 +424,7 @@ export async function markFalsePositive(p: { incidentId: string; actorPlatformAd
 }
 
 export async function reopenIncident(p: { incidentId: string; actorPlatformAdminId: string; note: string }): Promise<LifecycleResult> {
-  const note = p.note?.trim();
+  const note = sanitizeSecurityOperatorText(p.note);
   if (!note) return { ok: false, error: 'summary_required' };
   return applyLifecycleTransition({
     incidentId: p.incidentId,
@@ -389,7 +460,9 @@ export async function assignIncident(p: {
         incidentId: p.incidentId,
         action: p.assigneePlatformAdminId ? 'assigned' : 'unassigned',
         actorPlatformAdminId: p.actorPlatformAdminId,
-        metadata: { assignedToPlatformAdminId: p.assigneePlatformAdminId },
+        metadata: (sanitizeRuleMetadata(INCIDENT_ACTIVITY_METADATA_SCHEMA, {
+          assignedToPlatformAdminId: p.assigneePlatformAdminId,
+        }) as Prisma.InputJsonValue) ?? undefined,
       },
     });
 
@@ -402,7 +475,7 @@ export type NoteResult =
   | { ok: false; error: 'not_found' | 'summary_required' };
 
 export async function addIncidentNote(p: { incidentId: string; actorPlatformAdminId: string; note: string }): Promise<NoteResult> {
-  const note = p.note?.trim();
+  const note = sanitizeSecurityOperatorText(p.note);
   if (!note) return { ok: false, error: 'summary_required' };
   return prisma.$transaction(async (tx) => {
     const existing = await tx.securityIncident.findUnique({ where: { id: p.incidentId } });
@@ -413,7 +486,7 @@ export async function addIncidentNote(p: { incidentId: string; actorPlatformAdmi
         incidentId: p.incidentId,
         action: 'note_added',
         actorPlatformAdminId: p.actorPlatformAdminId,
-        note: note.slice(0, 2000),
+        note,
       },
     });
 

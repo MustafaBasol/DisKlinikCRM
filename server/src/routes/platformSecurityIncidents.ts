@@ -200,6 +200,10 @@ const HTTP_STATUS_BY_LIFECYCLE_ERROR: Record<string, number> = {
   not_found: 404,
   invalid_transition: 409,
   summary_required: 400,
+  // Another Platform Admin's concurrent request already won the transition —
+  // a conflict, not a validation error. The client should reload the
+  // incident's current state rather than blindly retry.
+  concurrent_transition: 409,
 };
 
 function respondLifecycle(res: Response, result: LifecycleResult) {

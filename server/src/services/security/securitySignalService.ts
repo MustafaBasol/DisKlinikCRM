@@ -16,9 +16,20 @@
  *     test-only fallback secret is used so local dev/tests keep working.
  *  4. User-agent is never stored raw — only a bounded SHA-256 fingerprint of a
  *     truncated, normalized string.
- *  5. Metadata passes an explicit allowlist/sanitizer: keys matching a secret/
- *     credential/content pattern are dropped entirely (not merely redacted),
- *     string values are truncated, and total size/key-count is bounded.
+ *  5. Metadata is gated by TWO layers, not one:
+ *       a. an explicit, closed, per-rule-family field allowlist (Zod schema
+ *          — see AUTH_SIGNAL_METADATA_SCHEMA / CROSS_TENANT_SIGNAL_METADATA_SCHEMA /
+ *          EXPORT_SIGNAL_METADATA_SCHEMA / INCIDENT_ACTIVITY_METADATA_SCHEMA below),
+ *          applied by each detection rule at the exact call site that knows
+ *          which family it belongs to — unknown keys are dropped, values with
+ *          the wrong type drop the whole object (fail-closed);
+ *       b. sanitizeSecurityMetadata(), a generic SECOND-layer guard applied
+ *          after (a): keys matching a secret/credential/content-pattern
+ *          DENYLIST are dropped entirely (not merely redacted), string
+ *          values are redaction-scrubbed and truncated, and total
+ *          size/key-count is bounded. This layer is defense-in-depth ONLY —
+ *          it must never be the sole gate on caller-supplied metadata, since
+ *          a denylist can only ever block what it already knows to name.
  *  6. recordSecuritySignal() NEVER throws — a signal-recording failure must
  *     never break the primary request (login, clinic access, export). This
  *     mirrors writeAuditLog()/recordOperationalEvent()'s existing swallow-all
@@ -31,6 +42,7 @@
  */
 
 import { createHash, createHmac } from 'node:crypto';
+import { z } from 'zod';
 import prisma from '../../db.js';
 import type { Prisma } from '@prisma/client';
 
@@ -42,6 +54,11 @@ const MAX_USER_AGENT_INPUT_LENGTH = 512;
 const MAX_METADATA_KEYS = 20;
 const MAX_METADATA_STRING_LENGTH = 200;
 const MAX_METADATA_JSON_BYTES = 4000;
+
+/** Final stored length for a Platform-Admin-entered operator text field. */
+const MAX_OPERATOR_TEXT_LENGTH = 2000;
+/** Hard ceiling applied before any regex scanning, independent of the final bound above — bounds worst-case regex work on a pathologically long paste. */
+const MAX_OPERATOR_TEXT_INPUT_CEILING = 20000;
 
 /** Keys rejected outright from safeMetadata (case-insensitive substring match). */
 const BLOCKED_METADATA_KEY_PATTERN =
@@ -175,12 +192,18 @@ function sanitizeMetadataObject(input: Record<string, unknown>, depth: number): 
 }
 
 /**
- * Allowlist/sanitizer for safeMetadata. Never throws. Drops blocked keys
- * entirely, redacts email/phone-shaped substrings out of any string value,
- * truncates strings, bounds array/object nesting and key count, and caps
- * the final JSON size — so metadata can never be unbounded, never contains
- * secrets/tokens/paths, and never carries obvious patient-identifying
- * content through under an innocuous key name.
+ * Generic, SECOND-layer metadata guard. This is a DENYLIST, not an
+ * allowlist — it accepts any key that doesn't match
+ * BLOCKED_METADATA_KEY_PATTERN, so on its own it cannot stop an unknown
+ * innocuous-looking key (e.g. "debugContext") from being stored. The actual
+ * allowlisting happens per rule family BEFORE this function runs (see
+ * AUTH_SIGNAL_METADATA_SCHEMA / CROSS_TENANT_SIGNAL_METADATA_SCHEMA /
+ * EXPORT_SIGNAL_METADATA_SCHEMA / INCIDENT_ACTIVITY_METADATA_SCHEMA and
+ * sanitizeRuleMetadata() below) — this function only ever sees whatever
+ * survived that closed field list, and exists to additionally bound
+ * size/nesting, truncate strings, redact email/phone-shaped substrings, and
+ * drop any denylisted key name as defense-in-depth should a schema above
+ * ever be misconfigured. Never throws.
  */
 export function sanitizeSecurityMetadata(
   input: Record<string, unknown> | null | undefined,
@@ -204,6 +227,157 @@ export function sanitizeSecurityMetadata(
   } catch {
     return null;
   }
+}
+
+// ── Explicit per-rule metadata allowlists ────────────────────────────────
+//
+// One closed Zod schema per rule family — every field a rule is allowed to
+// attach to a SecuritySignalEvent.safeMetadata or SecurityIncident.metadata
+// value is named here explicitly. Anything not listed is dropped (Zod's
+// default "strip" behavior for a plain z.object schema, not `.strict()`,
+// which would throw instead — dropping keeps this fail-closed without ever
+// throwing). A field that IS listed but has the wrong type drops the whole
+// object rather than partially validating it.
+
+const boundedMetaString = (max: number) => z.string().max(max);
+const boundedMetaNumber = z.number().finite();
+
+/** Rule 1 (auth.brute_force.v1) — auth login-failure signal + incident metadata. */
+export const AUTH_SIGNAL_METADATA_SCHEMA = z.object({
+  context: boundedMetaString(50).optional(),
+  occurrenceCountAtDetection: boundedMetaNumber.optional(),
+  windowMinutes: boundedMetaNumber.optional(),
+});
+
+/** Rule 2 (access.cross_tenant.v1) — cross-tenant denial signal + incident metadata. */
+export const CROSS_TENANT_SIGNAL_METADATA_SCHEMA = z.object({
+  method: boundedMetaString(20).optional(),
+  routeTemplate: boundedMetaString(200).optional(),
+  occurrenceCountAtDetection: boundedMetaNumber.optional(),
+  distinctResourceCount: boundedMetaNumber.optional(),
+  windowMinutes: boundedMetaNumber.optional(),
+});
+
+/** Rule 3 (export.*.v1 — step-up lockout, token replay, generation integrity, cleanup failure, request burst). */
+export const EXPORT_SIGNAL_METADATA_SCHEMA = z.object({
+  reason: boundedMetaString(50).optional(),
+  failureCode: boundedMetaString(100).optional(),
+  occurrenceCountAtDetection: boundedMetaNumber.optional(),
+  distinctClinicCount: boundedMetaNumber.optional(),
+  windowMinutes: boundedMetaNumber.optional(),
+});
+
+/**
+ * SecurityIncidentActivity.metadata for the lifecycle/aggregation events
+ * securityIncidentService.ts constructs itself (never Platform-Admin free
+ * text — see sanitizeSecurityOperatorText for that): severity_escalated,
+ * the reopen-linkage on a recurrence 'created' activity, and assign/unassign.
+ */
+export const INCIDENT_ACTIVITY_METADATA_SCHEMA = z.object({
+  newSeverity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  reopenedFromIncidentId: boundedMetaString(100).optional(),
+  assignedToPlatformAdminId: boundedMetaString(100).nullable().optional(),
+});
+
+/**
+ * Applies an explicit per-rule-family schema BEFORE the generic
+ * sanitizeSecurityMetadata() denylist pass (see that function's docstring
+ * for why both layers are required). Never throws — a schema mismatch drops
+ * the whole object (fail-closed) rather than propagating a ZodError.
+ */
+export function sanitizeRuleMetadata(
+  schema: z.ZodTypeAny,
+  input: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!input || typeof input !== 'object') return null;
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return null;
+  return sanitizeSecurityMetadata(parsed.data as Record<string, unknown>);
+}
+
+// ── Platform-Admin operator free-text sanitization ──────────────────────
+
+/**
+ * C0 (except tab and newline) + C1 control characters + DEL — never
+ * legitimate in an operator-typed field. Built from explicit character
+ * codes (not a regex literal) so the control-character ranges stay
+ * unambiguous and no raw control bytes ever appear in this source file.
+ */
+const OPERATOR_TEXT_CONTROL_CHAR_CODES: ReadonlySet<number> = new Set([
+  ...Array.from({ length: 0x20 }, (_, code) => code).filter((code) => code !== 0x09 && code !== 0x0a),
+  0x7f,
+  ...Array.from({ length: 0x20 }, (_, offset) => 0x80 + offset),
+]);
+
+function stripControlCharacters(value: string): string {
+  let out = '';
+  for (const ch of value) {
+    if (!OPERATOR_TEXT_CONTROL_CHAR_CODES.has(ch.codePointAt(0) ?? -1)) out += ch;
+  }
+  return out;
+}
+
+/**
+ * Structured-secret shapes that must reject the ENTIRE field rather than be
+ * partially redacted (unlike email/phone, above): a bearer token, password,
+ * cookie/session value, API key, or a download/reset/access token embedded
+ * in operator-typed text is not something that can be safely truncated to a
+ * marker in place — the only safe move is to force the operator to rewrite
+ * the note without it.
+ */
+const UNSAFE_OPERATOR_TEXT_PATTERNS: RegExp[] = [
+  /\bbearer\s+[a-z0-9._~+/-]{8,}=*/i,
+  /\bauthoriz(?:e|ation)\s*[:=]/i,
+  /\b(pass(?:word)?|pwd)\s*[:=]\s*\S+/i,
+  /\b(access|refresh|reset|download|api|auth|session|csrf|bearer)[-_ ]?token\s*[:=]\s*\S+/i,
+  /\bapi[-_]?key\s*[:=]\s*\S+/i,
+  /\bcookie\s*[:=]/i,
+  /\bset-cookie\s*[:=]/i,
+  /\bsession(?:id)?\s*[:=]\s*\S{6,}/i,
+  // Common vendor API-key shapes even without an explicit "key:" label.
+  /\b(sk|pk|rk)_(live|test)_[a-z0-9]{10,}/i,
+  // Filesystem / storage-object paths (never operator-relevant content).
+  /(^|[\s"'(])(\/[\w.-]+){2,}\.(zip|pdf|csv|json|xlsx?|png|jpe?g|db|sql|log|txt)\b/i,
+  /[a-zA-Z]:\\[^\s"']+/,
+  /\bs3:\/\/\S+/i,
+  /\b(uploads|exports)\/\S+/i,
+];
+
+/** Text that survived sanitization but is only redaction markers/whitespace carries no operator meaning. */
+const ONLY_REDACTION_MARKERS_PATTERN = /^(\s|\[redacted-(email|number)\])*$/;
+
+/**
+ * Sanitizer for Platform-Admin-entered free text on a SecurityIncident
+ * (containment/resolution/false-positive/reopen summaries, activity notes).
+ * Unlike sanitizeSecurityMetadata() (a structured-object key allowlist),
+ * this guards a single free-text field: an admin investigating an incident
+ * can accidentally paste patient PII, clinical detail, or a literal
+ * credential/token/path copied from logs.
+ *
+ * Never logs, and never returns, the raw rejected input — a rejection is
+ * always just `null`, so a caller cannot accidentally leak it into an error
+ * response or log line.
+ *
+ * Returns `null` if the input is not a string, becomes empty after
+ * stripping/redaction, contains a structured-secret pattern, or reduces to
+ * nothing but redaction markers. Callers treat `null` the same as an empty
+ * field (e.g. 'summary_required' for the required lifecycle fields).
+ */
+export function sanitizeSecurityOperatorText(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+
+  let value = raw.slice(0, MAX_OPERATOR_TEXT_INPUT_CEILING);
+  value = stripControlCharacters(value).trim();
+  if (!value) return null;
+
+  for (const pattern of UNSAFE_OPERATOR_TEXT_PATTERNS) {
+    if (pattern.test(value)) return null;
+  }
+
+  value = redactContentPatterns(value).slice(0, MAX_OPERATOR_TEXT_LENGTH).trim();
+  if (!value || ONLY_REDACTION_MARKERS_PATTERN.test(value)) return null;
+
+  return value;
 }
 
 /**

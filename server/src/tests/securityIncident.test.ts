@@ -83,6 +83,12 @@ import {
   hashIp,
   hashAccountIdentifier,
   sanitizeSecurityMetadata,
+  sanitizeSecurityOperatorText,
+  sanitizeRuleMetadata,
+  AUTH_SIGNAL_METADATA_SCHEMA,
+  CROSS_TENANT_SIGNAL_METADATA_SCHEMA,
+  EXPORT_SIGNAL_METADATA_SCHEMA,
+  INCIDENT_ACTIVITY_METADATA_SCHEMA,
   fingerprintUserAgent,
   recordSecuritySignal,
 } from '../services/security/securitySignalService.js';
@@ -90,6 +96,7 @@ import {
   upsertIncidentFromSignal,
   buildIncidentKey,
   acknowledgeIncident,
+  startInvestigation,
   containIncident,
   resolveIncident,
   markFalsePositive,
@@ -369,7 +376,7 @@ async function runDedupTests() {
     const { incident: original } = await upsertIncidentFromSignal(base);
     const admin = await createPlatformAdmin('reopen');
     await acknowledgeIncident({ incidentId: original.id, actorPlatformAdminId: admin.id });
-    await (await import('../services/security/securityIncidentService.js')).startInvestigation({ incidentId: original.id, actorPlatformAdminId: admin.id });
+    await startInvestigation({ incidentId: original.id, actorPlatformAdminId: admin.id });
     await resolveIncident({ incidentId: original.id, actorPlatformAdminId: admin.id, resolutionSummary: 'fixed' });
     await closeIncident({ incidentId: original.id, actorPlatformAdminId: admin.id });
 
@@ -672,6 +679,364 @@ async function runMigrationSanityTests() {
   });
 }
 
+// ── H. Concurrency-safe lifecycle (CAS) (real DB) ─────────────────────────
+
+async function runLifecycleConcurrencyTests() {
+  section('H. Concurrency-safe lifecycle (CAS)');
+  const orgId = testOrgId('lifecycle-race');
+
+  async function freshIncident(resourceId: string) {
+    const { incident } = await upsertIncidentFromSignal({
+      sourceRule: 'test.race.v1', sourceType: 'test', category: 'test_category', severity: 'medium',
+      organizationId: orgId, affectedResourceType: 'r', affectedResourceId: resourceId, title: 't', summary: 's',
+    });
+    return incident;
+  }
+
+  await test('34. Two concurrent acknowledge requests: exactly one succeeds, exactly one acknowledged activity, loser gets concurrent_transition', async () => {
+    const admin = await createPlatformAdmin('race-ack');
+    const incident = await freshIncident('race-ack');
+
+    const results = await Promise.all([
+      acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id }),
+      acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id }),
+    ]);
+
+    const winners = results.filter((r) => r.ok);
+    const losers = results.filter((r) => !r.ok);
+    assert.equal(winners.length, 1, 'exactly one concurrent acknowledge must win');
+    assert.equal(losers.length, 1);
+    assert.equal((losers[0] as { ok: false; error: string }).error, 'concurrent_transition');
+
+    const activities = await prisma.securityIncidentActivity.findMany({ where: { incidentId: incident.id, action: 'acknowledged' } });
+    assert.equal(activities.length, 1, 'exactly one acknowledged activity must exist');
+
+    const final = await prisma.securityIncident.findUniqueOrThrow({ where: { id: incident.id } });
+    assert.equal(final.status, 'acknowledged');
+  });
+
+  await test('35. Concurrent contain and resolve from investigating: only one wins, no contradictory activity pair, final status matches the winner', async () => {
+    const admin = await createPlatformAdmin('race-contain-resolve');
+    const incident = await freshIncident('race-contain-resolve');
+    await acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+    await startInvestigation({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+
+    const [containResult, resolveResult] = await Promise.all([
+      containIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id, containmentSummary: 'contained the issue' }),
+      resolveIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id, resolutionSummary: 'resolved the issue' }),
+    ]);
+
+    const results = [containResult, resolveResult];
+    const winners = results.filter((r) => r.ok);
+    const losers = results.filter((r) => !r.ok);
+    assert.equal(winners.length, 1, 'exactly one of contain/resolve must win the race');
+    assert.equal((losers[0] as { ok: false; error: string }).error, 'concurrent_transition');
+
+    const containedActivities = await prisma.securityIncidentActivity.findMany({ where: { incidentId: incident.id, action: 'contained' } });
+    const resolvedActivities = await prisma.securityIncidentActivity.findMany({ where: { incidentId: incident.id, action: 'resolved' } });
+    assert.equal(containedActivities.length + resolvedActivities.length, 1, 'no contradictory contain+resolve activity pair');
+
+    const final = await prisma.securityIncident.findUniqueOrThrow({ where: { id: incident.id } });
+    assert.ok(final.status === 'contained' || final.status === 'resolved');
+    if (containResult.ok) assert.equal(final.status, 'contained');
+    if (resolveResult.ok) assert.equal(final.status, 'resolved');
+  });
+
+  await test('36. Concurrent close and investigate from resolved: only one wins, no stale overwrite', async () => {
+    const admin = await createPlatformAdmin('race-close-investigate');
+    const incident = await freshIncident('race-close-investigate');
+    await acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+    await startInvestigation({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+    await resolveIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id, resolutionSummary: 'fix applied' });
+
+    const [closeResult, investigateResult] = await Promise.all([
+      closeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id }),
+      startInvestigation({ incidentId: incident.id, actorPlatformAdminId: admin.id }),
+    ]);
+
+    const results = [closeResult, investigateResult];
+    const winners = results.filter((r) => r.ok);
+    const losers = results.filter((r) => !r.ok);
+    assert.equal(winners.length, 1);
+    assert.equal((losers[0] as { ok: false; error: string }).error, 'concurrent_transition');
+
+    const final = await prisma.securityIncident.findUniqueOrThrow({ where: { id: incident.id } });
+    if (closeResult.ok) assert.equal(final.status, 'closed');
+    if (investigateResult.ok) assert.equal(final.status, 'investigating');
+  });
+
+  await test('37. The race loser never creates an activity row, even in a 3-way race', async () => {
+    const admin = await createPlatformAdmin('race-loser-activity');
+    const incident = await freshIncident('race-loser-activity');
+
+    await Promise.all([
+      acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id }),
+      acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id }),
+      acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id }),
+    ]);
+
+    const activities = await prisma.securityIncidentActivity.findMany({ where: { incidentId: incident.id, action: 'acknowledged' } });
+    assert.equal(activities.length, 1, 'only the single winner of a 3-way race may write an activity row');
+  });
+}
+
+// ── I. Atomic created-activity under concurrency (stress) (real DB) ──────
+
+async function runCreatedActivityStressTests() {
+  section('I. Atomic created-activity under concurrency (stress)');
+  const orgId = testOrgId('stress');
+  const clinicId = testClinicId('stress');
+
+  async function stress20(resourceIdSuffix: string) {
+    const affectedResourceId = `stress-resource-${resourceIdSuffix}`;
+    const severityCycle = ['low', 'medium', 'high', 'critical'] as const;
+
+    const calls = Array.from({ length: 20 }, (_, i) =>
+      upsertIncidentFromSignal({
+        sourceRule: 'test.stress.v1',
+        sourceType: 'test',
+        category: 'test_category',
+        severity: severityCycle[i % severityCycle.length],
+        organizationId: orgId,
+        clinicId,
+        affectedResourceType: 'test_resource',
+        affectedResourceId,
+        title: 'Stress incident',
+        summary: 'Stress test',
+      }),
+    );
+
+    const results = await Promise.allSettled(calls);
+    const rejected = results.filter((r) => r.status === 'rejected');
+    assert.equal(rejected.length, 0, `no unhandled rejection: ${rejected.map((r) => (r as PromiseRejectedResult).reason).join('; ')}`);
+
+    const fulfilled = results.map((r) => (r as PromiseFulfilledResult<Awaited<ReturnType<typeof upsertIncidentFromSignal>>>).value);
+    assert.equal(fulfilled.filter((r) => r.created).length, 1, 'exactly one caller must be the creator');
+
+    const key = buildIncidentKey({
+      sourceRule: 'test.stress.v1', organizationId: orgId, clinicId, affectedResourceType: 'test_resource', affectedResourceId,
+    });
+    const rows = await prisma.securityIncident.findMany({ where: { incidentKey: key } });
+    assert.equal(rows.length, 1, 'exactly one SecurityIncident row');
+    const row = rows[0];
+    assert.equal(row.occurrenceCount, 20, 'occurrenceCount must be exactly 20');
+    assert.equal(row.severity, 'critical', 'final severity must equal the highest submitted severity');
+    assert.ok(row.lastDetectedAt.getTime() >= row.firstDetectedAt.getTime(), 'lastDetectedAt must be at or after firstDetectedAt');
+
+    const createdActivities = await prisma.securityIncidentActivity.findMany({ where: { incidentId: row.id, action: 'created' } });
+    assert.equal(createdActivities.length, 1, 'exactly one created activity');
+  }
+
+  await test('38. 20 concurrent identical signals (run 1): exactly one row, one created activity, occurrenceCount 20, correct severity/timestamps', async () => {
+    await stress20('run1');
+  });
+
+  await test('39. 20 concurrent identical signals (run 2, independent incident): same invariants hold again', async () => {
+    await stress20('run2');
+  });
+
+  await test('40. 20 concurrent occurrences after a closed incident: exactly one new recurrence incident, one created activity, occurrenceCount 20', async () => {
+    const admin = await createPlatformAdmin('stress-recurrence');
+    const base = {
+      sourceRule: 'test.stress.recurrence.v1',
+      sourceType: 'test',
+      category: 'test_category',
+      severity: 'medium' as const,
+      organizationId: orgId,
+      clinicId,
+      affectedResourceType: 'test_resource',
+      affectedResourceId: 'stress-recurrence',
+      title: 'Recurrence stress incident',
+      summary: 'Recurrence stress test',
+    };
+    const { incident: original } = await upsertIncidentFromSignal(base);
+    await acknowledgeIncident({ incidentId: original.id, actorPlatformAdminId: admin.id });
+    await startInvestigation({ incidentId: original.id, actorPlatformAdminId: admin.id });
+    await resolveIncident({ incidentId: original.id, actorPlatformAdminId: admin.id, resolutionSummary: 'fixed before recurrence stress' });
+    await closeIncident({ incidentId: original.id, actorPlatformAdminId: admin.id });
+
+    const calls = Array.from({ length: 20 }, () => upsertIncidentFromSignal(base));
+    const results = await Promise.allSettled(calls);
+    const rejected = results.filter((r) => r.status === 'rejected');
+    assert.equal(rejected.length, 0, 'no unhandled rejection during recurrence stress');
+
+    const fulfilled = results.map((r) => (r as PromiseFulfilledResult<Awaited<ReturnType<typeof upsertIncidentFromSignal>>>).value);
+    assert.equal(fulfilled.filter((r) => r.created).length, 1, 'exactly one recurrence incident must be created');
+    fulfilled.forEach((r) => assert.notEqual(r.incident.id, original.id, 'the recurrence must never be the same row as the terminal incident'));
+
+    const recurrenceId = fulfilled.find((r) => r.created)!.incident.id;
+    const recurrenceRow = await prisma.securityIncident.findUniqueOrThrow({ where: { id: recurrenceId } });
+    assert.equal(recurrenceRow.occurrenceCount, 20);
+
+    const createdActivities = await prisma.securityIncidentActivity.findMany({ where: { incidentId: recurrenceId, action: 'created' } });
+    assert.equal(createdActivities.length, 1);
+
+    const stillOriginal = await prisma.securityIncident.findUniqueOrThrow({ where: { id: original.id } });
+    assert.equal(stillOriginal.status, 'closed');
+    assert.equal(stillOriginal.occurrenceCount, 1, 'the terminal incident must not absorb any of the 20 new occurrences');
+  });
+}
+
+// ── J. Platform-Admin operator-text sanitization ──────────────────────────
+
+async function runOperatorTextSanitizationTests() {
+  section('J. Platform-Admin operator-text sanitization');
+
+  await test('41. Raw email is never stored — redacted to a marker', () => {
+    const out = sanitizeSecurityOperatorText('Contained after contacting patient@example.com about the incident.');
+    assert.ok(out);
+    assert.ok(!out!.includes('patient@example.com'));
+    assert.ok(out!.includes('[redacted-email]'));
+  });
+
+  await test('42. Raw phone number is never stored — redacted to a marker', () => {
+    const out = sanitizeSecurityOperatorText('Called the patient at 555-123-4567 to confirm.');
+    assert.ok(out);
+    assert.ok(!out!.includes('555-123-4567'));
+    assert.ok(out!.includes('[redacted-number]'));
+  });
+
+  await test('43. A bearer token in the text rejects the whole field', () => {
+    const out = sanitizeSecurityOperatorText('Rotated credentials, old value was Bearer abcdefgh12345678');
+    assert.equal(out, null);
+  });
+
+  await test('44. Password-like content is rejected', () => {
+    assert.equal(sanitizeSecurityOperatorText('Reset password: hunter2ForNow'), null);
+    assert.equal(sanitizeSecurityOperatorText('pwd=SuperSecret123'), null);
+  });
+
+  await test('45. Control characters are removed', () => {
+    const withControlChars =
+      'Contained' + String.fromCharCode(0) + ' the' + String.fromCharCode(7) + ' issue' + String.fromCharCode(31) + ' cleanly';
+    const out = sanitizeSecurityOperatorText(withControlChars);
+    assert.ok(out);
+    const hasControlChar = Array.from(out!).some((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      return (code <= 0x1f && code !== 0x09 && code !== 0x0a) || code === 0x7f || (code >= 0x80 && code <= 0x9f);
+    });
+    assert.ok(!hasControlChar, 'no control characters must survive sanitization');
+    assert.ok(out!.includes('Contained'));
+  });
+
+  await test('46. Oversized input is bounded', () => {
+    const out = sanitizeSecurityOperatorText('safe content '.repeat(2000));
+    assert.ok(out);
+    assert.ok(out!.length <= 2000);
+  });
+
+  await test('47. A fully unsafe required summary is rejected end-to-end by containIncident', async () => {
+    const admin = await createPlatformAdmin('sanitize-e2e');
+    const { incident } = await upsertIncidentFromSignal({
+      sourceRule: 'test.sanitize.v1', sourceType: 'test', category: 'test_category', severity: 'medium',
+      organizationId: testOrgId('sanitize'), affectedResourceType: 'r', affectedResourceId: 'sanitize-1', title: 't', summary: 's',
+    });
+    await acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+    await startInvestigation({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+
+    const result = await containIncident({
+      incidentId: incident.id,
+      actorPlatformAdminId: admin.id,
+      containmentSummary: 'Authorization: Bearer abcdefgh12345678',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error, 'summary_required');
+
+    const reloaded = await prisma.securityIncident.findUniqueOrThrow({ where: { id: incident.id } });
+    assert.equal(reloaded.containmentSummary, null, 'the unsafe raw text must never reach the row');
+  });
+
+  await test('48. Raw email/phone values never persist in an incident or activity row after a safe-but-mixed summary', async () => {
+    const admin = await createPlatformAdmin('sanitize-e2e-2');
+    const { incident } = await upsertIncidentFromSignal({
+      sourceRule: 'test.sanitize.v2', sourceType: 'test', category: 'test_category', severity: 'medium',
+      organizationId: testOrgId('sanitize2'), affectedResourceType: 'r', affectedResourceId: 'sanitize-2', title: 't', summary: 's',
+    });
+    await acknowledgeIncident({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+    await startInvestigation({ incidentId: incident.id, actorPlatformAdminId: admin.id });
+
+    const result = await containIncident({
+      incidentId: incident.id,
+      actorPlatformAdminId: admin.id,
+      containmentSummary: 'Reached out to patient@example.com at 555-987-6543 and rotated the account; contained the scope.',
+    });
+    assert.equal(result.ok, true);
+
+    const reloaded = await prisma.securityIncident.findUniqueOrThrow({ where: { id: incident.id } });
+    assert.ok(reloaded.containmentSummary);
+    assert.ok(!reloaded.containmentSummary!.includes('patient@example.com'));
+    assert.ok(!reloaded.containmentSummary!.includes('555-987-6543'));
+
+    const activity = await prisma.securityIncidentActivity.findFirst({ where: { incidentId: incident.id, action: 'contained' } });
+    assert.ok(activity?.note);
+    assert.ok(!activity!.note!.includes('patient@example.com'));
+    assert.ok(!activity!.note!.includes('555-987-6543'));
+  });
+}
+
+// ── K. Explicit per-rule metadata allowlists ──────────────────────────────
+
+async function runMetadataAllowlistTests() {
+  section('K. Explicit per-rule metadata allowlists');
+
+  await test('49. An unknown innocent-looking key is not stored (auth schema)', () => {
+    const out = sanitizeRuleMetadata(AUTH_SIGNAL_METADATA_SCHEMA, {
+      context: 'clinic',
+      debugContext: 'this should never survive',
+    });
+    assert.ok(out);
+    assert.ok(!('debugContext' in out!));
+    assert.equal(out!.context, 'clinic');
+  });
+
+  await test('50. A nested arbitrary object is not stored', () => {
+    const out = sanitizeRuleMetadata(CROSS_TENANT_SIGNAL_METADATA_SCHEMA, {
+      method: 'GET',
+      routeTemplate: { nested: { arbitrary: 'object' } } as unknown as string,
+    });
+    assert.equal(out, null, 'a defined field with the wrong (object) type must drop the whole object');
+  });
+
+  await test('51. A supported rule retains only its documented keys', () => {
+    const out = sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, {
+      reason: 'expired',
+      failureCode: 'TEMP_STORAGE_UNSAFE',
+      occurrenceCountAtDetection: 3,
+      distinctClinicCount: 2,
+      windowMinutes: 60,
+      unexpectedExtraField: 'should be dropped',
+    });
+    assert.ok(out);
+    assert.deepEqual(
+      Object.keys(out!).sort(),
+      ['distinctClinicCount', 'failureCode', 'occurrenceCountAtDetection', 'reason', 'windowMinutes'].sort(),
+    );
+  });
+
+  await test('52. Blocked key names are still removed as defense-in-depth', () => {
+    const out = sanitizeSecurityMetadata({ newSeverity: 'high', token: 'should-be-dropped' });
+    assert.ok(out);
+    assert.ok(!('token' in out!));
+  });
+
+  await test('53. An oversized field value never survives the per-rule allowlist pass', () => {
+    const out = sanitizeRuleMetadata(AUTH_SIGNAL_METADATA_SCHEMA, { context: 'x'.repeat(10000) });
+    assert.equal(out, null, 'a field exceeding its documented max length is rejected, never silently truncated and stored');
+  });
+
+  await test('54. Incident-activity metadata schema accepts only its documented fields', () => {
+    const out = sanitizeRuleMetadata(INCIDENT_ACTIVITY_METADATA_SCHEMA, {
+      newSeverity: 'critical',
+      reopenedFromIncidentId: 'incident-123',
+      assignedToPlatformAdminId: null,
+      extraneous: 'nope',
+    });
+    assert.ok(out);
+    assert.deepEqual(Object.keys(out!).sort(), ['assignedToPlatformAdminId', 'newSeverity', 'reopenedFromIncidentId'].sort());
+    assert.equal(out!.assignedToPlatformAdminId, null);
+  });
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -683,6 +1048,10 @@ async function main() {
     await runTenantIsolationTests();
     await runApiSourceTests();
     await runMigrationSanityTests();
+    await runLifecycleConcurrencyTests();
+    await runCreatedActivityStressTests();
+    await runOperatorTextSanitizationTests();
+    await runMetadataAllowlistTests();
   } finally {
     await cleanup();
     await prisma.$disconnect();

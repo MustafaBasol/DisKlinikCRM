@@ -510,6 +510,7 @@ const PlatformSecurityIncidents: React.FC = () => {
                         : pendingActionForm === 'resolve' ? t('actions.resolutionSummary')
                         : t('actions.note')}
                     </label>
+                    <p className="text-xs text-amber-700 dark:text-amber-400">{t('actions.sanitizationWarning')}</p>
                     <textarea
                       value={formText}
                       onChange={(e) => setFormText(e.target.value)}

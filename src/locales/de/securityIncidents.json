@@ -103,6 +103,7 @@
     "cancel": "Abbrechen",
     "assigneeIdPlaceholder": "Plattform-Admin-ID",
     "success": "Vorfall aktualisiert.",
-    "error": "Vorfall konnte nicht aktualisiert werden."
+    "error": "Vorfall konnte nicht aktualisiert werden.",
+    "sanitizationWarning": "Geben Sie keine Patientennamen, Telefonnummern, E-Mail-Adressen, klinische Informationen, Passwörter, Token oder andere vertrauliche Daten ein."
   }
 }

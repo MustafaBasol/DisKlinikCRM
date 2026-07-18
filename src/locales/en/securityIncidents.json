@@ -103,6 +103,7 @@
     "cancel": "Cancel",
     "assigneeIdPlaceholder": "Platform admin ID",
     "success": "Incident updated.",
-    "error": "Failed to update incident."
+    "error": "Failed to update incident.",
+    "sanitizationWarning": "Do not enter patient names, phone numbers, email addresses, clinical information, passwords, tokens, or other confidential data."
   }
 }

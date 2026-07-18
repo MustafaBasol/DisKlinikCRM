@@ -27,6 +27,10 @@ import {
   countSignalsInWindow,
   hashAccountIdentifier,
   hashResourceId,
+  sanitizeRuleMetadata,
+  AUTH_SIGNAL_METADATA_SCHEMA,
+  CROSS_TENANT_SIGNAL_METADATA_SCHEMA,
+  EXPORT_SIGNAL_METADATA_SCHEMA,
   type SecuritySignalSeverity,
 } from './securitySignalService.js';
 import { upsertIncidentFromSignal } from './securityIncidentService.js';
@@ -90,7 +94,7 @@ export function evaluateAuthLoginFailureSignal(params: AuthLoginFailureParams): 
       userAgent: params.userAgent ?? null,
       resourceType: 'account',
       resourceId: accountHash,
-      safeMetadata: { context: params.context },
+      safeMetadata: sanitizeRuleMetadata(AUTH_SIGNAL_METADATA_SCHEMA, { context: params.context }),
     });
 
     const windowMs = AUTH_FAILURE_WINDOW_MINUTES() * 60 * 1000;
@@ -113,7 +117,11 @@ export function evaluateAuthLoginFailureSignal(params: AuthLoginFailureParams): 
       summary:
         `${count} failed login attempts for the same account within ${AUTH_FAILURE_WINDOW_MINUTES()} minutes. ` +
         'Account identifier is HMAC-hashed; no plaintext email is stored.',
-      metadata: { context: params.context, occurrenceCountAtDetection: count, windowMinutes: AUTH_FAILURE_WINDOW_MINUTES() },
+      metadata: sanitizeRuleMetadata(AUTH_SIGNAL_METADATA_SCHEMA, {
+        context: params.context,
+        occurrenceCountAtDetection: count,
+        windowMinutes: AUTH_FAILURE_WINDOW_MINUTES(),
+      }),
     });
   });
 }
@@ -164,7 +172,7 @@ export function evaluateCrossTenantDenialSignal(params: CrossTenantDenialParams)
       userAgent: params.userAgent ?? null,
       resourceType: params.attemptedResourceType,
       resourceId: resourceHash,
-      safeMetadata: { method: params.method, routeTemplate: params.routeTemplate },
+      safeMetadata: sanitizeRuleMetadata(CROSS_TENANT_SIGNAL_METADATA_SCHEMA, { method: params.method, routeTemplate: params.routeTemplate }),
     });
 
     const windowMs = CROSS_TENANT_WINDOW_MINUTES() * 60 * 1000;
@@ -197,13 +205,13 @@ export function evaluateCrossTenantDenialSignal(params: CrossTenantDenialParams)
       summary:
         `${count} denied cross-tenant access attempts within ${CROSS_TENANT_WINDOW_MINUTES()} minutes` +
         (isMultiResourceProbing ? `, across ${distinctResources.length} distinct target resources.` : '.'),
-      metadata: {
+      metadata: sanitizeRuleMetadata(CROSS_TENANT_SIGNAL_METADATA_SCHEMA, {
         occurrenceCountAtDetection: count,
         distinctResourceCount: distinctResources.length,
         windowMinutes: CROSS_TENANT_WINDOW_MINUTES(),
         method: params.method,
         routeTemplate: params.routeTemplate,
-      },
+      }),
     });
   });
 }
@@ -259,7 +267,7 @@ export function evaluateExportStepUpLockoutSignal(ctx: ExportActorContext): void
       affectedResourceId: hashResourceId(ctx.clinicId),
       title: 'Clinic bulk export step-up brute-force lockout',
       summary: `Step-up password brute-force lockout reached ${count} time(s) within ${EXPORT_LOCKOUT_WINDOW_MINUTES()} minutes for this clinic.`,
-      metadata: { occurrenceCountAtDetection: count },
+      metadata: sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, { occurrenceCountAtDetection: count }),
     });
   });
 }
@@ -288,7 +296,7 @@ export function evaluateExportTokenReplaySignal(ctx: ExportActorContext & { reas
       userAgent: ctx.userAgent ?? null,
       resourceType: 'clinic',
       resourceId: hashResourceId(ctx.clinicId),
-      safeMetadata: { reason: ctx.reason },
+      safeMetadata: sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, { reason: ctx.reason }),
     });
 
     const windowMs = EXPORT_REPLAY_WINDOW_MINUTES() * 60 * 1000;
@@ -307,7 +315,7 @@ export function evaluateExportTokenReplaySignal(ctx: ExportActorContext & { reas
       affectedResourceId: hashResourceId(ctx.clinicId),
       title: 'Repeated clinic export download-token replay/invalid attempts',
       summary: `${count} rejected download-token attempts (replay/expired/invalid) within ${EXPORT_REPLAY_WINDOW_MINUTES()} minutes for this clinic.`,
-      metadata: { occurrenceCountAtDetection: count },
+      metadata: sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, { occurrenceCountAtDetection: count }),
     });
   });
 }
@@ -333,7 +341,7 @@ export function evaluateExportGenerationIntegritySignal(params: {
       clinicId: params.clinicId,
       resourceType: 'clinic_bulk_export_job',
       resourceId: hashResourceId(params.jobId),
-      safeMetadata: { failureCode: params.failureCode },
+      safeMetadata: sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, { failureCode: params.failureCode }),
     });
 
     const windowMs = 60 * 60 * 1000;
@@ -350,7 +358,7 @@ export function evaluateExportGenerationIntegritySignal(params: {
       affectedResourceId: hashResourceId(params.clinicId),
       title: 'Clinic export generation integrity failure',
       summary: `Generation failed with a security-relevant integrity code (${params.failureCode}) ${count} time(s) in the last hour.`,
-      metadata: { failureCode: params.failureCode, occurrenceCountAtDetection: count },
+      metadata: sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, { failureCode: params.failureCode, occurrenceCountAtDetection: count }),
     });
   });
 }
@@ -389,7 +397,7 @@ export function evaluateExportCleanupFailureSignal(params: { organizationId: str
       affectedResourceId: hashResourceId(params.jobId),
       title: 'Persistent clinic export artifact cleanup failure',
       summary: `Storage-object deletion for a clinic export artifact has failed ${count} time(s) — a sensitive ZIP may remain in storage longer than intended.`,
-      metadata: { occurrenceCountAtDetection: count },
+      metadata: sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, { occurrenceCountAtDetection: count }),
     });
   });
 }
@@ -443,7 +451,7 @@ export function evaluateExportRequestBurstSignal(ctx: ExportActorContext): void 
       affectedResourceId: actorHash,
       title: isMultiClinic ? 'Repeated clinic export requests across multiple clinics' : 'Abnormally repeated clinic export requests',
       summary: `${count} clinic bulk export requests by the same user within ${EXPORT_REQUEST_BURST_WINDOW_MINUTES()} minutes` + (isMultiClinic ? `, across ${distinctClinics.length} distinct clinics.` : '.'),
-      metadata: { occurrenceCountAtDetection: count, distinctClinicCount: distinctClinics.length },
+      metadata: sanitizeRuleMetadata(EXPORT_SIGNAL_METADATA_SCHEMA, { occurrenceCountAtDetection: count, distinctClinicCount: distinctClinics.length }),
     });
   });
 }

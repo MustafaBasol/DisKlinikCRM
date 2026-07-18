@@ -103,6 +103,7 @@
     "cancel": "Vazgeç",
     "assigneeIdPlaceholder": "Platform admin ID",
     "success": "Olay güncellendi.",
-    "error": "Olay güncellenemedi."
+    "error": "Olay güncellenemedi.",
+    "sanitizationWarning": "Hasta adı, telefon, e-posta, klinik bilgi, şifre, token veya başka gizli bilgiler girmeyin."
   }
 }
