@@ -24,6 +24,8 @@ These are evidence-quality labels, not task status values. Task status values (`
 | [F0-002_REPOSITORY_BASELINE.md](F0-002_REPOSITORY_BASELINE.md) | F0-002 Stage A | Factual, reproducible repository/deployment-capability inventory as of the F0-002 worktree HEAD. §6.9 has been reconciled with Stage B; a few rows remain `UNVERIFIED_PRODUCTION`/`UNVERIFIED` where no evidence was supplied. |
 | [F0-002_PRODUCTION_EVIDENCE_REQUEST.md](F0-002_PRODUCTION_EVIDENCE_REQUEST.md) | F0-002 Stage B (input) | Copy-pasteable, read-only command set for the user to run on the production VPS. Reusable runbook — kept for future re-verification (e.g. F0-006). |
 | [F0-002_PRODUCTION_BASELINE_EVIDENCE.md](F0-002_PRODUCTION_BASELINE_EVIDENCE.md) | F0-002 Stage B (output) | Sanitized summary of the production/VPS evidence supplied 2026-07-19T13:43:12+03:00 in response to the evidence request above: host, runtime, PM2 topology, health, TLS, database/migrations, configuration presence, storage, backup/PITR/restore-test status, accepted findings, and risks. |
+| [F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md](F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md) | F0-006 | Source-level process/deployment/config/storage/backup/security tracing (entrypoints, job scheduling, graceful shutdown, storage/backup client code), reconciliation of a second task-supplied production evidence snapshot against F0-002 Stage B, and the required drift/contradiction table. Does not duplicate F0-002's evidence — cites it by section. |
+| [F0-006_configuration_inventory.json](F0-006_configuration_inventory.json) | F0-006 | Structured machine-readable inventory: topology, configuration sources/variables, deployment steps, drift findings, risks, unverified fields. |
 
 ## Stage model for F0-002
 

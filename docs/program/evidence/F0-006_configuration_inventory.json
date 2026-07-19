@@ -1,0 +1,160 @@
+{
+  "taskId": "F0-006",
+  "phase": "F0",
+  "dependency": {
+    "taskId": "F0-002",
+    "status": "MERGED",
+    "pr": 172,
+    "mergeCommit": "db89b60c91666cb029c32757f171f227a643c79c",
+    "mergedAt": "2026-07-19T12:02:51Z"
+  },
+  "baselineCommit": "db89b60c91666cb029c32757f171f227a643c79c",
+  "productionEvidenceTimestamp": "2026-07-19T13:43:12+03:00",
+  "productionEvidenceSource": "F0-002 Stage B, reconciled with a same-day task-supplied evidence snapshot (see F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md section 1)",
+  "topology": {
+    "host": {
+      "hostname": "disklinik-prod-01",
+      "os": "Ubuntu Linux",
+      "kernel": "6.8.0-124-generic",
+      "rootFilesystemUsedPercent": 11,
+      "ramTotalGiB": 7.8,
+      "swapTotalGiB": 2,
+      "uptimeApproxDays": 20,
+      "evidenceClassification": "VERIFIED_PRODUCTION_OBSERVED"
+    },
+    "processes": [
+      {
+        "name": "noramedi-api",
+        "entrypoint": "server/src/index.ts",
+        "startCommand": "npm run start (npx prisma generate && tsx src/index.ts)",
+        "processManager": "PM2",
+        "mode": "fork",
+        "owner": "root",
+        "restartsObserved": 14,
+        "unstableRestarts": 0,
+        "deployManaged": true,
+        "deployMechanism": "scripts/noramedi-deploy.sh step 5 (pm2 reload noramedi-api --update-env)",
+        "hasHttpListener": true,
+        "healthEndpoint": "GET /api/health",
+        "runsBackgroundJobsUnless": "RUN_BACKGROUND_JOBS === 'false'",
+        "evidenceClassification": "VERIFIED_PRODUCTION_OBSERVED"
+      },
+      {
+        "name": "noramedi-worker",
+        "entrypoint": "server/src/worker.ts",
+        "startCommand": "npm run start:worker (npx prisma generate && tsx src/worker.ts)",
+        "processManager": "PM2",
+        "mode": "fork",
+        "owner": "root",
+        "restartsObserved": 13,
+        "unstableRestarts": 0,
+        "deployManaged": false,
+        "deployMechanism": "NONE_FOUND_IN_REPOSITORY",
+        "hasHttpListener": false,
+        "healthEndpoint": null,
+        "runsBackgroundJobsUnconditionally": true,
+        "evidenceClassification": "VERIFIED_PRODUCTION_OBSERVED (existence) + VERIFIED_REPOSITORY_ABSENCE (deploy automation)"
+      }
+    ],
+    "publicEndpoints": [
+      { "hostname": "api.noramedi.com", "purpose": "API", "tlsCovered": true },
+      { "hostname": "app.noramedi.com", "purpose": "frontend", "tlsCovered": true },
+      { "hostname": "noramedi.com", "purpose": "unspecified/marketing", "tlsCovered": true },
+      { "hostname": "www.noramedi.com", "purpose": "unspecified/marketing", "tlsCovered": true }
+    ],
+    "services": [
+      { "name": "Nginx", "version": "1.24.0", "role": "TLS termination, reverse proxy, static asset serving (host-level, not containerized)" },
+      { "name": "PostgreSQL", "version": "16.14", "database": "noramedi_crm", "sizeMB": 16 },
+      { "name": "Redis", "version": "7.0.15", "active": true, "role": "optional fail-open rate-limit counter store only" },
+      { "name": "PM2", "version": "7.0.1", "role": "process manager, no ecosystem.config.* file in repository" }
+    ]
+  },
+  "configurationSources": [
+    {
+      "mechanism": "dotenv.config() (no explicit path)",
+      "invokedIn": ["server/src/index.ts", "server/src/worker.ts", "server/src/db.ts (import 'dotenv/config')"],
+      "resolvesRelativeTo": "process.cwd()",
+      "assumedFile": "server/.env",
+      "confirmedInProduction": false,
+      "note": "Actual PM2 cwd for either process was never independently confirmed in production."
+    }
+  ],
+  "variables": [
+    { "name": "DATABASE_URL", "category": "required", "default": null, "productionStatus": "SET" },
+    { "name": "NODE_ENV", "category": "required", "default": null, "productionStatus": "SET" },
+    { "name": "JWT_SECRET", "category": "required", "default": null, "productionStatus": "SET" },
+    { "name": "PLATFORM_JWT_SECRET", "category": "required", "default": null, "productionStatus": "SET" },
+    { "name": "CSRF_SECRET", "category": "required", "default": null, "productionStatus": "SET" },
+    { "name": "ENCRYPTION_KEY", "category": "required_fatal_in_production", "default": null, "productionStatus": "SET" },
+    { "name": "REDIS_URL", "category": "optional_feature_gate", "default": null, "productionStatus": "SET" },
+    { "name": "RUN_BACKGROUND_JOBS", "category": "optional_default", "default": "unset = jobs run in API process", "productionStatus": "SET_VALUE_NOT_READ" },
+    { "name": "S3_BUCKET", "category": "optional_feature_gate", "default": null, "productionStatus": "MISSING" },
+    { "name": "S3_REGION", "category": "optional_feature_gate", "default": "auto", "productionStatus": "MISSING" },
+    { "name": "S3_ENDPOINT", "category": "optional_feature_gate", "default": null, "productionStatus": "MISSING" },
+    { "name": "S3_ACCESS_KEY_ID", "category": "optional_feature_gate", "default": "AWS SDK credential chain", "productionStatus": "NOT_CHECKED" },
+    { "name": "S3_SECRET_ACCESS_KEY", "category": "optional_feature_gate", "default": "AWS SDK credential chain", "productionStatus": "NOT_CHECKED" },
+    { "name": "S3_FORCE_PATH_STYLE", "category": "optional_feature_gate", "default": "false", "productionStatus": "NOT_CHECKED" },
+    { "name": "PORT", "category": "optional_default", "default": "5000", "productionStatus": "NOT_CHECKED" },
+    { "name": "LISTEN_HOST", "category": "optional_default", "default": "0.0.0.0", "productionStatus": "NOT_CHECKED" },
+    { "name": "JSON_BODY_LIMIT", "category": "optional_default", "default": "1mb", "productionStatus": "NOT_CHECKED" },
+    { "name": "TRUST_PROXY", "category": "optional_default", "default": "1", "productionStatus": "NOT_CHECKED" },
+    { "name": "DB_POOL_MAX", "category": "optional_default", "default": "10", "productionStatus": "NOT_CHECKED" },
+    { "name": "DB_POOL_CONNECT_TIMEOUT_MS", "category": "optional_default", "default": "10000", "productionStatus": "NOT_CHECKED" },
+    { "name": "DB_POOL_IDLE_TIMEOUT_MS", "category": "optional_default", "default": "30000", "productionStatus": "NOT_CHECKED" },
+    { "name": "CORS_ORIGINS", "category": "optional_default", "default": "empty", "productionStatus": "NOT_CHECKED", "note": "server/.env.example defines this key twice; only the last assignment would take effect in a real .env file" }
+  ],
+  "deploymentSteps": [
+    { "order": 1, "step": "git pull --ff-only", "target": "APP_DIR", "skippable": "--skip-pull" },
+    { "order": 2, "step": "npm ci", "target": "APP_DIR/server", "skippable": "--skip-build" },
+    { "order": 3, "step": "npx prisma migrate deploy", "target": "APP_DIR/server", "skippable": "--skip-migrate" },
+    { "order": 4, "step": "npx prisma generate", "target": "APP_DIR/server", "skippable": "--skip-generate" },
+    { "order": 5, "step": "pm2 reload noramedi-api --update-env", "target": "noramedi-api only", "skippable": false },
+    { "order": 6, "step": "sleep 2", "target": null, "skippable": false },
+    { "order": 7, "step": "noramedi-healthcheck.sh --local --max-attempts 12 --interval 5", "target": "local health endpoint", "skippable": false }
+  ],
+  "deploymentGaps": [
+    "No step reloads or restarts noramedi-worker",
+    "No step builds or publishes the frontend",
+    "No rollback subcommand or documented rollback procedure",
+    "Script is fail-fast (set -euo pipefail) but not atomic/transactional across the whole sequence"
+  ],
+  "driftFindings": [
+    { "id": 1, "area": "Node version", "repositoryExpectation": "CI declares Node 20; no engines field anywhere", "productionObservation": "Node 22.23.1", "classification": "VERSION_DRIFT", "risk": "MEDIUM" },
+    { "id": 2, "area": "Deployment topology documentation", "repositoryExpectation": "docs/35-docker-deploy-runbook.md describes Docker Compose deployment", "productionObservation": "Bare-VPS + PM2 + host Nginx; no Dockerfile/compose file exists in repository", "classification": "STALE_DOCUMENTATION", "risk": "MEDIUM" },
+    { "id": 3, "area": "Worker deploy automation", "repositoryExpectation": "server/src/worker.ts and start:worker script exist", "productionObservation": "noramedi-worker runs in production but no repository script reloads/restarts it", "classification": "DEPLOYMENT_DRIFT", "risk": "HIGH" },
+    { "id": 4, "area": "Frontend artifact revision", "repositoryExpectation": "Vite build script produces dist/ from source at a given commit", "productionObservation": "No repository script deploys the frontend build; served bundle vs source match unconfirmed", "classification": "UNVERIFIED", "risk": "MEDIUM" },
+    { "id": 5, "area": "Object storage", "repositoryExpectation": "fileStorage.ts supports S3-compatible mode", "productionObservation": "LOCAL_VPS_STORAGE, no S3 configured", "classification": "CONFIG_DRIFT", "risk": "HIGH" },
+    { "id": 6, "area": "PITR", "repositoryExpectation": "backupService.ts comments describe PITR as a target capability", "productionObservation": "archive_mode=off", "classification": "CONFIG_DRIFT", "risk": "HIGH" },
+    { "id": 7, "area": "Restore test", "repositoryExpectation": "runRestoreTest() capability exists, admin-triggered", "productionObservation": "No durable evidence any restore has ever been exercised", "classification": "UNVERIFIED", "risk": "HIGH" },
+    { "id": 8, "area": "PM2 privilege", "repositoryExpectation": "Deploy script assumes PM2 pre-installed, no privilege spec", "productionObservation": "Both processes run as root", "classification": "CONFIG_DRIFT", "risk": "MEDIUM" },
+    { "id": 9, "area": "Backup locality", "repositoryExpectation": "backupService.ts hardcodes BACKUP_DIR on the same host, no offsite-upload code path", "productionObservation": "Backup directory local to the same VPS; no offsite copy evidence", "classification": "CONFIG_DRIFT", "risk": "HIGH" }
+  ],
+  "risks": [
+    { "id": "R-029", "severity": "HIGH", "summary": "Local patient/imaging file storage co-located with database on a single VPS, no S3-compatible object storage configured" },
+    { "id": "R-030", "severity": "HIGH", "summary": "Database backup directory local to the same VPS as the database; no offsite copy evidence" },
+    { "id": "R-031", "severity": "HIGH", "summary": "PITR unavailable (archive_mode=off); recovery granularity bounded by backup frequency (~11h gap observed)" },
+    { "id": "R-032", "severity": "HIGH", "summary": "Restore-test execution unverified — capability exists but no durable evidence of exercise" },
+    { "id": "R-033", "severity": "HIGH", "summary": "noramedi-worker has no repository-defined deploy/reload automation; update lifecycle undocumented" },
+    { "id": "R-034", "severity": "HIGH", "summary": "Potential duplicate background-job registration across API and worker when RUN_BACKGROUND_JOBS is not explicitly 'false'; duplicate execution mitigated by DB-backed JobLock, duplicate registration itself uncontrolled" },
+    { "id": "R-035", "severity": "MEDIUM", "summary": "Node.js version drift: production runs Node 22.23.1, only CI evidence pins Node 20, no engines field anywhere" },
+    { "id": "R-036", "severity": "MEDIUM", "summary": "PM2 processes run as root; no least-privilege separation" },
+    { "id": "R-037", "severity": "MEDIUM", "summary": "PM2 restart counts (14 API / 13 worker) at ~38-39 min observed uptime warrant operational review" },
+    { "id": "R-038", "severity": "MEDIUM", "summary": "Frontend build-artifact-to-source revision unverified" },
+    { "id": "R-039", "severity": "MEDIUM", "summary": "Stale Docker Compose deployment runbook could mislead a future deploy attempt" },
+    { "id": "R-040", "severity": "MEDIUM", "summary": "Configuration source ambiguity: dotenv loads from process.cwd() with no repository-enforced working directory (no ecosystem.config.* file)" }
+  ],
+  "unverified": [
+    "Literal value of RUN_BACKGROUND_JOBS in production",
+    "PM2 cwd for noramedi-api and noramedi-worker",
+    "Actual host Nginx configuration content (body limits, timeouts, headers, upstream directives)",
+    "PgBouncer presence in production",
+    "Read replica presence in production",
+    "Frontend build-artifact-to-source match",
+    "Backup encryption-at-rest status",
+    "Offsite backup existence",
+    "Actual retention-enforcement mechanism (vs declared 7-day policy)",
+    "server/.env filesystem permissions and ownership",
+    "Whether server/uploads/ content is included in any backup pipeline",
+    "Last restore test (remains UNVERIFIED, not proof it never happened)"
+  ]
+}
