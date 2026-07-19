@@ -403,7 +403,7 @@
       "authorization_path": "N/A",
       "delete_path": "N/A",
       "retention_behavior": "N/A",
-      "backup_coverage": "NOT_COVERED — this row exists specifically to record that no file-tree backup script, job, or process was found anywhere in the repository (find for *backup* patterns outside backupService.ts/its test/UI trio returned nothing) and PRODUCTION_TOPOLOGY.md's own evidence indicates uploads/ inclusion in the DB backup pipeline is unconfirmed and likely absent",
+      "backup_coverage": "NOT_COVERED — this row exists specifically to record that no file-tree backup script, job, or process was found in the inspected storage, backup, attachment, imaging, export, and job paths (backupService.ts, fileStorage.ts, attachments.ts, imaging.ts, imagingBridgePublic.ts, services/privacy/*, export-related jobs) — a bounded finding, not a repository-wide search — and PRODUCTION_TOPOLOGY.md's own evidence indicates uploads/ inclusion in the DB backup pipeline is unconfirmed and likely absent",
       "integrity_mechanism": "N/A",
       "encryption_evidence": "N/A",
       "audit_evidence": "N/A",

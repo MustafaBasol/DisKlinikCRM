@@ -18,7 +18,8 @@
     "VERIFIED_REPOSITORY": "Confirmed present/absent in repository source code",
     "UNVERIFIED_PRODUCTION": "Neither confirmed present nor confirmed absent in production; repository gives no conclusive signal",
     "INFERRED": "A reasoned conclusion from indirect evidence, explicitly not a direct observation",
-    "NOT_FOUND": "Actively searched for and not found — a stronger claim than UNVERIFIED, used when a targeted search specifically for this item returned nothing"
+    "NOT_FOUND": "Actively searched for and not found — a stronger claim than UNVERIFIED, used when a targeted search specifically for this item returned nothing",
+    "NOT_FOUND_IN_BOUNDED_SCOPE": "Not found within a specific, named set of inspected paths — NOT a repository-wide search; areas outside the named paths are UNRESOLVED, not confirmed absent"
   },
   "categories": [
     {
@@ -60,8 +61,8 @@
     {
       "category_id": "GAP-C",
       "category": "Object storage / file-tree backup (attachments, imaging, lab attachments)",
-      "current_coverage": "None found — no file-tree backup script, job, or process exists anywhere in the repository",
-      "evidence_class": "NOT_FOUND (repository-wide search for backup-related patterns outside backupService.ts's own trio returned nothing)",
+      "current_coverage": "None found in the inspected storage, backup, attachment, imaging, export, and job paths (backupService.ts, fileStorage.ts, attachments.ts, imaging.ts, imagingBridgePublic.ts, services/privacy/*, export-related jobs, PRODUCTION_TOPOLOGY.md) — a bounded finding, not a repository-wide absence claim",
+      "evidence_class": "NOT_FOUND_IN_BOUNDED_SCOPE (targeted inspection of the named storage/backup/attachment/imaging/export/job paths found no file-tree backup mechanism; no repository-wide search was run or documented, so areas outside these paths remain UNRESOLVED, not confirmed absent)",
       "gap": "Complete — this is the single largest gap identified by this task. Patient attachments, lab attachments, and imaging images (the highest-sensitivity storage flows in f0-011-storage-flow-inventory.json) have zero backup coverage of file bytes today",
       "linked_risk": "R-029 (storage architecture gap); no dedicated risk-register row exists yet specifically for 'no file backup' as distinct from 'no object storage' — this document recommends RISK_REGISTER.md track this as its own line item, not implemented here",
       "proposed_target_rpo": "<=24h once implemented (proposal)",
