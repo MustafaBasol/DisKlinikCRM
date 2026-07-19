@@ -33,7 +33,7 @@ import {
   type SmsPurpose,
   type SmsRenderContext,
 } from './smsTemplating.js';
-import { assertCommunicationPermission } from '../communicationConsent/communicationConsentPolicy.js';
+import { resolveCommunicationConsent, type LegacyGateSignal } from '../communicationConsent/legacyReconciliationResolver.js';
 import { SMS_PURPOSE_TO_COMMUNICATION_PURPOSE } from './smsCommunicationPurposeMap.js';
 
 const MAX_SMS_BODY_LENGTH = 1000;
@@ -169,37 +169,39 @@ export async function sendClinicSms(
   }
   const region = resolveSmsRegion(normalized);
 
-  // 3. Consent gate
-  const consent = evaluateSmsConsent({ purpose: args.purpose, patient });
-  if (!consent.allowed) {
-    const messageId = await recordBlocked({
-      ...args, recipient: normalized, body: '', status: 'blocked_consent',
-      region, errorCode: consent.reason,
-      errorMessage: 'Patient consent rules block this SMS.',
-    });
-    return { ok: false, code: 'consent_blocked', error: 'Patient consent rules block this SMS.', messageId };
-  }
+  // 3. Consent gate — single orchestration point for the legacy gate (opt-out,
+  // marketing consent, communication consent) and the central KVKK-HIGH-007
+  // decision (additive; disabled by default, see COMMUNICATION_CONSENT_*
+  // flags). Never call the legacy gate and the central service independently —
+  // resolveCommunicationConsent is the one place their precedence is decided,
+  // so it cannot diverge between call sites (see legacyReconciliationResolver.ts).
+  const legacyConsent = evaluateSmsConsent({ purpose: args.purpose, patient });
+  const legacySignal: LegacyGateSignal = legacyConsent.allowed
+    ? { allowed: true, hardVeto: false, reasonCode: 'legacy_ok' }
+    : { allowed: false, hardVeto: legacyConsent.reason === 'sms_opt_out', reasonCode: legacyConsent.reason };
 
-  // 3b. Central KVKK-HIGH-007 communication consent decision (additive; disabled by
-  // default — see COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED/_MODE — and never queries
-  // the DB when the flag is off, so this is a no-op unless a future rollout enables it).
-  const centralPermission = await assertCommunicationPermission({
+  const resolved = await resolveCommunicationConsent(legacySignal, {
     organizationId: args.organizationId,
     clinicId: args.clinicId,
     patientId: args.patientId,
     channel: 'sms',
     purpose: SMS_PURPOSE_TO_COMMUNICATION_PURPOSE[args.purpose],
   });
-  if (centralPermission.blocked) {
+
+  if (!resolved.finalAllowed) {
+    // Distinguish which gate actually produced the block (not whether
+    // reconciliation is enabled) so SmsMessage history keeps the same
+    // legacy-vs-central labeling it always has: the legacy gate's own
+    // reasonCode surfacing unchanged means the legacy gate caused this block.
+    const legacyCaused = !legacySignal.allowed && resolved.finalReasonCode === legacySignal.reasonCode;
+    const status = legacyCaused ? 'blocked_consent' : 'blocked_by_consent';
+    const code: SmsBlockCode = legacyCaused ? 'consent_blocked' : 'blocked_by_consent';
     const messageId = await recordBlocked({
-      ...args, recipient: normalized, body: '', status: 'blocked_by_consent',
-      region, errorCode: centralPermission.reasonCode,
-      errorMessage: 'Central communication consent policy blocks this SMS.',
+      ...args, recipient: normalized, body: '', status,
+      region, errorCode: resolved.finalReasonCode,
+      errorMessage: 'Patient consent rules block this SMS.',
     });
-    return {
-      ok: false, code: 'blocked_by_consent',
-      error: 'Central communication consent policy blocks this SMS.', messageId,
-    };
+    return { ok: false, code, error: 'Patient consent rules block this SMS.', messageId };
   }
 
   // 4. Body: explicit or rendered template; unresolved variables block the send

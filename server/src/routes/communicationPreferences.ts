@@ -9,6 +9,13 @@
  * edit legal evidence fields). DENTIST is read + grant/deny/withdraw capable
  * like front-desk staff — clinical staff routinely capture verbal consent
  * during a visit; a future review may narrow this further.
+ *
+ * The full-evidence export endpoint (GET .../export) is management-only
+ * (OWNER / ORG_ADMIN / CLINIC_MANAGER) — narrower than the view/mutate roles
+ * above, matching the equivalent patientPrivacy.ts export endpoint. A bulk
+ * dump of every historical consent event is a different risk profile than
+ * viewing/editing today's preference state, so RECEPTIONIST/DENTIST keep
+ * matrix/history/mutation access but not the export.
  */
 
 import express, { Response } from 'express';
@@ -24,7 +31,8 @@ import {
   isCommunicationChannel,
   isCommunicationPurpose,
 } from '../services/communicationConsent/taxonomy.js';
-import { evaluateCommunicationPermission } from '../services/communicationConsent/communicationConsentPolicy.js';
+import { deriveCommunicationDecision } from '../services/communicationConsent/communicationConsentPolicy.js';
+import type { CommunicationPreferenceStatus } from '../services/communicationConsent/taxonomy.js';
 import {
   setCommunicationPreference,
   bulkSetCommunicationPreferences,
@@ -32,10 +40,17 @@ import {
   type SetPreferenceAction,
 } from '../services/communicationConsent/communicationConsentAdmin.js';
 import { hashEvidenceIp, hashEvidenceUserAgent } from '../services/communicationConsent/consentEvidenceSanitizer.js';
+import {
+  getCommunicationConsentAuditSummary,
+  CommunicationConsentAuditReportError,
+} from '../services/communicationConsent/communicationConsentAuditReport.js';
 
 const router = express.Router();
 
 const ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const;
+
+/** Consent evidence export is a bulk historical dump — management-only, same scope as patientPrivacy.ts's export endpoint. */
+const EXPORT_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'] as const;
 
 /**
  * `revision` is only a global order *within* one channel+purpose key (see
@@ -83,7 +98,7 @@ async function loadScopedPatient(req: AuthRequest, res: Response, patientId: str
   const orgId = req.user!.organizationId;
   const patient = await prisma.patient.findFirst({
     where: { id: patientId, organizationId: orgId, deletedAt: null },
-    select: { id: true, clinicId: true, organizationId: true },
+    select: { id: true, clinicId: true, organizationId: true, smsOptOut: true },
   });
   if (!patient) {
     res.status(404).json({ error: 'Patient not found' });
@@ -113,22 +128,49 @@ router.get(
       });
       const byKey = new Map(rows.map((r) => [`${r.channel}:${r.purpose}`, r]));
 
+      // Evaluated once, in memory, for every cell — the patient (and thus
+      // scope) and every preference row are already loaded above, so there is
+      // no need to re-query the database per channel×purpose cell (see
+      // deriveCommunicationDecision doc comment). The matrix's own args always
+      // match the loaded patient's org/clinic exactly, so the cross-clinic
+      // PatientClinic branch in the full evaluateCommunicationPermission path
+      // never applies here — this is a like-for-like optimization, not a
+      // behavior change.
       const matrix = [];
       for (const channel of COMMUNICATION_CHANNELS) {
         for (const purpose of COMMUNICATION_PURPOSES) {
-          const decision = await evaluateCommunicationPermission({
+          const row = byKey.get(`${channel}:${purpose}`);
+          const decisionArgs = {
             organizationId: patient.organizationId,
             clinicId: patient.clinicId,
             patientId: patient.id,
             channel,
             purpose,
-          });
-          const row = byKey.get(`${channel}:${purpose}`);
+          };
+          const decision = deriveCommunicationDecision(
+            decisionArgs,
+            purpose,
+            (row?.status as CommunicationPreferenceStatus | undefined) ?? null,
+            row?.id,
+          );
+
+          // Read-only, always-computed ground truth (not gated by the
+          // reconciliation/enforcement rollout flags — same principle as
+          // evaluateCommunicationPermission always computing the real answer).
+          // smsOptOut is dormant with no write path today, but a stale
+          // hard-restrictive legacy signal disagreeing with an explicit
+          // central grant is a genuine data-integrity conflict staff need to
+          // see, never silently resolved by the matrix display itself.
+          const legacyConflict = channel === 'sms' && patient.smsOptOut && row?.status === 'granted'
+            ? { detected: true as const, reasonCode: 'legacy_central_conflict' as const }
+            : null;
+
           matrix.push({
             channel,
             purpose,
             isPolicyException: (POLICY_EXCEPTION_PURPOSES as readonly string[]).includes(purpose),
             decision,
+            legacyConflict,
             preference: row
               ? {
                   id: row.id,
@@ -167,18 +209,33 @@ router.get(
       const patient = await loadScopedPatient(req, res, patientId);
       if (!patient) return;
 
-      const { channel, purpose } = req.query as { channel?: string; purpose?: string };
+      const { channel, purpose, status, source, cursor } = req.query as {
+        channel?: string; purpose?: string; status?: string; source?: string; cursor?: string;
+      };
       const where: any = { patientId: patient.id, clinicId: patient.clinicId };
       if (channel) where.channel = channel;
       if (purpose) where.purpose = purpose;
+      if (status) where.newStatus = status;
+      if (source) where.source = source;
+
+      const rawLimit = Number(req.query.limit);
+      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 200) : 50;
 
       const events = await prisma.patientCommunicationConsentEvent.findMany({
         where,
         orderBy: resolveCommunicationHistoryOrderBy(channel, purpose),
-        take: 200,
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       });
 
-      res.json({ patientId: patient.id, events });
+      const hasMore = events.length > limit;
+      const page = hasMore ? events.slice(0, limit) : events;
+
+      res.json({
+        patientId: patient.id,
+        events: page,
+        pageInfo: { hasMore, nextCursor: hasMore ? page[page.length - 1]!.id : null, limit },
+      });
     } catch (err: any) {
       console.error('[communicationPreferences] history error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to load communication consent history' });
@@ -191,7 +248,7 @@ router.get(
 
 router.get(
   '/patients/:patientId/communication-preferences/export',
-  authorize([...ROLES]),
+  authorize([...EXPORT_ROLES]),
   async (req: AuthRequest, res: Response) => {
     const patientId = getParam(req, 'patientId');
     try {
@@ -433,6 +490,38 @@ router.get(
     } catch (err: any) {
       console.error('[communicationPreferences] aggregate error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to load communication preference aggregate' });
+    }
+  },
+);
+
+// ─── GET /api/communication-consent/audit-summary ────────────────────────────
+// Bounded audit-mode observability summary — see communicationConsentAuditReport.ts.
+// Elevated-role only: this is operational rollout tooling, not day-to-day patient care.
+
+router.get(
+  '/communication-consent/audit-summary',
+  authorize(['OWNER', 'ORG_ADMIN']),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { clinicId, since, until } = req.query as { clinicId?: string; since?: string; until?: string };
+      if (clinicId && !req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(clinicId)) {
+        return res.status(403).json({ error: 'Access denied to this clinic' });
+      }
+
+      const summary = await getCommunicationConsentAuditSummary({
+        organizationId: req.user!.organizationId,
+        clinicId,
+        since: since ? new Date(since) : undefined,
+        until: until ? new Date(until) : undefined,
+      });
+
+      res.json(summary);
+    } catch (err: any) {
+      if (err instanceof CommunicationConsentAuditReportError) {
+        return res.status(400).json({ error: err.message });
+      }
+      console.error('[communicationPreferences] audit-summary error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to load communication consent audit summary' });
     }
   },
 );

@@ -32,7 +32,41 @@
     "denied": "Refusé",
     "withdrawn": "Retiré",
     "unknown": "Inconnu",
-    "not_required": "Non requis"
+    "not_required": "Non requis",
+    "conflict": "Révision manuelle requise"
+  },
+  "summary": {
+    "allowed": "Accordé",
+    "deniedOrWithdrawn": "Refusé / Retiré",
+    "unknown": "Inconnu",
+    "notRequired": "Non requis",
+    "conflict": "Conflit — révision nécessaire"
+  },
+  "purposeGroups": {
+    "essential": "Essentiel / Opérationnel",
+    "appointment": "Communication de rendez-vous",
+    "treatmentFollowup": "Suivi de traitement",
+    "recall": "Rappel / Réactivation",
+    "marketing": "Marketing / Campagnes",
+    "survey": "Sondages / Informatif"
+  },
+  "help": {
+    "unknownNotConsent": "« Inconnu » ne signifie pas un consentement — cela indique qu'aucune préférence explicite n'a été enregistrée.",
+    "deniedVsWithdrawn": "« Refusé » et « Retiré » sont des états historiques différents : retiré signifie qu'une autorisation précédemment enregistrée a ensuite été retirée.",
+    "notRequiredMeaning": "« Non requis » est une exception technique de politique (ex. transactionnel/avis légal) — pas une autorisation marketing générale."
+  },
+  "conflict": {
+    "modalNote": "Un signal restrictif hérité obsolète (ex. désinscription SMS) est en contradiction avec un enregistrement central explicite « accordé » pour cette cellule. L'envoi est bloqué. Choisir « Refuser » ou « Retirer » ne RÉSOUT PAS ce conflit — cela accepte uniquement le signal restrictif hérité, en alignant l'enregistrement central sur celui-ci. Si vous pensez que le signal hérité lui-même est obsolète, il n'existe actuellement aucun moyen pris en charge pour le corriger — cela doit être consigné comme un suivi distinct."
+  },
+  "legacySignals": {
+    "title": "Signaux hérités",
+    "disclaimer": "Ce sont des champs hérités (avant migration) et ne reflètent PAS le statut de consentement actuel. La matrice de préférences centrale ci-dessus est la source actuelle et faisant autorité.",
+    "communicationConsent": "Consentement de communication (champ hérité)",
+    "marketingConsent": "Consentement marketing (champ hérité)",
+    "smsOptOut": "Désinscription SMS (champ hérité)"
+  },
+  "export": {
+    "explanation": "L'exportation télécharge l'état de préférence actuel et l'historique complet de ce patient au format JSON. Les champs secrets/internes uniquement (ex. hachages IP/UA bruts) ne sont jamais inclus."
   },
   "actions": {
     "export": "Exporter les preuves",
@@ -41,7 +75,13 @@
     "withdraw": "Retirer",
     "reset": "Réinitialiser à Inconnu",
     "cancel": "Annuler",
-    "confirm": "Confirmer"
+    "confirm": "Confirmer",
+    "manage": "Gérer",
+    "manageTitle": "{{channel}} / {{purpose}} — Choisir une action",
+    "chooseAction": "Choisir une action",
+    "groupedView": "Vue groupée",
+    "matrixView": "Vue matricielle",
+    "viewHistory": "Voir l'historique"
   },
   "confirm": {
     "grantTitle": "Accorder le consentement pour {{channel}} / {{purpose}} ?",
@@ -84,8 +124,17 @@
   },
   "history": {
     "title": "Historique {{channel}} / {{purpose}}",
+    "allTitle": "Historique complet du consentement",
     "empty": "Aucun historique pour le moment.",
-    "initial": "Aucun enregistrement"
+    "initial": "Aucun enregistrement",
+    "filters": {
+      "toggle": "Afficher/masquer les filtres",
+      "anyChannel": "Tous les canaux",
+      "anyPurpose": "Tous les objectifs",
+      "anyStatus": "Tous les statuts",
+      "anySource": "Toutes les sources",
+      "apply": "Filtrer"
+    }
   },
   "errors": {
     "loadFailed": "Échec du chargement des préférences de communication.",

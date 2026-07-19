@@ -12,7 +12,6 @@ import {
   MapPin, 
   User as UserIcon,
   CheckCircle2,
-  AlertCircle,
   Loader2,
   Plus,
   ClipboardList,
@@ -381,36 +380,6 @@ const PatientDetail: React.FC = () => {
             </div>
           </div>
 
-          <div className="card p-6 space-y-4">
-            <h3 className="font-bold text-gray-900">{t('patients:detail.consents')}</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
-                <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.communicationConsent')}</span>
-                {patient.communicationConsent ? (
-                  <span className="flex items-center gap-1 text-green-600 text-xs font-bold">
-                    <CheckCircle2 size={14} /> {t('common:yes')}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-gray-400 text-xs font-bold">
-                    <AlertCircle size={14} /> {t('common:no')}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
-                <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.marketingConsent')}</span>
-                {patient.marketingConsent ? (
-                  <span className="flex items-center gap-1 text-green-600 text-xs font-bold">
-                    <CheckCircle2 size={14} /> {t('common:yes')}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-gray-400 text-xs font-bold">
-                    <AlertCircle size={14} /> {t('common:no')}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* Clinical Alerts — overview tab only */}
           {activeTab === 'overview' && (
             <div className={`card p-5 ${patient.notes ? 'border-amber-200 bg-amber-50' : ''}`}>
@@ -489,25 +458,6 @@ const PatientDetail: React.FC = () => {
                   <div className="flex items-center gap-3 text-gray-600">
                     <MapPin size={16} className="text-gray-400 flex-shrink-0" />
                     <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
-                  </div>
-                </div>
-                <div className="card p-4 space-y-3">
-                  <h3 className="font-bold text-gray-900 text-sm">{t('patients:detail.consents')}</h3>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
-                    <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.communicationConsent')}</span>
-                    {patient.communicationConsent ? (
-                      <span className="flex items-center gap-1 text-green-600 text-xs font-bold"><CheckCircle2 size={13} /> {t('common:yes')}</span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-gray-400 text-xs font-bold"><AlertCircle size={13} /> {t('common:no')}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
-                    <span className="text-xs font-semibold text-gray-500 uppercase">{t('patients:form.marketingConsent')}</span>
-                    {patient.marketingConsent ? (
-                      <span className="flex items-center gap-1 text-green-600 text-xs font-bold"><CheckCircle2 size={13} /> {t('common:yes')}</span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-gray-400 text-xs font-bold"><AlertCircle size={13} /> {t('common:no')}</span>
-                    )}
                   </div>
                 </div>
                 <div className={`card p-4 ${patient.notes ? 'border-amber-200 bg-amber-50' : ''}`}>
@@ -1359,6 +1309,11 @@ const PatientDetail: React.FC = () => {
             <CommunicationPreferencesPanel
               patientId={id!}
               canManage={(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const).includes(userCanonicalRole as any)}
+              legacySignals={{
+                communicationConsent: !!patient.communicationConsent,
+                marketingConsent: !!patient.marketingConsent,
+                smsOptOut: !!patient.smsOptOut,
+              }}
             />
           </div>
         )}

@@ -38,6 +38,10 @@
  *   DATA_RETENTION_INBOUND_EVENT_DAYS          integer ≥ 30 (default: 90)
  *   DATA_RETENTION_RESOLVED_CONTACT_REQUEST_DAYS  integer ≥ 30 (default: 365)
  *   DATA_RETENTION_BATCH_SIZE               integer 1–1000 (default: 500)
+ *   DATA_RETENTION_CONSENT_CONFLICT_BUCKETS_DAYS  integer ≥ 30 (default: 180) —
+ *     CommunicationConsentConflictBucket rows (KVKK-HIGH-007 legacy/central
+ *     conflict aggregates — already PII-free, but bounded like every other
+ *     category so it doesn't grow unbounded either).
  */
 
 export type DataRetentionConfig = {
@@ -48,6 +52,7 @@ export type DataRetentionConfig = {
   operationalEventsDays: number;
   inboundEventDays: number;
   resolvedContactRequestDays: number;
+  communicationConsentConflictBucketsDays: number;
   batchSize: number;
 };
 
@@ -60,6 +65,7 @@ const DEFAULTS = {
   operationalEventsDays: 180,
   inboundEventDays: 90,
   resolvedContactRequestDays: 365,
+  communicationConsentConflictBucketsDays: 180,
   batchSize: 500,
 } as const;
 
@@ -88,6 +94,7 @@ export function loadDataRetentionConfig(): DataRetentionConfig {
     operationalEventsDays: parseSafeDays('DATA_RETENTION_OPERATIONAL_EVENTS_DAYS', DEFAULTS.operationalEventsDays),
     inboundEventDays: parseSafeDays('DATA_RETENTION_INBOUND_EVENT_DAYS', DEFAULTS.inboundEventDays),
     resolvedContactRequestDays: parseSafeDays('DATA_RETENTION_RESOLVED_CONTACT_REQUEST_DAYS', DEFAULTS.resolvedContactRequestDays),
+    communicationConsentConflictBucketsDays: parseSafeDays('DATA_RETENTION_CONSENT_CONFLICT_BUCKETS_DAYS', DEFAULTS.communicationConsentConflictBucketsDays),
     batchSize: parseSafeBatchSize(),
   };
 }

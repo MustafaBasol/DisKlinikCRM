@@ -37,6 +37,7 @@ import {
   isCommunicationConsentEnforcementEnabled,
   getCommunicationConsentEnforcementMode,
 } from './enforcementConfig.js';
+import { maybeRecordCommunicationConsentAuditEvent } from './communicationConsentAuditLogging.js';
 
 export type CommunicationPermissionReasonCode =
   | 'consent_granted'
@@ -100,6 +101,41 @@ function decision(
 }
 
 /**
+ * Pure, I/O-free decision step: given a purpose and an already-known
+ * preference status (or null/unknown), returns the same decision
+ * `evaluateCommunicationPermission` would return once scope has already been
+ * validated. Callers that already hold the patient's scope and the relevant
+ * preference rows in memory (the matrix endpoint, the legacy reconciliation
+ * resolver) should call this directly instead of re-querying the database.
+ */
+export function deriveCommunicationDecision(
+  args: EvaluateCommunicationPermissionArgs,
+  purpose: CommunicationPurpose,
+  status: CommunicationPreferenceStatus | null,
+  preferenceId?: string,
+): CommunicationPermissionDecision {
+  if (isPolicyExceptionPurpose(purpose)) {
+    return decision(args, true, EXCEPTION_REASON_CODE[purpose] ?? 'consent_not_required', 'not_required');
+  }
+
+  const effectiveStatus = (status ?? 'unknown') as CommunicationPreferenceStatus;
+
+  switch (effectiveStatus) {
+    case 'granted':
+      return decision(args, true, 'consent_granted', effectiveStatus, preferenceId);
+    case 'not_required':
+      return decision(args, true, 'consent_not_required', effectiveStatus, preferenceId);
+    case 'denied':
+      return decision(args, false, 'consent_denied', effectiveStatus, preferenceId);
+    case 'withdrawn':
+      return decision(args, false, 'consent_withdrawn', effectiveStatus, preferenceId);
+    case 'unknown':
+    default:
+      return decision(args, false, 'consent_unknown', effectiveStatus, preferenceId);
+  }
+}
+
+/**
  * Pure decision: always computes the real, current answer from the
  * preference table - never gated by the rollout flag. Never throws; unknown
  * inputs resolve to an explicit deny reason code instead.
@@ -142,7 +178,7 @@ export async function evaluateCommunicationPermission(
   }
 
   if (isPolicyExceptionPurpose(purpose)) {
-    return decision(args, true, EXCEPTION_REASON_CODE[purpose] ?? 'consent_not_required', 'not_required');
+    return deriveCommunicationDecision(args, purpose, null);
   }
 
   const preference = await prisma.patientCommunicationPreference.findUnique({
@@ -157,21 +193,7 @@ export async function evaluateCommunicationPermission(
     select: { id: true, status: true },
   });
 
-  const status = (preference?.status ?? 'unknown') as CommunicationPreferenceStatus;
-
-  switch (status) {
-    case 'granted':
-      return decision(args, true, 'consent_granted', status, preference?.id);
-    case 'not_required':
-      return decision(args, true, 'consent_not_required', status, preference?.id);
-    case 'denied':
-      return decision(args, false, 'consent_denied', status, preference?.id);
-    case 'withdrawn':
-      return decision(args, false, 'consent_withdrawn', status, preference?.id);
-    case 'unknown':
-    default:
-      return decision(args, false, 'consent_unknown', status, preference?.id);
-  }
+  return deriveCommunicationDecision(args, purpose, (preference?.status as CommunicationPreferenceStatus | undefined) ?? null, preference?.id);
 }
 
 export type AssertCommunicationPermissionResult = CommunicationPermissionDecision & {
@@ -212,6 +234,18 @@ export async function assertCommunicationPermission(
 
   const real = await evaluateCommunicationPermission(args);
   const mode = getCommunicationConsentEnforcementMode();
+
+  await maybeRecordCommunicationConsentAuditEvent({
+    organizationId: args.organizationId,
+    clinicId: args.clinicId,
+    channel: args.channel,
+    purpose: args.purpose,
+    reasonCode: real.reasonCode,
+    enforcementMode: mode,
+    evaluatedAllowed: real.allowed,
+    wouldBlock: !real.allowed,
+    stableEventKey: args.patientId,
+  });
 
   if (mode === 'audit') {
     return { ...real, allowed: true, blocked: false, enforcementMode: 'audit', evaluatedAllowed: real.allowed };
