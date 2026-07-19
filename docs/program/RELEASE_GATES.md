@@ -36,7 +36,7 @@ Tüm kapılar başlangıçta `NOT_APPROVED` durumundadır. Hiçbir kapı geçilm
 - **Gerekli operasyonel kanıt:** İzleme/alarm; olay müdahale (incident) prosedürü; restore testi kanıtı.
 - **Onay sahibi:** Kullanıcı (ChatGPT incelemesiyle).
 - **Rollback hazırlığı:** Pilot kliniklerin verisiyle birlikte geri dönüş/çıkış planı belgelenmiş olmalı.
-- **Not:** F0-012 bu kapının kanıt listesini ayrıntılandıracaktır.
+- **Not:** F0-012 bu kapının kanıt listesini ayrıntılandıracaktır. F0-011, "restore testi kanıtı" için gereken deney spesifikasyonunu üretti ([f0-011-storage-backup-test-matrix.md](../architecture/f0-011-storage-backup-test-matrix.md), Experiments 25-35) ve mevcut durumun `UNVERIFIED`/`NOT_CONFIGURED` olduğunu kanıtla doğruladı (R-029…R-032) — bu kapı hâlâ `NOT_APPROVED`; F0-011 hiçbir deneyi çalıştırmadı, yalnızca tasarladı.
 
 ## G2 — General Commercial Launch Ready
 
@@ -74,6 +74,7 @@ Tüm kapılar başlangıçta `NOT_APPROVED` durumundadır. Hiçbir kapı geçilm
 - **Gerekli operasyonel kanıt:** Görüntü hacmi kapasite planı; imaging izleme.
 - **Onay sahibi:** Kullanıcı + yasal/klinik danışmanlık.
 - **Rollback hazırlığı:** Imaging özelliklerinin feature flag ile kapatılabilirliği kanıtı.
+- **Not:** F0-011, "object storage üzerinde imaging hattı" için tasarım girdisi üretti ([object-storage-backup-migration-design.md §11](../architecture/object-storage-backup-migration-design.md#11-dicomcbct-and-imaging-storage-strategy)) — PACS'tan sıfırdan inşa önerilmedi (ADR-011 ile tutarlı), orijinal tanısal görüntülerin kayıplı sıkıştırılması önerilmedi. Sağlayıcı/migrasyon henüz seçilmedi; bu kapı hâlâ `NOT_APPROVED`.
 
 ## G5 — Official Integration Ready
 
