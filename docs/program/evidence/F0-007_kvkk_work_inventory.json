@@ -1,0 +1,361 @@
+{
+  "taskId": "F0-007",
+  "baselineCommit": "91276dc7f610ef6923e3c1a7572f0ebba578a2f7",
+  "generatedAt": "2026-07-19T13:01:07Z",
+  "knownKvkkTasks": [
+    {
+      "id": "KVKK-CRIT-001a",
+      "title": "Public booking privacy notice display and automatic notice-version evidence record",
+      "status": "MERGED",
+      "prs": [156, 157, 158, 159],
+      "deployed": "claimed_by_compliance_doc_not_independently_reverified",
+      "productionVerified": "claimed_by_compliance_doc_not_independently_reverified"
+    },
+    {
+      "id": "KVKK-ATTACH-IMAGING-001",
+      "title": "Attachment/imaging physical-file lifecycle (legal hold, export package, anonymization, deletion-review)",
+      "status": "MERGED",
+      "prs": [160, 162, 163],
+      "deployed": "claimed_by_compliance_doc_not_independently_reverified",
+      "productionVerified": "claimed_by_compliance_doc_not_independently_reverified"
+    },
+    {
+      "id": "KVKK-HIGH-004",
+      "title": "Secure clinic bulk/structured-data export",
+      "status": "MERGED",
+      "prs": [165],
+      "deployed": "UNVERIFIED",
+      "productionVerified": "UNVERIFIED",
+      "note": "feature flag ships false"
+    },
+    {
+      "id": "KVKK-CRIT-003",
+      "title": "Security incident response foundation and baseline security alerting",
+      "status": "MERGED",
+      "prs": [167],
+      "deployed": "UNVERIFIED",
+      "productionVerified": "UNVERIFIED",
+      "note": "tracker previously recorded this PR as OPEN; corrected by F0-007 GitHub verification to MERGED"
+    },
+    {
+      "id": "KVKK-HIGH-007-base",
+      "title": "Centralized communication preference and consent management",
+      "status": "MERGED",
+      "prs": [169],
+      "deployed": "VERIFIED_PRODUCTION_OBSERVED",
+      "productionVerified": "NOT_ESTABLISHED_release_gate",
+      "note": "merge commit equals confirmed production HEAD; enforcement flag ships disabled"
+    },
+    {
+      "id": "KVKK-HIGH-007-continuation",
+      "title": "Consent reconciliation (continuation of KVKK-HIGH-007 base)",
+      "status": "UNVERIFIED_ACTIVE_WORK",
+      "prs": [175],
+      "prsNote": "empty ([]) at this task's original verification time; PR 175 found OPEN during the correction pass on PR #174 (see correctionPass.primaryTreeObservations). Content of PR 175 not inspected.",
+      "deployed": false,
+      "productionVerified": false,
+      "note": "observed only via read-only path metadata in primary working tree at task start; implementation content not inspected at any point; commit/push/PR status is time-sliced, see correctionPass"
+    },
+    {
+      "id": "KVKK-CRIT-002",
+      "title": "International transfer inventory and mechanism decision",
+      "status": "BLOCKED",
+      "prs": [],
+      "note": "waiting for legal review"
+    },
+    {
+      "id": "KVKK-CRIT-005",
+      "title": "Lawful-basis matrix documentation and notice-evidence at intake",
+      "status": "BLOCKED",
+      "prs": [],
+      "note": "waiting for legal review"
+    },
+    {
+      "id": "KVKK-HIGH-001",
+      "title": "Application-level attachment encryption",
+      "status": "BLOCKED",
+      "prs": [],
+      "note": "waiting for infrastructure evidence"
+    },
+    {
+      "id": "KVKK-HIGH-003",
+      "title": "Medical-record retention period and periodic anonymization policy",
+      "status": "BLOCKED",
+      "prs": [],
+      "note": "waiting for legal review"
+    },
+    {
+      "id": "KVKK-HIGH-005",
+      "title": "IYS integration",
+      "status": "SUPERSEDED",
+      "prs": [],
+      "note": "not applicable; no active marketing-send path found"
+    },
+    {
+      "id": "KVKK-HIGH-006",
+      "title": "Reclassify req.user.clinicId usages via targeted analysis",
+      "status": "TODO",
+      "prs": [],
+      "note": "not started"
+    }
+  ],
+  "knownPullRequests": [
+    { "number": 156, "title": "feat(kvkk): add public booking notice evidence", "state": "MERGED" },
+    { "number": 160, "title": "KVKK: attachment/imaging physical-file lifecycle", "state": "MERGED" },
+    { "number": 162, "title": "fix(kvkk): make isSafeStorageKey reject absolute paths cross-platform", "state": "MERGED" },
+    { "number": 163, "title": "fix(kvkk): enforce attachment legal hold on delete + legal-hold UI + i18n", "state": "MERGED" },
+    { "number": 164, "title": "docs(kvkk): mark KVKK-CRIT-001a and KVKK-ATTACH-IMAGING-001 completed and verified in production", "state": "MERGED" },
+    { "number": 165, "title": "feat(kvkk): secure clinic bulk/structured-data export (KVKK-HIGH-004)", "state": "MERGED", "mergeCommit": "f18b26efad3897b11400532ce20dab560fea3381", "mergedAt": "2026-07-17T16:43:35Z", "changedFiles": 34, "additions": 10757, "deletions": 95 },
+    { "number": 166, "title": "F0-001 Program Control and Master Tracker Foundation", "state": "MERGED" },
+    { "number": 167, "title": "feat(kvkk): add security incident response foundation and baseline alerting (KVKK-CRIT-003)", "state": "MERGED", "mergeCommit": "368bcc8d0a9f4c0ea185ca33d4dd1193d8def9ef", "mergedAt": "2026-07-18T16:10:01Z", "changedFiles": 29, "additions": 4910, "deletions": 14, "note": "tracker previously recorded OPEN; corrected by this task" },
+    { "number": 168, "title": "docs(architecture): add F0-003 domain and module ownership map", "state": "MERGED" },
+    { "number": 169, "title": "feat(kvkk): add centralized communication preference and consent management (KVKK-HIGH-007 base)", "state": "MERGED", "mergeCommit": "7fcf2f850f151241266f07349c4bf4442c72bbca", "mergedAt": "2026-07-18T22:05:26Z", "changedFiles": 35, "additions": 5579, "deletions": 28, "note": "merge commit equals confirmed production HEAD" },
+    { "number": 170, "title": "docs(architecture): add F0-004 cross-module dependency map", "state": "MERGED" },
+    { "number": 171, "title": "docs(test): add F0-005 test inventory and runtime baseline", "state": "MERGED" },
+    { "number": 172, "title": "docs(program): complete F0-002 repository and production baseline", "state": "MERGED", "mergeCommit": "db89b60c91666cb029c32757f171f227a643c79c", "mergedAt": "2026-07-19T12:02:51Z" },
+    { "number": 173, "title": "docs(architecture): verify F0-006 production topology and configuration", "state": "MERGED", "mergeCommit": "91276dc7f610ef6923e3c1a7572f0ebba578a2f7", "mergedAt": "2026-07-19T12:54:43Z" }
+  ],
+  "repositoryWidePrSweep": {
+    "originalClaim": {
+      "totalPrsFound": 61,
+      "range": "113-173",
+      "openPrs": 0,
+      "draftPrs": 0,
+      "method": "gh pr list --state all --limit 60",
+      "status": "INCORRECT_METHODOLOGY",
+      "note": "a --limit 60 query cannot return 61 rows and does not scan full PR history; this was a 60-row recency-limited window, not a repository-wide sweep"
+    },
+    "correctedSweep": {
+      "totalPrsFound": 174,
+      "range": "1-175",
+      "openPrs": 3,
+      "openPrNumbers": [48, 174, 175],
+      "draftPrs": 0,
+      "method": "gh pr list --state all --limit 200 --json number,state",
+      "performedDuring": "correction pass on PR #174",
+      "note": "PR 48 (fix/clinic-branch-visibility, open since 2026-06-16) is pre-existing and unrelated to KVKK, missed by the original narrow sweep; PR 174 is this task's own PR; PR 175 is the KVKK-HIGH-007 continuation, opened after this task's original verification"
+    }
+  },
+  "stableBaseline": {
+    "repositoryMigrationHead": "20260718164142_add_communication_preference_and_consent",
+    "repositoryMigrationCount": 62,
+    "productionMigrationHead": "20260718164142_add_communication_preference_and_consent",
+    "productionEvidenceTimestamp": "2026-07-19T13:43:12+03:00",
+    "repositoryProductionMigrationDrift": false,
+    "prismaModelCount": 90
+  },
+  "activeWork": {
+    "label": "KVKK-HIGH-007-continuation",
+    "observationMethod": "read_only_git_status_short_path_metadata_only",
+    "contentInspected": false,
+    "commitStatus": "UNVERIFIED_ACTIVE_WORK",
+    "commitStatusNote": "time-sliced; see correctionPass.primaryTreeObservations for the three distinct observations (task start dirty/uncommitted, task end clean local branch, correction pass GitHub PR 175 open). Not flatly 'uncommitted' as originally stated.",
+    "migrationName": "20260719120821_kvkk_high007_consent_reconciliation",
+    "migrationStatus": "UNVERIFIED",
+    "pathGroups": [
+      "prisma_schema_migration",
+      "communication_consent_services",
+      "communication_preference_routes",
+      "message_routes",
+      "sms",
+      "whatsapp_purpose_mapping",
+      "recall_candidates",
+      "data_retention",
+      "operational_events",
+      "reconciliation_backfill_audit_reporting",
+      "frontend_communication_preferences_ui",
+      "locales",
+      "compliance_documentation"
+    ],
+    "modifiedFileCount": 24,
+    "untrackedPathCount": 12
+  },
+  "affectedDomains": [
+    "Privacy / Consent / Retention / Data Subject Rights",
+    "Messaging - WhatsApp",
+    "Messaging - SMS",
+    "Automations / Reminders / Follow-up / Recall",
+    "Observability / Operational Events",
+    "Audit and Activity (adjacent, not directly touched)"
+  ],
+  "freezeBoundary": [
+    { "area": "Prisma privacy/consent schema", "mutability": "MUTABLE", "conflictRisk": "HIGH" },
+    { "area": "CommunicationPreference and consent models", "mutability": "PARTIALLY_MUTABLE", "conflictRisk": "MEDIUM" },
+    { "area": "Consent enforcement policy", "mutability": "MUTABLE", "conflictRisk": "HIGH" },
+    { "area": "Consent reconciliation/backfill", "mutability": "MUTABLE", "conflictRisk": "HIGH" },
+    { "area": "Consent audit logging/reporting", "mutability": "MUTABLE", "conflictRisk": "MEDIUM" },
+    { "area": "Retention policy and cleanup jobs", "mutability": "MUTABLE", "conflictRisk": "HIGH" },
+    { "area": "OperationalEvent", "mutability": "MUTABLE", "conflictRisk": "MEDIUM" },
+    { "area": "Messaging routes", "mutability": "MUTABLE", "conflictRisk": "HIGH" },
+    { "area": "WhatsApp purpose mapping", "mutability": "MUTABLE", "conflictRisk": "HIGH" },
+    { "area": "SMS sending", "mutability": "MUTABLE", "conflictRisk": "MEDIUM" },
+    { "area": "Recall candidate generation", "mutability": "MUTABLE", "conflictRisk": "MEDIUM" },
+    { "area": "Patient privacy/anonymization", "mutability": "STABLE", "conflictRisk": "MEDIUM" },
+    { "area": "AuditLog and ActivityLog behavior", "mutability": "STABLE", "conflictRisk": "LOW_MEDIUM" },
+    { "area": "Authentication and authorization", "mutability": "STABLE", "conflictRisk": "LOW" },
+    { "area": "Tenant scoping", "mutability": "STABLE", "conflictRisk": "LOW" },
+    { "area": "Storage and attachment lifecycle", "mutability": "STABLE", "conflictRisk": "LOW" },
+    { "area": "Imaging lifecycle", "mutability": "STABLE", "conflictRisk": "LOW" },
+    { "area": "Backup and restore", "mutability": "STABLE", "conflictRisk": "LOW" },
+    { "area": "Queue/outbox architecture", "mutability": "NOT_IMPLEMENTED", "conflictRisk": "LOW" },
+    { "area": "Cross-domain contracts", "mutability": "MUTABLE_BY_ACTIVE_BRANCH_ONLY", "conflictRisk": "MEDIUM" }
+  ],
+  "parallelSafeWork": [
+    "documentation",
+    "repository_evidence_collection",
+    "adr_review_and_design",
+    "poc_design_no_implementation",
+    "test_inventory_and_test_design",
+    "object_storage_migration_design_only",
+    "backup_pitr_design_only",
+    "ci_design",
+    "operational_runbook_design",
+    "non_invasive_security_review",
+    "read_only_production_verification",
+    "F0-008_adr_review",
+    "F0-009_design_only",
+    "F0-010_design_only",
+    "F0-011_design_only_pending_separate_user_decision",
+    "F0-012_gate_definition"
+  ],
+  "blockedWork": [
+    "broad_prisma_schema_refactoring",
+    "consent_privacy_model_relocation",
+    "retention_model_relocation",
+    "communication_consent_service_restructuring_outside_active_branch",
+    "cross_domain_event_contract_replacement",
+    "authentication_middleware_restructuring",
+    "tenant_scope_middleware_restructuring",
+    "local_storage_key_migration",
+    "attachment_physical_deletion_redesign",
+    "imaging_storage_lifecycle_redesign",
+    "rls_rollout",
+    "prisma_tenant_extension_rollout",
+    "wide_module_extraction",
+    "queue_outbox_implementation_rewiring_consent_audit_flows",
+    "message_delivery_refactor_across_channels",
+    "broad_recall_workflow_refactor",
+    "F0-009_F0-010_F0-011_implementation_as_opposed_to_design",
+    "F1_phase_entry",
+    "F0-013_consolidated_report"
+  ],
+  "conflictRisks": [
+    {
+      "sourceDomain": "Messaging - WhatsApp",
+      "targetDomain": "Privacy / Consent",
+      "affectedContract": "none_accepted_ADR-015_proposed",
+      "activeKvkkPathGroup": "whatsapp_purpose_mapping",
+      "hazard": "new purpose-mapping logic added to the domain with the highest fan-out (106 edges) and 9 X-severity boundary violations per F0-004",
+      "mitigation": "treat new purpose map as unaccepted contract pending ADR-015 review",
+      "requiredSequencing": "continuation merged before any WhatsApp boundary-violation remediation begins"
+    },
+    {
+      "sourceDomain": "Messaging - SMS",
+      "targetDomain": "Privacy / Consent",
+      "affectedContract": "none_accepted",
+      "activeKvkkPathGroup": "sms",
+      "hazard": "consent-check logic changing concurrently with any SMS architecture review",
+      "mitigation": "treat current SMS consent behavior as unverified until continuation merges",
+      "requiredSequencing": "continuation merged"
+    },
+    {
+      "sourceDomain": "Automations / Recall",
+      "targetDomain": "Privacy / Consent",
+      "affectedContract": "none_accepted",
+      "activeKvkkPathGroup": "recall_candidates",
+      "hazard": "new consent-gate test implies recall candidate generation becoming consent-aware mid-change",
+      "mitigation": "do not assume recall respects consent in either direction until continuation merges",
+      "requiredSequencing": "continuation merged"
+    },
+    {
+      "sourceDomain": "Background Jobs / Retention",
+      "targetDomain": "Privacy / Consent / Audit",
+      "affectedContract": "retention_policy_explicit_exclusion_of_medical_financial_records",
+      "activeKvkkPathGroup": "data_retention",
+      "hazard": "retention cleanup acting on consent/audit rows during schema transition risks deleting or corrupting data the reconciliation logic still needs",
+      "mitigation": "no independent deployment of retention schedule/scope changes outside the continuation unit",
+      "requiredSequencing": "continuation merged, retention job behavior independently re-verified post-merge"
+    },
+    {
+      "sourceDomain": "Messaging routes",
+      "targetDomain": "Privacy / Consent",
+      "affectedContract": "none_accepted",
+      "activeKvkkPathGroup": "message_routes",
+      "hazard": "cross-domain messaging bypassing consent public contract mid-implementation",
+      "mitigation": "no assumption that messages.ts currently consent-gates all sends",
+      "requiredSequencing": "continuation merged, gate behavior verified across all channels"
+    },
+    {
+      "sourceDomain": "Prisma Schema",
+      "targetDomain": "all_90_dependent_domains",
+      "affectedContract": "core_dependency_warning_dependency_map_section_7",
+      "activeKvkkPathGroup": "prisma_schema_migration",
+      "hazard": "broad blast radius; any concurrent schema-level architecture work touching the same tables would conflict",
+      "mitigation": "already covered by program-wide freeze; F0-007 adds no new schema-touching authorization",
+      "requiredSequencing": "continuation merged; F0-009 remains design-only regardless"
+    }
+  ],
+  "correctionPass": {
+    "reason": "External review of PR #174 found the document set stated the primary tree's branch/HEAD were unchanged throughout the task, and called the continuation flatly 'uncommitted, no PR' without time-slicing. Both corrected here and across KVKK_ACTIVE_WORK_BASELINE.md, KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md, and F0-007_KVKK_BASELINE_EVIDENCE.md.",
+    "primaryTreeObservations": [
+      {
+        "label": "TASK_START_LOCAL_OBSERVATION",
+        "branch": "main",
+        "head": "db89b60c91666cb029c32757f171f227a643c79c",
+        "dirtyEntryCount": 36,
+        "modifiedCount": 23,
+        "untrackedCount": 13,
+        "contentInspected": false
+      },
+      {
+        "label": "TASK_END_LOCAL_OBSERVATION",
+        "branch": "feature/kvkk-high007-consent-reconciliation-ux",
+        "head": "267458c8f09bf13126e1822705317629906f9491",
+        "dirtyEntryCount": 0,
+        "pushedStatus": "UNVERIFIED_AT_THAT_TIME",
+        "prStatusAtThatTime": "none_found",
+        "prCheckMethod": "gh pr list --state all --head feature/kvkk-high007-consent-reconciliation-ux",
+        "transitionCause": "separate session, not this task",
+        "contentInspected": false
+      },
+      {
+        "label": "CORRECTION_PASS_OBSERVATION",
+        "branch": "feature/kvkk-high007-consent-reconciliation-ux",
+        "head": "267458c8f09bf13126e1822705317629906f9491",
+        "dirtyEntryCount": 0,
+        "githubPr": {
+          "number": 175,
+          "state": "OPEN",
+          "mergeable": "MERGEABLE",
+          "baseRefName": "main",
+          "headRefOid": "267458c8f09bf13126e1822705317629906f9491",
+          "changedFiles": 36,
+          "additions": 3942,
+          "deletions": 215,
+          "createdAt": "2026-07-19T13:19:58Z"
+        },
+        "headShaMatchesTaskEndObservation": true,
+        "contentInspected": false,
+        "note": "36 changed files matches the 36 dirty paths originally observed at task start by count only, not by content comparison"
+      }
+    ]
+  },
+  "unverified": [
+    "kvkk_high_007_continuation_tests",
+    "kvkk_high_007_continuation_migration_validation",
+    "kvkk_high_007_continuation_rollback",
+    "kvkk_high_007_continuation_tenant_isolation_impact",
+    "kvkk_high_007_continuation_consent_conflict_resolution_behavior",
+    "kvkk_high_007_continuation_production_readiness",
+    "kvkk_high_004_deployment_and_production_verification",
+    "kvkk_crit_003_deployment_and_production_verification",
+    "kvkk_high_007_base_enforcement_flag_runtime_value"
+  ],
+  "exitCriteria": [
+    "KVKK-HIGH-007 continuation committed to a branch and a PR opened against main (gh-verifiable)",
+    "That PR merged (gh-verifiable state/mergedAt/mergeCommit)",
+    "Merged migration applied in production and confirmed via read-only production evidence",
+    "Rollback and tenant-impact verification independently evidenced",
+    "External review/user acceptance explicitly declares the KVKK baseline stable"
+  ]
+}
