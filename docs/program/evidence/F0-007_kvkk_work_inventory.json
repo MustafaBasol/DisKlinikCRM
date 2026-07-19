@@ -60,11 +60,11 @@
       "id": "KVKK-HIGH-008",
       "title": "Legacy smsOptOut correction workflow + consent-modal/tab-overflow UX hardening",
       "status": "UNVERIFIED_ACTIVE_WORK",
-      "prs": [],
-      "prsNote": "branch feature/kvkk-high008-legacy-consent-correction, based on main @ 9669b06a (includes PR #176, docs-only). No PR opened at time of writing this entry.",
+      "prs": ["#180"],
+      "prsNote": "branch feature/kvkk-high008-legacy-consent-correction, based on main @ 9669b06a (includes PR #176, docs-only). PR #180 opened, state OPEN, not merged.",
       "deployed": false,
       "productionVerified": false,
-      "note": "new immutable PatientLegacyConsentCorrection model + audited correction API, never grants consent, never touches PatientCommunicationPreference/PatientCommunicationConsentEvent; all COMMUNICATION_CONSENT_* flags remain disabled by default; no production backfill executed"
+      "note": "new immutable PatientLegacyConsentCorrection model + audited correction API, never grants consent, never touches PatientCommunicationPreference/PatientCommunicationConsentEvent; NOT gated by any COMMUNICATION_CONSENT_* flag and becomes immediately active for OWNER/ORG_ADMIN/CLINIC_MANAGER once merged and deployed (see docs/compliance/56-...md §21.12.14) — code merge readiness is pending review, deployment readiness is separate from KVKK-HIGH-007's still-disabled consent-enforcement flags; no production backfill executed"
     },
     {
       "id": "KVKK-CRIT-002",

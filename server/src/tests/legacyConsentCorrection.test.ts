@@ -164,6 +164,9 @@ async function main() {
       await runChain(chain, req, res);
       assert.equal(res.statusCode, 200, JSON.stringify(res.body));
       assert.equal(res.body.correction.newValue, false);
+      for (const forbiddenKey of ['requestFingerprint', 'idempotencyKey']) {
+        assert.equal(res.body.correction[forbiddenKey], undefined, `POST create response must never include ${forbiddenKey}`);
+      }
     });
   }
 
@@ -219,6 +222,27 @@ async function main() {
     assert.equal(res.statusCode, 403);
     assert.equal(res.body?.replay, undefined);
     assert.equal(res.body?.correction, undefined);
+  });
+
+  await test('a denied role cannot use replay to bypass authorization — reusing the exact idempotencyKey+payload of an existing correction still gets 403, never a replay success', async () => {
+    const fx = await createFixture();
+    const body = correctionBody();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+
+    const legitReq = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, body);
+    const legitRes = mockResponse();
+    await runChain(chain, legitReq, legitRes);
+    assert.equal(legitRes.statusCode, 200);
+    assert.equal(legitRes.body.replay, false);
+
+    for (const role of ['RECEPTIONIST', 'DENTIST', 'BILLING'] as const) {
+      const req = authRequest({ role, organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId], canAccessAllClinics: false }, { patientId: fx.patientId }, {}, body);
+      const res = mockResponse();
+      await runChain(chain, req, res);
+      assert.equal(res.statusCode, 403, `${role} must be denied even when replaying an existing, already-succeeded idempotencyKey+payload`);
+      assert.equal(res.body?.replay, undefined, `${role} must never receive replay:true — authorize() runs before any idempotency lookup`);
+      assert.equal(res.body?.correction, undefined);
+    }
   });
 
   section('2. Correction behavior');
@@ -406,9 +430,38 @@ async function main() {
     assert.equal(first.replay, false);
     assert.equal(second.replay, true);
     assert.equal(second.correction.id, first.correction.id);
+    for (const forbiddenKey of ['requestFingerprint', 'idempotencyKey']) {
+      assert.equal((first.correction as any)[forbiddenKey], undefined, `create result must never include ${forbiddenKey}`);
+      assert.equal((second.correction as any)[forbiddenKey], undefined, `replay result must never include ${forbiddenKey}`);
+    }
 
     const count = await prisma.patientLegacyConsentCorrection.count({ where: { patientId: fx.patientId } });
     assert.equal(count, 1, 'exactly one immutable correction row, regardless of the duplicate submission');
+  });
+
+  await test('HTTP-level replay: POSTing the same idempotencyKey+payload twice returns replay:true on the second call, neither response ever includes requestFingerprint/idempotencyKey', async () => {
+    const fx = await createFixture();
+    const body = correctionBody();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+
+    const firstReq = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, body);
+    const firstRes = mockResponse();
+    await runChain(chain, firstReq, firstRes);
+    assert.equal(firstRes.statusCode, 200);
+    assert.equal(firstRes.body.replay, false);
+
+    const secondReq = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, body);
+    const secondRes = mockResponse();
+    await runChain(chain, secondReq, secondRes);
+    assert.equal(secondRes.statusCode, 200);
+    assert.equal(secondRes.body.replay, true);
+    assert.equal(secondRes.body.correction.id, firstRes.body.correction.id);
+
+    for (const res of [firstRes, secondRes]) {
+      for (const forbiddenKey of ['requestFingerprint', 'idempotencyKey']) {
+        assert.equal(res.body.correction[forbiddenKey], undefined, `HTTP response must never include ${forbiddenKey}`);
+      }
+    }
   });
 
   await test('same idempotencyKey with different payload is rejected (idempotency_conflict)', async () => {

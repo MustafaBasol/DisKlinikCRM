@@ -1512,3 +1512,25 @@ capability and does not change how the field defaults or is read anywhere
 else; correcting the legacy signal does **not** grant consent and does
 **not** create or alter a central preference; the deferred inbound-reply
 paths (§21.7/§21.9) remain deferred and untouched.
+
+### 21.12.14 Activation readiness
+
+This workflow is **not** inert behind a runtime flag — unlike the KVKK-HIGH-007
+central-consent rollout (§21.6–§21.9), it has no `COMMUNICATION_CONSENT_*`
+gate at all. Once merged and deployed, the management-only correction
+endpoint can immediately mutate `Patient.smsOptOut: true → false` and
+`Patient.smsOptOutAt → null`, and creates immutable
+`PatientLegacyConsentCorrection`/`AuditLog` records. Stated precisely, in four
+separate parts that must not be conflated:
+
+- **Code merge readiness:** Pending review and resolution of findings.
+- **Deployment readiness:** Separate from consent enforcement activation —
+  this migration and this API do not depend on, and are not gated by, any
+  `COMMUNICATION_CONSENT_*` flag.
+- **Legacy correction workflow activation:** Active immediately after
+  deployment for OWNER, ORG_ADMIN, and CLINIC_MANAGER; not controlled by a
+  `COMMUNICATION_CONSENT_*` feature flag.
+- **Consent-policy activation:** Reconciliation, audit logging, enforcement,
+  and production backfill (the separate KVKK-HIGH-007 rollout) remain
+  disabled and pending separate legal/operational approval — unaffected by
+  whether this workflow is deployed.
