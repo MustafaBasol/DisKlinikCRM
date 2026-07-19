@@ -56,14 +56,20 @@
     "notRequiredMeaning": "„Nicht erforderlich“ ist eine technische Richtlinienausnahme (z. B. Transaktion/rechtlicher Hinweis) — keine allgemeine Marketingberechtigung."
   },
   "conflict": {
-    "modalNote": "Ein veraltetes, restriktives Altsignal (z. B. SMS-Opt-out) widerspricht einem ausdrücklichen zentralen „Erteilt“-Eintrag für diese Zelle. Der Versand wird blockiert. Die Auswahl von „Ablehnen“ oder „Widerrufen“ LÖST diesen Konflikt NICHT — sie akzeptiert lediglich das restriktive Altsignal und bringt den zentralen Eintrag damit in Übereinstimmung. Falls Sie annehmen, dass das Altsignal selbst veraltet ist, gibt es derzeit keine unterstützte Möglichkeit, dies zu korrigieren — dies sollte als separater Folgeauftrag protokolliert werden."
+    "modalNote": "Ein veraltetes, restriktives Altsignal (z. B. SMS-Opt-out) widerspricht einem ausdrücklichen zentralen „Erteilt“-Eintrag für diese Zelle. Der Versand wird blockiert. Die Auswahl von „Ablehnen“ oder „Widerrufen“ unten LÖST diesen Konflikt NICHT — sie akzeptiert lediglich das restriktive Altsignal und protokolliert dauerhaft ein neues zentrales Einwilligungsereignis, das den zentralen Eintrag damit in Übereinstimmung bringt; dies BEWEIST NICHT, dass das Altsignal korrekt war. Falls Sie annehmen, dass das Altsignal selbst veraltet ist, nutzen Sie den untenstehenden Link, um eine separate Korrektur zu erfassen — diese Aktion erteilt selbst keine Einwilligung und ändert die zentrale Präferenz nicht.",
+    "correctLegacyAction": "Alten SMS-Opt-out korrigieren / als veraltet markieren"
   },
   "legacySignals": {
     "title": "Altsignale",
     "disclaimer": "Dies sind Altfelder (vor der Migration) und spiegeln NICHT den aktuellen Einwilligungsstatus wider. Die zentrale Präferenzmatrix oben ist die aktuelle, maßgebliche Quelle.",
     "communicationConsent": "Kommunikationseinwilligung (Altfeld)",
     "marketingConsent": "Marketingeinwilligung (Altfeld)",
-    "smsOptOut": "SMS-Opt-out (Altfeld)"
+    "smsOptOut": "SMS-Opt-out (Altfeld)",
+    "smsOptOutActive": "Aktives altes SMS-Opt-out-Signal",
+    "smsOptOutCorrected": "Altsignal korrigiert",
+    "smsOptOutNotPresent": "Kein Altsignal vorhanden",
+    "notCentralConsent": "Dieser Wert ist keine zentrale Kommunikationseinwilligung.",
+    "viewCorrectionHistory": "Korrekturverlauf anzeigen"
   },
   "export": {
     "explanation": "Der Export lädt den aktuellen Präferenzstatus und den vollständigen Verlauf für diesen Patienten als JSON herunter. Geheime/nur interne Felder (z. B. rohe IP-/UA-Hashes) sind nie enthalten."
@@ -98,10 +104,12 @@
     "source": "Quelle",
     "noticeVersion": "Fassung des Hinweises",
     "noticeVersionPlaceholder": "z. B. v1.2 (optional)",
+    "noticeVersionRequiredPlaceholder": "z. B. v1.2 (erforderlich)",
     "noticeVersionRequiredHint": "Erforderlich für eine aus dieser Quelle erfasste Zustimmung.",
     "notes": "Notizen",
     "notesPlaceholder": "Kurze Notiz zur Erklärung des Patienten (optional)",
-    "sourceDescriptionRequiredHint": "Für eine von Mitarbeitenden erfasste mündliche Zustimmung ist eine kurze Beschreibung dessen, was gesagt/gezeigt wurde, erforderlich."
+    "notesRequiredPlaceholder": "Beschreiben Sie, was die Mitarbeiterin/der Mitarbeiter gesagt/gezeigt hat (erforderlich)",
+    "notesRequiredHint": "Für eine von Mitarbeitenden erfasste mündliche Zustimmung ist eine kurze Beschreibung dessen, was gesagt/gezeigt wurde, erforderlich."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Mündliche Erklärung (Mitarbeiterprotokoll)",
@@ -149,6 +157,57 @@
     "unsafe_note": "Die Notiz wurde abgelehnt, da sie unzulässige Inhalte enthält.",
     "preference_not_found": "Präferenzeintrag nicht gefunden.",
     "concurrent_update": "Dieser Eintrag wurde zeitgleich geändert. Bitte erneut versuchen.",
-    "consent_enforcement_disabled": "Die Einwilligungsdurchsetzung ist derzeit deaktiviert."
+    "consent_enforcement_disabled": "Die Einwilligungsdurchsetzung ist derzeit deaktiviert.",
+    "validationSummary": "{{count}} Felder fehlen oder sind ungültig. Bitte überprüfen Sie die markierten Felder."
+  },
+  "legacyCorrection": {
+    "title": "Alten SMS-Opt-out korrigieren",
+    "warning": "Verwenden Sie dies nur, wenn der alte smsOptOut-Wert nachweislich veraltet oder falsch ist. Diese Aktion erteilt selbst KEINE Einwilligung — die zentrale Kommunikationspräferenz bleibt unverändert. Ein Grund, ein Nachweistyp und Notizen sind erforderlich; die Aktion wird dauerhaft protokolliert.",
+    "currentValue": "Aktueller Wert",
+    "proposedValue": "Vorgeschlagener Wert",
+    "smsOptOutActiveValue": "SMS-Opt-out: Aktiv",
+    "smsOptOutCorrectedValue": "SMS-Opt-out: Korrigiert (nicht aktiv)",
+    "fields": {
+      "reason": "Korrekturgrund",
+      "reasonPlaceholder": "Erklären Sie, warum dieses Altsignal veraltet/falsch ist (erforderlich)",
+      "reasonRequiredHint": "Ein Korrekturgrund ist erforderlich.",
+      "evidenceType": "Nachweistyp",
+      "notes": "Notizen",
+      "notesPlaceholder": "Erklären Sie den Nachweis, dass das Altsignal veraltet ist (erforderlich)",
+      "notesRequiredHint": "Mitarbeiternotizen, die erklären, warum das alte Signal als veraltet gilt, sind erforderlich.",
+      "sourceReference": "Quellenverweis (optional)",
+      "sourceReferencePlaceholder": "z. B. Telefonprotokoll #4471 vom 18.07.2026"
+    },
+    "confirm": "Korrigieren und speichern",
+    "close": "Schließen",
+    "success": "Das alte SMS-Opt-out-Signal wurde erfolgreich korrigiert.",
+    "evidenceTypes": {
+      "patient_verbal_confirmation": "Mündliche Bestätigung des Patienten",
+      "signed_form": "Unterschriebenes Formular",
+      "documented_import_error": "Dokumentierter Importfehler",
+      "other_verified_source": "Andere verifizierte Quelle"
+    },
+    "errors": {
+      "legacy_signal_not_present": "Für diesen Patienten gibt es keinen aktiven alten SMS-Opt-out-Eintrag zu korrigieren.",
+      "legacy_signal_already_corrected": "Dieser Alteintrag wurde bereits korrigiert.",
+      "stale_legacy_signal_state": "Dieser Eintrag wurde durch eine andere Anfrage geändert. Bitte aktualisieren und erneut versuchen.",
+      "correction_notes_required": "Notizen sind erforderlich.",
+      "correction_reason_required": "Ein Korrekturgrund ist erforderlich.",
+      "invalid_evidence_type": "Ungültiger Nachweistyp.",
+      "unsafe_note": "Dieser Text wurde abgelehnt, da er unzulässige Inhalte enthält.",
+      "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "patient_not_found": "Patient nicht gefunden.",
+      "clinic_scope_mismatch": "Sie haben keinen Zugriff auf diesen Patienten.",
+      "idempotency_conflict": "Diese Anfrage wurde bereits mit anderem Inhalt gesendet. Bitte aktualisieren.",
+      "generic": "Diese Korrektur konnte nicht gespeichert werden. Bitte erneut versuchen."
+    }
+  },
+  "legacyCorrectionHistory": {
+    "title": "Korrekturverlauf für Altsignale",
+    "empty": "Noch keine Korrektureinträge vorhanden.",
+    "smsOptOutCorrected": "SMS-Opt-out korrigiert",
+    "viewDetails": "Details anzeigen",
+    "loadingDetail": "Details werden geladen...",
+    "detailFailed": "Details konnten nicht geladen werden."
   }
 }

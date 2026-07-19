@@ -56,14 +56,20 @@
     "notRequiredMeaning": "« Non requis » est une exception technique de politique (ex. transactionnel/avis légal) — pas une autorisation marketing générale."
   },
   "conflict": {
-    "modalNote": "Un signal restrictif hérité obsolète (ex. désinscription SMS) est en contradiction avec un enregistrement central explicite « accordé » pour cette cellule. L'envoi est bloqué. Choisir « Refuser » ou « Retirer » ne RÉSOUT PAS ce conflit — cela accepte uniquement le signal restrictif hérité, en alignant l'enregistrement central sur celui-ci. Si vous pensez que le signal hérité lui-même est obsolète, il n'existe actuellement aucun moyen pris en charge pour le corriger — cela doit être consigné comme un suivi distinct."
+    "modalNote": "Un signal restrictif hérité obsolète (ex. désinscription SMS) est en contradiction avec un enregistrement central explicite « accordé » pour cette cellule. L'envoi est bloqué. Choisir « Refuser » ou « Retirer » ci-dessous ne RÉSOUT PAS ce conflit — cela accepte uniquement le signal restrictif hérité et enregistre de façon permanente un nouvel événement de consentement central alignant l'enregistrement central sur celui-ci ; cela ne PROUVE PAS que le signal hérité était correct. Si vous pensez que le signal hérité lui-même est obsolète, utilisez le lien ci-dessous pour enregistrer une correction distincte — cette action n'accorde pas de consentement en soi et ne modifie pas la préférence centrale.",
+    "correctLegacyAction": "Corriger la désinscription SMS héritée / marquer comme obsolète"
   },
   "legacySignals": {
     "title": "Signaux hérités",
     "disclaimer": "Ce sont des champs hérités (avant migration) et ne reflètent PAS le statut de consentement actuel. La matrice de préférences centrale ci-dessus est la source actuelle et faisant autorité.",
     "communicationConsent": "Consentement de communication (champ hérité)",
     "marketingConsent": "Consentement marketing (champ hérité)",
-    "smsOptOut": "Désinscription SMS (champ hérité)"
+    "smsOptOut": "Désinscription SMS (champ hérité)",
+    "smsOptOutActive": "Signal hérité de désinscription SMS actif",
+    "smsOptOutCorrected": "Signal hérité corrigé",
+    "smsOptOutNotPresent": "Aucun signal hérité présent",
+    "notCentralConsent": "Cette valeur n'est pas le consentement de communication central.",
+    "viewCorrectionHistory": "Voir l'historique des corrections"
   },
   "export": {
     "explanation": "L'exportation télécharge l'état de préférence actuel et l'historique complet de ce patient au format JSON. Les champs secrets/internes uniquement (ex. hachages IP/UA bruts) ne sont jamais inclus."
@@ -98,10 +104,12 @@
     "source": "Source",
     "noticeVersion": "Version de la notice",
     "noticeVersionPlaceholder": "ex. v1.2 (facultatif)",
+    "noticeVersionRequiredPlaceholder": "ex. v1.2 (obligatoire)",
     "noticeVersionRequiredHint": "Obligatoire pour un consentement enregistré depuis cette source.",
     "notes": "Notes",
     "notesPlaceholder": "Brève note sur la déclaration du patient (facultatif)",
-    "sourceDescriptionRequiredHint": "Une brève description de ce qui a été dit/montré est requise pour un consentement enregistré par le personnel."
+    "notesRequiredPlaceholder": "Décrivez ce que le personnel a dit/montré (obligatoire)",
+    "notesRequiredHint": "Une brève description de ce qui a été dit/montré est requise pour un consentement enregistré par le personnel."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Déclaration verbale (registre du personnel)",
@@ -149,6 +157,57 @@
     "unsafe_note": "La note a été rejetée car elle contient un contenu non autorisé.",
     "preference_not_found": "Registre de préférence introuvable.",
     "concurrent_update": "Cet enregistrement a été modifié simultanément. Veuillez réessayer.",
-    "consent_enforcement_disabled": "L'application du consentement est actuellement désactivée."
+    "consent_enforcement_disabled": "L'application du consentement est actuellement désactivée.",
+    "validationSummary": "{{count}} champs sont manquants ou invalides. Veuillez vérifier les champs surlignés."
+  },
+  "legacyCorrection": {
+    "title": "Corriger la désinscription SMS héritée",
+    "warning": "N'utilisez ceci que si la valeur héritée smsOptOut est manifestement obsolète ou incorrecte. Cette action n'accorde PAS de consentement en soi — la préférence de communication centrale reste inchangée. Un motif, un type de preuve et des notes sont requis ; l'action est enregistrée de façon permanente.",
+    "currentValue": "Valeur actuelle",
+    "proposedValue": "Valeur proposée",
+    "smsOptOutActiveValue": "Désinscription SMS : Active",
+    "smsOptOutCorrectedValue": "Désinscription SMS : Corrigée (non active)",
+    "fields": {
+      "reason": "Motif de la correction",
+      "reasonPlaceholder": "Expliquez pourquoi ce signal hérité est obsolète/incorrect (obligatoire)",
+      "reasonRequiredHint": "Un motif de correction est requis.",
+      "evidenceType": "Type de preuve",
+      "notes": "Notes",
+      "notesPlaceholder": "Expliquez la preuve que le signal hérité est obsolète (obligatoire)",
+      "notesRequiredHint": "Des notes du personnel expliquant pourquoi l'ancien signal est considéré comme obsolète sont requises.",
+      "sourceReference": "Référence de la source (facultatif)",
+      "sourceReferencePlaceholder": "ex. journal d'appel téléphonique n°4471 du 18/07/2026"
+    },
+    "confirm": "Corriger et enregistrer",
+    "close": "Fermer",
+    "success": "Le signal hérité de désinscription SMS a été corrigé avec succès.",
+    "evidenceTypes": {
+      "patient_verbal_confirmation": "Confirmation verbale du patient",
+      "signed_form": "Formulaire signé",
+      "documented_import_error": "Erreur d'importation documentée",
+      "other_verified_source": "Autre source vérifiée"
+    },
+    "errors": {
+      "legacy_signal_not_present": "Il n'y a pas de désinscription SMS héritée active à corriger pour ce patient.",
+      "legacy_signal_already_corrected": "Ce signal hérité a déjà été corrigé.",
+      "stale_legacy_signal_state": "Cet enregistrement a été modifié par une autre requête. Veuillez actualiser et réessayer.",
+      "correction_notes_required": "Des notes sont requises.",
+      "correction_reason_required": "Un motif de correction est requis.",
+      "invalid_evidence_type": "Type de preuve invalide.",
+      "unsafe_note": "Ce texte a été rejeté car il contient un contenu non autorisé.",
+      "forbidden": "Vous n'avez pas l'autorisation d'effectuer cette action.",
+      "patient_not_found": "Patient introuvable.",
+      "clinic_scope_mismatch": "Vous n'avez pas accès à ce patient.",
+      "idempotency_conflict": "Cette requête a déjà été soumise avec un contenu différent. Veuillez actualiser.",
+      "generic": "Impossible d'enregistrer cette correction. Veuillez réessayer."
+    }
+  },
+  "legacyCorrectionHistory": {
+    "title": "Historique des corrections de signaux hérités",
+    "empty": "Aucune correction enregistrée pour le moment.",
+    "smsOptOutCorrected": "Désinscription SMS corrigée",
+    "viewDetails": "Voir les détails",
+    "loadingDetail": "Chargement des détails...",
+    "detailFailed": "Échec du chargement des détails."
   }
 }

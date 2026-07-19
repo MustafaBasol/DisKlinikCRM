@@ -56,14 +56,20 @@
     "notRequiredMeaning": "\"Gerekli Değil\" teknik bir politika istisnasıdır (ör. işlemsel/yasal bildirim) — genel pazarlama yetkisi anlamına gelmez."
   },
   "conflict": {
-    "modalNote": "Bu hücrede eski bir kısıtlayıcı sinyal (ör. SMS çıkışı) ile merkezi \"izin verildi\" kaydı çelişiyor. Gönderim engellenir. \"Reddet\" veya \"Geri Çek\" seçimi bu çelişkiyi ÇÖZMEZ — yalnızca eski kısıtlayıcı sinyali kabul ederek merkezi kaydı onunla uyumlu hale getirir. Eski sinyalin hatalı/güncel olmadığını düşünüyorsanız, bunu düzeltecek bir işlev şu anda bulunmamaktadır; bu durum ayrı bir takip konusu olarak kaydedilmelidir."
+    "modalNote": "Bu hücrede eski bir kısıtlayıcı sinyal (ör. SMS çıkışı) ile merkezi \"izin verildi\" kaydı çelişiyor. Gönderim engellenir. Aşağıda \"Reddet\" veya \"Geri Çek\" seçmek bu çelişkiyi ÇÖZMEZ — yalnızca eski kısıtlayıcı sinyali kabul ederek merkezi kaydı onunla uyumlu hale getirir ve bu durum yeni bir merkezi onay olayı olarak kalıcı şekilde kaydedilir; bu, eski sinyalin doğru olduğunu KANITLAMAZ. Eski sinyalin hatalı/güncel olmadığını düşünüyorsanız, aşağıdaki bağlantıyı kullanarak ayrı bir düzeltme kaydı oluşturabilirsiniz — bu işlem kendi başına onay VERMEZ ve merkezi tercihi değiştirmez.",
+    "correctLegacyAction": "Eski SMS Engelleme Kaydını Düzelt / Hatalı Olarak İşaretle"
   },
   "legacySignals": {
     "title": "Eski Kayıt Sinyalleri",
     "disclaimer": "Bu değerler eski (migrasyon öncesi) alanlardır ve mevcut onay durumunu YANSITMAZ. Güncel ve yetkili kaynak yukarıdaki merkezi tercih matrisidir.",
     "communicationConsent": "İletişim İzni (eski alan)",
     "marketingConsent": "Pazarlama İzni (eski alan)",
-    "smsOptOut": "SMS Çıkışı (eski alan)"
+    "smsOptOut": "SMS Çıkışı (eski alan)",
+    "smsOptOutActive": "Aktif eski SMS engelleme kaydı",
+    "smsOptOutCorrected": "Eski kayıt düzeltildi",
+    "smsOptOutNotPresent": "Açık bir eski kayıt bulunmuyor",
+    "notCentralConsent": "Bu değer merkezi iletişim izni değildir.",
+    "viewCorrectionHistory": "Düzeltme Geçmişini Görüntüle"
   },
   "export": {
     "explanation": "Dışa aktarma, bu hasta için mevcut tercih durumunu ve tüm geçmiş kayıtlarını JSON olarak indirir. Gizli/dahili alanlar (ör. IP/UA hash'leri ham haliyle değil) dahil edilmez."
@@ -98,10 +104,12 @@
     "source": "Kaynak",
     "noticeVersion": "Aydınlatma Metni Sürümü",
     "noticeVersionPlaceholder": "örn. v1.2 (isteğe bağlı)",
+    "noticeVersionRequiredPlaceholder": "örn. v1.2 (zorunlu)",
     "noticeVersionRequiredHint": "Bu kaynaktan kaydedilen bir onay için zorunludur.",
     "notes": "Notlar",
     "notesPlaceholder": "Hastanın beyanı hakkında kısa not (isteğe bağlı)",
-    "sourceDescriptionRequiredHint": "Personel tarafından kaydedilen sözlü onay için ne söylendiğine/gösterildiğine dair kısa bir açıklama zorunludur."
+    "notesRequiredPlaceholder": "Personelin ne söylediğini/gösterdiğini açıklayın (zorunlu)",
+    "notesRequiredHint": "Personel tarafından kaydedilen sözlü onay için ne söylendiğine/gösterildiğine dair kısa bir açıklama zorunludur."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Sözlü Beyan (Personel Kaydı)",
@@ -149,6 +157,57 @@
     "unsafe_note": "Not, izin verilmeyen içerik barındırdığı için reddedildi.",
     "preference_not_found": "Tercih kaydı bulunamadı.",
     "concurrent_update": "Kayıt aynı anda başka bir işlemle güncellendi. Lütfen tekrar deneyin.",
-    "consent_enforcement_disabled": "Onay zorlaması şu anda devre dışı."
+    "consent_enforcement_disabled": "Onay zorlaması şu anda devre dışı.",
+    "validationSummary": "{{count}} alan eksik veya hatalı. Lütfen işaretlenen alanları kontrol edin."
+  },
+  "legacyCorrection": {
+    "title": "Eski SMS Engelleme Kaydını Düzelt",
+    "warning": "Bu işlemi yalnızca eski smsOptOut değerinin kanıtlanabilir şekilde hatalı veya güncel olmadığını düşünüyorsanız kullanın. Bu işlem tek başına onay VERMEZ; merkezi iletişim tercihi olduğu gibi kalır. Neden, kanıt türü ve not zorunludur; işlem kalıcı olarak kaydedilir.",
+    "currentValue": "Mevcut Değer",
+    "proposedValue": "Önerilen Değer",
+    "smsOptOutActiveValue": "SMS Engelleme: Aktif",
+    "smsOptOutCorrectedValue": "SMS Engelleme: Düzeltildi (Aktif Değil)",
+    "fields": {
+      "reason": "Düzeltme Nedeni",
+      "reasonPlaceholder": "Bu eski sinyalin neden hatalı/güncel olmadığını açıklayın (zorunlu)",
+      "reasonRequiredHint": "Bir düzeltme nedeni zorunludur.",
+      "evidenceType": "Kanıt Türü",
+      "notes": "Notlar",
+      "notesPlaceholder": "Eski sinyalin hatalı olduğuna dair kanıtı/detayları açıklayın (zorunlu)",
+      "notesRequiredHint": "Eski sinyalin neden hatalı sayıldığını açıklayan personel notu zorunludur.",
+      "sourceReference": "Kaynak Referansı (isteğe bağlı)",
+      "sourceReferencePlaceholder": "örn. 18.07.2026 tarihli telefon görüşmesi kaydı #4471"
+    },
+    "confirm": "Düzelt ve Kaydet",
+    "close": "Kapat",
+    "success": "Eski SMS engelleme kaydı başarıyla düzeltildi.",
+    "evidenceTypes": {
+      "patient_verbal_confirmation": "Hastanın Sözlü Teyidi",
+      "signed_form": "İmzalı Form",
+      "documented_import_error": "Belgelenmiş İçe Aktarma Hatası",
+      "other_verified_source": "Diğer Doğrulanmış Kaynak"
+    },
+    "errors": {
+      "legacy_signal_not_present": "Bu hasta için düzeltilecek aktif bir eski SMS engelleme kaydı yok.",
+      "legacy_signal_already_corrected": "Bu eski kayıt daha önce düzeltilmiş.",
+      "stale_legacy_signal_state": "Kayıt başka bir işlemle değişti. Lütfen sayfayı yenileyip tekrar deneyin.",
+      "correction_notes_required": "Not alanı zorunludur.",
+      "correction_reason_required": "Düzeltme nedeni zorunludur.",
+      "invalid_evidence_type": "Geçersiz kanıt türü.",
+      "unsafe_note": "Metin, izin verilmeyen içerik barındırdığı için reddedildi.",
+      "forbidden": "Bu işlem için yetkiniz yok.",
+      "patient_not_found": "Hasta bulunamadı.",
+      "clinic_scope_mismatch": "Bu hastaya erişim yetkiniz yok.",
+      "idempotency_conflict": "Bu istek daha önce farklı içerikle gönderilmiş. Lütfen sayfayı yenileyin.",
+      "generic": "Düzeltme kaydedilemedi. Lütfen tekrar deneyin."
+    }
+  },
+  "legacyCorrectionHistory": {
+    "title": "Eski Kayıt Düzeltme Geçmişi",
+    "empty": "Henüz bir düzeltme kaydı yok.",
+    "smsOptOutCorrected": "SMS Engelleme Düzeltildi",
+    "viewDetails": "Detayları Görüntüle",
+    "loadingDetail": "Detaylar yükleniyor...",
+    "detailFailed": "Detaylar yüklenemedi."
   }
 }

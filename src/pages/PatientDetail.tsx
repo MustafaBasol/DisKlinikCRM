@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link, Navigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link, Navigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Mail, 
@@ -48,6 +48,14 @@ import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
 import FilePreviewModal, { isInlinePreviewable } from '../components/FilePreviewModal';
 import PatientImagingTab from '../components/imaging/PatientImagingTab';
+import PatientDetailTabs, { type PatientDetailTabItem } from '../components/PatientDetailTabs';
+import {
+  computeVisiblePatientDetailTabs,
+  resolvePatientDetailActiveTab,
+  requiresUrlNormalization,
+  DEFAULT_PATIENT_DETAIL_TAB,
+  type PatientDetailTab,
+} from './patientDetailTabsHelpers';
 import { normalizeRole, canViewPatients, canViewImaging, canManageLegalHold } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
@@ -65,10 +73,52 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'imaging' | 'dental' | 'privacy' | 'communication'>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
   // Klinik görüntüler tıbbi kayıttır: BILLING ve ASSISTANT sekmeyi hiç görmez
   // (server/src/routes/imaging.ts IMAGING_CLINICAL_ROLES ile senkron).
   const canSeeImaging = canViewImaging(user);
+
+  // KVKK-HIGH-008 F-2: the URL is the single source of truth for the active
+  // tab — there is no separate `activeTab` state. This is what lets a direct
+  // link/refresh land on a right-side tab (e.g. "communication") instead of
+  // always resetting to Overview, while still requiring exactly one writer
+  // (goToTab below) to avoid a state/URL sync race.
+  const visibleTabKeys = computeVisiblePatientDetailTabs(canSeeImaging);
+  const requestedTab = searchParams.get('tab');
+  const activeTab: PatientDetailTab = resolvePatientDetailActiveTab(requestedTab, visibleTabKeys);
+
+  // User-initiated tab change — the ONLY place that writes `?tab=`, using a
+  // normal (history-pushing) navigation so back/forward moves between tabs.
+  const goToTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    setSearchParams(next);
+  };
+
+  // Normalization — the ONLY other place that writes `?tab=`, and only when
+  // the param is PRESENT but invalid/unauthorized/feature-disabled (never
+  // when it's simply absent, so an old bookmarked URL with no `?tab=` keeps
+  // defaulting to Overview without ever being rewritten). Uses `replace` so
+  // this correction never pollutes browser history.
+  useEffect(() => {
+    if (requiresUrlNormalization(requestedTab, visibleTabKeys)) {
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', DEFAULT_PATIENT_DETAIL_TAB);
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTab, canSeeImaging]);
+
+  const tabLabel = (tab: PatientDetailTab): string =>
+    tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' })
+    : tab === 'files' ? t('patients:detail.filesTab')
+    : tab === 'imaging' ? t('imaging:tab')
+    : tab === 'dental' ? t('patients:dentalChart.title')
+    : tab === 'privacy' ? 'Gizlilik'
+    : tab === 'communication' ? t('communicationConsent:tab')
+    : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) });
+
+  const tabItems: PatientDetailTabItem[] = visibleTabKeys.map((tab) => ({ key: tab, label: tabLabel(tab) }));
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -330,18 +380,7 @@ const PatientDetail: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex gap-1 sm:gap-4 border-b border-gray-200 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'imaging', 'dental', 'activity', 'privacy', 'communication'] as const).filter(tab => tab !== 'imaging' || canSeeImaging).map(tab => (
-          <button
-            key={tab}
-            data-tab={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'imaging' ? t('imaging:tab') : tab === 'dental' ? t('patients:dentalChart.title') : tab === 'privacy' ? 'Gizlilik' : tab === 'communication' ? t('communicationConsent:tab') : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
-          </button>
-        ))}
-      </div>
+      <PatientDetailTabs tabs={tabItems} activeTab={activeTab} onSelect={goToTab} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Profile Summary (desktop only) */}
@@ -516,7 +555,7 @@ const PatientDetail: React.FC = () => {
                     <Calendar size={17} className="text-primary-500" />
                     {t('patients:detail.overview.upcomingAppointments')}
                   </h3>
-                  <button onClick={() => setActiveTab('appointments')} className="text-xs text-primary-600 hover:underline">
+                  <button onClick={() => goToTab('appointments')} className="text-xs text-primary-600 hover:underline">
                     {t('patients:detail.overview.viewAllAppointments')}
                   </button>
                 </div>
@@ -568,7 +607,7 @@ const PatientDetail: React.FC = () => {
                     <Layers size={17} className="text-purple-500" />
                     {t('patients:detail.overview.activeTreatments')}
                   </h3>
-                  <button onClick={() => setActiveTab('treatments')} className="text-xs text-primary-600 hover:underline">
+                  <button onClick={() => goToTab('treatments')} className="text-xs text-primary-600 hover:underline">
                     {t('patients:detail.overview.viewAllTreatments')}
                   </button>
                 </div>
@@ -622,7 +661,7 @@ const PatientDetail: React.FC = () => {
                     <ClipboardList size={17} className="text-primary-500" />
                     {t('patients:detail.overview.dentalSummary')}
                   </h3>
-                  <button onClick={() => setActiveTab('dental')} className="text-xs text-primary-600 hover:underline">
+                  <button onClick={() => goToTab('dental')} className="text-xs text-primary-600 hover:underline">
                     {t('patients:detail.overview.openDentalChart')}
                   </button>
                 </div>
@@ -661,7 +700,7 @@ const PatientDetail: React.FC = () => {
                     <Activity size={17} className="text-gray-500" />
                     {t('patients:detail.overview.recentActivity')}
                   </h3>
-                  <button onClick={() => setActiveTab('activity')} className="text-xs text-primary-600 hover:underline">
+                  <button onClick={() => goToTab('activity')} className="text-xs text-primary-600 hover:underline">
                     {t('patients:detail.overview.viewAllActivity')}
                   </button>
                 </div>
@@ -1309,11 +1348,18 @@ const PatientDetail: React.FC = () => {
             <CommunicationPreferencesPanel
               patientId={id!}
               canManage={(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const).includes(userCanonicalRole as any)}
+              // KVKK-HIGH-008: the legacy-correction workflow is management-only
+              // (OWNER/ORG_ADMIN/CLINIC_MANAGER) — deliberately narrower than
+              // canManage above, which also includes RECEPTIONIST/DENTIST for
+              // the general matrix. Mirrors the PatientPrivacyPanel canManage
+              // check just above.
+              canCorrectLegacyConsent={userCanonicalRole === 'OWNER' || userCanonicalRole === 'ORG_ADMIN' || userCanonicalRole === 'CLINIC_MANAGER'}
               legacySignals={{
                 communicationConsent: !!patient.communicationConsent,
                 marketingConsent: !!patient.marketingConsent,
                 smsOptOut: !!patient.smsOptOut,
               }}
+              onLegacySignalsChanged={() => fetchPatient()}
             />
           </div>
         )}

@@ -164,6 +164,24 @@ export const communicationPreferencesService = {
       notes?: string | null;
     },
   ) => api.post(`/patients/${patientId}/communication-preferences/bulk`, data),
+  // KVKK-HIGH-008: legacy consent correction workflow — management-only,
+  // never touches the central preference system above.
+  submitLegacySmsOptOutCorrection: (
+    patientId: string,
+    data: {
+      correctionReason: string;
+      notes: string;
+      evidenceType: string;
+      sourceReference?: string | null;
+      expectedCurrentValue: true;
+      expectedSmsOptOutAt?: string | null;
+      idempotencyKey: string;
+    },
+  ) => api.post(`/patients/${patientId}/communication-preferences/legacy-corrections/sms-opt-out`, data),
+  getLegacyCorrections: (patientId: string, params?: { cursor?: string; limit?: number }) =>
+    api.get(`/patients/${patientId}/communication-preferences/legacy-corrections`, { params }),
+  getLegacyCorrectionDetail: (patientId: string, correctionId: string) =>
+    api.get(`/patients/${patientId}/communication-preferences/legacy-corrections/${correctionId}`),
 };
 
 export const appointmentTypeService = {
