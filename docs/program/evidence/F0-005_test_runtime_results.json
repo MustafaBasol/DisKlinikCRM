@@ -1,6 +1,8 @@
 {
   "taskId": "F0-005",
-  "baselineCommit": "5ee0b6af30fff187b7190d649f1fc3e844362105",
+  "baselineCommit": "7fcf2f850f151241266f07349c4bf4442c72bbca",
+  "originalBaselineCommit": "5ee0b6af30fff187b7190d649f1fc3e844362105",
+  "rebaselineNote": "Original runtime measurement was performed at commit 5ee0b6af30fff187b7190d649f1fc3e844362105. On 2026-07-19 the F0-005 branch was merged with origin/main (commit 7fcf2f850f151241266f07349c4bf4442c72bbca, PR #169) and every command below marked rerunAt7fcf2f8=true was re-executed against the merged tree; commands not remarked were not re-executed because their inputs (bridge-agent/, windows-bridge/) were not touched by the merge — see evidence doc §1a.",
   "environment": {
     "os": "Windows 10 (10.0.19045)",
     "nodeVersion": "v24.18.0",
@@ -17,8 +19,10 @@
       "workingDirectory": "server/",
       "durationSeconds": 25,
       "exitCode": 0,
+      "rerunAt7fcf2f8": false,
       "notes": [
-        "clean install from committed package-lock.json, 381 packages"
+        "clean install from committed package-lock.json, 381 packages",
+        "NOT re-run for the 2026-07-19 rebaseline — server/package-lock.json was not touched by the merge from origin/main (verified via `git diff 5ee0b6a 7fcf2f8 --stat -- server/package-lock.json`, empty), so the existing node_modules/ install remains trustworthy."
       ]
     },
     {
@@ -27,8 +31,10 @@
       "workingDirectory": "server/",
       "durationSeconds": 11,
       "exitCode": 0,
+      "rerunAt7fcf2f8": true,
       "notes": [
-        "required before ANY test/typecheck can import @prisma/client — first attempt to run tests without this failed with \"SyntaxError: The requested module '@prisma/client' does not provide an export named 'PrismaClient'\""
+        "required before ANY test/typecheck can import @prisma/client — first attempt to run tests without this failed with \"SyntaxError: The requested module '@prisma/client' does not provide an export named 'PrismaClient'\"",
+        "Re-run for the 2026-07-19 rebaseline because the merge changed server/prisma/schema.prisma (+134/-2 lines, new migration 20260718164142_add_communication_preference_and_consent). Re-run duration: 3s (faster — engine binaries already cached). Exit 0, clean."
       ]
     },
     {
@@ -37,8 +43,10 @@
       "workingDirectory": "server/",
       "durationSeconds": 45,
       "exitCode": 0,
+      "rerunAt7fcf2f8": true,
       "notes": [
-        "npx prisma generate && tsc --noEmit; clean, zero errors"
+        "npx prisma generate && tsc --noEmit; clean, zero errors",
+        "Re-run for the 2026-07-19 rebaseline (schema change). Re-run duration: 49s. Exit 0, clean, zero errors — unchanged result."
       ]
     },
     {
@@ -47,8 +55,10 @@
       "workingDirectory": "(repo root)",
       "durationSeconds": 23,
       "exitCode": 0,
+      "rerunAt7fcf2f8": false,
       "notes": [
-        "336 packages; npm audit reports 2 pre-existing vulnerabilities (1 moderate, 1 high) — observed, not remediated (out of scope)"
+        "336 packages; npm audit reports 2 pre-existing vulnerabilities (1 moderate, 1 high) — observed, not remediated (out of scope)",
+        "NOT re-run for the 2026-07-19 rebaseline — root package-lock.json was not touched by the merge from origin/main; existing node_modules/ remains trustworthy."
       ]
     },
     {
@@ -57,8 +67,10 @@
       "workingDirectory": "(repo root)",
       "durationSeconds": 54,
       "exitCode": 0,
+      "rerunAt7fcf2f8": true,
       "notes": [
-        "tsc -b && vite build; clean, zero type errors; vite emits a pre-existing chunk-size warning (dicom-viewer-libs 2.77MB, index 814KB) — observed, not remediated"
+        "tsc -b && vite build; clean, zero type errors; vite emits a pre-existing chunk-size warning (dicom-viewer-libs 2.77MB, index 814KB) — observed, not remediated",
+        "Re-run for the 2026-07-19 rebaseline (merge added src/components/CommunicationPreferencesPanel.tsx and related frontend files). Re-run duration: 71s. Exit 0, clean, zero type errors — same pre-existing chunk-size warning, no new warnings."
       ]
     },
     {
@@ -67,8 +79,10 @@
       "workingDirectory": "bridge-agent/",
       "durationSeconds": 6,
       "exitCode": 0,
+      "rerunAt7fcf2f8": false,
       "notes": [
-        "23 packages"
+        "23 packages",
+        "NOT re-run for the 2026-07-19 rebaseline — bridge-agent/ was not touched by the merge from origin/main (verified via `git diff 5ee0b6a 7fcf2f8 --name-only`, no bridge-agent/ or windows-bridge/ paths present)."
       ]
     },
     {
@@ -82,8 +96,10 @@
       "failed": 0,
       "skipped": 0,
       "repeatability": "NOT_REPEATED (single run only)",
+      "rerunAt7fcf2f8": false,
       "notes": [
-        "chains all 9 bridge-agent/tests/*.test.ts files; 16+9+14+17+17+9+10+6+7=105"
+        "chains all 9 bridge-agent/tests/*.test.ts files; 16+9+14+17+17+9+10+6+7=105",
+        "NOT re-run for the 2026-07-19 rebaseline — bridge-agent/ source and tests were not touched by the merge from origin/main; result carried forward unchanged."
       ]
     },
     {
@@ -97,10 +113,46 @@
       "failed": 1,
       "skipped": 0,
       "repeatability": "STABLE_FAIL for the one failing assertion (reproduced in run-2 below); the other 52 scripts were STABLE_PASS on their single run",
+      "rerunAt7fcf2f8": true,
       "notes": [
         "Chains 54 scripts with && — chain stopped after test:clinic-bulk-export failed, so test:security-incidents (the 54th/last script) never ran in this invocation.",
         "2481 = sum of all passed counts across the 53 scripts that ran (see per-script breakdown in scripts[] below).",
-        "The single failure is clinicBulkExport.test.ts \"status DTO never serializes sensitive fields\" — root-caused to a Windows/CRLF line-ending artifact (git core.autocrlf=true checks the file out with \\r\\n; the test does an exact-string indexOf() search containing a literal \\n), NOT a real product defect. Confirmed via byte-level inspection of server/src/routes/clinicBulkExport.ts."
+        "The single failure is clinicBulkExport.test.ts \"status DTO never serializes sensitive fields\" — root-caused to a Windows/CRLF line-ending artifact (git core.autocrlf=true checks the file out with \\r\\n; the test does an exact-string indexOf() search containing a literal \\n), NOT a real product defect. Confirmed via byte-level inspection of server/src/routes/clinicBulkExport.ts.",
+        "Re-run for the 2026-07-19 rebaseline at commit 7fcf2f850f151241266f07349c4bf4442c72bbca (durationSeconds now 115, up from 107 — noise, not a regression): chain now has 56 scripts (2 more than the original 54 — test:communication-consent and test:communication-consent-backfill were appended by PR #169 after test:security-incidents). The chain still halts at script 53 (test:clinic-bulk-export) for the identical CRLF-related reason, so scripts 54-56 still never run in this invocation. Result unchanged: 2481 passed, 1 failed across the same 53 scripts. The 2 new scripts were run individually — see server-communication-consent and server-communication-consent-backfill below."
+      ]
+    },
+    {
+      "id": "server-communication-consent",
+      "command": "npm run test:communication-consent",
+      "workingDirectory": "server/",
+      "durationSeconds": null,
+      "exitCode": 1,
+      "suiteCount": 1,
+      "passed": 4,
+      "failed": 88,
+      "skipped": 0,
+      "repeatability": "BLOCKED",
+      "rerunAt7fcf2f8": true,
+      "notes": [
+        "New test added by PR #169 (commit 7fcf2f850f151241266f07349c4bf4442c72bbca), not present in the original 534b66e baseline; added to this rebaseline because it is part of the merged main tree.",
+        "Requires a reachable Postgres DATABASE_URL (per the file's own header comment) — none is available in this environment (same blocker as securityIncident.test.ts, no committed disposable-DB provisioning; see blockedMeasurements below). 88 of 92 total assertions fail with `Invalid prisma.organization.create() invocation ... ECONNREFUSED`; only 4 DB-free assertions pass (disabled-mode test #15, evidence-sanitization tests #29-31). Environment blocker, not a product defect."
+      ]
+    },
+    {
+      "id": "server-communication-consent-backfill",
+      "command": "npm run test:communication-consent-backfill",
+      "workingDirectory": "server/",
+      "durationSeconds": null,
+      "exitCode": 1,
+      "suiteCount": 1,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "repeatability": "BLOCKED",
+      "rerunAt7fcf2f8": true,
+      "notes": [
+        "New test added by PR #169 (commit 7fcf2f850f151241266f07349c4bf4442c72bbca), not present in the original 534b66e baseline; added to this rebaseline because it is part of the merged main tree.",
+        "Crashes with an uncaught PrismaClientKnownRequestError (ECONNREFUSED, ::1:5432 and 127.0.0.1:5432) inside createFixture(), called directly in main() before any of the file's 7 named test() calls run — no pass/fail tally is ever printed by the script itself. Same DATABASE_URL blocker as securityIncident.test.ts and communicationConsent.test.ts, not a code defect."
       ]
     },
     {
@@ -114,8 +166,10 @@
       "failed": 1,
       "skipped": 0,
       "repeatability": "STABLE_FAIL — identical single failure reproduced",
+      "rerunAt7fcf2f8": false,
       "notes": [
-        "repeat run per task instructions for a failing suite; same test, same failure, confirms deterministic (CRLF-caused) rather than flaky"
+        "repeat run per task instructions for a failing suite; same test, same failure, confirms deterministic (CRLF-caused) rather than flaky",
+        "Not independently repeated again for the 2026-07-19 rebaseline — server-full-test-run-1 already reconfirmed the identical single failure at commit 7fcf2f850f151241266f07349c4bf4442c72bbca."
       ]
     },
     {
@@ -129,8 +183,10 @@
       "failed": 8,
       "skipped": 0,
       "repeatability": "BLOCKED",
+      "rerunAt7fcf2f8": true,
       "notes": [
-        "first 8 assertions (pure sanitization/hashing logic) pass; all subsequent assertions fail with \"Invalid `prisma.platformAdmin.create()` invocation\" — no reachable DATABASE_URL / disposable Postgres instance. Environment blocker, not a deterministic code defect."
+        "first 8 assertions (pure sanitization/hashing logic) pass; all subsequent assertions fail with \"Invalid `prisma.platformAdmin.create()` invocation\" — no reachable DATABASE_URL / disposable Postgres instance. Environment blocker, not a deterministic code defect.",
+        "Re-run for the 2026-07-19 rebaseline — identical result (8 passed, 8 failed, same ECONNREFUSED cause)."
       ]
     },
     {
@@ -144,9 +200,11 @@
       "failed": 2,
       "skipped": 0,
       "repeatability": "overdue-installments STABLE_FAIL (reproduced 2x, identical 2 failures both times); other 5 STABLE_PASS on single run",
+      "rerunAt7fcf2f8": true,
       "notes": [
         "These 6 scripts exist in server/package.json but are NEVER called from the `npm run test` chain — they were run individually to complete the inventory.",
-        "test:overdue-installments has 2 GENUINE deterministic failures (not environmental, not CRLF-related): the test asserts the production `overdueInstallmentWhere()` query filters status strictly to the literal value \"pending\" and that isInstallmentOverdue() treats a literal status=\"overdue\" value as never-written/always-false. The actual production code now queries `status: { in: ['pending', 'overdue'] }` and isInstallmentOverdue() returns true for status=\"overdue\". This is real behavioral drift between an orphaned test (never run by CI or the full `npm run test` chain) and the production code it was written to protect."
+        "test:overdue-installments has 2 GENUINE deterministic failures (not environmental, not CRLF-related): the test asserts the production `overdueInstallmentWhere()` query filters status strictly to the literal value \"pending\" and that isInstallmentOverdue() treats a literal status=\"overdue\" value as never-written/always-false. The actual production code now queries `status: { in: ['pending', 'overdue'] }` and isInstallmentOverdue() returns true for status=\"overdue\". This is real behavioral drift between an orphaned test (never run by CI or the full `npm run test` chain) and the production code it was written to protect.",
+        "Re-run for the 2026-07-19 rebaseline — all 6 scripts (101 passed, 2 failed total) reproduced identically, including the same 2 named test:overdue-installments failures."
       ]
     },
     {
@@ -160,23 +218,27 @@
       "failed": 0,
       "skipped": 0,
       "repeatability": "STABLE_PASS on single run",
+      "rerunAt7fcf2f8": true,
       "notes": [
-        "these 6 files have NO package.json script at all — the only way to run them is a direct tsx invocation; all pass cleanly"
+        "these 6 files have NO package.json script at all — the only way to run them is a direct tsx invocation; all pass cleanly",
+        "Re-run for the 2026-07-19 rebaseline — identical result (15+28+29+58+24+23=177 passed, 0 failed)."
       ]
     },
     {
       "id": "frontend-tests",
-      "command": "5 individual npm run test:* invocations (dicom-helpers, onboarding-helpers, pairing-poller, booking-widget-helpers, clinic-bulk-export-selection)",
+      "command": "6 individual npm run test:* invocations (dicom-helpers, onboarding-helpers, pairing-poller, booking-widget-helpers, clinic-bulk-export-selection, communication-consent-matrix)",
       "workingDirectory": "(repo root)",
       "durationSeconds": null,
       "exitCode": 0,
-      "suiteCount": 5,
-      "passed": 115,
+      "suiteCount": 6,
+      "passed": 128,
       "failed": 0,
       "skipped": 0,
       "repeatability": "STABLE_PASS on single run",
+      "rerunAt7fcf2f8": true,
       "notes": [
-        "36+21+8+26+24=115; no aggregate \"run all frontend tests\" script exists — each must be invoked individually"
+        "36+21+8+26+24+13=128; no aggregate \"run all frontend tests\" script exists — each must be invoked individually.",
+        "Re-run for the 2026-07-19 rebaseline: the original 5 scripts reproduced identically (36+21+8+26+24=115 passed, 0 failed); test:communication-consent-matrix is new (added by PR #169) and was run for the first time (13 passed, 0 failed)."
       ]
     },
     {
@@ -185,8 +247,10 @@
       "workingDirectory": "windows-bridge/",
       "durationSeconds": null,
       "exitCode": 1,
+      "rerunAt7fcf2f8": false,
       "notes": [
-        "BLOCKED before any test ran: \"Requested SDK version: 10.0.301 ... Installed SDKs: 9.0.305\". windows-bridge/global.json pins an SDK version not present on this machine. Not attempted to install a new SDK (outside this task’s repository-only, non-destructive scope). Static count only: 247+2+91+14=354 approx. [Fact]/[Theory] attributes across the 4 test projects (grep-counted, not executed)."
+        "BLOCKED before any test ran: \"Requested SDK version: 10.0.301 ... Installed SDKs: 9.0.305\". windows-bridge/global.json pins an SDK version not present on this machine. Not attempted to install a new SDK (outside this task’s repository-only, non-destructive scope). Static count only: 247+2+91+14=354 approx. [Fact]/[Theory] attributes across the 4 test projects (grep-counted, not executed).",
+        "NOT re-run for the 2026-07-19 rebaseline — windows-bridge/ was not touched by the merge from origin/main, and the SDK blocker is an unrelated, unchanged environment fact."
       ]
     },
     {
@@ -200,8 +264,10 @@
       "failed": 0,
       "skipped": 0,
       "repeatability": "STABLE_PASS on single run",
+      "rerunAt7fcf2f8": false,
       "notes": [
-        "26+17+8+7=58; run under Windows PowerShell 5.1 (powershell.exe) even though CI declares `shell: pwsh` (PowerShell 7) — all 4 scripts are hand-rolled Add-Result pass/fail harnesses (not Pester), and ran successfully on 5.1 without modification"
+        "26+17+8+7=58; run under Windows PowerShell 5.1 (powershell.exe) even though CI declares `shell: pwsh` (PowerShell 7) — all 4 scripts are hand-rolled Add-Result pass/fail harnesses (not Pester), and ran successfully on 5.1 without modification",
+        "NOT re-run for the 2026-07-19 rebaseline — windows-bridge/ was not touched by the merge from origin/main; result carried forward unchanged."
       ]
     }
   ],
@@ -214,6 +280,16 @@
     {
       "item": "3 server/scripts/verify-*.ts manual lifecycle scripts",
       "reason": "Same as above — explicitly documented in each script’s own header as requiring `DATABASE_URL=postgresql://.../throwaway_db` and a prior `prisma migrate deploy`, and explicitly NOT wired into npm test by original design.",
+      "exactMissingPrerequisite": "Same as securityIncident.test.ts."
+    },
+    {
+      "item": "server/src/tests/communicationConsent.test.ts (added by PR #169, commit 7fcf2f850f151241266f07349c4bf4442c72bbca) — 88 of 92 assertions",
+      "reason": "Same as securityIncident.test.ts — requires a reachable PostgreSQL instance via DATABASE_URL; no committed disposable-DB provisioning exists in the repository.",
+      "exactMissingPrerequisite": "Same as securityIncident.test.ts."
+    },
+    {
+      "item": "server/src/tests/communicationPreferenceBackfill.test.ts (added by PR #169, commit 7fcf2f850f151241266f07349c4bf4442c72bbca) — entire file (crashes before any test() runs)",
+      "reason": "Same as securityIncident.test.ts — createFixture() requires a reachable PostgreSQL instance via DATABASE_URL; no committed disposable-DB provisioning exists in the repository.",
       "exactMissingPrerequisite": "Same as securityIncident.test.ts."
     },
     {

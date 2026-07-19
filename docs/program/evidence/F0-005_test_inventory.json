@@ -1,7 +1,9 @@
 {
   "taskId": "F0-005",
-  "baselineCommit": "5ee0b6af30fff187b7190d649f1fc3e844362105",
-  "generatedAt": "2026-07-18",
+  "baselineCommit": "7fcf2f850f151241266f07349c4bf4442c72bbca",
+  "originalBaselineCommit": "5ee0b6af30fff187b7190d649f1fc3e844362105",
+  "rebaselineNote": "This inventory was originally generated at commit 5ee0b6af30fff187b7190d649f1fc3e844362105 (97 entries, generatedAt 2026-07-18). On 2026-07-19, the F0-005 branch was merged with origin/main (a normal, non-force merge, no conflicts) to bring in commit 7fcf2f850f151241266f07349c4bf4442c72bbca (PR #169, communication preference and consent management), which added 3 test files not present in the original baseline. This rebaseline adds those 3 files (testFiles[] BE-communicationConsent, BE-communicationPreferenceBackfill, FE-communicationConsentMatrixHelpers) and updates every derived total/summary accordingly; all pre-existing 97 entries were independently re-verified against this same commit and are unchanged in count, pass/fail result, or classification.",
+  "generatedAt": "2026-07-19",
   "domainSource": "docs/program/MODULE_MAP.md + docs/program/evidence/F0-003_module_ownership_inventory.json (34 F0-003 domains; test→domain assignments reused directly from F0-003’s own `tests[]` field per domain where present, 68/70 backend files; 2 files absent from F0-003’s map (dataRetentionCleanupJob.test.ts, messageTemplatePurpose.test.ts) and all 5 frontend test files were assigned fresh by this task from direct file-content evidence; 10 multi-domain backend files had a canonical primary chosen by this task per the \"behavior principally protected\" rule — see evidence doc §3)",
   "dependencySource": "docs/program/DEPENDENCY_MAP.md + docs/program/evidence/F0-004_dependency_inventory.json (9 HIGH_RISK_BOUNDARY_VIOLATION edges, F0004-E0608/E0608/E0670/E0674/E0675/E0684/E0695/E0696/E0702/E0703)",
   "scopeNote": "windows-bridge C# tests are inventoried at project/script granularity (4 dotnet test projects + 4 installer PowerShell scripts), not per-.cs-file/per-method, given their volume (~354 Fact/Theory methods) — see evidence doc §6.",
@@ -348,6 +350,87 @@
         "note": "executed via direct `npx tsx src/tests/clinicLegalProfile.test.ts` — no package.json script wires this file"
       },
       "repeatRunStatus": "STABLE_PASS (single run; not repeated a 2nd time — see task cap of 2 full-suite runs)"
+    },
+    {
+      "id": "BE-communicationConsent",
+      "path": "server/src/tests/communicationConsent.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [
+        "Messaging — WhatsApp",
+        "Messaging — SMS"
+      ],
+      "testType": "DATABASE_INTEGRATION",
+      "secondaryTypes": [
+        "PRIVACY_KVKK",
+        "PROVIDER_ADAPTER"
+      ],
+      "addedBy": "Merged into main at commit 7fcf2f850f151241266f07349c4bf4442c72bbca (PR #169, 2026-07-19), after this task's original baseline (534b66e) was recorded; added to this inventory by this task's rebaseline following a merge from origin/main into the F0-005 branch — see evidence doc §1a.",
+      "sourceFilesProtected": [
+        "server/src/services/communicationConsent/communicationConsentPolicy.ts",
+        "server/src/services/communicationConsent/communicationConsentAdmin.ts",
+        "server/src/services/communicationConsent/consentEvidenceSanitizer.ts",
+        "server/src/services/communicationConsent/enforcementConfig.ts",
+        "server/src/services/communicationConsent/taxonomy.ts",
+        "server/src/services/sms/smsService.ts",
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/routes/communicationPreferences.ts"
+      ],
+      "command": "npm run test:communication-consent",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper)",
+      "dbRequired": "yes — real Postgres via DATABASE_URL; exercises actual Prisma transactions, the DB unique-constraint on (patientId, clinicId, channel, purpose), and a real 20-concurrent-call race (section F); only 4 of 92 observed assertions are DB-free (disabled-mode test #15, evidence-sanitization tests #29-31)",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no (WhatsApp send-time integration, section I, is exercised via an EvolutionWhatsAppProvider.prototype.sendMessage spy, not a live network call)",
+      "externalProviderMode": "SMS/WhatsApp provider send calls are spied/stubbed at the provider-class-method level, not live",
+      "envVarsRequired": [
+        "DATABASE_URL"
+      ],
+      "orderSensitive": "no per-test isolation (each test creates its own fixture data), but every section after #1 depends on a reachable DB from the start",
+      "timingSensitive": "yes (section F issues 20 concurrent mixed grant/deny/withdraw calls against real DB rows to verify race-safe revision ordering)",
+      "lineCount": 1515,
+      "testCaseCount": 92,
+      "observedRuntime": {
+        "passed": 4,
+        "failed": 88,
+        "note": "BLOCKED — 88 of 92 assertions require a reachable Postgres DATABASE_URL, which is not available in this environment (no committed disposable-DB provisioning; see F0-005's original §8 finding, unchanged by this rebaseline). Only the 4 DB-free assertions pass. This is the same class of environment blocker as securityIncident.test.ts, not a product defect. testCaseCount (92) exceeds the 61 static test() call sites because sections H and I generate multiple named sub-cases per call site inside loops (per-source and per-dispatcher iteration)."
+      },
+      "repeatRunStatus": "BLOCKED (reproduced — identical ECONNREFUSED result on every attempt in this environment)"
+    },
+    {
+      "id": "BE-communicationPreferenceBackfill",
+      "path": "server/src/tests/communicationPreferenceBackfill.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [
+        "Patients"
+      ],
+      "testType": "DATABASE_INTEGRATION",
+      "secondaryTypes": [
+        "MIGRATION"
+      ],
+      "addedBy": "Merged into main at commit 7fcf2f850f151241266f07349c4bf4442c72bbca (PR #169, 2026-07-19), after this task's original baseline (534b66e) was recorded; added to this inventory by this task's rebaseline following a merge from origin/main into the F0-005 branch — see evidence doc §1a.",
+      "sourceFilesProtected": [
+        "server/src/scripts/backfillCommunicationPreferences.ts"
+      ],
+      "command": "npm run test:communication-consent-backfill",
+      "runner": "tsx (no test framework — node:assert/strict + hand-rolled test()/section() helper); spawns the actual script as a real child process via node:child_process.exec (dry-run, then --execute) rather than importing it directly",
+      "dbRequired": "yes — real Postgres via DATABASE_URL; createFixture() runs directly in main() before any test() wrapper, so a DB outage fails the whole file rather than one named test",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [
+        "DATABASE_URL"
+      ],
+      "orderSensitive": "yes — all 7 named test() calls share one fixture created once in main() and assert on cumulative DB state across a dry-run step, an --execute step, and a re-run --execute step, in that sequence",
+      "timingSensitive": "no",
+      "lineCount": 166,
+      "testCaseCount": 7,
+      "observedRuntime": {
+        "passed": 0,
+        "failed": 0,
+        "note": "BLOCKED — crashes with an uncaught PrismaClientKnownRequestError (ECONNREFUSED) inside createFixture(), called directly in main() before any of the 7 named test() calls execute; no pass/fail tally is ever printed. Same environment blocker as securityIncident.test.ts and communicationConsent.test.ts (no reachable DATABASE_URL in this environment), not a code defect."
+      },
+      "repeatRunStatus": "BLOCKED (reproduced — identical ECONNREFUSED crash on every attempt in this environment)"
     },
     {
       "id": "BE-contactRequests",
@@ -2546,6 +2629,37 @@
       "repeatRunStatus": "NOT_REPEATED (single run only)"
     },
     {
+      "id": "FE-communicationConsentMatrixHelpers",
+      "path": "src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "secondaryDomains": [],
+      "testType": "FRONTEND_UTILITY",
+      "secondaryTypes": [],
+      "addedBy": "Merged into main at commit 7fcf2f850f151241266f07349c4bf4442c72bbca (PR #169, 2026-07-19), after this task's original baseline (534b66e) was recorded; added to this inventory by this task's rebaseline following a merge from origin/main into the F0-005 branch — see evidence doc §1a.",
+      "sourceFilesProtected": [
+        "src/components/communicationConsentMatrixHelpers.ts",
+        "src/components/CommunicationPreferencesPanel.tsx"
+      ],
+      "command": "npm run test:communication-consent-matrix",
+      "runner": "tsx (no test framework, no DOM/React Testing Library in repo — pure-logic tests only)",
+      "dbRequired": "none",
+      "redisRequired": "no",
+      "filesystemRequired": "no",
+      "networkRequired": "no",
+      "externalProviderMode": "n/a",
+      "envVarsRequired": [],
+      "orderSensitive": "no",
+      "timingSensitive": "no",
+      "lineCount": null,
+      "testCaseCount": null,
+      "observedRuntime": {
+        "passed": 13,
+        "failed": 0,
+        "note": "13 passed, 0 failed"
+      },
+      "repeatRunStatus": "NOT_REPEATED (single run only)"
+    },
+    {
       "id": "BRA-archiveStrategy",
       "path": "bridge-agent/tests/archiveStrategy.test.ts",
       "canonicalOwner": "Imaging — Device Bridge / Windows Bridge",
@@ -3159,14 +3273,15 @@
   "commands": [
     {
       "script": "server/package.json:test",
-      "underlyingCommand": "54 chained tsx invocations (see file_to_scripts mapping)",
-      "filesReached": 54,
+      "underlyingCommand": "56 chained tsx invocations (see file_to_scripts mapping) — 2 more than the original 534b66e baseline (test:communication-consent, test:communication-consent-backfill appended after test:security-incidents by PR #169/commit 7fcf2f850f151241266f07349c4bf4442c72bbca)",
+      "filesReached": 56,
       "prerequisites": "npx prisma generate must run first (not automatic)",
       "overlapsWith": "every individual test:* script it chains",
       "accuratelyNamed": true,
       "inFullSuite": true,
       "calledFromCi": false,
-      "orphaned": false
+      "orphaned": false,
+      "note": "the chain still halts at the same position as the original baseline — test:clinic-bulk-export (script 53) fails, so scripts 54-56 (test:security-incidents, test:communication-consent, test:communication-consent-backfill) never run inside this invocation; all 3 were run individually to complete the inventory (all BLOCKED — see testFiles[])"
     },
     {
       "script": "server/package.json:typecheck",
@@ -3244,7 +3359,7 @@
     },
     {
       "domain": "Privacy / Consent / Retention / Data Subject Rights",
-      "ownedTestCount": 13
+      "ownedTestCount": 16
     },
     {
       "domain": "Messaging — WhatsApp",
@@ -3437,7 +3552,7 @@
     ],
     "migrationGaps": [
       "No automated migration up/down test exists in the repository. The 3 server/scripts/verify-*.ts scripts are the closest equivalent (real-Postgres lifecycle proofs for specific KVKK features) but are explicitly NOT wired into any test runner and require a manually-provisioned disposable database — see §8 Runtime Results.",
-      "securityIncident.test.ts is the only .test.ts file that requires a real database connection, and it could not be executed in this task (see §8/§9) — meaning the security-incident domain’s DATABASE_INTEGRATION coverage is entirely unverified in this baseline."
+      "securityIncident.test.ts, communicationConsent.test.ts, and communicationPreferenceBackfill.test.ts are the only 3 .test.ts files that require a real database connection, and none of the 3 could be executed to completion in this environment (see §8/§9 and the rebaseline note in §1a) — meaning the security-incident domain's and the Privacy domain's new consent/backfill DATABASE_INTEGRATION coverage are both entirely unverified in this baseline."
     ],
     "frontendGaps": [
       "The frontend has NO test runner, NO React Testing Library, and NO DOM/component-rendering test harness of any kind (confirmed by explicit statements in all 5 frontend test file headers). All 5 frontend tests are FRONTEND_UTILITY-only — pure extracted-function logic. There is zero FRONTEND_COMPONENT coverage anywhere in the repository.",
@@ -3512,18 +3627,21 @@
     },
     {
       "domain": "Privacy / Consent / Retention / Data Subject Rights",
-      "ownedTestCount": 13,
+      "ownedTestCount": 16,
       "ownedTestFiles": [
         "server/src/tests/aiPrivacyBoundary.test.ts",
         "server/src/tests/channelConsentFlowResume.test.ts",
         "server/src/tests/channelConsentGate.test.ts",
         "server/src/tests/clinicBulkExport.test.ts",
         "server/src/tests/clinicLegalProfile.test.ts",
+        "server/src/tests/communicationConsent.test.ts",
+        "server/src/tests/communicationPreferenceBackfill.test.ts",
         "server/src/tests/dataRetentionCleanupJob.test.ts",
         "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
         "server/src/tests/patientPrivacy.test.ts",
         "server/src/tests/publicBookingNoticeEvidence.test.ts",
         "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
+        "src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
         "server/scripts/verify-attachment-legal-hold-lifecycle.ts",
         "server/scripts/verify-clinic-bulk-export-lifecycle.ts",
         "server/scripts/verify-export-archive-lifecycle.ts"
@@ -3534,11 +3652,14 @@
         "npx tsx server/src/tests/channelConsentGate.test.ts",
         "npm run test:clinic-bulk-export",
         "npx tsx server/src/tests/clinicLegalProfile.test.ts",
+        "npm run test:communication-consent (BLOCKED in this environment — requires DATABASE_URL)",
+        "npm run test:communication-consent-backfill (BLOCKED in this environment — requires DATABASE_URL)",
         "npm run test:data-retention",
         "npm run test:kvkk-lifecycle",
         "npm run test:patient-privacy",
         "npm run test:notice-evidence",
         "npm run test:clinic-bulk-export-selection",
+        "npm run test:communication-consent-matrix",
         "DATABASE_URL=<disposable> npx tsx server/scripts/verify-attachment-legal-hold-lifecycle.ts (manual only, never wired into npm test by design)",
         "DATABASE_URL=<disposable> npx tsx server/scripts/verify-clinic-bulk-export-lifecycle.ts (manual only, never wired into npm test by design)",
         "DATABASE_URL=<disposable> npx tsx server/scripts/verify-export-archive-lifecycle.ts (manual only, never wired into npm test by design)"
