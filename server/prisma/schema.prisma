@@ -101,6 +101,7 @@ model Clinic {
   clinicBulkExportPwAttempts    ClinicBulkExportPasswordAttempt[]
   communicationPreferences      PatientCommunicationPreference[]
   communicationConsentEvents    PatientCommunicationConsentEvent[]
+  legacyConsentCorrections      PatientLegacyConsentCorrection[]
 
   @@unique([organizationId, slug])
 }
@@ -175,6 +176,7 @@ model User {
   imagingStudiesCreated        ImagingStudy[]                 @relation("ImagingStudyCreator")
   imagingBridgeAgentsCreated   ImagingBridgeAgent[]           @relation("ImagingBridgeAgentCreator")
   imagingBridgePairingsCreated ImagingBridgePairing[]         @relation("ImagingBridgePairingCreator")
+  legacyConsentCorrections     PatientLegacyConsentCorrection[]
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -275,6 +277,7 @@ model Patient {
   imagingStudies                ImagingStudy[]
   communicationPreferences      PatientCommunicationPreference[]
   communicationConsentEvents    PatientCommunicationConsentEvent[]
+  legacyConsentCorrections      PatientLegacyConsentCorrection[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -1358,6 +1361,7 @@ model Organization {
   instagramConversationMessages InstagramConversationMessage[]
   postTreatmentTemplates        PostTreatmentMessageTemplate[]
   postTreatmentQueue            PostTreatmentMessageQueue[]
+  legacyConsentCorrections      PatientLegacyConsentCorrection[]
 }
 
 model UserClinic {
@@ -2153,6 +2157,57 @@ model CommunicationConsentConflictBucket {
   @@unique([organizationId, clinicId, channel, purpose, reasonCode, bucketStartedAt])
   @@index([organizationId, clinicId, createdAt])
   @@index([bucketStartedAt])
+}
+
+/// Closed set of legacy consent-adjacent fields that support a supported,
+/// audited correction workflow. Extend by adding an enum value (additive
+/// migration) — never widen fieldName to a free-form string, since the
+/// correction workflow's behavior (which Patient column it flips, which
+/// error codes apply) is hard-coded per value, not data-driven.
+enum PatientLegacyConsentField {
+  SMS_OPT_OUT
+}
+
+/// Immutable, create-only evidence record for KVKK-HIGH-008: an authorized
+/// management user (OWNER/ORG_ADMIN/CLINIC_MANAGER) marking a legacy consent
+/// signal (e.g. Patient.smsOptOut) as stale/incorrect. This is NOT a central
+/// consent grant/deny/withdraw event — it never touches
+/// PatientCommunicationPreference/PatientCommunicationConsentEvent and never
+/// grants consent. No update/delete route exists or should ever exist for
+/// this model; there is deliberately no updatedAt column.
+model PatientLegacyConsentCorrection {
+  id                 String                    @id @default(uuid())
+  organizationId     String
+  organization       Organization              @relation(fields: [organizationId], references: [id])
+  clinicId           String
+  clinic             Clinic                    @relation(fields: [clinicId], references: [id])
+  patientId          String
+  patient            Patient                   @relation(fields: [patientId], references: [id])
+  fieldName          PatientLegacyConsentField
+  previousValue      Boolean
+  newValue           Boolean
+  /// Verbatim copy of the live field's prior "recorded at" timestamp (e.g.
+  /// Patient.smsOptOutAt) at the moment of correction — preserved here even
+  /// though the live column is cleared, so historical meaning is never lost.
+  previousRecordedAt DateTime?
+  correctionReason   String
+  evidenceType       String
+  /// Optional external citation (e.g. "phone call log ref 2026-07-18") — NOT
+  /// the same concept as PatientCommunicationPreference.source.
+  sourceReference    String?
+  notes              String
+  correctedById      String
+  correctedBy        User                      @relation(fields: [correctedById], references: [id])
+  /// Client-supplied replay-protection key, scoped per (organizationId, patientId).
+  idempotencyKey     String
+  /// SHA-256 over a fixed-order canonical payload — detects a reused key with
+  /// different content. Never returned in any API response or log.
+  requestFingerprint String
+  createdAt          DateTime                  @default(now())
+
+  @@unique([organizationId, patientId, idempotencyKey])
+  @@index([patientId, createdAt])
+  @@index([organizationId, clinicId, createdAt])
 }
 
 // ── SMS Add-on Module ─────────────────────────────────────────────────────────
