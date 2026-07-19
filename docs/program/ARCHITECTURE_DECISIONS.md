@@ -1,6 +1,6 @@
 # ARCHITECTURE_DECISIONS — ADR İndeksi
 
-Son güncelleme: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Decision Set)
+Son güncelleme: 2026-07-19 (F0-010 — Queue and Transactional Outbox PoC Design: ADR-006/ADR-007 `DEFERRED` → `NEEDS_POC`, PoC tasarımı ve deney matrisi kanıtıyla; bkz. ilgili ADR satırlarındaki "F0-010 review" notları. Önceki tur: F0-008 — ADR Review and Enterprise Foundation Decision Set)
 
 ## Durum sözlüğü
 
@@ -47,40 +47,44 @@ Son güncelleme: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Dec
 - **Evidence still needed:** Ölçek/maliyet analizi; pilot müşteri gereksinimleri.
 
 ## ADR-004 — Prisma and PgBouncer strategy
-- **Status:** `NEEDS_POC` (F0-008, 2026-07-19)
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19; PoC criteria refined by F0-009, 2026-07-19)
 - **F0-008 review:** No acceptance possible without F0-009 PoC evidence; implementation frozen under `NORAMEDI_MASTER_TRACKER.md` §8 items 3-4 regardless of PoC outcome. See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix) (matrix row).
+- **F0-009 review:** Confirmed PgBouncer presence in production is `UNVERIFIED` (repository-wide grep, zero code hits) — any PoC starts from zero, not from validating an existing partial deployment. Confirmed exact current pool config (`server/src/db.ts:9-21`: `DB_POOL_MAX` default 10, `DB_POOL_CONNECT_TIMEOUT_MS` default 10000, `DB_POOL_IDLE_TIMEOUT_MS` default 30000 — none present in `server/.env.example`) and a second, unaccounted-for live connection pool (`server/src/utils/activity.ts:10`, its own `PrismaClient`/`Pool`, not the `db.ts` singleton). Full isolated-PoC design (roles, `SET LOCAL`/RLS-interaction experiments, prepared-statement question, connection-budget proposal): [tenant-rls-pgbouncer-poc-design.md §8](../architecture/tenant-rls-pgbouncer-poc-design.md#8-pgbouncer-poc-design-isolated-environment-only). This review does not change status — still `NEEDS_POC`; no PoC was executed.
 - **Purpose:** Prisma'nın PgBouncer (transaction pooling) ile güvenli birlikte çalışma stratejisini belirlemek.
 - **Decision required:** Pooling modu, session state (RLS `SET`), prepared statement davranışı, bağlantı bütçeleri.
 - **Phase:** F5
 - **Dependencies:** F0-009
-- **Evidence still needed:** PoC ölçümleri; bağlantı tükenmesi senaryoları.
+- **Evidence still needed:** PoC ölçümleri; bağlantı tükenmesi senaryoları. Deferred to F5 PoC execution — see experiments 14-15, 20 in [f0-009-poc-test-matrix.md](../architecture/f0-009-poc-test-matrix.md).
 
 ## ADR-005 — PostgreSQL RLS
-- **Status:** `NEEDS_POC` (F0-008, 2026-07-19)
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19; PoC criteria refined by F0-009, 2026-07-19)
 - **F0-008 review:** No acceptance possible without F0-009 PoC evidence; implementation explicitly frozen (`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3 item 11, `NORAMEDI_MASTER_TRACKER.md` §8 item 3). Directional intent ("RLS is additive to, not a replacement for, ADR-002's application-level scoping") is affirmed as PoC design guidance, not accepted as a decision. See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix).
+- **F0-009 review:** Classified all 91 Prisma models by tenant-scoping shape (68/91 are direct-column-policy candidates; 15/91 — `org_scoped_optional_clinic`, `ambiguous_nullable_tenant`, `child_via_parent` — need a policy-function or join-based approach; the remaining 8/91 are `platform_global`/`organization_scoped` and are out of scope for per-clinic RLS policies. See [f0-009-tenant-model-inventory.json](../architecture/evidence/f0-009-tenant-model-inventory.json)). Confirmed a specific case (nested-write FK-target insert) where Postgres FK constraint checks bypass RLS regardless of policy — direct evidence that the Prisma guard's parent-ownership validation remains load-bearing even with RLS enabled, reinforcing ADR-002's "additive, not replacement" framing with a concrete mechanism rather than only a principle. Full isolated-PoC design (roles, policy-family comparison, disposable-environment spec): [tenant-rls-pgbouncer-poc-design.md §7](../architecture/tenant-rls-pgbouncer-poc-design.md#7-rls-poc-design-isolated-environment-only). This review does not change status — still `NEEDS_POC`; no PoC was executed, no policy family is pre-selected.
 - **Purpose:** Satır düzeyi güvenliğin (RLS) tenant izolasyonu için kullanımına karar vermek.
 - **Decision required:** Policy modeli, rol stratejisi, Prisma entegrasyonu, performans etkisi.
 - **Phase:** F5
 - **Dependencies:** F0-009, ADR-004
-- **Evidence still needed:** RLS PoC kanıtı; performans ölçümleri.
+- **Evidence still needed:** RLS PoC kanıtı; performans ölçümleri. Deferred to F5 PoC execution — see experiments 1-13, 16-19 in [f0-009-poc-test-matrix.md](../architecture/f0-009-poc-test-matrix.md).
 
 ## ADR-006 — Transactional outbox
-- **Status:** `DEFERRED` (F0-008, 2026-07-19) — whether/when to build an outbox is deferred to F0-010; the narrow principle "events must be versioned and consumers idempotent if/when an outbox is built" is treated as an already-binding invariant independent of this ADR's own status
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19: `DEFERRED`; PoC criteria produced by F0-010, 2026-07-19) — the narrow principle "events must be versioned and consumers idempotent if/when an outbox is built" remains an already-binding invariant independent of this ADR's own status
 - **F0-008 review:** No volume projections exist; implementation frozen (`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3 item 14 — touches consent/audit flows). See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix).
+- **F0-010 review:** Full current-state async/job/messaging/consent/export inventory produced (18 business flows + 3 infrastructure primitives, [f0-010-async-flow-inventory.json](../architecture/evidence/f0-010-async-flow-inventory.json)) — only 4/18 flows show a genuine outbox-shaped gap (appointment/payment reminder sends, appointment-request confirmation, in-app notification generation), and one of those four (in-app notifications) is a clean "textbook" outbox use case; one further flow (communication-consent audit write) has a narrower, non-outbox fix already available in-repo (`writeAuditLogInTx`, used today only by `clinicBulkExportPackage.ts`). Full isolated-PoC design (table/dispatcher/claim-mechanism comparison, payload minimization, replay/audit, 25-experiment matrix): [queue-outbox-poc-design.md](../architecture/queue-outbox-poc-design.md), [f0-010-poc-test-matrix.md](../architecture/f0-010-poc-test-matrix.md). This satisfies the "PoC tasarımı" half of the ADR's stated evidence gap; "hacim projeksiyonları" (volume projections) remain genuinely unmet — no production observability exists (ADR-012 still `DEFERRED`) to produce real volume numbers, so F0-010's flow-count-based structural reasoning is offered as a substitute for, not a replacement of, a volume projection. This review does not change implementation-freeze status — still frozen; no PoC was executed, no schema/migration/dependency was added.
 - **Purpose:** Kaybolmayan, tam-bir-kez etkili (idempotent) event yayını için outbox desenine karar vermek.
 - **Decision required:** Outbox tablosu tasarımı, dispatcher, retry/poison stratejisi.
 - **Phase:** F6
 - **Dependencies:** F0-010
-- **Evidence still needed:** PoC tasarımı; hacim projeksiyonları.
+- **Evidence still needed:** PoC ölçümleri (bkz. deney 1-25, [f0-010-poc-test-matrix.md](../architecture/f0-010-poc-test-matrix.md)); gerçek hacim projeksiyonları (ADR-012 gözlemlenebilirlik kanıtı gerektirir, henüz yok).
 
 ## ADR-007 — Queue platform
-- **Status:** `DEFERRED` (F0-008, 2026-07-19)
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19: `DEFERRED`; PoC criteria produced by F0-010, 2026-07-19)
 - **F0-008 review:** No queue exists today (only PM2 cron + `JobLock`). "BullMQ preferred near-term candidate" is recorded as a non-binding preference only, not a decision — platform selection awaits F0-010. See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix).
+- **F0-010 review:** Confirmed no queue library exists anywhere in the repository (repository-wide inventory, not a new grep — see [f0-010-async-flow-inventory.json](../architecture/evidence/f0-010-async-flow-inventory.json) `generated_from`/`infrastructure_primitives`). Produced a 5-option comparison (no external queue / BullMQ / Postgres-native job queue / managed queue abstraction / Kafka) against 16 criteria including KVKK/data-residency, HA, local development, and a measurable adoption trigger per option: [queue-outbox-poc-design.md §9](../architecture/queue-outbox-poc-design.md#9-queue-alternatives-comparison). Recommends a PostgreSQL-outbox-plus-in-process-dispatcher (modeled directly on the already-working `clinicBulkExportWorker.ts` claim pattern) as the PoC's primary candidate — **no external queue product is selected**; BullMQ remains a non-binding comparison candidate to be measured in Experiment 21, not adopted on the basis of familiarity. Defines a 6-point measurable Kafka trigger (§11) explicitly requiring ≥2 conditions met with real evidence, none of which are met or currently measurable (no observability exists). This review does not change status beyond `NEEDS_POC` — still frozen; no PoC was executed, no platform is selected.
 - **Purpose:** Kuyruk platformunu (ör. BullMQ/Redis vb. adaylar) seçmek.
 - **Decision required:** Platform seçimi, işlem garantileri, gözlemlenebilirlik, çok-tenant adalet (fairness).
 - **Phase:** F6
 - **Dependencies:** F0-010, ADR-006
-- **Evidence still needed:** Aday karşılaştırması; mevcut job altyapısının envanteri.
+- **Evidence still needed:** PoC ölçümleri (özellikle deney 20-21, Postgres-outbox vs. BullMQ karşılaştırması); ölçülebilir Kafka tetikleyicisinin (bkz. [queue-outbox-poc-design.md §11](../architecture/queue-outbox-poc-design.md#11-kafka-trigger-objective-7)) karşılandığına dair kanıt (şu an yok, gözlemlenebilirlik eksik).
 
 ## ADR-008 — Object-storage abstraction
 - **Status:** `ACCEPTED_WITH_CONDITIONS` (F0-008, 2026-07-19 — pending external review)
