@@ -47,22 +47,24 @@ Son güncelleme: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Dec
 - **Evidence still needed:** Ölçek/maliyet analizi; pilot müşteri gereksinimleri.
 
 ## ADR-004 — Prisma and PgBouncer strategy
-- **Status:** `NEEDS_POC` (F0-008, 2026-07-19)
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19; PoC criteria refined by F0-009, 2026-07-19)
 - **F0-008 review:** No acceptance possible without F0-009 PoC evidence; implementation frozen under `NORAMEDI_MASTER_TRACKER.md` §8 items 3-4 regardless of PoC outcome. See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix) (matrix row).
+- **F0-009 review:** Confirmed PgBouncer presence in production is `UNVERIFIED` (repository-wide grep, zero code hits) — any PoC starts from zero, not from validating an existing partial deployment. Confirmed exact current pool config (`server/src/db.ts:9-21`: `DB_POOL_MAX` default 10, `DB_POOL_CONNECT_TIMEOUT_MS` default 10000, `DB_POOL_IDLE_TIMEOUT_MS` default 30000 — none present in `server/.env.example`) and a second, unaccounted-for live connection pool (`server/src/utils/activity.ts:10`, its own `PrismaClient`/`Pool`, not the `db.ts` singleton). Full isolated-PoC design (roles, `SET LOCAL`/RLS-interaction experiments, prepared-statement question, connection-budget proposal): [tenant-rls-pgbouncer-poc-design.md §8](../architecture/tenant-rls-pgbouncer-poc-design.md#8-pgbouncer-poc-design-isolated-environment-only). This review does not change status — still `NEEDS_POC`; no PoC was executed.
 - **Purpose:** Prisma'nın PgBouncer (transaction pooling) ile güvenli birlikte çalışma stratejisini belirlemek.
 - **Decision required:** Pooling modu, session state (RLS `SET`), prepared statement davranışı, bağlantı bütçeleri.
 - **Phase:** F5
 - **Dependencies:** F0-009
-- **Evidence still needed:** PoC ölçümleri; bağlantı tükenmesi senaryoları.
+- **Evidence still needed:** PoC ölçümleri; bağlantı tükenmesi senaryoları. Deferred to F5 PoC execution — see experiments 14-15, 20 in [f0-009-poc-test-matrix.md](../architecture/f0-009-poc-test-matrix.md).
 
 ## ADR-005 — PostgreSQL RLS
-- **Status:** `NEEDS_POC` (F0-008, 2026-07-19)
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19; PoC criteria refined by F0-009, 2026-07-19)
 - **F0-008 review:** No acceptance possible without F0-009 PoC evidence; implementation explicitly frozen (`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3 item 11, `NORAMEDI_MASTER_TRACKER.md` §8 item 3). Directional intent ("RLS is additive to, not a replacement for, ADR-002's application-level scoping") is affirmed as PoC design guidance, not accepted as a decision. See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix).
+- **F0-009 review:** Classified all 91 Prisma models by tenant-scoping shape (69/91 are direct-column-policy candidates; 16/91 — `org_scoped_optional_clinic`, `ambiguous_nullable_tenant`, `child_via_parent` — need a policy-function or join-based approach; see [f0-009-tenant-model-inventory.json](../architecture/evidence/f0-009-tenant-model-inventory.json)). Confirmed a specific case (nested-write FK-target insert) where Postgres FK constraint checks bypass RLS regardless of policy — direct evidence that the Prisma guard's parent-ownership validation remains load-bearing even with RLS enabled, reinforcing ADR-002's "additive, not replacement" framing with a concrete mechanism rather than only a principle. Full isolated-PoC design (roles, policy-family comparison, disposable-environment spec): [tenant-rls-pgbouncer-poc-design.md §7](../architecture/tenant-rls-pgbouncer-poc-design.md#7-rls-poc-design-isolated-environment-only). This review does not change status — still `NEEDS_POC`; no PoC was executed, no policy family is pre-selected.
 - **Purpose:** Satır düzeyi güvenliğin (RLS) tenant izolasyonu için kullanımına karar vermek.
 - **Decision required:** Policy modeli, rol stratejisi, Prisma entegrasyonu, performans etkisi.
 - **Phase:** F5
 - **Dependencies:** F0-009, ADR-004
-- **Evidence still needed:** RLS PoC kanıtı; performans ölçümleri.
+- **Evidence still needed:** RLS PoC kanıtı; performans ölçümleri. Deferred to F5 PoC execution — see experiments 1-13, 16-19 in [f0-009-poc-test-matrix.md](../architecture/f0-009-poc-test-matrix.md).
 
 ## ADR-006 — Transactional outbox
 - **Status:** `DEFERRED` (F0-008, 2026-07-19) — whether/when to build an outbox is deferred to F0-010; the narrow principle "events must be versioned and consumers idempotent if/when an outbox is built" is treated as an already-binding invariant independent of this ADR's own status
