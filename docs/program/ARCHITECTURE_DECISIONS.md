@@ -1,6 +1,6 @@
 # ARCHITECTURE_DECISIONS — ADR İndeksi
 
-Son güncelleme: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Decision Set)
+Son güncelleme: 2026-07-19 (F0-010 — Queue and Transactional Outbox PoC Design: ADR-006/ADR-007 `DEFERRED` → `NEEDS_POC`, PoC tasarımı ve deney matrisi kanıtıyla; bkz. ilgili ADR satırlarındaki "F0-010 review" notları. Önceki tur: F0-008 — ADR Review and Enterprise Foundation Decision Set)
 
 ## Durum sözlüğü
 
@@ -67,22 +67,24 @@ Son güncelleme: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Dec
 - **Evidence still needed:** RLS PoC kanıtı; performans ölçümleri. Deferred to F5 PoC execution — see experiments 1-13, 16-19 in [f0-009-poc-test-matrix.md](../architecture/f0-009-poc-test-matrix.md).
 
 ## ADR-006 — Transactional outbox
-- **Status:** `DEFERRED` (F0-008, 2026-07-19) — whether/when to build an outbox is deferred to F0-010; the narrow principle "events must be versioned and consumers idempotent if/when an outbox is built" is treated as an already-binding invariant independent of this ADR's own status
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19: `DEFERRED`; PoC criteria produced by F0-010, 2026-07-19) — the narrow principle "events must be versioned and consumers idempotent if/when an outbox is built" remains an already-binding invariant independent of this ADR's own status
 - **F0-008 review:** No volume projections exist; implementation frozen (`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3 item 14 — touches consent/audit flows). See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix).
+- **F0-010 review:** Full current-state async/job/messaging/consent/export inventory produced (18 business flows + 3 infrastructure primitives, [f0-010-async-flow-inventory.json](../architecture/evidence/f0-010-async-flow-inventory.json)) — only 4/18 flows show a genuine outbox-shaped gap (appointment/payment reminder sends, appointment-request confirmation, in-app notification generation), and one of those four (in-app notifications) is a clean "textbook" outbox use case; one further flow (communication-consent audit write) has a narrower, non-outbox fix already available in-repo (`writeAuditLogInTx`, used today only by `clinicBulkExportPackage.ts`). Full isolated-PoC design (table/dispatcher/claim-mechanism comparison, payload minimization, replay/audit, 25-experiment matrix): [queue-outbox-poc-design.md](../architecture/queue-outbox-poc-design.md), [f0-010-poc-test-matrix.md](../architecture/f0-010-poc-test-matrix.md). This satisfies the "PoC tasarımı" half of the ADR's stated evidence gap; "hacim projeksiyonları" (volume projections) remain genuinely unmet — no production observability exists (ADR-012 still `DEFERRED`) to produce real volume numbers, so F0-010's flow-count-based structural reasoning is offered as a substitute for, not a replacement of, a volume projection. This review does not change implementation-freeze status — still frozen; no PoC was executed, no schema/migration/dependency was added.
 - **Purpose:** Kaybolmayan, tam-bir-kez etkili (idempotent) event yayını için outbox desenine karar vermek.
 - **Decision required:** Outbox tablosu tasarımı, dispatcher, retry/poison stratejisi.
 - **Phase:** F6
 - **Dependencies:** F0-010
-- **Evidence still needed:** PoC tasarımı; hacim projeksiyonları.
+- **Evidence still needed:** PoC ölçümleri (bkz. deney 1-25, [f0-010-poc-test-matrix.md](../architecture/f0-010-poc-test-matrix.md)); gerçek hacim projeksiyonları (ADR-012 gözlemlenebilirlik kanıtı gerektirir, henüz yok).
 
 ## ADR-007 — Queue platform
-- **Status:** `DEFERRED` (F0-008, 2026-07-19)
+- **Status:** `NEEDS_POC` (F0-008, 2026-07-19: `DEFERRED`; PoC criteria produced by F0-010, 2026-07-19)
 - **F0-008 review:** No queue exists today (only PM2 cron + `JobLock`). "BullMQ preferred near-term candidate" is recorded as a non-binding preference only, not a decision — platform selection awaits F0-010. See [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix).
+- **F0-010 review:** Confirmed no queue library exists anywhere in the repository (repository-wide inventory, not a new grep — see [f0-010-async-flow-inventory.json](../architecture/evidence/f0-010-async-flow-inventory.json) `generated_from`/`infrastructure_primitives`). Produced a 5-option comparison (no external queue / BullMQ / Postgres-native job queue / managed queue abstraction / Kafka) against 16 criteria including KVKK/data-residency, HA, local development, and a measurable adoption trigger per option: [queue-outbox-poc-design.md §9](../architecture/queue-outbox-poc-design.md#9-queue-alternatives-comparison). Recommends a PostgreSQL-outbox-plus-in-process-dispatcher (modeled directly on the already-working `clinicBulkExportWorker.ts` claim pattern) as the PoC's primary candidate — **no external queue product is selected**; BullMQ remains a non-binding comparison candidate to be measured in Experiment 21, not adopted on the basis of familiarity. Defines a 6-point measurable Kafka trigger (§11) explicitly requiring ≥2 conditions met with real evidence, none of which are met or currently measurable (no observability exists). This review does not change status beyond `NEEDS_POC` — still frozen; no PoC was executed, no platform is selected.
 - **Purpose:** Kuyruk platformunu (ör. BullMQ/Redis vb. adaylar) seçmek.
 - **Decision required:** Platform seçimi, işlem garantileri, gözlemlenebilirlik, çok-tenant adalet (fairness).
 - **Phase:** F6
 - **Dependencies:** F0-010, ADR-006
-- **Evidence still needed:** Aday karşılaştırması; mevcut job altyapısının envanteri.
+- **Evidence still needed:** PoC ölçümleri (özellikle deney 20-21, Postgres-outbox vs. BullMQ karşılaştırması); ölçülebilir Kafka tetikleyicisinin (bkz. [queue-outbox-poc-design.md §11](../architecture/queue-outbox-poc-design.md#11-kafka-trigger-objective-7)) karşılandığına dair kanıt (şu an yok, gözlemlenebilirlik eksik).
 
 ## ADR-008 — Object-storage abstraction
 - **Status:** `ACCEPTED_WITH_CONDITIONS` (F0-008, 2026-07-19 — pending external review)
