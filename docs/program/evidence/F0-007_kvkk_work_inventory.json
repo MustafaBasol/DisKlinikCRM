@@ -57,6 +57,16 @@
       "note": "observed only via read-only path metadata in primary working tree at task start; implementation content not inspected at any point; commit/push/PR status is time-sliced, see correctionPass"
     },
     {
+      "id": "KVKK-HIGH-008",
+      "title": "Legacy smsOptOut correction workflow + consent-modal/tab-overflow UX hardening",
+      "status": "UNVERIFIED_ACTIVE_WORK",
+      "prs": [],
+      "prsNote": "branch feature/kvkk-high008-legacy-consent-correction, based on main @ 9669b06a (includes PR #176, docs-only). No PR opened at time of writing this entry.",
+      "deployed": false,
+      "productionVerified": false,
+      "note": "new immutable PatientLegacyConsentCorrection model + audited correction API, never grants consent, never touches PatientCommunicationPreference/PatientCommunicationConsentEvent; all COMMUNICATION_CONSENT_* flags remain disabled by default; no production backfill executed"
+    },
+    {
       "id": "KVKK-CRIT-002",
       "title": "International transfer inventory and mechanism decision",
       "status": "BLOCKED",
