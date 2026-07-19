@@ -229,6 +229,18 @@ Per `RELEASE_GATES.md` and `NORAMEDI_MASTER_TRACKER.md` §2.3 (both origin/main-
 5. Rebase-conflict check against `origin/main`'s 3 newer commits (expected clean per §9, not executed as a real rebase by this read-only task).
 6. Resolution of the `server/.env.test-kvkk008` gitignore gap (recommend the branch author address before any `git add -A`).
 
+## 14a. Post-capture note (primary tree advanced during this task)
+
+While this task was writing the deliverables above (i.e., after §1-§14's evidence was captured), the primary tree's branch advanced by one further commit: `73ff3e90...` → `9b0e119d7831fc668fe833e317f07bc54e1ff848` ("test(kvkk): verify no internal replay-control fields leak; correct activation wording"). A final read-only check at the end of this task (`git log`, `git reflog`, `git merge-base --is-ancestor`) confirmed:
+
+- `73ff3e9` remains an ancestor of the new HEAD — this is a normal forward commit, not a reset/rewrite/force-push.
+- The new commit's trailer carries a **different** `Claude-Session` identifier than this task's own session — it was made by a separate, independent agent/session actively working on that branch while this read-only task ran, not by F0-011-P1.
+- The new commit's diff is content-identical to the 4 files this document's §3 already captured as *uncommitted working-tree changes* (the two compliance docs, the F0-007 evidence JSON, and the 3 added test assertions) — they are now committed rather than uncommitted. No new, previously-unseen content was introduced.
+- The previously-observed untracked `server/.env.test-kvkk008` file (§3, §14 item 6) no longer exists on disk — apparently cleaned up by that same concurrent session.
+- The primary tree's working directory is otherwise clean (`git status --short --untracked-files=all` returns nothing) as of this final check.
+
+This task's own primary-tree evidence (§1-§14) reflects the state at initial capture time and was not retroactively rewritten to chase this later commit, consistent with this program's established "self-reference lag" convention (see `NORAMEDI_MASTER_TRACKER.md` §2.1/§7) — later evidence (git commits) outranks this document, and a future task refreshing this baseline should treat `9b0e119` as the current HEAD rather than `73ff3e9`. This task did not read, stage, commit, or otherwise interact with the primary tree at any point beyond read-only `git`/file-read operations; this new commit is confirmed external, independent activity.
+
 ## 15. Sources reviewed
 
 `AGENTS.md`; `docs/program/NORAMEDI_MASTER_TRACKER.md`; `docs/program/CURRENT_PHASE.md`; `docs/program/phases/F0_BASELINE_AND_VALIDATION.md`; `docs/program/ARCHITECTURE_DECISIONS.md`; `docs/program/RISK_REGISTER.md`; `docs/program/KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md`; `docs/program/RELEASE_GATES.md`; `docs/program/TEST_OWNERSHIP.md`; `docs/program/DEPENDENCY_MAP.md`; `docs/program/MODULE_MAP.md`; `docs/program/KVKK_ACTIVE_WORK_BASELINE.md`; `docs/program/evidence/F0-007_KVKK_BASELINE_EVIDENCE.md`; `docs/program/evidence/F0-009-S1_SECURITY_INCIDENT_TENANT_OWNERSHIP_EVIDENCE.md`; `docs/compliance/56-kvkk-communication-preference-and-consent-management.md`; `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` (all read at origin/main, i.e. commit `64b9ede`); primary-tree `git status`/`git log`/`git diff`/`git show`; `gh pr view 180`; direct reads of every changed/added file listed in §1 and the companion JSON inventory.
