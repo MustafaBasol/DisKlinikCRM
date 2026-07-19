@@ -68,6 +68,29 @@ function getRouteHandler(router: RouterLike, method: 'get' | 'put' | 'post', pat
   throw new Error(`No route handler found for ${method.toUpperCase()} ${path}`);
 }
 
+/**
+ * Runs the FULL route middleware chain (authorize() included), not just the
+ * final handler — getRouteHandler() above deliberately skips authorize() to
+ * unit-test handler logic in isolation. This one exercises the real
+ * production authorization decision for a given req.user.
+ */
+function getRouteMiddlewareChain(router: RouterLike, method: 'get' | 'put' | 'post', path: string): Array<(req: AuthRequest, res: Response, next: () => void) => void | Promise<void>> {
+  for (const layer of router.stack) {
+    if (layer.route && layer.route.path === path && layer.route.methods?.[method]) {
+      return layer.route.stack.map((s: any) => s.handle);
+    }
+  }
+  throw new Error(`No route handler found for ${method.toUpperCase()} ${path}`);
+}
+
+async function runChain(chain: Array<(req: AuthRequest, res: Response, next: () => void) => void | Promise<void>>, req: AuthRequest, res: Response): Promise<void> {
+  for (const fn of chain) {
+    let calledNext = false;
+    await fn(req, res, () => { calledNext = true; });
+    if (!calledNext) return; // middleware responded instead of calling next() — chain stops here
+  }
+}
+
 function mockResponse(): Response & { statusCode: number; body: any } {
   const res: any = {
     statusCode: 200,
@@ -82,6 +105,7 @@ function authRequest(overrides: Partial<NonNullable<AuthRequest['user']>>, param
   return {
     params,
     query,
+    headers: {},
     user: {
       id: randomUUID(),
       clinicId: '',
@@ -242,6 +266,76 @@ async function main() {
     const page1Ids = new Set(resPage1.body.events.map((e: any) => e.id));
     const page2Ids = resPage2.body.events.map((e: any) => e.id);
     assert.ok(page2Ids.every((id: string) => !page1Ids.has(id)), 'pages do not overlap');
+  });
+
+  section('5. Export endpoint authorization — management roles only (OWNER/ORG_ADMIN/CLINIC_MANAGER)');
+
+  await test('OWNER is allowed to export consent evidence', async () => {
+    const fx = await createFixture();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences/export');
+    const req = authRequest({ role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId });
+    const res = mockResponse();
+    await runChain(chain, req, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.patientId, fx.patientId);
+  });
+
+  await test('ORG_ADMIN is allowed to export consent evidence', async () => {
+    const fx = await createFixture();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences/export');
+    const req = authRequest({ role: 'ORG_ADMIN', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId });
+    const res = mockResponse();
+    await runChain(chain, req, res);
+    assert.equal(res.statusCode, 200);
+  });
+
+  await test('CLINIC_MANAGER is allowed to export consent evidence', async () => {
+    const fx = await createFixture();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences/export');
+    const req = authRequest({ role: 'CLINIC_MANAGER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId });
+    const res = mockResponse();
+    await runChain(chain, req, res);
+    assert.equal(res.statusCode, 200);
+  });
+
+  await test('RECEPTIONIST is denied export access (403), even though they can view the matrix', async () => {
+    const fx = await createFixture();
+    const exportChain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences/export');
+    const req = authRequest({ role: 'RECEPTIONIST', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId], canAccessAllClinics: false }, { patientId: fx.patientId });
+    const res = mockResponse();
+    await runChain(exportChain, req, res);
+    assert.equal(res.statusCode, 403);
+    assert.ok(res.body?.error, 'must be the authorize() rejection, not the export handler\'s success payload');
+    assert.equal(res.body?.preferences, undefined, 'export data must never be present when access is forbidden');
+
+    const matrixChain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences');
+    const matrixReq = authRequest({ role: 'RECEPTIONIST', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId], canAccessAllClinics: false }, { patientId: fx.patientId });
+    const matrixRes = mockResponse();
+    await runChain(matrixChain, matrixReq, matrixRes);
+    assert.equal(matrixRes.statusCode, 200, 'view/mutate roles are unchanged by this fix — only export is narrowed');
+  });
+
+  await test('DENTIST is denied export access (403), even though they can view the matrix', async () => {
+    const fx = await createFixture();
+    const exportChain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences/export');
+    const req = authRequest({ role: 'DENTIST', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId], canAccessAllClinics: false }, { patientId: fx.patientId });
+    const res = mockResponse();
+    await runChain(exportChain, req, res);
+    assert.equal(res.statusCode, 403);
+    assert.ok(res.body?.error, 'must be the authorize() rejection, not the export handler\'s success payload');
+    assert.equal(res.body?.preferences, undefined, 'export data must never be present when access is forbidden');
+  });
+
+  await test('a management-role user from a different organization is still denied by tenant scoping, not just role', async () => {
+    const fx = await createFixture();
+    const otherOrg = await prisma.organization.create({ data: { name: 'Other Export Org', slug: `other-export-org-${randomUUID().slice(0, 8)}` } });
+    createdOrgIds.push(otherOrg.id);
+
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences/export');
+    const req = authRequest({ role: 'OWNER', organizationId: otherOrg.id, allowedClinicIds: [] }, { patientId: fx.patientId });
+    const res = mockResponse();
+    await runChain(chain, req, res);
+    assert.equal(res.statusCode, 404, 'role passes authorize(), but loadScopedPatient still enforces org scoping');
   });
 
   await cleanup();

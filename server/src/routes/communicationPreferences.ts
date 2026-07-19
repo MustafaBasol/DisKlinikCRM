@@ -9,6 +9,13 @@
  * edit legal evidence fields). DENTIST is read + grant/deny/withdraw capable
  * like front-desk staff — clinical staff routinely capture verbal consent
  * during a visit; a future review may narrow this further.
+ *
+ * The full-evidence export endpoint (GET .../export) is management-only
+ * (OWNER / ORG_ADMIN / CLINIC_MANAGER) — narrower than the view/mutate roles
+ * above, matching the equivalent patientPrivacy.ts export endpoint. A bulk
+ * dump of every historical consent event is a different risk profile than
+ * viewing/editing today's preference state, so RECEPTIONIST/DENTIST keep
+ * matrix/history/mutation access but not the export.
  */
 
 import express, { Response } from 'express';
@@ -41,6 +48,9 @@ import {
 const router = express.Router();
 
 const ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const;
+
+/** Consent evidence export is a bulk historical dump — management-only, same scope as patientPrivacy.ts's export endpoint. */
+const EXPORT_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'] as const;
 
 /**
  * `revision` is only a global order *within* one channel+purpose key (see
@@ -238,7 +248,7 @@ router.get(
 
 router.get(
   '/patients/:patientId/communication-preferences/export',
-  authorize([...ROLES]),
+  authorize([...EXPORT_ROLES]),
   async (req: AuthRequest, res: Response) => {
     const patientId = getParam(req, 'patientId');
     try {
