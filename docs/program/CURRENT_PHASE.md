@@ -49,13 +49,13 @@ KVKK-HIGH-004 (secure clinic bulk export) çalışması [PR #165](https://github
 
 ## Aktif görev
 
-**F0-006 — Production Topology and Configuration Verification** → `AGENT_COMPLETED`. İzole worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-006-production-topology`, branch `docs/f0-006-production-topology-verification`, base `origin/main` @ `db89b60c91666cb029c32757f171f227a643c79c` (F0-002'nin kendi merge commit'i). Süreç/deployment/config/storage/backup topolojisi kaynak-kod seviyesinde izlendi ve F0-002 Stage B ile mutabakat sağlandı; 12 yeni risk (R-029…R-040) kaydedildi. `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` dış teyit gerektirir.
+**F0-006 — Production Topology and Configuration Verification** → `PR_OPEN` — [PR #173](https://github.com/MustafaBasol/DisKlinikCRM/pull/173) `main` hedefli açıldı. İzole worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-006-production-topology`, branch `docs/f0-006-production-topology-verification`, base `origin/main` @ `db89b60c91666cb029c32757f171f227a643c79c` (F0-002'nin kendi merge commit'i). Süreç/deployment/config/storage/backup topolojisi kaynak-kod seviyesinde izlendi ve F0-002 Stage B ile mutabakat sağlandı; 12 yeni risk (R-029…R-040) kaydedildi. `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` dış teyit gerektirir.
 
 **Not (F0-002 düzeltmesi):** F0-002 aslında [PR #172](https://github.com/MustafaBasol/DisKlinikCRM/pull/172) ile `main`'e merge edilmiştir (merge commit `db89b60c91666cb029c32757f171f227a643c79c`, `2026-07-19T12:02:51Z`, `gh pr view 172` ile teyit edildi) — `PR_OPEN` durumu, o merge commit'inin kendi tracker anlık görüntüsündeki öz-referans gecikmesiydi (F0-003/004/005'te de görülen aynı desen), F0-006 tarafından düzeltildi.
 
 ## Sonraki görev
 
-**F0-006'nın pull request'i için dış inceleme ve merge kararı.** Merge sonrası sıradaki adaylar: **F0-007 — Active KVKK Work Baseline and Architecture Freeze Boundary** ve **F0-011 — Object Storage and Backup Migration Design** (ikisinin de bağımlılıkları — F0-002 ve, F0-011 için ayrıca F0-006 — artık karşılandı). F0-002, F0-003, F0-004, F0-005 hepsi `main`'e merge edilmiş durumda.
+**[PR #173](https://github.com/MustafaBasol/DisKlinikCRM/pull/173) için dış inceleme ve merge kararı.** Merge sonrası sıradaki adaylar: **F0-007 — Active KVKK Work Baseline and Architecture Freeze Boundary** ve **F0-011 — Object Storage and Backup Migration Design** (ikisinin de bağımlılıkları — F0-002 ve, F0-011 için ayrıca F0-006 — artık karşılandı). F0-002, F0-003, F0-004, F0-005 hepsi `main`'e merge edilmiş durumda.
 
 ## Giriş koşulları
 
@@ -93,3 +93,4 @@ Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blo
 | 2026-07-19 | F0-002 | [PR #172](https://github.com/MustafaBasol/DisKlinikCRM/pull/172) `main` hedefli açıldı: F0-002 → `PR_OPEN`. Merge kararı dış incelemeye aittir. |
 | 2026-07-19 | F0-002 | [PR #172](https://github.com/MustafaBasol/DisKlinikCRM/pull/172) merge edildi (merge commit `db89b60c91666cb029c32757f171f227a643c79c`, `2026-07-19T12:02:51Z`, `gh pr view 172` ile doğrulandı): F0-002 → `MERGED`. |
 | 2026-07-19 | F0-006 | İzole worktree/branch oluşturuldu (`docs/f0-006-production-topology-verification` @ `db89b60c91666cb029c32757f171f227a643c79c`). Süreç/deployment/config/Postgres/Redis/storage/backup/güvenlik topolojisi kaynak-kod seviyesinde izlendi, F0-002 Stage B ile mutabakat sağlandı (görev-sağlanan ikinci bir anlık görüntü tamamen tutarlı bulundu), zorunlu drift tablosu oluşturuldu, 12 yeni risk (R-029…R-040) kaydedildi. F0-006 → `AGENT_COMPLETED`. |
+| 2026-07-19 | F0-006 | [PR #173](https://github.com/MustafaBasol/DisKlinikCRM/pull/173) `main` hedefli açıldı: F0-006 → `PR_OPEN`. Merge kararı dış incelemeye aittir. |
