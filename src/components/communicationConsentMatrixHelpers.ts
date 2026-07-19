@@ -164,6 +164,62 @@ export function isCellActionable(canManage: boolean, entry: Pick<MatrixEntry, 'i
   return canManage && !entry.isPolicyException;
 }
 
+// ── Consent-action modal validation — single source of truth ─────────────────
+//
+// KVKK-HIGH-008 UX fix. Mirrors the backend notice-version/evidence matrix in
+// communicationConsentAdmin.ts (DIGITAL_GRANT_SOURCES / the `source === 'staff'`
+// check) — client-side hints only, the server remains authoritative. Every
+// consumer (submit-eligibility, inline field errors, the modal-level summary,
+// and focus-first-invalid) reads from this ONE function so the "is this valid"
+// answer can never diverge between what's displayed and what's enforced.
+//
+// Important, previously-mis-stated distinction: the notes requirement is keyed
+// on `source === 'staff'` (a grant recorded by staff on the patient's behalf),
+// NOT on the selected `evidenceType`. They default together in the UI
+// (evidenceType defaults to 'verbal_staff_record', source defaults to
+// 'staff'), which is why the underlying bug reads as "picking that evidence
+// type requires notes" — but changing evidenceType alone while leaving source
+// at 'staff' still requires notes, and changing source away from 'staff'
+// while leaving evidenceType at 'verbal_staff_record' does not.
+export const DIGITAL_GRANT_SOURCES = ['patient_portal', 'public_booking', 'whatsapp', 'sms_keyword', 'email_unsubscribe'];
+
+export type ConsentActionValidationField = 'noticeVersion' | 'notes';
+
+export type ConsentActionValidationState = {
+  action: 'grant' | 'deny' | 'withdraw' | 'reset' | null;
+  source: string;
+  noticeVersion: string;
+  notes: string;
+};
+
+export type ConsentActionValidationResult = {
+  noticeVersionRequired: boolean;
+  notesRequired: boolean;
+  /** Fields currently failing their requirement, in field (top-to-bottom) order. */
+  invalidFields: ConsentActionValidationField[];
+  firstInvalidField: ConsentActionValidationField | null;
+  /** True only when an action is selected and no required field is empty. */
+  canSubmit: boolean;
+};
+
+export function computeConsentActionValidation(state: ConsentActionValidationState): ConsentActionValidationResult {
+  const isGrant = state.action === 'grant';
+  const noticeVersionRequired = isGrant && DIGITAL_GRANT_SOURCES.includes(state.source);
+  const notesRequired = isGrant && state.source === 'staff';
+
+  const invalidFields: ConsentActionValidationField[] = [];
+  if (noticeVersionRequired && !state.noticeVersion.trim()) invalidFields.push('noticeVersion');
+  if (notesRequired && !state.notes.trim()) invalidFields.push('notes');
+
+  return {
+    noticeVersionRequired,
+    notesRequired,
+    invalidFields,
+    firstInvalidField: invalidFields[0] ?? null,
+    canSubmit: state.action != null && invalidFields.length === 0,
+  };
+}
+
 export type BulkSelectionItem = { channel: string; purpose: string; action: 'grant' | 'deny' | 'withdraw' | 'reset' };
 
 /**

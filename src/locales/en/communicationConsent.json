@@ -56,14 +56,20 @@
     "notRequiredMeaning": "\"Not Required\" is a technical policy exception (e.g. transactional/legal notice) — not a general marketing authorization."
   },
   "conflict": {
-    "modalNote": "A stale legacy restrictive signal (e.g. SMS opt-out) disagrees with an explicit central \"granted\" record for this cell. Sending is blocked. Choosing \"Deny\" or \"Withdraw\" does NOT resolve this conflict — it only accepts the restrictive legacy signal, bringing the central record into agreement with it. If you believe the legacy signal itself is stale, there is currently no supported way to correct it — this should be logged as a separate follow-up."
+    "modalNote": "A stale legacy restrictive signal (e.g. SMS opt-out) disagrees with an explicit central \"granted\" record for this cell. Sending is blocked. Choosing \"Deny\" or \"Withdraw\" below does NOT resolve this conflict — it only accepts the restrictive legacy signal, permanently recording a new central consent event that brings the central record into agreement with it; this does NOT prove the legacy signal was correct. If you believe the legacy signal itself is stale, use the link below to record a separate correction — that action does not itself grant consent and does not change the central preference.",
+    "correctLegacyAction": "Correct Legacy SMS Opt-out / Mark as Stale"
   },
   "legacySignals": {
     "title": "Legacy Signal",
     "disclaimer": "These are legacy (pre-migration) fields and do NOT reflect the current consent status. The central preference matrix above is the current, authoritative source.",
     "communicationConsent": "Communication Consent (legacy field)",
     "marketingConsent": "Marketing Consent (legacy field)",
-    "smsOptOut": "SMS Opt-out (legacy field)"
+    "smsOptOut": "SMS Opt-out (legacy field)",
+    "smsOptOutActive": "Active legacy SMS opt-out record",
+    "smsOptOutCorrected": "Legacy record corrected",
+    "smsOptOutNotPresent": "No legacy record present",
+    "notCentralConsent": "This value is not the central communication consent.",
+    "viewCorrectionHistory": "View Correction History"
   },
   "export": {
     "explanation": "Export downloads the current preference state and full history for this patient as JSON. Secret/internal-only fields (e.g. raw IP/UA hashes) are never included."
@@ -98,10 +104,12 @@
     "source": "Source",
     "noticeVersion": "Notice Version",
     "noticeVersionPlaceholder": "e.g. v1.2 (optional)",
+    "noticeVersionRequiredPlaceholder": "e.g. v1.2 (required)",
     "noticeVersionRequiredHint": "Required for a grant recorded from this source.",
     "notes": "Notes",
     "notesPlaceholder": "Brief note on the patient's statement (optional)",
-    "sourceDescriptionRequiredHint": "A brief description of what was said/shown is required for a staff-recorded grant."
+    "notesRequiredPlaceholder": "Describe what the staff member said/showed (required)",
+    "notesRequiredHint": "A brief description of what was said/shown is required for a staff-recorded grant."
   },
   "evidenceTypes": {
     "verbal_staff_record": "Verbal Statement (Staff Record)",
@@ -149,6 +157,57 @@
     "unsafe_note": "The note was rejected because it contains disallowed content.",
     "preference_not_found": "Preference record not found.",
     "concurrent_update": "This record was updated concurrently. Please try again.",
-    "consent_enforcement_disabled": "Consent enforcement is currently disabled."
+    "consent_enforcement_disabled": "Consent enforcement is currently disabled.",
+    "validationSummary": "{{count}} fields are missing or invalid. Please check the highlighted fields."
+  },
+  "legacyCorrection": {
+    "title": "Correct Legacy SMS Opt-out",
+    "warning": "Use this only when the legacy smsOptOut value is demonstrably stale or incorrect. This action does NOT itself grant consent — the central communication preference is left unchanged. A reason, evidence type, and notes are required; the action is permanently recorded.",
+    "currentValue": "Current Value",
+    "proposedValue": "Proposed Value",
+    "smsOptOutActiveValue": "SMS Opt-out: Active",
+    "smsOptOutCorrectedValue": "SMS Opt-out: Corrected (Not Active)",
+    "fields": {
+      "reason": "Correction Reason",
+      "reasonPlaceholder": "Explain why this legacy signal is stale/incorrect (required)",
+      "reasonRequiredHint": "A correction reason is required.",
+      "evidenceType": "Evidence Type",
+      "notes": "Notes",
+      "notesPlaceholder": "Explain the evidence that the legacy signal is stale (required)",
+      "notesRequiredHint": "Staff notes explaining why the old signal is considered stale are required.",
+      "sourceReference": "Source Reference (optional)",
+      "sourceReferencePlaceholder": "e.g. phone call log #4471 from 2026-07-18"
+    },
+    "confirm": "Correct and Save",
+    "close": "Close",
+    "success": "The legacy SMS opt-out signal was corrected successfully.",
+    "evidenceTypes": {
+      "patient_verbal_confirmation": "Patient Verbal Confirmation",
+      "signed_form": "Signed Form",
+      "documented_import_error": "Documented Import Error",
+      "other_verified_source": "Other Verified Source"
+    },
+    "errors": {
+      "legacy_signal_not_present": "There is no active legacy SMS opt-out record for this patient to correct.",
+      "legacy_signal_already_corrected": "This legacy record was already corrected.",
+      "stale_legacy_signal_state": "This record changed via another request. Please refresh and try again.",
+      "correction_notes_required": "Notes are required.",
+      "correction_reason_required": "A correction reason is required.",
+      "invalid_evidence_type": "Invalid evidence type.",
+      "unsafe_note": "This text was rejected because it contains disallowed content.",
+      "forbidden": "You do not have permission to perform this action.",
+      "patient_not_found": "Patient not found.",
+      "clinic_scope_mismatch": "You do not have access to this patient.",
+      "idempotency_conflict": "This request was already submitted with different content. Please refresh.",
+      "generic": "Could not save this correction. Please try again."
+    }
+  },
+  "legacyCorrectionHistory": {
+    "title": "Legacy Correction History",
+    "empty": "No correction records yet.",
+    "smsOptOutCorrected": "SMS Opt-out Corrected",
+    "viewDetails": "View Details",
+    "loadingDetail": "Loading details...",
+    "detailFailed": "Failed to load details."
   }
 }

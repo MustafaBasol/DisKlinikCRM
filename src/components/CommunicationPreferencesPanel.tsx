@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MessageSquareHeart, AlertTriangle, Download, Loader2, History, X, Info,
@@ -19,19 +19,36 @@ import {
   CELL_VARIANT_STYLE,
   shouldShowLegacySignals,
   isCellActionable,
+  computeConsentActionValidation,
   type MatrixEntry,
   type MatrixCellVariantWithConflict,
+  type ConsentActionValidationField,
 } from './communicationConsentMatrixHelpers';
+import LegacyConsentCorrectionModal from './LegacyConsentCorrectionModal';
+import LegacyConsentCorrectionHistory from './LegacyConsentCorrectionHistory';
 
 interface Props {
   patientId: string;
   canManage: boolean;
+  /**
+   * Management-only capability for the KVKK-HIGH-008 legacy correction
+   * workflow (OWNER/ORG_ADMIN/CLINIC_MANAGER) — deliberately NARROWER than
+   * `canManage` above, which also includes RECEPTIONIST/DENTIST. Using
+   * `canManage` to gate the correction controls would let roles the backend
+   * would 403 see a client-only-gated action. Defaults to `canManage` only if
+   * the caller genuinely has nothing narrower to pass (keeps this prop
+   * optional for any other embedding of this panel), but PatientDetail always
+   * passes the real, narrower value.
+   */
+  canCorrectLegacyConsent?: boolean;
   /** Legacy Patient fields — historical/pre-migration signals only, never the current source of truth. Rendered as a collapsed, authorized-role-only disclosure. */
   legacySignals?: {
     communicationConsent: boolean;
     marketingConsent: boolean;
     smsOptOut: boolean;
   };
+  /** Refetched by the parent after a legacy correction succeeds, so the tri-state legacy display reflects the new value. */
+  onLegacySignalsChanged?: () => void;
 }
 
 type SetPreferenceAction = 'grant' | 'deny' | 'withdraw' | 'reset';
@@ -60,11 +77,6 @@ const SOURCES = ['staff', 'patient_portal', 'public_booking', 'sms_keyword', 'em
 const HISTORY_STATUSES = ['granted', 'denied', 'withdrawn', 'unknown'] as const;
 const ACTIONS: readonly SetPreferenceAction[] = ['grant', 'deny', 'withdraw', 'reset'];
 
-// Mirrors the backend notice-version/evidence matrix in
-// communicationConsentAdmin.ts (DIGITAL_GRANT_SOURCES / staff-source check) —
-// client-side hints only, the server remains the source of truth.
-const DIGITAL_GRANT_SOURCES = ['patient_portal', 'public_booking', 'whatsapp', 'sms_keyword', 'email_unsubscribe'];
-
 const VARIANT_ICON: Record<MatrixCellVariantWithConflict, LucideIcon> = {
   allowed: CheckCircle2,
   denied: XCircle,
@@ -74,7 +86,9 @@ const VARIANT_ICON: Record<MatrixCellVariantWithConflict, LucideIcon> = {
   conflict: AlertTriangle,
 };
 
-const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, legacySignals }) => {
+const CommunicationPreferencesPanel: React.FC<Props> = ({
+  patientId, canManage, canCorrectLegacyConsent = canManage, legacySignals, onLegacySignalsChanged,
+}) => {
   const { t } = useTranslation('communicationConsent');
   const { formatDate } = useClinicPreferences();
 
@@ -95,6 +109,70 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, 
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState('');
+  // Fields the user has already attempted to submit with invalid content —
+  // an inline error only appears here, not before the first submit attempt,
+  // and clears the moment the field becomes valid (see the effect below).
+  const [touchedInvalidFields, setTouchedInvalidFields] = useState<Set<ConsentActionValidationField>>(new Set());
+  const modalDialogRef = useRef<HTMLDivElement>(null);
+  const modalPreviouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const noticeVersionInputRef = useRef<HTMLInputElement>(null);
+  const notesInputRef = useRef<HTMLTextAreaElement>(null);
+  const modalTitleId = useId();
+
+  const [legacyCorrectionModalOpen, setLegacyCorrectionModalOpen] = useState(false);
+  const [legacyCorrectionHistoryOpen, setLegacyCorrectionHistoryOpen] = useState(false);
+  const [latestSmsOptOutCorrection, setLatestSmsOptOutCorrection] = useState<{ createdAt: string; evidenceType: string } | null>(null);
+
+  // Fetched lazily (canManage-gated, list-only fields — see §6 of the
+  // KVKK-HIGH-008 design) whenever the legacy-signals section is opened, so
+  // the tri-state smsOptOut summary can show "corrected on <date>" instead of
+  // just "not currently active".
+  useEffect(() => {
+    if (!legacyOpen || !canManage) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await communicationPreferencesService.getLegacyCorrections(patientId, { limit: 1 });
+        const latest = res.data.items?.[0];
+        if (!cancelled) setLatestSmsOptOutCorrection(latest ? { createdAt: latest.createdAt, evidenceType: latest.evidenceType } : null);
+      } catch {
+        if (!cancelled) setLatestSmsOptOutCorrection(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [legacyOpen, canManage, patientId]);
+
+  const refreshAfterLegacyCorrection = async () => {
+    await loadMatrix();
+    onLegacySignalsChanged?.();
+    try {
+      const res = await communicationPreferencesService.getLegacyCorrections(patientId, { limit: 1 });
+      const latest = res.data.items?.[0];
+      setLatestSmsOptOutCorrection(latest ? { createdAt: latest.createdAt, evidenceType: latest.evidenceType } : null);
+    } catch {
+      // best-effort refresh only — the correction itself already succeeded
+    }
+  };
+
+  const validation = computeConsentActionValidation({ action: pendingCell?.action ?? null, source, noticeVersion, notes });
+  const { noticeVersionRequired, notesRequired, canSubmit } = validation;
+  const fieldRefs: Record<ConsentActionValidationField, React.RefObject<HTMLElement | null>> = {
+    noticeVersion: noticeVersionInputRef,
+    notes: notesInputRef,
+  };
+  const fieldErrorHintKey: Record<ConsentActionValidationField, string> = {
+    noticeVersion: 'fields.noticeVersionRequiredHint',
+    notes: 'fields.notesRequiredHint',
+  };
+  // Stale errors clear the moment a field becomes valid, without waiting for
+  // another submit attempt.
+  useEffect(() => {
+    setTouchedInvalidFields((prev) => {
+      const next = new Set([...prev].filter((f) => validation.invalidFields.includes(f)));
+      return next.size === prev.size && [...next].every((f) => prev.has(f)) ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noticeVersion, notes, pendingCell?.action, source]);
 
   const [historyCell, setHistoryCell] = useState<{ channel: string; purpose: string } | null>(null);
   const [historyEvents, setHistoryEvents] = useState<HistoryEvent[]>([]);
@@ -119,15 +197,34 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, 
 
   useEffect(() => { loadMatrix(); }, [loadMatrix]);
 
+  // Action modal dialog semantics: focus trap entry, Escape-to-close, body
+  // scroll lock, and focus restore on close — modeled directly on
+  // src/components/common/ConfirmDialog.tsx (reused pattern, not reinvented).
+  useEffect(() => {
+    if (!pendingCell) return;
+
+    modalPreviouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusTarget = modalDialogRef.current?.querySelector<HTMLElement>('[data-autofocus]') ?? modalDialogRef.current;
+    focusTarget?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !submitting) setPendingCell(null);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      modalPreviouslyFocusedRef.current?.focus?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCell != null, submitting]);
+
   const index = buildMatrixIndex(matrix);
   const summary = useMemo(() => computeConsentSummary(matrix), [matrix]);
-
-  const isGrant = pendingCell?.action === 'grant';
-  const noticeVersionRequired = isGrant && DIGITAL_GRANT_SOURCES.includes(source);
-  const sourceDescriptionRequired = isGrant && source === 'staff';
-  const canSubmit = pendingCell?.action != null &&
-    (!noticeVersionRequired || noticeVersion.trim().length > 0) &&
-    (!sourceDescriptionRequired || notes.trim().length > 0);
 
   const openActionMenu = (channel: string, purpose: string, isConflict: boolean) => {
     setPendingCell({ channel, purpose, action: null, isConflict });
@@ -136,10 +233,23 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, 
     setNoticeVersion('');
     setNotes('');
     setModalError('');
+    setTouchedInvalidFields(new Set());
   };
 
   const submitAction = async () => {
     if (!pendingCell?.action) return;
+
+    // Validate on submit — Confirm stays enabled at all times (per the
+    // required UX pattern); an invalid submit populates inline errors, moves
+    // focus to the first invalid field, and never silently no-ops.
+    if (!canSubmit) {
+      setTouchedInvalidFields(new Set(validation.invalidFields));
+      const target = validation.firstInvalidField ? fieldRefs[validation.firstInvalidField].current : null;
+      target?.focus();
+      target?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+
     setSubmitting(true);
     setModalError('');
     try {
@@ -458,13 +568,29 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, 
                 {legacyOpen ? <ChevronUp size={16} className="text-amber-500" /> : <ChevronDown size={16} className="text-amber-500" />}
               </button>
               {legacyOpen && (
-                <div className="px-4 py-3 space-y-2 bg-white">
+                <div className="px-4 py-3 space-y-3 bg-white">
                   <p className="text-xs text-amber-700">{t('legacySignals.disclaimer')}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-                    <LegacyField label={t('legacySignals.communicationConsent')} value={legacySignals.communicationConsent} />
-                    <LegacyField label={t('legacySignals.marketingConsent')} value={legacySignals.marketingConsent} />
-                    <LegacyField label={t('legacySignals.smsOptOut')} value={legacySignals.smsOptOut} isRestrictive />
+                    <LegacyField label={t('legacySignals.communicationConsent')} value={legacySignals.communicationConsent} neutral />
+                    <LegacyField label={t('legacySignals.marketingConsent')} value={legacySignals.marketingConsent} neutral />
+                    <SmsOptOutLegacyField
+                      active={legacySignals.smsOptOut}
+                      correction={!legacySignals.smsOptOut ? latestSmsOptOutCorrection : null}
+                      correctionLabel={latestSmsOptOutCorrection ? t(`legacyCorrection.evidenceTypes.${latestSmsOptOutCorrection.evidenceType}`, { defaultValue: latestSmsOptOutCorrection.evidenceType }) : ''}
+                      formatDate={formatDate}
+                      t={t}
+                    />
                   </div>
+                  <p className="text-[11px] text-gray-400">{t('legacySignals.notCentralConsent')}</p>
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => setLegacyCorrectionHistoryOpen(true)}
+                      className="text-xs text-primary-600 hover:underline"
+                    >
+                      {t('legacySignals.viewCorrectionHistory')}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -474,21 +600,40 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, 
 
       {/* Action menu modal — pick an action, then supply evidence */}
       {pendingCell && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-5 py-4 border-b">
-              <h3 className="font-semibold text-gray-900">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !submitting && setPendingCell(null)}>
+          <div
+            ref={modalDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={modalTitleId}
+            tabIndex={-1}
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md outline-none max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
+              <h3 id={modalTitleId} className="font-semibold text-gray-900">
                 {t('actions.manageTitle', { channel: t(`channels.${pendingCell.channel}`), purpose: t(`purposes.${pendingCell.purpose}`) })}
               </h3>
-              <button onClick={() => setPendingCell(null)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setPendingCell(null)} className="text-gray-400 hover:text-gray-600" aria-label={t('actions.cancel')}>
                 <X size={18} />
               </button>
             </div>
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-5 py-4 space-y-4 overflow-y-auto">
               {pendingCell.isConflict && (
-                <div className="flex items-start gap-2 p-3 bg-orange-50 text-orange-800 rounded-lg text-sm border border-orange-200">
-                  <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
-                  <span>{t('conflict.modalNote')}</span>
+                <div className="flex flex-col gap-2 p-3 bg-orange-50 text-orange-800 rounded-lg text-sm border border-orange-200">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
+                    <span>{t('conflict.modalNote')}</span>
+                  </div>
+                  {canCorrectLegacyConsent && (
+                    <button
+                      type="button"
+                      onClick={() => { setPendingCell(null); setLegacyCorrectionModalOpen(true); }}
+                      className="self-start text-xs font-semibold text-orange-900 underline hover:no-underline"
+                    >
+                      {t('conflict.correctLegacyAction')}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -527,36 +672,67 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, 
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="consent-notice-version" className="block text-sm font-medium text-gray-700 mb-1">
                       {t('fields.noticeVersion')} {noticeVersionRequired && <span className="text-red-500">*</span>}
                     </label>
-                    <input value={noticeVersion} onChange={(e) => setNoticeVersion(e.target.value)} className="input-field" placeholder={t('fields.noticeVersionPlaceholder')} maxLength={64} />
-                    {noticeVersionRequired && !noticeVersion.trim() && (
-                      <p className="text-xs text-amber-600 mt-1">{t('fields.noticeVersionRequiredHint')}</p>
+                    <input
+                      id="consent-notice-version"
+                      ref={noticeVersionInputRef}
+                      value={noticeVersion}
+                      onChange={(e) => setNoticeVersion(e.target.value)}
+                      className="input-field"
+                      placeholder={noticeVersionRequired ? t('fields.noticeVersionRequiredPlaceholder') : t('fields.noticeVersionPlaceholder')}
+                      maxLength={64}
+                      aria-invalid={touchedInvalidFields.has('noticeVersion')}
+                      aria-describedby={touchedInvalidFields.has('noticeVersion') ? 'consent-notice-version-error' : undefined}
+                    />
+                    {touchedInvalidFields.has('noticeVersion') && (
+                      <p id="consent-notice-version-error" className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <AlertTriangle size={11} /> {t(fieldErrorHintKey.noticeVersion)}
+                      </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('fields.notes')} {sourceDescriptionRequired && <span className="text-red-500">*</span>}
+                    <label htmlFor="consent-notes" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('fields.notes')} {notesRequired && <span className="text-red-500">*</span>}
                     </label>
-                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} className="input-field resize-none" placeholder={t('fields.notesPlaceholder')} />
-                    {sourceDescriptionRequired && !notes.trim() && (
-                      <p className="text-xs text-amber-600 mt-1">{t('fields.sourceDescriptionRequiredHint')}</p>
+                    <textarea
+                      id="consent-notes"
+                      ref={notesInputRef}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={2}
+                      maxLength={1000}
+                      className="input-field resize-none"
+                      placeholder={notesRequired ? t('fields.notesRequiredPlaceholder') : t('fields.notesPlaceholder')}
+                      aria-invalid={touchedInvalidFields.has('notes')}
+                      aria-describedby={touchedInvalidFields.has('notes') ? 'consent-notes-error' : undefined}
+                    />
+                    {touchedInvalidFields.has('notes') && (
+                      <p id="consent-notes-error" className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <AlertTriangle size={11} /> {t(fieldErrorHintKey.notes)}
+                      </p>
                     )}
                   </div>
                 </>
               )}
 
+              {touchedInvalidFields.size > 1 && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg p-2" role="alert">
+                  {t('errors.validationSummary', { count: touchedInvalidFields.size })}
+                </p>
+              )}
+
               {modalError && (
-                <p className="text-sm text-red-600 flex items-center gap-1">
+                <p className="text-sm text-red-600 flex items-center gap-1" role="alert">
                   <AlertTriangle size={13} />
                   {modalError}
                 </p>
               )}
             </div>
-            <div className="px-5 py-4 border-t flex justify-end gap-3">
-              <button onClick={() => setPendingCell(null)} className="btn-secondary">{t('actions.cancel')}</button>
-              <button onClick={submitAction} disabled={submitting || !canSubmit} className="btn-primary flex items-center gap-2">
+            <div className="px-5 py-4 border-t flex justify-end gap-3 flex-shrink-0">
+              <button onClick={() => setPendingCell(null)} className="btn-secondary" disabled={submitting}>{t('actions.cancel')}</button>
+              <button onClick={submitAction} disabled={submitting} className="btn-primary flex items-center gap-2">
                 {submitting && <Loader2 size={15} className="animate-spin" />}
                 {t('actions.confirm')}
               </button>
@@ -564,6 +740,22 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({ patientId, canManage, 
           </div>
         </div>
       )}
+
+      <LegacyConsentCorrectionModal
+        open={legacyCorrectionModalOpen}
+        patientId={patientId}
+        onClose={() => setLegacyCorrectionModalOpen(false)}
+        // Deliberately does NOT close the modal — the modal shows its own
+        // success confirmation and a "Kapat" button; auto-closing here would
+        // remove that confirmation before the user ever sees it.
+        onSuccess={refreshAfterLegacyCorrection}
+      />
+      <LegacyConsentCorrectionHistory
+        open={legacyCorrectionHistoryOpen}
+        patientId={patientId}
+        canViewDetail={canCorrectLegacyConsent}
+        onClose={() => setLegacyCorrectionHistoryOpen(false)}
+      />
 
       {/* History timeline — per-cell or full, with filters */}
       {historyCell && (
@@ -653,13 +845,57 @@ const SummaryTile: React.FC<{ icon: LucideIcon; colorClass: string; label: strin
   </div>
 );
 
-const LegacyField: React.FC<{ label: string; value: boolean; isRestrictive?: boolean }> = ({ label, value, isRestrictive }) => (
+/**
+ * Generic legacy boolean field (communicationConsent/marketingConsent) — a
+ * default `false` is never rendered as an explicit patient denial (KVKK-HIGH-008
+ * requirement); both states use neutral gray wording, since neither value is
+ * the current source of truth for consent.
+ */
+const LegacyField: React.FC<{ label: string; value: boolean; neutral?: boolean }> = ({ label, value }) => (
   <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
     <span className="text-xs text-gray-600 break-words pr-2">{label}</span>
-    <span className={`text-xs font-bold flex-shrink-0 ${value && isRestrictive ? 'text-red-600' : value ? 'text-gray-500' : 'text-gray-400'}`}>
-      {value ? 'Evet' : 'Hayır'}
+    <span className="text-xs font-medium flex-shrink-0 text-gray-500">
+      {value ? 'İşaretli' : 'Kayıtlı değil'}
     </span>
   </div>
 );
+
+/**
+ * Tri-state smsOptOut display (KVKK-HIGH-008 §G): active restrictive legacy
+ * signal / corrected historical signal / not present. Never shows a plain
+ * "Evet"/"Hayır" — the whole point is to distinguish "still restricting" from
+ * "was restricting, now corrected" from "never was set".
+ */
+const SmsOptOutLegacyField: React.FC<{
+  active: boolean;
+  correction: { createdAt: string; evidenceType: string } | null;
+  correctionLabel: string;
+  formatDate: (d: string) => string;
+  t: (key: string, opts?: any) => string;
+}> = ({ active, correction, correctionLabel, formatDate, t }) => {
+  const label = t('legacySignals.smsOptOut');
+  if (active) {
+    return (
+      <div className="flex items-center justify-between p-2 rounded-lg bg-red-50 border border-red-100">
+        <span className="text-xs text-gray-700 break-words pr-2">{label}</span>
+        <span className="text-xs font-bold flex-shrink-0 text-red-600">{t('legacySignals.smsOptOutActive')}</span>
+      </div>
+    );
+  }
+  if (correction) {
+    return (
+      <div className="flex items-center justify-between p-2 rounded-lg bg-green-50 border border-green-100" title={`${formatDate(correction.createdAt)} — ${correctionLabel}`}>
+        <span className="text-xs text-gray-700 break-words pr-2">{label}</span>
+        <span className="text-xs font-bold flex-shrink-0 text-green-700">{t('legacySignals.smsOptOutCorrected')}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
+      <span className="text-xs text-gray-600 break-words pr-2">{label}</span>
+      <span className="text-xs font-medium flex-shrink-0 text-gray-400">{t('legacySignals.smsOptOutNotPresent')}</span>
+    </div>
+  );
+};
 
 export default CommunicationPreferencesPanel;
