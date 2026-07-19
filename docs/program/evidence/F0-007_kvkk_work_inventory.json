@@ -48,12 +48,13 @@
     },
     {
       "id": "KVKK-HIGH-007-continuation",
-      "title": "Consent reconciliation (uncommitted continuation of KVKK-HIGH-007 base)",
+      "title": "Consent reconciliation (continuation of KVKK-HIGH-007 base)",
       "status": "UNVERIFIED_ACTIVE_WORK",
-      "prs": [],
+      "prs": [175],
+      "prsNote": "empty ([]) at this task's original verification time; PR 175 found OPEN during the correction pass on PR #174 (see correctionPass.primaryTreeObservations). Content of PR 175 not inspected.",
       "deployed": false,
       "productionVerified": false,
-      "note": "observed only via read-only path metadata in primary working tree; implementation content not inspected"
+      "note": "observed only via read-only path metadata in primary working tree at task start; implementation content not inspected at any point; commit/push/PR status is time-sliced, see correctionPass"
     },
     {
       "id": "KVKK-CRIT-002",
@@ -115,11 +116,25 @@
     { "number": 173, "title": "docs(architecture): verify F0-006 production topology and configuration", "state": "MERGED", "mergeCommit": "91276dc7f610ef6923e3c1a7572f0ebba578a2f7", "mergedAt": "2026-07-19T12:54:43Z" }
   ],
   "repositoryWidePrSweep": {
-    "totalPrsFound": 61,
-    "range": "113-173",
-    "openPrs": 0,
-    "draftPrs": 0,
-    "method": "gh pr list --state all --limit 60"
+    "originalClaim": {
+      "totalPrsFound": 61,
+      "range": "113-173",
+      "openPrs": 0,
+      "draftPrs": 0,
+      "method": "gh pr list --state all --limit 60",
+      "status": "INCORRECT_METHODOLOGY",
+      "note": "a --limit 60 query cannot return 61 rows and does not scan full PR history; this was a 60-row recency-limited window, not a repository-wide sweep"
+    },
+    "correctedSweep": {
+      "totalPrsFound": 174,
+      "range": "1-175",
+      "openPrs": 3,
+      "openPrNumbers": [48, 174, 175],
+      "draftPrs": 0,
+      "method": "gh pr list --state all --limit 200 --json number,state",
+      "performedDuring": "correction pass on PR #174",
+      "note": "PR 48 (fix/clinic-branch-visibility, open since 2026-06-16) is pre-existing and unrelated to KVKK, missed by the original narrow sweep; PR 174 is this task's own PR; PR 175 is the KVKK-HIGH-007 continuation, opened after this task's original verification"
+    }
   },
   "stableBaseline": {
     "repositoryMigrationHead": "20260718164142_add_communication_preference_and_consent",
@@ -133,7 +148,10 @@
     "label": "KVKK-HIGH-007-continuation",
     "observationMethod": "read_only_git_status_short_path_metadata_only",
     "contentInspected": false,
-    "uncommittedMigration": "20260719120821_kvkk_high007_consent_reconciliation",
+    "commitStatus": "UNVERIFIED_ACTIVE_WORK",
+    "commitStatusNote": "time-sliced; see correctionPass.primaryTreeObservations for the three distinct observations (task start dirty/uncommitted, task end clean local branch, correction pass GitHub PR 175 open). Not flatly 'uncommitted' as originally stated.",
+    "migrationName": "20260719120821_kvkk_high007_consent_reconciliation",
+    "migrationStatus": "UNVERIFIED",
     "pathGroups": [
       "prisma_schema_migration",
       "communication_consent_services",
@@ -277,6 +295,51 @@
       "requiredSequencing": "continuation merged; F0-009 remains design-only regardless"
     }
   ],
+  "correctionPass": {
+    "reason": "External review of PR #174 found the document set stated the primary tree's branch/HEAD were unchanged throughout the task, and called the continuation flatly 'uncommitted, no PR' without time-slicing. Both corrected here and across KVKK_ACTIVE_WORK_BASELINE.md, KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md, and F0-007_KVKK_BASELINE_EVIDENCE.md.",
+    "primaryTreeObservations": [
+      {
+        "label": "TASK_START_LOCAL_OBSERVATION",
+        "branch": "main",
+        "head": "db89b60c91666cb029c32757f171f227a643c79c",
+        "dirtyEntryCount": 36,
+        "modifiedCount": 23,
+        "untrackedCount": 13,
+        "contentInspected": false
+      },
+      {
+        "label": "TASK_END_LOCAL_OBSERVATION",
+        "branch": "feature/kvkk-high007-consent-reconciliation-ux",
+        "head": "267458c8f09bf13126e1822705317629906f9491",
+        "dirtyEntryCount": 0,
+        "pushedStatus": "UNVERIFIED_AT_THAT_TIME",
+        "prStatusAtThatTime": "none_found",
+        "prCheckMethod": "gh pr list --state all --head feature/kvkk-high007-consent-reconciliation-ux",
+        "transitionCause": "separate session, not this task",
+        "contentInspected": false
+      },
+      {
+        "label": "CORRECTION_PASS_OBSERVATION",
+        "branch": "feature/kvkk-high007-consent-reconciliation-ux",
+        "head": "267458c8f09bf13126e1822705317629906f9491",
+        "dirtyEntryCount": 0,
+        "githubPr": {
+          "number": 175,
+          "state": "OPEN",
+          "mergeable": "MERGEABLE",
+          "baseRefName": "main",
+          "headRefOid": "267458c8f09bf13126e1822705317629906f9491",
+          "changedFiles": 36,
+          "additions": 3942,
+          "deletions": 215,
+          "createdAt": "2026-07-19T13:19:58Z"
+        },
+        "headShaMatchesTaskEndObservation": true,
+        "contentInspected": false,
+        "note": "36 changed files matches the 36 dirty paths originally observed at task start by count only, not by content comparison"
+      }
+    ]
+  },
   "unverified": [
     "kvkk_high_007_continuation_tests",
     "kvkk_high_007_continuation_migration_validation",

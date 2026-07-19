@@ -7,6 +7,8 @@ Baseline commit: `origin/main` @ `91276dc7f610ef6923e3c1a7572f0ebba578a2f7` — 
 
 See [README.md](README.md) for the evidence-classification legend used throughout this document.
 
+> **Correction note (2026-07-19, correction pass on PR #174):** External review found that §1 previously stated the primary tree's branch/HEAD were "unchanged throughout this task." That was false — the primary tree changed branch and HEAD independently, by a separate session, between this task's start and its own finish. §1 below is corrected to a time-sliced observation record (task-start / task-end / this correction pass) instead of a single misleading snapshot. §3.1's PR-sweep claim is also corrected: the original "repository-wide, 61/61 `MERGED`, zero open" statement was generated from `gh pr list --state all --limit 60`, which — by construction — cannot return more than 60 rows and did not scan the full PR history; it missed a pre-existing open PR outside that 60-row recency window. A true wider sweep, run during this correction pass, is recorded in §3.1.
+
 ---
 
 ## 1. Worktree and primary-tree safety record
@@ -18,12 +20,22 @@ See [README.md](README.md) for the evidence-classification legend used throughou
 | HEAD at creation | `91276dc7f610ef6923e3c1a7572f0ebba578a2f7` | `git rev-parse HEAD` |
 | Worktree status at creation | clean (`git status --short` empty) | `VERIFIED_GIT` |
 | Pre-existing worktree/branch of this name | none found | `git worktree list` before creation |
-| Primary tree branch | `main`, unchanged throughout this task | `git branch --show-current` in primary tree |
-| Primary tree HEAD | `db89b60c91666cb029c32757f171f227a643c79c`, unchanged throughout this task | `git rev-parse HEAD` in primary tree |
-| Primary tree dirty-file count | 36 entries (23 modified + 13 untracked, incl. 1 additional path — `docs/compliance/56-...md` — not listed in the task's provided path set but observed via read-only `git status --short`) | `git status --short \| wc -l`, run once at task start |
-| Commands run against the primary tree this task | `git fetch origin --prune` (updates remote-tracking refs only, does not touch working tree), `git status --short --branch` (×2, read-only), `git branch --show-current`, `git rev-parse HEAD` — no `git diff`, no staging, no commit, no reset/restore/checkout/stash/clean, no file open/read against any of the 36 dirty paths | this task's own command log |
+| Primary tree dirty-file count at task start | 36 entries (23 modified + 13 untracked, incl. 1 additional path — `docs/compliance/56-...md` — not listed in the task's provided path set but observed via read-only `git status --short`) | `git status --short \| wc -l`, run once at task start |
+| Commands run against the primary tree this task | `git fetch origin --prune` (updates remote-tracking refs only, does not touch working tree), `git status --short --branch` (read-only, multiple times across this task and its correction pass), `git branch --show-current`, `git rev-parse HEAD` — no `git diff`, no staging, no commit, no reset/restore/checkout/stash/clean, no file open/read against any of the 36 (or later, 0) dirty paths | this task's own command log |
 
-**Additional observed path not in the task's provided list:** `docs/compliance/56-kvkk-communication-preference-and-consent-management.md` is modified in the primary tree (path name only, from `git status --short`; content not read, not diffed). This is treated as corroborating scope metadata — it is the compliance narrative document for KVKK-HIGH-007, consistent with the active work being a continuation of that same initiative (see [KVKK_ACTIVE_WORK_BASELINE.md](../KVKK_ACTIVE_WORK_BASELINE.md) §1).
+### 1.1 Primary tree — time-sliced observations (corrected)
+
+The primary working tree (`D:\Mustafa\Siteler\DisKlinikCRM`) is under active, independent development by a separate session, entirely outside this task's control. The following are three distinct, timestamped, read-only observations — not a single fact — because the tree's branch and HEAD changed between them:
+
+| Observation | Branch | HEAD | Dirty entries | Method | Notes |
+|---|---|---|---|---|---|
+| **A. TASK_START_LOCAL_OBSERVATION** | `main` | `db89b60c91666cb029c32757f171f227a643c79c` | 36 (23 modified + 13 untracked) | `git branch --show-current`, `git rev-parse HEAD`, `git status --short` — all read-only, run once at task start | Path metadata only; no file content inspected. |
+| **B. TASK_END_LOCAL_OBSERVATION** (end of this task's original run, shortly before PR #174 was opened at `2026-07-19T13:16:14Z`) | `feature/kvkk-high007-consent-reconciliation-ux` | `267458c8f09bf13126e1822705317629906f9491` (actually recorded via `git rev-parse HEAD`, not assumed) | 0 — working tree clean | Same read-only commands, re-run once before pushing this task's own branch | Remote push status of this branch: `UNVERIFIED` at that moment. PR status: `gh pr list --state all --head feature/kvkk-high007-consent-reconciliation-ux` returned `[]` — no PR found on GitHub at that verification time. This transition was performed entirely by a separate session; F0-007 did not cause it, and did not inspect its commit content. |
+| **C. CORRECTION_PASS_OBSERVATION** (this correction pass, external review of PR #174) | `feature/kvkk-high007-consent-reconciliation-ux` (unchanged since B) | `267458c8f09bf13126e1822705317629906f9491` (unchanged since B) | 0 — still clean | Same read-only commands, re-run during this correction pass | GitHub now shows [PR #175](https://github.com/MustafaBasol/DisKlinikCRM/pull/175), head branch `feature/kvkk-high007-consent-reconciliation-ux`, head SHA `267458c8f09bf13126e1822705317629906f9491` — **exact match** to the HEAD recorded in row B. State `OPEN`, `mergeable: MERGEABLE`, base `main`, 36 changed files, `+3942/−215`, created `2026-07-19T13:19:58Z` (`VERIFIED_GITHUB`, `gh pr view 175`). This confirms the branch was pushed and a PR opened, ~3.5 minutes after this task's own PR #174 was created — i.e. after row B's observation, not before it. **Only GitHub metadata (title/state/branch/head SHA/changed-file counts) was read — no diff, patch, or file content of PR #175 was opened or inspected.** |
+
+Do not read rows A/B/C as one continuous fact. Row A describes the state this task started from. Row B describes the state this task finished from (self-observed, not caused). Row C describes what is independently verifiable via GitHub as of this correction pass. None of the three implies anything about the other's timing beyond what is stated.
+
+**Additional observed path not in the task's provided list (row A only):** `docs/compliance/56-kvkk-communication-preference-and-consent-management.md` is modified in the primary tree (path name only, from `git status --short`; content not read, not diffed). This is treated as corroborating scope metadata — it is the compliance narrative document for KVKK-HIGH-007, consistent with the active work being a continuation of that same initiative (see [KVKK_ACTIVE_WORK_BASELINE.md](../KVKK_ACTIVE_WORK_BASELINE.md) §1).
 
 ## 2. Authoritative sources read
 
@@ -31,9 +43,19 @@ All 12 root program documents, `AGENTS.md`, `evidence/README.md`, and the F0-002
 
 ## 3. GitHub PR verification (`VERIFIED_GITHUB` — `gh pr view`/`gh pr list`, this task, baseline commit `91276dc`)
 
-### 3.1 Repository-wide PR sweep
+### 3.1 Repository-wide PR sweep (corrected)
 
-`gh pr list --state all --limit 60` returned **61 PRs, numbered #113–#173, all in state `MERGED`. Zero PRs are currently `OPEN` or `DRAFT` anywhere in the repository.** This is a direct, repository-wide fact, not limited to the KVKK subset the task asked to spot-check.
+**Original claim (incorrect methodology):** this task originally ran `gh pr list --state all --limit 60` and reported "61 PRs, numbered #113–#173, all `MERGED`, zero open, repository-wide." This is internally impossible — `--limit 60` caps the result at 60 rows, not 61 — and the claim was not actually repository-wide: it only captured the 60 most-recently-updated PRs (which happened to span #113–#173 and were indeed all `MERGED`), while silently excluding older PRs outside that recency window.
+
+**Corrected sweep (this correction pass):** `gh pr list --state all --limit 200 --json number,state` returned **174 PRs total, numbered #1–#175** (with some gaps in the numbering, shared with issues). Of these, **3 are currently `OPEN`**:
+
+| # | Title | Head branch | Created | Relevance |
+|---|---|---|---|---|
+| [#48](https://github.com/MustafaBasol/DisKlinikCRM/pull/48) | Fix/clinic branch visibility | `fix/clinic-branch-visibility` | `2026-06-16T22:15:41Z` | Pre-existing, unrelated to KVKK; missed entirely by the original `--limit 60` sweep because it falls outside the 60 most-recently-updated PRs. Not part of this task's scope. |
+| [#174](https://github.com/MustafaBasol/DisKlinikCRM/pull/174) | docs(privacy): establish F0-007 KVKK baseline and freeze boundary | `docs/f0-007-kvkk-baseline-freeze-boundary` | `2026-07-19T13:16:14Z` | This task's own PR — expected to be open. |
+| [#175](https://github.com/MustafaBasol/DisKlinikCRM/pull/175) | KVKK-HIGH-007 follow-up: legacy/central consent reconciliation, audit-mode readiness, UX hardening | `feature/kvkk-high007-consent-reconciliation-ux` | `2026-07-19T13:19:58Z` | The KVKK-HIGH-007 continuation, opened after this task's original §1 observation (row B) concluded. See §1.1 row C. |
+
+The corrected, narrower claim: **as of this task's original verification (baseline commit `91276dc`, before PR #174 was opened), the KVKK/privacy/security PR subset explicitly checked in §3.2 (#156, #160, #162, #163, #164, #165, #167, #169) were all `MERGED` with zero open among that named set.** No claim of an exhaustive, gap-free, repository-wide zero-open-PRs fact should have been made from a 60-row, recency-limited query. This methodological error is recorded as a new risk (see updated `RISK_REGISTER.md`, R-053).
 
 ### 3.2 KVKK/privacy/security PRs — full detail
 
@@ -54,6 +76,8 @@ The tracker/phase docs, as read at this task's start, recorded PR #167 as `OPEN`
 
 Separately, and **not corrected by this task** (out of scope — `docs/compliance/` is not part of this task's permitted change set): `docs/compliance/56-kvkk-communication-preference-and-consent-management.md` and `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md`, both committed on `origin/main`, still describe PR #169 as "not yet merged" / "in progress." GitHub confirms `MERGED`. This is recorded as risk R-042 (see updated `RISK_REGISTER.md`).
 
+**Correction-pass addition:** this task's own §1 originally asserted the primary tree's branch/HEAD were "unchanged throughout this task" — also stale, in the opposite direction (understating change rather than overstating it). Corrected in §1.1 above. Separately, the KVKK-HIGH-007 continuation now has an open PR — [#175](https://github.com/MustafaBasol/DisKlinikCRM/pull/175), opened `2026-07-19T13:19:58Z`, after this task's own original verification concluded. See §1.1 row C.
+
 ## 4. Program-control (non-KVKK) PR re-confirmation
 
 | # | Title | State | Merge commit | Merged at |
@@ -73,9 +97,9 @@ Both match the task instructions' provided values exactly (`VERIFIED_GITHUB`).
 
 Per [F0-002_PRODUCTION_BASELINE_EVIDENCE.md](F0-002_PRODUCTION_BASELINE_EVIDENCE.md) (`VERIFIED_PRODUCTION_OBSERVED`, evidence timestamp `2026-07-19T13:43:12+03:00`): `20260718164142_add_communication_preference_and_consent`, 0 incomplete migrations. **This is identical to the repository migration head (A)** — repository and production are in sync at this baseline. Production `HEAD` (`7fcf2f850f151241266f07349c4bf4442c72bbca`) also equals PR #169's merge commit exactly (§3.2).
 
-### C. Active uncommitted migration
+### C. Active migration — commit/PR status corrected
 
-`20260719120821_kvkk_high007_consent_reconciliation` — observed only as a directory name via read-only `git status --short` in the primary tree. Per the task's mandatory rule, this migration's content was **not opened or inspected**. Status: `UNVERIFIED_ACTIVE_WORK`. Not assumed applied. Not assumed valid. Not assumed rollback-safe. Not assumed to be a single, atomic, or final migration (its content, and whether it will be split/squashed/renamed before commit, is unknown).
+`20260719120821_kvkk_high007_consent_reconciliation` — at task-start observation (§1.1 row A), observed only as a directory name via read-only `git status --short` in the primary tree, uncommitted. By task-end observation (§1.1 row B) the primary tree was already clean on a local feature branch, and by this correction pass (§1.1 row C) that branch has an open GitHub PR (#175, 36 changed files — matching the original 36-dirty-path count observed in row A, which is corroborating path-count metadata, not content confirmation). Whether this migration directory is included in that branch/PR, in what form, is **not inspected and remains `UNVERIFIED`** — per the task's mandatory rule, this migration's content was never opened. Status: `UNVERIFIED_ACTIVE_WORK`. Not assumed applied. Not assumed valid. Not assumed rollback-safe. Not assumed to be a single, atomic, or final migration. Remote presence beyond the PR's own changed-file count: `UNVERIFIED`. Deployed to production: no evidence.
 
 ## 6. Dependency and conflict analysis (built from F0-003/F0-004 evidence)
 
@@ -102,7 +126,7 @@ No direct cross-domain contract is invented here beyond what F0-003/F0-004 alrea
 | KVKK-HIGH-004 | yes, `clinicBulkExport.test.ts` | F0-005 independently ran it: **environment-sensitive line-ending failure** (Windows CRLF, not a product defect — see TEST_OWNERSHIP.md §4.1) | — | — | not covered | not established | `UNVERIFIED` |
 | KVKK-CRIT-003 | yes, `test:security-incidents` (compliance doc) | not independently run (F0-005: `BLOCKED`, no `DATABASE_URL`) | — | yes — `BLOCKED` (F0-005) | not covered | not established | `UNVERIFIED` |
 | KVKK-HIGH-007 (base) | yes, `communicationConsent.test.ts` + `communicationPreferenceBackfill.test.ts` + `communicationConsentMatrixHelpers.test.ts` | F0-005: `communicationConsent.test.ts` **BLOCKED** (4/92 assertions ran, 88 `ECONNREFUSED`); `communicationPreferenceBackfill.test.ts` **BLOCKED** (crashed before any test ran); `communicationConsentMatrixHelpers.test.ts` **passed**, 13/13 (frontend, no DB dependency) | — | 2 of 3 new files `BLOCKED` (no `DATABASE_URL`) | not covered (PR #169's 3 new files landed with zero CI path coverage — TEST_OWNERSHIP.md §6/§7) | not established | `UNVERIFIED` |
-| KVKK-HIGH-007 (continuation) | `UNVERIFIED` — not accessible, uncommitted | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `NOT ESTABLISHED` | `UNVERIFIED` |
+| KVKK-HIGH-007 (continuation) | `UNVERIFIED` — content not accessible/not inspected; commit status corrected from "uncommitted" to `UNVERIFIED_ACTIVE_WORK` (PR #175 now open, content still unread — see §1.1/§5C) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `NOT ESTABLISHED` | `UNVERIFIED` |
 
 For the active KVKK-HIGH-007 continuation specifically, per task instruction: migration validation `UNVERIFIED`; rollback `UNVERIFIED`; tenant isolation impact `UNVERIFIED`; consent conflict resolution behavior `UNVERIFIED`; production readiness `NOT ESTABLISHED`.
 
@@ -110,16 +134,20 @@ For the active KVKK-HIGH-007 continuation specifically, per task instruction: mi
 
 1. Baseline commit `91276dc7f610ef6923e3c1a7572f0ebba578a2f7` matches the task's provided value exactly (`VERIFIED_GIT`).
 2. F0-002/F0-003/F0-004/F0-005/F0-006 are all `MERGED` per `gh pr view` (`VERIFIED_GITHUB`), matching the task's provided values exactly.
-3. Zero open PRs exist anywhere in the repository (`VERIFIED_GITHUB`, repository-wide sweep).
+3. **(Corrected)** The named KVKK/privacy/security PR subset checked in §3.2 (#156, #160, #162, #163, #164, #165, #167, #169) were all `MERGED` with zero open among that set, as of this task's original verification (`VERIFIED_GITHUB`) — not a repository-wide zero-open-PRs fact (see §3.1 correction).
 4. KVKK-HIGH-007's base feature (PR #169) is `MERGED` and its merge commit equals the confirmed production `HEAD` (`VERIFIED_GITHUB` + `VERIFIED_PRODUCTION_OBSERVED`, cross-referenced against F0-002 Stage B).
 5. Repository and production migration heads are identical (`20260718164142_add_communication_preference_and_consent`) — no repository/production migration drift exists at this baseline (`VERIFIED_REPOSITORY` + `VERIFIED_PRODUCTION_OBSERVED`).
 6. The tracker's "PR #167 `OPEN`" claim was stale as of this task's start; GitHub shows it `MERGED` since 2026-07-18T16:10:01Z (`VERIFIED_GITHUB`).
-7. The primary working tree was not modified by this task; only `git status --short`/`git branch`/`git rev-parse` (read-only) were run against it.
+7. **(Corrected)** The primary working tree was not written to by this task at any point (no diff/stage/commit/reset/restore/checkout/stash/clean/file-open); only `git status --short`/`git branch`/`git rev-parse` (read-only) were ever run against it. Its branch and HEAD nonetheless changed independently between this task's start and finish (§1.1) — that change was observed, not caused, and not prevented (this task has no authority to prevent another session's own commits).
+8. **(New, correction pass)** The KVKK-HIGH-007 continuation now has an open PR — [#175](https://github.com/MustafaBasol/DisKlinikCRM/pull/175), head SHA `267458c8f09bf13126e1822705317629906f9491`, exactly matching the HEAD this task recorded at its own task-end observation (§1.1 row B) — confirming that HEAD was pushed to a remote branch. Opened `2026-07-19T13:19:58Z`, after this task's original verification. Content not inspected.
+9. **(New, correction pass)** The original repository-wide PR-sweep methodology (`gh pr list --state all --limit 60`) was flawed: it cannot return more than 60 rows and is not a repository-wide scan. A corrected wider sweep (this correction pass) found a pre-existing, KVKK-unrelated open PR (#48, since 2026-06-16) that the original sweep missed. Recorded as risk R-053.
 
 ## 9. Rejected or unverified claims
 
 1. Any claim that KVKK-HIGH-004 or KVKK-CRIT-003 are deployed or production-verified — compliance-doc claims exist but were not independently re-run or re-checked live by this task; both remain `UNVERIFIED` for deployment/production status in this document's own classification.
 2. Any claim that the KVKK-HIGH-007 continuation's tests pass, are complete, or are behaviorally correct — file names alone (e.g. `messagesConsentGate.test.ts`) indicate *intent*, not verified behavior.
 3. Any claim that `docs/compliance/56-...md` or `KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md`'s "PR #169 not merged" text is currently accurate — it is stale relative to GitHub (§3.3), and is not corrected by this task (out of scope).
-4. Any claim that the uncommitted migration `20260719120821_kvkk_high007_consent_reconciliation` is a single, final, or applied migration — not inspected, not assumed.
+4. Any claim that the migration `20260719120821_kvkk_high007_consent_reconciliation` is a single, final, or applied migration, or that it is definitely included (in any particular form) in PR #175 — not inspected, not assumed, `UNVERIFIED`.
 5. Any claim that the new `whatsappCommunicationPurposeMap.ts`/`legacyReconciliationResolver.ts`/`communicationConsentConflictTracker.ts`/`communicationConsentAuditLogging.ts`/`communicationConsentAuditReport.ts` files constitute an accepted cross-domain contract — no ADR-015 review has occurred.
+6. Any claim that PR #175's tests pass, are complete, or are behaviorally correct, or that its 36 changed files / `+3942/−215` diffstat map one-to-one onto the 36 dirty paths originally observed in the primary tree (§1.1 row A) — the file *count* matches, but content, filenames, and diff shape were not compared; this is corroborating metadata, not proof of identity.
+7. Any claim that the original "repository-wide, 61/61 `MERGED`, zero open" PR sweep was accurate as stated — it was not; see §3.1 and accepted finding 9.
