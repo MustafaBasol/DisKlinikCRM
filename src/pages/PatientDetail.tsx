@@ -40,6 +40,7 @@ import { patientService, taskService, treatmentCaseService, paymentService, paym
 import api from '../services/api';
 import DentalChart from '../components/DentalChart';
 import PatientPrivacyPanel from '../components/PatientPrivacyPanel';
+import CommunicationPreferencesPanel from '../components/CommunicationPreferencesPanel';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
@@ -65,7 +66,7 @@ const PatientDetail: React.FC = () => {
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isInsuranceFormOpen, setIsInsuranceFormOpen] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'imaging' | 'dental' | 'privacy'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'tasks' | 'treatments' | 'payments' | 'insurance' | 'messages' | 'activity' | 'files' | 'imaging' | 'dental' | 'privacy' | 'communication'>('overview');
   // Klinik görüntüler tıbbi kayıttır: BILLING ve ASSISTANT sekmeyi hiç görmez
   // (server/src/routes/imaging.ts IMAGING_CLINICAL_ROLES ile senkron).
   const canSeeImaging = canViewImaging(user);
@@ -331,14 +332,14 @@ const PatientDetail: React.FC = () => {
       </div>
 
       <div className="flex gap-1 sm:gap-4 border-b border-gray-200 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'imaging', 'dental', 'activity', 'privacy'] as const).filter(tab => tab !== 'imaging' || canSeeImaging).map(tab => (
-          <button 
+        {(['overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance', 'messages', 'files', 'imaging', 'dental', 'activity', 'privacy', 'communication'] as const).filter(tab => tab !== 'imaging' || canSeeImaging).map(tab => (
+          <button
             key={tab}
             data-tab={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'imaging' ? t('imaging:tab') : tab === 'dental' ? t('patients:dentalChart.title') : tab === 'privacy' ? 'Gizlilik' : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
+            {tab === 'messages' ? t('patients:detail.messagesTab', { defaultValue: 'Mesajlar' }) : tab === 'files' ? t('patients:detail.filesTab') : tab === 'imaging' ? t('imaging:tab') : tab === 'dental' ? t('patients:dentalChart.title') : tab === 'privacy' ? 'Gizlilik' : tab === 'communication' ? t('communicationConsent:tab') : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) })}
           </button>
         ))}
       </div>
@@ -1350,6 +1351,14 @@ const PatientDetail: React.FC = () => {
               isAnonymized={!!patient.isAnonymized}
               canManage={userCanonicalRole === 'OWNER' || userCanonicalRole === 'ORG_ADMIN' || userCanonicalRole === 'CLINIC_MANAGER'}
               onAnonymized={() => fetchPatient()}
+            />
+          </div>
+        )}
+        {activeTab === 'communication' && (
+          <div className="card p-6">
+            <CommunicationPreferencesPanel
+              patientId={id!}
+              canManage={(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DENTIST'] as const).includes(userCanonicalRole as any)}
             />
           </div>
         )}
