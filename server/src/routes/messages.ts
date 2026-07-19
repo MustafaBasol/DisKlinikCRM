@@ -20,6 +20,12 @@ import {
 import { evaluateTemplateBinding, type TemplateBindingStatus } from '../services/whatsapp/templateBinding.js';
 import { sendClinicSms } from '../services/sms/smsService.js';
 import type { WhatsAppConnectionRecord } from '../services/whatsapp/WhatsAppProvider.js';
+import { assertCommunicationPermission } from '../services/communicationConsent/communicationConsentPolicy.js';
+import {
+  MESSAGE_TEMPLATE_PURPOSE_TO_COMMUNICATION_PURPOSE,
+  DEFAULT_MESSAGE_COMMUNICATION_PURPOSE,
+} from '../services/whatsapp/whatsappCommunicationPurposeMap.js';
+import type { MessageTemplatePurpose } from '../schemas/index.js';
 
 const router = express.Router();
 const LOW_SENSITIVITY_CHANNELS = new Set(['sms', 'whatsapp']);
@@ -464,7 +470,7 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
   try {
     const message = await prisma.sentMessage.findFirst({
       where: { id, clinicId },
-      include: { patient: { select: patientContactSelect } },
+      include: { patient: { select: patientContactSelect }, template: true },
     });
     if (!message) return res.status(404).json({ error: 'Message not found' });
     if (message.status !== 'prepared') {
@@ -502,6 +508,35 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
     }
 
     if (message.channel === 'whatsapp') {
+      // KVKK-HIGH-007: this generic dispatch path (manual composer + recall
+      // drafts) previously called sendWhatsAppMessage with zero consent
+      // context at all — the one wired-in gap among the app's WhatsApp
+      // senders. No pre-existing legacy gate exists here to reconcile with,
+      // so this calls the central decision service directly, governed purely
+      // by the existing enforcementMode (disabled today — this is a
+      // zero-behavior-change fix until a future rollout enables it).
+      const templatePurpose = (message.template?.purpose as MessageTemplatePurpose | undefined) ?? undefined;
+      const communicationPurpose = templatePurpose
+        ? MESSAGE_TEMPLATE_PURPOSE_TO_COMMUNICATION_PURPOSE[templatePurpose]
+        : DEFAULT_MESSAGE_COMMUNICATION_PURPOSE;
+
+      const permission = await assertCommunicationPermission({
+        organizationId: req.user!.organizationId,
+        clinicId,
+        patientId: message.patientId,
+        channel: 'whatsapp',
+        purpose: communicationPurpose,
+      });
+      if (permission.blocked) {
+        await prisma.sentMessage.update({ where: { id }, data: { status: 'blocked_by_consent' } });
+        await logActivity({
+          clinicId, userId: req.user!.id, entityType: 'message', entityId: id,
+          action: 'send_blocked',
+          description: `${message.patient.firstName} ${message.patient.lastName} için WhatsApp mesajı iletişim izni nedeniyle engellendi`,
+        });
+        return res.status(403).json({ error: 'Patient consent rules block this WhatsApp message.', code: 'consent_blocked' });
+      }
+
       try {
         const sendResult = await sendWhatsAppMessage(clinicId, { phone: message.recipient, text: message.body });
         if (!sendResult.success) throw new Error(sendResult.error ?? 'WhatsApp send failed');

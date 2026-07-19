@@ -32,7 +32,41 @@
     "denied": "Abgelehnt",
     "withdrawn": "Widerrufen",
     "unknown": "Unbekannt",
-    "not_required": "Nicht erforderlich"
+    "not_required": "Nicht erforderlich",
+    "conflict": "Manuelle Prüfung erforderlich"
+  },
+  "summary": {
+    "allowed": "Erteilt",
+    "deniedOrWithdrawn": "Abgelehnt / Widerrufen",
+    "unknown": "Unbekannt",
+    "notRequired": "Nicht erforderlich",
+    "conflict": "Konflikt — Prüfung nötig"
+  },
+  "purposeGroups": {
+    "essential": "Erforderlich / Betrieblich",
+    "appointment": "Terminkommunikation",
+    "treatmentFollowup": "Behandlungsnachsorge",
+    "recall": "Wiedereinbestellung / Reaktivierung",
+    "marketing": "Marketing / Kampagnen",
+    "survey": "Umfragen / Information"
+  },
+  "help": {
+    "unknownNotConsent": "„Unbekannt“ ist keine Einwilligung — es bedeutet, dass keine ausdrücklich erfasste Präferenz vorliegt.",
+    "deniedVsWithdrawn": "„Abgelehnt“ und „Widerrufen“ sind unterschiedliche historische Zustände: Widerrufen bedeutet, dass eine zuvor erfasste Erlaubnis später zurückgezogen wurde.",
+    "notRequiredMeaning": "„Nicht erforderlich“ ist eine technische Richtlinienausnahme (z. B. Transaktion/rechtlicher Hinweis) — keine allgemeine Marketingberechtigung."
+  },
+  "conflict": {
+    "modalNote": "Ein veraltetes, restriktives Altsignal (z. B. SMS-Opt-out) widerspricht einem ausdrücklichen zentralen „Erteilt“-Eintrag für diese Zelle. Der Versand wird blockiert. Die Auswahl von „Ablehnen“ oder „Widerrufen“ LÖST diesen Konflikt NICHT — sie akzeptiert lediglich das restriktive Altsignal und bringt den zentralen Eintrag damit in Übereinstimmung. Falls Sie annehmen, dass das Altsignal selbst veraltet ist, gibt es derzeit keine unterstützte Möglichkeit, dies zu korrigieren — dies sollte als separater Folgeauftrag protokolliert werden."
+  },
+  "legacySignals": {
+    "title": "Altsignale",
+    "disclaimer": "Dies sind Altfelder (vor der Migration) und spiegeln NICHT den aktuellen Einwilligungsstatus wider. Die zentrale Präferenzmatrix oben ist die aktuelle, maßgebliche Quelle.",
+    "communicationConsent": "Kommunikationseinwilligung (Altfeld)",
+    "marketingConsent": "Marketingeinwilligung (Altfeld)",
+    "smsOptOut": "SMS-Opt-out (Altfeld)"
+  },
+  "export": {
+    "explanation": "Der Export lädt den aktuellen Präferenzstatus und den vollständigen Verlauf für diesen Patienten als JSON herunter. Geheime/nur interne Felder (z. B. rohe IP-/UA-Hashes) sind nie enthalten."
   },
   "actions": {
     "export": "Nachweis exportieren",
@@ -41,7 +75,13 @@
     "withdraw": "Widerrufen",
     "reset": "Auf Unbekannt zurücksetzen",
     "cancel": "Abbrechen",
-    "confirm": "Bestätigen"
+    "confirm": "Bestätigen",
+    "manage": "Verwalten",
+    "manageTitle": "{{channel}} / {{purpose}} — Aktion wählen",
+    "chooseAction": "Aktion wählen",
+    "groupedView": "Gruppierte Ansicht",
+    "matrixView": "Matrixansicht",
+    "viewHistory": "Verlauf anzeigen"
   },
   "confirm": {
     "grantTitle": "Einwilligung für {{channel}} / {{purpose}} erteilen?",
@@ -84,8 +124,17 @@
   },
   "history": {
     "title": "Verlauf {{channel}} / {{purpose}}",
+    "allTitle": "Vollständiger Einwilligungsverlauf",
     "empty": "Noch kein Verlauf vorhanden.",
-    "initial": "Kein Eintrag"
+    "initial": "Kein Eintrag",
+    "filters": {
+      "toggle": "Filter ein-/ausblenden",
+      "anyChannel": "Alle Kanäle",
+      "anyPurpose": "Alle Zwecke",
+      "anyStatus": "Alle Status",
+      "anySource": "Alle Quellen",
+      "apply": "Filtern"
+    }
   },
   "errors": {
     "loadFailed": "Kommunikationspräferenzen konnten nicht geladen werden.",

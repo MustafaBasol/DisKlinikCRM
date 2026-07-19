@@ -1572,6 +1572,10 @@ model OperationalEvent {
   @@index([organizationId, source])
   @@index([organizationId, resolvedAt])
   @@index([createdAt])
+  /// Supports the bounded KVKK-HIGH-007 audit-summary query
+  /// (communicationConsentAuditReport.ts): source='communication_consent'
+  /// scoped by organization/clinic within a mandatory bounded date range.
+  @@index([source, organizationId, clinicId, createdAt])
 }
 
 // ── Sprint 23: Instagram DM Integration ──────────────────────────────────────
@@ -2111,6 +2115,44 @@ model PatientCommunicationConsentEvent {
   @@index([patientId, clinicId, channel, purpose, createdAt])
   @@index([clinicId, createdAt])
   @@index([organizationId])
+}
+
+/// Database-backed, atomically-upserted aggregate of legacy/central consent
+/// conflicts (KVKK-HIGH-007 reconciliation follow-up) — e.g. a dormant legacy
+/// Patient.smsOptOut=true alongside an explicit central `granted` row for the
+/// same channel/purpose. Deliberately NOT process-local (NoraMedi runs
+/// multiple API instances/workers with PM2 reloads and horizontal scaling —
+/// an in-memory Map would deduplicate differently per process, lose counts on
+/// restart, and produce duplicate rows across instances). One row per
+/// (organization, clinic, channel, purpose, reasonCode, hourly bucket);
+/// every detection is a single atomic Postgres upsert that creates the row
+/// with occurrenceCount=1 or increments it — safe under concurrency
+/// regardless of how many processes are running.
+///
+/// Deliberately excludes any patient-level identifier (no patientId, no
+/// patient name/phone/email, no message text, no raw or hashed contact
+/// identifier, no IP, no user-agent) — this table can report how many
+/// conflicts occurred, never which specific patients they involved.
+model CommunicationConsentConflictBucket {
+  id             String @id @default(uuid())
+  organizationId String
+  clinicId       String
+  channel        String
+  purpose        String
+  reasonCode     String
+
+  /// Start of the hourly bucket this row aggregates (floor of detection time to the hour).
+  bucketStartedAt DateTime
+  firstDetectedAt DateTime
+  lastDetectedAt  DateTime
+  occurrenceCount Int      @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, clinicId, channel, purpose, reasonCode, bucketStartedAt])
+  @@index([organizationId, clinicId, createdAt])
+  @@index([bucketStartedAt])
 }
 
 // ── SMS Add-on Module ─────────────────────────────────────────────────────────

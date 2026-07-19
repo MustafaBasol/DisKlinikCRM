@@ -5,6 +5,7 @@ import {
   RecallActionMode,
   RecallSettings,
 } from './recallSettings.js';
+import { resolveCommunicationConsent, type LegacyGateSignal } from './communicationConsent/legacyReconciliationResolver.js';
 
 export const ACTIVE_RECALL_STATUSES = [
   'PENDING',
@@ -19,6 +20,7 @@ export const recallCandidateInclude = {
   patient: {
     select: {
       id: true,
+      organizationId: true,
       firstName: true,
       lastName: true,
       phone: true,
@@ -403,8 +405,26 @@ export async function prepareRecallMessageForCandidate(candidateId: string, acto
   if (!candidate) throw new Error('Recall candidate not found');
 
   const settings = await getRecallSettings(candidate.clinicId);
-  if (settings.respectCommunicationConsent && !candidate.patient.communicationConsent) {
-    throw new Error('Patient communication consent is not enabled');
+  if (settings.respectCommunicationConsent) {
+    // Single orchestration point shared with SMS — see
+    // legacyReconciliationResolver.ts. No hard-veto concept for recall
+    // (WhatsApp has no opt-out field like smsOptOut), so this never reaches
+    // the legacy/central conflict branch; the per-clinic
+    // respectCommunicationConsent escape hatch above is preserved exactly as
+    // before when it's false.
+    const legacySignal: LegacyGateSignal = candidate.patient.communicationConsent
+      ? { allowed: true, hardVeto: false, reasonCode: 'legacy_ok' }
+      : { allowed: false, hardVeto: false, reasonCode: 'missing_communication_consent' };
+    const resolved = await resolveCommunicationConsent(legacySignal, {
+      organizationId: candidate.patient.organizationId,
+      clinicId: candidate.clinicId,
+      patientId: candidate.patientId,
+      channel: 'whatsapp',
+      purpose: 'recall',
+    });
+    if (!resolved.finalAllowed) {
+      throw new Error('Patient communication consent is not enabled');
+    }
   }
   if (!candidate.patient.phone) {
     throw new Error('Patient has no phone number');

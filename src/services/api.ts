@@ -138,7 +138,7 @@ export const patientPrivacyService = {
 export const communicationPreferencesService = {
   getMatrix: (patientId: string) =>
     api.get(`/patients/${patientId}/communication-preferences`),
-  getHistory: (patientId: string, params?: { channel?: string; purpose?: string }) =>
+  getHistory: (patientId: string, params?: { channel?: string; purpose?: string; status?: string; source?: string; limit?: number; cursor?: string }) =>
     api.get(`/patients/${patientId}/communication-preferences/history`, { params }),
   exportEvidence: (patientId: string) =>
     api.get(`/patients/${patientId}/communication-preferences/export`),
