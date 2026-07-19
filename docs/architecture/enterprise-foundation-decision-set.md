@@ -2,7 +2,7 @@
 
 This is the compact, binding-vs-not summary of `docs/architecture/adr-foundation-review.md`. It answers one question per line: **what can the rest of the program rely on as of F0-008, and what can it not yet rely on?**
 
-Baseline: `origin/main` @ `7cf7a827277779091b9e34e726eebccd39f624ae`. Task: F0-008 (documentation/ADR-review only — no schema, migration, runtime, or deployment change). Full rationale, evidence citations, and required ADR fields for every item below are in `adr-foundation-review.md`; this document does not repeat them.
+Original baseline: `origin/main` @ `7cf7a827277779091b9e34e726eebccd39f624ae`. **Correction-pass baseline (2026-07-19):** merged forward onto `origin/main` @ `1da9586995b625624b7385c14e70ba6a322def73` (PR #175, KVKK-HIGH-007 follow-up, merged) — see `adr-foundation-review.md` §0a. Task: F0-008 (documentation/ADR-review only — no schema, migration, runtime, or deployment change). Full rationale, evidence citations, and required ADR fields for every item below are in `adr-foundation-review.md`; this document does not repeat them.
 
 ## A. Binding architectural invariants (effective now)
 
@@ -21,7 +21,7 @@ These do not require further PoC, design, or external approval to be treated as 
 11. No Kubernetes adoption without independently measured and evidenced trigger: independent service count, multi-node autoscaling need, and operational capacity — none exist today. (ADR-016)
 12. No queue platform selection (including BullMQ) and no outbox implementation is binding yet — see §B.
 13. Schema, migration, and storage changes use expand-migrate-contract with backward compatibility and rollback, per program-wide decision principles (unchanged, restated — not newly decided by F0-008).
-14. RLS and Prisma tenant-extension **implementation** (as opposed to design) remain blocked under the F0-007 architecture freeze boundary regardless of any PoC outcome, until the KVKK-HIGH-007 continuation (PR #175, currently `OPEN`, unmerged) reaches the exit conditions in `KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §5.
+14. RLS and Prisma tenant-extension **implementation** (as opposed to design) remain blocked under the F0-007 architecture freeze boundary regardless of any PoC outcome. **Correction (2026-07-19 correction pass):** the KVKK-HIGH-007 continuation (PR #175) merged into `main` at commit `1da9586995b625624b7385c14e70ba6a322def73`, satisfying `KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §5 condition 2 — but this gate was never conditioned on PR #175's merge status alone. It is governed by that document's §3 default freeze rules, which move only on §5 condition 5 (an explicit external "KVKK baseline stable" declaration) — not yet satisfied, since production migration application, rollback/tenant-impact verification, and production backfill execution are all still unconfirmed. This item's blocked status is unchanged by the merge.
 
 ## B. Approved direction requiring later implementation (not yet binding in detail)
 
