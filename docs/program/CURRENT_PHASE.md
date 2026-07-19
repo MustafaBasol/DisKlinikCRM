@@ -1,6 +1,6 @@
 # CURRENT_PHASE — Aktif Faz Durumu
 
-Son güncelleme: 2026-07-18 (F0-002 Stage A — final remediation)
+Son güncelleme: 2026-07-19 (F0-002 Stage A + Stage B tamamlandı — production baseline kanıtı belgelendi; F0-003/F0-004/F0-005 `MERGED` durum düzeltmeleri main'den taşındı)
 
 ## Aktif faz
 
@@ -49,11 +49,11 @@ KVKK-HIGH-004 (secure clinic bulk export) çalışması [PR #165](https://github
 
 ## Aktif görev
 
-**F0-002 — Repository and Deployment Baseline Inventory** → `IN_PROGRESS` — Stage A (depo kanıtı) `AGENT_COMPLETED` (bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); Stage B (production kanıtı) kullanıcının salt-okunur VPS kanıtı sağlamasını bekliyor ([evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md)). Genel görev durumu ajan tarafından bunun ötesine geçirilemez.
+**F0-002 — Repository and Deployment Baseline Inventory** → `AGENT_COMPLETED` — Stage A (depo kanıtı, bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)) ve Stage B (production baseline kanıtı, kullanıcı tarafından salt-okunur sağlandı, evidence timestamp `2026-07-19T13:43:12+03:00`, bkz. [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)) ikisi de tamamlandı. Genel görev durumu ajan tarafından bunun ötesine (`PR_OPEN` PR açıldıktan sonra hariç) geçirilemez — `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` dış teyit gerektirir.
 
 ## Sonraki görev
 
-**F0-002 Stage B — Production Topology, Commit, Migration, and Runtime Verification** → kullanıcı girdisi bekleniyor (production evidence request çıktısı). Ardından F0-003 sıraya girer (bu turda **başlatılmadı**).
+**F0-002 için dış inceleme ve merge kararı** (PR açılacak). Merge sonrası sıradaki adaylar: **F0-006 — Production Topology and Configuration Verification** ve **F0-007 — Active KVKK Work Baseline and Architecture Freeze Boundary** (ikisi de F0-002'ye bağımlı). F0-003, F0-004, F0-005 bu arada `main`'e merge edilmiş durumda (kullanıcının açık talimatıyla repository-only paralel yürütülmüşlerdi).
 
 ## Giriş koşulları
 
@@ -73,8 +73,8 @@ G0, F0-013 konsolide raporunun; baseline kanıtları, harita doğrulamaları, Po
 
 Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blockers-güncel-blokajlar). Özet:
 
-- KVKK taban çizgisi dışarıdan kararlı olarak teyit edilmedi (KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışması [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) — `OPEN`, merge/deploy/production doğrulaması yok).
-- Depo baseline'ı kanıtla toplandı (F0-002 Stage A); production topolojisi, RLS/PgBouncer, storage ve queue/outbox kanıtları henüz yok (F0-002 Stage B, F0-006, F0-009, F0-010, F0-011).
+- KVKK taban çizgisi dışarıdan kararlı olarak teyit edilmedi (KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi; devam eden KVKK/güvenlik çalışmasının [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) sonrası güncel kapsam/durum tespiti F0-007'nin işidir — F0-002 bu alana dokunmaz).
+- Depo baseline'ı kanıtla toplandı (F0-002 Stage A); production baseline kanıtı da artık toplandı ve belgelendi (F0-002 Stage B — bkz. [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)). RLS/PgBouncer, storage-migrasyon tasarımı ve queue/outbox kanıtları hâlâ yok (F0-009, F0-010, F0-011); production topolojinin biçimsel/ayrıntılı incelemesi F0-006'ya aittir (F0-002'nin bu turdaki gözlemsel kanıtı F0-006'nın girdisidir, yerine geçmez).
 
 ## Tarih ve güncelleme geçmişi
 
@@ -87,3 +87,4 @@ Bkz. [NORAMEDI_MASTER_TRACKER.md §12](NORAMEDI_MASTER_TRACKER.md#12-current-blo
 | 2026-07-17 | F0-001 | Düzeltmeler commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi; PR açık: F0-001 → `PR_OPEN`. |
 | 2026-07-18 | F0-001 | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) merge edildi (merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, `2026-07-18T08:08:10Z`, `gh pr view` ile doğrulandı): F0-001 → `MERGED`. |
 | 2026-07-18 | F0-002 | Stage A (depo kanıtı) tamamlandı: izole worktree/branch oluşturuldu, PR #166 merge-ancestry doğrulandı, depo/toolchain/script/Prisma/deployment/runtime-bağımlılık/CI envanteri kanıtla dolduruldu (bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); production evidence request hazırlandı ([evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md)). F0-002 → `IN_PROGRESS` (Stage A `AGENT_COMPLETED`, Stage B kullanıcı girdisi bekliyor). |
+| 2026-07-19 | F0-002 | Branch `origin/main`'e merge edildi (F0-003/F0-004/F0-005 artık `MERGED`, PR #167/#169 KVKK çalışması dahil) — normal, force olmayan `git merge`, 2 dokümantasyon-yalnız çakışma çözüldü. Stage B production baseline kanıtı kullanıcı tarafından salt-okunur olarak sağlandı (evidence timestamp `2026-07-19T13:43:12+03:00`) ve [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)'e işlendi; repository baseline'ın §6.9 kanıt matrisi bu kanıtla mutabakat sağlandı. F0-002 → `AGENT_COMPLETED` (Stage A + Stage B tamamlandı; `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` atanmadı). |

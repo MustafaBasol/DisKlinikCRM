@@ -1,5 +1,7 @@
 # F0-002 — Production Evidence Request (Stage B input)
 
+> **Status: SUPPLIED.** The user ran this command set against the production VPS (read-only) and returned sanitized output on 2026-07-19 (evidence timestamp `2026-07-19T13:43:12+03:00`). The reconciled results are documented in [F0-002_PRODUCTION_BASELINE_EVIDENCE.md](F0-002_PRODUCTION_BASELINE_EVIDENCE.md) and cross-referenced into [F0-002_REPOSITORY_BASELINE.md](F0-002_REPOSITORY_BASELINE.md) §6.9. This file itself is kept unchanged below as a **reusable runbook** — the same command set applies to any future re-verification (e.g. F0-006 Production Topology and Configuration Verification, or a periodic re-check).
+
 **For the user to run, read-only, on the production VPS.** This is not run by the agent. Nothing in this file connects to production, restarts anything, migrates anything, or installs anything.
 
 > ⚠️ **Review the output before sharing.** Remove any secret, token, password, connection string, patient name, phone number, email address, clinical data, or private object path before pasting the results back into this conversation or into ChatGPT.
