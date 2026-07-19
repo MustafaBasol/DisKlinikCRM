@@ -488,6 +488,7 @@ await test('all categories fail: summary has errors but does not throw', async (
     inboundEvents: failingDeps('d'),
     contactRequests: failingDeps('e'),
     inboxEntries: failingDeps('f'),
+    communicationConsentConflictBuckets: failingDeps('g'),
   };
 
   let threw = false;
@@ -499,7 +500,7 @@ await test('all categories fail: summary has errors but does not throw', async (
   }
   assert.equal(threw, false, 'runDataRetentionCleanup must not throw even if all categories fail');
   assert.ok(summary, 'summary should be returned');
-  assert.ok((summary?.errors?.length ?? 0) >= 6, 'should have collected all 6 errors');
+  assert.ok((summary?.errors?.length ?? 0) >= 7, 'should have collected all 7 errors');
 });
 
 // ── Section L: Log safety ─────────────────────────────────────────────────────
