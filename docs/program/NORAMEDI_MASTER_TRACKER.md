@@ -2,7 +2,7 @@
 
 Bu dosya, NoraMedi kurumsal mimari ve modülerleşme programının **yetkili canlı durum kaynağıdır**. Bkz. [README.md](README.md).
 
-Son güncelleme: 2026-07-19 (F0-005 PR #171 düzeltme turu — F0-004 durum düzeltmesi, rebaseline, terminoloji netleştirmesi)
+Son güncelleme: 2026-07-19 (F0-002 Stage B — production baseline kanıtı toplandı ve belgelendi; main'den F0-004 `MERGED`/F0-005 `MERGED` durum düzeltmeleri taşındı, bkz. PR #167/#169/#171 sonrası `origin/main` @ `d9fc40883afc8791098865d4d185de3336774c7a`)
 
 ---
 
@@ -66,34 +66,36 @@ Word yol haritası **stratejik referanstır**, canlı durum kaynağı değildir.
 
 ## 3. Current baseline (Güncel taban çizgisi)
 
-Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu tabloyu kanıtla dolduracaktır. Değer **uydurulmaz**.
+Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir. F0-002 Stage A bu tabloyu **depo** kanıtıyla doldurdu (bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); F0-002 Stage B artık kullanıcının salt-okunur VPS kanıtıyla **tamamlandı** (bkz. [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md), kanıt zaman damgası `2026-07-19T13:43:12+03:00`) — production'a bağlı alanların çoğu artık `VERIFIED_PRODUCTION_OBSERVED`'dır; kanıtla çözülmeyenler (frontend build-artifact eşleşmesi, restore test, offsite yedek, PITR **varlığı**) kasıtlı olarak `UNVERIFIED`/`NOT_CONFIGURED` kalır. Depo kapasitesi production kanıtı **yerine geçmez**. Değer **uydurulmaz**. Bu, ne bir `PRODUCTION_VERIFIED` release-gate durumu ne de kimlenmemiş risklerin (aşağıda §12) çözüldüğü anlamına gelir.
 
 | Alan | Değer |
 |---|---|
-| Repository | `DisKlinikCRM` (yerel yol: `E:\Ek Gelir\Siteler\DisKlinikCRM-git`; remote: `github.com/MustafaBasol/DisKlinikCRM`) |
+| Repository | `DisKlinikCRM` (yerel yol: `D:\Mustafa\Siteler\DisKlinikCRM`; remote: `github.com/MustafaBasol/DisKlinikCRM`). Not: önceki sürümde yerel yol `E:\Ek Gelir\Siteler\DisKlinikCRM-git` olarak kayıtlıydı — bu, F0-002 Stage A sırasında bayat olduğu tespit edilip düzeltildi; hiçbir Git/GitHub kanıtını etkilemez. |
 | Default branch | `main` |
-| Current branch (bu dokümantasyon çalışması) | `docs/f0-001-program-tracker-foundation` |
-| Documentation branch creation base | `68721554eb622837f67f956d571723192d628eaf` (branch oluşturulduğu andaki `origin/main`, 2026-07-17) |
+| Current branch (bu dokümantasyon çalışması) | `docs/f0-002-repository-deployment-baseline` |
+| F0-002 isolated worktree | `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline` — tercih edilen `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f0-002-baseline` yolundan sapma; bu ortamda `E:` sürücüsü bağlı değil (bkz. evidence dosyası "Deviations from instructions"). |
+| Documentation branch creation base | `4302825abcdf4f5dbb90b4ded92b2e44a947df18` (F0-002 branch'i oluşturulduğu andaki `origin/main`, 2026-07-18 — aynı zamanda PR #166 merge commit'i; `main` bu commit'in ötesine geçmemiş) |
 | PR base branch | `main` |
-| Current main commit | `UNVERIFIED` — F0-002 bu kanıtı toplayacaktır |
-| Production commit | `UNVERIFIED` |
-| Backend deployment | `UNVERIFIED` |
-| Frontend deployment | `UNVERIFIED` |
-| Worker deployment | `UNVERIFIED` |
-| Current database migration | `UNVERIFIED` |
-| Last backup | `UNVERIFIED` |
-| Last restore test | `UNVERIFIED` |
-| Last production verification | `UNVERIFIED` |
+| Current main commit | `4302825abcdf4f5dbb90b4ded92b2e44a947df18` — `VERIFIED_GIT` (refreshed `origin/main`, `git fetch` + `git rev-parse origin/main` ile doğrulandı, 2026-07-18) |
+| Repository migration head | `20260716120000_add_clinic_bulk_export` — `VERIFIED_REPOSITORY` (60 migration dizini, doğrusal, çakışma/eksik yok — bkz. evidence §6.5) |
+| Production commit | `7fcf2f850f151241266f07349c4bf4442c72bbca`, branch `main`, working tree `CLEAN` — `VERIFIED_PRODUCTION_OBSERVED`, evidence timestamp `2026-07-19T13:43:12+03:00` (bkz. [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md) §B.2). `origin/main` o anda `d9fc40883afc8791098865d4d185de3336774c7a` idi; fark yalnızca dokümantasyon-yalnız [PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171) — runtime deployment drift **değildir**. |
+| Backend deployment | `noramedi-api` PM2 süreci `online`, fork mode, ~38 dk uptime, 14 restart, 0 unstable restart — `VERIFIED_PRODUCTION_OBSERVED`. Local `/api/health` → 200, public `/api/health` → 200. Restart sayısı gözlemsel meta veri olarak kaydedilmiştir; kesinti/instabilite iddiası **yapılmaz** (bkz. evidence §B.4/§B.11). |
+| Frontend deployment | Ayrı bir build-artifact-kaynak eşleşme kontrolü Stage B kapsamında **yapılmadı** (salt-okunur komut setinin dışında) — `UNVERIFIED_PRODUCTION` olarak kalır. |
+| Worker deployment | `noramedi-worker` PM2 süreci `online`, fork mode, ~39 dk uptime, 13 restart, 0 unstable restart — **artık `VERIFIED_PRODUCTION_OBSERVED`** (bkz. evidence §B.4). Depoda bu sürecin adı hâlâ **bulunamıyor** (bkz. evidence §6.6/§6.10 madde 3) — süreç production'da çalışıyor ama depo, onu nasıl deploy ettiğini/yeniden başlattığını tanımlamıyor; bu operasyonel boşluk F0-006'ya taşınır. |
+| Current production database migration | `20260718164142_add_communication_preference_and_consent`, başladı `2026-07-19 13:03:57+03`, bitti `2026-07-19 13:03:58+03`, 0 tamamlanmamış migration — **repository migration head'iyle ve deploy edilen commit'le tutarlı** — `VERIFIED_PRODUCTION_OBSERVED` (bkz. evidence §B.7). |
+| Last backup | En son eşleşen yedek `~38.160` saniye (≈10.6 saat) eski, `434.585` bayt, 7 eşleşen yedek dosyası, cron ile zamanlanmış (systemd timer yok) — `VERIFIED_PRODUCTION_OBSERVED` (bkz. evidence §B.10). Offsite kopya kanıtı **bulunamadı** (`HIGH` risk, bkz. §12/evidence §B.11). |
+| Last restore test | `UNVERIFIED` — otomatik restore-test cron/systemd job'ı bulunamadı, kalıcı manuel kanıt sağlanmadı. **Bu, bir restore testinin hiç yapılmadığı anlamına gelmez** — yalnızca dar kapsamlı otomatik kontrolün sonucu (bkz. evidence §B.10/§B.11). |
+| Last production verification | `NOT_APPLICABLE` bir release-gate `PRODUCTION_VERIFIED` durumu olarak — F0-002 bir envanter görevidir, release-gate doğrulaması iddia etmez. Gözlemsel kanıt: local+public health check'leri `2026-07-19T13:43:12+03:00` civarında ikisi de `200` döndü (bkz. evidence §B.5). |
 | Last confirmed merged KVKK work | [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) — KVKK-HIGH-004 secure clinic bulk export — `MERGED` (2026-07-17) |
-| Currently active KVKK work | `UNVERIFIED` |
-| Local observation (KVKK) | Ana çalışma ağacında `feature/kvkk-crit-003-security-incident-foundation` branch'i gözlemlendi; remote branch, PR, kapsam, uygulama ve tamamlanma durumu `UNVERIFIED` |
+| Currently active KVKK work | [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) — KVKK-CRIT-003 (security incident response foundation). `OPEN`, not draft, mergeable snapshot `true` — `VERIFIED_GITHUB` (`gh pr view 167`, 2026-07-18). Head branch `feature/kvkk-crit-003-security-incident-foundation` @ `9c5c15512e1bc013340526a7f7c3792c32b0f408`, base `main`, 29 changed files, 3 commits. The PR body and commit messages report implementation/test activity (e.g. disposable-Postgres migration runs, `test:security-incidents` results), but these are **self-reported claims by the PR's own commits and are not independently accepted by F0-002** — F0-002 did not run, review, or verify any of that testing itself. PR #167 is **not** `MERGED`, **not** `DEPLOYED`, and has **no** `PRODUCTION_VERIFIED` status; acceptance and merge remain dış inceleme (ChatGPT/kullanıcı) kararı. |
+| Local observation (KVKK) | Yerel branch: `feature/kvkk-crit-003-security-incident-foundation`. Stage A başlangıcı (2026-07-18): temiz. Dış inceleme ara kontrolü (2026-07-18, aynı gün sonra): eşzamanlı değişmiş/untracked dosyalar mevcuttu (liste evidence dokümanında; F0-002 tarafından oluşturulmadı). Önceki düzeltme kontrolü (2026-07-18, remediation #1): yeniden temiz, remote ile güncel. Bu son düzeltme kontrolü (2026-07-18, remediation #2): 1 untracked dosya mevcut (`server/.env.pre-security-smoke-*`; F0-002 tarafından oluşturulmadı) — ağaç, eşzamanlı KVKK çalışması (bkz. PR #167 yukarıda) sürdüğü için zaman içinde değişmeye devam ediyor; bu **kararlı bir durum değildir**, yalnızca tek bir anlık gözlemdir. Tüm gözlemler **salt-okunur** (`git status`/`git branch`) — F0-002 bu ağaca hiçbir yazma/commit/reset/checkout komutu çalıştırmadı. Sınıflandırma: `OBSERVED_LOCAL_ONLY`. Remote branch'in scope/completion/deployment durumu (PR üzerinden dış onay/merge/deploy dışında): `UNVERIFIED` (F0-007 kapsamı) |
 | Known blockers | Bkz. §12 |
 
 ## 4. Phase summary (Faz özeti)
 
 | Faz | Ad | Durum | Giriş koşulu | Çıkış kapısı | Bloklayan bağımlılık | Son güncelleme |
 |---|---|---|---|---|---|---|
-| F0 | Baseline, Program Control, and Architecture Validation | `IN_PROGRESS` | Program başlangıcı | G0: F0 doğrulama raporu (F0-013) onayı | Aktif KVKK çalışması taban çizgisi (mimari değişiklikler için) | 2026-07-17 |
+| F0 | Baseline, Program Control, and Architecture Validation | `IN_PROGRESS` | Program başlangıcı | G0: F0 doğrulama raporu (F0-013) onayı | Aktif KVKK çalışması taban çizgisi (mimari değişiklikler için) | 2026-07-18 |
 | F1 | CI and Test Architecture | `TODO` | G0 onayı | Etki-bazlı CI modeli kanıtla çalışıyor | F0 | 2026-07-17 |
 | F2 | Modular Boundaries and Public Contracts | `TODO` | F1 çıkışı | Modül sınırları + public contract'lar kabul | F1 | 2026-07-17 |
 | F3 | Production Hardening | `TODO` | F2 çıkışı | Sertleştirme kanıtları + gözlemlenebilirlik | F2 | 2026-07-17 |
@@ -110,35 +112,38 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 
 | Alan | Değer |
 |---|---|
-| ID | F0-001 |
-| Title | Program Control and Master Tracker Foundation |
-| Status | `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; dış inceleme düzeltmeleri commit `ef11d2d` ile push edildi (2026-07-17; merge kararı dış incelemeye aittir) |
-| Branch | `docs/f0-001-program-tracker-foundation` |
-| Scope | Yalnızca dokümantasyon: program takip temeli (`docs/program/`) |
-| Out of scope | Tüm uygulama ve veritabanı değişiklikleri |
-| Dependency | Yok |
+| ID | F0-002 |
+| Title | Repository and Deployment Baseline Inventory |
+| Status | `PR_OPEN` — [PR #172](https://github.com/MustafaBasol/DisKlinikCRM/pull/172) açıldı (`main` hedefli). Stage A (depo kanıtı) ve Stage B (production baseline kanıtı, kullanıcı tarafından salt-okunur sağlandı, evidence timestamp `2026-07-19T13:43:12+03:00`) ikisi de tamamlandı. `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` ajan tarafından **atanamaz** — dış teyit gerektirir. |
+| Branch | `docs/f0-002-repository-deployment-baseline` |
+| Worktree | `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline` (izole; ana KVKK çalışma ağacına dokunulmadı). `origin/main`'den F0-003/F0-004/F0-005'i içeren normal, force olmayan `git merge` ile güncellendi (2026-07-19). |
+| Scope | Yalnızca analiz/dokümantasyon: depo/deployment/production-baseline envanteri (`docs/program/`) |
+| Out of scope | Tüm uygulama, şema, migration, test, CI, deployment değişiklikleri; production'a yazma erişimi (yalnızca kullanıcının salt-okunur VPS kanıtı toplanmıştır) |
+| Dependency | F0-001 (`MERGED`) |
 | Reviewer | ChatGPT / kullanıcı |
-| Ajan için izinli sonraki durum | Yok — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir |
+| Evidence | [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md), [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md), [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md) |
+| Ajan için izinli sonraki durum | `PR_OPEN` ([PR #172](https://github.com/MustafaBasol/DisKlinikCRM/pull/172)) — sıradaki adım dış inceleme/merge kararı; `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` yalnızca dış kanıtla kaydedilebilir |
 
 ## 6. Current F0 task backlog (F0 görev listesi)
 
 ### F0-001 — Program Control and Master Tracker Foundation
-- **Status:** `PR_OPEN` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166) açık; düzeltmeler push edildi (2026-07-17)
+- **Status:** `MERGED` — [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166), merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, merged at `2026-07-18T08:08:10Z` (`gh pr view 166` ile doğrulandı — `VERIFIED_GITHUB`).
 - **Purpose:** Depo-tabanlı yetkili program takip sistemini (`docs/program/`) oluşturmak.
 - **Dependencies:** Yok.
 - **Deliverables:** 24 Markdown dosyası (12 kök + 12 faz dokümanı).
-- **Evidence required:** Dosyaların depoda varlığı; uygulama/şema/CI/test dosyalarının değişmediğinin `git status` kanıtı.
+- **Evidence required:** Dosyaların depoda varlığı; uygulama/şema/CI/test dosyalarının değişmediğinin `git status` kanıtı. ✅ Karşılandı.
 - **Blocking conditions:** Yok.
-- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED` / `CHANGES_REQUESTED` / PR akışı.
+- **Allowed next status:** Yok — `MERGED` nihai durumdur.
 
 ### F0-002 — Repository and Deployment Baseline Inventory
-- **Status:** `READY`
+- **Status:** `PR_OPEN` — [PR #172](https://github.com/MustafaBasol/DisKlinikCRM/pull/172) `main` hedefli açıldı. Stage A (depo, toolchain, script, Prisma/migration, deployment, runtime-bağımlılık ve CI envanteri, bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)) ve Stage B (production baseline kanıtı — host, PM2 topolojisi, health, TLS, DB/migration, config presence, storage, backup/PITR/restore-test durumu; kullanıcı tarafından salt-okunur olarak sağlandı, evidence timestamp `2026-07-19T13:43:12+03:00`, bkz. [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)) ikisi de tamamlandı. Merge kararı dış incelemeye aittir.
 - **Purpose:** Depo, branch, migration, deployment ve ortam taban çizgisini **kanıtla** envanterlemek; §3'teki `UNVERIFIED` alanları doldurmak.
-- **Dependencies:** F0-001.
-- **Deliverables:** Güncellenmiş §3 baseline tablosu + envanter raporu.
-- **Evidence required:** Git referansları, migration listesi, deployment revizyon bilgileri (erişilebiliyorsa).
-- **Blocking conditions:** Yok. **Yalnızca analiz/dokümantasyon; uygulama davranışı değiştirilemez.**
-- **Allowed next status:** `IN_PROGRESS` → `AGENT_COMPLETED`.
+- **Dependencies:** F0-001 (`MERGED`).
+- **Deliverables:** Güncellenmiş §3 baseline tablosu + [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md) + [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md) + [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md) (yeni).
+- **Evidence required:** Git referansları ✅, migration listesi ✅, deployment tanımı ✅ (depo kapasitesi olarak); deployment revizyon/production kanıtı ✅ (Stage B tamamlandı).
+- **Blocking conditions:** Yok — Stage A ve Stage B ikisi de tamamlandı. **Yalnızca analiz/dokümantasyon; uygulama davranışı değiştirilmedi, production'a hiçbir yazma erişimi kullanılmadı.**
+- **Accepted open risks (remediated değil, yalnızca belgelendi):** yerel VPS storage (S3 yok), offsite yedek kanıtı yok, PITR yapılandırılmamış (`archive_mode: off`), restore test `UNVERIFIED`, Node sürüm sapması (CI'da 20, production'da 22.23.1, `engines` pini yok), PM2 restart sayıları (14/13) operasyonel inceleme gerektiriyor, PM2 süreçleri `root` olarak çalışıyor. Ayrıntı: [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md) §B.11.
+- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED`/`CHANGES_REQUESTED`/merge akışı; `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` yalnızca dış kanıtla kaydedilebilir.
 
 ### F0-003 — Domain and Module Ownership Map
 - **Status:** `MERGED` — [PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168) `main`'e merge edildi, merge commit `131c7cc398fde6c72fea275a40b7efcc1253b828` (2026-07-18T18:27:09Z, `gh pr view 168` ile teyit edildi). Bu satır önceki turda `PR_OPEN` olarak bırakılmıştı; F0-004'ün başlangıç kanıt taramasında düzeltildi (bkz. F0-004 teslim raporu "PARALLEL EXECUTION DECISION").
@@ -161,19 +166,19 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 - **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED`/`CHANGES_REQUESTED`/PR akışı — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir.
 
 ### F0-005 — Test Inventory, Runtime Measurement, and Ownership Map
-- **Status:** `PR_OPEN` — [PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171) açık. **Commit kanıtı (düzeltildi — bkz. PR #171 external review):**
+- **Status:** `MERGED` — [PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171) `main`'e merge edildi, merge commit `d9fc40883afc8791098865d4d185de3336774c7a` (2026-07-19, `docs(test): add F0-005 test inventory and runtime baseline (#171)`). Bu satır önceki turda `PR_OPEN` olarak bırakılmıştı; F0-002'nin bu turunda düzeltildi. **Commit kanıtı:**
   - `534b66e917d4f2b27b7d464f565d3a5d91c5bd4a` — ilk envanter/kanıt commit'i (2026-07-18), orijinal baseline `5ee0b6a` üzerinde.
   - `1e10909...` — bu satırın `PR_OPEN` durumunu kaydeden takip commit'i (2026-07-18).
   - `ecee8533df0aaa5f29bcbf4c69f89b2a00856912` — `origin/main`'in PR #169 ile ilerlemesi üzerine yapılan normal, force olmayan `git merge origin/main` commit'i (2026-07-19); F0-004'ün gerçek `MERGED` durumunu ve PR #169'un 3 yeni test dosyasını branch'e getirdi.
-  - **`76bdf1136b0f6cb98a04d3d5a335281f5c0cac32`** — bu rebaseline'ın kendi düzeltme commit'i (2026-07-19): F0-004 durum düzeltmesi, PR #169'un 3 yeni test dosyasının tam envanter/runtime rebaseline'ı, "test framework yok" iddiasının daraltılması, başarısızlık terminolojisinin netleştirilmesi. **Bu, branch'in şu anki gerçek son head'idir — `534b66e` artık güncel değildir, yalnızca ilk envanter için tarihsel kanıt olarak yukarıda tutulmuştur.**
-  - Merge kararı dış incelemeye aittir. Worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-005-test-ownership`, branch `docs/f0-005-test-inventory-runtime-ownership`, güncel baseline `origin/main` @ `7fcf2f850f151241266f07349c4bf4442c72bbca`.
+  - `76bdf1136b0f6cb98a04d3d5a335281f5c0cac32` — bu rebaseline'ın kendi düzeltme commit'i (2026-07-19): F0-004 durum düzeltmesi, PR #169'un 3 yeni test dosyasının tam envanter/runtime rebaseline'ı, "test framework yok" iddiasının daraltılması, başarısızlık terminolojisinin netleştirilmesi.
+  - Worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-005-test-ownership`, branch `docs/f0-005-test-inventory-runtime-ownership`, merge sonrası `main` @ `d9fc40883afc8791098865d4d185de3336774c7a`.
 - **Purpose:** [TEST_OWNERSHIP.md](TEST_OWNERSHIP.md) envanter tablosunu doldurmak: test dosyaları, süreler, DB/harici bağımlılıklar, güvenilirlik.
 - **Dependencies:** F0-003, F0-004. ✅ Karşılandı — F0-003 ve F0-004 ikisi de `main`'e merge edildi (yukarıda); F0-003'ün committed `tests[]` alanı bu görevin sahiplik envanterinin temeli olarak doğrudan yeniden kullanıldı.
 - **Parallel execution note:** Bu görev, kullanıcının **açık talimatıyla**, F0-002 Stage B (production/VPS kanıtı) hâlâ `BLOCKED` iken, repository-only paralel yetkiyle yürütüldü — F0-003/F0-004'teki aynı istisna ilkesiyle (bkz. o görevlerin "Parallel execution note"). Bu yetki F0-002'yi tamamlamaz, VPS erişimi/production varsayımı/runtime veya şema değişikliği yetkilendirmez ve gelecekteki görevler için paralel-yetki emsali oluşturmaz.
 - **Deliverables:** [TEST_OWNERSHIP.md](TEST_OWNERSHIP.md) (revize edildi — placeholder §3 depo-kanıtıyla dolduruldu, 2026-07-19 rebaseline dahil), [evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md](evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md) (yeni), [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) (yeni, **100** test/doğrulama hedefi — rebaseline öncesi 97), [evidence/F0-005_test_runtime_results.json](evidence/F0-005_test_runtime_results.json) (yeni, 17 komut/suite çalıştırma kaydı — rebaseline öncesi 15).
 - **Evidence required:** Test çalıştırma çıktıları (hedefli; tüm suite zorunlu değil). ✅ Karşılandı — orijinal baseline'da 2532 assertion gerçekten çalıştırıldı (backend 70/70 `.test.ts` dosyası, frontend 5/5, bridge-agent 9/9, windows-bridge installer PowerShell 4/4 script); 2026-07-19 rebaseline'ında bu tekrar doğrulandı ve PR #169'un 3 yeni dosyası eklendi (backend artık 72/72, frontend 6/6) — 2 yeni backend dosyası `DATABASE_URL` erişilemediği için BLOCKED, 1 yeni frontend dosyası 13/13 geçti. 2 gerçek/deterministic ve environment-sensitive bulgu bulundu ve düzeltilmeden belgelendi (`overdueInstallments.test.ts` — orphan script, **deterministic source-drift**; `clinicBulkExport.test.ts` — **environment-sensitive** Windows CRLF ortam artefaktı); bu görev tarafından **0 doğrulanmış product-runtime kusuru** tespit edilmiştir. windows-bridge .NET testleri (`dotnet test`), `securityIncident.test.ts`, ve rebaseline'ın 2 yeni DB-bağımlı dosyası (`communicationConsent.test.ts`, `communicationPreferenceBackfill.test.ts`) ölçülemedi (bkz. Blocking conditions).
 - **Blocking conditions:** Pahalı/geniş suite'ler için kullanıcı onayı — bu görevde full-suite çalıştırma sınırlı kalındı (talimata uygun). windows-bridge `dotnet test` **BLOCKED** (`windows-bridge/global.json` .NET SDK 10.0.301 istiyor, makinede yalnızca 9.0.305 kurulu). `securityIncident.test.ts` + `communicationConsent.test.ts` + `communicationPreferenceBackfill.test.ts` + 3 manuel `server/scripts/verify-*.ts` **BLOCKED** (depoda commit edilmiş disposable-Postgres kurulum otomasyonu yok; Docker CLI makinede mevcut ancak daemon çalışmıyor, ve talimatın "improvised setup yapma" kuralı gereği kullanılmadı).
-- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED`/`CHANGES_REQUESTED`/PR akışı — `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` yalnızca dış kanıtla kaydedilebilir; bu üçü **NOT APPLICABLE** kalır (dokümantasyon-yalnız görev, deployment/production doğrulaması gerektirmez veya iddia etmez).
+- **Allowed next status:** Yok — `MERGED` nihai durumdur (PR #171, merge commit `d9fc40883afc8791098865d4d185de3336774c7a`). `DEPLOYED`/`PRODUCTION_VERIFIED` bu dokümantasyon-yalnız görev için **NOT APPLICABLE** kalır.
 
 ### F0-006 — Production Topology and Configuration Verification
 - **Status:** `TODO`
@@ -251,10 +256,10 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir; F0-002 bu ta
 
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
-| F0-001 | Program Control and Master Tracker Foundation | `PR_OPEN` | Yalnızca dokümantasyon oluşturuldu. Uygulama veya mimari doğrulama **tamamlanmış değildir**. Dış inceleme düzeltmeleri (bayat KVKK taban çizgisi ifadeleri) commit `ef11d2d` ile [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166)'ya push edildi (2026-07-17); PR açık, merge kararı dış incelemeye aittir. |
+| F0-001 | Program Control and Master Tracker Foundation | `MERGED` | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166), merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, merged `2026-07-18T08:08:10Z` — `VERIFIED_GITHUB`. Yalnızca dokümantasyon; uygulama/mimari doğrulama F0-002+ kapsamındadır. |
 | F0-003 | Domain and Module Ownership Map | `MERGED` | Depo-doğrulanmış domain/modül haritası; F0-002'nin genel görev durumu tamamlanmadan, kullanıcının açık talimatıyla paralel yürütüldü (bkz. §6 F0-003 "Parallel execution note"). [PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168) `main`'e merge edildi, commit `131c7cc398fde6c72fea275a40b7efcc1253b828` (2026-07-18). |
-| F0-004 | Cross-Module Dependency Map | `MERGED` | Depo-kanıtıyla dolu 37-domain/833-edge bağımlılık matrisi; F0-002 Stage B hâlâ `BLOCKED` iken kullanıcının açık talimatıyla repository-only paralel yürütüldü (bkz. §6 F0-004 "Parallel execution note"). [PR #170](https://github.com/MustafaBasol/DisKlinikCRM/pull/170) `main`'e merge edildi, merge commit `5ee0b6af30fff187b7190d649f1fc3e844362105`. Deployed/Production Verified: NOT APPLICABLE. |
-| F0-005 | Test Inventory, Runtime Measurement, and Ownership Map | `PR_OPEN` | 100 test/doğrulama hedefinin depo-kanıtıyla envanteri (rebaseline öncesi 97 — 2026-07-19'da `origin/main`'den PR #169'u içeren bir merge sonrası 3 yeni dosya eklendi) + sahiplik + F0-004'ün 9 yüksek-riskli edge'inin test kapsamı; 2532+ assertion gerçekten çalıştırıldı, 1 deterministic source-drift başarısızlığı (`overdueInstallments.test.ts`, CI-uygulama boşluğunun somut kanıtı) + 1 environment-sensitive line-ending başarısızlığı (`clinicBulkExport.test.ts`) bulunup düzeltilmeden belgelendi — bu görev tarafından 0 doğrulanmış product-runtime kusuru tespit edilmiştir. F0-002 Stage B hâlâ `BLOCKED` iken kullanıcının açık talimatıyla repository-only paralel yürütüldü (bkz. §6 F0-005 "Parallel execution note"). [PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171) açık; merge kararı dış incelemeye aittir. Deployed/Production Verified: NOT APPLICABLE. |
+| F0-004 | Cross-Module Dependency Map | `MERGED` | Depo-kanıtıyla dolu 37-domain/833-edge bağımlılık matrisi; F0-002 Stage B hâlâ toplanmadan kullanıcının açık talimatıyla repository-only paralel yürütüldü (bkz. §6 F0-004 "Parallel execution note"). [PR #170](https://github.com/MustafaBasol/DisKlinikCRM/pull/170) `main`'e merge edildi, merge commit `5ee0b6af30fff187b7190d649f1fc3e844362105`. Deployed/Production Verified: NOT APPLICABLE. |
+| F0-005 | Test Inventory, Runtime Measurement, and Ownership Map | `MERGED` | 100 test/doğrulama hedefinin depo-kanıtıyla envanteri (rebaseline öncesi 97 — 2026-07-19'da `origin/main`'den PR #169'u içeren bir merge sonrası 3 yeni dosya eklendi) + sahiplik + F0-004'ün 9 yüksek-riskli edge'inin test kapsamı; 2532+ assertion gerçekten çalıştırıldı, 1 deterministic source-drift başarısızlığı (`overdueInstallments.test.ts`, CI-uygulama boşluğunun somut kanıtı) + 1 environment-sensitive line-ending başarısızlığı (`clinicBulkExport.test.ts`) bulunup düzeltilmeden belgelendi — bu görev tarafından 0 doğrulanmış product-runtime kusuru tespit edilmiştir. F0-002 Stage B kanıtı henüz toplanmadan kullanıcının açık talimatıyla repository-only paralel yürütüldü (bkz. §6 F0-005 "Parallel execution note"). [PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171) `main`'e merge edildi, merge commit `d9fc40883afc8791098865d4d185de3336774c7a` (2026-07-19, `docs(test): add F0-005 test inventory and runtime baseline (#171)`). Deployed/Production Verified: NOT APPLICABLE. |
 
 ## 8. Blocked tasks (Bloklu işler)
 
@@ -313,24 +318,30 @@ Aşağıdakiler `PROGRAM DIRECTION` niteliğindedir; **kesinleşmiş ADR değild
 
 ## 11. Production verification history (Production doğrulama geçmişi)
 
-Henüz bu program kapsamında production doğrulaması yapılmamıştır.
+Bu tablo, §2.2'deki `PRODUCTION_VERIFIED` release-gate durumu için resmî kayıttır — henüz bu program kapsamında böyle bir release-gate doğrulaması yapılmamıştır.
 
 | Tarih | Görev/Sürüm | Ortam | Test | Sonuç | Kanıt |
 |---|---|---|---|---|---|
 | — | — | — | — | — | — |
 
+**Not (release-gate doğrulaması ile karıştırılmamalı):** F0-002 Stage B kapsamında 2026-07-19'da (`2026-07-19T13:43:12+03:00`) gözlemsel bir production baseline kanıtı toplandı — local/public `/api/health` her ikisi de `200`, migration state temiz, PM2 topolojisi `online`, TLS hostname kapsamı doğrulandı (bkz. [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)). Bu, F0-002'nin bir **envanter/dokümantasyon** görevi olması nedeniyle yukarıdaki tablonun tanımladığı resmî `PRODUCTION_VERIFIED` release-gate doğrulaması **değildir** ve öyle sayılmamalıdır; storage/PITR/restore-test/offsite-backup riskleri (bkz. §12) açık ve düzeltilmemiş kalır.
+
 ## 12. Current blockers (Güncel blokajlar)
 
-1. KVKK taban çizgisi henüz dışarıdan kararlı olarak teyit edilmedi. KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi (2026-07-17); ancak bu, tüm KVKK programının tamamlandığı anlamına gelmez — devam eden KVKK/güvenlik çalışmasının durumu `UNVERIFIED` (F0-007 kanıt toplayacaktır).
-2. Depo taban çizgisi (baseline) henüz toplanmadı (F0-002).
-3. Production topolojisi bu program kapsamında henüz doğrulanmadı (F0-006).
+1. KVKK taban çizgisi henüz dışarıdan kararlı olarak teyit edilmedi. KVKK-HIGH-004 [PR #165](https://github.com/MustafaBasol/DisKlinikCRM/pull/165) ile merge edildi (2026-07-17); ancak bu, tüm KVKK programının tamamlandığı anlamına gelmez. Devam eden KVKK çalışması artık [PR #167](https://github.com/MustafaBasol/DisKlinikCRM/pull/167) (KVKK-CRIT-003) olarak kanıtlandı — `OPEN`, merge edilmedi, deploy edilmedi, production doğrulaması yapılmadı (`VERIFIED_GITHUB`, bkz. §3). F0-007 bu PR'ın kapsamını ve mimari dondurma sınırıyla ilişkisini ayrıntılı olarak belgeleyecektir.
+2. Depo taban çizgisi (baseline) Stage A kapsamında **kanıtla toplandı** (F0-002 Stage A `AGENT_COMPLETED`, bkz. [evidence/F0-002_REPOSITORY_BASELINE.md](evidence/F0-002_REPOSITORY_BASELINE.md)); production baseline kanıtı da artık Stage B kapsamında **toplandı ve belgelendi** (kullanıcı tarafından salt-okunur, evidence timestamp `2026-07-19T13:43:12+03:00`, bkz. [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)). Bu artık bir blokaj değildir; F0-002 `AGENT_COMPLETED`'dır ve PR bekliyor.
+3. Production topolojisi F0-002 Stage B kapsamında **gözlemsel olarak doğrulandı** (bare-VPS + PM2 + host Nginx, Docker Compose runbook'u stale/aspirasyonel olarak doğrulandı — bkz. evidence §6.10 madde 1). Kalan açık riskler artık bir "topoloji bilinmiyor" blokajı değil, belirli, kimliklendirilmiş riskler: (a) yerel VPS storage (S3 yok, HIGH), (b) offsite yedek kanıtı yok (HIGH), (c) PITR yapılandırılmamış (`archive_mode: off`, HIGH), (d) restore test `UNVERIFIED` (HIGH), (e) PM2 restart sayıları (14/13) operasyonel inceleme gerektiriyor (MEDIUM), (f) PM2 süreçleri `root` olarak çalışıyor, privilege hardening değerlendirilmedi (MEDIUM), (g) Node sürüm sapması — CI'da 20, production'da 22.23.1, `engines` pini yok (yeni bulgu, Stage B). Bu risklerin biçimsel, ayrıntılı ele alınışı F0-006'ya aittir; F0-002 yalnızca envanterler, düzeltmez.
 4. RLS / Prisma / PgBouncer uyumluluğu henüz kanıtlanmadı (F0-009 → F5).
-5. Object-storage sağlayıcısı ve migrasyon tasarımı henüz onaylanmadı (F0-011 → F4).
+5. Object-storage sağlayıcısı ve migrasyon tasarımı henüz onaylanmadı (F0-011 → F4). Mevcut durum artık kanıtla biliniyor: `LOCAL_VPS_STORAGE` (bkz. evidence §B.9), tasarım kararı hâlâ bekliyor.
 6. Queue/outbox mimarisi henüz kanıtlanmadı (F0-010 → F6).
-7. F0-002'nin genel görev durumu bu dosyada (`main`) hâlâ `READY` görünüyor çünkü F0-002'nin çalışma branch'i (`docs/f0-002-repository-deployment-baseline`, worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline`) henüz `main`'e merge edilmedi ve PR'ı yok. O branch'in kendi tracker kopyası Stage A'yı `AGENT_COMPLETED`, Stage B'yi (production kanıtı) `BLOCKED` olarak kaydediyor. Bu gözlem F0-003 tarafından salt-okunur olarak yapıldı; F0-002'nin branch'ine hiçbir yazma işlemi uygulanmadı.
+7. F0-002'nin genel görev durumu bu dosyada (`main`) hâlâ eski (Stage B öncesi) görünüyor olabilir çünkü F0-002'nin çalışma branch'i (`docs/f0-002-repository-deployment-baseline`, worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline`) bu teslimat anında henüz `main`'e merge edilmedi — PR açılacak ama merge kararı dış incelemeye aittir. O branch'in kendi tracker kopyası artık Stage A'yı ve Stage B'yi (production baseline kanıtı) `AGENT_COMPLETED` olarak kaydediyor (bkz. §5/§6 F0-002). `main` üzerindeki bu satır, F0-002 merge edilene kadar güncellenmeyecektir.
 
 ## 13. Exact next task (Kesin sonraki görev)
 
-**F0-002 Stage B — Production Topology, Commit, Migration, and Runtime Verification** (F0-002'nin kendi branch'indeki kanıtına göre) veya, birleştirilmemiş haliyle, **F0-002 — Repository and Deployment Baseline Inventory** bu dosyanın (`main`) kendi görünümünde.
+**External review and merge decision for [PR #172](https://github.com/MustafaBasol/DisKlinikCRM/pull/172)** (F0-002 — see §6 F0-002 and §5).
 
-F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştiremez**. F0-003 (`main`'e merge edildi, PR #168), F0-004 (`main`'e merge edildi, PR #170 — bu düzeltme turunda `PR_OPEN`'dan `MERGED`'e güncellendi, bkz. §6/§7) ve F0-005 (`AGENT_COMPLETED`, PR #171 açık, bu düzeltme turunda 2026-07-19 rebaseline'ıyla güncellendi) bu turlarda tamamlandı (bkz. §6/§7) — üçü de kullanıcının açık talimatıyla F0-002'nin tamamlanmasını beklemeden repository-only paralel yürütüldü; bu, F0-002'nin durumunu veya sırasını değiştirmez. F0-005 sonrası backlog'daki bir sonraki adaylar (F0-006 Production Topology, F0-007 KVKK Baseline) F0-002'ye bağımlıdır ve F0-002 Stage B bloklu kaldığı sürece aynı repository-only paralel istisnası olmadan başlatılamaz. F0-008 (ADR Review) F0-004'ün **merge edilmesini** bekliyordu; F0-004 artık `main`'e merge edilmiş olduğundan bu ön koşul artık **karşılanmıştır** — ancak bu düzeltme görevi yalnızca dokümantasyon doğruluğunu ele alır, F0-008'i başlatma kararı vermez; F0-008'in `READY`'e geçişi ayrı bir kullanıcı kararı gerektirir. Bu turda F0-003/F0-004/F0-005'in tükettiği "açıkça talimatlandırılmış istisna" listesinin ötesinde, tracker'ın kendi sıralama kuralına göre şu an **kanıtla gerekçelendirilebilir, hazır bir sonraki repository-only aday yoktur**; F0-002 Stage B hâlâ programın kesin sıradaki görevidir ve yeni bir paralel istisna kararı yine kullanıcıya aittir.
+F0-002 Stage A (depo kanıtı) ve Stage B (production baseline kanıtı, kullanıcı tarafından salt-okunur olarak sağlandı ve [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)'e işlendi, evidence timestamp `2026-07-19T13:43:12+03:00`) ikisi de tamamlandı; F0-002 → `PR_OPEN`. `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` dış teyit gerektirir ve bu turda **atanmaz**. F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştirmedi**.
+
+F0-003 ([PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168), `MERGED`), F0-004 ([PR #170](https://github.com/MustafaBasol/DisKlinikCRM/pull/170), `MERGED`) ve F0-005 ([PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171), `MERGED`, merge commit `d9fc40883afc8791098865d4d185de3336774c7a`) üçü de `main`'e merge edilmiş durumda — kullanıcının açık talimatıyla F0-002'nin tamamlanmasını beklemeden repository-only paralel yürütülmüşlerdi; bu geçmiş, F0-002'nin kendi sırasını veya kapsamını değiştirmez.
+
+F0-002 `main`'e merge edildikten sonra sıradaki adaylar: **F0-006 — Production Topology and Configuration Verification** (bağımlılığı F0-002; bu turun production baseline kanıtı büyük ölçüde F0-006'nın kapsamını da besler, ancak F0-006 kendi başına ayrı, biçimsel bir görev olarak kalır) ve **F0-007 — Active KVKK Work Baseline and Architecture Freeze Boundary** (bağımlılığı F0-002). İkisinin de `READY`'e geçişi ayrı bir kullanıcı kararı gerektirir; F0-002 henüz merge edilmediği için resmî olarak hâlâ bloklu sayılırlar (F0-003/004/005'teki gibi bir repository-only paralel istisna kararı verilmedikçe).
