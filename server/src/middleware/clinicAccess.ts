@@ -14,6 +14,27 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import { buildClinicScopeWhere, ClinicScopeWhere } from '../utils/clinicScope.js';
+import { evaluateCrossTenantDenialSignal } from '../services/security/securityDetectionRules.js';
+
+/** KVKK-CRIT-003 Rule 2 — see the identical helper's doc comment in clinicScope.ts. */
+function recordCrossTenantDenialIfTargeted(
+  user: NonNullable<AuthRequest['user']>,
+  req: AuthRequest,
+  clinicId: string | undefined,
+): void {
+  if (!clinicId || clinicId === 'all') return;
+  evaluateCrossTenantDenialSignal({
+    actorUserId: user.id,
+    actorOrganizationId: user.organizationId,
+    actorClinicId: user.clinicId ?? null,
+    attemptedResourceType: 'clinic',
+    attemptedResourceId: clinicId,
+    method: req.method,
+    routeTemplate: req.route?.path ? `${req.baseUrl ?? ''}${req.route.path}` : req.path,
+    ip: req.ip ?? null,
+    userAgent: req.headers['user-agent'] as string | undefined,
+  });
+}
 
 // AuthRequest'i genişlet — clinicScope ekleniyor
 declare module '../middleware/auth.js' {
@@ -43,6 +64,7 @@ export const requireClinicAccess = async (
 
   const scope = await buildClinicScopeWhere(req.user, selectedClinicId);
   if (scope === null) {
+    recordCrossTenantDenialIfTargeted(req.user, req, selectedClinicId);
     return res.status(403).json({ error: 'Access denied to requested clinic' });
   }
 
@@ -75,6 +97,7 @@ export const requireSpecificClinicAccess = async (
 
   const scope = await buildClinicScopeWhere(req.user, clinicId);
   if (scope === null) {
+    recordCrossTenantDenialIfTargeted(req.user, req, clinicId);
     return res.status(403).json({ error: 'Access denied to requested clinic' });
   }
 

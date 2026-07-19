@@ -22,6 +22,7 @@ import {
 } from '../services/sms/platformSmsProviders.js';
 import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRoutingPolicy.js';
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
+import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
 
 const router = express.Router();
 
@@ -62,6 +63,7 @@ router.post('/auth/login', async (req, res) => {
     if (!admin || !admin.isActive) {
       await platformLoginEmailLimiter.record(normalizedEmail);
       await platformLoginIpLimiter.record(clientIp);
+      evaluateAuthLoginFailureSignal({ accountIdentifier: normalizedEmail, context: 'platform', ip: clientIp, userAgent: req.headers['user-agent'] as string | undefined });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -69,6 +71,7 @@ router.post('/auth/login', async (req, res) => {
     if (!valid) {
       await platformLoginEmailLimiter.record(normalizedEmail);
       await platformLoginIpLimiter.record(clientIp);
+      evaluateAuthLoginFailureSignal({ accountIdentifier: normalizedEmail, context: 'platform', ip: clientIp, userAgent: req.headers['user-agent'] as string | undefined });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -83,6 +86,7 @@ router.post('/auth/login', async (req, res) => {
       if (!totpSecret || !verifyTotp(totpSecret, totpCode)) {
         await platformLoginEmailLimiter.record(normalizedEmail);
         await platformLoginIpLimiter.record(clientIp);
+        evaluateAuthLoginFailureSignal({ accountIdentifier: normalizedEmail, context: 'platform', ip: clientIp, userAgent: req.headers['user-agent'] as string | undefined });
         return res.status(401).json({ error: 'Invalid MFA code', code: 'MFA_INVALID' });
       }
     }

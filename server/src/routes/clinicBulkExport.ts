@@ -41,6 +41,11 @@ import {
   type ClaimDownloadFailure,
 } from '../services/privacy/clinicBulkExportPackage.js';
 import { openFileStream } from '../services/fileStorage.js';
+import {
+  evaluateExportStepUpLockoutSignal,
+  evaluateExportTokenReplaySignal,
+  evaluateExportRequestBurstSignal,
+} from '../services/security/securityDetectionRules.js';
 
 const router = express.Router();
 
@@ -173,6 +178,13 @@ router.post(
         description: 'Clinic bulk export step-up rate limited (brute-force lockout)',
         ...extractRequestMeta(req),
       });
+      evaluateExportStepUpLockoutSignal({
+        organizationId: scope.organizationId,
+        clinicId: scope.clinicId,
+        actorUserId: user.id,
+        ip,
+        userAgent: req.headers['user-agent'] as string | undefined,
+      });
       return res.status(429).json({ error: 'CLINIC_BULK_EXPORT_RATE_LIMITED' });
     }
     if (stepUp.outcome === 'rejected') {
@@ -200,6 +212,13 @@ router.post(
         stepUpVerifiedAt: new Date(),
         actorRole: user.role,
         req,
+      });
+      evaluateExportRequestBurstSignal({
+        organizationId: scope.organizationId,
+        clinicId: scope.clinicId,
+        actorUserId: user.id,
+        ip: req.ip ?? null,
+        userAgent: req.headers['user-agent'] as string | undefined,
       });
       return res.status(202).json({ jobId, status: 'queued' });
     } catch (err) {
@@ -293,6 +312,13 @@ router.post(
         return res.status(500).json({ error: 'Step-up verification failed. Please try again.' });
       }
       if (stepUp.outcome === 'locked') {
+        evaluateExportStepUpLockoutSignal({
+          organizationId: scope.organizationId,
+          clinicId: scope.clinicId,
+          actorUserId: user.id,
+          ip,
+          userAgent: req.headers['user-agent'] as string | undefined,
+        });
         return res.status(429).json({ error: 'CLINIC_BULK_EXPORT_RATE_LIMITED' });
       }
       stepUpOk = stepUp.outcome === 'verified';
@@ -392,6 +418,16 @@ router.get(
           not_ready: 'CLINIC_BULK_EXPORT_NOT_READY',
           already_downloaded: 'CLINIC_BULK_EXPORT_ALREADY_DOWNLOADED',
         };
+        if (reason === 'expired' || reason === 'already_downloaded') {
+          evaluateExportTokenReplaySignal({
+            organizationId: scope.organizationId,
+            clinicId: scope.clinicId,
+            actorUserId: user.id,
+            ip: req.ip ?? null,
+            userAgent: req.headers['user-agent'] as string | undefined,
+            reason: reason === 'already_downloaded' ? 'already_downloaded' : 'expired',
+          });
+        }
         return res.status(statusByReason[reason] ?? 404).json({ error: codeByReason[reason] ?? 'Export not available for download' });
       }
 
@@ -440,6 +476,16 @@ router.get(
           already_downloaded: 'CLINIC_BULK_EXPORT_ALREADY_DOWNLOADED',
           invalid_token: 'Export not available for download',
         };
+        if (claim.failure === 'already_downloaded' || claim.failure === 'expired' || claim.failure === 'invalid_token') {
+          evaluateExportTokenReplaySignal({
+            organizationId: scope.organizationId,
+            clinicId: scope.clinicId,
+            actorUserId: user.id,
+            ip: req.ip ?? null,
+            userAgent: req.headers['user-agent'] as string | undefined,
+            reason: claim.failure === 'already_downloaded' ? 'already_downloaded' : claim.failure === 'expired' ? 'expired' : 'invalid',
+          });
+        }
         return res
           .status(statusByClaimFailure[claim.failure])
           .json({ error: codeByClaimFailure[claim.failure] });

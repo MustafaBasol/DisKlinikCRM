@@ -99,6 +99,8 @@ model Clinic {
   privacyExportArchives         PatientPrivacyExportArchive[]
   clinicBulkExportArchives      ClinicBulkExportArchive[]
   clinicBulkExportPwAttempts    ClinicBulkExportPasswordAttempt[]
+  communicationPreferences      PatientCommunicationPreference[]
+  communicationConsentEvents    PatientCommunicationConsentEvent[]
 
   @@unique([organizationId, slug])
 }
@@ -271,6 +273,8 @@ model Patient {
   labWorkOrders                 LabWorkOrder[]
   imagingRequests               ImagingRequest[]
   imagingStudies                ImagingStudy[]
+  communicationPreferences      PatientCommunicationPreference[]
+  communicationConsentEvents    PatientCommunicationConsentEvent[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -779,7 +783,7 @@ model SentMessage {
   recipient            String
   subject              String?
   body                 String
-  status               String              @default("prepared") // prepared, sent, failed, delivered, read
+  status               String              @default("prepared") // prepared, sent, failed, delivered, read, blocked_by_consent
   providerMessageId    String?
   sentAt               DateTime?
   createdById          String?
@@ -1295,6 +1299,16 @@ model PlatformAdmin {
   totpEnabledAt       DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  // KVKK-CRIT-003 — security incident lifecycle back-relations. All
+  // onDelete: SetNull on the owning side so a deleted/deactivated Platform
+  // Admin never destroys incident history.
+  securityIncidentsAssigned     SecurityIncident[]         @relation("SecurityIncidentAssignee")
+  securityIncidentsAcknowledged SecurityIncident[]         @relation("SecurityIncidentAcknowledger")
+  securityIncidentsContained    SecurityIncident[]         @relation("SecurityIncidentContainer")
+  securityIncidentsResolved     SecurityIncident[]         @relation("SecurityIncidentResolver")
+  securityIncidentsClosed       SecurityIncident[]         @relation("SecurityIncidentCloser")
+  securityIncidentActivity      SecurityIncidentActivity[] @relation("SecurityIncidentActivityActor")
 }
 
 model ClinicInvitation {
@@ -1781,7 +1795,7 @@ model PostTreatmentMessageQueue {
   channel                       String
   recipient                     String?
   messageBodyRendered           String
-  /// pending | sent | failed | cancelled | waiting_approval | no_recipient
+  /// pending | sent | failed | cancelled | waiting_approval | no_recipient | blocked_by_consent
   status                        String                       @default("pending")
   scheduledAt                   DateTime
   sentAt                        DateTime?
@@ -1968,6 +1982,134 @@ model ChannelConsentLog {
 
   @@index([clinicId, channel, contactIdentifier])
   @@index([clinicId, consentTextVersion])
+  @@index([organizationId])
+}
+
+// ── Communication Preference & Consent Management (KVKK-HIGH-007) ─────────────
+//
+// Technical control only — not a legal determination. See
+// docs/compliance/56-kvkk-communication-preference-and-consent-management.md.
+//
+// Two-table design:
+//  - PatientCommunicationPreference: current effective state, one row per
+//    patient+clinic+channel+purpose (fast lookup for every send decision;
+//    upserted atomically so concurrent grant/withdraw races resolve to a
+//    single deterministic row via the DB unique constraint).
+//  - PatientCommunicationConsentEvent: immutable append-only history/evidence
+//    of every state transition. Never updated or deleted by application code.
+//
+// This is separate from ChannelConsentLog, which records WhatsApp/Instagram
+// inbound-reply opt-in to the Meta 24h messaging window (contact-identifier
+// keyed, channel-only, no purpose dimension) — a narrower, provider-specific
+// concern that predates this general-purpose model.
+
+/// Current effective communication preference for one patient+clinic+channel+purpose.
+/// Looked up by the central decision service (communicationConsentPolicy.ts) on
+/// every send. A missing row means status = unknown (never implicitly granted).
+model PatientCommunicationPreference {
+  id             String   @id @default(uuid())
+  organizationId String
+  clinicId       String
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient  @relation(fields: [patientId], references: [id])
+
+  /// sms | email | whatsapp | phone_call | push
+  channel String
+  /// transactional | appointment_reminder | appointment_followup | clinical_followup |
+  /// recall | no_show_recovery | operational | marketing | campaign | survey |
+  /// legal_notice | security_notice
+  purpose String
+
+  /// granted | denied | withdrawn | unknown | not_required
+  status      String    @default("unknown")
+  effectiveAt DateTime  @default(now())
+  grantedAt   DateTime?
+  withdrawnAt DateTime?
+  expiresAt   DateTime?
+
+  /// Monotonic per-key revision counter, incremented under a
+  /// pg_advisory_xact_lock in setCommunicationPreference() (see
+  /// communicationConsentAdmin.ts). This — not createdAt/updatedAt, which are
+  /// only millisecond-precision and can tie under concurrency — is the
+  /// authoritative order for this row's transition history. Matches the
+  /// revision on the PatientCommunicationConsentEvent row written in the same
+  /// transaction.
+  revision Int @default(1)
+
+  /// patient_portal | public_booking | staff | import | api | whatsapp |
+  /// sms_keyword | email_unsubscribe | legacy | system
+  source String
+
+  /// Free-form evidence classification, e.g. verbal_staff_record | signed_form |
+  /// portal_click | inbound_reply | public_booking_checkbox
+  evidenceType String?
+  /// Legal notice / KVKK text version shown at the time of the decision
+  noticeVersion String?
+  /// Internal policy/config version applied by the decision service
+  policyVersion String?
+
+  actorUserId          String?
+  actorPlatformAdminId String?
+  /// Hashed with COMMUNICATION_CONSENT_EVIDENCE_HASH_SECRET — never raw
+  requestIpHash String?
+  /// Hashed with COMMUNICATION_CONSENT_EVIDENCE_HASH_SECRET — never raw
+  userAgentHash       String?
+  externalProviderRef String?
+  /// Sanitized, bounded free text — see consentEvidenceSanitizer.ts
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events PatientCommunicationConsentEvent[]
+
+  @@unique([patientId, clinicId, channel, purpose])
+  @@index([clinicId, channel, purpose, status])
+  @@index([organizationId])
+}
+
+/// Immutable history/evidence record. One row is inserted every time a
+/// PatientCommunicationPreference is created or its status changes. Rows are
+/// never updated or deleted by application code (append-only audit trail).
+model PatientCommunicationConsentEvent {
+  id             String                         @id @default(uuid())
+  organizationId String
+  clinicId       String
+  clinic         Clinic                         @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient                        @relation(fields: [patientId], references: [id])
+  preferenceId   String
+  preference     PatientCommunicationPreference @relation(fields: [preferenceId], references: [id])
+
+  channel String
+  purpose String
+
+  previousStatus String?
+  newStatus      String
+
+  /// The PatientCommunicationPreference.revision this event corresponds to —
+  /// the authoritative, gap-free, deterministic order for this key's history.
+  /// Never infer order from createdAt alone (timestamp precision can tie
+  /// under concurrency); always order by revision.
+  revision Int
+
+  source               String
+  evidenceType         String?
+  noticeVersion        String?
+  policyVersion        String?
+  actorUserId          String?
+  actorPlatformAdminId String?
+  requestIpHash        String?
+  userAgentHash        String?
+  externalProviderRef  String?
+  notes                String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([preferenceId, revision])
+  @@index([patientId, clinicId, channel, purpose, createdAt])
+  @@index([clinicId, createdAt])
   @@index([organizationId])
 }
 
@@ -2634,4 +2776,177 @@ model ClinicBulkExportPasswordAttempt {
 
   @@unique([userId, clinicId, ipHash])
   @@index([updatedAt])
+}
+
+// ── KVKK-CRIT-003: Security Incident Response Foundation ────────────────────
+//
+// This is a TECHNICAL foundation only. It does not constitute legal approval
+// of breach classification, notification obligations/deadlines/recipients,
+// legal wording, or regulator/data-subject communication — see
+// docs/compliance/55-kvkk-security-incident-response-foundation.md.
+//
+// Three models, three distinct jobs — never merge them:
+//   SecuritySignalEvent      — append-only raw detection evidence. Never
+//                              mutated. What windowed-threshold counting
+//                              reads FROM.
+//   SecurityIncident         — the mutable, deduplicated aggregate a
+//                              Platform Admin actually works. incidentKey
+//                              is unique so concurrent identical signals
+//                              can only ever produce one row (DB-level
+//                              upsert, never find-then-create).
+//   SecurityIncidentActivity — immutable per-incident history. Only ever
+//                              inserted, in the same transaction as the
+//                              SecurityIncident row it documents.
+
+/// Append-only raw security-signal evidence. Deliberately NOT layered onto
+/// the existing OperationalEvent model: OperationalEvent.organizationId is a
+/// required (non-nullable) column depended on by 8+ existing org-scoped call
+/// sites and the clinic-facing /api/ops/events route, but some security
+/// signals (a Platform Admin login failure, a cross-tenant probe with no
+/// resolvable target org) have no natural single organizationId — forcing
+/// them through OperationalEvent would mean either a risky nullability
+/// change to a widely-depended-on column or a fake placeholder org id, both
+/// worse than a dedicated table. Never contains secrets, tokens, raw IPs, or
+/// patient content — see securitySignalService.ts's allowlist sanitizer.
+model SecuritySignalEvent {
+  id String @id @default(uuid())
+
+  signalType String // e.g. "auth_login_failed", "clinic_scope_denied", "export_step_up_lockout"
+  category   String
+  severity   String
+  ruleKey    String
+
+  organizationId String?
+  clinicId       String?
+
+  actorUserId          String?
+  actorPlatformAdminId String?
+
+  /// HMAC-SHA256(SECURITY_SIGNAL_IP_HASH_SECRET, ip) — never a raw IP.
+  ipHash String?
+  /// Bounded/normalized user-agent fingerprint (hashed) — never the raw header.
+  userAgentFingerprint String?
+
+  resourceType String?
+  /// HMAC-hashed or otherwise safe resource identifier — never a raw guessed id.
+  resourceId   String?
+
+  /// Grouping key used to compute a durable windowed occurrence count for
+  /// threshold-based rules (e.g. an account-identifier hash, an ipHash, or a
+  /// resource-scope hash) — see securitySignalService.ts.
+  dedupeDimension String
+
+  /// Sanitized metadata only — allowlist-checked, see securitySignalService.ts.
+  safeMetadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([ruleKey, dedupeDimension, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([clinicId, createdAt])
+  @@index([createdAt])
+}
+
+/// Durable, deduplicated security incident record — the mutable aggregate a
+/// Platform Admin actually triages and works. legalReviewRequired/
+/// legalReviewStatus are technical placeholders recording that a human
+/// legal decision is pending; they are never set by this feature to imply a
+/// legal conclusion, classification, or notification deadline — see the
+/// runbook. onDelete: SetNull throughout so a deleted/deactivated Platform
+/// Admin never destroys incident history.
+model SecurityIncident {
+  id String @id @default(uuid())
+
+  /// Deterministic dedupe key derived from sourceRule + scope + affected
+  /// resource (see securitySignalService.ts buildIncidentKey). Unique at the
+  /// DB level so concurrent identical signals can only ever upsert the SAME
+  /// row — never a race-prone find-then-create.
+  incidentKey String @unique
+
+  organizationId String?
+  clinicId       String?
+
+  category String // auth_brute_force | cross_tenant_access | export_anomaly | webhook_signature
+  severity String // low | medium | high | critical
+  status   String @default("open") // open | acknowledged | investigating | contained | resolved | closed | false_positive
+
+  title   String
+  summary String
+
+  firstDetectedAt DateTime
+  lastDetectedAt  DateTime
+  occurrenceCount Int      @default(1)
+
+  sourceType String // e.g. "auth_login", "clinic_scope_denial", "clinic_bulk_export"
+  sourceRule String // stable rule key, e.g. "auth.brute_force.v1"
+
+  affectedResourceType String?
+  affectedResourceId   String?
+
+  assignedToPlatformAdminId String?
+  assignedToPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentAssignee", fields: [assignedToPlatformAdminId], references: [id], onDelete: SetNull)
+
+  acknowledgedAt                DateTime?
+  acknowledgedByPlatformAdminId String?
+  acknowledgedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentAcknowledger", fields: [acknowledgedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  containedAt                DateTime?
+  containedByPlatformAdminId String?
+  containedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentContainer", fields: [containedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  resolvedAt                DateTime?
+  resolvedByPlatformAdminId String?
+  resolvedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentResolver", fields: [resolvedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  closedAt                DateTime?
+  closedByPlatformAdminId String?
+  closedByPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentCloser", fields: [closedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  resolutionSummary  String?
+  containmentSummary String?
+
+  /// Technical placeholder only, default true. Never flipped by any
+  /// automated detection code — only ever changed via an explicit Platform
+  /// Admin action (recorded in SecurityIncidentActivity), and even then this
+  /// is not a legal determination.
+  legalReviewRequired Boolean @default(true)
+  legalReviewStatus   String  @default("pending") // pending | in_review | not_required | advised
+
+  /// Safe, sanitized metadata only — same allowlist as SecuritySignalEvent.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activity SecurityIncidentActivity[]
+
+  @@index([status, severity, lastDetectedAt])
+  @@index([organizationId, status])
+  @@index([clinicId, status])
+  @@index([category, lastDetectedAt])
+  @@index([assignedToPlatformAdminId, status])
+}
+
+/// Immutable incident lifecycle history — only ever created, never updated
+/// or deleted, and always inserted in the same DB transaction as the
+/// SecurityIncident row it documents. Never contains secrets or patient
+/// content — same allowlist/sanitizer as SecuritySignalEvent.
+model SecurityIncidentActivity {
+  id         String           @id @default(uuid())
+  incidentId String
+  incident   SecurityIncident @relation(fields: [incidentId], references: [id])
+
+  action         String // created | occurrence_recorded | severity_escalated | acknowledged | investigating | assigned | contained | resolved | closed | false_positive | reopened | note_added
+  previousStatus String?
+  newStatus      String?
+
+  actorPlatformAdminId String?
+  actorPlatformAdmin   PlatformAdmin? @relation("SecurityIncidentActivityActor", fields: [actorPlatformAdminId], references: [id], onDelete: SetNull)
+
+  note     String?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([incidentId, createdAt])
 }

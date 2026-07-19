@@ -40,7 +40,9 @@ import legalEn from '../locales/en/legal.json';
 import postTreatmentEn from '../locales/en/postTreatment.json';
 import smsEn from '../locales/en/sms.json';
 import patientPrivacyEn from '../locales/en/patientPrivacy.json';
+import communicationConsentEn from '../locales/en/communicationConsent.json';
 import clinicBulkExportEn from '../locales/en/clinicBulkExport.json';
+import securityIncidentsEn from '../locales/en/securityIncidents.json';
 
 import commonTr from '../locales/tr/common.json';
 import authTr from '../locales/tr/auth.json';
@@ -79,7 +81,9 @@ import legalTr from '../locales/tr/legal.json';
 import postTreatmentTr from '../locales/tr/postTreatment.json';
 import smsTr from '../locales/tr/sms.json';
 import patientPrivacyTr from '../locales/tr/patientPrivacy.json';
+import communicationConsentTr from '../locales/tr/communicationConsent.json';
 import clinicBulkExportTr from '../locales/tr/clinicBulkExport.json';
+import securityIncidentsTr from '../locales/tr/securityIncidents.json';
 
 import commonFr from '../locales/fr/common.json';
 import authFr from '../locales/fr/auth.json';
@@ -118,7 +122,9 @@ import legalFr from '../locales/fr/legal.json';
 import postTreatmentFr from '../locales/fr/postTreatment.json';
 import smsFr from '../locales/fr/sms.json';
 import patientPrivacyFr from '../locales/fr/patientPrivacy.json';
+import communicationConsentFr from '../locales/fr/communicationConsent.json';
 import clinicBulkExportFr from '../locales/fr/clinicBulkExport.json';
+import securityIncidentsFr from '../locales/fr/securityIncidents.json';
 
 import commonDe from '../locales/de/common.json';
 import authDe from '../locales/de/auth.json';
@@ -157,7 +163,9 @@ import legalDe from '../locales/de/legal.json';
 import postTreatmentDe from '../locales/de/postTreatment.json';
 import smsDe from '../locales/de/sms.json';
 import patientPrivacyDe from '../locales/de/patientPrivacy.json';
+import communicationConsentDe from '../locales/de/communicationConsent.json';
 import clinicBulkExportDe from '../locales/de/clinicBulkExport.json';
+import securityIncidentsDe from '../locales/de/securityIncidents.json';
 
 const namespaces = [
   'common',
@@ -195,7 +203,9 @@ const namespaces = [
   'postTreatment',
   'sms',
   'patientPrivacy',
+  'communicationConsent',
   'clinicBulkExport',
+  'securityIncidents',
   'validation',
   'errors',
 ];
@@ -237,7 +247,9 @@ const resources = {
     postTreatment: postTreatmentEn,
     sms: smsEn,
     patientPrivacy: patientPrivacyEn,
+    communicationConsent: communicationConsentEn,
     clinicBulkExport: clinicBulkExportEn,
+    securityIncidents: securityIncidentsEn,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -277,7 +289,9 @@ const resources = {
     postTreatment: postTreatmentTr,
     sms: smsTr,
     patientPrivacy: patientPrivacyTr,
+    communicationConsent: communicationConsentTr,
     clinicBulkExport: clinicBulkExportTr,
+    securityIncidents: securityIncidentsTr,
     validation: validationTr,
     errors: errorsTr,
   },
@@ -317,7 +331,9 @@ const resources = {
     postTreatment: postTreatmentFr,
     sms: smsFr,
     patientPrivacy: patientPrivacyFr,
+    communicationConsent: communicationConsentFr,
     clinicBulkExport: clinicBulkExportFr,
+    securityIncidents: securityIncidentsFr,
     validation: validationFr,
     errors: errorsFr,
   },
@@ -357,7 +373,9 @@ const resources = {
     postTreatment: postTreatmentDe,
     sms: smsDe,
     patientPrivacy: patientPrivacyDe,
+    communicationConsent: communicationConsentDe,
     clinicBulkExport: clinicBulkExportDe,
+    securityIncidents: securityIncidentsDe,
     validation: validationDe,
     errors: errorsDe,
   }

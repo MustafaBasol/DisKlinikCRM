@@ -22,7 +22,7 @@ Son güncelleme: 2026-07-17 (F0-001)
 - **Decision required:** Modül tanımı, katmanlar, servis çıkarım kriterleri.
 - **Phase:** F2
 - **Dependencies:** F0-003, F0-004
-- **Evidence still needed:** Depo-doğrulanmış modül haritası ve bağımlılık matrisi.
+- **Evidence still needed:** Depo-doğrulanmış modül haritası ([MODULE_MAP.md](MODULE_MAP.md), F0-003 — sağlandı) ve bağımlılık matrisi ([DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) §10, F0-004 — sağlandı: 37 domain, 833 edge, 9 high-risk boundary violation, 35 iki-domain döngü, 15 contract adayı; bkz. [evidence/F0-004_CROSS_MODULE_DEPENDENCY_EVIDENCE.md](evidence/F0-004_CROSS_MODULE_DEPENDENCY_EVIDENCE.md)). F0-003/F0-004 kanıtı bu kararı henüz **kabul etmez** — yalnızca girdi sağlar. F0-004 özellikle `core-identity-access↔core-org-clinic-membership` ve `imaging-server-viewer↔imaging-device-bridge` döngülerini bu ADR'nin "tek bounded context mi, iki mi" sorusuna somut girdi olarak işaretledi (evidence doc §5).
 
 ## ADR-002 — Tenant isolation layers
 - **Status:** `PROPOSED`
@@ -134,7 +134,7 @@ Son güncelleme: 2026-07-17 (F0-001)
 - **Decision required:** Contract sözdizimi/konumu, sürümleme, ihlal denetimi (lint/CI).
 - **Phase:** F2
 - **Dependencies:** F0-003, F0-004, ADR-001
-- **Evidence still needed:** Bağımlılık matrisi; pilot contract denemesi.
+- **Evidence still needed:** Bağımlılık matrisi ([DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) §10, F0-004 — sağlandı); pilot contract denemesi (henüz yapılmadı). F0-004, 15 kanıt-tabanlı contract adayı üretti ([evidence/F0-004_CROSS_MODULE_DEPENDENCY_EVIDENCE.md §10](evidence/F0-004_CROSS_MODULE_DEPENDENCY_EVIDENCE.md#10-contract-candidates) ve [evidence/F0-004_dependency_inventory.json](evidence/F0-004_dependency_inventory.json) `contractCandidates[]`) — en yüksek öncelikli: CC-04 (Appointment booking/cancellation command), 9 high-risk boundary violation'ın 4'ünü kapatıyor. Hiçbiri henüz uygulanmadı veya kabul edilmedi.
 
 ## ADR-016 — Container and orchestration strategy
 - **Status:** `PROPOSED`

@@ -1,0 +1,1008 @@
+{
+  "task": "F0-003",
+  "title": "Domain and Module Ownership Map — structured inventory",
+  "generated_from_commit": "368bcc8d0a9f4c0ea185ca33d4dd1193d8def9ef",
+  "generated_from_branch": "main",
+  "methodology": "File-level and Prisma-model-level classification derived from repository evidence pinned to the commit above (via git show/git ls-tree), not the live working tree, because the shared working tree was observed under concurrent modification by unrelated in-flight work during this task (see notes.uncommitted_working_tree_drift). Ownership = primary evidence-based responsibility, not enforced boundaries — no module boundaries exist yet in this codebase (pre-F2).",
+  "notes": {
+    "uncommitted_working_tree_drift": "During this task the working tree showed modified server/prisma/schema.prisma, modified server/prisma/migrations/migration_lock.toml, and untracked server/src/services/communicationConsent/ plus a new migration directory, none of which are part of commit 368bcc8. These are not included in this inventory's evidence base. Two additional Prisma models (PatientCommunicationPreference, PatientCommunicationConsentEvent) were observed uncommitted and are excluded from the 88-model committed count.",
+    "f0_002_status_conflict": "This task's authorization framing ('F0-003 may proceed in parallel with F0-002 Stage B') was found to conflict with F0-002's own tracker copy on the unmerged, no-PR branch docs/f0-002-repository-deployment-baseline, which explicitly states F0-003 was not started and remains blocked behind F0-002's overall IN_PROGRESS status. The user was asked and explicitly directed to proceed anyway. See NORAMEDI_MASTER_TRACKER.md and the F0-003 delivery report for full detail.",
+    "cross_domain_matrix_deferred": "This inventory records ownership and a light set of observed cross-domain access notes per domain. The full row/column import-evidence dependency matrix (C/E/S/X classification) is explicitly F0-004's deliverable (DEPENDENCY_MAP.md) and is not duplicated here.",
+    "test_runtime_measurement_deferred": "Test files are assigned to an owning domain by evidence (filename/subject), but runtime duration, reliability, and CI-layer classification are F0-005's deliverable (TEST_OWNERSHIP.md) and are not measured here."
+  },
+  "domains": [
+    {
+      "id": "core-identity-access",
+      "name": "Identity and Access",
+      "classification": "core platform",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/auth.ts"],
+        "services": [],
+        "middleware": ["server/src/middleware/auth.ts", "server/src/middleware/csrf.ts"],
+        "jobs": [],
+        "utils": ["server/src/utils/authFallback.ts", "server/src/utils/totp.ts", "server/src/utils/passwordResetToken.ts", "server/src/utils/passwordStepUp.ts", "server/src/utils/sessionCookies.ts"]
+      },
+      "frontend": {
+        "pages": ["src/pages/Login.tsx", "src/pages/Register.tsx", "src/pages/ForgotPassword.tsx", "src/pages/ResetPassword.tsx", "src/pages/VerifyEmail.tsx", "src/pages/ResendVerification.tsx"],
+        "components": [],
+        "services": ["src/services/api.ts (shared client — auth header/session handling lives here)"]
+      },
+      "models": ["User", "PasswordResetToken", "EmailVerificationToken"],
+      "tests": ["server/src/tests/passwordReset.test.ts", "server/src/tests/emailVerification.test.ts", "server/src/tests/totp.test.ts", "server/src/tests/sessionCookieCsrf.test.ts", "server/src/tests/staffOnboarding.test.ts"],
+      "contract_candidates": ["AuthenticatedUserContext (already implicit via middleware/auth.ts req.user)"],
+      "entitlement_relationship": "not entitlement-gated — core, must remain free per FINAL GOVERNANCE RULE",
+      "release_flag_relevance": "none observed",
+      "evidence_note": "middleware/auth.ts is imported by nearly every route file (mounted globally at server/src/index.ts:193) — high blast radius core dependency, not a violation.",
+      "uncertainty": "Whether User.role-based checks belong here or in core-permissions-roles is not sharply separated in current code; both live partly in middleware/auth.ts."
+    },
+    {
+      "id": "core-org-clinic-membership",
+      "name": "Organization / Clinic / User Membership",
+      "classification": "core platform",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/clinicRegistration.ts", "server/src/routes/organizationBranches.ts", "server/src/routes/organizationDashboard.ts", "server/src/routes/users.ts", "server/src/routes/usersImport.ts"],
+        "services": ["server/src/services/clinicOperatingPreferences.ts"],
+        "middleware": ["server/src/middleware/planLimits.ts"],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/Branches.tsx", "src/pages/OrganizationDashboard.tsx", "src/pages/Users.tsx"],
+        "components": ["src/components/ClinicSwitcher.tsx", "src/components/UserClinicAssignmentModal.tsx", "src/components/UserImportModal.tsx", "src/components/UserList.tsx"],
+        "services": []
+      },
+      "models": ["Organization", "Clinic", "ClinicInvitation", "ClinicWorkingHours", "UserClinic", "Plan"],
+      "tests": ["server/src/tests/multiBranchAccess.test.ts", "server/src/tests/staffOnboarding.test.ts", "server/src/tests/userImportOnboarding.test.ts", "server/src/tests/scheduleAccess.test.ts"],
+      "contract_candidates": ["ClinicDirectory / OrganizationDirectory (read-only reference lookup for other domains)"],
+      "entitlement_relationship": "Plan.features JSON is the current de-facto entitlement source (see core-platform-administration for PlatformAdmin-side plan editing)",
+      "release_flag_relevance": "Plan.features gates whatsapp/reports/compensation etc. today — informal, not a dedicated entitlement service",
+      "evidence_note": "Plan model has no clinicId/organizationId — global reference data.",
+      "uncertainty": "Plan really straddles this domain and a future Entitlements domain; kept here because it is FK'd from Clinic/Organization and has no dedicated routes of its own."
+    },
+    {
+      "id": "core-tenant-security",
+      "name": "Tenant Security and Scope",
+      "classification": "core platform",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": [],
+        "services": [],
+        "middleware": ["server/src/middleware/clinicAccess.ts"],
+        "jobs": [],
+        "utils": ["server/src/utils/clinicScope.ts", "server/src/utils/tenantGuard.ts", "server/src/utils/relationGuards.ts"]
+      },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": [],
+      "tests": ["server/src/tests/multiBranchAccess.test.ts", "server/src/tests/treatmentCaseClinicScope.test.ts", "server/src/tests/billingPatientAccess.test.ts", "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts"],
+      "contract_candidates": ["already a public-ish contract in practice: validateAndGetClinicIdScope-style helpers are imported widely; a formal public export would harden this"],
+      "entitlement_relationship": "not entitlement-gated — core, must remain free per FINAL GOVERNANCE RULE",
+      "release_flag_relevance": "none",
+      "evidence_note": "DEPENDENCY_MAP.md §8 already names this class of helper as a high-risk shared component to track in F0-004.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "core-permissions-roles",
+      "name": "Permissions / Roles",
+      "classification": "core platform",
+      "criticality": "high-risk",
+      "maturity": "mixed",
+      "backend": {
+        "routes": [],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/roles.ts"]
+      },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": [],
+      "tests": ["server/src/tests/treatmentPackagePermissions.test.ts"],
+      "contract_candidates": ["PermissionCheck service — currently role-string checks are inlined per-route rather than a single contract"],
+      "entitlement_relationship": "distinct from entitlements per DEPENDENCY_MAP.md §9 rule 7, but not yet cleanly separated in code",
+      "release_flag_relevance": "none",
+      "evidence_note": "role checks are scattered inline across route files in addition to utils/roles.ts — not a single bounded module today.",
+      "uncertainty": "Extent of inline (non-utils/roles.ts) permission logic was not exhaustively enumerated — flagged for F0-004 import-evidence pass."
+    },
+    {
+      "id": "core-audit-activity",
+      "name": "Audit and Activity",
+      "classification": "core platform",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": [],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/activity.ts", "server/src/utils/auditLog.ts"]
+      },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": ["ActivityLog", "AuditLog"],
+      "tests": [],
+      "contract_candidates": ["AuditService.record() — already close to a de-facto contract via utils/auditLog.ts"],
+      "entitlement_relationship": "not entitlement-gated — core, must remain free",
+      "release_flag_relevance": "none",
+      "evidence_note": "ActivityLog is clinic-scoped/FK-heavy; AuditLog is organization-scoped and deliberately separate per schema comment at server/prisma/schema.prisma:1521.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "core-privacy-consent-retention-dsr",
+      "name": "Privacy / Consent / Retention / Data Subject Rights",
+      "classification": "core platform",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "mixed",
+      "backend": {
+        "routes": ["server/src/routes/patientPrivacy.ts", "server/src/routes/gdprExport.ts", "server/src/routes/clinicBulkExport.ts", "server/src/routes/clinicLegalProfile.ts", "server/src/routes/publicClinicKvkk.ts"],
+        "services": ["server/src/services/privacy/clinicBulkExportConfig.ts", "server/src/services/privacy/clinicBulkExportFieldAllowlists.ts", "server/src/services/privacy/clinicBulkExportPackage.ts", "server/src/services/privacy/clinicBulkExportPasswordAttempts.ts", "server/src/services/privacy/dataRetentionPolicy.ts", "server/src/services/privacy/deletionReviewInventory.ts", "server/src/services/privacy/orphanFileInspection.ts", "server/src/services/privacy/patientAnonymization.ts", "server/src/services/privacy/patientPrivacyExportPackage.ts", "server/src/services/privacy/redaction.ts", "server/src/services/publicBookingNoticeEvidence.ts", "server/src/services/channelConsentGate.ts"],
+        "middleware": [],
+        "jobs": ["server/src/jobs/dataRetentionCleanupJob.ts", "server/src/jobs/patientPrivacyExportCleanupJob.ts", "server/src/jobs/clinicBulkExportCleanupJob.ts", "server/src/jobs/clinicBulkExportWorker.ts", "server/src/jobs/publicBookingNoticeEvidenceCleanupJob.ts"],
+        "utils": ["server/src/utils/encryption.ts", "server/src/utils/secrets.ts"]
+      },
+      "frontend": {
+        "pages": ["src/pages/clinic/ClinicKvkkPublicPage.tsx", "src/pages/legal/CommunicationsNoticePage.tsx", "src/pages/legal/ConsentTemplatePage.tsx", "src/pages/legal/CookiePolicyPage.tsx", "src/pages/legal/DataSubjectRequestPage.tsx", "src/pages/legal/LegalCenterPage.tsx", "src/pages/legal/PrivacyNoticePage.tsx", "src/pages/platform/PlatformPrivacy.tsx"],
+        "components": ["src/components/PatientPrivacyPanel.tsx", "src/components/settings/ClinicBulkExportSection.tsx", "src/components/settings/clinicBulkExportSelectionHelpers.ts", "src/components/settings/ClinicKvkkSection.tsx", "src/components/legal/LegalLayout.tsx"],
+        "services": []
+      },
+      "models": ["PatientPrivacyRequest", "ClinicLegalProfile", "PublicBookingNoticeEvidence", "ChannelConsentLog", "PatientPrivacyExportArchive", "ClinicBulkExportArchive", "ClinicBulkExportPasswordAttempt"],
+      "tests": ["server/src/tests/patientPrivacy.test.ts", "server/src/tests/clinicBulkExport.test.ts", "server/src/tests/clinicLegalProfile.test.ts", "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts", "server/src/tests/channelConsentGate.test.ts", "server/src/tests/channelConsentFlowResume.test.ts", "server/src/tests/publicBookingNoticeEvidence.test.ts", "server/src/tests/aiPrivacyBoundary.test.ts"],
+      "contract_candidates": ["Consent/Privacy evidence service (as named in task spec) — currently split across channelConsentGate.ts, redaction.ts, and per-flow ad hoc checks"],
+      "entitlement_relationship": "not entitlement-gated — core, must never be placed behind a paid entitlement per FINAL GOVERNANCE RULE",
+      "release_flag_relevance": "clinicBulkExport is feature-flagged off by default per schema comment at server/prisma/schema.prisma:2509 — a release flag, not a commercial entitlement",
+      "evidence_note": "This is the most actively-developed domain in the repo (KVKK-CRIT-003/HIGH-004 work); also owns legalHold fields on PatientAttachment and ImagingStudy which live physically in other domains' tables — a legitimate, documented cross-domain concern (see cross_domain notes below).",
+      "cross_domain_direct_access": "reads/writes PatientAttachment.legalHold (clinical-patients-owned table) and ImagingStudy.legalHold (imaging-server-viewer-owned table) directly — documented in schema comments as intentional KVKK lifecycle fields, not an accidental violation, but a candidate for a future explicit LegalHold contract per module-boundary principles.",
+      "uncertainty": "An uncommitted, in-progress services/communicationConsent/ directory and 2 new Prisma models were observed in the working tree; excluded from this evidence-based map (see notes.uncommitted_working_tree_drift)."
+    },
+    {
+      "id": "core-security-incident-detection",
+      "name": "Security Incident Response and Detection",
+      "classification": "core platform",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/platformSecurityIncidents.ts"],
+        "services": ["server/src/services/security/securityDetectionRules.ts", "server/src/services/security/securityIncidentService.ts", "server/src/services/security/securitySignalService.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/platform/PlatformSecurityIncidents.tsx"],
+        "components": [],
+        "services": []
+      },
+      "models": ["SecuritySignalEvent", "SecurityIncident", "SecurityIncidentActivity"],
+      "tests": ["server/src/tests/securityIncident.test.ts"],
+      "contract_candidates": ["SecuritySignalIngest command — already close to bounded via securitySignalService.ts"],
+      "entitlement_relationship": "not entitlement-gated — core security function",
+      "release_flag_relevance": "none observed at this layer",
+      "evidence_note": "Added by PR #167 (368bcc8, merged 2026-07-18), deliberately kept separate from OperationalEvent per schema comment at server/prisma/schema.prisma:2670 (org-id nullability reasoning).",
+      "uncertainty": "This is the most recently merged domain; only 3 commits of history exist — maturity may change quickly."
+    },
+    {
+      "id": "core-config-secrets",
+      "name": "Configuration and Secrets",
+      "classification": "core platform",
+      "criticality": "high-risk",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/settings.ts"],
+        "services": ["server/src/services/platformSettings.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/secrets.ts", "server/src/utils/encryption.ts"]
+      },
+      "frontend": { "pages": ["src/pages/Settings.tsx"], "components": [], "services": [] },
+      "models": ["Setting", "PlatformSetting"],
+      "tests": [],
+      "contract_candidates": [],
+      "entitlement_relationship": "not entitlement-gated — core",
+      "release_flag_relevance": "PlatformSetting rows are described as 'runtime feature toggles' in schema comment — likely release-flag storage",
+      "evidence_note": "utils/secrets.ts and utils/encryption.ts are imported across many domains (WhatsApp/Instagram token encryption, imaging bridge tokens, SMS provider credentials) — high blast radius shared primitive.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "core-observability-ops-events",
+      "name": "Observability / Operational Events",
+      "classification": "core platform",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/operationalMonitoring.ts"],
+        "services": ["server/src/services/operationalEventService.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/logger.ts"]
+      },
+      "frontend": { "pages": ["src/pages/platform/PlatformSystem.tsx", "src/pages/Operations.tsx"], "components": [], "services": [] },
+      "models": ["OperationalEvent"],
+      "tests": ["server/src/tests/operationalMonitoring.test.ts"],
+      "contract_candidates": ["OperationalEvent.emit() — already a de-facto contract via operationalEventService.ts"],
+      "entitlement_relationship": "not entitlement-gated — core",
+      "release_flag_relevance": "none",
+      "evidence_note": "operationalMonitoring.ts uses raw SQL (see hotspots/raw_sql_locations) for aggregate queries.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "core-shared-events-queue-idempotency",
+      "name": "Shared Events / Queue Contracts / Idempotency",
+      "classification": "core platform",
+      "criticality": "high-risk",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": [],
+        "services": ["server/src/services/messagingInboundIdempotency.ts"],
+        "middleware": [],
+        "jobs": ["server/src/jobs/inboundEventRetryJob.ts", "server/src/jobs/startBackgroundJobs.ts"],
+        "utils": ["server/src/utils/jobLock.ts", "server/src/utils/concurrency.ts"]
+      },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": ["MessagingInboundEvent", "JobLock"],
+      "tests": [],
+      "contract_candidates": ["already an explicit design intent per schema comment: MessagingInboundEvent.connectionId is documented as provider-agnostic for future channels"],
+      "entitlement_relationship": "not entitlement-gated — core",
+      "release_flag_relevance": "none",
+      "evidence_note": "No real queue/broker exists yet (ADR-006/ADR-007 both PROPOSED); this is an in-process job-lock + idempotency-ledger pattern, not a transactional outbox.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "core-storage-abstraction",
+      "name": "Storage Abstraction",
+      "classification": "core platform",
+      "criticality": "high-risk",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": [],
+        "services": ["server/src/services/fileStorage.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/fileSignature.ts", "server/src/utils/filePreview.ts"]
+      },
+      "frontend": { "pages": [], "components": ["src/components/FilePreviewModal.tsx"], "services": [] },
+      "models": [],
+      "tests": ["server/src/tests/filePreview.test.ts"],
+      "contract_candidates": ["StoragePort (as named in task spec) — fileStorage.ts is the closest existing candidate"],
+      "entitlement_relationship": "not entitlement-gated — core",
+      "release_flag_relevance": "none",
+      "evidence_note": "ADR-008 (object-storage abstraction) is PROPOSED, dependent on F0-011; current fileStorage.ts is local-filesystem-based per F0-002 Stage A evidence (not independently re-verified here).",
+      "uncertainty": "Provider abstraction maturity not independently re-verified in this task; deferred to F0-011."
+    },
+    {
+      "id": "core-notifications",
+      "name": "Notifications",
+      "classification": "core platform",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/notifications.ts"],
+        "services": ["server/src/services/notificationPreferences.ts", "server/src/services/taskAssignmentNotifier.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": [], "components": ["src/components/NotificationBell.tsx"], "services": [] },
+      "models": ["Notification"],
+      "tests": [],
+      "contract_candidates": [],
+      "entitlement_relationship": "not entitlement-gated",
+      "release_flag_relevance": "none",
+      "evidence_note": "In-app notifications only (Notification model) — distinct from outbound messaging (SentMessage/SmsMessage), which belongs to Messaging domains.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "core-platform-administration",
+      "name": "Platform Administration",
+      "classification": "platform capability",
+      "criticality": "high-risk",
+      "maturity": "mixed",
+      "backend": {
+        "routes": ["server/src/routes/platformAdmin.ts"],
+        "services": ["server/src/services/backupService.ts"],
+        "middleware": ["server/src/middleware/platformAuth.ts"],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/PlatformAdmin.tsx", "src/pages/platform/PlatformBackups.tsx", "src/pages/platform/PlatformClinics.tsx", "src/pages/platform/PlatformDashboard.tsx", "src/pages/platform/PlatformLogin.tsx", "src/pages/platform/PlatformOrganizations.tsx", "src/pages/platform/PlatformPlans.tsx", "src/pages/platform/PlatformUsers.tsx"],
+        "components": [],
+        "services": [],
+        "layout": ["src/layouts/PlatformAdminLayout.tsx"]
+      },
+      "models": ["PlatformAdmin", "PlatformSmsProvider"],
+      "tests": ["server/src/tests/platformAdmin.test.ts", "server/src/tests/platformBackup.test.ts"],
+      "contract_candidates": [],
+      "entitlement_relationship": "administers Plan/entitlement data for tenants — not itself entitlement-gated",
+      "release_flag_relevance": "administers PlatformSetting release toggles",
+      "evidence_note": "routes/platformAdmin.ts is a 1201-line, 40-route hotspot spanning clinic/org/plan/backup/SMS-provider administration — see hotspots.",
+      "uncertainty": "Exact sub-boundaries inside platformAdmin.ts (clinics vs. orgs vs. plans vs. SMS-provider admin) were not separately traced route-by-route; flagged as a hotspot for F0-004/strangler planning."
+    },
+    {
+      "id": "clinical-patients",
+      "name": "Patients",
+      "classification": "core clinical",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/patients.ts", "server/src/routes/patientsImport.ts", "server/src/routes/attachments.ts"],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/patientName.ts", "server/src/utils/excelImport.ts"]
+      },
+      "frontend": {
+        "pages": ["src/pages/Patients.tsx", "src/pages/PatientDetail.tsx"],
+        "components": ["src/components/PatientForm.tsx", "src/components/PatientImportModal.tsx", "src/components/GlobalSearch.tsx"],
+        "services": []
+      },
+      "models": ["Patient", "PatientAttachment", "PatientClinic"],
+      "tests": ["server/src/tests/patientName.test.ts", "server/src/tests/patientSharedPhone.test.ts", "server/src/tests/excelImport.test.ts", "server/src/tests/billingPatientAccess.test.ts"],
+      "contract_candidates": ["PatientDirectory / PatientReferenceQuery (as named in task spec) — heavily consumed by Appointments, TreatmentCases, Messaging, Imaging, Lab, Finance domains today via direct Prisma reads"],
+      "entitlement_relationship": "not entitlement-gated — core MVP entity per AGENTS.md",
+      "release_flag_relevance": "none",
+      "evidence_note": "Patient is the single most cross-referenced model in the schema (18+ inbound relations) — prime candidate for a first public query contract.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "clinical-appointments-availability",
+      "name": "Appointments and Availability",
+      "classification": "core clinical",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/appointments.ts", "server/src/routes/appointmentRequests.ts", "server/src/routes/schedules.ts", "server/src/routes/contactRequests.ts", "server/src/routes/services.ts", "server/src/routes/noShows.ts"],
+        "services": ["server/src/services/appointments/appointmentAvailabilityService.ts", "server/src/services/appointmentRequestSafety.ts", "server/src/services/appointmentRequestNotification.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/noShowFollowUp.ts"]
+      },
+      "frontend": {
+        "pages": ["src/pages/Appointments.tsx", "src/pages/AppointmentDetail.tsx", "src/pages/AppointmentRequests.tsx", "src/pages/ClinicSchedule.tsx", "src/pages/ContactRequests.tsx", "src/pages/NoShows.tsx"],
+        "components": ["src/components/AppointmentForm.tsx", "src/components/CalendarTimelineView.tsx", "src/components/DoctorAvailabilityManager.tsx", "src/components/MultiDoctorDayView.tsx", "src/components/ServiceList.tsx"],
+        "services": []
+      },
+      "models": ["Appointment", "AppointmentType", "AppointmentRequest", "DoctorAvailability", "DoctorOffDay", "ContactRequest"],
+      "tests": ["server/src/tests/appointmentAvailabilityService.test.ts", "server/src/tests/appointmentRequestOverlapSafety.test.ts", "server/src/tests/appointmentUpdateValidation.test.ts", "server/src/tests/noShow.test.ts", "server/src/tests/noShowFollowUpParity.test.ts", "server/src/tests/scheduleAccess.test.ts", "server/src/tests/contactRequests.test.ts", "server/src/tests/servicePricing.test.ts"],
+      "contract_candidates": ["AppointmentReferenceQuery", "AppointmentCompleted event"],
+      "entitlement_relationship": "not entitlement-gated — core MVP entity",
+      "release_flag_relevance": "none",
+      "evidence_note": "AppointmentRequest is written directly by clinical-public-booking, messaging-whatsapp and messaging-instagram (source field: whatsapp/instagram/public), making it a natural first cross-domain command/contract candidate.",
+      "cross_domain_direct_access": "AppointmentRequest and ContactRequest rows are created directly (Prisma) by messaging-whatsapp/messaging-instagram route and service code rather than through an Appointments-owned command — classified as transitional, not yet a violation given no contract exists to violate.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "clinical-treatment-cases",
+      "name": "Treatment Cases",
+      "classification": "core clinical",
+      "criticality": "elevated",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/treatmentCases.ts", "server/src/routes/treatmentPackages.ts"],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/TreatmentCases.tsx", "src/pages/TreatmentCaseDetail.tsx"],
+        "components": ["src/components/TreatmentCaseForm.tsx", "src/components/TreatmentPackageList.tsx"],
+        "services": []
+      },
+      "models": ["TreatmentCase", "TreatmentPackage", "TreatmentPackageItem", "TreatmentPackageApplication"],
+      "tests": ["server/src/tests/treatmentCaseClinicScope.test.ts", "server/src/tests/treatmentPackagePermissions.test.ts", "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts"],
+      "contract_candidates": ["ProcedureCompleted event (shared with clinical-dental-chart-procedures)"],
+      "entitlement_relationship": "not entitlement-gated — core MVP entity",
+      "release_flag_relevance": "none",
+      "evidence_note": "TreatmentPackageApplication triggers stock deduction in the Inventory domain (services/treatmentStockDeduction.ts) — legitimate business collaboration, currently direct-call rather than event-based.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "clinical-dental-chart-procedures",
+      "name": "Dental Chart / Procedures",
+      "classification": "core clinical",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/dentalChart.ts", "server/src/routes/treatmentPlanProcedures.ts"],
+        "services": ["server/src/services/treatmentStockDeduction.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": [],
+        "components": ["src/components/DentalChart.tsx", "src/components/dentalChart.types.ts", "src/components/DentalChartFullscreenModal.tsx", "src/components/ToothDetailPanel.tsx", "src/components/ToothIcon.tsx"],
+        "services": []
+      },
+      "models": ["ToothRecord", "TreatmentPlanProcedure"],
+      "tests": [],
+      "contract_candidates": ["ProcedureCompleted event (as named in task spec)"],
+      "entitlement_relationship": "not entitlement-gated — core MVP-adjacent clinical entity",
+      "release_flag_relevance": "none",
+      "evidence_note": "treatmentStockDeduction.ts sits here but writes InventoryTransaction rows directly — cross-domain write into Inventory-owned data.",
+      "cross_domain_direct_access": "services/treatmentStockDeduction.ts writes InventoryTransaction (Inventory-owned model) directly — transitional, candidate for an Inventory stock-adjustment command per task spec's contract list.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "clinical-public-booking",
+      "name": "Public Booking",
+      "classification": "core clinical",
+      "criticality": "elevated",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/publicBooking.ts"],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/BookingWidget.tsx", "src/pages/bookingWidgetHelpers.ts", "src/pages/LandingPage.tsx"],
+        "components": ["src/components/landing/* (marketing surfaces around the public booking/landing funnel)"],
+        "services": []
+      },
+      "models": [],
+      "tests": ["server/src/tests/publicBookingAvailability.test.ts", "server/src/tests/publicBookingSlotConsistency.test.ts", "server/src/tests/publicBookingSlotRequired.test.ts", "server/src/tests/publicBookingNoticeEvidence.test.ts"],
+      "contract_candidates": [],
+      "entitlement_relationship": "not entitlement-gated",
+      "release_flag_relevance": "none",
+      "evidence_note": "publicBooking.ts writes AppointmentRequest and PublicBookingNoticeEvidence directly — no dedicated model of its own; it is a channel/entry-point domain over Appointments + Privacy data.",
+      "uncertainty": "Whether this deserves an independently-owned model set or should formally be modeled as an entry-point over clinical-appointments-availability is unresolved — flagged for ADR-015 input."
+    },
+    {
+      "id": "clinical-basic-payments",
+      "name": "Basic Payments",
+      "classification": "core clinical",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/payments.ts", "server/src/routes/paymentPlans.ts"],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": ["server/src/utils/overdueInstallments.ts", "server/src/utils/overdueReceivables.ts"]
+      },
+      "frontend": {
+        "pages": ["src/pages/Payments.tsx", "src/pages/PaymentPlans.tsx"],
+        "components": ["src/components/PaymentForm.tsx", "src/components/PaymentPlanForm.tsx", "src/components/ReceiptModal.tsx"],
+        "services": []
+      },
+      "models": ["Payment", "PaymentPlan", "PaymentPlanInstallment"],
+      "tests": ["server/src/tests/paymentValidation.test.ts", "server/src/tests/paymentBillingEdit.test.ts", "server/src/tests/overdueInstallments.test.ts", "server/src/tests/overdueReceivables.test.ts"],
+      "contract_candidates": ["PaymentReceived event (as named in task spec)"],
+      "entitlement_relationship": "not entitlement-gated — 'Basic Payments' per AGENTS.md MVP scope; distinguished from finance-advanced-compensation which is a separable commercial module",
+      "release_flag_relevance": "none",
+      "evidence_note": "PractitionerEarning reads Payment directly (finance-advanced-compensation reading clinical-basic-payments data) — legitimate business collaboration.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "clinical-tasks-followup",
+      "name": "Tasks and Follow-up",
+      "classification": "core clinical",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/tasks.ts"],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": ["src/pages/Tasks.tsx"], "components": ["src/components/TaskForm.tsx"], "services": [] },
+      "models": ["Task"],
+      "tests": [],
+      "contract_candidates": [],
+      "entitlement_relationship": "not entitlement-gated — explicit AGENTS.md MVP entity",
+      "release_flag_relevance": "none",
+      "evidence_note": "Task is referenced by RecallAction (messaging-automation-recall-followup) — legitimate cross-domain reference (taskId FK), not a listed domain in the task spec's required list but added because AGENTS.md names 'Follow-up tasks' as a top-level MVP entity and a distinct Task model/route/page exists.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "messaging-whatsapp",
+      "name": "Messaging — WhatsApp",
+      "classification": "optional operational",
+      "criticality": "elevated",
+      "maturity": "mixed",
+      "backend": {
+        "routes": ["server/src/routes/whatsapp.ts", "server/src/routes/whatsappInbox.ts", "server/src/routes/metaWhatsAppWebhook.ts", "server/src/routes/organizationWhatsApp.ts"],
+        "services": ["server/src/services/whatsapp/clinicResolver.ts", "server/src/services/whatsapp/conversationMessageStore.ts", "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts", "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts", "server/src/services/whatsapp/metaInboundDelivery.ts", "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts", "server/src/services/whatsapp/templateBinding.ts", "server/src/services/whatsapp/whatsappOutboundMessaging.ts", "server/src/services/whatsapp/WhatsAppProvider.ts", "server/src/services/whatsapp/whatsappProviderFactory.ts", "server/src/services/whatsapp/whatsappService.ts", "server/src/services/evolutionApi.ts", "server/src/services/metaTemplateService.ts"],
+        "middleware": [],
+        "jobs": ["server/src/jobs/metaTemplateSyncJob.ts"],
+        "utils": ["server/src/utils/legacyWhatsApp.ts", "server/src/utils/whatsappDate.ts", "server/src/utils/webhookVerification.ts", "server/src/utils/webhookRouting.ts", "server/src/utils/messageSanitizer.ts"]
+      },
+      "frontend": {
+        "pages": ["src/pages/WhatsAppConnections.tsx", "src/pages/WhatsAppInbox.tsx", "src/pages/MetaCallbackPage.tsx", "src/pages/MessageTemplates.tsx", "src/pages/Messages.tsx"],
+        "components": ["src/components/MessageTemplateForm.tsx", "src/components/PrepareMessageModal.tsx"],
+        "services": []
+      },
+      "models": ["WhatsAppConnection", "ClinicWhatsAppConnection", "WhatsAppInboxEntry", "WhatsAppConversationState", "WhatsAppConversationMessage"],
+      "tests": ["server/src/tests/metaWhatsAppWebhook.test.ts", "server/src/tests/metaTemplateService.test.ts", "server/src/tests/metaTemplateSyncJob.test.ts", "server/src/tests/whatsappConversationPersistence.test.ts", "server/src/tests/whatsappIdentityAndPostBooking.test.ts", "server/src/tests/whatsappInbox.test.ts", "server/src/tests/whatsappOutboundMessaging.test.ts", "server/src/tests/whatsappProvider.test.ts", "server/src/tests/messageTemplateWabaBinding.test.ts", "server/src/tests/messageSafetyHardening.test.ts"],
+      "contract_candidates": ["Messaging send/automation command (as named in task spec) — provider factory pattern already exists (whatsappProviderFactory.ts)"],
+      "entitlement_relationship": "gated by Plan.features.whatsapp per core-org-clinic-membership evidence note",
+      "release_flag_relevance": "likely, not independently re-verified",
+      "evidence_note": "routes/whatsapp.ts is a 3999-line, 7-route hotspot: only ~380 lines (3616-3999) are actual route handlers; the remaining ~3600 lines are conversation-AI/patient-matching/booking-flow business logic embedded directly in the route file. See hotspots.",
+      "cross_domain_direct_access": "routes/whatsapp.ts creates Patient and finds/creates User rows directly (see handleIncomingWhatsAppMessage and ensureWhatsAppContactPatient at server/src/routes/whatsapp.ts:1206) — a direct write into clinical-patients-owned data from a messaging route, not through a Patients-owned command.",
+      "uncertainty": "Exact line-level boundary between AI-orchestration logic and WhatsApp-provider logic inside routes/whatsapp.ts was not further decomposed — flagged for a dedicated hotspot strangler task."
+    },
+    {
+      "id": "messaging-instagram",
+      "name": "Messaging — Instagram",
+      "classification": "optional operational",
+      "criticality": "elevated",
+      "maturity": "mixed",
+      "backend": {
+        "routes": ["server/src/routes/instagramInbox.ts", "server/src/routes/instagramWebhook.ts", "server/src/routes/organizationInstagram.ts"],
+        "services": ["server/src/services/instagram/instagramAiConversationProcessor.ts", "server/src/services/instagram/instagramClinicResolver.ts", "server/src/services/instagram/InstagramMessagingProvider.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/InstagramConnections.tsx", "src/pages/InstagramInbox.tsx"],
+        "components": [],
+        "services": []
+      },
+      "models": ["InstagramConnection", "ClinicInstagramConnection", "InstagramInboxEntry", "InstagramConversationMessage"],
+      "tests": ["server/src/tests/instagramAssistantParity.test.ts", "server/src/tests/instagramConversion.test.ts", "server/src/tests/instagramProvider.test.ts"],
+      "contract_candidates": ["shares the Messaging send/automation command candidate with messaging-whatsapp"],
+      "entitlement_relationship": "likely gated by Plan.features, not independently re-verified for Instagram specifically",
+      "release_flag_relevance": "not independently re-verified",
+      "evidence_note": "Structured deliberately as a dedicated model set ('Option B') per schema comment at server/prisma/schema.prisma:1621 to avoid disrupting WhatsApp — an explicit repository decision favoring parallel channel domains over one shared messaging schema.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "messaging-sms",
+      "name": "Messaging — SMS",
+      "classification": "optional operational",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/sms.ts"],
+        "services": ["server/src/services/sms/platformSmsProviders.ts", "server/src/services/sms/smsEntitlement.ts", "server/src/services/sms/SmsProvider.ts", "server/src/services/sms/smsProviders.ts", "server/src/services/sms/smsRouting.ts", "server/src/services/sms/smsRoutingPolicy.ts", "server/src/services/sms/smsService.ts", "server/src/services/sms/smsTemplating.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": [], "components": ["src/components/settings/SmsSettingsSection.tsx"], "services": [] },
+      "models": ["ClinicSmsSettings", "SmsMessage", "SmsUsageCounter"],
+      "tests": ["server/src/tests/smsModule.test.ts"],
+      "contract_candidates": [],
+      "entitlement_relationship": "explicit add-on: ClinicSmsSettings.addonEnabled per schema comment — the cleanest existing example of a real, code-enforced commercial entitlement in the repo",
+      "release_flag_relevance": "region allow-lists (turkeyAllowed/europeAllowed) function as platform-admin-controlled release gates",
+      "evidence_note": "smsEntitlement.ts is a named, dedicated entitlement-check module — a positive example other domains' future entitlement checks could follow.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "messaging-email",
+      "name": "Messaging — Email",
+      "classification": "optional operational",
+      "criticality": "normal",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": [],
+        "services": ["server/src/services/emailService.ts", "server/src/services/emailTemplates.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": [],
+      "tests": [],
+      "contract_candidates": [],
+      "entitlement_relationship": "not independently re-verified",
+      "release_flag_relevance": "none observed",
+      "evidence_note": "No dedicated route file or Prisma model — email is used for auth flows (verification/reset) and consumed via emailService.ts by core-identity-access; not evidenced as a clinic-facing messaging channel with its own inbox model like WhatsApp/Instagram.",
+      "uncertainty": "Whether Email deserves independent domain status vs. being a core-identity-access utility is genuinely ambiguous given current evidence."
+    },
+    {
+      "id": "messaging-ai-orchestration",
+      "name": "Messaging AI Orchestration",
+      "classification": "optional operational",
+      "criticality": "elevated",
+      "maturity": "shared/ambiguous",
+      "backend": {
+        "routes": [],
+        "services": ["server/src/services/whatsappAgentPrompt.ts", "server/src/services/whatsappAgentSchema.ts", "server/src/services/whatsappAvailability.ts", "server/src/services/whatsappBookingFlow.ts", "server/src/services/whatsappClarification.ts", "server/src/services/whatsappConversationAgent.ts", "server/src/services/whatsappInterpreter.ts", "server/src/services/whatsappPublicApi.ts", "server/src/services/whatsappResolvedIntentRouter.ts", "server/src/services/whatsappStepAwareNlu.ts", "server/src/services/whatsappWebhookPayload.ts", "server/src/services/googleAiStudio.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": [],
+      "tests": ["server/src/tests/whatsappAgentEvaluation.test.ts", "server/src/tests/whatsappAwaitingServiceStep.test.ts", "server/src/tests/whatsappConversationFixtures.ts", "server/src/tests/whatsappSafetyFixtures.ts", "server/src/tests/whatsappStepAwareNlu.test.ts", "server/src/tests/aiPrivacyBoundary.test.ts"],
+      "contract_candidates": ["AiProvider / AiGateway contract (as named in task spec) — googleAiStudio.ts is the only generic AI-provider file today; the rest is WhatsApp-specific conversation logic, not a general AI platform"],
+      "entitlement_relationship": "bundled with messaging-whatsapp entitlement, not separately gated",
+      "release_flag_relevance": "not independently re-verified",
+      "evidence_note": "This is currently a WhatsApp-specific conversational-AI stack, not a channel-agnostic AI Gateway; ADR-009 (AI Gateway) is PROPOSED and explicitly depends on this kind of evidence.",
+      "uncertainty": "Whether Instagram's instagramAiConversationProcessor.ts should merge into this domain or stay under messaging-instagram is unresolved — kept under messaging-instagram here because it lives in services/instagram/ and has no shared code path with the WhatsApp agent files evidenced."
+    },
+    {
+      "id": "messaging-automation-recall-followup",
+      "name": "Automations / Reminders / Follow-up / Recall",
+      "classification": "optional operational",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/recall.ts", "server/src/routes/postTreatment.ts"],
+        "services": ["server/src/services/recallCandidateService.ts", "server/src/services/recallSettings.ts", "server/src/services/postTreatmentMessaging.ts"],
+        "middleware": [],
+        "jobs": ["server/src/jobs/reminders.ts"],
+        "utils": ["server/src/utils/noShowFollowUp.ts (shared with clinical-appointments-availability)"]
+      },
+      "frontend": {
+        "pages": ["src/pages/RecallDashboard.tsx"],
+        "components": ["src/components/recall/RecallActionModal.tsx", "src/components/recall/RecallCandidateStatusBadge.tsx", "src/components/recall/RecallCandidateTable.tsx", "src/components/recall/RecallMessageDraftModal.tsx", "src/components/recall/RecallSettingsSection.tsx", "src/components/recall/RecallSummaryCards.tsx", "src/components/PostTreatmentMessages.tsx"],
+        "services": []
+      },
+      "models": ["ClinicRecallSetting", "RecallCandidate", "RecallAction", "PostTreatmentMessageTemplate", "PostTreatmentMessageQueue"],
+      "tests": ["server/src/tests/postTreatmentMessaging.test.ts", "server/src/tests/noShowFollowUpParity.test.ts"],
+      "contract_candidates": ["consumes ProcedureCompleted/AppointmentCompleted events (as named in task spec) once those exist"],
+      "entitlement_relationship": "not independently re-verified",
+      "release_flag_relevance": "none observed",
+      "evidence_note": "jobs/reminders.ts is the main scheduled entry point sending appointment/payment/recall reminders — reads across Appointments, Payments, and this domain's own models.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "imaging-server-viewer",
+      "name": "Imaging — Server Ingest and Viewer",
+      "classification": "optional operational",
+      "criticality": "elevated",
+      "maturity": "mixed",
+      "backend": {
+        "routes": ["server/src/routes/imaging.ts"],
+        "services": ["server/src/services/imaging/imagingRequestTransitions.ts", "server/src/services/imaging/imagingUploadValidation.ts", "server/src/services/imaging/releaseMetadataValidation.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/ImagingQueue.tsx"],
+        "components": ["src/components/imaging/DicomViewer.tsx", "src/components/imaging/dicomHelpers.ts", "src/components/imaging/ImagingSettingsPanel.tsx", "src/components/imaging/PatientImagingTab.tsx"],
+        "services": []
+      },
+      "models": ["ImagingDevice", "ImagingRequest", "ImagingStudy", "ImagingImage"],
+      "tests": ["server/src/tests/imaging.test.ts"],
+      "contract_candidates": ["ImagingStudyReceived event (as named in task spec)"],
+      "entitlement_relationship": "not independently re-verified; likely a premium/optional module per AGENTS.md ('Medical imaging storage' listed as explicitly out of MVP scope, yet implemented)",
+      "release_flag_relevance": "not independently re-verified",
+      "evidence_note": "AGENTS.md explicitly lists 'Medical imaging storage' as something to avoid in the MVP unless explicitly requested — yet a substantial Imaging domain (routes/imaging.ts is 1303 lines/27 routes, plus a full bridge subsystem) exists in the repository. This is repository evidence contradicting the MVP charter, not a judgment on whether the feature should exist — flagged as a governance note for the user/ADR-011.",
+      "uncertainty": "none significant on the ownership question itself"
+    },
+    {
+      "id": "imaging-device-bridge",
+      "name": "Imaging — Device Bridge / Windows Bridge",
+      "classification": "external adapter/integration",
+      "criticality": "elevated",
+      "maturity": "partially bounded",
+      "backend": {
+        "routes": ["server/src/routes/imagingBridgePublic.ts"],
+        "services": ["server/src/services/imaging/bridgeOnboardingConfig.ts", "server/src/services/imaging/bridgePairing.ts", "server/src/services/imaging/bridgeTokens.ts", "server/src/services/imaging/bridgeUpdateConfig.ts"],
+        "middleware": [],
+        "jobs": ["server/src/jobs/imagingBridgeOfflineJob.ts"],
+        "utils": []
+      },
+      "frontend": {
+        "pages": [],
+        "components": ["src/components/imaging/bridgeHelpers.ts", "src/components/imaging/BridgeOnboardingCard.tsx", "src/components/imaging/BridgeSetupWizard.tsx", "src/components/imaging/constants.ts", "src/components/imaging/onboardingHelpers.ts", "src/components/imaging/pairingPoller.ts"],
+        "services": [],
+        "external": ["bridge-agent/ (separate deployable, not scanned — out of the targeted CodeGraph roots for this task)", "windows-bridge/ (separate deployable, not scanned)"]
+      },
+      "models": ["ImagingBridgeAgent", "ImagingBridgePairing", "ImagingBridgePairingDevice", "ImagingBridgeBinding"],
+      "tests": ["server/src/tests/imagingBridgeOnboarding.test.ts", "server/src/tests/imagingBridgePairing.test.ts", "server/src/tests/imagingBridgeUpdate.test.ts"],
+      "contract_candidates": ["provider port/adapter — bridge is already an anti-corruption-boundary-shaped design (token-based pairing, no local paths stored server-side per schema comment)"],
+      "entitlement_relationship": "not independently re-verified",
+      "release_flag_relevance": "not independently re-verified",
+      "evidence_note": "bridge-agent/ and windows-bridge/ top-level directories exist as separate deployables; their internals were not scanned in this task per CODEGRAPH DISCIPLINE scope limits (server/src and src only) — flagged as unverified/out of scope, not as absent.",
+      "uncertainty": "bridge-agent/ and windows-bridge/ internal structure is unverified by this task."
+    },
+    {
+      "id": "inventory",
+      "name": "Inventory",
+      "classification": "optional operational",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/inventory.ts"],
+        "services": ["server/src/services/inventoryAlerts.ts", "server/src/services/treatmentStockDeduction.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": ["src/pages/Inventory.tsx"], "components": [], "services": [] },
+      "models": ["InventoryItem", "InventoryTransaction", "AppointmentTypeMaterial", "TreatmentPackageMaterial"],
+      "tests": [],
+      "contract_candidates": ["Inventory stock-adjustment command or event consumer (as named in task spec)"],
+      "entitlement_relationship": "not independently re-verified",
+      "release_flag_relevance": "none observed",
+      "evidence_note": "InventoryItem is organization-scoped (has organizationId directly) while InventoryTransaction is clinic-scoped — a scope-level inconsistency worth flagging for the future tenant/RLS phase (F5), not fixed here.",
+      "cross_domain_direct_access": "services/treatmentStockDeduction.ts (physically located under clinical-dental-chart-procedures backend) writes InventoryTransaction directly — see that domain's cross_domain_direct_access note.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "insurance",
+      "name": "Insurance",
+      "classification": "optional operational",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "backend": { "routes": ["server/src/routes/insuranceProvisions.ts"], "services": [], "middleware": [], "jobs": [], "utils": [] },
+      "frontend": {
+        "pages": ["src/pages/InsuranceProvisions.tsx", "src/pages/InsuranceProvisionDetail.tsx"],
+        "components": ["src/components/InsuranceProvisionForm.tsx"],
+        "services": []
+      },
+      "models": ["InsuranceProvision"],
+      "tests": [],
+      "contract_candidates": [],
+      "entitlement_relationship": "not independently re-verified",
+      "release_flag_relevance": "none observed",
+      "evidence_note": "No dedicated insurance-provider integration exists — InsuranceProvision is an internal tracking record only (policyNumber/provisionNumber free text), not an adapter to a real insurer API.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "finance-advanced-compensation",
+      "name": "Advanced Finance — Compensation and Payouts",
+      "classification": "optional operational",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/financeDashboard.ts", "server/src/routes/compensationRules.ts", "server/src/routes/practitionerEarnings.ts", "server/src/routes/practitionerPayouts.ts"],
+        "services": ["server/src/services/earningService.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": {
+        "pages": ["src/pages/FinanceDashboard.tsx", "src/pages/MyEarnings.tsx", "src/pages/PractitionerEarnings.tsx"],
+        "components": [],
+        "services": []
+      },
+      "models": ["PractitionerCompensationRule", "ServiceCompensationRule", "PractitionerEarning", "PractitionerPayout"],
+      "tests": ["server/src/tests/billingFinancialTreatmentCaseSelect.test.ts"],
+      "contract_candidates": [],
+      "entitlement_relationship": "distinguished from clinical-basic-payments; a strong candidate for a separable commercial module per task spec's 'Advanced Finance' category",
+      "release_flag_relevance": "not independently re-verified",
+      "evidence_note": "reads Payment (clinical-basic-payments) directly to compute earnings — legitimate business collaboration, not yet contract-mediated.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "reporting-analytics",
+      "name": "Reporting / Analytics",
+      "classification": "optional operational",
+      "criticality": "normal",
+      "maturity": "shared/ambiguous",
+      "backend": {
+        "routes": ["server/src/routes/reports.ts", "server/src/routes/dashboard.ts", "server/src/routes/organizationDashboard.ts"],
+        "services": [],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": ["src/pages/Reports.tsx", "src/pages/Dashboard.tsx"], "components": [], "services": [] },
+      "models": [],
+      "tests": ["server/src/tests/dashboard.test.ts", "server/src/tests/organizationDashboard.test.ts", "server/src/tests/financeDashboard.test.ts"],
+      "contract_candidates": ["Reporting read-model/query boundary (as named in task spec)"],
+      "entitlement_relationship": "not independently re-verified",
+      "release_flag_relevance": "none observed",
+      "evidence_note": "reports.ts is a raw-SQL hotspot (see raw_sql_locations) reading directly across Patients/Appointments/Payments/TreatmentCases tables — the clearest existing case for a future read-model/OLAP boundary (ADR-017, PROPOSED).",
+      "uncertainty": "No dedicated Prisma models — this domain is purely a cross-cutting read surface over other domains' data, which is expected for reporting but means it has the widest direct cross-domain read footprint in the backend."
+    },
+    {
+      "id": "lab-prosthetics-tracking",
+      "name": "Dental Laboratory / Prosthetics Tracking",
+      "classification": "optional operational",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "backend": {
+        "routes": ["server/src/routes/laboratories.ts", "server/src/routes/labOrders.ts"],
+        "services": ["server/src/services/labOrders/labOrderStatusTransitions.ts", "server/src/services/labOrders/labOrderSummary.ts"],
+        "middleware": [],
+        "jobs": [],
+        "utils": []
+      },
+      "frontend": { "pages": ["src/pages/LabOrders.tsx"], "components": [], "services": [] },
+      "models": ["Laboratory", "LabWorkOrder", "LabWorkOrderStatusHistory", "LabOrderAttachment"],
+      "tests": ["server/src/tests/labOrders.test.ts"],
+      "contract_candidates": [],
+      "entitlement_relationship": "not independently re-verified",
+      "release_flag_relevance": "none observed",
+      "evidence_note": "Not in the task spec's required domain list; added because clear, self-contained repository evidence (dedicated routes/services/models/tests/pages) supports treating it as its own bounded domain rather than folding it into Treatment Cases or Inventory.",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "planned-ai-platform-gateway",
+      "name": "AI Platform / AI Gateway",
+      "classification": "planned/not implemented",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "backend": { "routes": [], "services": ["server/src/services/googleAiStudio.ts (only generic AI-provider file found)"], "middleware": [], "jobs": [], "utils": [] },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": [],
+      "tests": [],
+      "contract_candidates": ["AiProvider / AiGateway contract — ADR-009, PROPOSED, dependent on ADR-001"],
+      "entitlement_relationship": "not applicable — not implemented",
+      "release_flag_relevance": "not applicable",
+      "evidence_note": "No provider registry, model routing, prompt versioning, usage/cost metering, safety policy, PII/PHI minimization, evaluation, human review, or AI audit/provenance components were found as a distinct platform. Current AI usage is entirely embedded inside messaging-ai-orchestration (WhatsApp-specific).",
+      "uncertainty": "none — clearly absent, not merely unverified"
+    },
+    {
+      "id": "planned-integration-platform",
+      "name": "Integration Platform (Official/Ministry Adapters)",
+      "classification": "planned/not implemented",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "backend": { "routes": [], "services": [], "middleware": [], "jobs": [], "utils": [] },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": [],
+      "tests": [],
+      "contract_candidates": ["Integration connector port — ADR-010, PROPOSED"],
+      "entitlement_relationship": "not applicable",
+      "release_flag_relevance": "not applicable",
+      "evidence_note": "No Sağlık Bakanlığı or other official/government integration code found. Each existing external integration (WhatsApp, Instagram, SMS) has its own bespoke provider-factory pattern rather than a shared adapter platform.",
+      "uncertainty": "none — clearly absent"
+    },
+    {
+      "id": "planned-billing-subscription",
+      "name": "Billing / Subscription Engine",
+      "classification": "planned/not implemented",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "backend": { "routes": [], "services": [], "middleware": [], "jobs": [], "utils": [] },
+      "frontend": { "pages": ["src/pages/PricingPage.tsx (marketing page, not a billing engine)"], "components": ["src/components/pricing/* (marketing/comparison UI, not billing logic)"], "services": [] },
+      "models": ["Plan (reference data only — see core-org-clinic-membership)"],
+      "tests": [],
+      "contract_candidates": [],
+      "entitlement_relationship": "Plan.features is the only real entitlement storage; no payment-processing/subscription-billing engine exists",
+      "release_flag_relevance": "not applicable",
+      "evidence_note": "src/pages/PricingPage.tsx and src/components/pricing/* are marketing/comparison surfaces, not a functioning subscription-billing system (no payment-provider integration for platform subscriptions found).",
+      "uncertainty": "none significant"
+    },
+    {
+      "id": "planned-campaign-health-tourism-invoicing",
+      "name": "Campaign Management / Health Tourism / Invoicing",
+      "classification": "planned/not implemented",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "backend": { "routes": [], "services": [], "middleware": [], "jobs": [], "utils": [] },
+      "frontend": { "pages": [], "components": [], "services": [] },
+      "models": [],
+      "tests": [],
+      "contract_candidates": [],
+      "entitlement_relationship": "not applicable",
+      "release_flag_relevance": "not applicable",
+      "evidence_note": "No routes, services, models, or dedicated frontend pages found for Campaign Management, Health Tourism, Lead Management, Call Center, Marketing Analytics, Invoicing, e-Invoice/e-Archive, Accounting Connectors, or Insurance Connectors. Confirmed absent, not merely unverified.",
+      "uncertainty": "none — clearly absent"
+    }
+  ],
+  "models_full_inventory_note": "The complete 88-model table (owner, tenant scope, sensitivity, cross-domain access, migration/deletion notes) is maintained as prose tables in docs/program/evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md §Data Ownership to keep this JSON file's size manageable for tooling; every model listed there is also cross-referenced under its owning domain's \"models\" array above.",
+  "hotspots": [
+    {
+      "file": "server/src/routes/whatsapp.ts",
+      "lines": 3999,
+      "route_count": 7,
+      "owning_domains": ["messaging-whatsapp", "messaging-ai-orchestration"],
+      "responsibilities": ["Evolution API webhook handling", "WhatsApp AI conversation engine (NLU, clarification, booking flow)", "direct Patient/User lookup and creation", "appointment booking/cancellation business logic", "only 7 of ~4000 lines are actual Express route handlers (lines 3616-3999)"],
+      "risk": "high — business logic and cross-domain writes (Patient creation) embedded in a route file with no service-layer separation",
+      "recommended_strangler_sequence": "extract patient-matching/creation helpers into a Patients-owned command first (smallest, most reusable), then extract the appointment booking/cancellation flow into services/appointments, then leave only the thin Evolution-webhook route + AI-orchestration call in routes/whatsapp.ts",
+      "refactor_performed_in_this_task": false
+    },
+    {
+      "file": "server/src/routes/platformAdmin.ts",
+      "lines": 1201,
+      "route_count": 40,
+      "owning_domains": ["core-platform-administration"],
+      "responsibilities": ["clinic administration", "organization administration", "plan administration", "backup triggering", "SMS provider administration — at least 5 distinct sub-areas in one file"],
+      "risk": "elevated — single file spans multiple sub-domains of platform admin with no internal module split",
+      "recommended_strangler_sequence": "split by admin sub-area (clinics, organizations, plans, SMS providers, backups) into separate route files before any public-contract work",
+      "refactor_performed_in_this_task": false
+    },
+    {
+      "file": "server/src/routes/imaging.ts",
+      "lines": 1303,
+      "route_count": 27,
+      "owning_domains": ["imaging-server-viewer"],
+      "responsibilities": ["device management", "imaging request lifecycle", "study/image upload and retrieval", "legal-hold interactions with core-privacy-consent-retention-dsr"],
+      "risk": "elevated — large but single-domain; lower priority than whatsapp.ts/platformAdmin.ts because responsibilities stay within Imaging",
+      "recommended_strangler_sequence": "not urgent; consider splitting device/request/study/image sub-routers if it keeps growing",
+      "refactor_performed_in_this_task": false
+    },
+    {
+      "file": "server/src/routes/reports.ts",
+      "lines": 512,
+      "route_count": 5,
+      "owning_domains": ["reporting-analytics"],
+      "responsibilities": ["raw-SQL aggregate reporting across Patients/Appointments/Payments/TreatmentCases"],
+      "risk": "elevated — see raw_sql_locations; wide direct cross-domain read footprint via raw SQL rather than each domain's own query surface",
+      "recommended_strangler_sequence": "candidate for the ADR-017 (OLAP/analytics strategy) read-model boundary rather than a simple file split",
+      "refactor_performed_in_this_task": false
+    },
+    {
+      "file": "server/src/routes/instagramInbox.ts",
+      "lines": 796,
+      "route_count": 11,
+      "owning_domains": ["messaging-instagram"],
+      "responsibilities": ["inbox listing/resolution", "conversation history", "patient linking"],
+      "risk": "normal — sized proportionally to its route count, not flagged as urgently mixed",
+      "recommended_strangler_sequence": "none recommended at this time",
+      "refactor_performed_in_this_task": false
+    },
+    {
+      "file": "server/src/routes/whatsappInbox.ts",
+      "lines": 807,
+      "route_count": 8,
+      "owning_domains": ["messaging-whatsapp"],
+      "responsibilities": ["inbox listing/resolution", "conversation history", "patient linking"],
+      "risk": "normal — sized proportionally to its route count",
+      "recommended_strangler_sequence": "none recommended at this time",
+      "refactor_performed_in_this_task": false
+    }
+  ],
+  "raw_sql_locations": [
+    { "file": "server/src/routes/reports.ts", "owning_domain": "reporting-analytics", "type": "read-only (assumed from route purpose; individual statements not line-by-line audited)", "cross_domain": true, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/routes/imaging.ts", "owning_domain": "imaging-server-viewer", "type": "not audited line-by-line", "cross_domain": false, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/routes/imagingBridgePublic.ts", "owning_domain": "imaging-device-bridge", "type": "not audited line-by-line", "cross_domain": false, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/routes/platformAdmin.ts", "owning_domain": "core-platform-administration", "type": "not audited line-by-line", "cross_domain": true, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/routes/operationalMonitoring.ts", "owning_domain": "core-observability-ops-events", "type": "not audited line-by-line", "cross_domain": false, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/index.ts", "owning_domain": "core platform (bootstrap)", "type": "not audited line-by-line — likely startup/health-check query", "cross_domain": false, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/services/security/securityIncidentService.ts", "owning_domain": "core-security-incident-detection", "type": "not audited line-by-line", "cross_domain": false, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/services/privacy/clinicBulkExportPackage.ts", "owning_domain": "core-privacy-consent-retention-dsr", "type": "not audited line-by-line", "cross_domain": true, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/services/privacy/patientPrivacyExportPackage.ts", "owning_domain": "core-privacy-consent-retention-dsr", "type": "not audited line-by-line", "cross_domain": true, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/services/privacy/patientAnonymization.ts", "owning_domain": "core-privacy-consent-retention-dsr", "type": "not audited line-by-line", "cross_domain": true, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/services/privacy/clinicBulkExportPasswordAttempts.ts", "owning_domain": "core-privacy-consent-retention-dsr", "type": "not audited line-by-line", "cross_domain": false, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/services/appointmentRequestSafety.ts", "owning_domain": "clinical-appointments-availability", "type": "advisory-lock pattern per code comments elsewhere in the repo (pg_advisory_xact_lock-style)", "cross_domain": false, "detailed_tenant_predicate_review": "deferred to F0-004/F1" },
+    { "file": "server/src/tests/publicBookingAvailability.test.ts", "owning_domain": "clinical-public-booking (test-only)", "type": "test fixture/assertion, not production code", "cross_domain": false, "detailed_tenant_predicate_review": "not applicable — test file" },
+    { "file": "server/src/tests/publicBookingSlotConsistency.test.ts", "owning_domain": "clinical-public-booking (test-only)", "type": "test fixture/assertion, not production code", "cross_domain": false, "detailed_tenant_predicate_review": "not applicable — test file" },
+    { "file": "server/src/tests/imaging.test.ts", "owning_domain": "imaging-server-viewer (test-only)", "type": "test fixture/assertion, not production code", "cross_domain": false, "detailed_tenant_predicate_review": "not applicable — test file" },
+    { "file": "server/src/tests/appointmentRequestOverlapSafety.test.ts", "owning_domain": "clinical-appointments-availability (test-only)", "type": "test fixture/assertion, not production code", "cross_domain": false, "detailed_tenant_predicate_review": "not applicable — test file" }
+  ],
+  "shared_utilities_classification": [
+    { "path": "server/src/utils/clinicScope.ts", "classification": "security/tenant-critical helper" },
+    { "path": "server/src/utils/tenantGuard.ts", "classification": "security/tenant-critical helper" },
+    { "path": "server/src/utils/relationGuards.ts", "classification": "security/tenant-critical helper" },
+    { "path": "server/src/middleware/clinicAccess.ts", "classification": "security/tenant-critical helper" },
+    { "path": "server/src/utils/roles.ts", "classification": "security/tenant-critical helper" },
+    { "path": "server/src/utils/logger.ts", "classification": "true platform primitive" },
+    { "path": "server/src/utils/encryption.ts", "classification": "cryptography — true platform primitive" },
+    { "path": "server/src/utils/secrets.ts", "classification": "cryptography — true platform primitive" },
+    { "path": "server/src/utils/fileSignature.ts", "classification": "file storage/signature validation — true platform primitive" },
+    { "path": "server/src/utils/filePreview.ts", "classification": "file storage — true platform primitive" },
+    { "path": "server/src/utils/jobLock.ts", "classification": "job locking — true platform primitive" },
+    { "path": "server/src/utils/concurrency.ts", "classification": "true platform primitive" },
+    { "path": "server/src/utils/safeError.ts", "classification": "error/validation utility — true platform primitive" },
+    { "path": "server/src/utils/webhookVerification.ts", "classification": "security-critical helper, but messaging-specific — candidate for relocation under a messaging-shared namespace rather than generic utils/" },
+    { "path": "server/src/utils/webhookRouting.ts", "classification": "domain-specific utility in the wrong shared location — messaging-only, currently in generic utils/" },
+    { "path": "server/src/utils/messageSanitizer.ts", "classification": "domain-specific utility in the wrong shared location — messaging-only" },
+    { "path": "server/src/utils/legacyWhatsApp.ts", "classification": "compatibility helper — filename itself signals legacy/compat status" },
+    { "path": "server/src/utils/whatsappDate.ts", "classification": "domain-specific utility in the wrong shared location — WhatsApp-only" },
+    { "path": "server/src/utils/patientName.ts", "classification": "domain-specific utility in the wrong shared location — Patients-only" },
+    { "path": "server/src/utils/noShowFollowUp.ts", "classification": "domain-specific utility in the wrong shared location — Appointments/Recall-only" },
+    { "path": "server/src/utils/overdueInstallments.ts", "classification": "domain-specific utility in the wrong shared location — Payments-only" },
+    { "path": "server/src/utils/overdueReceivables.ts", "classification": "domain-specific utility in the wrong shared location — Payments-only" },
+    { "path": "server/src/utils/excelImport.ts", "classification": "true platform primitive (generic import parsing), consumed by Patients and Users import routes" },
+    { "path": "server/src/utils/prismaSelects.ts", "classification": "uncertain — not independently inspected; name suggests a cross-cutting Prisma select-shape helper, candidate platform primitive" },
+    { "path": "server/src/utils/passwordStepUp.ts", "classification": "security-critical helper, currently used by core-identity-access and core-privacy-consent-retention-dsr (clinic bulk export step-up) — genuinely shared, correctly placed in utils/" },
+    { "path": "server/src/utils/helpers.ts", "classification": "uncertain — generic name, not independently inspected; candidate for later audit" },
+    { "path": "server/src/utils/counterStore.ts", "classification": "uncertain — not independently inspected" },
+    { "path": "server/src/utils/inboundRateLimiter.ts", "classification": "security-critical helper — messaging-inbound-specific but has platform-wide rate-limiting shape" }
+  ],
+  "coverage_counts": {
+    "prisma_models_committed": 88,
+    "prisma_models_mapped": 88,
+    "backend_route_files": 56,
+    "backend_route_files_mapped": 56,
+    "backend_service_files_approx": 79,
+    "backend_service_files_mapped_by_directory_or_file": 79,
+    "backend_job_files": 10,
+    "backend_job_files_mapped": 10,
+    "backend_middleware_files": 5,
+    "backend_middleware_files_mapped": 5,
+    "backend_test_files": 72,
+    "backend_test_files_mapped_or_shared": 72,
+    "frontend_pages_total": 64,
+    "frontend_pages_mapped": 64,
+    "frontend_pages_note": "all 64 non-test files under src/pages and src/pages/{clinic,legal,platform} (commit 368bcc8) are assigned to a domain above; src/pages/__tests__ treated as shared test scaffolding, not domain-owned",
+    "raw_sql_locations_found": 16,
+    "hotspots_documented": 5
+  }
+}

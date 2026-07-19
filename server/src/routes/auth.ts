@@ -12,6 +12,7 @@ import {
   createRateLimiter,
 } from '../utils/helpers.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
+import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
 import { sendMail } from '../services/emailService.js';
 import { buildPasswordResetEmail, buildEmailVerificationEmail } from '../services/emailTemplates.js';
 import {
@@ -58,6 +59,7 @@ router.post('/login', async (req, res) => {
       console.warn(`[login] Duplicate email detected (${matchCount} accounts). Blocking login for safety.`);
       await recordLoginAttempt(normalizedEmail);
       await loginIpLimiter.record(clientIp);
+      evaluateAuthLoginFailureSignal({ accountIdentifier: normalizedEmail, context: 'clinic', ip: clientIp, userAgent: req.headers['user-agent'] as string | undefined });
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -77,12 +79,28 @@ router.post('/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       await recordLoginAttempt(normalizedEmail);
       await loginIpLimiter.record(clientIp);
+      evaluateAuthLoginFailureSignal({
+        accountIdentifier: normalizedEmail,
+        context: 'clinic',
+        organizationId: user?.organizationId ?? null,
+        clinicId: user?.clinicId ?? null,
+        ip: clientIp,
+        userAgent: req.headers['user-agent'] as string | undefined,
+      });
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     if (!user.isActive) {
       await recordLoginAttempt(normalizedEmail);
       await loginIpLimiter.record(clientIp);
+      evaluateAuthLoginFailureSignal({
+        accountIdentifier: normalizedEmail,
+        context: 'clinic',
+        organizationId: user.organizationId,
+        clinicId: user.clinicId,
+        ip: clientIp,
+        userAgent: req.headers['user-agent'] as string | undefined,
+      });
       return res.status(403).json({ error: 'User account is inactive' });
     }
 

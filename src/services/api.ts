@@ -133,6 +133,39 @@ export const patientPrivacyService = {
     api.get(`/patients/${patientId}/privacy/orphan-check`),
 };
 
+// KVKK-HIGH-007: communication preference & consent management — technical
+// control only, not a legal determination (see docs/compliance/56-*.md).
+export const communicationPreferencesService = {
+  getMatrix: (patientId: string) =>
+    api.get(`/patients/${patientId}/communication-preferences`),
+  getHistory: (patientId: string, params?: { channel?: string; purpose?: string }) =>
+    api.get(`/patients/${patientId}/communication-preferences/history`, { params }),
+  exportEvidence: (patientId: string) =>
+    api.get(`/patients/${patientId}/communication-preferences/export`),
+  setPreference: (
+    patientId: string,
+    channel: string,
+    purpose: string,
+    data: {
+      action: 'grant' | 'deny' | 'withdraw' | 'reset';
+      source: string;
+      evidenceType?: string | null;
+      noticeVersion?: string | null;
+      notes?: string | null;
+    },
+  ) => api.put(`/patients/${patientId}/communication-preferences/${channel}/${purpose}`, data),
+  bulkSetPreferences: (
+    patientId: string,
+    data: {
+      items: Array<{ channel: string; purpose: string; action: 'grant' | 'deny' | 'withdraw' | 'reset' }>;
+      source: string;
+      evidenceType?: string | null;
+      noticeVersion?: string | null;
+      notes?: string | null;
+    },
+  ) => api.post(`/patients/${patientId}/communication-preferences/bulk`, data),
+};
+
 export const appointmentTypeService = {
   getAll: (onlyActive = false) => api.get('/appointment-types', { params: { onlyActive } }),
   create: (data: any) => api.post('/appointment-types', data),

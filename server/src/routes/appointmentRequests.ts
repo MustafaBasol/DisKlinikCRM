@@ -325,6 +325,8 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
       externalSenderId: request.externalSenderId,
       sourceConnectionId: request.sourceConnectionId,
       patientName: request.patientName,
+      organizationId: req.user!.organizationId,
+      patientId,
       appointment: {
         startTime: appointment.startTime,
         appointmentType: { name: appointment.appointmentType.name },

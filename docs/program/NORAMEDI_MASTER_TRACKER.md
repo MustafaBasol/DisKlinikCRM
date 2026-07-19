@@ -2,7 +2,7 @@
 
 Bu dosya, NoraMedi kurumsal mimari ve modülerleşme programının **yetkili canlı durum kaynağıdır**. Bkz. [README.md](README.md).
 
-Son güncelleme: 2026-07-18 (F0-002 Stage A — final remediation)
+Son güncelleme: 2026-07-19 (F0-002 Stage B — production baseline kanıtı toplandı ve belgelendi; main'den F0-004 `MERGED`/F0-005 `MERGED` durum düzeltmeleri taşındı, bkz. PR #167/#169/#171 sonrası `origin/main` @ `d9fc40883afc8791098865d4d185de3336774c7a`)
 
 ---
 
@@ -145,31 +145,39 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir. F0-002 Stage
 - **Allowed next status:** Stage B kanıtı geldikten sonra dış mutabakat; genel görev ajan tarafından en fazla `AGENT_COMPLETED` (Stage A) durumuna getirilebilir — bu zaten yapıldı, üstü dış kanıt gerektirir.
 
 ### F0-003 — Domain and Module Ownership Map
-- **Status:** `TODO`
+- **Status:** `MERGED` — [PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168) `main`'e merge edildi, merge commit `131c7cc398fde6c72fea275a40b7efcc1253b828` (2026-07-18T18:27:09Z, `gh pr view 168` ile teyit edildi). Bu satır önceki turda `PR_OPEN` olarak bırakılmıştı; F0-004'ün başlangıç kanıt taramasında düzeltildi (bkz. F0-004 teslim raporu "PARALLEL EXECUTION DECISION").
 - **Purpose:** [MODULE_MAP.md](MODULE_MAP.md) içindeki geçici hedef haritayı gerçek dosya sahipliğiyle doğrulamak ve revize etmek.
-- **Dependencies:** F0-002.
-- **Deliverables:** Depo-doğrulanmış modül haritası.
-- **Evidence required:** Dosya/dizin → domain eşleme listesi.
-- **Blocking conditions:** Yok (analiz-yalnız).
-- **Allowed next status:** `READY` (F0-002 sonrası) → `IN_PROGRESS` → `AGENT_COMPLETED`.
+- **Dependencies:** F0-002 (tracker kuralı gereği).
+- **Parallel execution note:** Bu görev, F0-002'nin genel görev durumu `IN_PROGRESS`/`READY` iken (Stage B hâlâ bloklu) kullanıcının **açık talimatıyla** paralel başlatıldı. Bu, görevin orijinal yönlendirme metninin ("F0-003 paralel çalışmaya yetkilidir") **F0-002'nin kendi kanıt dokümanının** ("F0-003 bu tur içinde başlatılmadı") ile çeliştiği tespit edildikten ve kullanıcıya sorulduktan sonra yapıldı — kullanıcı "Proceed anyway" seçeneğini seçti. Bu istisna yalnızca bu göreve özgüdür; gelecekteki görevler için paralel-yetki emsali oluşturmaz.
+- **Deliverables:** [MODULE_MAP.md](MODULE_MAP.md) (revize edildi), [evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md](evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md) (yeni), [evidence/F0-003_module_ownership_inventory.json](evidence/F0-003_module_ownership_inventory.json) (yeni), [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) güncellemesi (yalnızca domain kümesi notu — matris hâlâ F0-004'ün işi), [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) ADR-001/ADR-015 kanıt işaretçileri.
+- **Evidence required:** Dosya/dizin → domain eşleme listesi. ✅ Karşılandı — 88/88 committed Prisma modeli, 56/56 route dosyası, 79/79 servis dosyası, 10/10 job dosyası, 5/5 middleware dosyası, 72/72 test dosyası, 64/64 frontend sayfası eşlendi.
+- **Blocking conditions:** Yok (analiz-yalnız). Bu görev VPS/production erişimi gerektirmedi ve kullanmadı.
+- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED`/`CHANGES_REQUESTED`/PR akışı — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir.
 
 ### F0-004 — Cross-Module Dependency Map
-- **Status:** `TODO`
+- **Status:** `MERGED` — [PR #170](https://github.com/MustafaBasol/DisKlinikCRM/pull/170) `main`'e merge edildi, merge commit `5ee0b6af30fff187b7190d649f1fc3e844362105` (2026-07-18T20:37:49Z, `gh pr view 170` ile teyit edildi). Bu satır önceki turda `PR_OPEN` olarak bırakılmıştı; F0-005'in PR #171 düzeltme turunda düzeltildi. Worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-004-dependency-map`, branch `docs/f0-004-cross-module-dependency-map`, base `origin/main` @ `131c7cc398fde6c72fea275a40b7efcc1253b828` (PR açılırken kullanılan base — merge sonrası `main` üzerinde artık `5ee0b6a`). **Deployed / Production Verified: NOT APPLICABLE** — `MERGED` yalnızca `main`'e merge kanıtını ifade eder; bu dokümantasyon-yalnız görev için deployment veya production doğrulaması ne iddia edilir ne de gereklidir (§2 legend: `DEPLOYED`/`PRODUCTION_VERIFIED` ayrı, daha güçlü kanıt gerektiren durumlardır).
 - **Purpose:** [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) matrisini depo kanıtıyla doldurmak; ihlalleri işaretlemek.
-- **Dependencies:** F0-003.
-- **Deliverables:** Dolu bağımlılık matrisi + ihlal listesi.
-- **Evidence required:** Import/çağrı kanıtları (dosya:satır).
-- **Blocking conditions:** Yok (analiz-yalnız).
-- **Allowed next status:** `READY` → `IN_PROGRESS` → `AGENT_COMPLETED`.
+- **Dependencies:** F0-003. ✅ Karşılandı — F0-003 `main`'e merge edildi (yukarıda).
+- **Parallel execution note:** Bu görev, kullanıcının **açık talimatıyla**, F0-002 Stage B (production/VPS kanıtı) hâlâ `BLOCKED` iken, repository-only paralel yetkiyle yürütüldü. Bu yetki F0-002'yi tamamlamaz, VPS erişimi/production varsayımı/runtime veya şema değişikliği yetkilendirmez ve gelecekteki görevler için paralel-yetki emsali oluşturmaz (F0-003'ün kendi notundaki istisna kapsamıyla aynı ilke).
+- **Deliverables:** [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) (37-domain matris dolduruldu), [evidence/F0-004_CROSS_MODULE_DEPENDENCY_EVIDENCE.md](evidence/F0-004_CROSS_MODULE_DEPENDENCY_EVIDENCE.md) (yeni), [evidence/F0-004_dependency_inventory.json](evidence/F0-004_dependency_inventory.json) (yeni, 833 edge/35 cycle/15 contract candidate/16 raw-SQL kaydı).
+- **Evidence required:** Import/çağrı kanıtları (dosya:satır). ✅ Karşılandı — 833 edge (307 IMPORT + 526 DATA_READ/WRITE), 224 dolu matris hücresi, her biri en az bir `F0004-Exxxx` kanıt kaydına bağlı; 264/833 edge tek tek incelendi, kalan 569'u belgelenmiş kural-tabanlı varsayılan sınıflandırma kullanıyor (bkz. evidence doc §1).
+- **Blocking conditions:** Yok (analiz-yalnız). Bu görev VPS/production erişimi gerektirmedi ve kullanmadı.
+- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED`/`CHANGES_REQUESTED`/PR akışı — `MERGED` yalnızca dış merge kanıtıyla kaydedilebilir.
 
 ### F0-005 — Test Inventory, Runtime Measurement, and Ownership Map
-- **Status:** `TODO`
+- **Status:** `PR_OPEN` — [PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171) açık. **Commit kanıtı (düzeltildi — bkz. PR #171 external review):**
+  - `534b66e917d4f2b27b7d464f565d3a5d91c5bd4a` — ilk envanter/kanıt commit'i (2026-07-18), orijinal baseline `5ee0b6a` üzerinde.
+  - `1e10909...` — bu satırın `PR_OPEN` durumunu kaydeden takip commit'i (2026-07-18).
+  - `ecee8533df0aaa5f29bcbf4c69f89b2a00856912` — `origin/main`'in PR #169 ile ilerlemesi üzerine yapılan normal, force olmayan `git merge origin/main` commit'i (2026-07-19); F0-004'ün gerçek `MERGED` durumunu ve PR #169'un 3 yeni test dosyasını branch'e getirdi.
+  - **`76bdf1136b0f6cb98a04d3d5a335281f5c0cac32`** — bu rebaseline'ın kendi düzeltme commit'i (2026-07-19): F0-004 durum düzeltmesi, PR #169'un 3 yeni test dosyasının tam envanter/runtime rebaseline'ı, "test framework yok" iddiasının daraltılması, başarısızlık terminolojisinin netleştirilmesi. **Bu, branch'in şu anki gerçek son head'idir — `534b66e` artık güncel değildir, yalnızca ilk envanter için tarihsel kanıt olarak yukarıda tutulmuştur.**
+  - Merge kararı dış incelemeye aittir. Worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-005-test-ownership`, branch `docs/f0-005-test-inventory-runtime-ownership`, güncel baseline `origin/main` @ `7fcf2f850f151241266f07349c4bf4442c72bbca`.
 - **Purpose:** [TEST_OWNERSHIP.md](TEST_OWNERSHIP.md) envanter tablosunu doldurmak: test dosyaları, süreler, DB/harici bağımlılıklar, güvenilirlik.
-- **Dependencies:** F0-003.
-- **Deliverables:** Test envanteri + süre ölçümleri.
-- **Evidence required:** Test çalıştırma çıktıları (hedefli; tüm suite zorunlu değil).
-- **Blocking conditions:** Pahalı/geniş suite'ler için kullanıcı onayı.
-- **Allowed next status:** `READY` → `IN_PROGRESS` → `AGENT_COMPLETED`.
+- **Dependencies:** F0-003, F0-004. ✅ Karşılandı — F0-003 ve F0-004 ikisi de `main`'e merge edildi (yukarıda); F0-003'ün committed `tests[]` alanı bu görevin sahiplik envanterinin temeli olarak doğrudan yeniden kullanıldı.
+- **Parallel execution note:** Bu görev, kullanıcının **açık talimatıyla**, F0-002 Stage B (production/VPS kanıtı) hâlâ `BLOCKED` iken, repository-only paralel yetkiyle yürütüldü — F0-003/F0-004'teki aynı istisna ilkesiyle (bkz. o görevlerin "Parallel execution note"). Bu yetki F0-002'yi tamamlamaz, VPS erişimi/production varsayımı/runtime veya şema değişikliği yetkilendirmez ve gelecekteki görevler için paralel-yetki emsali oluşturmaz.
+- **Deliverables:** [TEST_OWNERSHIP.md](TEST_OWNERSHIP.md) (revize edildi — placeholder §3 depo-kanıtıyla dolduruldu, 2026-07-19 rebaseline dahil), [evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md](evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md) (yeni), [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) (yeni, **100** test/doğrulama hedefi — rebaseline öncesi 97), [evidence/F0-005_test_runtime_results.json](evidence/F0-005_test_runtime_results.json) (yeni, 17 komut/suite çalıştırma kaydı — rebaseline öncesi 15).
+- **Evidence required:** Test çalıştırma çıktıları (hedefli; tüm suite zorunlu değil). ✅ Karşılandı — orijinal baseline'da 2532 assertion gerçekten çalıştırıldı (backend 70/70 `.test.ts` dosyası, frontend 5/5, bridge-agent 9/9, windows-bridge installer PowerShell 4/4 script); 2026-07-19 rebaseline'ında bu tekrar doğrulandı ve PR #169'un 3 yeni dosyası eklendi (backend artık 72/72, frontend 6/6) — 2 yeni backend dosyası `DATABASE_URL` erişilemediği için BLOCKED, 1 yeni frontend dosyası 13/13 geçti. 2 gerçek/deterministic ve environment-sensitive bulgu bulundu ve düzeltilmeden belgelendi (`overdueInstallments.test.ts` — orphan script, **deterministic source-drift**; `clinicBulkExport.test.ts` — **environment-sensitive** Windows CRLF ortam artefaktı); bu görev tarafından **0 doğrulanmış product-runtime kusuru** tespit edilmiştir. windows-bridge .NET testleri (`dotnet test`), `securityIncident.test.ts`, ve rebaseline'ın 2 yeni DB-bağımlı dosyası (`communicationConsent.test.ts`, `communicationPreferenceBackfill.test.ts`) ölçülemedi (bkz. Blocking conditions).
+- **Blocking conditions:** Pahalı/geniş suite'ler için kullanıcı onayı — bu görevde full-suite çalıştırma sınırlı kalındı (talimata uygun). windows-bridge `dotnet test` **BLOCKED** (`windows-bridge/global.json` .NET SDK 10.0.301 istiyor, makinede yalnızca 9.0.305 kurulu). `securityIncident.test.ts` + `communicationConsent.test.ts` + `communicationPreferenceBackfill.test.ts` + 3 manuel `server/scripts/verify-*.ts` **BLOCKED** (depoda commit edilmiş disposable-Postgres kurulum otomasyonu yok; Docker CLI makinede mevcut ancak daemon çalışmıyor, ve talimatın "improvised setup yapma" kuralı gereği kullanılmadı).
+- **Allowed next status:** Dış inceleme sonrası `REVIEW_REQUIRED`/`CHANGES_REQUESTED`/PR akışı — `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` yalnızca dış kanıtla kaydedilebilir; bu üçü **NOT APPLICABLE** kalır (dokümantasyon-yalnız görev, deployment/production doğrulaması gerektirmez veya iddia etmez).
 
 ### F0-006 — Production Topology and Configuration Verification
 - **Status:** `TODO`
@@ -248,6 +256,9 @@ Kanıt toplanmamış alanlar `UNVERIFIED` olarak işaretlenmiştir. F0-002 Stage
 | ID | Başlık | Durum | Not |
 |---|---|---|---|
 | F0-001 | Program Control and Master Tracker Foundation | `MERGED` | [PR #166](https://github.com/MustafaBasol/DisKlinikCRM/pull/166), merge commit `4302825abcdf4f5dbb90b4ded92b2e44a947df18`, merged `2026-07-18T08:08:10Z` — `VERIFIED_GITHUB`. Yalnızca dokümantasyon; uygulama/mimari doğrulama F0-002+ kapsamındadır. |
+| F0-003 | Domain and Module Ownership Map | `MERGED` | Depo-doğrulanmış domain/modül haritası; F0-002'nin genel görev durumu tamamlanmadan, kullanıcının açık talimatıyla paralel yürütüldü (bkz. §6 F0-003 "Parallel execution note"). [PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168) `main`'e merge edildi, commit `131c7cc398fde6c72fea275a40b7efcc1253b828` (2026-07-18). |
+| F0-004 | Cross-Module Dependency Map | `MERGED` | Depo-kanıtıyla dolu 37-domain/833-edge bağımlılık matrisi; F0-002 Stage B hâlâ toplanmadan kullanıcının açık talimatıyla repository-only paralel yürütüldü (bkz. §6 F0-004 "Parallel execution note"). [PR #170](https://github.com/MustafaBasol/DisKlinikCRM/pull/170) `main`'e merge edildi, merge commit `5ee0b6af30fff187b7190d649f1fc3e844362105`. Deployed/Production Verified: NOT APPLICABLE. |
+| F0-005 | Test Inventory, Runtime Measurement, and Ownership Map | `MERGED` | 100 test/doğrulama hedefinin depo-kanıtıyla envanteri (rebaseline öncesi 97 — 2026-07-19'da `origin/main`'den PR #169'u içeren bir merge sonrası 3 yeni dosya eklendi) + sahiplik + F0-004'ün 9 yüksek-riskli edge'inin test kapsamı; 2532+ assertion gerçekten çalıştırıldı, 1 deterministic source-drift başarısızlığı (`overdueInstallments.test.ts`, CI-uygulama boşluğunun somut kanıtı) + 1 environment-sensitive line-ending başarısızlığı (`clinicBulkExport.test.ts`) bulunup düzeltilmeden belgelendi — bu görev tarafından 0 doğrulanmış product-runtime kusuru tespit edilmiştir. F0-002 Stage B kanıtı henüz toplanmadan kullanıcının açık talimatıyla repository-only paralel yürütüldü (bkz. §6 F0-005 "Parallel execution note"). [PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171) `main`'e merge edildi, merge commit `d9fc40883afc8791098865d4d185de3336774c7a` (2026-07-19, `docs(test): add F0-005 test inventory and runtime baseline (#171)`). Deployed/Production Verified: NOT APPLICABLE. |
 
 ## 8. Blocked tasks (Bloklu işler)
 
@@ -320,11 +331,14 @@ Henüz bu program kapsamında production doğrulaması yapılmamıştır.
 4. RLS / Prisma / PgBouncer uyumluluğu henüz kanıtlanmadı (F0-009 → F5).
 5. Object-storage sağlayıcısı ve migrasyon tasarımı henüz onaylanmadı (F0-011 → F4).
 6. Queue/outbox mimarisi henüz kanıtlanmadı (F0-010 → F6).
+7. F0-002'nin genel görev durumu bu dosyada (`main`) hâlâ `READY` görünüyor çünkü F0-002'nin çalışma branch'i (`docs/f0-002-repository-deployment-baseline`, worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f0-002-baseline`) henüz `main`'e merge edilmedi ve PR'ı yok. O branch'in kendi tracker kopyası Stage A'yı `AGENT_COMPLETED`, Stage B'yi (production kanıtı) `BLOCKED` olarak kaydediyor. Bu gözlem F0-003 tarafından salt-okunur olarak yapıldı; F0-002'nin branch'ine hiçbir yazma işlemi uygulanmadı.
 
 ## 13. Exact next task (Kesin sonraki görev)
 
-**F0-002 Stage B — Production Topology, Commit, Migration, and Runtime Verification**
+**External review and merge decision for F0-002** (PR pending as of this delivery — see §6 F0-002 and §5).
 
-Stage A (depo kanıtı) tamamlandı. Stage B, kullanıcının [evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md](evidence/F0-002_PRODUCTION_EVIDENCE_REQUEST.md) içindeki salt-okunur komut setini production VPS'te çalıştırıp çıktıyı (sır/PII temizlenmiş olarak) paylaşmasını bekliyor. Bu geldikten sonra bir sonraki ajan turu §3 baseline tablosundaki `UNVERIFIED` production alanlarını kanıtla dolduracak ve F0-002'yi genel görev olarak sonuçlandıracaktır (yine de `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` **atanamaz** — bunlar dış teyit gerektirir).
+F0-002 Stage A (depo kanıtı) ve Stage B (production baseline kanıtı, kullanıcı tarafından salt-okunur olarak sağlandı ve bu turda [evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md](evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md)'e işlendi, evidence timestamp `2026-07-19T13:43:12+03:00`) ikisi de tamamlandı; F0-002'nin genel görev durumu ajan tarafından en fazla `AGENT_COMPLETED` (PR açılana kadar) / `PR_OPEN` (PR açıldıktan sonra) olabilir — `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` dış teyit gerektirir ve bu turda **atanmaz**. F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştirmedi**.
 
-F0-002 yalnızca **analiz/dokümantasyon** görevidir; uygulama davranışını, şemayı, migration'ları, testleri, CI'ı veya deployment'ı **değiştiremez**. F0-003 bu tur içinde **başlatılmadı** — F0-002'nin genel görev durumu `IN_PROGRESS` kaldığı sürece sıradaki görev budur.
+F0-003 ([PR #168](https://github.com/MustafaBasol/DisKlinikCRM/pull/168), `MERGED`), F0-004 ([PR #170](https://github.com/MustafaBasol/DisKlinikCRM/pull/170), `MERGED`) ve F0-005 ([PR #171](https://github.com/MustafaBasol/DisKlinikCRM/pull/171), `MERGED`, merge commit `d9fc40883afc8791098865d4d185de3336774c7a`) üçü de `main`'e merge edilmiş durumda — kullanıcının açık talimatıyla F0-002'nin tamamlanmasını beklemeden repository-only paralel yürütülmüşlerdi; bu geçmiş, F0-002'nin kendi sırasını veya kapsamını değiştirmez.
+
+F0-002 `main`'e merge edildikten sonra sıradaki adaylar: **F0-006 — Production Topology and Configuration Verification** (bağımlılığı F0-002; bu turun production baseline kanıtı büyük ölçüde F0-006'nın kapsamını da besler, ancak F0-006 kendi başına ayrı, biçimsel bir görev olarak kalır) ve **F0-007 — Active KVKK Work Baseline and Architecture Freeze Boundary** (bağımlılığı F0-002). İkisinin de `READY`'e geçişi ayrı bir kullanıcı kararı gerektirir; F0-002 henüz merge edilmediği için resmî olarak hâlâ bloklu sayılırlar (F0-003/004/005'teki gibi bir repository-only paralel istisna kararı verilmedikçe).

@@ -14,6 +14,7 @@ import {
   X,
   ChevronRight,
   Shield,
+  ShieldAlert,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePlatformAuth } from '../context/PlatformAuthContext';
@@ -29,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/platform/system', icon: <Activity size={18} />, labelKey: 'system' },
   { path: '/platform/privacy', icon: <Lock size={18} />, labelKey: 'privacy' },
   { path: '/platform/backups', icon: <HardDrive size={18} />, labelKey: 'backups' },
+  { path: '/platform/security-incidents', icon: <ShieldAlert size={18} />, labelKey: 'securityIncidents' },
 ];
 
 const PlatformAdminLayout: React.FC = () => {

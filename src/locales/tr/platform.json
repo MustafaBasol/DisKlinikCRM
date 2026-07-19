@@ -70,7 +70,8 @@
       "plans": "Planlar",
       "system": "Sistem",
       "privacy": "Gizlilik / Veri",
-      "backups": "Yedekler"
+      "backups": "Yedekler",
+      "securityIncidents": "Güvenlik Olayları"
     }
   },
   "dashboard": {

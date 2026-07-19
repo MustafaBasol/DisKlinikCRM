@@ -1,0 +1,109 @@
+{
+  "title": "Security Incidents",
+  "legalDisclaimer": "This technical classification is not a legal determination. Breach classification, notification obligations, deadlines, and wording require Turkish legal counsel review.",
+  "summary": {
+    "openCritical": "Open critical",
+    "openHigh": "Open high",
+    "unacknowledged": "Unacknowledged",
+    "investigating": "Investigating",
+    "last24h": "Detected in last 24h"
+  },
+  "filters": {
+    "status": "Status",
+    "severity": "Severity",
+    "category": "Category",
+    "organizationId": "Organization ID",
+    "clinicId": "Clinic ID",
+    "assignedTo": "Assignee (admin ID)",
+    "from": "From",
+    "to": "To",
+    "all": "All",
+    "apply": "Apply filters",
+    "clear": "Clear"
+  },
+  "status": {
+    "open": "Open",
+    "acknowledged": "Acknowledged",
+    "investigating": "Investigating",
+    "contained": "Contained",
+    "resolved": "Resolved",
+    "closed": "Closed",
+    "false_positive": "False positive"
+  },
+  "severity": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "category": {
+    "auth_brute_force": "Authentication brute-force",
+    "cross_tenant_access": "Cross-tenant access",
+    "export_anomaly": "Export anomaly",
+    "webhook_signature": "Webhook signature"
+  },
+  "table": {
+    "severity": "Severity",
+    "status": "Status",
+    "category": "Category",
+    "title": "Title",
+    "organization": "Organization",
+    "clinic": "Clinic",
+    "firstDetected": "First detected",
+    "lastDetected": "Last detected",
+    "occurrences": "Occurrences",
+    "assignee": "Assignee",
+    "unassigned": "Unassigned"
+  },
+  "list": {
+    "loading": "Loading incidents…",
+    "error": "Failed to load incidents.",
+    "empty": "No security incidents match the current filters.",
+    "pageInfo": "Page {{page}} of {{totalPages}} ({{total}} total)",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "detail": {
+    "title": "Incident detail",
+    "close": "Close",
+    "summary": "Summary",
+    "metadata": "Safe metadata",
+    "noMetadata": "No metadata recorded.",
+    "occurrenceCount": "Occurrence count",
+    "sourceRule": "Detection rule",
+    "affectedResource": "Affected resource",
+    "activityTitle": "Activity history",
+    "activityLoading": "Loading activity…",
+    "activityEmpty": "No activity recorded yet.",
+    "legalReview": "Legal review",
+    "legalReviewRequired": "Required",
+    "legalReviewStatus": {
+      "pending": "Pending",
+      "in_review": "In review",
+      "not_required": "Not required",
+      "advised": "Counsel advised"
+    }
+  },
+  "actions": {
+    "acknowledge": "Acknowledge",
+    "investigate": "Start investigation",
+    "assign": "Assign",
+    "unassign": "Unassign",
+    "contain": "Mark contained",
+    "resolve": "Resolve",
+    "close": "Close incident",
+    "falsePositive": "Mark false positive",
+    "reopen": "Reopen",
+    "addNote": "Add note",
+    "note": "Note",
+    "containmentSummary": "Containment summary",
+    "resolutionSummary": "Resolution summary",
+    "reasonRequired": "A reason is required",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "assigneeIdPlaceholder": "Platform admin ID",
+    "success": "Incident updated.",
+    "error": "Failed to update incident.",
+    "sanitizationWarning": "Do not enter patient names, phone numbers, email addresses, clinical information, passwords, tokens, or other confidential data."
+  }
+}
