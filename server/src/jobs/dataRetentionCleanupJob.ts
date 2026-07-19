@@ -36,6 +36,7 @@ export type DataRetentionSummary = {
   deletedInboundEvents: number;
   anonymizedContactRequests: number;
   redactedInboxEntries: number;
+  deletedCommunicationConsentConflictBuckets: number;
   skippedCategories: string[];
   errors: string[];
   dryRun: boolean;
@@ -58,6 +59,7 @@ export type DataRetentionDeps = {
   inboundEvents: DataRetentionCategoryDeps;
   contactRequests: DataRetentionCategoryDeps;
   inboxEntries: DataRetentionCategoryDeps;
+  communicationConsentConflictBuckets: DataRetentionCategoryDeps;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -196,6 +198,25 @@ function makeContactRequestsDeps(): DataRetentionCategoryDeps {
   };
 }
 
+function makeCommunicationConsentConflictBucketsDeps(): DataRetentionCategoryDeps {
+  return {
+    countEligible: (threshold) =>
+      prisma.communicationConsentConflictBucket.count({ where: { bucketStartedAt: { lt: threshold } } }),
+    executeCleanupBatch: async (threshold, batchSize) => {
+      const rows = await prisma.communicationConsentConflictBucket.findMany({
+        where: { bucketStartedAt: { lt: threshold } },
+        select: { id: true },
+        take: batchSize,
+      });
+      if (rows.length === 0) return 0;
+      const { count } = await prisma.communicationConsentConflictBucket.deleteMany({
+        where: { id: { in: rows.map(r => r.id) } },
+      });
+      return count;
+    },
+  };
+}
+
 function makeInboxEntriesDeps(): DataRetentionCategoryDeps {
   return {
     countEligible: (threshold) =>
@@ -237,6 +258,7 @@ function defaultDeps(): DataRetentionDeps {
     inboundEvents: makeInboundEventsDeps(),
     contactRequests: makeContactRequestsDeps(),
     inboxEntries: makeInboxEntriesDeps(),
+    communicationConsentConflictBuckets: makeCommunicationConsentConflictBucketsDeps(),
   };
 }
 
@@ -279,6 +301,7 @@ export async function runDataRetentionCleanup(
     deletedInboundEvents: 0,
     anonymizedContactRequests: 0,
     redactedInboxEntries: 0,
+    deletedCommunicationConsentConflictBuckets: 0,
     skippedCategories: [],
     errors: [],
     dryRun,
@@ -340,6 +363,15 @@ export async function runDataRetentionCleanup(
     summary,
   );
 
+  summary.deletedCommunicationConsentConflictBuckets = await runCategory(
+    'communicationConsentConflictBuckets',
+    daysAgo(config.communicationConsentConflictBucketsDays),
+    config,
+    resolved.communicationConsentConflictBuckets,
+    dryRun,
+    summary,
+  );
+
   console.log(
     `[data-retention] Complete dryRun=${dryRun}` +
     ` messages=${summary.deletedConversationMessages}` +
@@ -348,6 +380,7 @@ export async function runDataRetentionCleanup(
     ` inboundEvents=${summary.deletedInboundEvents}` +
     ` contactRequests=${summary.anonymizedContactRequests}` +
     ` inboxEntries=${summary.redactedInboxEntries}` +
+    ` consentConflictBuckets=${summary.deletedCommunicationConsentConflictBuckets}` +
     (summary.errors.length ? ` errors=${summary.errors.length}` : ''),
   );
 
