@@ -84,13 +84,6 @@ type ConflictCategory =
   | 'legacy_yes_without_evidence'
   | 'already_reconciled';
 
-const CONFLICT_CATEGORIES: readonly ConflictCategory[] = [
-  'legacy_opt_out_vs_central_granted',
-  'legacy_false_or_default_vs_central_unknown',
-  'legacy_yes_without_evidence',
-  'already_reconciled',
-];
-
 type ConflictCategoryCounts = Record<ConflictCategory, number>;
 
 function emptyConflictCounts(): ConflictCategoryCounts {
