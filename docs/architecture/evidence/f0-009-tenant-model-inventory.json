@@ -130,14 +130,14 @@
   ],
   "summary_counts": {
     "total_models": 91,
-    "platform_global": 7,
+    "platform_global": 5,
     "organization_scoped": 3,
-    "clinic_scoped_direct": 47,
-    "clinic_scoped_dual_key": 22,
+    "clinic_scoped_direct": 49,
+    "clinic_scoped_dual_key": 19,
     "org_scoped_optional_clinic": 5,
     "child_via_parent": 6,
-    "ambiguous_nullable_tenant": 5,
-    "note_on_counts": "Counts are derived from the classification field of each of the 91 entries above; SecuritySignalEvent/SecurityIncident/CommunicationConsentConflictBucket/MessagingInboundEvent/SecurityIncidentActivity's ambiguity is split between ambiguous_nullable_tenant (4 direct) and child_via_parent inheriting that ambiguity (SecurityIncidentActivity, counted under child_via_parent)."
+    "ambiguous_nullable_tenant": 4,
+    "note_on_counts": "Correction (F0-009 correction pass, 2026-07-19): this block previously listed stale, internally-inconsistent counts (47/22/7/5/6/5/3, summing to 95) left over from an earlier classification draft. These figures are recomputed by counting the classification field of each of the 91 model entries above (deterministic script, zero manual entry); they sum to 91 and match schema.prisma's 91 models exactly. No model's classification field was changed to produce this correction. SecuritySignalEvent/SecurityIncident/CommunicationConsentConflictBucket/MessagingInboundEvent are the 4 ambiguous_nullable_tenant entries; SecurityIncidentActivity inherits that ambiguity but is counted under child_via_parent (no own tenant column)."
   },
   "raw_sql_files_summary": {
     "total_files_with_raw_sql": 19,
