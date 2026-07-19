@@ -1011,14 +1011,22 @@ mirroring the SMS branch of the same route. Tested in
 not let through by an unrelated `operational` grant (proves the purpose map
 actually discriminates, not just defaults everything through).
 
-**Deliberately not touched, documented as a separate deferred finding**:
-`POST /api/whatsapp/inbox/:id/reply` (staff replying inside an inbound
-conversation) and the AI auto-responder sends in the Evolution webhook
-handler also call `sendWhatsAppMessage` with zero consent context — but
-these are direct replies within a patient-initiated conversation, a
-categorically different semantic (arguably governed by `ChannelConsentLog`'s
-accept/decline state, not the purpose-based matrix) needing its own design
-decision, not a hasty default classification.
+**Deliberately not touched, documented as a separate deferred finding**: three
+patient-initiated conversation reply paths call a WhatsApp send function with
+zero consent context —
+
+- `POST /api/whatsapp/inbox/:id/reply` (staff replying inside an inbound
+  conversation)
+- the Evolution WhatsApp AI auto-responder send (Evolution webhook handler)
+- the Meta Cloud WhatsApp AI auto-responder send
+  (`server/src/services/whatsapp/metaWhatsAppAiProcessor.ts`, the
+  `provider.sendMessage()` call inside the inbound-reply flow)
+
+These are patient-initiated conversation reply paths with different
+ChannelConsentLog/provider-window semantics and are not yet mapped into the
+central purpose-based consent model. This finding does not claim every
+WhatsApp sender is covered by this PR — these three remain open, needing
+their own design decision, not a hasty default classification.
 
 ### 21.8 Frontend redesign
 
@@ -1079,8 +1087,11 @@ status switch, never merged visually with denied/withdrawn/unknown/granted).
   decisions.
 - A legacy-signal correction workflow (clearing a stale `smsOptOut`) — no
   write path exists today; building one is a distinct, larger feature.
-- `POST /api/whatsapp/inbox/:id/reply` and the AI auto-responder consent gap
-  (§21.7) — different semantics, needs its own design decision.
+- The three patient-initiated conversation reply paths named in §21.7 —
+  `POST /api/whatsapp/inbox/:id/reply`, the Evolution WhatsApp AI
+  auto-responder send, and the Meta Cloud WhatsApp AI auto-responder send
+  (`metaWhatsAppAiProcessor.ts`) — different ChannelConsentLog/provider-window
+  semantics, needs its own design decision. Not claimed as covered by this PR.
 - Instagram channel is still not part of the consent taxonomy/model — adding
   a channel is a data-model decision, not a readiness fix.
 - The CSP (Google Fonts, inline script) and Platform-Admin `/api/auth/me`
@@ -1100,3 +1111,118 @@ enabled anywhere; that the production backfill (dry-run or execute) has been
 run; or that any legal-basis, notice-wording, retention, or controller/
 processor question from §15 has been resolved. All of §15's open items
 remain open and are unchanged by this PR.
+
+### 21.11 Production migration deployment runbook
+
+This PR's migration
+(`server/prisma/migrations/20260719120821_kvkk_high007_consent_reconciliation/migration.sql`)
+is purely additive — one new table
+(`CommunicationConsentConflictBucket`, with its own indexes) and one new
+index on the existing `OperationalEvent` table
+(`OperationalEvent_source_organizationId_clinicId_createdAt_idx`). Prisma's
+`migrate deploy` runs each migration inside a transaction, so this index is
+created with plain `CREATE INDEX`, not `CREATE INDEX CONCURRENTLY` — that is
+intentional and is **not** being changed as part of this PR
+(`CONCURRENTLY` cannot run inside a transaction block at all). On a large
+`OperationalEvent` table this holds `ACCESS EXCLUSIVE` for the duration of
+the index build, which blocks concurrent reads/writes to that table for that
+window. The steps below exist to make that window observable and safe, not
+to avoid it.
+
+**Pre-deploy (read-only, run first, in a low-traffic window):**
+
+1. Check `OperationalEvent` size, so the expected duration of the index
+   build is known in advance rather than discovered live:
+
+   ```sql
+   sudo -u postgres psql -d noramedi_crm -P pager=off <<'SQL'
+   SELECT
+     pg_size_pretty(pg_total_relation_size('"OperationalEvent"')) AS total_size,
+     pg_size_pretty(pg_relation_size('"OperationalEvent"')) AS table_size,
+     pg_size_pretty(pg_indexes_size('"OperationalEvent"')) AS indexes_size,
+     COUNT(*) AS row_count
+   FROM "OperationalEvent";
+   SQL
+   ```
+
+2. Take a verified database backup and confirm it is restorable before
+   proceeding — this is a prerequisite for any production schema change in
+   this app, not specific to this migration.
+
+3. Confirm all consent flags remain at their default/disabled values in the
+   target environment before and after this deploy — this migration does not
+   require, and must not be paired with, flipping
+   `COMMUNICATION_CONSENT_LEGACY_RECONCILIATION_ENABLED`,
+   `COMMUNICATION_CONSENT_AUDIT_LOGGING_ENABLED`,
+   `COMMUNICATION_CONSENT_AUDIT_LOG_SAMPLE_RATE`,
+   `COMMUNICATION_CONSENT_AUDIT_SAMPLE_SALT`, or
+   `COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED`/`_MODE`.
+
+**Deploy:**
+
+4. Run the migration in a genuinely low-traffic window (its lock duration
+   scales with the current `OperationalEvent` size measured in step 1):
+
+   ```sh
+   npx prisma migrate deploy
+   ```
+
+5. Verify status immediately after:
+
+   ```sh
+   npx prisma migrate status
+   ```
+
+**Post-deploy monitoring:**
+
+6. While the migration runs (and immediately after), watch for locks held
+   against `OperationalEvent` and anything waiting on them:
+
+   ```sql
+   sudo -u postgres psql -d noramedi_crm -P pager=off <<'SQL'
+   SELECT
+     pid,
+     now() - query_start AS duration,
+     wait_event_type,
+     wait_event,
+     state,
+     left(query, 120) AS query
+   FROM pg_stat_activity
+   WHERE query ILIKE '%OperationalEvent%'
+     AND state <> 'idle'
+   ORDER BY duration DESC;
+   SQL
+   ```
+
+   A companion lock-specific view, if the above shows unexpected waiters:
+
+   ```sql
+   sudo -u postgres psql -d noramedi_crm -P pager=off <<'SQL'
+   SELECT
+     l.pid,
+     l.mode,
+     l.granted,
+     a.state,
+     now() - a.query_start AS duration,
+     left(a.query, 120) AS query
+   FROM pg_locks l
+   JOIN pg_stat_activity a ON a.pid = l.pid
+   WHERE l.relation = '"OperationalEvent"'::regclass
+   ORDER BY l.granted, duration DESC;
+   SQL
+   ```
+
+7. Confirm API and worker health (error rates, request latency,
+   `OperationalEvent`-writing paths in particular — e.g. audit logging call
+   sites, though those remain no-ops while
+   `COMMUNICATION_CONSENT_AUDIT_LOGGING_ENABLED=false`) show no sustained
+   stall or elevated error rate correlated with the deploy window.
+
+8. Confirm no query against `OperationalEvent` was left waiting for a
+   prolonged period during the deploy — i.e., that steps 6/7 showed only the
+   expected transient lock, not a lasting write stall.
+
+This runbook does not change the migration to use `CREATE INDEX
+CONCURRENTLY` — doing so would require splitting the index creation out of
+Prisma's transactional migration entirely, which is a larger, separate
+change and out of scope for this follow-up.
