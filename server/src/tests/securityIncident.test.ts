@@ -71,6 +71,18 @@
  *      this session (61 migrations applied cleanly, unique incidentKey +
  *      all documented indexes confirmed present, zero drift beyond
  *      pre-existing unrelated drift already on `main`).
+ *
+ *   L. Raw-SQL severity-escalation tenant-ownership proof (F0-009-S1)
+ *      (source inspection + real DB) — see securityIncidentService.ts's
+ *      escalateSeverityAtomic() for the ownership-proof comment this pins:
+ *   55. escalateSeverityAtomic is unexported and its only call site passes
+ *       the current transaction's own upserted.id — never an externally
+ *       supplied incident id (no route/job ever calls it directly)
+ *   56. The raw UPDATE binds incidentId as a parameter, never
+ *       string-interpolated into the query text — no SQL-injection surface
+ *   57. Escalating one organization's incident severity never mutates a
+ *       different organization's identically-shaped incident (same
+ *       sourceRule/resource, different organizationId/clinicId)
  */
 
 import assert from 'node:assert/strict';
@@ -1037,6 +1049,71 @@ async function runMetadataAllowlistTests() {
   });
 }
 
+// ── L. Raw-SQL severity-escalation tenant-ownership proof (F0-009-S1) ─────
+
+async function runRawSqlTenantOwnershipTests() {
+  section('L. Raw-SQL tenant-ownership proof (F0-009-S1)');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'services', 'security', 'securityIncidentService.ts'), 'utf8');
+
+  await test('55. escalateSeverityAtomic is unexported and its only call site passes the same transaction\'s own upserted.id', () => {
+    assert.ok(
+      /^async function escalateSeverityAtomic\(/m.test(src),
+      'escalateSeverityAtomic must stay a module-private (unexported) function — it is not a safe-to-call-externally API',
+    );
+    assert.ok(
+      !/^export (async )?function escalateSeverityAtomic\(/m.test(src),
+      'escalateSeverityAtomic must never be exported: it takes a bare incidentId with no tenant check and is only safe because its one caller derives that id from its own transaction',
+    );
+    // Excludes the `function escalateSeverityAtomic(` declaration itself (negative lookbehind),
+    // so this counts actual invocations only.
+    const callSites = [...src.matchAll(/(?<!function )escalateSeverityAtomic\(/g)];
+    assert.equal(callSites.length, 1, 'escalateSeverityAtomic must have exactly one call site — a second caller would need its own ownership proof');
+    assert.ok(
+      src.includes('escalateSeverityAtomic(tx, upserted.id, input.severity, now)'),
+      'the sole call site must pass upserted.id — the id of the row this exact transaction just found-or-created via the tenant-derived incidentKey, never a caller-supplied id',
+    );
+  });
+
+  await test('56. The raw UPDATE binds incidentId as a parameter, never string-interpolated into the query text', () => {
+    const fnMatch = src.match(/async function escalateSeverityAtomic\([\s\S]*?\r?\n\}\r?\n/);
+    assert.ok(fnMatch, 'escalateSeverityAtomic source must be found for inspection');
+    const fnSrc = fnMatch![0];
+    assert.ok(!fnSrc.includes('${incidentId}'), 'incidentId must never be template-interpolated into the SQL text');
+    assert.ok(!fnSrc.includes('${incomingSeverity}'), 'incomingSeverity must never be template-interpolated into the SQL text');
+    assert.ok(/WHERE id = \$3/.test(fnSrc), 'id must be bound as the $3 positional parameter');
+    assert.ok(/incomingSeverity,\s*\n\s*now,\s*\n\s*incidentId,\s*\n\s*incomingRank,/.test(fnSrc), 'all four values must be passed as bound parameters after the query template, in $1-$4 order');
+  });
+
+  await test('57. Escalating one organization\'s incident severity never mutates a different organization\'s identically-shaped incident', async () => {
+    const orgA = testOrgId('raw-sql-owner-a');
+    const orgB = testOrgId('raw-sql-owner-b');
+    const clinicA = testClinicId('raw-sql-owner-a');
+    const clinicB = testClinicId('raw-sql-owner-b');
+    const shared = {
+      sourceRule: 'test.raw-sql-ownership.v1',
+      sourceType: 'test',
+      category: 'test_category',
+      affectedResourceType: 'test_resource',
+      affectedResourceId: 'shared-resource-id',
+      title: 'Raw-SQL ownership test',
+      summary: 'Raw-SQL ownership test',
+    };
+
+    const { incident: incidentA } = await upsertIncidentFromSignal({ ...shared, severity: 'low', organizationId: orgA, clinicId: clinicA });
+    const { incident: incidentB } = await upsertIncidentFromSignal({ ...shared, severity: 'low', organizationId: orgB, clinicId: clinicB });
+    assert.notEqual(incidentA.id, incidentB.id, 'identical sourceRule/resource but different org/clinic must never collide onto one row');
+
+    // Escalate ONLY org A's occurrence stream.
+    await upsertIncidentFromSignal({ ...shared, severity: 'critical', organizationId: orgA, clinicId: clinicA });
+
+    const rowA = await prisma.securityIncident.findUniqueOrThrow({ where: { id: incidentA.id } });
+    const rowB = await prisma.securityIncident.findUniqueOrThrow({ where: { id: incidentB.id } });
+    assert.equal(rowA.severity, 'critical', 'org A\'s incident must have escalated');
+    assert.equal(rowB.severity, 'low', 'org B\'s incident must be completely untouched by org A\'s escalation');
+    assert.equal(rowB.occurrenceCount, 1, 'org B\'s incident must not have observed org A\'s occurrence');
+  });
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -1052,6 +1129,7 @@ async function main() {
     await runCreatedActivityStressTests();
     await runOperatorTextSanitizationTests();
     await runMetadataAllowlistTests();
+    await runRawSqlTenantOwnershipTests();
   } finally {
     await cleanup();
     await prisma.$disconnect();
