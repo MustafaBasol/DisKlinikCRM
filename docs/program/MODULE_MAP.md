@@ -93,4 +93,4 @@ See [evidence document §5](evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md#5-large
 
 - **F0-004 — Cross-Module Dependency Map**: bu haritadaki domain kümesini kullanarak tam import/çağrı-kanıtlı bağımlılık matrisini dolduracak ([DEPENDENCY_MAP.md](DEPENDENCY_MAP.md)).
 - **F0-005 — Test Inventory**: bu haritadaki domain→test dosyası eşlemesini kullanarak süre/güvenilirlik/CI-katmanı ölçümünü yapacak ([TEST_OWNERSHIP.md](TEST_OWNERSHIP.md)).
-- **ADR-001 / ADR-015**: bu haritayı ve F0-004 çıktısını kanıt olarak kullanacak (henüz `PROPOSED`).
+- **ADR-001 / ADR-015**: bu haritayı ve F0-004 çıktısını kanıt olarak kullandı — F0-008 tarafından sırasıyla `ACCEPTED`/`ACCEPTED_WITH_CONDITIONS` olarak gözden geçirildi (bkz. [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md), [../architecture/adr-foundation-review.md](../architecture/adr-foundation-review.md)); dış inceleme bekliyor.
