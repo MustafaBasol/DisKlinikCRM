@@ -44,6 +44,13 @@ import {
   getCommunicationConsentAuditSummary,
   CommunicationConsentAuditReportError,
 } from '../services/communicationConsent/communicationConsentAuditReport.js';
+import {
+  correctSmsOptOut,
+  listLegacyConsentCorrections,
+  getLegacyConsentCorrectionDetail,
+  LegacyConsentCorrectionError,
+} from '../services/communicationConsent/legacyConsentCorrection.js';
+import { legacySmsOptOutCorrectionSchema } from '../schemas/index.js';
 
 const router = express.Router();
 
@@ -91,6 +98,20 @@ const ADMIN_ERROR_STATUS: Record<string, number> = {
   notice_version_required: 400,
   unsafe_note: 400,
   preference_not_found: 404,
+};
+
+/** KVKK-HIGH-008: legacy consent correction workflow error → HTTP status mapping. */
+const LEGACY_CORRECTION_ERROR_STATUS: Record<string, number> = {
+  legacy_signal_not_present: 409,
+  legacy_signal_already_corrected: 409,
+  stale_legacy_signal_state: 409,
+  correction_notes_required: 400,
+  correction_reason_required: 400,
+  invalid_evidence_type: 400,
+  unsafe_note: 400,
+  patient_not_found: 404,
+  clinic_scope_mismatch: 403,
+  idempotency_conflict: 409,
 };
 
 /** Loads a patient scoped to the caller's organization + clinic access. Writes nothing. */
@@ -522,6 +543,116 @@ router.get(
       }
       console.error('[communicationPreferences] audit-summary error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to load communication consent audit summary' });
+    }
+  },
+);
+
+// ─── Legacy consent correction workflow (KVKK-HIGH-008) ──────────────────────
+// Management-only (OWNER/ORG_ADMIN/CLINIC_MANAGER — same as EXPORT_ROLES).
+// Corrects a stale/incorrect Patient.smsOptOut=true. Never touches
+// PatientCommunicationPreference/PatientCommunicationConsentEvent and never
+// grants consent — see legacyConsentCorrection.ts for the full design.
+
+// POST /api/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out
+router.post(
+  '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out',
+  authorize([...EXPORT_ROLES]),
+  async (req: AuthRequest, res: Response) => {
+    const patientId = getParam(req, 'patientId');
+    try {
+      const patient = await loadScopedPatient(req, res, patientId);
+      if (!patient) return;
+
+      const validation = legacySmsOptOutCorrectionSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: 'Validation error', details: validation.error.flatten().fieldErrors });
+      }
+      const body = validation.data;
+
+      const result = await correctSmsOptOut({
+        organizationId: patient.organizationId,
+        clinicId: patient.clinicId,
+        patientId: patient.id,
+        correctionReason: body.correctionReason,
+        evidenceType: body.evidenceType,
+        sourceReference: body.sourceReference ?? null,
+        notes: body.notes,
+        expectedCurrentValue: body.expectedCurrentValue,
+        expectedSmsOptOutAt: body.expectedSmsOptOutAt,
+        correctedById: req.user!.id,
+        idempotencyKey: body.idempotencyKey,
+      });
+
+      res.json({
+        replay: result.replay,
+        correction: result.correction,
+      });
+    } catch (err: any) {
+      if (err instanceof LegacyConsentCorrectionError) {
+        return res.status(LEGACY_CORRECTION_ERROR_STATUS[err.code] ?? 400).json({ errorCode: err.code, error: err.message });
+      }
+      console.error('[communicationPreferences] legacy correction error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to record legacy consent correction' });
+    }
+  },
+);
+
+// GET /api/patients/:patientId/communication-preferences/legacy-corrections
+// Summary list only — no correctionReason/notes/sourceReference (see detail route).
+router.get(
+  '/patients/:patientId/communication-preferences/legacy-corrections',
+  authorize([...EXPORT_ROLES]),
+  async (req: AuthRequest, res: Response) => {
+    const patientId = getParam(req, 'patientId');
+    try {
+      const patient = await loadScopedPatient(req, res, patientId);
+      if (!patient) return;
+
+      const { cursor } = req.query as { cursor?: string };
+      const rawLimit = Number(req.query.limit);
+      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
+
+      const { items, hasMore, nextCursor } = await listLegacyConsentCorrections({
+        organizationId: patient.organizationId,
+        clinicId: patient.clinicId,
+        patientId: patient.id,
+        cursor,
+        limit,
+      });
+
+      res.json({ patientId: patient.id, items, pageInfo: { hasMore, nextCursor } });
+    } catch (err: any) {
+      console.error('[communicationPreferences] legacy correction history error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to load legacy consent correction history' });
+    }
+  },
+);
+
+// GET /api/patients/:patientId/communication-preferences/legacy-corrections/:correctionId
+// Detail view — includes correctionReason/notes/sourceReference. Still never
+// requestFingerprint/idempotencyKey.
+router.get(
+  '/patients/:patientId/communication-preferences/legacy-corrections/:correctionId',
+  authorize([...EXPORT_ROLES]),
+  async (req: AuthRequest, res: Response) => {
+    const patientId = getParam(req, 'patientId');
+    const correctionId = getParam(req, 'correctionId');
+    try {
+      const patient = await loadScopedPatient(req, res, patientId);
+      if (!patient) return;
+
+      const detail = await getLegacyConsentCorrectionDetail({
+        organizationId: patient.organizationId,
+        clinicId: patient.clinicId,
+        patientId: patient.id,
+        correctionId,
+      });
+      if (!detail) return res.status(404).json({ error: 'Correction record not found' });
+
+      res.json({ patientId: patient.id, correction: detail });
+    } catch (err: any) {
+      console.error('[communicationPreferences] legacy correction detail error:', err?.message ?? err);
+      res.status(500).json({ error: 'Failed to load legacy consent correction detail' });
     }
   },
 );

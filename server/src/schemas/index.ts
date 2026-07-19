@@ -670,3 +670,18 @@ export const imagingBridgeStudyUploadSchema = z.object({
   studyDate: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   imagingRequestId: optionalId,
 });
+
+// KVKK-HIGH-008: legacy consent correction (e.g. marking Patient.smsOptOut as
+// stale/incorrect). See legacyConsentCorrection.ts for the closed
+// evidenceType taxonomy and the transaction/idempotency design — this schema
+// only shapes/validates the request body; expectedCurrentValue is a literal
+// `true` because the workflow only ever corrects an active legacy opt-out.
+export const legacySmsOptOutCorrectionSchema = z.object({
+  correctionReason: z.string().trim().min(1, 'correctionReason is required').max(1000),
+  notes: z.string().trim().min(1, 'notes is required').max(1000),
+  evidenceType: z.enum(['patient_verbal_confirmation', 'signed_form', 'documented_import_error', 'other_verified_source']),
+  sourceReference: z.string().trim().max(500).optional().nullable(),
+  expectedCurrentValue: z.literal(true),
+  expectedSmsOptOutAt: z.string().datetime().nullable().optional(),
+  idempotencyKey: z.string().trim().min(8).max(200),
+});

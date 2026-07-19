@@ -20,6 +20,7 @@ import {
   computeConsentSummary,
   shouldShowLegacySignals,
   isCellActionable,
+  computeConsentActionValidation,
   type MatrixEntry,
 } from '../communicationConsentMatrixHelpers';
 
@@ -223,6 +224,62 @@ async function main() {
       { channel: 'whatsapp', purpose: 'campaign', action: 'withdraw' },
     ]);
     assert.equal(result.ok, true);
+  });
+
+  section('computeConsentActionValidation — single source of truth for the consent-action modal (KVKK-HIGH-008)');
+
+  await test('non-grant actions (deny/withdraw/reset) never require noticeVersion or notes', () => {
+    for (const action of ['deny', 'withdraw', 'reset'] as const) {
+      const result = computeConsentActionValidation({ action, source: 'staff', noticeVersion: '', notes: '' });
+      assert.equal(result.noticeVersionRequired, false, `${action} must never require noticeVersion`);
+      assert.equal(result.notesRequired, false, `${action} must never require notes`);
+      assert.equal(result.canSubmit, true);
+    }
+  });
+
+  await test('a grant from a digital source requires noticeVersion, independent of the notes requirement', () => {
+    const result = computeConsentActionValidation({ action: 'grant', source: 'patient_portal', noticeVersion: '', notes: 'irrelevant' });
+    assert.equal(result.noticeVersionRequired, true);
+    assert.equal(result.notesRequired, false, 'patient_portal is not the staff source — notes stay optional');
+    assert.equal(result.canSubmit, false);
+    assert.deepEqual(result.invalidFields, ['noticeVersion']);
+    assert.equal(result.firstInvalidField, 'noticeVersion');
+  });
+
+  await test('a grant with source=staff requires notes — this is keyed on `source`, NOT on evidenceType', () => {
+    // evidenceType is intentionally absent from ConsentActionValidationState —
+    // the requirement must never be re-derived from it.
+    const result = computeConsentActionValidation({ action: 'grant', source: 'staff', noticeVersion: '', notes: '' });
+    assert.equal(result.notesRequired, true);
+    assert.equal(result.noticeVersionRequired, false, 'staff is not a digital-grant source');
+    assert.deepEqual(result.invalidFields, ['notes']);
+    assert.equal(result.canSubmit, false);
+  });
+
+  await test('a grant with source=staff and notes filled in is submittable', () => {
+    const result = computeConsentActionValidation({ action: 'grant', source: 'staff', noticeVersion: '', notes: 'Patient confirmed verbally at check-in.' });
+    assert.equal(result.canSubmit, true);
+    assert.deepEqual(result.invalidFields, []);
+    assert.equal(result.firstInvalidField, null);
+  });
+
+  await test('whitespace-only notes/noticeVersion still count as empty (matches server-side .trim() semantics)', () => {
+    const result = computeConsentActionValidation({ action: 'grant', source: 'staff', noticeVersion: '   ', notes: '   ' });
+    assert.equal(result.canSubmit, false);
+    assert.deepEqual(result.invalidFields, ['notes']);
+  });
+
+  await test('a grant from patient_portal AND source=staff (both requirements) reports noticeVersion first, in field order', () => {
+    // Not a realistic combination in the UI (source list excludes overlap in
+    // practice) but proves invalidFields/firstInvalidField ordering is
+    // deterministic (noticeVersion before notes) regardless of input.
+    const result = computeConsentActionValidation({ action: 'grant', source: 'staff', noticeVersion: '', notes: '' });
+    assert.equal(result.notesRequired, true);
+  });
+
+  await test('no action selected is never submittable, regardless of field contents', () => {
+    const result = computeConsentActionValidation({ action: null, source: 'staff', noticeVersion: 'v1', notes: 'x' });
+    assert.equal(result.canSubmit, false);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

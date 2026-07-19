@@ -7,7 +7,7 @@
 
 ## 0. Non-authorization statement
 
-> F0-011-P1 records the current KVKK-HIGH-008 working-tree state, dependencies, risks, and freeze boundary only. It does not accept the active implementation, authorize additional code changes, confirm tests, approve migration or backfill execution, approve feature-flag activation, approve merge, approve deployment, or declare the KVKK baseline stable. Each of those states requires separate repository and production evidence.
+> F0-011-P1 records the current KVKK-HIGH-008 working-tree state, dependencies, risks, and freeze boundary only. It does not accept the active implementation, authorize additional code changes, confirm tests, approve migration or backfill execution, approve feature-flag activation, approve merge, approve deployment, or declare the KVKK baseline stable. Each of those states requires separate repository and production evidence. **Post-merge addendum (§14b):** PR #180 has since merged into `main` — a repository fact this document neither authorized nor produced. The merge does not itself satisfy any of the states above; see §14b for what is, and is not, established by it.
 
 ## 1. Evidence capture — primary tree
 
@@ -244,6 +244,17 @@ While this task was writing the deliverables above (i.e., after §1-§14's evide
 - The primary tree's working directory is otherwise clean (`git status --short --untracked-files=all` returns nothing) as of this final check.
 
 This task's own primary-tree evidence (§1-§14) reflects the state at initial capture time and was not retroactively rewritten to chase this later commit, consistent with this program's established "self-reference lag" convention (see `NORAMEDI_MASTER_TRACKER.md` §2.1/§7) — later evidence (git commits) outranks this document, and a future task refreshing this baseline should treat `9b0e119` as the current HEAD rather than `73ff3e9`. This task did not read, stage, commit, or otherwise interact with the primary tree at any point beyond read-only `git`/file-read operations; this new commit is confirmed external, independent activity.
+
+## 14b. Post-baseline repository status (2026-07-19, F0-011-P1 post-merge conflict resolution)
+
+This section is added after, and does not rewrite, §1–§14's capture-time evidence. §1–§14 reflect the repository as it stood at evidence-capture time on 2026-07-19: PR #180 was `OPEN`, 0 reviews, no CI, and F0-011-P1 had not independently executed any test named in §7. The facts below are later events, observed by a separate follow-on pass (`git merge --no-ff origin/main`, `gh pr view`), and are kept distinct rather than backdated into §1–§14:
+
+- **At evidence-capture time** (§1), PR #180 was open and this task had not, and could not, independently confirm any of PR #180's self-reported test results (§7).
+- **After capture**, PR #180 merged into `main` (merge commit `e972bfef918471074137bb0f11705d43a1ca2ce5`), confirmed via `gh pr view 180 --json state,mergedAt,mergeCommit` and `git rev-parse origin/main`.
+- **This later merge does not prove** migration application, deployment, feature activation, production verification, or KVKK-baseline stability. Merging is a repository-history event; none of those five states can be inferred from it. §5's "Production application status: NOT APPLIED to production" and §7's "Independently executed by F0-011-P1: No" rows are **unchanged** by the merge — no production evidence was gathered before or after it.
+- **F0-011-P1 still does not independently confirm** the author-reported test results in §7 — the merge itself is not test execution, and no independent test run occurred during this reconciliation pass either (this pass touched documentation only, per its own scope restriction).
+- **No-feature-flag / no-kill-switch concern (§8, §4 of the companion freeze-boundary document), re-checked against the merged code:** a read-only check of the merged `server/src/routes/communicationPreferences.ts` (now present in this branch via the `origin/main` merge) finds the same 3 legacy-correction routes as at capture time, still gated only by `authorize([OWNER, ORG_ADMIN, CLINIC_MANAGER])`, with no `COMMUNICATION_CONSENT_*`-style or other feature-flag/kill-switch gate added between capture and merge. **This concern is therefore not silently removed** — `main` contains no evidence of it having been resolved, accepted, or superseded by a flag; it remains an open decision for a human/program decision-maker (`RISK_REGISTER.md` R-061, unchanged).
+- **KVKK baseline stable declaration:** not made by PR #180's merge, not made by this document, not found anywhere in `main` as of this reconciliation pass.
 
 ## 15. Sources reviewed
 

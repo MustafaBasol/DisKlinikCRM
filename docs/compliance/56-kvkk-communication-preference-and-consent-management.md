@@ -1085,8 +1085,11 @@ status switch, never merged visually with denied/withdrawn/unknown/granted).
   central evidence exists broadly (§21.1) — requires the reconciliation flag
   and, eventually, enforcement to actually be turned on, both explicit future
   decisions.
-- A legacy-signal correction workflow (clearing a stale `smsOptOut`) — no
-  write path exists today; building one is a distinct, larger feature.
+- ~~A legacy-signal correction workflow (clearing a stale `smsOptOut`) — no
+  write path exists today; building one is a distinct, larger feature.~~
+  **Built in the KVKK-HIGH-008 follow-up — see §21.12.** `smsOptOut` still has
+  no *general* write path; the new workflow is a single, narrowly-scoped,
+  audited exception to that, not a general patient-edit field.
 - The three patient-initiated conversation reply paths named in §21.7 —
   `POST /api/whatsapp/inbox/:id/reply`, the Evolution WhatsApp AI
   auto-responder send, and the Meta Cloud WhatsApp AI auto-responder send
@@ -1226,3 +1229,308 @@ This runbook does not change the migration to use `CREATE INDEX
 CONCURRENTLY` — doing so would require splitting the index creation out of
 Prisma's transactional migration entirely, which is a larger, separate
 change and out of scope for this follow-up.
+
+## 21.12 KVKK-HIGH-008: legacy consent correction workflow + modal/tab UX hardening
+
+Branch `feature/kvkk-high008-legacy-consent-correction`, built on top of the
+§21 follow-up above. Closes the gap named in §21.3/§21.9: there was no
+supported way to clear a stale `Patient.smsOptOut=true`. This section also
+covers two unrelated production UX bugs fixed in the same branch: the
+consent-action modal's Notes validation UX, and `PatientDetail`'s tab-overflow
+accessibility.
+
+**Not a claim of legal compliance. Does not enable reconciliation, audit
+logging, or enforcement. Does not execute the production backfill. All four
+`COMMUNICATION_CONSENT_*` flags remain at their disabled/audit defaults.**
+
+### 21.12.1 What this is NOT
+
+This workflow does **not**:
+- grant consent, or create/alter any `PatientCommunicationPreference` row;
+- write to `PatientCommunicationConsentEvent` (a distinct model, scoped to
+  central-preference transitions — see §21.12.3 for why it isn't reused);
+- delete or alter `CommunicationConsentConflictBucket` rows (historical
+  conflict occurrences remain available for audit reporting unchanged);
+- delete or alter any existing `PatientCommunicationPreference`/
+  `PatientCommunicationConsentEvent`/`AuditLog` history;
+- add a general patient-edit path for `smsOptOut` — the field still has no
+  write path outside this one, narrowly-scoped, audited action;
+- change any `COMMUNICATION_CONSENT_*` flag default or runtime precedence
+  beyond what naturally follows from the legacy field itself changing (the
+  matrix's existing `legacy_central_conflict` read at
+  `communicationPreferences.ts` already reads `patient.smsOptOut` live — once
+  corrected to `false`, the conflict stops appearing for that patient/channel
+  with zero change to that read path);
+- touch the three deferred inbound-reply paths named in §21.7/§21.9
+  (`POST /api/whatsapp/inbox/:id/reply`, the Evolution and Meta Cloud WhatsApp
+  AI auto-responders) — still fully out of scope.
+
+### 21.12.2 Legacy signal ownership review (evidence-based, this session)
+
+| Field/model | Meaning | Writer paths | Reader paths | Default ambiguous? | Timestamp trustworthy? | Classification | Correction needed? |
+|---|---|---|---|---|---|---|---|
+| `Patient.smsOptOut` | Legacy hard SMS veto | None in application code (confirmed by exhaustive grep) | `smsTemplating.ts` (SMS gate), `communicationPreferences.ts` matrix (`legacyConflict`), `legacyReconciliationResolver.ts` (via caller-supplied signal), backfill/report script | Yes — `false` is indistinguishable from "never set" vs "explicitly cleared" | N/A (no writer) | Legacy, dormant | **Yes — this workflow** |
+| `Patient.smsOptOutAt` | When `smsOptOut` was (supposedly) set | None — always `null` in practice | Read-only export allowlist only | N/A (never populated) | **No — never written, do not treat as evidence** | Dead/legacy | Preserved as history only (`previousRecordedAt`), not itself correctable |
+| `Patient.communicationConsent` / `marketingConsent` | Legacy patient-level consent booleans | `POST/PUT /api/patients` (patient form), inbound-message auto-create paths, anonymization (forces `false`) | SMS gate, recall gate, patient privacy export, backfill report (never auto-grants) | Yes — same false-vs-default ambiguity | `Patient.updatedAt` is **not** a per-field timestamp (shared by every field on the row) — never used as evidence | Legacy, still writable via the patient form | Out of scope for this task — has a normal write path already, unlike `smsOptOut` |
+| `PatientCommunicationPreference` | Current effective central preference | `communicationConsentAdmin.ts` (`setCommunicationPreference`, advisory-lock + revision) | Central decision service, matrix API | No — explicit `unknown` default | Yes — `revision` is authoritative, not `createdAt`/`updatedAt` | Current, authoritative | N/A — untouched by this workflow |
+| `PatientCommunicationConsentEvent` | Immutable central-preference transition log | Same transaction as the preference upsert only | History API, export | N/A | Yes (`revision`) | Evidenced | N/A — structurally incompatible with a legacy-field correction (see §21.12.3) |
+| `CommunicationConsentConflictBucket` | Anonymous hourly conflict aggregate | `communicationConsentConflictTracker.ts` (send-time resolver only) | Audit-mode summary reporting | N/A | Yes (`bucketStartedAt`) | Aggregate evidence | N/A — untouched; historical occurrences remain after a correction |
+| `AuditLog` / `ActivityLog` | Generic audit/activity trail | `writeAuditLog`/`writeAuditLogInTx`, `logActivity` | Ops/compliance review | N/A | Yes | Evidenced (AuditLog); best-effort (ActivityLog) | New entries added by this workflow (see §21.12.5) |
+| **`PatientLegacyConsentCorrection`** (new) | Immutable record of a legacy-field correction | This workflow only (create-only) | Correction history API | N/A | Yes (`createdAt`, plus preserved `previousRecordedAt`) | Evidenced | N/A — this *is* the correction record |
+
+### 21.12.3 Why a new model, not `PatientCommunicationConsentEvent`
+
+`PatientCommunicationConsentEvent.preferenceId` is a mandatory, non-nullable
+FK to `PatientCommunicationPreference`, and the model's own doc comment scopes
+it to "every time a `PatientCommunicationPreference` is created or its status
+changes." A legacy-field correction has no corresponding central preference
+transition — forcing one through this model would mean either fabricating a
+central preference row (this workflow must never touch the central system)
+or relaxing the FK (breaking the model's core invariant). A dedicated model,
+`PatientLegacyConsentCorrection`, avoids both.
+
+### 21.12.4 Data model
+
+Additive migration
+(`server/prisma/migrations/20260719155318_kvkk_high008_legacy_consent_correction/migration.sql`),
+hand-authored rather than raw `prisma migrate dev` diff output specifically to
+exclude unrelated pre-existing schema drift the diff tool would otherwise have
+bundled in (an FK drop/recreate on `ImagingStudy`/`WhatsAppConversationMessage`,
+an unrelated `User` unique-index drop, several `@updatedAt` default drops, a
+`WhatsAppConnection` column type change — all pre-existing, none touched here).
+Contents: one `CREATE TYPE "PatientLegacyConsentField"` enum (currently one
+value, `SMS_OPT_OUT` — extensible later via an additive enum-value migration,
+never a free-form string), one `CREATE TABLE "PatientLegacyConsentCorrection"`,
+two lookup indexes, and one compound unique constraint
+(`organizationId, patientId, idempotencyKey`) for scoped replay protection. No
+`ALTER` to any existing table; no lock risk beyond a new, empty table.
+
+Fields: `id, organizationId, clinicId, patientId, fieldName, previousValue,
+newValue, previousRecordedAt, correctionReason, evidenceType, sourceReference,
+notes, correctedById, idempotencyKey, requestFingerprint, createdAt`. No
+`updatedAt` — the row is create-only; no update/delete route exists or should
+ever exist for this model.
+
+**`smsOptOutAt` handling on correction (explicit design decision):** the live
+`Patient.smsOptOutAt` is set to `null` when `smsOptOut` flips to `false` — a
+stale opt-out timestamp sitting on a now-corrected record would misrepresent
+current state. The pre-correction value (always `null` in today's production
+data, since nothing ever writes it) is preserved permanently in the
+correction record's `previousRecordedAt`, so no historical information is
+lost even though the live field is cleared.
+
+### 21.12.5 Correction transaction, idempotency, and concurrency
+
+Service: `server/src/services/communicationConsent/legacyConsentCorrection.ts`.
+`correctSmsOptOut()`:
+
+1. Requires the caller to have already resolved and authorized
+   `organizationId`/`clinicId` for this patient (via the route's
+   `loadScopedPatient`, management roles only) — no idempotency-table query
+   ever runs before that, so a cross-tenant caller supplying a real
+   `patientId`+`idempotencyKey` pair is rejected (404/403) before any
+   existence signal could leak.
+2. A cheap, pre-transaction idempotency lookup keyed on
+   `(organizationId, patientId, idempotencyKey)` — a same-key/same-content
+   replay returns the original result; same key with different content is
+   rejected as `idempotency_conflict`.
+3. A single `$transaction`: re-reads `Patient` fresh, verifies `smsOptOut` is
+   currently `true` (else `legacy_signal_already_corrected` or
+   `legacy_signal_not_present`, depending on whether a prior correction
+   exists), flips it via a `WHERE smsOptOut = true` guarded `updateMany`
+   (this codebase's established conditional-update idiom — no version-column
+   convention exists here), then creates the immutable correction row and a
+   `writeAuditLogInTx` entry in the same transaction. A lost race (`count ===
+   0`) is resolved via a further non-throwing lookup distinguishing "a
+   concurrent duplicate of this exact request already won" (safe replay) from
+   "a different request won" (`stale_legacy_signal_state`) — both safe to
+   query inside the same transaction since neither is a thrown error. A
+   genuine unique-constraint violation on the terminal `create` (an
+   extremely tight window not otherwise reachable) propagates out of
+   `$transaction` uncaught, rolling back the `updateMany` too, and is
+   resolved by a fresh, separate query afterward.
+4. `ActivityLog` (via `logActivity`) is written **after** the transaction
+   commits, fire-and-forget — confirmed non-transactional (`logActivity` uses
+   its own separate `PrismaClient` and swallows its own errors). The
+   correction row + `AuditLog` entry are the sole authoritative,
+   transactionally-guaranteed evidence; `ActivityLog` is a best-effort
+   operational projection only.
+
+**Optimistic-concurrency scope, stated honestly:** `expectedCurrentValue:
+true` cannot by itself distinguish a stale read from a fresh one (every
+un-corrected record has the same boolean). An optional `expectedSmsOptOutAt`
+token is wired in for a future writer of `smsOptOutAt` to strengthen this
+automatically; today it adds no real discriminating power since that field is
+always `null`. Real safety comes from the guarded `updateMany` + idempotency
+key + the fact that nothing in this codebase ever sets `smsOptOut` back to
+`true`.
+
+`requestFingerprint`: SHA-256 over a fixed-order tuple array (never
+object-key iteration order), UTF-8 explicit, hashed on the exact
+(zod-trimmed, sanitized) string content — no case-folding or Unicode
+normalization, so materially different staff-written evidence can never
+collapse to the same fingerprint. Actor/org/the idempotency key itself are
+deliberately excluded from the hash (identity is already pinned by the
+unique key and route-level authorization). Never returned in any API
+response or written to any log.
+
+### 21.12.6 Authorization
+
+Management-only: `OWNER`, `ORG_ADMIN`, `CLINIC_MANAGER` (reusing
+`communicationPreferences.ts`'s existing `EXPORT_ROLES` constant).
+`RECEPTIONIST`, `DENTIST`, `BILLING` are denied; cross-organization and
+inaccessible-clinic requests are denied by `loadScopedPatient` before any
+correction-table query. Frontend gating uses a new, narrower
+`canCorrectLegacyConsent` capability (`PatientDetail.tsx`, mirroring the
+existing `PatientPrivacyPanel` `canManage` check) — distinct from the panel's
+existing, broader `canManage` (which also includes `RECEPTIONIST`/`DENTIST`
+for the general preference matrix and is left completely unchanged).
+
+### 21.12.7 API
+
+Added to `server/src/routes/communicationPreferences.ts`:
+- `POST /api/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out`
+- `GET /api/patients/:patientId/communication-preferences/legacy-corrections` (summary list — bounded pagination, `createdAt desc, id desc`; excludes `correctionReason`/`notes`/`sourceReference`/`requestFingerprint`/`idempotencyKey`)
+- `GET /api/patients/:patientId/communication-preferences/legacy-corrections/:correctionId` (detail — adds `correctionReason`/`notes`/`sourceReference`; still never the fingerprint/idempotency key)
+
+Error codes: `legacy_signal_not_present`, `legacy_signal_already_corrected`,
+`stale_legacy_signal_state`, `correction_notes_required`,
+`correction_reason_required`, `invalid_evidence_type`, `unsafe_note`,
+`patient_not_found`/`clinic_scope_mismatch` (via `loadScopedPatient`),
+`idempotency_conflict`. Validation via a dedicated zod schema
+(`legacySmsOptOutCorrectionSchema`); no raw Zod/Prisma error object ever
+reaches the client.
+
+### 21.12.8 Conflict UX and legacy-signal display
+
+`CommunicationPreferencesPanel`'s conflict cell now offers two distinct,
+explicit choices: accepting the restrictive legacy signal (the existing
+deny/withdraw flow, with clarified copy that this does not prove the legacy
+signal was correct) and, for `canCorrectLegacyConsent` users only, a
+dedicated "correct the legacy signal" action opening
+`LegacyConsentCorrectionModal` — a confirmation-first form (current→proposed
+value, required reason/evidence type/notes, warning copy, loading state,
+duplicate-submit guard, error/success feedback) that never one-click-submits.
+The collapsed "Eski Kayıt Sinyalleri" section now shows `smsOptOut`
+tri-state (`SmsOptOutLegacyField`): active restrictive signal / corrected
+(with date + evidence type from the list-safe fields only, never the reason
+text) / not present — never a plain "Evet"/"Hayır" that could read as an
+explicit patient denial. `communicationConsent`/`marketingConsent` get
+neutral, non-denial wording too, plus a fixed disclaimer that they are not
+the central communication consent. `LegacyConsentCorrectionHistory` renders
+the correction list for management users, with a per-row detail fetch
+(`canCorrectLegacyConsent`-gated) for the free-text fields.
+
+### 21.12.9 Consent-action modal validation UX fix
+
+Root cause (precisely diagnosed, not assumed): the Notes-required condition
+was always `source === 'staff'` on a `grant` (`CommunicationPreferencesPanel.tsx`,
+mirrored server-side in `communicationConsentAdmin.ts`) — a field literally
+named `source`, separate from the `evidenceType` field the production bug
+report named. They default together, which is why the bug *read* as
+"evidence type triggers notes" even though the code gates on `source`. Fix:
+- A single pure function, `computeConsentActionValidation`
+  (`communicationConsentMatrixHelpers.ts`), is now the sole source of truth
+  for submit-eligibility, inline field errors, the modal summary, and
+  focus-first-invalid — eliminating the previous risk of the visible hint
+  text and the actual submit gate silently diverging.
+- Label/placeholder are now dynamic and correct: a required Notes field shows
+  `Notlar *` with a placeholder stating notes are required, never "isteğe
+  bağlı" (optional); the same fix applies to Notice Version.
+- Confirm stays enabled at all times (per the required pattern); clicking
+  with invalid state populates inline errors, moves focus to the first
+  invalid field, and scrolls it into view — it never silently no-ops.
+- `aria-invalid`/`aria-describedby` on both fields, `role="dialog"
+  aria-modal="true"`, a focus trap, `Escape`-to-close, and focus-restore on
+  close, modeled directly on the existing `src/components/common/ConfirmDialog.tsx`
+  pattern (reused, not reinvented).
+- Existing validation semantics are unchanged: verbal/staff-recorded grant
+  still requires notes; digital-source grant still requires noticeVersion;
+  deny/withdraw/reset still never require either.
+
+### 21.12.10 PatientDetail tab overflow (F-2)
+
+`PatientDetail.tsx`'s tab bar previously used `overflow-x-auto scrollbar-hide`
+with no other affordance — tabs after "Görüntüleme" (Diş Haritası, Activity,
+Gizlilik, İletişim Tercihleri) could be clipped and invisible at constrained
+widths, with `activeTab` a plain, non-URL-backed `useState` (a direct link
+could never land on anything but Overview). Fix, in a new
+`PatientDetailTabs` component: the scroll container remains (native touch
+swipe/wheel keep working) but gains visible left/right scroll-chevron
+buttons (rendered only when overflow actually exists, recalculated via
+`ResizeObserver`) with an edge fade, `role="tablist"`/`role="tab"`/
+`aria-selected`/roving `tabIndex`, `Left/Right/Home/End` + `Enter/Space`
+keyboard support, and auto-scroll of the active tab into view on every
+change including initial mount. The active tab is now derived from
+`?tab=<key>` (stable internal keys only, never translated labels) with the
+URL as the single source of truth — no second, competing `activeTab` state.
+User-initiated tab changes push a normal navigation (back/forward works
+between tabs); an invalid/unauthorized/feature-disabled `tab` value is
+corrected via `navigate(..., { replace: true })` (pure logic extracted to
+`patientDetailTabsHelpers.ts` for direct unit testing) — but a **missing**
+`tab` param is left alone, so old bookmarked URLs keep defaulting to Overview
+without ever being rewritten.
+
+### 21.12.11 Retention
+
+The correction record is an audit/evidence record. Following the existing
+by-omission convention already used for `AuditLog`/`ActivityLog`, it is
+**excluded from `dataRetentionCleanupJob.ts`'s automatic categories** — no
+code in this PR adds it to any cleanup job. Whether a dedicated retention
+policy should eventually apply to `PatientLegacyConsentCorrection` is
+**pending legal review**, consistent with this document's existing posture
+on retention questions (§15). No automatic deletion is implemented or
+implied.
+
+### 21.12.12 Tests
+
+Backend: `server/src/tests/legacyConsentCorrection.test.ts` (26 tests —
+authorization matrix incl. cross-org/cross-clinic-with-a-valid-idempotency-key,
+correction behavior, real-Postgres concurrency for both same-key and
+different-key races, transaction-rollback-on-downstream-FK-failure, no-PII
+assertions, history pagination/ordering/field-allowlist). Frontend pure
+logic: `computeConsentActionValidation` and `patientDetailTabsHelpers.ts`
+tests added to the existing hand-rolled convention. Frontend component tests:
+new Vitest + Testing Library infrastructure (this repo had none before —
+`vitest.config.ts`, `src/test/setup.ts`), covering the full modal validation/
+accessibility matrix, the conflict-correction workflow (management-only
+gating, no one-click override, duplicate-submit guard, success refresh), and
+the tab bar (overflow detection, keyboard nav, resize, no duplicate
+rendering) — with jsdom's real-layout limitations (no `ResizeObserver`, no
+computed `scrollWidth`/`clientWidth`) stated explicitly rather than
+conflated with the separate, manual real-browser verification pass at the
+required widths/zoom levels. All existing regression suites named in this
+document (communication-consent, reconciliation resolver, matrix route,
+audit report, SMS, recall-consent-gate, messages-consent-gate,
+data-retention) were re-run and pass unchanged.
+
+### 21.12.13 Non-claims (restated)
+
+Same posture as §21.10: no legal compliance claim. In addition, specific to
+this follow-up: `smsOptOut` correction is **not** a general patient-edit
+capability and does not change how the field defaults or is read anywhere
+else; correcting the legacy signal does **not** grant consent and does
+**not** create or alter a central preference; the deferred inbound-reply
+paths (§21.7/§21.9) remain deferred and untouched.
+
+### 21.12.14 Activation readiness
+
+This workflow is **not** inert behind a runtime flag — unlike the KVKK-HIGH-007
+central-consent rollout (§21.6–§21.9), it has no `COMMUNICATION_CONSENT_*`
+gate at all. Once merged and deployed, the management-only correction
+endpoint can immediately mutate `Patient.smsOptOut: true → false` and
+`Patient.smsOptOutAt → null`, and creates immutable
+`PatientLegacyConsentCorrection`/`AuditLog` records. Stated precisely, in four
+separate parts that must not be conflated:
+
+- **Code merge readiness:** Pending review and resolution of findings.
+- **Deployment readiness:** Separate from consent enforcement activation —
+  this migration and this API do not depend on, and are not gated by, any
+  `COMMUNICATION_CONSENT_*` flag.
+- **Legacy correction workflow activation:** Active immediately after
+  deployment for OWNER, ORG_ADMIN, and CLINIC_MANAGER; not controlled by a
+  `COMMUNICATION_CONSENT_*` feature flag.
+- **Consent-policy activation:** Reconciliation, audit logging, enforcement,
+  and production backfill (the separate KVKK-HIGH-007 rollout) remain
+  disabled and pending separate legal/operational approval — unaffected by
+  whether this workflow is deployed.

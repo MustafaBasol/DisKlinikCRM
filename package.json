@@ -13,7 +13,9 @@
     "test:pairing-poller": "tsx src/components/imaging/__tests__/pairingPoller.test.ts",
     "test:booking-widget-helpers": "tsx src/pages/__tests__/bookingWidgetHelpers.test.ts",
     "test:clinic-bulk-export-selection": "tsx src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
-    "test:communication-consent-matrix": "tsx src/components/__tests__/communicationConsentMatrixHelpers.test.ts"
+    "test:communication-consent-matrix": "tsx src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
+    "test:patient-detail-tabs-helpers": "tsx src/pages/__tests__/patientDetailTabsHelpers.test.ts",
+    "test:vitest": "vitest run"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.21",
@@ -35,17 +37,22 @@
     "recharts": "^3.9.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/cornerstone-core": "2.3.3",
     "@types/node": "20.19.43",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.5.2",
+    "jsdom": "^25.0.1",
     "postcss": "^8.5.16",
     "tailwindcss": "^3.4.13",
     "tsx": "4.22.4",
     "typescript": "^5.5.3",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vitest": "^2.1.9"
   },
   "overrides": {
     "cornerstone-wado-image-loader": {

@@ -87,13 +87,14 @@ Son güncelleme: 2026-07-19 (F0-010 — Queue and Transactional Outbox PoC Desig
 - **Evidence still needed:** PoC ölçümleri (özellikle deney 20-21, Postgres-outbox vs. BullMQ karşılaştırması); ölçülebilir Kafka tetikleyicisinin (bkz. [queue-outbox-poc-design.md §11](../architecture/queue-outbox-poc-design.md#11-kafka-trigger-objective-7)) karşılandığına dair kanıt (şu an yok, gözlemlenebilirlik eksik).
 
 ## ADR-008 — Object-storage abstraction
-- **Status:** `ACCEPTED_WITH_CONDITIONS` (F0-008, 2026-07-19 — pending external review)
+- **Status:** `ACCEPTED_WITH_CONDITIONS` (F0-008, 2026-07-19 — pending external review; conditions refined by F0-011, 2026-07-19)
 - **F0-008 review:** The existing provider-agnostic abstraction (`services/fileStorage.ts`) and tenant-scoped key convention (`buildStorageKey`) is affirmed as the pattern to build on. Provider/data-residency selection NEEDS EXTERNAL VENDOR/LEGAL DECISION; migration/lifecycle design DEFER to F0-011. No storage-key migration is authorized. Full ADR content: [adr-foundation-review.md §5.4](../architecture/adr-foundation-review.md#54-adr-008--object-storage-abstraction-accepted-with-conditions).
+- **F0-011 review:** Confirmed production is `LOCAL_VPS_STORAGE`, no S3 configured (R-029); the existing `fileStorage.ts` abstraction already supports 8 of the task's ~14 candidate operations, with `deleteObjects`/`copyObject`/`moveObject`/checksum/`listObjects`/multipart-abort/health-check named as the concrete gaps: [object-storage-backup-migration-design.md §6.1](../architecture/object-storage-backup-migration-design.md#61-what-already-exists-vs-what-this-design-adds). Object keys confirmed already PHI/PII-safe by construction (`buildStorageKey`, no patient name/TC kimlik/phone in keys). Produced a 5-category provider comparison (§13), a 5-option bucket-topology comparison with measurable dedicated-bucket triggers (§7.3, explicitly not defaulting to bucket-per-clinic), a 13-stage expand-migrate-contract migration design with a migration ledger field specification (§10, not implemented), and a 14-flow storage inventory (JSON). **No provider is selected, no migration is performed, no storage-key migration is authorized** — this review does not change ADR-008's status beyond refining its conditions with this evidence; the provider/data-residency decision remains external per F0-008's original marking.
 - **Purpose:** Dosya/görüntü depolama için sağlayıcı-bağımsız soyutlamaya ve sağlayıcı seçimine karar vermek.
 - **Decision required:** Sağlayıcı (S3-uyumlu vb.), veri yerleşimi (KVKK), anahtar şeması, migrasyon yolu.
 - **Phase:** F4
-- **Dependencies:** F0-011
-- **Evidence still needed:** Mevcut depolama kullanım envanteri; sağlayıcı analizi.
+- **Dependencies:** F0-011 (satisfied — design document exists, see F0-011 review above)
+- **Evidence still needed:** Sağlayıcı/veri-yerleşimi kararı için dış (hukuki/ticari) girdi — F0-011 bu kararı vermez, yalnızca girdi üretir.
 
 ## ADR-009 — AI Gateway
 - **Status:** `ACCEPTED_WITH_CONDITIONS` (F0-008, 2026-07-19 — pending external review)
@@ -132,13 +133,14 @@ Son güncelleme: 2026-07-19 (F0-010 — Queue and Transactional Outbox PoC Desig
 - **Evidence still needed:** Mevcut log/monitoring envanteri.
 
 ## ADR-013 — Backup, PITR, and DR
-- **Status:** `DEFERRED` (F0-008, 2026-07-19)
+- **Status:** `DEFERRED` → `NEEDS_POC` (F0-011, 2026-07-19)
 - **F0-008 review:** RPO/RTO targets and DR topology DEFER to F0-011. Retention-period components NEED EXTERNAL LEGAL DECISION (`docs/compliance/53§16`, `56§15`: clinical-image/consent retention explicitly pending legal counsel). Existing gaps (R-030/R-031/R-032, all `HIGH`) are not created or resolved by this review — see [adr-foundation-review.md §4](../architecture/adr-foundation-review.md#4-decision-matrix).
+- **F0-011 review:** Produced an 8-category backup/restore gap matrix (database, object storage, local filesystem-during-migration, config/secrets, deployment metadata, audit evidence, imaging/DICOM, export artifacts): [evidence/f0-011-backup-restore-gap-matrix.json](../architecture/evidence/f0-011-backup-restore-gap-matrix.json). Confirmed the single largest gap is category C/G (object storage and imaging/DICOM file-tree backup) — **no file-tree backup implementation was found in the inspected storage, backup, attachment, imaging, export, and job paths** (bounded finding; no repository-wide search was run — see [f0-011-backup-restore-gap-matrix.json](../architecture/evidence/f0-011-backup-restore-gap-matrix.json) GAP-C `evidence_class: NOT_FOUND_IN_BOUNDED_SCOPE`), distinct from and larger than the already-known database-backup gaps (R-030/R-031/R-032). Produced proposed (not authoritative) RPO/RTO targets requiring business approval: [object-storage-backup-migration-design.md §9.4](../architecture/object-storage-backup-migration-design.md#94-rpo-rto-and-other-proposals-business-approval-required-not-authoritative). Produced an 18-scenario restore-test specification covering deleted-attachment, imaging-study, full-DB, PITR, provider-outage, ransomware-style, and DB/object-state-mismatch recovery, including the specific KVKK question of anonymized-patient-metadata reappearance after a pre-anonymization restore: [f0-011-storage-backup-test-matrix.md](../architecture/f0-011-storage-backup-test-matrix.md), Experiments 25-35. **No backup configuration was changed, no restore was executed.** The retention-period legal-decision component named by F0-008 remains separately unmet.
 - **Purpose:** Yedekleme, point-in-time recovery ve felaket kurtarma stratejisine karar vermek.
 - **Decision required:** RPO/RTO hedefleri, yedek doğrulama (restore testi), DR topolojisi.
 - **Phase:** F4 / F11
 - **Dependencies:** ADR-008
-- **Evidence still needed:** Mevcut yedekleme durumunun kanıtı (şu an `UNVERIFIED`).
+- **Evidence still needed:** RPO/RTO hedefleri için iş onayı (F0-011 §9.4 öneri üretti, karar dış); saklama süresi bileşenleri için hukuki karar (F0-008'den beri açık); gelecekteki PoC'un kendisinin çalıştırılması (bu görev yalnızca tasarımdır, hiçbir deney yürütülmedi).
 
 ## ADR-014 — Feature flags, entitlements, and permissions
 - **Status:** `ACCEPTED` (F0-008, 2026-07-19 — pending external review)
