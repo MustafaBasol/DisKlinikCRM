@@ -1,5 +1,6 @@
 {
   "task": "F0-011-P1",
+  "correction_note": "2026-07-19, same-day correction: this inventory originally used a general authorization category, ALLOWED_NOW_NARROW_CORRECTIVE_FIX, for 15 files, and a merge_allowed_under_current_freeze field name that implied merge authorization. That exceeded F0-011-P1's documentation-only authority. The field has been renamed freeze_status_classification and revalued using the non-authorizing status model in KVKK_HIGH008_FREEZE_BOUNDARY.md section 2. No file in this inventory is authorized, accepted, or declared 'allowed now' for implementation, merge, or deployment purposes.",
   "generated_from": {
     "primary_tree_path": "D:\\Mustafa\\Siteler\\DisKlinikCRM",
     "primary_branch": "feature/kvkk-high008-legacy-consent-correction",
@@ -36,14 +37,15 @@
       "low": 20,
       "informational": 2
     },
-    "by_freeze_classification": {
-      "ALLOWED_NOW_DOCUMENTATION": 3,
-      "ALLOWED_NOW_TEST_ONLY": 10,
-      "ALLOWED_NOW_NARROW_CORRECTIVE_FIX": 15,
-      "BLOCKED_UNTIL_PR175_PRODUCTION_MIGRATION_VERIFIED": 1,
-      "AMBIGUOUS": 2
+    "by_freeze_status_classification": {
+      "DOCUMENTATION_ALLOWED": 3,
+      "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT": 10,
+      "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED": 15,
+      "MIGRATION_APPLICATION_BLOCKED": 1,
+      "AMBIGUOUS_PENDING_EXTERNAL_DECISION": 2
     },
-    "ambiguous_count": 2
+    "ambiguous_count": 2,
+    "note": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED files also all carry MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW (see each file's freeze_status_classification value); this is not a separate top-level bucket because it applies to the same 15 files, not an additional set."
   },
   "files": [
     {
@@ -62,7 +64,7 @@
       "dependency": "server/prisma/migrations/20260719155318_kvkk_high008_legacy_consent_correction/migration.sql (must match)",
       "status": "agent_completed; committed to branch; not merged; not applied to any production database",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "AMBIGUOUS — narrow/additive and does not match any of the 16 explicitly blocked categories in KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md section 3, but is also not literally covered by section 4's allowed-in-parallel list (which is documentation/design/PoC only, not implementation). See KVKK_HIGH008_FREEZE_BOUNDARY.md for the resolved classification."
+      "freeze_status_classification": "AMBIGUOUS_PENDING_EXTERNAL_DECISION — narrow/additive and does not match any of the 16 explicitly blocked categories in KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md section 3, but is also not literally covered by section 4's allowed-in-parallel list (which is documentation/design/PoC only, not implementation). This is an unresolved gap, not an authorization; see KVKK_HIGH008_FREEZE_BOUNDARY.md section 2 for the non-authorizing status model and section 3 for what must happen before this file's merge status can be resolved."
     },
     {
       "path": "server/prisma/migrations/20260719155318_kvkk_high008_legacy_consent_correction/migration.sql",
@@ -80,7 +82,7 @@
       "dependency": "server/prisma/schema.prisma",
       "status": "agent_completed; committed to branch; NOT applied to any database except the author's disposable local/CI test database (per test file requiring DATABASE_URL)",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "BLOCKED_UNTIL_PR175_PRODUCTION_MIGRATION_VERIFIED — KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md section 5 condition 3 (KVKK-HIGH-007's own migration confirmed applied in production) is unsatisfied; stacking a second KVKK-consent-adjacent migration before that is confirmed increases R-046 (migration deployed without rollback/tenant-impact verification = irreversible risk) exposure. This applies to production APPLICATION of the migration, not to merging the file into main."
+      "freeze_status_classification": "MIGRATION_APPLICATION_BLOCKED — KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md section 5 condition 3 (KVKK-HIGH-007's own migration confirmed applied in production) is unsatisfied; stacking a second KVKK-consent-adjacent migration before that is confirmed increases R-046 (migration deployed without rollback/tenant-impact verification = irreversible risk) exposure. This blocks production APPLICATION of the migration specifically. Merging this file into main (as part of PR #180) is a separate question, governed by MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW — not authorized by this inventory either."
     },
     {
       "path": "server/src/services/communicationConsent/legacyConsentCorrection.ts",
@@ -98,7 +100,7 @@
       "dependency": "server/prisma/schema.prisma, server/src/utils/auditLog.ts, server/src/routes/communicationPreferences.ts (sole caller)",
       "status": "agent_completed; unit/integration-tested per legacyConsentCorrection.test.ts (30 tests, NOT independently executed by F0-011-P1); committed; not merged; not deployed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX for code review/merge readiness (narrow, additive, single-purpose, no cross-domain reach, follows an existing codebase idiom for tenant-scoped race-safe updates). Production activation is a separate question — see KVKK_HIGH008_FREEZE_BOUNDARY.md."
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW — narrow, additive, single-purpose, no cross-domain reach, follows an existing codebase idiom for tenant-scoped race-safe updates, per read-only evidence. This is a finding, not acceptance: code review may proceed (REVIEW_ALLOWED), but merge and production activation are not authorized by this inventory — see KVKK_HIGH008_FREEZE_BOUNDARY.md."
     },
     {
       "path": "server/src/routes/communicationPreferences.ts",
@@ -116,7 +118,7 @@
       "dependency": "server/src/services/communicationConsent/legacyConsentCorrection.ts, server/src/schemas/index.ts, server/src/middleware/auth.ts",
       "status": "agent_completed; tested per legacyConsentCorrection.test.ts (NOT independently executed by F0-011-P1); committed; not merged; not deployed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX for merge readiness. The absence of a feature flag/kill switch is flagged as a deployment-readiness gap requiring explicit acceptance before production activation — see KVKK_HIGH008_FREEZE_BOUNDARY.md."
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW; DEPLOYMENT_BLOCKED — this is the sole activation entry point, and the absence of a feature flag/kill switch is flagged as an open deployment-readiness gap requiring explicit human/program acceptance before production activation — see KVKK_HIGH008_FREEZE_BOUNDARY.md section 4."
     },
     {
       "path": "server/src/schemas/index.ts",
@@ -134,7 +136,7 @@
       "dependency": "server/src/routes/communicationPreferences.ts",
       "status": "agent_completed; committed; not merged",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "server/src/tests/legacyConsentCorrection.test.ts",
@@ -152,7 +154,7 @@
       "dependency": "server/.env.test-kvkk008 (local run convenience, untracked), server/src/services/communicationConsent/legacyConsentCorrection.ts, server/src/routes/communicationPreferences.ts",
       "status": "agent_completed (written); reportedly passing per PR #180 test-plan checklist ('30 tests'); NOT independently executed by F0-011-P1; no CI evidence exists (TEST_OWNERSHIP.md: only 1 CI workflow exists, scoped to windows-bridge/imaging paths only)",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT — may be run/extended against a disposable local or CI database; does not itself constitute independent test execution until actually run by a party independent of the branch author."
     },
     {
       "path": "src/components/LegacyConsentCorrectionModal.tsx",
@@ -170,7 +172,7 @@
       "dependency": "src/services/api.ts",
       "status": "agent_completed; covered by CommunicationPreferencesPanel.vitest.test.tsx (part of 26 frontend Vitest tests per PR #180); NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/components/LegacyConsentCorrectionHistory.tsx",
@@ -188,7 +190,7 @@
       "dependency": "src/services/api.ts",
       "status": "agent_completed; NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/components/CommunicationPreferencesPanel.tsx",
@@ -206,7 +208,7 @@
       "dependency": "src/components/communicationConsentMatrixHelpers.ts, src/components/LegacyConsentCorrectionModal.tsx, src/components/LegacyConsentCorrectionHistory.tsx",
       "status": "agent_completed; covered by CommunicationPreferencesPanel.vitest.test.tsx; NOT independently executed by F0-011-P1",
       "confidence": "medium — this file mixes 3 logically separate changes under one diff, reducing confidence that its full blast radius was exhaustively reviewed in a single pass",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX — none of the 3 bundled changes touch schema/migration/tenant-scoping/cross-domain contracts; recommend the PR description continue to call out the 3 pieces separately (it already does) so reviewers can evaluate each on its own risk."
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW — none of the 3 bundled changes touch schema/migration/tenant-scoping/cross-domain contracts per read-only evidence; recommend the PR description continue to call out the 3 pieces separately (it already does) so reviewers can evaluate each on its own risk. This recommendation does not constitute acceptance."
     },
     {
       "path": "src/components/CommunicationPreferencesPanel.vitest.test.tsx",
@@ -224,7 +226,7 @@
       "dependency": "vitest.config.ts, src/test/setup.ts",
       "status": "agent_completed (written); reportedly passing per PR #180 ('26 tests' aggregate for this + PatientDetailTabs); NOT independently executed by F0-011-P1; no CI evidence",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "src/components/PatientDetailTabs.tsx",
@@ -242,7 +244,7 @@
       "dependency": "src/pages/patientDetailTabsHelpers.ts",
       "status": "agent_completed; covered by PatientDetailTabs.vitest.test.tsx (14 tests per PR #180); manually verified per PR #180 test plan (Playwright, multiple viewport widths); NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX — pure UI/accessibility change, no schema/tenant/consent semantics involved; recommend noting in the PR that this is separable from the KVKK-HIGH-008 scope proper."
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW — pure UI/accessibility change, no schema/tenant/consent semantics involved per read-only evidence; recommend noting in the PR that this is separable from the KVKK-HIGH-008 scope proper. This recommendation does not constitute acceptance."
     },
     {
       "path": "src/pages/patientDetailTabsHelpers.ts",
@@ -260,7 +262,7 @@
       "dependency": "src/components/PatientDetailTabs.tsx, src/pages/PatientDetail.tsx",
       "status": "agent_completed; covered by src/pages/__tests__/patientDetailTabsHelpers.test.ts; NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/pages/__tests__/patientDetailTabsHelpers.test.ts",
@@ -278,7 +280,7 @@
       "dependency": "src/pages/patientDetailTabsHelpers.ts",
       "status": "agent_completed (written); NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "src/components/PatientDetailTabs.vitest.test.tsx",
@@ -296,7 +298,7 @@
       "dependency": "vitest.config.ts, src/test/setup.ts",
       "status": "agent_completed (written); reportedly passing per PR #180; NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "src/pages/PatientDetail.tsx",
@@ -314,7 +316,7 @@
       "dependency": "src/components/CommunicationPreferencesPanel.tsx, src/components/PatientDetailTabs.tsx",
       "status": "agent_completed; NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/services/api.ts",
@@ -332,7 +334,7 @@
       "dependency": "server/src/routes/communicationPreferences.ts",
       "status": "agent_completed; NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/components/communicationConsentMatrixHelpers.ts",
@@ -350,7 +352,7 @@
       "dependency": "src/components/CommunicationPreferencesPanel.tsx",
       "status": "agent_completed; covered by the existing __tests__/communicationConsentMatrixHelpers.test.ts; NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
@@ -368,7 +370,7 @@
       "dependency": "src/components/communicationConsentMatrixHelpers.ts",
       "status": "agent_completed (extended); NOT independently executed by F0-011-P1",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "src/locales/de/communicationConsent.json",
@@ -386,7 +388,7 @@
       "dependency": "src/components/CommunicationPreferencesPanel.tsx, LegacyConsentCorrectionModal.tsx, LegacyConsentCorrectionHistory.tsx",
       "status": "agent_completed; NOT independently executed/reviewed key-by-key by F0-011-P1",
       "confidence": "medium — key-level diff not read in full; only stat-level change (+/-67 lines) confirmed",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/locales/en/communicationConsent.json",
@@ -404,7 +406,7 @@
       "dependency": "same as de/communicationConsent.json",
       "status": "agent_completed; NOT independently executed/reviewed key-by-key",
       "confidence": "medium",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/locales/fr/communicationConsent.json",
@@ -422,7 +424,7 @@
       "dependency": "same as de/communicationConsent.json",
       "status": "agent_completed; NOT independently executed/reviewed key-by-key",
       "confidence": "medium",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "src/locales/tr/communicationConsent.json",
@@ -440,7 +442,7 @@
       "dependency": "same as de/communicationConsent.json",
       "status": "agent_completed; NOT independently executed/reviewed key-by-key",
       "confidence": "medium",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_NARROW_CORRECTIVE_FIX"
+      "freeze_status_classification": "IMPLEMENTATION_ACCEPTANCE_UNVERIFIED; MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW"
     },
     {
       "path": "vitest.config.ts",
@@ -458,7 +460,7 @@
       "dependency": "src/test/setup.ts, package.json devDependencies",
       "status": "agent_completed; committed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "src/test/setup.ts",
@@ -476,7 +478,7 @@
       "dependency": "vitest.config.ts",
       "status": "agent_completed; committed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "package.json",
@@ -494,7 +496,7 @@
       "dependency": "package-lock.json",
       "status": "agent_completed; committed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "package-lock.json",
@@ -512,7 +514,7 @@
       "dependency": "package.json",
       "status": "agent_completed; committed",
       "confidence": "medium — not independently audited for supply-chain risk beyond confirming it corresponds to the package.json diff",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "server/package.json",
@@ -530,7 +532,7 @@
       "dependency": "server/src/tests/legacyConsentCorrection.test.ts",
       "status": "agent_completed; committed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_TEST_ONLY"
+      "freeze_status_classification": "TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT"
     },
     {
       "path": "docs/compliance/56-kvkk-communication-preference-and-consent-management.md",
@@ -548,7 +550,7 @@
       "dependency": "docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md",
       "status": "agent_completed (document header still self-declares 'in progress, not merged, not deployed, not production-verified, not legally approved')",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_DOCUMENTATION"
+      "freeze_status_classification": "DOCUMENTATION_ALLOWED"
     },
     {
       "path": "docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md",
@@ -566,7 +568,7 @@
       "dependency": "docs/compliance/56-kvkk-communication-preference-and-consent-management.md",
       "status": "agent_completed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_DOCUMENTATION"
+      "freeze_status_classification": "DOCUMENTATION_ALLOWED"
     },
     {
       "path": "docs/program/evidence/F0-007_kvkk_work_inventory.json",
@@ -584,7 +586,7 @@
       "dependency": "docs/program/evidence/F0-007_KVKK_BASELINE_EVIDENCE.md",
       "status": "agent_completed",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "ALLOWED_NOW_DOCUMENTATION — note: this file being edited by the KVKK-HIGH-008 author, inside the primary tree, ahead of an independent F0-series task reviewing it, is itself a minor instance of the program's known self-reference-lag pattern; F0-011-P1 treats its content as unaccepted author-asserted evidence, not independently verified."
+      "freeze_status_classification": "DOCUMENTATION_ALLOWED — note: this file being edited by the KVKK-HIGH-008 author, inside the primary tree, ahead of an independent F0-series task reviewing it, is itself a minor instance of the program's known self-reference-lag pattern; F0-011-P1 treats its content as unaccepted author-asserted evidence, not independently verified."
     },
     {
       "path": "server/.env.test-kvkk008",
@@ -602,7 +604,7 @@
       "dependency": "server/src/tests/legacyConsentCorrection.test.ts",
       "status": "not committed; not part of PR #180; hygiene gap identified — server/.gitignore's `.env` pattern only matches a file literally named `.env`, so this file is NOT covered and would be swept up by a broad `git add -A`",
       "confidence": "high",
-      "merge_allowed_under_current_freeze": "AMBIGUOUS — should never be committed at all; not a freeze-boundary question but a hygiene finding for the branch author to address (either delete it, rename to a `.env.test*`-covering gitignore pattern, or add an explicit ignore rule) before any broad `git add`."
+      "freeze_status_classification": "AMBIGUOUS_PENDING_EXTERNAL_DECISION — should never be committed at all; not a freeze-boundary question but a hygiene finding for the branch author to address (either delete it, rename to a `.env.test*`-covering gitignore pattern, or add an explicit ignore rule) before any broad `git add`."
     }
   ]
 }

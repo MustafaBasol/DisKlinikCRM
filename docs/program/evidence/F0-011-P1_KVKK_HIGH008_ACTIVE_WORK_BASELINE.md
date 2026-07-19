@@ -124,7 +124,7 @@ Confirmed by direct code read (not merely by commit message) that these two piec
 1. **Consent-action-modal validation/accessibility UX rework** (commit `f9f9214`, inside `CommunicationPreferencesPanel.tsx`) — extracts `computeConsentActionValidation` into `communicationConsentMatrixHelpers.ts`, replaces a silently-disabled submit button with focus-and-scroll-to-first-invalid-field behavior, adds `aria-invalid`/`aria-describedby`, dialog semantics modeled on the existing `ConfirmDialog.tsx`. This is a **behavior-visible change to already-merged, pre-existing functionality** (the grant/deny/withdraw modal), not new functionality — worth explicit reviewer attention for that reason alone.
 2. **`PatientDetail` tab-overflow/accessibility fix, "F-2"** (commit `2f92fdf`) — new `PatientDetailTabs.tsx` + `patientDetailTabsHelpers.ts`, URL-backed active-tab state via `useSearchParams`, keyboard nav, scroll chevrons. Affects all 13 tabs on the page, not just the communication tab.
 
-Neither touches schema, migration, tenant scoping, or consent semantics. Both are classified `ALLOWED_NOW_NARROW_CORRECTIVE_FIX` in the file inventory. **Recommendation** (non-binding, for the branch author/reviewer, not an instruction this task can issue): the PR description already separates these three pieces in prose; keeping that separation explicit in review reduces the risk of one piece's review attention diluting the others'.
+Neither touches schema, migration, tenant scoping, or consent semantics. Both are classified `IMPLEMENTATION_ACCEPTANCE_UNVERIFIED` / `MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW` in the file inventory — narrow and additive per read-only evidence, but not accepted or merge-authorized by this task. **Recommendation** (non-binding, for the branch author/reviewer, not an instruction this task can issue): the PR description already separates these three pieces in prose; keeping that separation explicit in review reduces the risk of one piece's review attention diluting the others'.
 
 ## 7. Test evidence
 
@@ -181,28 +181,32 @@ Checked against the task's specific risk checklist:
 
 ## 10. Freeze-boundary classification summary
 
+**Correction note (2026-07-19, same day):** This section originally used a general authorization category, `ALLOWED_NOW_NARROW_CORRECTIVE_FIX`, for 15 files and implied that classification permitted merge-readiness work. That exceeded this task's documentation-only authority. The table below replaces it with the non-authorizing status model defined in `KVKK_HIGH008_FREEZE_BOUNDARY.md` §2. No file in this branch is classified as authorized, accepted, or "allowed now" for implementation purposes.
+
 Full per-file classification is in `f0-011-p1-kvkk-high008-file-inventory.json`. Aggregate:
 
 | Classification | Count | What it covers |
 |---|---|---|
-| `ALLOWED_NOW_DOCUMENTATION` | 3 | Compliance docs, F0-007 evidence JSON |
-| `ALLOWED_NOW_TEST_ONLY` | 10 | All test files + test/build tooling config (vitest config, setup, package manifests) |
-| `ALLOWED_NOW_NARROW_CORRECTIVE_FIX` | 15 | Runtime service/route/schema code, frontend components, i18n, the two bundled UI fixes |
-| `BLOCKED_UNTIL_PR175_PRODUCTION_MIGRATION_VERIFIED` | 1 | The new migration's *production application* specifically (not its existence in the branch) |
-| `AMBIGUOUS` | 2 | `schema.prisma` (see below) and the untracked `.env.test-kvkk008` hygiene gap |
+| `DOCUMENTATION_ALLOWED` | 3 | Compliance docs, F0-007 evidence JSON |
+| `TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT` | 10 | All test files + test/build tooling config (vitest config, setup, package manifests) — running/extending tests against a disposable local or CI database only, not any shared or production database |
+| `IMPLEMENTATION_ACCEPTANCE_UNVERIFIED` (+ `MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW`) | 15 | Runtime service/route/schema-validation code, frontend components, i18n, the two bundled UI fixes — narrow and additive per read-only evidence, but not accepted, cleared, or merge-authorized |
+| `MIGRATION_APPLICATION_BLOCKED` | 1 | The new migration's *production application* specifically (not its existence in the branch, which itself remains subject to `MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW`) |
+| `AMBIGUOUS_PENDING_EXTERNAL_DECISION` | 2 | `schema.prisma` (see below) and the untracked `.env.test-kvkk008` hygiene gap |
 
-See `KVKK_HIGH008_FREEZE_BOUNDARY.md` (companion document) for the full reasoning behind these classifications, in particular why the existing `KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` does not cleanly cover this branch either as "blocked" (§3's 16 items) or as "allowed in parallel" (§4's design/docs-only list) — KVKK-HIGH-008 is real, narrow, additive implementation work that falls **between** those two enumerated categories, which is why `schema.prisma` is marked `AMBIGUOUS` at the file level pending the explicit resolution in that companion document.
+See `KVKK_HIGH008_FREEZE_BOUNDARY.md` (companion document) for the full reasoning behind these classifications, in particular why the existing `KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` does not cleanly cover this branch either as "blocked" (§3's 16 items) or as "allowed in parallel" (§4's design/docs-only list) — KVKK-HIGH-008 is real, narrow, additive implementation work that falls **between** those two enumerated categories. That gap is a finding requiring external review to close (§3 of the companion document), not a category this task can resolve by classification. `schema.prisma` is marked `AMBIGUOUS_PENDING_EXTERNAL_DECISION` at the file level for the same reason.
 
 ## 11. What may safely continue vs. what is blocked
 
-**May safely continue now, under this task's read-only findings:**
-- Code review of PR #180 (no CI, no reviews yet — human/agent review can proceed).
-- Adding/extending automated tests (backend or frontend).
+**`REVIEW_ALLOWED` / `TEST_EXECUTION_ALLOWED_IN_ISOLATED_ENVIRONMENT` / `DOCUMENTATION_ALLOWED`, under this task's read-only findings:**
+- Code review of PR #180 (no CI, no reviews yet — human/agent review can proceed). This is review, not acceptance.
+- Adding/extending automated tests (backend or frontend), executed against a disposable local or CI database only.
 - Documentation completeness fixes (e.g., adding KVKK-HIGH-008 as a numbered row in `KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md`).
-- Rebasing the branch onto current `origin/main` (3 commits, all docs/design/security-verification-only, no expected conflicts) — recommended before merge, not performed by this task.
-- Merging PR #180 into `main` **is a program/user decision**, not pre-authorized or blocked by this document alone; see §12 for what must happen first per program convention (external review, per `NORAMEDI_MASTER_TRACKER.md` §2.3: this task cannot itself assign `MERGED`).
+- Rebasing the branch onto current `origin/main` (3 commits, all docs/design/security-verification-only, no expected conflicts) — recommended before merge, not performed by this task, and not itself a merge-readiness clearance.
 
-**Blocked pending independent evidence:**
+**`MERGE_REQUIRES_EXTERNAL_ARCHITECTURE_REVIEW` — not authorized by this document:**
+- Merging PR #180 into `main` is a program/user decision requiring external architecture review and the confirmations in `KVKK_HIGH008_FREEZE_BOUNDARY.md` §3(a–f); it is neither pre-authorized nor blocked outright by this document alone. See §12 for what must happen first per program convention (external review, per `NORAMEDI_MASTER_TRACKER.md` §2.3: this task cannot itself assign `MERGED`).
+
+**`DEPLOYMENT_BLOCKED` / `MIGRATION_APPLICATION_BLOCKED` — blocked pending independent evidence:**
 - **Production deployment of any part of this branch** — blocked pending resolution of the feature-flag/kill-switch design question (§8) and pending KVKK-HIGH-007's own production-migration confirmation (freeze-boundary §5 condition 3), consistent with R-046.
 - **Applying the new migration to any shared/production database** — same blockers.
 - Any work matching `KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3's 16-item list remains blocked regardless of this branch (unaffected by KVKK-HIGH-008).
