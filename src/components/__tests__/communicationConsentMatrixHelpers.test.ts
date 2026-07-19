@@ -16,6 +16,10 @@ import {
   buildMatrixIndex,
   matrixKey,
   validateBulkSelection,
+  PURPOSE_GROUPS,
+  computeConsentSummary,
+  shouldShowLegacySignals,
+  isCellActionable,
   type MatrixEntry,
 } from '../communicationConsentMatrixHelpers';
 
@@ -101,6 +105,82 @@ async function main() {
       preference: { id: '1', status: 'denied', effectiveAt: '', grantedAt: null, withdrawnAt: null, source: 'staff', evidenceType: null, noticeVersion: null, actorUserId: null, actorPlatformAdminId: null, updatedAt: '' },
     }));
     assert.equal(variant, 'denied');
+  });
+
+  await test('legacyConflict always wins, even over a granted preference — never merged with allowed/denied/withdrawn/unknown', () => {
+    const variant = resolveCellVariant(makeEntry({
+      preference: { id: '1', status: 'granted', effectiveAt: '', grantedAt: '', withdrawnAt: null, source: 'staff', evidenceType: null, noticeVersion: null, actorUserId: null, actorPlatformAdminId: null, updatedAt: '' },
+      legacyConflict: { detected: true, reasonCode: 'legacy_central_conflict' },
+    }));
+    assert.equal(variant, 'conflict');
+  });
+
+  await test('legacyConflict also wins over a policy-exception purpose', () => {
+    const variant = resolveCellVariant(makeEntry({
+      isPolicyException: true,
+      legacyConflict: { detected: true, reasonCode: 'legacy_central_conflict' },
+    }));
+    assert.equal(variant, 'conflict');
+  });
+
+  section('PURPOSE_GROUPS — every purpose appears in exactly one of the 6 required categories');
+
+  await test('every COMMUNICATION_PURPOSES value appears in exactly one group', () => {
+    const seen = new Map<string, number>();
+    for (const group of PURPOSE_GROUPS) {
+      for (const purpose of group.purposes) {
+        seen.set(purpose, (seen.get(purpose) ?? 0) + 1);
+      }
+    }
+    for (const purpose of COMMUNICATION_PURPOSES) {
+      assert.equal(seen.get(purpose), 1, `${purpose} should appear in exactly one group, got ${seen.get(purpose) ?? 0}`);
+    }
+    assert.equal(PURPOSE_GROUPS.length, 6);
+  });
+
+  section('computeConsentSummary — the top summary bar data source');
+
+  await test('counts allowed/deniedOrWithdrawn/unknown/notRequired/conflict correctly and exhaustively', () => {
+    const matrix: MatrixEntry[] = [
+      makeEntry({ channel: 'sms', purpose: 'marketing', preference: { id: '1', status: 'granted', effectiveAt: '', grantedAt: '', withdrawnAt: null, source: 'staff', evidenceType: null, noticeVersion: null, actorUserId: null, actorPlatformAdminId: null, updatedAt: '' } }),
+      makeEntry({ channel: 'sms', purpose: 'campaign', preference: { id: '2', status: 'denied', effectiveAt: '', grantedAt: null, withdrawnAt: null, source: 'staff', evidenceType: null, noticeVersion: null, actorUserId: null, actorPlatformAdminId: null, updatedAt: '' } }),
+      makeEntry({ channel: 'sms', purpose: 'survey', preference: { id: '3', status: 'withdrawn', effectiveAt: '', grantedAt: null, withdrawnAt: '', source: 'staff', evidenceType: null, noticeVersion: null, actorUserId: null, actorPlatformAdminId: null, updatedAt: '' } }),
+      makeEntry({ channel: 'sms', purpose: 'recall', preference: null }),
+      makeEntry({ channel: 'sms', purpose: 'transactional', isPolicyException: true, preference: null }),
+      makeEntry({
+        channel: 'sms', purpose: 'operational',
+        preference: { id: '4', status: 'granted', effectiveAt: '', grantedAt: '', withdrawnAt: null, source: 'staff', evidenceType: null, noticeVersion: null, actorUserId: null, actorPlatformAdminId: null, updatedAt: '' },
+        legacyConflict: { detected: true, reasonCode: 'legacy_central_conflict' },
+      }),
+    ];
+    const summary = computeConsentSummary(matrix);
+    assert.deepEqual(summary, { allowed: 1, deniedOrWithdrawn: 2, unknown: 1, notRequired: 1, conflict: 1 });
+  });
+
+  section('shouldShowLegacySignals — authorized-role-only disclosure, never a second "current state"');
+
+  await test('hidden for non-canManage roles even when legacy data is present', () => {
+    assert.equal(shouldShowLegacySignals(false, { communicationConsent: true, marketingConsent: false, smsOptOut: false }), false);
+  });
+
+  await test('hidden when no legacy data was passed, even for canManage roles', () => {
+    assert.equal(shouldShowLegacySignals(true, undefined), false);
+    assert.equal(shouldShowLegacySignals(true, null), false);
+  });
+
+  await test('shown only for canManage roles with legacy data present', () => {
+    assert.equal(shouldShowLegacySignals(true, { communicationConsent: true, marketingConsent: false, smsOptOut: false }), true);
+  });
+
+  section('isCellActionable — not-required (policy-exception) cells stay non-actionable regardless of role');
+
+  await test('policy-exception cells are never actionable, even for canManage roles', () => {
+    assert.equal(isCellActionable(true, { isPolicyException: true }), false);
+  });
+
+  await test('non-exception cells are actionable only for canManage roles', () => {
+    assert.equal(isCellActionable(false, { isPolicyException: false }), false);
+    assert.equal(isCellActionable(true, { isPolicyException: false }), true);
   });
 
   section('buildMatrixIndex');

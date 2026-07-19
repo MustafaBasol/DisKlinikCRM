@@ -32,7 +32,41 @@
     "denied": "Reddedildi",
     "withdrawn": "Geri Çekildi",
     "unknown": "Bilinmiyor",
-    "not_required": "Gerekli Değil"
+    "not_required": "Gerekli Değil",
+    "conflict": "Manuel İnceleme Gerekli"
+  },
+  "summary": {
+    "allowed": "İzin Verilen",
+    "deniedOrWithdrawn": "Reddedilen / Geri Çekilen",
+    "unknown": "Bilinmiyor",
+    "notRequired": "Gerekli Değil",
+    "conflict": "Çelişki — İnceleme Gerekli"
+  },
+  "purposeGroups": {
+    "essential": "Zorunlu / Operasyonel",
+    "appointment": "Randevu İletişimi",
+    "treatmentFollowup": "Tedavi Takibi",
+    "recall": "Hatırlatma / Yeniden Kazanım",
+    "marketing": "Pazarlama / Kampanya",
+    "survey": "Anket / Bilgilendirme"
+  },
+  "help": {
+    "unknownNotConsent": "\"Bilinmiyor\" onay anlamına gelmez — kayıtlı açık bir tercih bulunmadığını gösterir.",
+    "deniedVsWithdrawn": "\"Reddedildi\" ve \"Geri Çekildi\" farklı geçmiş durumlardır: geri çekilen bir izin, daha önce verilmiş bir yetkinin sonradan kaldırıldığı anlamına gelir.",
+    "notRequiredMeaning": "\"Gerekli Değil\" teknik bir politika istisnasıdır (ör. işlemsel/yasal bildirim) — genel pazarlama yetkisi anlamına gelmez."
+  },
+  "conflict": {
+    "modalNote": "Bu hücrede eski bir kısıtlayıcı sinyal (ör. SMS çıkışı) ile merkezi \"izin verildi\" kaydı çelişiyor. Gönderim engellenir. \"Reddet\" veya \"Geri Çek\" seçimi bu çelişkiyi ÇÖZMEZ — yalnızca eski kısıtlayıcı sinyali kabul ederek merkezi kaydı onunla uyumlu hale getirir. Eski sinyalin hatalı/güncel olmadığını düşünüyorsanız, bunu düzeltecek bir işlev şu anda bulunmamaktadır; bu durum ayrı bir takip konusu olarak kaydedilmelidir."
+  },
+  "legacySignals": {
+    "title": "Eski Kayıt Sinyalleri",
+    "disclaimer": "Bu değerler eski (migrasyon öncesi) alanlardır ve mevcut onay durumunu YANSITMAZ. Güncel ve yetkili kaynak yukarıdaki merkezi tercih matrisidir.",
+    "communicationConsent": "İletişim İzni (eski alan)",
+    "marketingConsent": "Pazarlama İzni (eski alan)",
+    "smsOptOut": "SMS Çıkışı (eski alan)"
+  },
+  "export": {
+    "explanation": "Dışa aktarma, bu hasta için mevcut tercih durumunu ve tüm geçmiş kayıtlarını JSON olarak indirir. Gizli/dahili alanlar (ör. IP/UA hash'leri ham haliyle değil) dahil edilmez."
   },
   "actions": {
     "export": "Kanıtı Dışa Aktar",
@@ -41,7 +75,13 @@
     "withdraw": "Geri Çek",
     "reset": "Bilinmiyor Durumuna Sıfırla",
     "cancel": "İptal",
-    "confirm": "Onayla"
+    "confirm": "Onayla",
+    "manage": "Yönet",
+    "manageTitle": "{{channel}} / {{purpose}} — İşlem Seç",
+    "chooseAction": "Bir işlem seçin",
+    "groupedView": "Gruplu Görünüm",
+    "matrixView": "Matris Görünümü",
+    "viewHistory": "Geçmişi Görüntüle"
   },
   "confirm": {
     "grantTitle": "{{channel}} / {{purpose}} için izin verilsin mi?",
@@ -84,8 +124,17 @@
   },
   "history": {
     "title": "{{channel}} / {{purpose}} Geçmişi",
+    "allTitle": "Tüm Onay Geçmişi",
     "empty": "Henüz bir kayıt yok.",
-    "initial": "Kayıt yok"
+    "initial": "Kayıt yok",
+    "filters": {
+      "toggle": "Filtreleri Göster/Gizle",
+      "anyChannel": "Tüm Kanallar",
+      "anyPurpose": "Tüm Amaçlar",
+      "anyStatus": "Tüm Durumlar",
+      "anySource": "Tüm Kaynaklar",
+      "apply": "Filtrele"
+    }
   },
   "errors": {
     "loadFailed": "İletişim tercihleri yüklenemedi.",

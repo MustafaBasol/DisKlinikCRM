@@ -32,7 +32,41 @@
     "denied": "Denied",
     "withdrawn": "Withdrawn",
     "unknown": "Unknown",
-    "not_required": "Not Required"
+    "not_required": "Not Required",
+    "conflict": "Manual Review Required"
+  },
+  "summary": {
+    "allowed": "Granted",
+    "deniedOrWithdrawn": "Denied / Withdrawn",
+    "unknown": "Unknown",
+    "notRequired": "Not Required",
+    "conflict": "Conflict — Review Needed"
+  },
+  "purposeGroups": {
+    "essential": "Essential / Operational",
+    "appointment": "Appointment Communication",
+    "treatmentFollowup": "Treatment Follow-up",
+    "recall": "Recall / Reactivation",
+    "marketing": "Marketing / Campaigns",
+    "survey": "Surveys / Informational"
+  },
+  "help": {
+    "unknownNotConsent": "\"Unknown\" is not consent — it means no explicit recorded preference exists.",
+    "deniedVsWithdrawn": "\"Denied\" and \"Withdrawn\" are different historical states: withdrawn means a previously recorded authorization was later withdrawn.",
+    "notRequiredMeaning": "\"Not Required\" is a technical policy exception (e.g. transactional/legal notice) — not a general marketing authorization."
+  },
+  "conflict": {
+    "modalNote": "A stale legacy restrictive signal (e.g. SMS opt-out) disagrees with an explicit central \"granted\" record for this cell. Sending is blocked. Choosing \"Deny\" or \"Withdraw\" does NOT resolve this conflict — it only accepts the restrictive legacy signal, bringing the central record into agreement with it. If you believe the legacy signal itself is stale, there is currently no supported way to correct it — this should be logged as a separate follow-up."
+  },
+  "legacySignals": {
+    "title": "Legacy Signal",
+    "disclaimer": "These are legacy (pre-migration) fields and do NOT reflect the current consent status. The central preference matrix above is the current, authoritative source.",
+    "communicationConsent": "Communication Consent (legacy field)",
+    "marketingConsent": "Marketing Consent (legacy field)",
+    "smsOptOut": "SMS Opt-out (legacy field)"
+  },
+  "export": {
+    "explanation": "Export downloads the current preference state and full history for this patient as JSON. Secret/internal-only fields (e.g. raw IP/UA hashes) are never included."
   },
   "actions": {
     "export": "Export Evidence",
@@ -41,7 +75,13 @@
     "withdraw": "Withdraw",
     "reset": "Reset to Unknown",
     "cancel": "Cancel",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "manage": "Manage",
+    "manageTitle": "{{channel}} / {{purpose}} — Choose an Action",
+    "chooseAction": "Choose an action",
+    "groupedView": "Grouped View",
+    "matrixView": "Matrix View",
+    "viewHistory": "View History"
   },
   "confirm": {
     "grantTitle": "Grant consent for {{channel}} / {{purpose}}?",
@@ -84,8 +124,17 @@
   },
   "history": {
     "title": "{{channel}} / {{purpose}} History",
+    "allTitle": "Full Consent History",
     "empty": "No history yet.",
-    "initial": "No record"
+    "initial": "No record",
+    "filters": {
+      "toggle": "Show/hide filters",
+      "anyChannel": "Any channel",
+      "anyPurpose": "Any purpose",
+      "anyStatus": "Any status",
+      "anySource": "Any source",
+      "apply": "Filter"
+    }
   },
   "errors": {
     "loadFailed": "Failed to load communication preferences.",
