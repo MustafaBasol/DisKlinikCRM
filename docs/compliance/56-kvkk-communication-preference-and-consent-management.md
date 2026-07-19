@@ -755,3 +755,348 @@ safe and leaves the tables unused but harmless.
 - Confirm `COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED` is `false` (or
   unset) — i.e. confirm this PR changed nothing observable in production
   yet.
+
+## 21. KVKK-HIGH-007 follow-up: legacy/central reconciliation, audit-mode readiness, UX hardening
+
+Branch `feature/kvkk-high007-consent-reconciliation-ux`. This follow-up does
+**not** enable enforcement, the new reconciliation flag, or audit logging in
+any deployed environment, and does not execute the production backfill. It
+closes the operational gaps §6–§9 above left open: the legacy fields still
+actively gate SMS/recall independently of the central system (§21.1), the
+matrix endpoint re-queries the database per cell (§21.4), and the production
+"Onaylar ve Kaynak" sidebar card contradicted the new matrix (§21.6).
+
+### 21.1 Legacy-field ownership map (confirmed by direct code reading)
+
+| Field/model | Current meaning | Written by | Read by | Classification | Can disagree with central? |
+|---|---|---|---|---|---|
+| `Patient.communicationConsent` | General "may we contact" boolean, default `false` | Staff CRUD (`patients.ts`), auto-`true` on approved public-booking signup, auto-`false` on WhatsApp/Instagram auto-created patients | `evaluateSmsConsent()` (SMS gate, all non-marketing purposes), `recallCandidateService.ts` (recall drafting) | Legacy, **actively enforced**, no evidence trail | **Yes** — was structurally unable to see an explicit central grant at all before this PR (see §21.2) |
+| `Patient.marketingConsent` | Marketing-specific SMS boolean, default `false` | Staff CRUD | `evaluateSmsConsent()` (marketing purpose only) | Legacy, actively enforced, no evidence trail | Yes — same gap |
+| `Patient.smsOptOut` / `smsOptOutAt` | Hard SMS opt-out | **No write path anywhere in the app** — dormant; only `backfillCommunicationPreferences.ts` reads it | `evaluateSmsConsent()` (hard block, checked first), the backfill script | Legacy, dormant, migration-signal only | Yes — a stale, uncorrectable hard veto if it ever disagrees with an explicit central grant (see §21.3, `legacy_central_conflict`) |
+| `ChannelConsentLog` | WhatsApp/Instagram inbound-reply KVKK Art.5 processing consent (accept/decline), evidenced (`consentTextVersion`/`consentTextSnapshot`) | `channelConsentGate.ts`, called from the Evolution/Meta WhatsApp and Instagram inbound flows | Same gate, before auto-creating a patient/appointment-request/contact | Legacy, **actively enforced**, evidence-grade, provider-specific | No central equivalent — deliberately out of scope (different purpose/lifecycle); keyed by raw `contactIdentifier`, not `patientId`, so it is never joined against `Patient`/`PatientCommunicationPreference` (§21.5) |
+| Meta 24-hour messaging window | Platform delivery-mechanism rule (template vs. free text) | N/A — **no backing data model exists anywhere in the codebase** | N/A | Not a consent model; a documented platform constraint only | N/A |
+
+Recommended target state (not implemented in this PR — see §21.9): once
+enough patients have real central evidence, retire the SMS/recall legacy
+gate's independent authority in favor of the central system exclusively;
+until then, the reconciliation resolver (§21.2) is the bridge. `smsOptOut`
+has no supported write path today; adding one is a separate, larger feature
+(a legacy-field correction workflow), not a "delete the dead field" cleanup,
+since it is still read at send time.
+
+### 21.2 Dual-gate reconciliation — decision table and orchestration function
+
+`smsService.ts` and `recallCandidateService.ts` each ran their own legacy
+gate completely independently of the central decision service — the legacy
+gate ran first, unconditionally, and returned immediately on failure, so an
+explicit central `granted` row had **zero effect** on either sender. New
+single orchestration point,
+`server/src/services/communicationConsent/legacyReconciliationResolver.ts`
+(`resolveCommunicationConsent`), gated by a new, independent, default-`false`
+flag `COMMUNICATION_CONSENT_LEGACY_RECONCILIATION_ENABLED` (separate from
+`COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED` — that flag continues to govern
+only the channels that never had a legacy gate). Both senders now call this
+one function instead of chaining two independent checks:
+
+| Scenario | Reconciliation flag OFF (default — today, unchanged) | Reconciliation flag ON (opt-in) |
+|---|---|---|
+| central `granted` + legacy false/default | legacy blocks → blocked (the pre-existing bug, byte-for-byte unchanged) | central grant wins → **allowed**, but only once `enforcementMode === 'enforce'` too (see below) |
+| central `denied`/`withdrawn` + legacy true | legacy allows → sent (central has no teeth today) | central restriction wins → **blocked**, immediately, regardless of `enforcementMode` |
+| central `unknown` + legacy true | legacy allows → sent | falls back to legacy → sent (unchanged — holds even in `enforce` mode, so fail-closed-on-unknown never nukes pre-reconciliation communications) |
+| central `unknown` + legacy false/default | legacy blocks → blocked | falls back to legacy → blocked (unchanged) |
+| `smsOptOut=true` + central `granted` | hard veto blocks → blocked | **conflict** — fails closed, `legacy_central_conflict`, never silently resolved either direction (§21.3) |
+| no central row + no legacy signal | legacy blocks → blocked | falls back to legacy → blocked (unchanged) |
+
+Full mode matrix (reconciliation × enforcement), tested exhaustively in
+`legacyReconciliationResolver.test.ts`:
+
+| reconciliation | enforcement | Real send behavior |
+|---|---|---|
+| OFF | disabled / audit / enforce | Byte-identical to the pre-existing two-step code in all three modes — this is the current production configuration and is unaffected by this PR. |
+| ON | disabled | Restrictive signals (hard veto, central denied/withdrawn, conflict) take effect immediately — pure safety-tightening. The one permissive behavior (central grant overriding legacy false) is **observed only** — real `finalAllowed` still falls back to legacy. |
+| ON | audit | Same real send behavior as ON+disabled (audit never blocks/unblocks); the would-be-enforce answer is computed for observability. |
+| ON | enforce | Full policy live: restrictive signals block, conflict blocks, and a central `granted` row now genuinely overrides a stale legacy false/default. |
+
+Restrictive signals get to act as soon as reconciliation is on, regardless of
+enforcement mode, because honoring a restriction early is never a compliance
+risk. The one permissive behavior is additionally gated behind
+`enforcementMode === 'enforce'` because it is the one direction that could
+cause unwanted messaging if wrong — both flags must be deliberately set, and
+neither is touched by this PR.
+
+**Named policy-exception branch, not an accidental fallback.** The resolver
+explicitly checks `central.effectiveStatus === 'not_required'`
+(`transactional`/`legal_notice`/`security_notice`/`consent_not_required`)
+before the granted/denied/unknown switch, mirroring
+`evaluateCommunicationPermission()`'s own pre-existing, already-shipped
+unconditional exception rule, so an ambiguous legacy false/default can never
+block a legal/transactional message by falling through the `unknown` branch.
+Scope validity is still checked first and always blocks, exception or not.
+**Whether a hard channel opt-out like `smsOptOut` should be able to suppress
+a legal/security notice is an open question left to legal review — this is a
+technical default, not a legal conclusion**, and is inert today: SMS's own
+purpose taxonomy has no value mapping to those three purposes, and recall's
+purpose is always `'recall'`.
+
+### 21.3 The `legacy_central_conflict` state — never silently resolved
+
+A hard-veto legacy signal (`smsOptOut=true`) disagreeing with an explicit
+central `granted` row is a genuine data-integrity conflict, not something
+either side should silently win. It fails closed (blocks the send),
+regardless of enforcement mode once reconciliation is on, and is recorded via
+an atomic Postgres upsert into a new table, `CommunicationConsentConflictBucket`
+(`id, organizationId, clinicId, channel, purpose, reasonCode, bucketStartedAt,
+firstDetectedAt, lastDetectedAt, occurrenceCount` — deliberately **no**
+patientId, name, phone, email, message text, raw/hashed contact identifier,
+IP, or user-agent). One row per (org, clinic, channel, purpose, reasonCode,
+hourly bucket); a process-local mechanism was explicitly rejected because
+NoraMedi runs multiple API/worker instances with PM2 reloads and horizontal
+scaling — an in-memory `Map` would deduplicate differently per process, lose
+counts on restart, and produce duplicate rows across instances. First
+detection surfaces immediately; repeated detections in the same hour
+increment `occurrenceCount` atomically. Concurrency-tested: 20 parallel
+identical detections produce exactly one row with `occurrenceCount === 20`.
+
+**Resolution is not automatic and is not a one-click override.** An
+authorized user can use the already-existing `withdraw`/`deny` action on that
+channel/purpose (already evidenced, already writes an immutable
+`PatientCommunicationConsentEvent` + audit log) — but this only **accepts the
+restrictive legacy signal**, bringing the central record into agreement with
+it. It does not prove the legacy `smsOptOut` value is correct, and if that
+value is actually stale, **there is currently no supported way to clear it**
+— a dedicated legacy-signal correction workflow with its own immutable audit
+trail is a separate, unimplemented follow-up. The UI labels this state
+"Manuel İnceleme Gerekli" (Manual Review Required), distinct from
+denied/withdrawn/unknown/granted, and its modal explicitly states that
+Deny/Withdraw does not resolve the underlying contradiction.
+
+This table gets its own retention category in `dataRetentionCleanupJob.ts`
+(`communicationConsentConflictBucketsDays`, default 180 days, same
+bounded-batch pattern as every other category) — it does not grow unbounded
+either, even though it is already PII-free.
+
+### 21.4 Matrix endpoint N+1 fix
+
+The matrix route looped 5 channels × 12 purposes and called
+`evaluateCommunicationPermission()` per cell, which re-queried the patient
+and the already-loaded preference row on every call (~120 redundant queries
+per page load). Fix: the pure, I/O-free post-scope-check logic was extracted
+into `deriveCommunicationDecision(args, purpose, status, preferenceId)`;
+`evaluateCommunicationPermission()` is now a thin wrapper (existing DB checks,
+then the pure function — identical behavior, all existing tests unchanged),
+and the matrix route calls the pure function directly per cell using the
+already-loaded preference map. Zero extra queries. Verified structurally in
+`communicationPreferencesRoute.test.ts` (the pure function is asserted to not
+return a `Promise`) and functionally (route-level tests covering scoping,
+the new `legacyConflict` field, and history filters/pagination — this route
+previously had **no** HTTP-level test coverage at all).
+
+The route's existing home-clinic-only scoping (it never considers a
+patient's `PatientClinic` links, only `patient.clinicId`) is **documented as
+a deliberate boundary, not changed** — a multi-branch-linked patient's matrix
+is always scoped to their home clinic; no `clinicId` selector was added to
+the route.
+
+The history endpoint (`GET .../history`) now additionally accepts `status`
+and `source` filters and a bounded `limit`/`cursor` pagination pair
+(default 50, max 200), replacing the previous hardcoded `take: 200` — used
+by the new "View full history" filter UI.
+
+### 21.5 Backfill dry-run reconciliation report
+
+`backfillCommunicationPreferences.ts` gained an additive `--report[=path.json]`
+flag (never gated by `--execute`, never writes regardless of any flag
+combination) that scans **all** patients (not just `smsOptOut=true`) and
+classifies legacy-vs-central signals:
+
+- `legacy_opt_out_vs_central_granted` — `smsOptOut=true` and a central `sms`
+  row is `granted`. Real conflict, flagged for human review, corresponds
+  exactly to the runtime `legacy_central_conflict` state (§21.3).
+- `legacy_false_or_default_vs_central_unknown` — both legacy booleans are
+  `false` and no central row exists. Reported explicitly as
+  **ambiguous/non-affirmative** — never as an explicit denial or as
+  agreement, since the booleans carry no "was this explicitly captured" flag.
+- `legacy_yes_without_evidence` — either legacy boolean is `true` with no
+  evidenced central `granted` row. Flagged; never auto-granted.
+- `already_reconciled` — `smsOptOut=true` and the standard backfill's own
+  `withdrawn`/`legacy`/`legacy_sms_opt_out_field` row already exists.
+- `channel_consent_log_summary` (a separate section, not a per-patient
+  category) — real aggregate counts (`groupBy`, no PII) from
+  `ChannelConsentLog` by clinic/channel/`consentStatus`. Deliberately **not**
+  joined against `Patient`/`PatientCommunicationPreference` — that model is
+  keyed by raw `contactIdentifier`, not `patientId`, and a phone-normalization
+  join would be an unreliable, silent linkage.
+
+Output: total patients inspected, would-create/skip counts (existing),
+conflict counts by category (overall and per-clinic), the
+`ChannelConsentLog` summary, zero raw PII (counts only). Tested in
+`communicationPreferenceReconciliationReport.test.ts` (9 tests): never
+writes, each category populates correctly, idempotent, no PII in output.
+
+**Exact future production command (not run in this PR):**
+
+```
+cd server && npx tsx src/scripts/backfillCommunicationPreferences.ts --report=./communication-consent-reconciliation-report.json
+```
+
+### 21.6 Audit-mode observability — bounded, deterministic, PII-free
+
+New env flags (all in `enforcementConfig.ts`): `COMMUNICATION_CONSENT_AUDIT_LOGGING_ENABLED`
+(default `false`), `COMMUNICATION_CONSENT_AUDIT_LOG_SAMPLE_RATE` (**no
+default** — unset or outside `[0,1]` fails safe to fully disabled), and a
+**dedicated** `COMMUNICATION_CONSENT_AUDIT_SAMPLE_SALT` (separate from
+`COMMUNICATION_CONSENT_EVIDENCE_HASH_SECRET` — different purpose, different
+rotation lifecycle; required whenever sampling is active).
+
+Sampling is **deterministic per evaluation**, not per clinic/channel/purpose/
+hour bucket — an earlier design that hashed only those coarse dimensions
+would have made every evaluation in a bucket sample identically (an
+all-or-nothing burst each hour, not representative sampling). The final
+design hashes `${organizationId}:${clinicId}:${channel}:${purpose}:${stableEventKey}:${hourBucket}:${salt}`
+(stable FNV-1a hash) where `stableEventKey` defaults to `patientId` — used
+only as an in-memory hash input, **never persisted**, so individual
+evaluations for the same clinic/channel/purpose/hour distribute
+independently across patients, while the same logical evaluation (same
+patient + hour) always reproduces the same decision. `EventSource` on
+`OperationalEvent` was widened to include `'communication_consent'`
+(additive, no migration). Persisted metadata: `{ evaluatedAllowed,
+reasonCode, channel, purpose, enforcementMode, wouldBlock, sampled: true,
+samplingRate, samplingVersion }` — no `patientId`, no `stableEventKey`, no
+phone/email/text/IP/UA/credentials, ever. `samplingVersion` is bumped
+whenever the sampling algorithm changes, so historical rows remain correctly
+interpretable even if the method changes later; the audit-summary report
+never assumes the *current* configured rate applied to past rows.
+
+`getCommunicationConsentAuditSummary()` (`communicationConsentAuditReport.ts`,
+exposed at `GET /api/communication-consent/audit-summary`,
+`OWNER`/`ORG_ADMIN` only) enforces a **mandatory bounded** date range
+(default 7 days, hard max 90 days) and aggregates entirely in Postgres —
+`groupBy` for plain columns, parameterized raw SQL (`metadata->>'reasonCode'`
+etc.) for JSON-held breakdown fields, and a direct aggregate query against
+`CommunicationConsentConflictBucket` for conflict figures — never an
+unbounded row fetch into Node memory. Breakdown rows are capped at 50 per
+dimension. If a queried range spans multiple `(samplingRate, samplingVersion)`
+combinations, the response reports them as **separate groups**, states
+plainly that sampled counts are not exact totals, and never extrapolates an
+estimated total. Conflict figures are reported as aggregate bucket/occurrence
+counts, explicitly **never** as a unique-patient count (impossible by
+construction — no patient identifier is ever persisted). A new
+`@@index([source, organizationId, clinicId, createdAt])` on `OperationalEvent`
+supports this query pattern (one of two small additive migrations in this
+PR, alongside the new conflict-bucket table).
+
+**Rollout sequence:** `disabled → audit (logging off) → audit (logging on,
+sampled/observed) → review the audit-summary report → enforce`. Enforcement
+and the new reconciliation flag both stay off by default; nothing in this PR
+changes production env.
+
+### 21.7 WhatsApp generic-send consent gap — closed
+
+`POST /api/messages/:id/send` (the shared dispatch endpoint for the manual
+message composer and recall-drafted messages) called `sendWhatsAppMessage()`
+directly for `channel === 'whatsapp'` with **zero consent check of either
+generation** — the one wired-in gap among the app's WhatsApp senders (every
+other dispatcher already calls `assertCommunicationPermission`). Fixed: a new
+`whatsappCommunicationPurposeMap.ts` maps `MessageTemplatePurpose` →
+`CommunicationPurpose` (mirroring `smsCommunicationPurposeMap.ts` value-for-
+value except `general_message`/no-template → `operational`, the
+least-privileged non-exception bucket, which fails closed by construction
+once enforcement is active). The route now calls
+`assertCommunicationPermission` before dispatch, governed purely by the
+existing `enforcementMode` (no new flag — there was no pre-existing legacy
+gate on this path to reconcile with). Blocked sends get `status:
+'blocked_by_consent'` and a `403 {code: 'consent_blocked'}` response,
+mirroring the SMS branch of the same route. Tested in
+`messagesConsentGate.test.ts`, including that a marketing-mapped template is
+not let through by an unrelated `operational` grant (proves the purpose map
+actually discriminates, not just defaults everything through).
+
+**Deliberately not touched, documented as a separate deferred finding**:
+`POST /api/whatsapp/inbox/:id/reply` (staff replying inside an inbound
+conversation) and the AI auto-responder sends in the Evolution webhook
+handler also call `sendWhatsAppMessage` with zero consent context — but
+these are direct replies within a patient-initiated conversation, a
+categorically different semantic (arguably governed by `ChannelConsentLog`'s
+accept/decline state, not the purpose-based matrix) needing its own design
+decision, not a hasty default classification.
+
+### 21.8 Frontend redesign
+
+`CommunicationPreferencesPanel.tsx` (rewritten) + `communicationConsentMatrixHelpers.ts`
+(additive: `PURPOSE_GROUPS`, `computeConsentSummary`, `shouldShowLegacySignals`,
+`isCellActionable`, a new `conflict` cell variant checked before the existing
+status switch, never merged visually with denied/withdrawn/unknown/granted).
+
+- **One authoritative summary bar** at the top (allowed / denied+withdrawn /
+  unknown / not-required / conflict counts), replacing the two-conflicting-
+  systems problem described in production.
+- **Default view is channel tabs + purpose-group accordion cards** (6
+  categories: essential/operational, appointment communication, treatment
+  follow-up, recall/reactivation, marketing/campaigns, surveys/informational)
+  — no default horizontal scroll. An explicit **"Matris Görünümü" (Matrix
+  view) toggle** keeps the original sticky-header table for power users.
+- Actions collapsed into a **single "Yönet" (Manage) button per row**
+  opening a modal with an action selector (Grant/Deny/Withdraw/Reset)
+  instead of three permanently-visible inline text links; the same
+  evidenceType/source/noticeVersion/notes fields and validation rules
+  (`noticeVersionRequired`, `sourceDescriptionRequired`) are unchanged, only
+  how the action is invoked changed.
+- `not_required` cells are visually subdued and non-actionable
+  (`isCellActionable` returns `false` unconditionally for policy exceptions,
+  regardless of role); `conflict` cells get their own distinct warning
+  treatment, "Manuel İnceleme Gerekli", with copy stating Deny/Withdraw only
+  accepts the legacy signal, it does not resolve the conflict.
+- **The legacy "Onaylar ve Kaynak" sidebar card is deleted** (both the
+  desktop and mobile duplicate in `PatientDetail.tsx`) — this was the direct
+  cause of the production contradiction. In its place, a collapsed,
+  `canManage`-only "Eski Kayıt Sinyalleri" (Legacy Signal) disclosure lives
+  *inside* the Communication tab, clearly labeled as historical/pre-migration
+  data that does not reflect current consent status.
+- A top-level "Geçmişi Görüntüle" (View History) entry point, in addition to
+  per-cell history, with channel/purpose/status/source filters wired to the
+  extended history endpoint (§21.4).
+- Verified live in a browser (dev server, real login/patient/data flow) at
+  320/375/768/1024/1440px — no required horizontal scroll at any width,
+  accordion/tabs/summary bar/legacy-signal section all render and function
+  correctly; the only console error observed was the pre-existing, unrelated,
+  already-documented Platform-Admin `/api/auth/me` 401 (§12.1) — not
+  introduced by this change.
+- All 22 pure-logic tests in `communicationConsentMatrixHelpers.test.ts`
+  pass. This repository has no React render-testing infrastructure
+  (no RTL/jsdom/vitest anywhere in ~100+ existing test files, consistent
+  with the backend's "no supertest" convention) — introducing one solely for
+  this component was judged out of proportion to the task, so the
+  component's decision logic (`shouldShowLegacySignals`, `isCellActionable`,
+  `computeConsentSummary`, `resolveCellVariant`) was extracted into pure,
+  directly-tested functions instead, and live rendering was verified via the
+  dev server as described above rather than an automated render test.
+
+### 21.9 Deferred/out-of-scope items from this follow-up
+
+- Retiring the SMS/recall legacy gate's independent authority once real
+  central evidence exists broadly (§21.1) — requires the reconciliation flag
+  and, eventually, enforcement to actually be turned on, both explicit future
+  decisions.
+- A legacy-signal correction workflow (clearing a stale `smsOptOut`) — no
+  write path exists today; building one is a distinct, larger feature.
+- `POST /api/whatsapp/inbox/:id/reply` and the AI auto-responder consent gap
+  (§21.7) — different semantics, needs its own design decision.
+- Instagram channel is still not part of the consent taxonomy/model — adding
+  a channel is a data-model decision, not a readiness fix.
+- The CSP (Google Fonts, inline script) and Platform-Admin `/api/auth/me`
+  401 findings remain documented-only follow-ups (§12.1), unchanged by this
+  PR — none were isolated/already-touched by this diff.
+- General HTTP request logs still contain raw `x-real-ip`/`x-forwarded-for`/
+  `remoteAddress`/user-agent — a separate, pre-existing backlog item, not
+  hot-edited as part of this task.
+- Whether a hard channel opt-out may suppress a legal/security notice
+  (§21.2) — pending legal review, not decided by this PR.
+
+### 21.10 Explicit non-claims
+
+This follow-up does not claim: KVKK/İYS/marketing-consent legal compliance;
+that enforcement, audit logging, or the legacy-reconciliation flag are
+enabled anywhere; that the production backfill (dry-run or execute) has been
+run; or that any legal-basis, notice-wording, retention, or controller/
+processor question from §15 has been resolved. All of §15's open items
+remain open and are unchanged by this PR.
