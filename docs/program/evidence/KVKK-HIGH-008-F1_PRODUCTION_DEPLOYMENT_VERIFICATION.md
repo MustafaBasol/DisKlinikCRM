@@ -128,7 +128,18 @@ For this docs task (KVKK-HIGH-008-F1-PROD-DOCS): agent completed — at most yes
 
 ## 22. Exact next task
 
-**Primary:** Safe behavioral production verification for PR #186 — without enabling the feature and without using real patient data — if a safe, route-level verification method is accepted (e.g. an authenticated request against the disabled mutation route confirming its fail-closed response, and/or a single authenticated `PlatformSetting` PATCH/rollback cycle in a controlled window to observe one real `PlatformAdminAuditEvent` row's attribution and previous/new-value chain, followed by confirming zero `SecuritySignalEvent` rows were created).
+**Primary — non-activating verification (safe to schedule as the next task, no additional authorization beyond this one required):** a read-only, non-activating behavioral verification of PR #186, limited to checks that do not change `privacy.legacyConsentCorrection.runtimeEnabled` at any point:
+
+- read-only policy/settings endpoint (`GET`) verification;
+- disabled-mutation-route fail-closed behavior (confirming the route rejects while the setting is absent/`false`);
+- unauthorized-request rejection;
+- invalid-payload rejection;
+- confirmation that no `PlatformAdminAuditEvent` row is created by a rejected or disabled-route attempt;
+- count/hash or other non-PII checks confirming no `PatientLegacyConsentCorrection`/consent-data change resulted from any of the above.
+
+None of these checks write, PATCH, or otherwise change the `PlatformSetting` row — the setting stays at its current effective state (row absent, effective `false`) throughout.
+
+**Explicitly separate and not part of this task's scope:** a `PlatformSetting` PATCH that changes `runtimeEnabled` from `false` to `true` — even temporarily, even if immediately followed by a rollback PATCH back to `false` — **is controlled activation, not a non-activating verification.** A `false → true → false` cycle is not authorized by PR #188 or by the current production-evidence task, regardless of how briefly the setting would read `true`. Performing one, and observing the resulting `PlatformAdminAuditEvent` row's attribution/previous-new-value chain, requires its own separate controlled-activation decision: a named approver/authorization, a scheduled maintenance window, a defined rollback/cutback plan, a monitoring plan for the activation window, and an explicit, pre-agreed evidence-capture scope. **Until that separate authorization exists, no toggle cycle should be proposed, scheduled, or treated as in-scope for "the next safe verification task."**
 
 **Otherwise:** proceed with the next roadmap-ordered task while retaining R-061 and R-046 as `OPEN`.
 
