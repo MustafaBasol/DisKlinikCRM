@@ -27,6 +27,7 @@ import {
 import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRoutingPolicy.js';
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
+import { recordSecuritySignal } from '../services/security/securitySignalService.js';
 
 const router = express.Router();
 
@@ -1093,11 +1094,37 @@ router.patch('/privacy/legacy-consent-correction/settings', async (req: Platform
     res.status(400).json({ error: 'runtimeEnabled must be a boolean' });
     return;
   }
+  const previousEnabled = await isLegacyConsentCorrectionRuntimeEnabled();
   await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, String(runtimeEnabled));
-  // No dedicated platform-admin audit table exists (AuditLog.organizationId
-  // is mandatory, so it cannot record a platform-wide setting change) —
-  // structured console logging is this router's existing convention for
-  // this class of action (see /backups/run, /backups/restore-test above).
+
+  // Durable, platform-scoped, admin-attributed audit record for this
+  // KVKK-relevant kill-switch change. Neither AuditLog nor OperationalEvent
+  // can represent it: both require a non-null organizationId, so a
+  // platform-wide (org-less) setting change would need a semantically-wrong
+  // sentinel org id. SecuritySignalEvent (KVKK-CRIT-003) already has an
+  // optional organizationId and an actorPlatformAdminId field built for
+  // exactly this attribution need, and recordSecuritySignal() never throws,
+  // so a logging failure can never block or distort the toggle response.
+  // A signalType/ruleKey not read by any rule in securityDetectionRules.ts
+  // keeps this from ever being aggregated into unrelated incident escalation.
+  await recordSecuritySignal({
+    signalType: 'platform_admin.legacy_consent_correction_runtime_toggle.v1',
+    category: 'platform_admin_config_change',
+    severity: 'low',
+    ruleKey: 'platform_admin.config_change.v1',
+    dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    actorPlatformAdminId: req.platformAdmin?.id ?? null,
+    resourceType: 'platform_setting',
+    resourceId: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    safeMetadata: {
+      settingKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+      previousValue: previousEnabled,
+      newValue: runtimeEnabled,
+      outcome: 'success',
+    },
+  });
+  // console.log retained for local/ops tailing convenience — the durable
+  // record above is the actual audit evidence, not this line.
   console.log(`[platform-privacy] Legacy consent correction runtime toggle set to ${runtimeEnabled} by admin ${req.platformAdmin?.email}`);
   res.json({ runtimeEnabled });
 });

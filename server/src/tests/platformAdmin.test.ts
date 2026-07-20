@@ -612,6 +612,48 @@ await test('PATCH settings: non-boolean payload is rejected with 400 and never w
   assert.equal(row, null, 'an invalid payload must never create/modify the setting row');
 });
 
+const CONFIG_CHANGE_RULE_KEY = 'platform_admin.config_change.v1';
+
+await test('PATCH settings: successful toggle creates a durable, structured SecuritySignalEvent audit record (platform-scope, admin-attributed, no patient data)', async () => {
+  await prisma.securitySignalEvent.deleteMany({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } }); // absent → previousValue must read as false
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const res = mockPlatformRes();
+  await runChain(chain, mockPlatformReq({ runtimeEnabled: true }), res);
+  assert.equal(res.statusCode, 200);
+
+  const signal = await prisma.securitySignalEvent.findFirst({
+    where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    orderBy: { createdAt: 'desc' },
+  });
+  assert.ok(signal, 'a durable SecuritySignalEvent must be created for a successful toggle');
+  assert.equal(signal!.actorPlatformAdminId, 'admin-1', 'must durably attribute the acting platform admin identity');
+  assert.equal(signal!.organizationId, null, 'platform-wide kill switch — never attached to a single tenant organization');
+  assert.equal(signal!.signalType, 'platform_admin.legacy_consent_correction_runtime_toggle.v1');
+  assert.equal(signal!.category, 'platform_admin_config_change');
+  assert.equal(signal!.resourceId, LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY);
+  const meta = signal!.safeMetadata as any;
+  assert.equal(meta.settingKey, LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY);
+  assert.equal(meta.previousValue, false, 'previous value must be captured before the write');
+  assert.equal(meta.newValue, true);
+  assert.equal(meta.outcome, 'success');
+  const serialized = JSON.stringify(signal);
+  assert.ok(!serialized.includes('@'), 'must never contain an email/identity string — only the opaque platformAdminId');
+});
+
+await test('PATCH settings: rejected (non-boolean) toggle attempt never creates a SecuritySignalEvent — no misleading success record on a failed attempt', async () => {
+  const before = await prisma.securitySignalEvent.count({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  for (const badBody of [{ runtimeEnabled: 'true' }, { runtimeEnabled: 1 }, { runtimeEnabled: null }, {}]) {
+    const res = mockPlatformRes();
+    await runChain(chain, mockPlatformReq(badBody), res);
+    assert.equal(res.statusCode, 400);
+  }
+  const after = await prisma.securitySignalEvent.count({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(after, before, 'a rejected/invalid toggle attempt must never create any audit record — success or otherwise');
+});
+
 await test('PATCH settings: admin-attributed console log is emitted on toggle (existing platform-admin observability convention), leaving the DB row as the final restored state', async () => {
   const logSpy: string[] = [];
   const originalLog = console.log;
@@ -625,8 +667,10 @@ await test('PATCH settings: admin-attributed console log is emitted on toggle (e
   assert.ok(logSpy.some((line) => line.includes('admin@platform.test') && line.includes('true')), 'toggle must be logged with the acting admin identity and the new value');
 
   // Restore to the real production default (absent) so this file leaves no
-  // global PlatformSetting state behind for whatever test file runs next.
+  // global PlatformSetting/SecuritySignalEvent state behind for whatever test
+  // file runs next.
   await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  await prisma.securitySignalEvent.deleteMany({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
 });
 
 // ── Sonuç ─────────────────────────────────────────────────────────────────────
