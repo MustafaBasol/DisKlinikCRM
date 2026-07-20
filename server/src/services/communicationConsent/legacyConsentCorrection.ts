@@ -38,7 +38,7 @@
 
 import { createHash } from 'node:crypto';
 import prisma from '../../db.js';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { sanitizeConsentNote } from './consentEvidenceSanitizer.js';
 import { getPlatformSetting } from '../platformSettings.js';
 
@@ -52,8 +52,18 @@ import { getPlatformSetting } from '../platformSettings.js';
 // the mutation route.
 export const LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY = 'privacy.legacyConsentCorrection.runtimeEnabled';
 
-export async function isLegacyConsentCorrectionRuntimeEnabled(): Promise<boolean> {
-  const value = await getPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY);
+/**
+ * `client` defaults to the global `prisma` singleton (unchanged behavior for
+ * the existing GET-policy and mutation-gate call sites). Pass a
+ * Prisma.TransactionClient to read the value from inside a caller's
+ * transaction — see the PATCH settings route in platformAdmin.ts, which reads
+ * the previous value in the SAME transaction as the write it audits, under an
+ * advisory lock, instead of a stale pre-transaction snapshot.
+ */
+export async function isLegacyConsentCorrectionRuntimeEnabled(
+  client?: Pick<PrismaClient, 'platformSetting'> | Prisma.TransactionClient,
+): Promise<boolean> {
+  const value = await getPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, client);
   return value === 'true';
 }
 

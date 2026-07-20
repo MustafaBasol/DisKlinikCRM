@@ -9,17 +9,19 @@
  * reporting ambiguity and risk future detection rules misinterpreting
  * routine admin changes.
  *
- * Mirrors writeAuditLogInTx() in utils/auditLog.ts: this function REQUIRES a
- * Prisma.TransactionClient (no optional/default fallback to the global
- * `prisma` singleton) so the audit insert is structurally part of the SAME
- * transaction as the configuration change it documents. If the insert
+ * Mirrors writeAuditLogInTx() in utils/auditLog.ts: this function's type
+ * signature accepts ONLY Prisma.TransactionClient — not the global `prisma`
+ * singleton, not even structurally via a Pick<PrismaClient, ...> — so a
+ * caller cannot compile a call that passes the global client and silently
+ * takes the audit insert out of the surrounding transaction. This is a
+ * compile-time guarantee, not just a documented convention. If the insert
  * throws, this does NOT catch it — the caller's surrounding
  * `prisma.$transaction` rejects and the whole transaction (including the
  * setting change) rolls back. A successful setting change without its
  * audit row must never happen.
  */
 
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export interface PlatformAdminAuditEventInput {
   actorPlatformAdminId: string | null;
@@ -34,7 +36,7 @@ export interface PlatformAdminAuditEventInput {
 }
 
 export async function writePlatformAdminAuditEventInTx(
-  tx: Pick<PrismaClient, 'platformAdminAuditEvent'> | Prisma.TransactionClient,
+  tx: Prisma.TransactionClient,
   input: PlatformAdminAuditEventInput,
 ): Promise<void> {
   await tx.platformAdminAuditEvent.create({

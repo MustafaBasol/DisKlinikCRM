@@ -1,8 +1,18 @@
 import prisma from '../db.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 
-export async function getPlatformSetting(key: string): Promise<string | null> {
-  const row = await prisma.platformSetting.findUnique({ where: { key } });
+/**
+ * `client` defaults to the global `prisma` singleton; pass a
+ * Prisma.TransactionClient to read the CURRENT value from inside a caller's
+ * larger transaction (e.g. to make a "read previous value, then write new
+ * value" sequence part of one atomic, lock-ordered operation instead of a
+ * separate pre-transaction snapshot).
+ */
+export async function getPlatformSetting(
+  key: string,
+  client: Pick<PrismaClient, 'platformSetting'> | Prisma.TransactionClient = prisma,
+): Promise<string | null> {
+  const row = await client.platformSetting.findUnique({ where: { key } });
   return row?.value ?? null;
 }
 

@@ -1094,8 +1094,6 @@ router.patch('/privacy/legacy-consent-correction/settings', async (req: Platform
     res.status(400).json({ error: 'runtimeEnabled must be a boolean' });
     return;
   }
-  const previousEnabled = await isLegacyConsentCorrectionRuntimeEnabled();
-
   // Durable, platform-scoped, admin-attributed audit record for this
   // KVKK-relevant kill-switch change, written in the SAME transaction as the
   // setting mutation via PlatformAdminAuditEvent (dedicated platform-admin
@@ -1103,7 +1101,20 @@ router.patch('/privacy/legacy-consent-correction/settings', async (req: Platform
   // SecuritySignalEvent, which is security-detection telemetry, a different
   // domain). If the audit insert fails, the whole transaction rolls back, so
   // the setting change never takes effect without its audit row.
+  //
+  // The previous value is read INSIDE this transaction (not before it) and
+  // under a transaction-scoped advisory lock keyed to this one setting, so
+  // concurrent PATCH requests serialize: the second transaction blocks until
+  // the first commits, then reads the just-committed value, guaranteeing the
+  // audit row's previousValue matches the actual committed write order. A
+  // key-scoped advisory lock is used instead of `SELECT ... FOR UPDATE`
+  // because PlatformSetting has no pre-existing row for a key that has never
+  // been toggled before — there would be nothing for FOR UPDATE to lock on
+  // that first call. The lock is released automatically at commit/rollback
+  // (pg_advisory_xact_lock), so it never needs manual cleanup.
   await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY}))`;
+    const previousEnabled = await isLegacyConsentCorrectionRuntimeEnabled(tx);
     await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, String(runtimeEnabled), tx);
     await writePlatformAdminAuditEventInTx(tx, {
       actorPlatformAdminId: req.platformAdmin?.id ?? null,

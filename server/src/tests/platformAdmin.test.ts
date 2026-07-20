@@ -741,6 +741,96 @@ await test('PATCH settings: setting update and audit insert are atomic — a for
   assert.equal(auditCount, 0, 'no audit row should exist either, since the whole transaction rolled back');
 });
 
+await test('PATCH settings: two concurrent successful toggles serialize via a real Postgres advisory lock and produce a sequentially coherent audit chain (two genuinely concurrent $transaction calls, no mocking)', async () => {
+  await cleanAuditRows();
+  const baselineValue = 'false';
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: baselineValue },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: baselineValue },
+  });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const resA = mockPlatformRes();
+  const resB = mockPlatformRes();
+  // Fired together via Promise.all (no await between them) against the same
+  // Postgres instance — each runChain call opens its own prisma.$transaction
+  // on its own pooled connection, so this is genuine DB-level concurrency,
+  // not a simulated race. The route's advisory lock (keyed to this one
+  // setting) forces exactly one of these two real transactions to block
+  // until the other commits.
+  await Promise.all([
+    runChain(chain, mockPlatformReq({ runtimeEnabled: true }), resA),
+    runChain(chain, mockPlatformReq({ runtimeEnabled: false }), resB),
+  ]);
+  assert.equal(resA.statusCode, 200);
+  assert.equal(resB.statusCode, 200);
+
+  const finalRow = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  const finalValue = finalRow?.value;
+  assert.ok(finalValue === 'true' || finalValue === 'false', 'the setting must land on exactly one of the two submitted values');
+  // Whichever of {true, false} did NOT win the race is the FIRST committer's target.
+  const firstCommitterTarget = finalValue === 'true' ? 'false' : 'true';
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(rows.length, 2, 'both concurrent successful writes must each produce exactly one audit row — no merging, no duplication, no dropped row');
+
+  const lastRow = rows.find((r) => r.newValue === finalValue);
+  const firstRow = rows.find((r) => r.newValue === firstCommitterTarget);
+  assert.ok(firstRow, "the first committer's audit row must exist");
+  assert.ok(lastRow, "the last (final) committer's audit row must exist");
+  assert.notEqual(firstRow!.id, lastRow!.id, 'the two rows must be distinct');
+
+  assert.equal(firstRow!.previousValue, baselineValue, 'the first committer must have read the true pre-race baseline value');
+  assert.equal(
+    lastRow!.previousValue,
+    firstCommitterTarget,
+    "the second (final) committer must have read the FIRST committer's freshly-committed value from inside its own transaction — a stale pre-transaction read would instead record the original baseline here",
+  );
+  assert.notEqual(
+    lastRow!.previousValue,
+    baselineValue,
+    'no stale duplicate previousValue: the committed order requires the second row to reflect the changed value, not the original baseline again',
+  );
+});
+
+await test("PATCH settings: a concurrently-failing toggle (forced FK violation) never corrupts the concurrently-succeeding toggle's committed value or audit trail", async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const goodReq = mockPlatformReq({ runtimeEnabled: true });
+  // Same real-FK-violation technique as the single-request atomicity test
+  // above, but fired concurrently against a separate, valid request.
+  const ghostReq = { body: { runtimeEnabled: true }, platformAdmin: { id: 'admin-does-not-exist-ghost-2', email: 'ghost2@platform.test' } } as any;
+  const goodRes = mockPlatformRes();
+  const ghostRes = mockPlatformRes();
+
+  const [goodOutcome, ghostOutcome] = await Promise.allSettled([
+    runChain(chain, goodReq, goodRes),
+    runChain(chain, ghostReq, ghostRes),
+  ]);
+  assert.equal(goodOutcome.status, 'fulfilled', 'the valid concurrent request must succeed regardless of the other one failing');
+  assert.equal(ghostOutcome.status, 'rejected', 'the FK-violating concurrent request must reject, not silently succeed');
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row?.value, 'true', "the setting must reflect only the successful concurrent write — the failed one's write must have fully rolled back, whichever order the two transactions ran in");
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(rows.length, 1, 'only the successful write may leave an audit row; the failed transaction must roll back its insert along with its setting write');
+  assert.equal(rows[0]!.previousValue, 'false');
+  assert.equal(rows[0]!.newValue, 'true');
+
+  const ghostAuditCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: 'admin-does-not-exist-ghost-2' } });
+  assert.equal(ghostAuditCount, 0);
+});
+
 await test('PATCH settings: admin-attributed console log is emitted on toggle (existing platform-admin observability convention), leaving the DB row as the final restored state', async () => {
   const logSpy: string[] = [];
   const originalLog = console.log;
