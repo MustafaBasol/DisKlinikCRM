@@ -19,7 +19,9 @@ import { setCommunicationPreference } from '../services/communicationConsent/com
 import {
   correctSmsOptOut,
   LegacyConsentCorrectionError,
+  LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
 } from '../services/communicationConsent/legacyConsentCorrection.js';
+import { setPlatformSetting } from '../services/platformSettings.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import type { Response } from 'express';
 
@@ -141,6 +143,9 @@ async function cleanup() {
   // before Patient rows (FK).
   await new Promise((resolve) => setTimeout(resolve, 200));
   await prisma.activityLog.deleteMany({ where: { patient: { organizationId: { in: createdOrgIds } } } });
+  // Global (not org-scoped) — restore to "absent", the real production
+  // default, rather than leaving 'true' behind for whatever runs next.
+  await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
   await prisma.patientLegacyConsentCorrection.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
   await prisma.communicationConsentConflictBucket.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
   await prisma.patientCommunicationConsentEvent.deleteMany({ where: { organizationId: { in: createdOrgIds } } });
@@ -153,6 +158,15 @@ async function cleanup() {
 }
 
 async function main() {
+  // KVKK-HIGH-008-F1: every test below this point exercises the workflow
+  // through the real HTTP route, which now defaults to DISABLED (no
+  // PlatformSetting row exists yet in a fresh test DB). Enable it once up
+  // front so sections 1-4 (all written against the always-on workflow)
+  // continue to exercise their intended behavior unmodified; the dedicated
+  // runtime-toggle gate itself is exercised in section 5 below, which
+  // deliberately flips this back off and on.
+  await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+
   section('1. Authorization matrix — POST legacy-corrections/sms-opt-out');
 
   for (const role of ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'] as const) {
@@ -630,6 +644,164 @@ async function main() {
     for (let i = 1; i < page1Res.body.items.length; i++) {
       assert.ok(new Date(page1Res.body.items[i - 1].createdAt).getTime() >= new Date(page1Res.body.items[i].createdAt).getTime(), 'deterministic createdAt desc ordering');
     }
+  });
+
+  section('5. Runtime activation control — KVKK-HIGH-008-F1 kill switch');
+
+  await test('missing setting (row deleted) → mutation denied 403 runtime_disabled, smsOptOut untouched, no correction row, no success audit', async () => {
+    await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+    const fx = await createFixture();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+    const req = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, correctionBody());
+    const res = mockResponse();
+    await runChain(chain, req, res);
+
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.errorCode, 'runtime_disabled');
+    assert.equal(res.body.correction, undefined);
+
+    const patient = await prisma.patient.findUnique({ where: { id: fx.patientId } });
+    assert.equal(patient!.smsOptOut, true, 'a disabled attempt must never flip smsOptOut');
+    const correctionCount = await prisma.patientLegacyConsentCorrection.count({ where: { patientId: fx.patientId } });
+    assert.equal(correctionCount, 0, 'a disabled attempt must never create a correction row');
+    const successAuditCount = await prisma.auditLog.count({ where: { organizationId: fx.organizationId, action: 'patient_legacy_sms_opt_out_corrected' } });
+    assert.equal(successAuditCount, 0, 'a disabled attempt must never create the success audit entry');
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+  });
+
+  await test('explicit false → mutation denied 403 runtime_disabled', async () => {
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'false');
+    const fx = await createFixture();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+    const req = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, correctionBody());
+    const res = mockResponse();
+    await runChain(chain, req, res);
+
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.errorCode, 'runtime_disabled');
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+  });
+
+  await test('explicit true → mutation allowed (200)', async () => {
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+    const fx = await createFixture();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+    const req = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, correctionBody());
+    const res = mockResponse();
+    await runChain(chain, req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.correction.newValue, false);
+  });
+
+  await test('disabled attempt writes a safe disabled-attempt audit entry — no patient name/phone/reason/notes/evidence', async () => {
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'false');
+    const fx = await createFixture();
+    const secretReason = 'UNIQUE-DISABLED-MARKER-nurcan-ozel-05551234567';
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+    const req = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, correctionBody({ correctionReason: secretReason }));
+    const res = mockResponse();
+    await runChain(chain, req, res);
+    assert.equal(res.statusCode, 403);
+
+    const log = await prisma.auditLog.findFirst({ where: { organizationId: fx.organizationId, action: 'legacy_consent_correction_disabled_attempt' } });
+    assert.ok(log, 'disabled-attempt audit entry must exist');
+    assert.equal(log!.entityType, 'patient');
+    assert.equal(log!.entityId, fx.patientId);
+    const patientBefore = await prisma.patient.findUnique({ where: { id: fx.patientId } });
+    const serialized = JSON.stringify(log!.metadata) + (log!.description ?? '');
+    assert.ok(!serialized.includes(secretReason), 'must never contain the free-text correction reason — the body is never even read on the disabled path');
+    assert.ok(!serialized.includes(patientBefore!.firstName), 'must never contain the patient first name');
+    assert.ok(!serialized.includes(patientBefore!.phone ?? '__none__'), 'must never contain the patient phone');
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+  });
+
+  await test('disabled-attempt audit failure does not weaken the denial — mutation still denied, no correction row, no smsOptOut mutation', async () => {
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'false');
+    const fx = await createFixture();
+    const originalCreate = prisma.auditLog.create;
+    (prisma.auditLog as any).create = async () => { throw new Error('simulated audit-log write failure'); };
+    try {
+      const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+      const req = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, correctionBody());
+      const res = mockResponse();
+      await runChain(chain, req, res);
+
+      assert.equal(res.statusCode, 403, 'denial must not depend on the audit write succeeding — writeAuditLog swallows its own errors');
+      assert.equal(res.body.errorCode, 'runtime_disabled');
+    } finally {
+      (prisma.auditLog as any).create = originalCreate;
+    }
+
+    const patient = await prisma.patient.findUnique({ where: { id: fx.patientId } });
+    assert.equal(patient!.smsOptOut, true, 'smsOptOut must remain untouched even when audit logging fails');
+    const correctionCount = await prisma.patientLegacyConsentCorrection.count({ where: { patientId: fx.patientId } });
+    assert.equal(correctionCount, 0, 'no correction row must be created even when audit logging fails');
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+  });
+
+  await test('repeated disabled attempts never create a misleading success log — only disabled-attempt entries accumulate', async () => {
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'false');
+    const fx = await createFixture();
+    const chain = getRouteMiddlewareChain(communicationPreferencesRouter, 'post', '/patients/:patientId/communication-preferences/legacy-corrections/sms-opt-out');
+
+    for (let i = 0; i < 3; i++) {
+      const req = authRequest({ id: fx.userId, role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId }, {}, correctionBody());
+      const res = mockResponse();
+      await runChain(chain, req, res);
+      assert.equal(res.statusCode, 403);
+    }
+
+    const disabledAttemptCount = await prisma.auditLog.count({ where: { organizationId: fx.organizationId, action: 'legacy_consent_correction_disabled_attempt', entityId: fx.patientId } });
+    assert.equal(disabledAttemptCount, 3, 'each repeated denial writes its own disabled-attempt entry — no dedup/suppression that would hide repeated attempts');
+    const successCount = await prisma.auditLog.count({ where: { organizationId: fx.organizationId, action: 'patient_legacy_sms_opt_out_corrected', entityId: fx.patientId } });
+    assert.equal(successCount, 0, 'repeated denials must never produce a success-labeled entry');
+    const correctionCount = await prisma.patientLegacyConsentCorrection.count({ where: { patientId: fx.patientId } });
+    assert.equal(correctionCount, 0, 'repeated denials must never create a correction row');
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+  });
+
+  await test('existing correction history remains readable via GET while mutation is disabled (read/history policy decision)', async () => {
+    const fx = await createFixture();
+    // Create the correction while enabled...
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+    await correctSmsOptOut({
+      organizationId: fx.organizationId, clinicId: fx.clinicId, patientId: fx.patientId,
+      ...correctionBody(), correctedById: fx.userId,
+    } as any);
+
+    // ...then disable, and confirm GET history/detail still work.
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'false');
+    const listChain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences/legacy-corrections');
+    const listReq = authRequest({ role: 'OWNER', organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId });
+    const listRes = mockResponse();
+    await runChain(listChain, listReq, listRes);
+    assert.equal(listRes.statusCode, 200);
+    assert.equal(listRes.body.items.length, 1, 'history must remain readable while mutation is runtime-disabled');
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+  });
+
+  await test('matrix GET response reflects the current runtime setting (frontend hide/show contract)', async () => {
+    const fx = await createFixture();
+    const matrixChain = getRouteMiddlewareChain(communicationPreferencesRouter, 'get', '/patients/:patientId/communication-preferences');
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'false');
+    const disabledReq = authRequest({ organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId });
+    const disabledRes = mockResponse();
+    await runChain(matrixChain, disabledReq, disabledRes);
+    assert.equal(disabledRes.body.legacyConsentCorrectionRuntimeEnabled, false);
+
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, 'true');
+    const enabledReq = authRequest({ organizationId: fx.organizationId, allowedClinicIds: [fx.clinicId] }, { patientId: fx.patientId });
+    const enabledRes = mockResponse();
+    await runChain(matrixChain, enabledReq, enabledRes);
+    assert.equal(enabledRes.body.legacyConsentCorrectionRuntimeEnabled, true);
   });
 
   await cleanup();

@@ -199,6 +199,7 @@
       "patient_not_found": "Patient introuvable.",
       "clinic_scope_mismatch": "Vous n'avez pas accès à ce patient.",
       "idempotency_conflict": "Cette requête a déjà été soumise avec un contenu différent. Veuillez actualiser.",
+      "runtime_disabled": "Cette fonctionnalité est actuellement désactivée. Veuillez contacter votre administrateur.",
       "generic": "Impossible d'enregistrer cette correction. Veuillez réessayer."
     }
   },

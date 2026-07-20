@@ -38,8 +38,34 @@
 
 import { createHash } from 'node:crypto';
 import prisma from '../../db.js';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { sanitizeConsentNote } from './consentEvidenceSanitizer.js';
+import { getPlatformSetting } from '../platformSettings.js';
+
+// ── KVKK-HIGH-008-F1: runtime activation control (kill switch) ─────────────
+//
+// Same PlatformSetting-backed pattern as privacy.dataRetention.runtimeEnabled
+// (see platformAdmin.ts) — no caching, so a toggle takes effect on the very
+// next request. Default-deny: an absent row (production's actual current
+// state — no migration adds one) reads as `null`, which is treated as
+// disabled, same as an explicit 'false'. Only the exact string 'true' enables
+// the mutation route.
+export const LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY = 'privacy.legacyConsentCorrection.runtimeEnabled';
+
+/**
+ * `client` defaults to the global `prisma` singleton (unchanged behavior for
+ * the existing GET-policy and mutation-gate call sites). Pass a
+ * Prisma.TransactionClient to read the value from inside a caller's
+ * transaction — see the PATCH settings route in platformAdmin.ts, which reads
+ * the previous value in the SAME transaction as the write it audits, under an
+ * advisory lock, instead of a stale pre-transaction snapshot.
+ */
+export async function isLegacyConsentCorrectionRuntimeEnabled(
+  client?: Pick<PrismaClient, 'platformSetting'> | Prisma.TransactionClient,
+): Promise<boolean> {
+  const value = await getPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, client);
+  return value === 'true';
+}
 
 export const LEGACY_CORRECTION_EVIDENCE_TYPES = [
   'patient_verbal_confirmation',

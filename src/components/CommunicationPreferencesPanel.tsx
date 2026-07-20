@@ -121,6 +121,11 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({
 
   const [legacyCorrectionModalOpen, setLegacyCorrectionModalOpen] = useState(false);
   const [legacyCorrectionHistoryOpen, setLegacyCorrectionHistoryOpen] = useState(false);
+  // KVKK-HIGH-008-F1: platform-wide runtime kill switch, read from the matrix
+  // response. Defaults to false (fail-closed) until the first successful
+  // load — hiding the action is purely supplementary UX; the backend route
+  // is the authoritative gate regardless of this value.
+  const [legacyCorrectionRuntimeEnabled, setLegacyCorrectionRuntimeEnabled] = useState(false);
   const [latestSmsOptOutCorrection, setLatestSmsOptOutCorrection] = useState<{ createdAt: string; evidenceType: string } | null>(null);
 
   // Fetched lazily (canManage-gated, list-only fields — see §6 of the
@@ -188,6 +193,7 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({
     try {
       const res = await communicationPreferencesService.getMatrix(patientId);
       setMatrix(res.data.matrix ?? []);
+      setLegacyCorrectionRuntimeEnabled(Boolean(res.data.legacyConsentCorrectionRuntimeEnabled));
     } catch {
       setError(t('errors.loadFailed'));
     } finally {
@@ -625,7 +631,7 @@ const CommunicationPreferencesPanel: React.FC<Props> = ({
                     <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
                     <span>{t('conflict.modalNote')}</span>
                   </div>
-                  {canCorrectLegacyConsent && (
+                  {canCorrectLegacyConsent && legacyCorrectionRuntimeEnabled && (
                     <button
                       type="button"
                       onClick={() => { setPendingCell(null); setLegacyCorrectionModalOpen(true); }}

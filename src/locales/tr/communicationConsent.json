@@ -199,6 +199,7 @@
       "patient_not_found": "Hasta bulunamadı.",
       "clinic_scope_mismatch": "Bu hastaya erişim yetkiniz yok.",
       "idempotency_conflict": "Bu istek daha önce farklı içerikle gönderilmiş. Lütfen sayfayı yenileyin.",
+      "runtime_disabled": "Bu işlev şu anda devre dışı. Lütfen yöneticinizle iletişime geçin.",
       "generic": "Düzeltme kaydedilemedi. Lütfen tekrar deneyin."
     }
   },

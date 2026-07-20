@@ -10,6 +10,10 @@ import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { loadDataRetentionConfig } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting, setPlatformSetting } from '../services/platformSettings.js';
+import {
+  LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+  isLegacyConsentCorrectionRuntimeEnabled,
+} from '../services/communicationConsent/legacyConsentCorrection.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import { encryptSecretTagged, decryptSecretTagged } from '../utils/encryption.js';
 import { generateTotpSecret, verifyTotp, buildOtpAuthUri } from '../utils/totp.js';
@@ -23,6 +27,7 @@ import {
 import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRoutingPolicy.js';
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
+import { writePlatformAdminAuditEventInTx } from '../services/platformAdminAudit.js';
 
 const router = express.Router();
 
@@ -1065,6 +1070,67 @@ router.patch('/privacy/data-retention/settings', async (req, res: Response) => {
   await setPlatformSetting('privacy.dataRetention.runtimeEnabled', String(runtimeCleanupEnabled));
   const config = loadDataRetentionConfig();
   res.json(buildPolicyResponse(config, runtimeCleanupEnabled));
+});
+
+// ─── Privacy / Legacy Consent Correction Runtime Toggle (KVKK-HIGH-008-F1) ────
+// Same PlatformSetting-backed pattern as the data-retention toggle above —
+// reused, not duplicated as a new settings framework. This is a platform-wide
+// kill switch (not per-tenant rollout allowlisting): default false, and the
+// legacy-corrections mutation route (communicationPreferences.ts) denies by
+// default whenever this setting is absent or not exactly 'true'.
+
+// GET /api/platform/privacy/legacy-consent-correction/policy
+// Returns current runtime toggle state. Platform-admin only.
+router.get('/privacy/legacy-consent-correction/policy', async (_req, res: Response) => {
+  const runtimeEnabled = await isLegacyConsentCorrectionRuntimeEnabled();
+  res.json({ runtimeEnabled });
+});
+
+// PATCH /api/platform/privacy/legacy-consent-correction/settings
+// Enable/disable the legacy consent correction workflow. Platform-admin only.
+router.patch('/privacy/legacy-consent-correction/settings', async (req: PlatformAdminRequest, res: Response) => {
+  const { runtimeEnabled } = req.body ?? {};
+  if (typeof runtimeEnabled !== 'boolean') {
+    res.status(400).json({ error: 'runtimeEnabled must be a boolean' });
+    return;
+  }
+  // Durable, platform-scoped, admin-attributed audit record for this
+  // KVKK-relevant kill-switch change, written in the SAME transaction as the
+  // setting mutation via PlatformAdminAuditEvent (dedicated platform-admin
+  // config-change audit trail — see platformAdminAudit.ts; deliberately not
+  // SecuritySignalEvent, which is security-detection telemetry, a different
+  // domain). If the audit insert fails, the whole transaction rolls back, so
+  // the setting change never takes effect without its audit row.
+  //
+  // The previous value is read INSIDE this transaction (not before it) and
+  // under a transaction-scoped advisory lock keyed to this one setting, so
+  // concurrent PATCH requests serialize: the second transaction blocks until
+  // the first commits, then reads the just-committed value, guaranteeing the
+  // audit row's previousValue matches the actual committed write order. A
+  // key-scoped advisory lock is used instead of `SELECT ... FOR UPDATE`
+  // because PlatformSetting has no pre-existing row for a key that has never
+  // been toggled before — there would be nothing for FOR UPDATE to lock on
+  // that first call. The lock is released automatically at commit/rollback
+  // (pg_advisory_xact_lock), so it never needs manual cleanup.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY}))`;
+    const previousEnabled = await isLegacyConsentCorrectionRuntimeEnabled(tx);
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, String(runtimeEnabled), tx);
+    await writePlatformAdminAuditEventInTx(tx, {
+      actorPlatformAdminId: req.platformAdmin?.id ?? null,
+      action: 'platform_setting.updated',
+      resourceType: 'platform_setting',
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+      previousValue: String(previousEnabled),
+      newValue: String(runtimeEnabled),
+      outcome: 'success',
+    });
+  });
+
+  // console.log retained for local/ops tailing convenience — the durable
+  // record above is the actual audit evidence, not this line.
+  console.log(`[platform-privacy] Legacy consent correction runtime toggle set to ${runtimeEnabled} by admin ${req.platformAdmin?.email}`);
+  res.json({ runtimeEnabled });
 });
 
 // POST /api/platform/privacy/data-retention/run
