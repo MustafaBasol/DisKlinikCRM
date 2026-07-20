@@ -564,6 +564,22 @@ function mockPlatformReq(body: Record<string, unknown> = {}) {
   return { body, platformAdmin: { id: 'admin-1', email: 'admin@platform.test' } } as any;
 }
 
+// PlatformAdminAuditEvent.actorPlatformAdminId has a real FK to
+// PlatformAdmin(id) — every route test below attributes the mocked toggle to
+// id 'admin-1', so a real row must exist for the audit insert (and the
+// transaction it lives in) to succeed, exactly as it would in production
+// where the id always comes from an authenticated session.
+await prisma.platformAdmin.upsert({
+  where: { id: 'admin-1' },
+  update: {},
+  create: {
+    id: 'admin-1',
+    email: 'admin-1-fixture@platform.test',
+    passwordHash: 'not-a-real-hash-test-fixture-only',
+    name: 'Test Fixture Platform Admin',
+  },
+});
+
 await test('GET policy: no PlatformSetting row → runtimeEnabled=false (default-deny)', async () => {
   await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
   const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'get', '/privacy/legacy-consent-correction/policy');
@@ -612,46 +628,117 @@ await test('PATCH settings: non-boolean payload is rejected with 400 and never w
   assert.equal(row, null, 'an invalid payload must never create/modify the setting row');
 });
 
-const CONFIG_CHANGE_RULE_KEY = 'platform_admin.config_change.v1';
+const AUDIT_ACTION = 'platform_setting.updated';
 
-await test('PATCH settings: successful toggle creates a durable, structured SecuritySignalEvent audit record (platform-scope, admin-attributed, no patient data)', async () => {
-  await prisma.securitySignalEvent.deleteMany({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
-  await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } }); // absent → previousValue must read as false
+async function cleanAuditRows() {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+}
+
+await test('PATCH settings: successful false→true toggle creates exactly one durable PlatformAdminAuditEvent row (platform-scope, admin-attributed, no patient data/secrets)', async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
 
   const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
   const res = mockPlatformRes();
   await runChain(chain, mockPlatformReq({ runtimeEnabled: true }), res);
   assert.equal(res.statusCode, 200);
 
-  const signal = await prisma.securitySignalEvent.findFirst({
-    where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
     orderBy: { createdAt: 'desc' },
   });
-  assert.ok(signal, 'a durable SecuritySignalEvent must be created for a successful toggle');
-  assert.equal(signal!.actorPlatformAdminId, 'admin-1', 'must durably attribute the acting platform admin identity');
-  assert.equal(signal!.organizationId, null, 'platform-wide kill switch — never attached to a single tenant organization');
-  assert.equal(signal!.signalType, 'platform_admin.legacy_consent_correction_runtime_toggle.v1');
-  assert.equal(signal!.category, 'platform_admin_config_change');
-  assert.equal(signal!.resourceId, LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY);
-  const meta = signal!.safeMetadata as any;
-  assert.equal(meta.settingKey, LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY);
-  assert.equal(meta.previousValue, false, 'previous value must be captured before the write');
-  assert.equal(meta.newValue, true);
-  assert.equal(meta.outcome, 'success');
-  const serialized = JSON.stringify(signal);
+  assert.equal(rows.length, 1, 'exactly one durable audit row must be created for one successful toggle');
+  const row = rows[0];
+  assert.equal(row.actorPlatformAdminId, 'admin-1', 'must durably attribute the acting platform admin identity');
+  assert.equal(row.resourceType, 'platform_setting');
+  assert.equal(row.resourceKey, LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY);
+  assert.equal(row.previousValue, 'false');
+  assert.equal(row.newValue, 'true');
+  assert.equal(row.outcome, 'success');
+  const serialized = JSON.stringify(row);
   assert.ok(!serialized.includes('@'), 'must never contain an email/identity string — only the opaque platformAdminId');
+
+  const signalCount = await prisma.securitySignalEvent.count({ where: { ruleKey: 'platform_admin.config_change.v1' } });
+  assert.equal(signalCount, 0, 'a platform-admin config change must never be written to SecuritySignalEvent — that is a separate, security-detection-only domain');
 });
 
-await test('PATCH settings: rejected (non-boolean) toggle attempt never creates a SecuritySignalEvent — no misleading success record on a failed attempt', async () => {
-  const before = await prisma.securitySignalEvent.count({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+await test('PATCH settings: successful true→false toggle creates exactly one durable PlatformAdminAuditEvent row with correct previous/new values', async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'true' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'true' },
+  });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const res = mockPlatformRes();
+  await runChain(chain, mockPlatformReq({ runtimeEnabled: false }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(rows.length, 1, 'exactly one durable audit row must be created for one successful toggle');
+  assert.equal(rows[0].previousValue, 'true');
+  assert.equal(rows[0].newValue, 'false');
+  assert.equal(rows[0].outcome, 'success');
+
+  const signalCount = await prisma.securitySignalEvent.count({ where: { ruleKey: 'platform_admin.config_change.v1' } });
+  assert.equal(signalCount, 0, 'a platform-admin config change must never be written to SecuritySignalEvent');
+});
+
+await test('PATCH settings: rejected (non-boolean) toggle attempt never creates a PlatformAdminAuditEvent — no misleading success record on a failed attempt', async () => {
+  await cleanAuditRows();
+  const before = await prisma.platformAdminAuditEvent.count({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
   const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
   for (const badBody of [{ runtimeEnabled: 'true' }, { runtimeEnabled: 1 }, { runtimeEnabled: null }, {}]) {
     const res = mockPlatformRes();
     await runChain(chain, mockPlatformReq(badBody), res);
     assert.equal(res.statusCode, 400);
   }
-  const after = await prisma.securitySignalEvent.count({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  const after = await prisma.platformAdminAuditEvent.count({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
   assert.equal(after, before, 'a rejected/invalid toggle attempt must never create any audit record — success or otherwise');
+});
+
+await test('PATCH settings: unauthorized caller (invalid platform token) is rejected before reaching the handler and creates no success audit', async () => {
+  await cleanAuditRows();
+  const req = makeReq('Bearer not-a-real-platform-token');
+  const res = makeRes();
+  let nextCalled = false;
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false, 'authenticatePlatformAdmin must reject an invalid token before any handler runs');
+  assert.equal(res._status, 401);
+
+  const after = await prisma.platformAdminAuditEvent.count({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(after, 0, 'an unauthorized request must never create an audit record');
+});
+
+await test('PATCH settings: setting update and audit insert are atomic — a forced audit-insert failure leaves the setting value unchanged and creates no row', async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const res = mockPlatformRes();
+  // actorPlatformAdminId has a real FK to PlatformAdmin(id); a non-existent
+  // admin id forces a genuine DB-level foreign-key violation on the audit
+  // insert inside the transaction — no mocking required. This must roll back
+  // the setting upsert alongside it, proving atomicity, not just error safety.
+  const req = { body: { runtimeEnabled: true }, platformAdmin: { id: 'admin-does-not-exist-ghost', email: 'ghost@platform.test' } } as any;
+  await assert.rejects(() => runChain(chain, req, res), 'a failed audit insert must reject the whole request rather than silently succeed');
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row?.value, 'false', 'the setting must remain at its pre-toggle value when the audit insert fails — atomic, not best-effort');
+
+  const auditCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: 'admin-does-not-exist-ghost' } });
+  assert.equal(auditCount, 0, 'no audit row should exist either, since the whole transaction rolled back');
 });
 
 await test('PATCH settings: admin-attributed console log is emitted on toggle (existing platform-admin observability convention), leaving the DB row as the final restored state', async () => {
@@ -667,10 +754,10 @@ await test('PATCH settings: admin-attributed console log is emitted on toggle (e
   assert.ok(logSpy.some((line) => line.includes('admin@platform.test') && line.includes('true')), 'toggle must be logged with the acting admin identity and the new value');
 
   // Restore to the real production default (absent) so this file leaves no
-  // global PlatformSetting/SecuritySignalEvent state behind for whatever test
-  // file runs next.
+  // global PlatformSetting/PlatformAdminAuditEvent state behind for whatever
+  // test file runs next.
   await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
-  await prisma.securitySignalEvent.deleteMany({ where: { ruleKey: CONFIG_CHANGE_RULE_KEY, dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  await cleanAuditRows();
 });
 
 // ── Sonuç ─────────────────────────────────────────────────────────────────────

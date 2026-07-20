@@ -27,7 +27,7 @@ import {
 import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRoutingPolicy.js';
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
-import { recordSecuritySignal } from '../services/security/securitySignalService.js';
+import { writePlatformAdminAuditEventInTx } from '../services/platformAdminAudit.js';
 
 const router = express.Router();
 
@@ -1095,34 +1095,27 @@ router.patch('/privacy/legacy-consent-correction/settings', async (req: Platform
     return;
   }
   const previousEnabled = await isLegacyConsentCorrectionRuntimeEnabled();
-  await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, String(runtimeEnabled));
 
   // Durable, platform-scoped, admin-attributed audit record for this
-  // KVKK-relevant kill-switch change. Neither AuditLog nor OperationalEvent
-  // can represent it: both require a non-null organizationId, so a
-  // platform-wide (org-less) setting change would need a semantically-wrong
-  // sentinel org id. SecuritySignalEvent (KVKK-CRIT-003) already has an
-  // optional organizationId and an actorPlatformAdminId field built for
-  // exactly this attribution need, and recordSecuritySignal() never throws,
-  // so a logging failure can never block or distort the toggle response.
-  // A signalType/ruleKey not read by any rule in securityDetectionRules.ts
-  // keeps this from ever being aggregated into unrelated incident escalation.
-  await recordSecuritySignal({
-    signalType: 'platform_admin.legacy_consent_correction_runtime_toggle.v1',
-    category: 'platform_admin_config_change',
-    severity: 'low',
-    ruleKey: 'platform_admin.config_change.v1',
-    dedupeDimension: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
-    actorPlatformAdminId: req.platformAdmin?.id ?? null,
-    resourceType: 'platform_setting',
-    resourceId: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
-    safeMetadata: {
-      settingKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
-      previousValue: previousEnabled,
-      newValue: runtimeEnabled,
+  // KVKK-relevant kill-switch change, written in the SAME transaction as the
+  // setting mutation via PlatformAdminAuditEvent (dedicated platform-admin
+  // config-change audit trail — see platformAdminAudit.ts; deliberately not
+  // SecuritySignalEvent, which is security-detection telemetry, a different
+  // domain). If the audit insert fails, the whole transaction rolls back, so
+  // the setting change never takes effect without its audit row.
+  await prisma.$transaction(async (tx) => {
+    await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, String(runtimeEnabled), tx);
+    await writePlatformAdminAuditEventInTx(tx, {
+      actorPlatformAdminId: req.platformAdmin?.id ?? null,
+      action: 'platform_setting.updated',
+      resourceType: 'platform_setting',
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+      previousValue: String(previousEnabled),
+      newValue: String(runtimeEnabled),
       outcome: 'success',
-    },
+    });
   });
+
   // console.log retained for local/ops tailing convenience — the durable
   // record above is the actual audit evidence, not this line.
   console.log(`[platform-privacy] Legacy consent correction runtime toggle set to ${runtimeEnabled} by admin ${req.platformAdmin?.email}`);

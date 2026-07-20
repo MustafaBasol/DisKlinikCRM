@@ -1312,6 +1312,7 @@ model PlatformAdmin {
   securityIncidentsResolved     SecurityIncident[]         @relation("SecurityIncidentResolver")
   securityIncidentsClosed       SecurityIncident[]         @relation("SecurityIncidentCloser")
   securityIncidentActivity      SecurityIncidentActivity[] @relation("SecurityIncidentActivityActor")
+  platformAdminAuditEvents      PlatformAdminAuditEvent[]  @relation("PlatformAdminAuditActor")
 }
 
 model ClinicInvitation {
@@ -1827,6 +1828,44 @@ model PlatformSetting {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Durable, create-only audit trail for Platform Admin configuration changes
+/// (e.g. PlatformSetting toggles). Deliberately separate from
+/// SecuritySignalEvent: that table is security-detection telemetry read by
+/// securityDetectionRules.ts for incident aggregation, and a config change is
+/// not a security signal — mixing the two domains would create retention/
+/// reporting ambiguity and risk future detection rules misinterpreting
+/// routine admin changes. Never contains patient data or secret values.
+/// onDelete: SetNull so a deleted/deactivated Platform Admin never destroys
+/// audit history.
+model PlatformAdminAuditEvent {
+  id String @id @default(uuid())
+
+  actorPlatformAdminId String?
+  actorPlatformAdmin   PlatformAdmin? @relation("PlatformAdminAuditActor", fields: [actorPlatformAdminId], references: [id], onDelete: SetNull)
+
+  /// e.g. "platform_setting.updated"
+  action String
+
+  resourceType String
+  /// The PlatformSetting key (or other resource identifier) this event concerns.
+  resourceKey  String
+
+  previousValue String?
+  newValue      String?
+
+  /// "success" | "failure" — this table only ever records successful
+  /// mutations (see platformAdminAuditService.ts); reserved for future use.
+  outcome String
+
+  /// Sanitized, non-secret, non-patient metadata only.
+  safeMetadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorPlatformAdminId, createdAt])
+  @@index([action, createdAt])
 }
 
 /// KVKK/GDPR patient privacy rights requests (access, rectification, anonymization, etc.)
