@@ -1,6 +1,8 @@
 # RELEASE_GATES — Yayın Kapıları (G0–G6)
 
-Son güncelleme: 2026-07-17 (F0-001)
+Son güncelleme: 2026-07-20 (F0-012 — G1/G2 kanıt listesi [LAUNCH_GATES.md](LAUNCH_GATES.md)'e ayrıntılandırıldı; bu dosyadaki G1/G2 durumu `NOT_APPROVED` kalır, hiçbir kapı bu görevle geçilmedi.)
+
+Prior update: 2026-07-17 (F0-001)
 
 ## Temel ilkeler
 
@@ -36,7 +38,7 @@ Tüm kapılar başlangıçta `NOT_APPROVED` durumundadır. Hiçbir kapı geçilm
 - **Gerekli operasyonel kanıt:** İzleme/alarm; olay müdahale (incident) prosedürü; restore testi kanıtı.
 - **Onay sahibi:** Kullanıcı (ChatGPT incelemesiyle).
 - **Rollback hazırlığı:** Pilot kliniklerin verisiyle birlikte geri dönüş/çıkış planı belgelenmiş olmalı.
-- **Not:** F0-012 bu kapının kanıt listesini ayrıntılandıracaktır. F0-011, "restore testi kanıtı" için gereken deney spesifikasyonunu üretti ([f0-011-storage-backup-test-matrix.md](../architecture/f0-011-storage-backup-test-matrix.md), Experiments 25-35) ve mevcut durumun `UNVERIFIED`/`NOT_CONFIGURED` olduğunu kanıtla doğruladı (R-029…R-032) — bu kapı hâlâ `NOT_APPROVED`; F0-011 hiçbir deneyi çalıştırmadı, yalnızca tasarladı.
+- **Not:** F0-012, bu kapının tam kanıt listesini [LAUNCH_GATES.md §2](LAUNCH_GATES.md#2-g1--controlled-pilot-ready) içinde ayrıntılandırdı — Gate ID, giriş kriterleri, A-H kanıt boyutları (program/governance, kod/test, tenant/güvenlik, DB/migration, storage/backup, operasyon, feature-activation, dış/yasal), blocker/accepted-risk ayrımı, onay kaydı şablonu. **Bu kapı hâlâ `NOT_APPROVED`/`NOT_EVALUATED`** — F0-012 yalnızca kanıt gereksinimlerini tanımladı, hiçbirini karşılamadı/onaylamadı. F0-011, "restore testi kanıtı" için gereken deney spesifikasyonunu üretti ([f0-011-storage-backup-test-matrix.md](../architecture/f0-011-storage-backup-test-matrix.md), Experiments 25-35) ve mevcut durumun `UNVERIFIED`/`NOT_CONFIGURED` olduğunu kanıtla doğruladı (R-029…R-032) — F0-011 hiçbir deneyi çalıştırmadı, yalnızca tasarladı.
 
 ## G2 — General Commercial Launch Ready
 
@@ -49,7 +51,7 @@ Tüm kapılar başlangıçta `NOT_APPROVED` durumundadır. Hiçbir kapı geçilm
 - **Gerekli operasyonel kanıt:** SLO'lar, kapasite planı, destek süreci, faturalama doğrulaması.
 - **Onay sahibi:** Kullanıcı.
 - **Rollback hazırlığı:** Sürüm geri alma provası (rollback rehearsal) kanıtı.
-- **Not:** G1'in geçilmesi G2'nin geçildiği anlamına **gelmez**.
+- **Not:** G1'in geçilmesi G2'nin geçildiği anlamına **gelmez**. F0-012, bu kapının tam kanıt listesini [LAUNCH_GATES.md §3](LAUNCH_GATES.md#3-g2--general-commercial-launch-ready) içinde ayrıntılandırdı — her A-H boyutu G1'den **bağımsız olarak** değerlendirilir (G1'de kabul edilen geçici riskler G2'de çoğunlukla zorunlu hale gelir: offsite yedek, PITR, CI kapsamı, izleme/alarm, otomatik rollback). **Bu kapı hâlâ `NOT_APPROVED`/`NOT_EVALUATED`.**
 
 ## G3 — Rapid Growth Ready
 
