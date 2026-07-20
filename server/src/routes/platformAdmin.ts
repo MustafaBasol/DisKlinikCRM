@@ -10,6 +10,10 @@ import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { loadDataRetentionConfig } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting, setPlatformSetting } from '../services/platformSettings.js';
+import {
+  LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+  isLegacyConsentCorrectionRuntimeEnabled,
+} from '../services/communicationConsent/legacyConsentCorrection.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import { encryptSecretTagged, decryptSecretTagged } from '../utils/encryption.js';
 import { generateTotpSecret, verifyTotp, buildOtpAuthUri } from '../utils/totp.js';
@@ -1065,6 +1069,37 @@ router.patch('/privacy/data-retention/settings', async (req, res: Response) => {
   await setPlatformSetting('privacy.dataRetention.runtimeEnabled', String(runtimeCleanupEnabled));
   const config = loadDataRetentionConfig();
   res.json(buildPolicyResponse(config, runtimeCleanupEnabled));
+});
+
+// ─── Privacy / Legacy Consent Correction Runtime Toggle (KVKK-HIGH-008-F1) ────
+// Same PlatformSetting-backed pattern as the data-retention toggle above —
+// reused, not duplicated as a new settings framework. This is a platform-wide
+// kill switch (not per-tenant rollout allowlisting): default false, and the
+// legacy-corrections mutation route (communicationPreferences.ts) denies by
+// default whenever this setting is absent or not exactly 'true'.
+
+// GET /api/platform/privacy/legacy-consent-correction/policy
+// Returns current runtime toggle state. Platform-admin only.
+router.get('/privacy/legacy-consent-correction/policy', async (_req, res: Response) => {
+  const runtimeEnabled = await isLegacyConsentCorrectionRuntimeEnabled();
+  res.json({ runtimeEnabled });
+});
+
+// PATCH /api/platform/privacy/legacy-consent-correction/settings
+// Enable/disable the legacy consent correction workflow. Platform-admin only.
+router.patch('/privacy/legacy-consent-correction/settings', async (req: PlatformAdminRequest, res: Response) => {
+  const { runtimeEnabled } = req.body ?? {};
+  if (typeof runtimeEnabled !== 'boolean') {
+    res.status(400).json({ error: 'runtimeEnabled must be a boolean' });
+    return;
+  }
+  await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, String(runtimeEnabled));
+  // No dedicated platform-admin audit table exists (AuditLog.organizationId
+  // is mandatory, so it cannot record a platform-wide setting change) —
+  // structured console logging is this router's existing convention for
+  // this class of action (see /backups/run, /backups/restore-test above).
+  console.log(`[platform-privacy] Legacy consent correction runtime toggle set to ${runtimeEnabled} by admin ${req.platformAdmin?.email}`);
+  res.json({ runtimeEnabled });
 });
 
 // POST /api/platform/privacy/data-retention/run

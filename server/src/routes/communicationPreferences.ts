@@ -48,6 +48,7 @@ import {
   correctSmsOptOut,
   listLegacyConsentCorrections,
   getLegacyConsentCorrectionDetail,
+  isLegacyConsentCorrectionRuntimeEnabled,
   LegacyConsentCorrectionError,
 } from '../services/communicationConsent/legacyConsentCorrection.js';
 import { legacySmsOptOutCorrectionSchema } from '../schemas/index.js';
@@ -144,9 +145,12 @@ router.get(
       const patient = await loadScopedPatient(req, res, patientId);
       if (!patient) return;
 
-      const rows = await prisma.patientCommunicationPreference.findMany({
-        where: { patientId: patient.id, clinicId: patient.clinicId },
-      });
+      const [rows, legacyConsentCorrectionRuntimeEnabled] = await Promise.all([
+        prisma.patientCommunicationPreference.findMany({
+          where: { patientId: patient.id, clinicId: patient.clinicId },
+        }),
+        isLegacyConsentCorrectionRuntimeEnabled(),
+      ]);
       const byKey = new Map(rows.map((r) => [`${r.channel}:${r.purpose}`, r]));
 
       // Evaluated once, in memory, for every cell — the patient (and thus
@@ -211,7 +215,7 @@ router.get(
         }
       }
 
-      res.json({ patientId: patient.id, clinicId: patient.clinicId, matrix });
+      res.json({ patientId: patient.id, clinicId: patient.clinicId, matrix, legacyConsentCorrectionRuntimeEnabled });
     } catch (err: any) {
       console.error('[communicationPreferences] matrix error:', err?.message ?? err);
       res.status(500).json({ error: 'Failed to load communication preferences' });
@@ -562,6 +566,28 @@ router.post(
     try {
       const patient = await loadScopedPatient(req, res, patientId);
       if (!patient) return;
+
+      // KVKK-HIGH-008-F1 kill switch — checked BEFORE any body validation, so
+      // a disabled attempt never reads correctionReason/notes/evidence at
+      // all (same "never touch the sensitive body on the disabled path"
+      // discipline as clinicBulkExport.ts's feature-disabled check).
+      if (!(await isLegacyConsentCorrectionRuntimeEnabled())) {
+        await writeAuditLog({
+          organizationId: patient.organizationId,
+          clinicId: patient.clinicId,
+          actorUserId: req.user!.id,
+          actorRole: req.user!.role,
+          action: 'legacy_consent_correction_disabled_attempt',
+          entityType: 'patient',
+          entityId: patient.id,
+          description: 'Legacy consent correction attempted while runtime-disabled.',
+          ...extractRequestMeta(req),
+        });
+        return res.status(403).json({
+          errorCode: 'runtime_disabled',
+          error: 'The legacy consent correction workflow is currently disabled.',
+        });
+      }
 
       const validation = legacySmsOptOutCorrectionSchema.safeParse(req.body);
       if (!validation.success) {

@@ -81,7 +81,10 @@ async function openManageMenuFor(purposeKey: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  svc.getMatrix.mockResolvedValue({ data: { matrix: CONFLICT_MATRIX } });
+  // legacyConsentCorrectionRuntimeEnabled: true — existing tests below assume
+  // the KVKK-HIGH-008-F1 runtime kill switch is on; see the dedicated
+  // "runtime toggle" describe block for the false/hidden-action cases.
+  svc.getMatrix.mockResolvedValue({ data: { matrix: CONFLICT_MATRIX, legacyConsentCorrectionRuntimeEnabled: true } });
   svc.getLegacyCorrections.mockResolvedValue({ data: { items: [], pageInfo: { hasMore: false, nextCursor: null } } });
 });
 
@@ -270,5 +273,47 @@ describe('CommunicationPreferencesPanel — legacy consent correction workflow (
 
     expect(await screen.findByText('legacyCorrectionHistory.smsOptOutCorrected')).toBeInTheDocument();
     expect(screen.queryByText('c1')).not.toBeInTheDocument(); // internal id never shown
+  });
+});
+
+describe('CommunicationPreferencesPanel — legacy consent correction runtime toggle (KVKK-HIGH-008-F1)', () => {
+  it('the "correct legacy signal" action is hidden when the backend runtime toggle is off, even for a management user', async () => {
+    svc.getMatrix.mockResolvedValue({ data: { matrix: CONFLICT_MATRIX, legacyConsentCorrectionRuntimeEnabled: false } });
+    renderPanel({ canCorrectLegacyConsent: true });
+    await waitForLoaded();
+    await openManageMenuFor('marketing');
+    expect(screen.queryByText('conflict.correctLegacyAction')).not.toBeInTheDocument();
+  });
+
+  it('the action is hidden by default if the matrix response omits the runtime flag entirely (fail-closed)', async () => {
+    svc.getMatrix.mockResolvedValue({ data: { matrix: CONFLICT_MATRIX } });
+    renderPanel({ canCorrectLegacyConsent: true });
+    await waitForLoaded();
+    await openManageMenuFor('marketing');
+    expect(screen.queryByText('conflict.correctLegacyAction')).not.toBeInTheDocument();
+  });
+
+  it('a stale/already-open modal that submits while the backend has since been disabled surfaces the server-supplied disabled explanation, not the generic fallback', async () => {
+    // The mock t() (see top of file) always prefers an explicit defaultValue
+    // over the key — same as real i18next's "translation missing" fallback
+    // behavior — so this asserts on the exact message LegacyConsentCorrectionModal
+    // passes as defaultValue for a 'runtime_disabled' errorCode: the server's
+    // own `error` string. In the real (non-mocked) app this key resolves to
+    // the localized `legacyCorrection.errors.runtime_disabled` copy added to
+    // all four locale files instead of falling through to this defaultValue.
+    const disabledMessage = 'The legacy consent correction workflow is currently disabled.';
+    svc.submitLegacySmsOptOutCorrection.mockRejectedValue({ response: { data: { errorCode: 'runtime_disabled', error: disabledMessage } } });
+    renderPanel();
+    await waitForLoaded();
+    await openManageMenuFor('marketing');
+    await userEvent.click(screen.getByText('conflict.correctLegacyAction'));
+    await screen.findByText('legacyCorrection.title');
+
+    await userEvent.type(screen.getByPlaceholderText('legacyCorrection.fields.reasonPlaceholder'), 'Legacy import mis-set this flag.');
+    await userEvent.type(screen.getByPlaceholderText('legacyCorrection.fields.notesPlaceholder'), 'Confirmed by phone with the patient.');
+    await userEvent.click(screen.getByRole('button', { name: 'legacyCorrection.confirm' }));
+
+    expect(await screen.findByText(disabledMessage)).toBeInTheDocument();
+    expect(screen.queryByText('legacyCorrection.errors.generic')).not.toBeInTheDocument();
   });
 });

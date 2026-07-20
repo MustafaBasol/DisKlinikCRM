@@ -199,6 +199,7 @@
       "patient_not_found": "Patient nicht gefunden.",
       "clinic_scope_mismatch": "Sie haben keinen Zugriff auf diesen Patienten.",
       "idempotency_conflict": "Diese Anfrage wurde bereits mit anderem Inhalt gesendet. Bitte aktualisieren.",
+      "runtime_disabled": "Diese Funktion ist derzeit deaktiviert. Bitte wenden Sie sich an Ihren Administrator.",
       "generic": "Diese Korrektur konnte nicht gespeichert werden. Bitte erneut versuchen."
     }
   },

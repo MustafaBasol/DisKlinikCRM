@@ -40,6 +40,22 @@ import { createHash } from 'node:crypto';
 import prisma from '../../db.js';
 import type { Prisma } from '@prisma/client';
 import { sanitizeConsentNote } from './consentEvidenceSanitizer.js';
+import { getPlatformSetting } from '../platformSettings.js';
+
+// ── KVKK-HIGH-008-F1: runtime activation control (kill switch) ─────────────
+//
+// Same PlatformSetting-backed pattern as privacy.dataRetention.runtimeEnabled
+// (see platformAdmin.ts) — no caching, so a toggle takes effect on the very
+// next request. Default-deny: an absent row (production's actual current
+// state — no migration adds one) reads as `null`, which is treated as
+// disabled, same as an explicit 'false'. Only the exact string 'true' enables
+// the mutation route.
+export const LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY = 'privacy.legacyConsentCorrection.runtimeEnabled';
+
+export async function isLegacyConsentCorrectionRuntimeEnabled(): Promise<boolean> {
+  const value = await getPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY);
+  return value === 'true';
+}
 
 export const LEGACY_CORRECTION_EVIDENCE_TYPES = [
   'patient_verbal_confirmation',

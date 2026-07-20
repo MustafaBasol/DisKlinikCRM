@@ -280,6 +280,13 @@
       "envDisabledWarning": "Automatic cleanup is disabled at the environment level (DATA_RETENTION_CLEANUP_ENABLED=false). It cannot be enabled from the UI.",
       "runtimeDisabledWarning": "Automatic cleanup is disabled via the UI setting. Use the toggle above to enable it."
     },
+    "legacyConsentCorrection": {
+      "title": "Legacy Consent Correction Workflow (Kill Switch)",
+      "explanation": "This is a platform-wide kill switch for the KVKK-HIGH-008 legacy SMS opt-out correction workflow — not a pilot-clinic allowlist. While off, no clinic can create a new correction record; existing correction history always remains viewable.",
+      "runtimeSetting": "Runtime setting",
+      "saveSuccess": "Setting saved",
+      "saveFailed": "Failed to save setting"
+    },
     "liveRunBlockedEnvDisabled": "Live cleanup cannot run because it is disabled at the system level (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Current Retention Policy",
     "policyLoadFailed": "Policy could not be loaded",

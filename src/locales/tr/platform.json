@@ -280,6 +280,13 @@
       "envDisabledWarning": "Otomatik temizlik .env seviyesinde kapalı (DATA_RETENTION_CLEANUP_ENABLED=false). Arayüzden etkinleştirilemez.",
       "runtimeDisabledWarning": "Otomatik temizlik arayüz ayarından kapalı. Açmak için yukarıdaki açma/kapama düğmesini kullanın."
     },
+    "legacyConsentCorrection": {
+      "title": "Eski Onay Düzeltme İş Akışı (Kill Switch)",
+      "explanation": "Bu, KVKK-HIGH-008 eski SMS engelleme düzeltme iş akışı için platform genelinde bir kill switch'tir — pilot klinik izin listesi değildir. Kapalıyken hiçbir klinik yeni bir düzeltme kaydı oluşturamaz; mevcut düzeltme geçmişi her zaman görüntülenebilir kalır.",
+      "runtimeSetting": "Çalışma zamanı ayarı",
+      "saveSuccess": "Ayar kaydedildi",
+      "saveFailed": "Ayar kaydedilemedi"
+    },
     "liveRunBlockedEnvDisabled": "Canlı temizlik sistem seviyesinde kapalı olduğu için çalıştırılamaz (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Mevcut Saklama Politikası",
     "policyLoadFailed": "Politika yüklenemedi",

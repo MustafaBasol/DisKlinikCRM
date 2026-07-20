@@ -24,6 +24,17 @@
  *   - Klinik tokenı platform JWT gizliğiyle doğrulanamaz
  */
 
+// Must load before ANY other import in this file. platformAuth.ts reads
+// PLATFORM_JWT_SECRET eagerly, once, at its own module top level — this file
+// previously never imported db.ts (the only thing that pulled in
+// `dotenv/config`) so PLATFORM_JWT_SECRET stayed consistently unset and every
+// signature check happened to line up against the same hardcoded fallback.
+// KVKK-HIGH-008-F1's new real-Postgres route tests below need `prisma` and
+// `platformAdminRouter` (which imports `prisma`), and importing those AFTER
+// platformAuth.ts made dotenv populate the real secret mid-file — an
+// import-order hazard, not a logic bug in either module. Loading dotenv
+// first removes the ordering dependency entirely.
+import 'dotenv/config';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 
@@ -40,6 +51,9 @@ import {
   DATA_RETENTION_DEFAULTS,
   DATA_RETENTION_MIN_DAYS,
 } from '../services/privacy/dataRetentionPolicy.js';
+import prisma from '../db.js';
+import platformAdminRouter from '../routes/platformAdmin.js';
+import { LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } from '../services/communicationConsent/legacyConsentCorrection.js';
 
 // ── Test yardımcısı ───────────────────────────────────────────────────────────
 
@@ -509,6 +523,110 @@ await test('Manuel live-run: env enabled ise geçer', () => {
   const envEnabled = true;
   const blocked = !dryRun && !envEnabled;
   assert.equal(blocked, false);
+});
+
+section('Privacy / Legacy Consent Correction Runtime Toggle (KVKK-HIGH-008-F1) — real route + DB');
+
+// Same extraction technique as legacyConsentCorrection.test.ts: pull the
+// route-specific handler chain out of the router's stack (this necessarily
+// bypasses the router-level `router.use(authenticatePlatformAdmin,
+// csrfProtection)` gate, since that's a separate, unkeyed layer — not part of
+// `layer.route.stack` — exactly like every other route test in this file and
+// in legacyConsentCorrection.test.ts). "L: clinic users cannot change it" is
+// covered above by the generic authenticatePlatformAdmin clinic-JWT-rejection
+// tests, which gate every route behind this router, including these two.
+type RouterLike = { stack: Array<any> };
+function getRouteMiddlewareChain(router: RouterLike, method: 'get' | 'patch', path: string) {
+  for (const layer of router.stack) {
+    if (layer.route && layer.route.path === path && layer.route.methods?.[method]) {
+      return layer.route.stack.map((s: any) => s.handle);
+    }
+  }
+  throw new Error(`No route handler found for ${method.toUpperCase()} ${path}`);
+}
+async function runChain(chain: Array<(req: any, res: any, next: () => void) => void | Promise<void>>, req: any, res: any): Promise<void> {
+  for (const fn of chain) {
+    let calledNext = false;
+    await fn(req, res, () => { calledNext = true; });
+    if (!calledNext) return;
+  }
+}
+function mockPlatformRes() {
+  const res: any = {
+    statusCode: 200,
+    body: undefined,
+    status(code: number) { this.statusCode = code; return this; },
+    json(payload: unknown) { this.body = payload; return this; },
+  };
+  return res;
+}
+function mockPlatformReq(body: Record<string, unknown> = {}) {
+  return { body, platformAdmin: { id: 'admin-1', email: 'admin@platform.test' } } as any;
+}
+
+await test('GET policy: no PlatformSetting row → runtimeEnabled=false (default-deny)', async () => {
+  await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'get', '/privacy/legacy-consent-correction/policy');
+  const res = mockPlatformRes();
+  await runChain(chain, mockPlatformReq(), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.runtimeEnabled, false);
+});
+
+await test('PATCH settings: platform admin enables it, GET then reflects true; row value is the literal string "true"', async () => {
+  const patchChain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const patchRes = mockPlatformRes();
+  await runChain(patchChain, mockPlatformReq({ runtimeEnabled: true }), patchRes);
+  assert.equal(patchRes.statusCode, 200);
+  assert.equal(patchRes.body.runtimeEnabled, true);
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row?.value, 'true');
+
+  const getChain = getRouteMiddlewareChain(platformAdminRouter as any, 'get', '/privacy/legacy-consent-correction/policy');
+  const getRes = mockPlatformRes();
+  await runChain(getChain, mockPlatformReq(), getRes);
+  assert.equal(getRes.body.runtimeEnabled, true);
+});
+
+await test('PATCH settings: platform admin disables it again; row value is the literal string "false"', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const res = mockPlatformRes();
+  await runChain(chain, mockPlatformReq({ runtimeEnabled: false }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.runtimeEnabled, false);
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row?.value, 'false');
+});
+
+await test('PATCH settings: non-boolean payload is rejected with 400 and never writes the setting', async () => {
+  await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  for (const badBody of [{ runtimeEnabled: 'true' }, { runtimeEnabled: 1 }, { runtimeEnabled: null }, {}]) {
+    const res = mockPlatformRes();
+    await runChain(chain, mockPlatformReq(badBody), res);
+    assert.equal(res.statusCode, 400, `expected 400 for payload ${JSON.stringify(badBody)}`);
+  }
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row, null, 'an invalid payload must never create/modify the setting row');
+});
+
+await test('PATCH settings: admin-attributed console log is emitted on toggle (existing platform-admin observability convention), leaving the DB row as the final restored state', async () => {
+  const logSpy: string[] = [];
+  const originalLog = console.log;
+  console.log = ((...args: unknown[]) => { logSpy.push(args.map(String).join(' ')); }) as any;
+  try {
+    const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+    await runChain(chain, mockPlatformReq({ runtimeEnabled: true }), mockPlatformRes());
+  } finally {
+    console.log = originalLog;
+  }
+  assert.ok(logSpy.some((line) => line.includes('admin@platform.test') && line.includes('true')), 'toggle must be logged with the acting admin identity and the new value');
+
+  // Restore to the real production default (absent) so this file leaves no
+  // global PlatformSetting state behind for whatever test file runs next.
+  await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
 });
 
 // ── Sonuç ─────────────────────────────────────────────────────────────────────

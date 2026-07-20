@@ -49,6 +49,17 @@ const PlatformPrivacy: React.FC = () => {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // KVKK-HIGH-008-F1: legacy consent correction runtime kill switch —
+  // platform-wide, default false. Same PlatformSetting-backed GET/PATCH
+  // pattern as the data-retention toggle above, kept as its own small state
+  // slice rather than folded into `policy` since the two features are
+  // otherwise unrelated.
+  const [legacyCorrectionEnabled, setLegacyCorrectionEnabled] = useState(false);
+  const [legacyCorrectionLoading, setLegacyCorrectionLoading] = useState(true);
+  const [legacyCorrectionToggleLoading, setLegacyCorrectionToggleLoading] = useState(false);
+  const [legacyCorrectionToggleSuccess, setLegacyCorrectionToggleSuccess] = useState(false);
+  const [legacyCorrectionToggleError, setLegacyCorrectionToggleError] = useState('');
+
   const fetchPolicy = () => {
     setPolicyLoading(true);
     setPolicyError('');
@@ -59,7 +70,35 @@ const PlatformPrivacy: React.FC = () => {
       .finally(() => setPolicyLoading(false));
   };
 
-  useEffect(() => { fetchPolicy(); }, []);
+  const fetchLegacyCorrectionSetting = () => {
+    setLegacyCorrectionLoading(true);
+    api
+      .get('/platform/privacy/legacy-consent-correction/policy')
+      .then((res) => setLegacyCorrectionEnabled(Boolean(res.data.runtimeEnabled)))
+      .catch(() => setLegacyCorrectionEnabled(false))
+      .finally(() => setLegacyCorrectionLoading(false));
+  };
+
+  useEffect(() => { fetchPolicy(); fetchLegacyCorrectionSetting(); }, []);
+
+  const handleLegacyCorrectionToggle = async () => {
+    const next = !legacyCorrectionEnabled;
+    setLegacyCorrectionToggleLoading(true);
+    setLegacyCorrectionToggleSuccess(false);
+    setLegacyCorrectionToggleError('');
+    try {
+      const res = await api.patch('/platform/privacy/legacy-consent-correction/settings', {
+        runtimeEnabled: next,
+      });
+      setLegacyCorrectionEnabled(Boolean(res.data.runtimeEnabled));
+      setLegacyCorrectionToggleSuccess(true);
+      setTimeout(() => setLegacyCorrectionToggleSuccess(false), 3000);
+    } catch {
+      setLegacyCorrectionToggleError(t('platform:privacy.legacyConsentCorrection.saveFailed'));
+    } finally {
+      setLegacyCorrectionToggleLoading(false);
+    }
+  };
 
   const handleToggle = async () => {
     if (!policy) return;
@@ -266,6 +305,53 @@ const PlatformPrivacy: React.FC = () => {
           </div>
         </>
       ) : null}
+
+      {/* ── Legacy Consent Correction Runtime Toggle (KVKK-HIGH-008-F1) ──── */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5">
+        <h2 className="font-semibold text-gray-900 dark:text-white mb-2">
+          {t('platform:privacy.legacyConsentCorrection.title')}
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          {t('platform:privacy.legacyConsentCorrection.explanation')}
+        </p>
+        {legacyCorrectionLoading ? (
+          <div className="flex items-center justify-center h-16">
+            <Loader2 size={20} className="animate-spin text-blue-500" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {t('platform:privacy.legacyConsentCorrection.runtimeSetting')}
+              </span>
+              {legacyCorrectionToggleError && (
+                <p className="text-xs text-red-500 mt-0.5">{legacyCorrectionToggleError}</p>
+              )}
+              {legacyCorrectionToggleSuccess && (
+                <p className="text-xs text-green-600 mt-0.5">{t('platform:privacy.legacyConsentCorrection.saveSuccess')}</p>
+              )}
+            </div>
+            <button
+              onClick={handleLegacyCorrectionToggle}
+              disabled={legacyCorrectionToggleLoading}
+              className="flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            >
+              {legacyCorrectionToggleLoading ? (
+                <Loader2 size={22} className="animate-spin text-blue-500" />
+              ) : legacyCorrectionEnabled ? (
+                <ToggleRight size={28} className="text-green-500" />
+              ) : (
+                <ToggleLeft size={28} className="text-gray-400" />
+              )}
+              <span className={`text-sm font-medium ${legacyCorrectionEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+                {legacyCorrectionEnabled
+                  ? t('platform:privacy.autoCleanup.on')
+                  : t('platform:privacy.autoCleanup.off')}
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* ── Actions ───────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5">
