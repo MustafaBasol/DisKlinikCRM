@@ -280,6 +280,13 @@
       "envDisabledWarning": "Le nettoyage automatique est désactivé au niveau environnement (DATA_RETENTION_CLEANUP_ENABLED=false). Il ne peut pas être activé depuis l'UI.",
       "runtimeDisabledWarning": "Le nettoyage automatique est désactivé via le paramètre UI. Utilisez le bouton ci-dessus pour l'activer."
     },
+    "legacyConsentCorrection": {
+      "title": "Workflow de correction de consentement hérité (kill switch)",
+      "explanation": "Il s'agit d'un kill switch à l'échelle de la plateforme pour le workflow de correction de désinscription SMS héritée KVKK-HIGH-008 — pas d'une liste d'autorisation de clinique pilote. Lorsqu'il est désactivé, aucune clinique ne peut créer de nouvel enregistrement de correction ; l'historique des corrections existantes reste toujours consultable.",
+      "runtimeSetting": "Paramètre d'exécution",
+      "saveSuccess": "Paramètre enregistré",
+      "saveFailed": "Échec de l'enregistrement"
+    },
     "liveRunBlockedEnvDisabled": "Le nettoyage réel ne peut pas s'exécuter car il est désactivé au niveau système (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Politique de conservation actuelle",
     "policyLoadFailed": "La politique n'a pas pu être chargée",

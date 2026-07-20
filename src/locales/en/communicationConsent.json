@@ -199,6 +199,7 @@
       "patient_not_found": "Patient not found.",
       "clinic_scope_mismatch": "You do not have access to this patient.",
       "idempotency_conflict": "This request was already submitted with different content. Please refresh.",
+      "runtime_disabled": "This workflow is currently turned off. Please contact your administrator.",
       "generic": "Could not save this correction. Please try again."
     }
   },

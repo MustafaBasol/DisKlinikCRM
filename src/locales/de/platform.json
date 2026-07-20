@@ -280,6 +280,13 @@
       "envDisabledWarning": "Die automatische Bereinigung ist auf Umgebungsebene deaktiviert (DATA_RETENTION_CLEANUP_ENABLED=false). Sie kann nicht über die UI aktiviert werden.",
       "runtimeDisabledWarning": "Die automatische Bereinigung ist über die UI-Einstellung deaktiviert. Verwenden Sie den Schalter oben, um sie zu aktivieren."
     },
+    "legacyConsentCorrection": {
+      "title": "Workflow zur Korrektur alter Einwilligungen (Kill Switch)",
+      "explanation": "Dies ist ein plattformweiter Kill Switch für den KVKK-HIGH-008-Workflow zur Korrektur des alten SMS-Opt-out — keine Pilot-Klinik-Freigabeliste. Wenn deaktiviert, kann keine Klinik einen neuen Korrektureintrag erstellen; der bestehende Korrekturverlauf bleibt jederzeit einsehbar.",
+      "runtimeSetting": "Laufzeiteinstellung",
+      "saveSuccess": "Einstellung gespeichert",
+      "saveFailed": "Speichern fehlgeschlagen"
+    },
     "liveRunBlockedEnvDisabled": "Die Live-Bereinigung kann nicht ausgeführt werden, da sie auf Systemebene deaktiviert ist (DATA_RETENTION_CLEANUP_ENABLED=false).",
     "policyTitle": "Aktuelle Aufbewahrungsrichtlinie",
     "policyLoadFailed": "Richtlinie konnte nicht geladen werden",
