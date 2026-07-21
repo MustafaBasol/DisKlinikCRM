@@ -415,8 +415,9 @@ R-071 (`RISK_REGISTER.md`) remains **OPEN** after this document. Evidence requir
 - Code changed: **no**.
 - Tests run: **no** (no characterization test was executed; no code changed, so none was required).
 - Docs written: **yes** (this file + the 4 permitted tracker/risk/compliance updates).
-- Committed: **no**.
-- PR opened: **no**.
+- Committed: **yes** (`d9176e1f2acb5625ce8d94017ab96bbe283be518`).
+- Pushed: **yes** (branch `docs/kvkk-high006-s2-occurrence-classification`).
+- PR opened: **yes** — [PR #191](https://github.com/MustafaBasol/DisKlinikCRM/pull/191), state `OPEN`, mergeable `MERGEABLE`, mergeStateStatus `CLEAN`, base `main`.
 - Merged: **no**.
 - Deployed: not applicable.
 - Production verified: not applicable.
@@ -430,4 +431,4 @@ R-071 (`RISK_REGISTER.md`) remains **OPEN** after this document. Evidence requir
 
 ## 30. Exact next task
 
-**KVKK-HIGH-006-S3 (or equivalent next task ID)** — implement **Batch 1** (`reports.ts:73,405`, `appointmentRequests.ts:152,192,346`, `dentalChart.ts:23,51,112`) as an isolated, reviewable PR: swap the flagged raw `req.user.clinicId` reads for `validateAndGetClinicIdScope` (list/report shape) or the record-derived-scope pattern (mutation shape), add the 12 required test cases per §22 against a disposable database, and independently (not author-only) re-verify before merge — mirroring this program's established evidentiary standard for prior KVKK-HIGH items. Batches 2-3 follow as separate, equally-isolated PRs once Batch 1's pattern is validated in review. Batch 4's `planLimits.ts` component requires a prerequisite product decision (§14.4/§28.1) before any implementation task can be scoped for it.
+**NEXT_AFTER_MERGE: KVKK-HIGH-006-S3 (or equivalent next task ID)**, once PR #191 merges — implement **Batch 1** (`reports.ts:73,405`, `appointmentRequests.ts:152,192,346`, `dentalChart.ts:23,51,112`) as an isolated, reviewable PR: swap the flagged raw `req.user.clinicId` reads for `validateAndGetClinicIdScope` (list/report shape) or the record-derived-scope pattern (mutation shape), add the 12 required test cases per §22 against a disposable database, and independently (not author-only) re-verify before merge — mirroring this program's established evidentiary standard for prior KVKK-HIGH items. Batches 2-3 follow as separate, equally-isolated PRs once Batch 1's pattern is validated in review. Batch 4's `planLimits.ts` component requires a prerequisite product decision (§14.4/§28.1) before any implementation task can be scoped for it.
