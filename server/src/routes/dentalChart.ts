@@ -1,6 +1,7 @@
 import express, { Response } from 'express';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import prisma from '../db.js';
+import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -20,16 +21,17 @@ router.get(
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
-    const clinicId = req.user!.clinicId;
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
     try {
       const patient = await prisma.patient.findFirst({
-        where: { id: patientId, clinicId, deletedAt: null },
-        select: { id: true },
+        where: { id: patientId, ...scope, deletedAt: null },
+        select: { id: true, clinicId: true },
       });
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
       const records = await prisma.toothRecord.findMany({
-        where: { patientId, clinicId },
+        where: { patientId, clinicId: patient.clinicId },
         include: { createdBy: { select: { firstName: true, lastName: true } } },
         orderBy: { toothFdi: 'asc' },
       });
@@ -48,7 +50,6 @@ router.put(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const toothFdi = parseInt(req.params.toothFdi as string, 10);
-    const clinicId = req.user!.clinicId;
     const { status, note } = req.body as { status: string; note?: string };
 
     if (!VALID_FDI.has(toothFdi)) {
@@ -58,12 +59,16 @@ router.put(
       return res.status(400).json({ error: 'Invalid status' });
     }
 
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
+
     try {
       const patient = await prisma.patient.findFirst({
-        where: { id: patientId, clinicId, deletedAt: null },
-        select: { id: true },
+        where: { id: patientId, ...scope, deletedAt: null },
+        select: { id: true, clinicId: true },
       });
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
+      const clinicId = patient.clinicId;
 
       const record = await prisma.toothRecord.upsert({
         where: { patientId_toothFdi: { patientId, toothFdi } },
@@ -109,17 +114,20 @@ router.delete(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const toothFdi = parseInt(req.params.toothFdi as string, 10);
-    const clinicId = req.user!.clinicId;
 
     if (!VALID_FDI.has(toothFdi)) {
       return res.status(400).json({ error: 'Invalid tooth FDI number' });
     }
 
+    const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+    if (scope === false) return;
+
     try {
       const record = await prisma.toothRecord.findFirst({
-        where: { patientId, toothFdi, clinicId },
+        where: { patientId, toothFdi, ...scope },
       });
       if (!record) return res.status(404).json({ error: 'Not found' });
+      const clinicId = record.clinicId;
 
       await prisma.toothRecord.delete({ where: { patientId_toothFdi: { patientId, toothFdi } } });
 
