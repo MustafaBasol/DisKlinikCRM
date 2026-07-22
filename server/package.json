@@ -87,7 +87,14 @@
     "test:messages-consent-gate": "tsx src/tests/messagesConsentGate.test.ts",
     "test:messages-record-scope": "tsx src/tests/messagesRecordScope.test.ts",
     "test:recall-consent-gate": "tsx src/tests/recallConsentGate.test.ts",
-    "backfill:communication-preferences": "tsx src/scripts/backfillCommunicationPreferences.ts"
+    "backfill:communication-preferences": "tsx src/scripts/backfillCommunicationPreferences.ts",
+    "test:kvkk-high006-db-clinic-scope-access": "tsx src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+    "test:kvkk-high006-db-record-owned-mutation-scope": "tsx src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+    "test:kvkk-high006-db-target-clinic-creation": "tsx src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+    "test:kvkk-high006-db-insurance-list-behavior": "tsx src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+    "test:kvkk-high006-db-plan-limits-quota": "tsx src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+    "test:kvkk-high006-db-input-handling": "tsx src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts",
+    "test:kvkk-high006-db-verification": "npm run test:kvkk-high006-db-clinic-scope-access && npm run test:kvkk-high006-db-record-owned-mutation-scope && npm run test:kvkk-high006-db-target-clinic-creation && npm run test:kvkk-high006-db-insurance-list-behavior && npm run test:kvkk-high006-db-plan-limits-quota && npm run test:kvkk-high006-db-input-handling"
   },
   "keywords": [],
   "author": "",
