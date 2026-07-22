@@ -448,11 +448,13 @@ router.get('/messages', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
 // GET /api/messages/:id
 router.get('/messages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { normalizedRole, id: userId } = req.user!;
 
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   try {
-    const where: any = { id, clinicId };
+    const where: any = { id, ...scope };
     if (normalizedRole === 'DENTIST') {
       where.patient = dentistPatientAccessWhere(userId);
     }
@@ -470,14 +472,18 @@ router.get('/messages/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 // POST /api/messages/:id/send
 router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
 
   try {
+    const where: any = { id, ...scope };
     const message = await prisma.sentMessage.findFirst({
-      where: { id, clinicId },
+      where,
       include: { patient: { select: patientContactSelect }, template: true },
     });
     if (!message) return res.status(404).json({ error: 'Message not found' });
+    const clinicId = message.clinicId;
     if (message.status !== 'prepared') {
       return res.status(400).json({ error: 'Only prepared messages can be sent' });
     }
