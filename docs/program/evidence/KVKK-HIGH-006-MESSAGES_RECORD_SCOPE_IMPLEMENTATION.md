@@ -286,3 +286,86 @@ git status --short     → M server/package.json
 rg -n "req\.user(!|\?)?\.clinicId" server/src/routes/messages.ts
   → 155, 225, 590, 671, 735 (exactly 5 — Batch 3's ownership, unmodified)
 ```
+
+## 15. Reconciliation with `origin/main` (post-Batch-3-merge)
+
+This branch was originally created from `origin/main` at `70ac5ed9d729783c7cda492b126b1f34d6b3ca77`, before Batch 3 (`fix/kvkk-high006-batch3-messaging-scope`) had merged. By the time this branch was reconciled, `origin/main` had advanced seven commits ahead, including three merged PRs relevant to KVKK-HIGH-006:
+
+- PR #194 — Batch 1
+- PR #195 — Batch 2
+- PR #196 — Batch 3 (`messages.ts` template/create/seed/Meta submit-sync-status scope fixes — the five occurrences this task's §12 explicitly left untouched as "Batch 3's ownership")
+
+New authoritative `origin/main` SHA at reconciliation time (`git fetch origin --prune && git rev-parse origin/main`):
+
+```
+47dea4d534aa8e464e186e448e51a31a31e61cf3
+```
+
+### 15.1 Reconciliation procedure
+
+1. `git fetch origin --prune` — confirmed `origin/main` at `47dea4d5...`.
+2. Confirmed the primary tree (`D:\Mustafa\Siteler\DisKlinikCRM`) remained clean and was not touched.
+3. Confirmed this worktree was clean except for the four already-reviewed files (`server/package.json`, `server/src/routes/messages.ts`, `server/src/tests/messagesRecordScope.test.ts`, this document) — all uncommitted at that point.
+4. Committed the existing two-route implementation as-is: commit **`a621b1a79412d45b97f2747c980b0ad223dc8424`** — "fix(kvkk): scope message read and send by record".
+5. Merged `origin/main` with a normal (non-fast-forward, non-rebase) merge commit: `git merge origin/main --no-ff`. Result: merge commit **`5df3ddd08eee98a77ddbf9368b7b1b0eb2659dbe`**, parents `a621b1a7...` (this branch) and `47dea4d5...` (`origin/main`).
+
+### 15.2 Conflicts and exact resolution
+
+Only **`server/package.json`** produced a git conflict. `server/src/routes/messages.ts` merged automatically with **zero conflicts** — Batch 3's five remediated routes (`POST /message-templates`, `POST /message-templates/seed`, `POST /message-templates/:id/meta/submit`, `POST /message-templates/:id/meta/sync`, `GET /message-templates/:id/meta/status`) and this branch's two remediated routes (`GET /messages/:id`, `POST /messages/:id/send`) sit in disjoint regions of the file, so git's three-way merge combined them without help.
+
+**`server/package.json` conflict — manual resolution:**
+
+- The only true conflict was the aggregate `"test"` script string: `origin/main` had inserted `&& npm run test:kvkk-high006-batch3` (mid-string) and appended `&& npm run test:reports-clinic-scope && npm run test:appointment-request-record-scope && npm run test:dental-chart-clinic-scope` (Batch 1/2/3 test wiring); this branch had inserted `&& npm run test:messages-record-scope` immediately after `test:messages-consent-gate`. Resolved by taking `origin/main`'s full chain and re-inserting `&& npm run test:messages-record-scope` at the same relative position (immediately after `test:messages-consent-gate`, before `test:recall-consent-gate`), preserving every script from both sides.
+- The `"test:messages-record-scope": "tsx src/tests/messagesRecordScope.test.ts"` script entry itself did not conflict (different region of the file) and was kept.
+- This branch's working copy had accumulated an **unrelated** `"allowScripts"` block (`@prisma/engines@7.8.0`, `esbuild@0.28.1`, `prisma@7.8.0`) — a side effect of running `npm install`/`npm approve-scripts` locally in this task's sandbox (see §10), not present on `origin/main` and not part of the KVKK-HIGH-006 fix. Per this reconciliation's explicit constraint (no unrelated `allowScripts`/dependency/lockfile changes), this block was **removed** during conflict resolution. `git diff origin/main -- server/package.json` after resolution confirms the only remaining delta from `origin/main` is the `test:messages-record-scope` script and its aggregate-chain wiring — nothing else.
+- No `dependencies`, `devDependencies`, or `overrides` changed; no `package-lock.json`/lockfile in this repo was touched.
+
+**`server/src/tests/messagesRecordScope.test.ts` — post-merge update (not a conflict, a stale assumption):** this file's own regression test asserted "exactly 5 raw `req.user!.clinicId` occurrences remain" — true only against the pre-Batch-3 baseline this branch was written against. Now that Batch 3's five remediations are merged alongside this branch's two, the correct invariant is **zero** remaining raw occurrences across all seven remediated routes. Updated the assertion and its description accordingly (`assert.equal(matches.length, 0, ...)`); no other test in the file depended on the stale baseline.
+
+### 15.3 Confirmation: all seven `messages.ts` remediations coexist
+
+`grep -c "req\.user[!?]\?\.clinicId" server/src/routes/messages.ts` → **0** raw occurrences. Route-by-route confirmation (all call `validateAndGetClinicIdScope` or `resolveEffectiveClinicId`, none fall back to `req.user!.clinicId`):
+
+| # | Route | Owner | Mechanism |
+|---|---|---|---|
+| 1 | `POST /message-templates` | Batch 3 | `resolveEffectiveClinicId` |
+| 2 | `POST /message-templates/seed` | Batch 3 | `resolveEffectiveClinicId` |
+| 3 | `POST /message-templates/:id/meta/submit` | Batch 3 | `validateAndGetClinicIdScope` + record-derived `clinicId` |
+| 4 | `POST /message-templates/:id/meta/sync` | Batch 3 | `validateAndGetClinicIdScope` + record-derived `clinicId` |
+| 5 | `GET /message-templates/:id/meta/status` | Batch 3 | `validateAndGetClinicIdScope` + record-derived `clinicId` |
+| 6 | `GET /messages/:id` | This task | `validateAndGetClinicIdScope` + `...scope` in `where` |
+| 7 | `POST /messages/:id/send` | This task | `validateAndGetClinicIdScope` + record-derived `clinicId` for provider/consent/audit |
+
+The pre-existing, already-correct sibling `GET /messages` (list) route, using `validateAndGetClinicIdScope` with an explicit `selectedClinicId`, remains unchanged and unaffected.
+
+### 15.4 Final tests (post-reconciliation)
+
+Run from `server/` in the reconciled worktree:
+
+```
+npx tsx src/tests/messagesRecordScope.test.ts          → 21 passed, 0 failed
+npx tsx src/tests/kvkkHigh006Batch3ClinicScope.test.ts → 31 passed, 0 failed
+npx tsc --noEmit (npm run typecheck)                    → exit 0, zero errors
+
+npx tsx src/tests/messageSafetyHardening.test.ts        → 36 passed, 0 failed
+npx tsx src/tests/messageTemplatePurpose.test.ts        → 17 passed, 0 failed
+npx tsx src/tests/messageTemplateWabaBinding.test.ts    → 19 passed, 1 failed (pre-existing, see below — not caused by this reconciliation)
+npx tsx src/tests/smsModule.test.ts                     → 77 passed, 0 failed
+```
+
+**Pre-existing, unrelated failure — `messageTemplateWabaBinding.test.ts`:** the assertion `'meta/status route strips metaTemplateConnectionId/metaWabaIdSnapshot before responding'` does a literal-string match for `const { metaTemplateConnectionId, metaWabaIdSnapshot, ...safeTemplate } = template;`. Batch 3's own change to `GET /message-templates/:id/meta/status` (to derive `clinicId` from the record) rewrote that line to `const { metaTemplateConnectionId, metaWabaIdSnapshot, clinicId: _clinicId, ...safeTemplate } = template;`, so the literal match no longer applies. Confirmed via `git show 47dea4d534aa8e464e186e448e51a31a31e61cf3:server/src/routes/messages.ts` that this exact line, and this exact test/code mismatch, **already exists on `origin/main` prior to any action in this reconciliation** — it is Batch 3's own pre-existing gap, not a regression introduced by merging or by this task's two-route fix, and not a route this task is authorized to modify. The underlying security property the test intends to verify (no raw `metaTemplateConnectionId`/`metaWabaIdSnapshot` in the JSON response) still holds — `clinicId: _clinicId` is destructured out alongside the other two fields, so `safeTemplate` still excludes all three. Left unmodified per this reconciliation's scope (no unrelated routes/tests).
+
+**DB-backed test — environment limitation, not a regression:** `npx tsx src/tests/messagesConsentGate.test.ts` requires a live PostgreSQL connection. Re-confirmed unreachable in this environment: `(echo > /dev/tcp/127.0.0.1/5432)` → "Connection refused". No Postgres instance is available in this sandbox; this is unchanged from §11's original finding and is not attributable to this reconciliation or to either set of `messages.ts` changes.
+
+### 15.5 Final occurrence scan and git state
+
+```
+rg -n "req\.user(!|\?)?\.clinicId" server/src/routes/messages.ts   → (no output — zero matches)
+git diff --check                                                   → clean
+git diff --stat                                                    → (empty — working tree matches HEAD after merge commit)
+git status --short                                                 → (clean)
+```
+
+### 15.6 R-071
+
+**R-071 remains OPEN.** This reconciliation only merges Batch 1/2/3 into this branch and completes this branch's own two-route scope; it does not close or otherwise act on R-071.
