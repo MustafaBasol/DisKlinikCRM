@@ -149,14 +149,17 @@ router.get('/appointment-requests/counts', authorize(['OWNER', 'ORG_ADMIN', 'CLI
 
 // PUT /api/appointment-requests/:id/status
 router.put('/appointment-requests/:id/status', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const id = getParam(req, 'id');
   const validation = appointmentRequestStatusSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   try {
-    const existing = await prisma.appointmentRequest.findFirst({ where: { id, clinicId } });
+    const existing = await prisma.appointmentRequest.findFirst({ where: { ...scope, id } });
     if (!existing) return res.status(404).json({ error: 'Appointment request not found' });
+    const clinicId = existing.clinicId;
     if (existing.status === 'converted') {
       return res.status(400).json({ error: 'Converted requests cannot be changed from this endpoint' });
     }
@@ -189,20 +192,28 @@ router.put('/appointment-requests/:id/status', authorize(['OWNER', 'ORG_ADMIN', 
 
 // POST /api/appointment-requests/:id/convert
 router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const id = getParam(req, 'id');
   const validation = appointmentRequestConvertSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   try {
     const request = await prisma.appointmentRequest.findFirst({
-      where: { id, clinicId },
+      where: { ...scope, id },
       include: { patient: { select: patientContactSelect } },
     });
 
     if (!request) return res.status(404).json({ error: 'Appointment request not found' });
     if (request.status === 'converted') return res.status(400).json({ error: 'Appointment request is already converted' });
     if (request.requestType === 'cancel') return res.status(400).json({ error: 'Cancel requests cannot be converted to appointments' });
+
+    // Every downstream lookup/write below uses the request's own clinicId
+    // (found within the caller's validated scope) — never re-derived from
+    // req.user.clinicId — so the target clinic can never diverge from the
+    // request being converted.
+    const clinicId = request.clinicId;
 
     const appointmentTypeId = validation.data.appointmentTypeId || request.appointmentTypeId;
     const practitionerId = validation.data.practitionerId || request.practitionerId;
@@ -343,14 +354,17 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
 
 // PUT /api/appointment-requests/:id
 router.put('/appointment-requests/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const id = getParam(req, 'id');
   const validation = appointmentRequestUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   try {
-    const existing = await prisma.appointmentRequest.findFirst({ where: { id, clinicId } });
+    const existing = await prisma.appointmentRequest.findFirst({ where: { ...scope, id } });
     if (!existing) return res.status(404).json({ error: 'Appointment request not found', code: 'NOT_FOUND' });
+    const clinicId = existing.clinicId;
     if (existing.status === 'converted') {
       return res.status(400).json({ error: 'Converted requests cannot be edited', code: 'ALREADY_CONVERTED' });
     }
