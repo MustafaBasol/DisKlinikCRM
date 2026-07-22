@@ -193,8 +193,12 @@ async function main() {
 
   await test('meta/status route strips metaTemplateConnectionId/metaWabaIdSnapshot before responding', () => {
     const code = src('../routes/messages.ts');
-    assert.ok(code.includes('const { metaTemplateConnectionId, metaWabaIdSnapshot, ...safeTemplate } = template;'),
-      'status endpoint must not return raw connection/WABA ids');
+    // Matches the destructuring regardless of what other fields (e.g. `clinicId: _clinicId`)
+    // get pulled out alongside them — the property under test is that these two sensitive
+    // fields are excluded from the rest object, not the exact list of fields destructured.
+    const statusDestructure = /const\s*\{\s*metaTemplateConnectionId\s*,\s*metaWabaIdSnapshot\s*,[^}]*\.\.\.\w+\s*\}\s*=\s*template;/;
+    assert.ok(statusDestructure.test(code),
+      'status endpoint must destructure metaTemplateConnectionId and metaWabaIdSnapshot out of template via a rest spread, so they never reach the response');
   });
 
   await test('message-templates list route strips metaTemplateConnectionId/metaWabaIdSnapshot before responding', () => {
