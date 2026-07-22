@@ -3,7 +3,7 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
-import { validateAndGetClinicIdScope, clinicIdsFromScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope, clinicIdsFromScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { overdueReceivablesAmount, overdueReceivablesList } from '../utils/overdueReceivables.js';
 
@@ -101,11 +101,13 @@ router.get(
 // GET /api/payment-plans/:id
 router.get('/payment-plans/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const plan = await prisma.paymentPlan.findFirst({
-      where: { id, clinicId },
+      where: { id, clinicId: { in: accessibleIds } },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } },
         treatmentCase: { select: { id: true, title: true, estimatedAmount: true, acceptedAmount: true } },
@@ -124,7 +126,6 @@ router.get('/payment-plans/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
 
 // POST /api/payment-plans
 router.post('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const { patientId, treatmentCaseId, totalAmount, currency, installmentCount, firstDueDate, description } = req.body;
 
   if (!patientId || !totalAmount || !installmentCount || !firstDueDate) {
@@ -136,6 +137,9 @@ router.post('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER',
   if (totalAmount <= 0) {
     return res.status(400).json({ error: 'totalAmount must be positive' });
   }
+
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.body.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
   try {
     const operatingPreferences = await getClinicOperatingPreferences(clinicId);
@@ -193,18 +197,22 @@ router.post(
   async (req: AuthRequest, res: Response) => {
     const planId = getParam(req, 'id');
     const installmentId = getParam(req, 'installmentId');
-    const clinicId = req.user!.clinicId;
     const { paymentMethod, notes } = req.body;
 
     if (!paymentMethod) return res.status(400).json({ error: 'paymentMethod is required' });
 
     try {
+      const accessibleIds = await getAccessibleClinicIds(req.user!);
+      if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
       const plan = await prisma.paymentPlan.findFirst({
-        where: { id: planId, clinicId },
+        where: { id: planId, clinicId: { in: accessibleIds } },
         include: { installments: true },
       });
       if (!plan) return res.status(404).json({ error: 'Payment plan not found' });
       if (plan.status === 'cancelled') return res.status(400).json({ error: 'Plan is cancelled' });
+
+      const clinicId = plan.clinicId;
 
       const installment = plan.installments.find(i => i.id === installmentId);
       if (!installment) return res.status(404).json({ error: 'Installment not found' });
@@ -258,11 +266,15 @@ router.post(
 // PATCH /api/payment-plans/:id/cancel
 router.patch('/payment-plans/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
 
   try {
-    const plan = await prisma.paymentPlan.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const plan = await prisma.paymentPlan.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!plan) return res.status(404).json({ error: 'Payment plan not found' });
+
+    const clinicId = plan.clinicId;
 
     const updated = await prisma.paymentPlan.update({
       where: { id },
