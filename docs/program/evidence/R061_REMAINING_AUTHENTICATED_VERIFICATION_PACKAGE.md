@@ -332,3 +332,45 @@ If A.2's login instead fails again (any non-200), Package A still closes one thi
 - Did not commit or push anything — this file exists only in the isolated worktree named at the top of this document, awaiting the user's own review before any commit/PR decision.
 - Did not run CodeGraph (not required for this documentation/command-preparation task; source line citations above were confirmed by direct file reads of the same lines already cited in the prior evidence files this document builds on).
 - R-061 status is unchanged by this document: **`OPEN`**.
+
+---
+
+## Package A execution result — 2026-07-22/23 production window
+
+Package A was subsequently executed manually by an authorized operator against production.
+
+Result:
+
+`PASS — AUTHENTICATED PRODUCTION VERIFIED`
+
+Observed authenticated results:
+
+- normal platform-admin login: HTTP `200`;
+- Test C1, authenticated policy `GET`: HTTP `200`, `{"runtimeEnabled":false}`;
+- Test C3, authenticated deliberately-invalid `PATCH`: HTTP `400`, `{"error":"runtimeEnabled must be a boolean"}`;
+- final before/after invariant values were identical: `0||0|0|0|0|18|0|0`;
+- final before/after patient-state digest was identical: `c91b3a90502dad4b92ee465c477190b6`;
+- production health remained HTTP `200`;
+- `noramedi-api` remained online at restart count `18`;
+- `noramedi-worker` remained online at restart count `16`;
+- temporary cookie/session material was cleaned;
+- Package B was not executed;
+- no real patient identifier was used;
+- no valid-boolean `PlatformSetting` PATCH was sent;
+- the feature was not activated.
+
+This closes the previously blocked Test C1 and Test C3 authenticated checks.
+
+It does not close or authorize:
+
+- gaps 1–3, which require a real in-scope patient;
+- gaps 4–8, which require a successful persistent setting/audit write;
+- gap 9, controlled activation.
+
+Full operator-result evidence:
+
+[R061_PACKAGE_A_AUTHENTICATED_PRODUCTION_VERIFICATION.md](R061_PACKAGE_A_AUTHENTICATED_PRODUCTION_VERIFICATION.md)
+
+Precise risk disposition:
+
+`R-061 remains OPEN — Package A PASS; Test C1/Test C3 CLOSED; separately-gated residual items remain unchanged and require their existing explicit authorization decisions.`
