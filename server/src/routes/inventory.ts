@@ -3,7 +3,7 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
-import { validateAndGetScope } from '../utils/clinicScope.js';
+import { validateAndGetScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -77,11 +77,13 @@ router.get('/inventory/alerts', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER
 // ── GET /api/inventory/:id ───────────────────────────────────────────────────
 router.get('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId as string;
 
   try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
     const item = await prisma.inventoryItem.findFirst({
-      where: { id, clinicId },
+      where: { id, clinicId: { in: accessibleIds } },
       include: {
         transactions: {
           include: { performedBy: { select: { id: true, firstName: true, lastName: true } } },
@@ -102,13 +104,15 @@ router.get('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 
 
 // ── POST /api/inventory ──────────────────────────────────────────────────────
 router.post('/inventory', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
   const userId = req.user!.id;
   const { name, category, unit, currentStock, minimumStock, unitCost, supplier, barcode, notes } = req.body;
 
   if (!name || !category || !unit) {
     return res.status(400).json({ error: 'name, category, and unit are required' });
   }
+
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.body.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
   try {
     const item = await prisma.inventoryItem.create({
@@ -155,13 +159,17 @@ router.post('/inventory', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), a
 // ── PUT /api/inventory/:id ───────────────────────────────────────────────────
 router.put('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId as string;
   const userId = req.user!.id;
   const { name, category, unit, minimumStock, unitCost, supplier, barcode, notes, isActive } = req.body;
 
   try {
-    const existing = await prisma.inventoryItem.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.inventoryItem.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Item not found' });
+
+    const clinicId = existing.clinicId;
 
     const updated = await prisma.inventoryItem.update({
       where: { id },
@@ -190,7 +198,6 @@ router.put('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'])
 // ── POST /api/inventory/:id/transactions ─────────────────────────────────────
 router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId as string;
   const userId = req.user!.id;
   const { type, quantity, unitCost, reason, treatmentCaseId, notes } = req.body;
 
@@ -207,8 +214,13 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
   }
 
   try {
-    const item = await prisma.inventoryItem.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const item = await prisma.inventoryItem.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    const clinicId = item.clinicId;
 
     // Compute new stock
     let stockDelta = qty;
@@ -259,15 +271,17 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
 // ── GET /api/inventory/:id/transactions ──────────────────────────────────────
 router.get('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId as string;
   const limit = Math.min(Number(req.query.limit) || 50, 200);
 
   try {
-    const item = await prisma.inventoryItem.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const item = await prisma.inventoryItem.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
     const transactions = await prisma.inventoryTransaction.findMany({
-      where: { itemId: id, clinicId },
+      where: { itemId: id, clinicId: item.clinicId },
       include: {
         performedBy: { select: { id: true, firstName: true, lastName: true } },
         treatmentCase: { select: { id: true, title: true } },
