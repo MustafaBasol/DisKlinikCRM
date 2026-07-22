@@ -1,6 +1,15 @@
 import { Response, NextFunction } from 'express';
 import prisma from '../db.js';
 import { AuthRequest } from './auth.js';
+import { resolveEffectiveClinicId } from '../utils/clinicScope.js';
+
+// AuthRequest'i genişlet — quota middleware'inin doğruladığı hedef klinik,
+// route handler'ın aynı doğrulamayı tekrar çalıştırmadan tekrar kullanabilmesi için.
+declare module './auth.js' {
+  interface AuthRequest {
+    targetClinicId?: string;
+  }
+}
 
 type LimitEntry = { maxUsers: number; maxPatients: number; userCount: number; patientCount: number; expiresAt: number };
 
@@ -59,10 +68,14 @@ async function getClinicLimits(clinicId: string): Promise<LimitEntry | null> {
 
 export const checkUserLimit = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const targetClinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!targetClinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+    req.targetClinicId = targetClinicId;
+
     const organizationId = req.user!.organizationId;
     const limits = organizationId
-      ? (await getOrgLimits(organizationId)) ?? (await getClinicLimits(req.user!.clinicId))
-      : await getClinicLimits(req.user!.clinicId);
+      ? (await getOrgLimits(organizationId)) ?? (await getClinicLimits(targetClinicId))
+      : await getClinicLimits(targetClinicId);
 
     if (!limits) return res.status(404).json({ error: 'Clinic not found' });
 
@@ -81,10 +94,14 @@ export const checkUserLimit = async (req: AuthRequest, res: Response, next: Next
 
 export const checkPatientLimit = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const targetClinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
+    if (!targetClinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+    req.targetClinicId = targetClinicId;
+
     const organizationId = req.user!.organizationId;
     const limits = organizationId
-      ? (await getOrgLimits(organizationId)) ?? (await getClinicLimits(req.user!.clinicId))
-      : await getClinicLimits(req.user!.clinicId);
+      ? (await getOrgLimits(organizationId)) ?? (await getClinicLimits(targetClinicId))
+      : await getClinicLimits(targetClinicId);
 
     if (!limits) return res.status(404).json({ error: 'Clinic not found' });
 

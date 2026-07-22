@@ -5,7 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { patientSchema, patientUpdateSchema } from '../schemas/index.js';
 import { checkPatientLimit } from '../middleware/planLimits.js';
-import { validateAndGetScope, resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { validateAndGetScope } from '../utils/clinicScope.js';
 import { patientListSelect, userNameRoleSelect, userNameSelect } from '../utils/prismaSelects.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 
@@ -278,9 +278,8 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 
 // POST /api/patients
 router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
-  // ?clinicId query param varsa doğrula, yoksa defaultClinicId kullan
-  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
-  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+  // checkPatientLimit already resolved and validated the creation-target clinic (org + access checked).
+  const clinicId = req.targetClinicId!;
   const validation = patientSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
