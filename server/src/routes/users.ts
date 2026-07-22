@@ -135,8 +135,8 @@ router.get('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTI
 
 // POST /api/users
 router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), checkUserLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
-  const clinicId = await resolveEffectiveClinicId(req.user!, req.query.clinicId as string | undefined);
-  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+  // checkUserLimit already resolved and validated the creation-target clinic (org + access checked).
+  const clinicId = req.targetClinicId!;
   const validation = userCreateSchema.safeParse(req.body);
 
   if (!validation.success) {
