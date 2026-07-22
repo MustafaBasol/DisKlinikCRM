@@ -7,6 +7,7 @@ import { insuranceProvisionSchema, insuranceProvisionUpdateSchema, insuranceStat
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { userNameSelect } from '../utils/prismaSelects.js';
 import { findUserAssignedToClinic } from '../utils/relationGuards.js';
+import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -52,12 +53,15 @@ async function validateInsuranceRelations(data: any, clinicId: string) {
 
 // GET /api/insurance-provisions
 router.get('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
   const { normalizedRole, id: userId } = req.user!;
   const { status, insurance_type, patient_id, treatment_case_id, provider_name } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const clinicScope = await validateAndGetClinicIdScope(req.user!, selectedClinicId, res);
+    if (clinicScope === false) return;
+
+    const where: any = { ...clinicScope };
     if (normalizedRole === 'DENTIST') Object.assign(where, getInsuranceDoctorScope(userId));
     if (status) where.status = String(status);
     if (insurance_type) where.insuranceType = String(insurance_type);
@@ -80,11 +84,13 @@ router.get('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MAN
 // GET /api/insurance-provisions/:id
 router.get('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING', 'DENTIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { normalizedRole, id: userId } = req.user!;
 
   try {
-    const where: any = { id, clinicId };
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const where: any = { id, clinicId: { in: accessibleIds } };
     if (normalizedRole === 'DENTIST') Object.assign(where, getInsuranceDoctorScope(userId));
 
     const provision = await prisma.insuranceProvision.findFirst({
@@ -104,7 +110,8 @@ router.get('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
 
 // POST /api/insurance-provisions
 router.post('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const clinicId = await resolveEffectiveClinicId(req.user!, req.body.clinicId as string | undefined);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
   try {
     const operatingPreferences = await getClinicOperatingPreferences(clinicId);
@@ -142,15 +149,19 @@ router.post('/insurance-provisions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
 // PUT /api/insurance-provisions/:id
 router.put('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { normalizedRole, id: userId } = req.user!;
 
   const validation = insuranceProvisionUpdateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.insuranceProvision.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.insuranceProvision.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Insurance provision not found' });
+
+    const clinicId = existing.clinicId;
 
     const updateData: any = { ...validation.data };
     if (normalizedRole === 'BILLING') {
@@ -190,14 +201,18 @@ router.put('/insurance-provisions/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
 // PATCH /api/insurance-provisions/:id/status
 router.patch('/insurance-provisions/:id/status', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { id: userId } = req.user!;
   const validation = insuranceStatusSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.insuranceProvision.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.insuranceProvision.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Insurance provision not found' });
+
+    const clinicId = existing.clinicId;
 
     const status = validation.data.status;
     const updated = await prisma.insuranceProvision.update({
@@ -225,12 +240,16 @@ router.patch('/insurance-provisions/:id/status', authorize(['OWNER', 'ORG_ADMIN'
 // PATCH /api/insurance-provisions/:id/cancel
 router.patch('/insurance-provisions/:id/cancel', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'BILLING']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
   const { id: userId } = req.user!;
 
   try {
-    const existing = await prisma.insuranceProvision.findFirst({ where: { id, clinicId } });
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const existing = await prisma.insuranceProvision.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
     if (!existing) return res.status(404).json({ error: 'Insurance provision not found' });
+
+    const clinicId = existing.clinicId;
 
     const updated = await prisma.insuranceProvision.update({
       where: { id },

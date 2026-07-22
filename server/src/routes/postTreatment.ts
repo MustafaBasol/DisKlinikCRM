@@ -15,6 +15,7 @@ import { z } from 'zod';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { getParam } from '../utils/helpers.js';
+import { resolveEffectiveClinicId, validateAndGetScope } from '../utils/clinicScope.js';
 
 const router = express.Router();
 
@@ -40,12 +41,13 @@ router.get(
   '/post-treatment-templates',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId as string;
-    if (!clinicId) return res.status(400).json({ error: 'No clinic context' });
+    const selectedClinicId = typeof req.query.clinicId === 'string' ? req.query.clinicId : undefined;
+    const scope = await validateAndGetScope(req.user!, selectedClinicId, res);
+    if (scope === false) return;
 
     try {
       const templates = await prisma.postTreatmentMessageTemplate.findMany({
-        where: { clinicId },
+        where: scope,
         include: {
           service: { select: { id: true, name: true } },
           treatmentPackage: { select: { id: true, name: true } },
@@ -65,9 +67,10 @@ router.post(
   '/post-treatment-templates',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId as string;
     const organizationId = req.user!.organizationId as string;
-    if (!clinicId) return res.status(400).json({ error: 'No clinic context' });
+    const requestedClinicId = typeof req.body?.clinicId === 'string' ? req.body.clinicId : undefined;
+    const clinicId = await resolveEffectiveClinicId(req.user!, requestedClinicId);
+    if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
     const parsed = createTemplateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -116,16 +119,17 @@ router.put(
   '/post-treatment-templates/:id',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId as string;
     const id = getParam(req, 'id');
-    if (!clinicId) return res.status(400).json({ error: 'No clinic context' });
+    const scope = await validateAndGetScope(req.user!, undefined, res);
+    if (scope === false) return;
 
     const parsed = updateTemplateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const existing = await prisma.postTreatmentMessageTemplate.findFirst({ where: { id, clinicId } });
+    const existing = await prisma.postTreatmentMessageTemplate.findFirst({ where: { id, ...scope } });
     if (!existing) return res.status(404).json({ error: 'Template not found' });
 
+    const clinicId = existing.clinicId;
     const { targetType, serviceId, treatmentPackageId } = parsed.data;
     if (targetType === 'service' && serviceId) {
       const svc = await prisma.appointmentType.findFirst({ where: { id: serviceId, clinicId } });
@@ -168,11 +172,11 @@ router.delete(
   '/post-treatment-templates/:id',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId as string;
     const id = getParam(req, 'id');
-    if (!clinicId) return res.status(400).json({ error: 'No clinic context' });
+    const scope = await validateAndGetScope(req.user!, undefined, res);
+    if (scope === false) return;
 
-    const existing = await prisma.postTreatmentMessageTemplate.findFirst({ where: { id, clinicId } });
+    const existing = await prisma.postTreatmentMessageTemplate.findFirst({ where: { id, ...scope } });
     if (!existing) return res.status(404).json({ error: 'Template not found' });
 
     try {
@@ -190,15 +194,14 @@ router.get(
   '/post-treatment-queue',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId as string;
-    if (!clinicId) return res.status(400).json({ error: 'No clinic context' });
-
-    const { patientId, status, limit } = req.query;
+    const { patientId, status, limit, clinicId: selectedClinicId } = req.query;
+    const scope = await validateAndGetScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
 
     try {
       const entries = await prisma.postTreatmentMessageQueue.findMany({
         where: {
-          clinicId,
+          ...scope,
           ...(patientId ? { patientId: String(patientId) } : {}),
           ...(status ? { status: String(status) } : {}),
         },
@@ -222,13 +225,19 @@ router.post(
   '/post-treatment-queue/:id/approve',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId as string;
     const id = getParam(req, 'id');
-    if (!clinicId) return res.status(400).json({ error: 'No clinic context' });
+    const scope = await validateAndGetScope(req.user!, undefined, res);
+    if (scope === false) return;
 
     try {
+      const entry = await prisma.postTreatmentMessageQueue.findFirst({
+        where: { id, ...scope },
+        select: { id: true, clinicId: true },
+      });
+      if (!entry) return res.status(404).json({ error: 'Queue entry not found' });
+
       const { approveAndSendQueueEntry } = await import('../services/postTreatmentMessaging.js');
-      await approveAndSendQueueEntry(id, clinicId);
+      await approveAndSendQueueEntry(id, entry.clinicId);
       return res.json({ success: true });
     } catch (err: any) {
       return res.status(400).json({ error: err?.message ?? 'Failed to approve post-treatment message' });
@@ -242,12 +251,12 @@ router.post(
   '/post-treatment-queue/:id/cancel',
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
-    const clinicId = req.user!.clinicId as string;
     const id = getParam(req, 'id');
-    if (!clinicId) return res.status(400).json({ error: 'No clinic context' });
+    const scope = await validateAndGetScope(req.user!, undefined, res);
+    if (scope === false) return;
 
     const existing = await prisma.postTreatmentMessageQueue.findFirst({
-      where: { id, clinicId, status: { in: ['pending', 'waiting_approval'] } },
+      where: { id, ...scope, status: { in: ['pending', 'waiting_approval'] } },
     });
     if (!existing) return res.status(404).json({ error: 'Queue entry not found or already processed' });
 
