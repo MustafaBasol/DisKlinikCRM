@@ -250,7 +250,7 @@ Note: `scripts/noramedi-deploy.sh` already implements steps 5.1–5.6 in this sa
 
 ## 9. Closure criteria
 
-**R-071** may only be proposed for closure after **all** of the following exist as recorded evidence (none exist yet as of this document):
+**R-071** may only be proposed for closure after **all** of the following exist as recorded evidence:
 
 1. Successful production deployment per §5 above (post-deploy SHA confirmed, no abort condition triggered).
 2. API and frontend health checks passing per §5.6/§8's verification step.
@@ -260,6 +260,8 @@ Note: `scripts/noramedi-deploy.sh` already implements steps 5.1–5.6 in this sa
 6. Tracker reconciliation — [CURRENT_PHASE.md](../CURRENT_PHASE.md), [NORAMEDI_MASTER_TRACKER.md](../NORAMEDI_MASTER_TRACKER.md), and [RISK_REGISTER.md](../RISK_REGISTER.md) updated to record the above, in a future task, not this one.
 
 Until all six exist, R-071 remains `OPEN`, and this document's own contribution to its record is the composite status `IMPLEMENTATION_MERGED — SOURCE_AND_DB_VERIFIED — PRODUCTION_VERIFICATION_PENDING` (see the tracker updates accompanying this document).
+
+**Superseded 2026-07-22 — [KVKK-HIGH-006-PRODUCTION_DEPLOYMENT_AND_SMOKE_VERIFICATION.md](KVKK-HIGH-006-PRODUCTION_DEPLOYMENT_AND_SMOKE_VERIFICATION.md):** the "none exist yet as of this document" parenthetical above is now stale — all six items exist as recorded evidence. Production deployment (pre-deploy SHA `85e3ffbca7ee1b53789564e16c5e58c5ec498cf2` → deployed SHA `1aa741d1dc1e1888b1dfdb9b911d0123b4eea1ab`) executed cleanly per §5 above; API/frontend health checks passed; the S1/S2/S3/S6/S7 minimum smoke set (item 3) passed with zero cross-tenant regression (item 4) and zero new high-severity log errors (item 5); trackers were reconciled (item 6). **S4 and S5 were not executed** (optional, outside the minimum closure set — see that document's §6 for the recorded rationale) and are not claimed to have passed. **R-071 is proposed `CLOSED`** by that document — this document's own composite status string above (`SOURCE_AND_DB_VERIFIED — PRODUCTION_VERIFICATION_PENDING`) is itself now superseded by `IMPLEMENTATION_MERGED — SOURCE_DB_AND_PRODUCTION_VERIFIED — COMPLETE`. This paragraph is added for historical continuity only — it does not restate or duplicate that document's own evidence, which remains the authoritative source for the production deployment and smoke results themselves.
 
 **R-061** may only be proposed for closure after its own, separate Package A production evidence succeeds (§7 above) — specifically, a successful platform-admin login (§A.2) followed by the expected `200`/`{"runtimeEnabled": false}` on Test C1 (§A.3) and the expected `400` rejection on Test C3 (§A.4), with all before/after invariants in §A.1/§A.5 unchanged. This document's own KVKK-HIGH-006 deployment and smoke evidence, however successful, **does not** and cannot satisfy R-061's closure criteria — the two risks are tracked, and must be closed, independently.
 
