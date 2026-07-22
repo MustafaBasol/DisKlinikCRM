@@ -152,7 +152,10 @@ router.get('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
 // Template authoring is a management responsibility; RECEPTIONIST can READ and SEND
 // but should not create or modify reusable templates.
 router.post('/message-templates', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
+  const clinicId = await resolveEffectiveClinicId(req.user!, selectedClinicId);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
   const validation = messageTemplateSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
@@ -222,7 +225,9 @@ router.put('/message-templates/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MA
 
 // POST /api/message-templates/seed
 router.post('/message-templates/seed', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = req.query.clinicId as string | undefined;
+  const clinicId = await resolveEffectiveClinicId(req.user!, selectedClinicId);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
   const defaultTemplates = [
     {
@@ -587,11 +592,13 @@ router.post('/messages/:id/send', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAG
 // POST /api/message-templates/:id/meta/submit
 router.post('/message-templates/:id/meta/submit', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const clinicScope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (clinicScope === false) return;
 
   try {
-    const template = await prisma.messageTemplate.findFirst({ where: { id, clinicId } });
+    const template = await prisma.messageTemplate.findFirst({ where: { id, ...clinicScope } });
     if (!template) return res.status(404).json({ error: 'Template not found' });
+    const clinicId = template.clinicId;
 
     if (template.channel !== 'whatsapp') {
       return res.status(400).json({ error: 'Only WhatsApp templates can be submitted for WhatsApp approval.' });
@@ -668,11 +675,13 @@ router.post('/message-templates/:id/meta/submit', authorize(['OWNER', 'ORG_ADMIN
 // POST /api/message-templates/:id/meta/sync
 router.post('/message-templates/:id/meta/sync', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const clinicScope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (clinicScope === false) return;
 
   try {
-    const template = await prisma.messageTemplate.findFirst({ where: { id, clinicId } });
+    const template = await prisma.messageTemplate.findFirst({ where: { id, ...clinicScope } });
     if (!template) return res.status(404).json({ error: 'Template not found' });
+    const clinicId = template.clinicId;
     if (!template.metaTemplateName) {
       return res.status(400).json({ error: 'This template has not been submitted for WhatsApp approval yet.' });
     }
@@ -732,13 +741,15 @@ router.post('/message-templates/:id/meta/sync', authorize(['OWNER', 'ORG_ADMIN',
 // GET /api/message-templates/:id/meta/status
 router.get('/message-templates/:id/meta/status', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const clinicScope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (clinicScope === false) return;
 
   try {
     const template = await prisma.messageTemplate.findFirst({
-      where: { id, clinicId },
+      where: { id, ...clinicScope },
       select: {
         id: true,
+        clinicId: true,
         metaTemplateName: true,
         metaTemplateLanguage: true,
         metaTemplateCategory: true,
@@ -752,6 +763,7 @@ router.get('/message-templates/:id/meta/status', authorize(['OWNER', 'ORG_ADMIN'
       },
     });
     if (!template) return res.status(404).json({ error: 'Template not found' });
+    const clinicId = template.clinicId;
 
     let bindingStatus: TemplateBindingStatus = 'unbound';
     if (template.metaTemplateName) {
@@ -761,7 +773,7 @@ router.get('/message-templates/:id/meta/status', authorize(['OWNER', 'ORG_ADMIN'
       bindingStatus = connection ? evaluateTemplateBinding(template, connection) : 'unbound';
     }
 
-    const { metaTemplateConnectionId, metaWabaIdSnapshot, ...safeTemplate } = template;
+    const { metaTemplateConnectionId, metaWabaIdSnapshot, clinicId: _clinicId, ...safeTemplate } = template;
     res.json({
       ...safeTemplate,
       bindingStatus,

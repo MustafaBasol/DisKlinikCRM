@@ -5,6 +5,7 @@ import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { appointmentTypeSchema, materialRecipeSchema } from '../schemas/index.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { resolveEffectiveClinicId, validateAndGetClinicIdScope, type ClinicIdScopeWhere } from '../utils/clinicScope.js';
 
 const router = express.Router();
 const materialRecipeListSchema = materialRecipeSchema.array().max(100);
@@ -13,8 +14,11 @@ const serviceMaterialInclude = {
   inventoryItem: { select: { id: true, name: true, unit: true, currentStock: true, minimumStock: true, category: true } },
 } as const;
 
-async function ensureServiceInClinic(serviceId: string, clinicId: string) {
-  return prisma.appointmentType.findFirst({ where: { id: serviceId, clinicId } });
+// KVKK-HIGH-006 Batch 3: record-derived lookup — accepts the requester's full
+// accessible clinic scope (never a single, static req.user.clinicId), and the
+// caller must use the returned record's own clinicId for any further write.
+async function ensureServiceInScope(serviceId: string, scope: ClinicIdScopeWhere) {
+  return prisma.appointmentType.findFirst({ where: { id: serviceId, ...scope } });
 }
 
 async function validateRecipeInventoryItems(clinicId: string, materials: { inventoryItemId: string }[]) {
@@ -34,11 +38,14 @@ async function validateRecipeInventoryItems(clinicId: string, materials: { inven
 }
 
 const getServicesHandler = async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const selectedClinicId = typeof req.query.clinicId === 'string' ? req.query.clinicId : undefined;
+  const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId, res);
+  if (scope === false) return;
+
   const { onlyActive, includeInactive } = req.query;
 
   try {
-    const where: any = { clinicId };
+    const where: any = { ...scope };
     if (includeInactive !== 'true' && onlyActive !== 'false') where.isActive = true;
 
     const types = await prisma.appointmentType.findMany({
@@ -52,7 +59,10 @@ const getServicesHandler = async (req: AuthRequest, res: Response) => {
 };
 
 const createServiceHandler = async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
+  const requestedClinicId = typeof req.body?.clinicId === 'string' ? req.body.clinicId : undefined;
+  const clinicId = await resolveEffectiveClinicId(req.user!, requestedClinicId);
+  if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
+
   const validation = appointmentTypeSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
@@ -80,18 +90,20 @@ const createServiceHandler = async (req: AuthRequest, res: Response) => {
 
 const updateServiceHandler = async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   const validation = appointmentTypeSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await prisma.appointmentType.findFirst({ where: { id, clinicId } });
+    const existing = await prisma.appointmentType.findFirst({ where: { id, ...scope } });
     if (!existing) return res.status(404).json({ error: 'Service not found' });
 
     const type = await prisma.appointmentType.update({ where: { id }, data: validation.data });
 
     await logActivity({
-      clinicId, userId: req.user!.id, entityType: 'setting', entityId: type.id,
+      clinicId: existing.clinicId, userId: req.user!.id, entityType: 'setting', entityId: type.id,
       action: 'updated', description: `"${type.name}" hizmeti güncellendi`,
     });
 
@@ -103,14 +115,15 @@ const updateServiceHandler = async (req: AuthRequest, res: Response) => {
 
 const listServiceMaterialsHandler = async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
 
   try {
-    const service = await ensureServiceInClinic(id, clinicId);
+    const service = await ensureServiceInScope(id, scope);
     if (!service) return res.status(404).json({ error: 'Service not found' });
 
     const materials = await prisma.appointmentTypeMaterial.findMany({
-      where: { serviceId: id, clinicId },
+      where: { serviceId: id, clinicId: service.clinicId },
       include: serviceMaterialInclude,
       orderBy: { createdAt: 'asc' },
     });
@@ -123,15 +136,18 @@ const listServiceMaterialsHandler = async (req: AuthRequest, res: Response) => {
 
 const replaceServiceMaterialsHandler = async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   const payload = Array.isArray(req.body) ? req.body : req.body.materials;
   const validation = materialRecipeListSchema.safeParse(payload ?? []);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const service = await ensureServiceInClinic(id, clinicId);
+    const service = await ensureServiceInScope(id, scope);
     if (!service) return res.status(404).json({ error: 'Service not found' });
 
+    const clinicId = service.clinicId;
     const inventoryError = await validateRecipeInventoryItems(clinicId, validation.data);
     if (inventoryError) return res.status(400).json({ error: inventoryError });
 
@@ -173,14 +189,17 @@ const replaceServiceMaterialsHandler = async (req: AuthRequest, res: Response) =
 
 const addServiceMaterialHandler = async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   const validation = materialRecipeSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const service = await ensureServiceInClinic(id, clinicId);
+    const service = await ensureServiceInScope(id, scope);
     if (!service) return res.status(404).json({ error: 'Service not found' });
 
+    const clinicId = service.clinicId;
     const inventoryError = await validateRecipeInventoryItems(clinicId, [validation.data]);
     if (inventoryError) return res.status(400).json({ error: inventoryError });
 
@@ -210,16 +229,19 @@ const addServiceMaterialHandler = async (req: AuthRequest, res: Response) => {
 const updateServiceMaterialHandler = async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const materialId = getParam(req, 'materialId');
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
+
   const validation = materialRecipeSchema.partial().safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
     const material = await prisma.appointmentTypeMaterial.findFirst({
-      where: { id: materialId, serviceId: id, clinicId },
+      where: { id: materialId, serviceId: id, ...scope },
     });
     if (!material) return res.status(404).json({ error: 'Service material not found' });
 
+    const clinicId = material.clinicId;
     if (validation.data.inventoryItemId) {
       const inventoryError = await validateRecipeInventoryItems(clinicId, [{ inventoryItemId: validation.data.inventoryItemId }]);
       if (inventoryError) return res.status(400).json({ error: inventoryError });
@@ -250,11 +272,12 @@ const updateServiceMaterialHandler = async (req: AuthRequest, res: Response) => 
 const deleteServiceMaterialHandler = async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const materialId = getParam(req, 'materialId');
-  const clinicId = req.user!.clinicId;
+  const scope = await validateAndGetClinicIdScope(req.user!, undefined, res);
+  if (scope === false) return;
 
   try {
     const material = await prisma.appointmentTypeMaterial.findFirst({
-      where: { id: materialId, serviceId: id, clinicId },
+      where: { id: materialId, serviceId: id, ...scope },
     });
     if (!material) return res.status(404).json({ error: 'Service material not found' });
 

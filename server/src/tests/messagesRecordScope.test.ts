@@ -299,9 +299,9 @@ async function main() {
     assert.ok(sendRoute.includes("status !== 'prepared'"), '"only prepared messages can be sent" guard must remain unchanged');
   });
 
-  await test('Exactly 5 raw req.user!.clinicId occurrences remain in the file (Batch 3\'s separately-owned scope, untouched by this change)', () => {
+  await test('Zero raw req.user!.clinicId occurrences remain in the file (Batch 3\'s five plus this task\'s two together remediate all seven)', () => {
     const matches = code.match(/req\.user(!|\?)?\.clinicId/g) ?? [];
-    assert.equal(matches.length, 5, `expected exactly 5 remaining raw occurrences (Batch 3 ownership), found ${matches.length}`);
+    assert.equal(matches.length, 0, `expected zero remaining raw occurrences post-reconciliation with Batch 3, found ${matches.length}`);
   });
 
   await test('Sibling GET /messages (list) route is untouched and still uses validateAndGetClinicIdScope with a selectable clinicId', () => {
