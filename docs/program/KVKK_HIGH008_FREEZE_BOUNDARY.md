@@ -180,3 +180,65 @@ This section performs exactly step (B) of §8's "exact next task" sequence: obta
 **Gap 9 (controlled activation, `runtimeEnabled: true`):** unchanged from §4/§7.1/§8 above — remains a later, separately authorized decision (named approver, maintenance window, rollback plan, monitoring plan, pre-agreed evidence-capture scope), **not authorized** by this section either.
 
 **Status, precise, per §2's model:** `ANALYSIS_COMPLETED`: yes. `FEASIBILITY_MATRIX_COMPLETED`: yes. `PRODUCTION_CONNECTED`/`PRODUCTION_ENDPOINT_CALLED`/`PRODUCTION_PATCH_EXECUTED`/`FEATURE_ACTIVATED`/`PRODUCTION_VERIFIED`: all no. `CODE_CHANGED`/`TESTS_RUN`: no. R-061 **remains `OPEN`** — this section neither closes it nor recommends the explicit-false PATCH as an accepted next step; it records the feasibility/reversibility analysis so the human decision named in §8 step (B) can be made with the constraint made explicit. **Exact next task named by this section:** KVKK-HIGH-006-S3 — Batch 1 implementation, now that [PR #191](https://github.com/MustafaBasol/DisKlinikCRM/pull/191) (KVKK-HIGH-006-S2) has merged — the KVKK-HIGH-008 production PATCH analyzed above remains a separately deferred human decision, not made automatic by this section.
+
+---
+
+## 10. R-061 Package A authenticated production verification result — 2026-07-23
+
+An authorized human operator subsequently executed the already-authorized, non-activating Package A defined in [R061_REMAINING_AUTHENTICATED_VERIFICATION_PACKAGE.md](evidence/R061_REMAINING_AUTHENTICATED_VERIFICATION_PACKAGE.md).
+
+Production application baseline:
+
+`1aa741d1dc1e1888b1dfdb9b911d0123b4eea1ab`
+
+Observed results:
+
+- normal platform-admin login: HTTP `200`;
+- Test C1, authenticated policy `GET`: HTTP `200`, `{"runtimeEnabled":false}`;
+- Test C3, authenticated deliberately-invalid `PATCH`: HTTP `400`, `{"error":"runtimeEnabled must be a boolean"}`;
+- final before/after invariant values identical: `0||0|0|0|0|18|0|0`;
+- final before/after patient-state digest identical: `c91b3a90502dad4b92ee465c477190b6`;
+- production health remained HTTP `200`;
+- `noramedi-api` and `noramedi-worker` remained online with restart counts `18` and `16`;
+- temporary session/cookie material was cleaned.
+
+Package A result:
+
+`PASS — AUTHENTICATED PRODUCTION VERIFIED`
+
+This closes the two authenticated checks that were previously blocked by credential rejection:
+
+- Test C1 — authenticated live policy read;
+- Test C3 — authenticated live invalid-payload rejection.
+
+Package A did not execute or authorize:
+
+- a real-patient route test for gaps 1–3;
+- a valid-boolean explicit-`false` setting PATCH for gaps 4–8;
+- any successful production `PlatformAdminAuditEvent` creation;
+- controlled activation or any `false → true → false` cycle.
+
+Package B was not executed.
+
+No real patient identifier was used, no valid setting value was written, no `PlatformSetting` or `PlatformAdminAuditEvent` row was created, and the feature remained disabled.
+
+Full production-result evidence:
+
+[R061_PACKAGE_A_AUTHENTICATED_PRODUCTION_VERIFICATION.md](evidence/R061_PACKAGE_A_AUTHENTICATED_PRODUCTION_VERIFICATION.md)
+
+### 10.1 Precise freeze-boundary disposition
+
+`R-061 remains OPEN — Package A PASS; Test C1/Test C3 CLOSED.`
+
+The remaining production-only gaps preserve their prior authorization classifications:
+
+- gaps 1–3: require a real in-scope patient and remain not authorized;
+- gaps 4–8: require a persistent, non-reversible-via-API production setting/audit write and remain not authorized;
+- gap 9: controlled activation remains not authorized.
+
+The next action is not automatic execution of Package B. It is an explicit human/program decision to either:
+
+1. permanently defer the remaining production-only confirmation gaps and accept the existing repository/disposable-Postgres evidence as sufficient; or
+2. separately authorize one or more remaining items under the approval and evidence conditions already documented in Package B.
+
+Until such a decision is recorded, Package B remains non-executable.
