@@ -20,13 +20,18 @@ router.get(
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']),
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
-    const clinicId = req.user!.clinicId;
     try {
+      // Organizasyon kapsamında ara; klinik erişimi hastanın KENDİ kayıtlı
+      // clinicId'sine göre ayrıca doğrulanır (req.user.clinicId asla filtre değildir).
       const patient = await prisma.patient.findFirst({
-        where: { id: patientId, clinicId, deletedAt: null },
-        select: { id: true },
+        where: { id: patientId, organizationId: req.user!.organizationId, deletedAt: null },
+        select: { id: true, clinicId: true },
       });
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
+      if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(patient.clinicId)) {
+        return res.status(403).json({ error: 'Access denied to this patient' });
+      }
+      const clinicId = patient.clinicId; // kayıt kaynaklı
 
       const records = await prisma.toothRecord.findMany({
         where: { patientId, clinicId },
@@ -48,7 +53,6 @@ router.put(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const toothFdi = parseInt(req.params.toothFdi as string, 10);
-    const clinicId = req.user!.clinicId;
     const { status, note } = req.body as { status: string; note?: string };
 
     if (!VALID_FDI.has(toothFdi)) {
@@ -60,10 +64,14 @@ router.put(
 
     try {
       const patient = await prisma.patient.findFirst({
-        where: { id: patientId, clinicId, deletedAt: null },
-        select: { id: true },
+        where: { id: patientId, organizationId: req.user!.organizationId, deletedAt: null },
+        select: { id: true, clinicId: true },
       });
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
+      if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(patient.clinicId)) {
+        return res.status(403).json({ error: 'Access denied to this patient' });
+      }
+      const clinicId = patient.clinicId; // kayıt kaynaklı — klinik mutasyonu bu klinige yazılır
 
       const record = await prisma.toothRecord.upsert({
         where: { patientId_toothFdi: { patientId, toothFdi } },
@@ -109,13 +117,22 @@ router.delete(
   async (req: AuthRequest, res: Response) => {
     const patientId = String(req.params.patientId);
     const toothFdi = parseInt(req.params.toothFdi as string, 10);
-    const clinicId = req.user!.clinicId;
 
     if (!VALID_FDI.has(toothFdi)) {
       return res.status(400).json({ error: 'Invalid tooth FDI number' });
     }
 
     try {
+      const patient = await prisma.patient.findFirst({
+        where: { id: patientId, organizationId: req.user!.organizationId, deletedAt: null },
+        select: { id: true, clinicId: true },
+      });
+      if (!patient) return res.status(404).json({ error: 'Patient not found' });
+      if (!req.user!.canAccessAllClinics && !req.user!.allowedClinicIds.includes(patient.clinicId)) {
+        return res.status(403).json({ error: 'Access denied to this patient' });
+      }
+      const clinicId = patient.clinicId; // kayıt kaynaklı
+
       const record = await prisma.toothRecord.findFirst({
         where: { patientId, toothFdi, clinicId },
       });

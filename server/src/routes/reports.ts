@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
-import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { validateAndGetClinicIdScope, clinicIdsFromScope } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 
 const router = express.Router();
@@ -66,18 +66,17 @@ router.get('/reports/revenue', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
     const totalCount = summary._count.id || 0;
 
     // By period — raw SQL for DATE_TRUNC (validated groupBy, parameterized values)
-    // Single-clinic scope için ham SQL kullanılır; çok-klinik scope'ta Prisma toplamı esas alınır
+    // Scope'taki TÜM klinik id'leri kullanılır (tek klinik veya `all` — asla
+    // req.user.clinicId'ye sessizce daraltılmaz; bkz. KVKK-HIGH-006-S3 kapsam düzeltmesi)
     const groupByTrunc = groupBy; // already validated against whitelist
-    const rawClinicId = ('clinicId' in scope && typeof (scope as any).clinicId === 'string')
-      ? (scope as any).clinicId
-      : req.user!.clinicId;
+    const scopedClinicIds = clinicIdsFromScope(scope);
     const byPeriodQuery = `
       SELECT
         TO_CHAR(DATE_TRUNC('${groupByTrunc}', "paidAt"), 'YYYY-MM-DD') as period,
         COALESCE(SUM(amount), 0)::float as revenue,
         COUNT(*)::int as count
       FROM "Payment"
-      WHERE "clinicId" = $1
+      WHERE "clinicId" = ANY($1::text[])
         AND "paymentStatus" IN ('paid', 'partial')
         AND "paidAt" >= $2
         AND "paidAt" <= $3
@@ -85,7 +84,7 @@ router.get('/reports/revenue', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
       ORDER BY DATE_TRUNC('${groupByTrunc}', "paidAt")
     `;
     const byPeriodRaw = await prisma.$queryRawUnsafe<{ period: string; revenue: number; count: number }[]>(
-      byPeriodQuery, rawClinicId, from, to
+      byPeriodQuery, scopedClinicIds, from, to
     );
 
     // By practitioner — fetch commission rates separately (avoids select validation on old Prisma client)
@@ -402,8 +401,7 @@ router.get('/reports/patient-sources', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_
 
 // GET /api/reports/no-show-analysis
 router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING']), async (req: AuthRequest, res: Response) => {
-  const clinicId = req.user!.clinicId;
-  const { dateFrom, dateTo } = req.query;
+  const { dateFrom, dateTo, clinicId: selectedClinicId } = req.query;
 
   const toDate = dateTo ? new Date(String(dateTo)) : new Date();
   toDate.setHours(23, 59, 59, 999);
@@ -415,6 +413,11 @@ router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
   }
 
   try {
+    const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
+    if (scope === false) return;
+
+    const scopedClinicIds = clinicIdsFromScope(scope);
+
     // Monthly trend
     const monthlyTrend = await prisma.$queryRaw<
       { month: string; total: number; no_shows: number; cancellations: number }[]
@@ -425,7 +428,7 @@ router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
         COUNT(*) FILTER (WHERE status = 'no_show')::int      AS no_shows,
         COUNT(*) FILTER (WHERE status = 'cancelled')::int    AS cancellations
       FROM "Appointment"
-      WHERE "clinicId" = ${clinicId}
+      WHERE "clinicId" = ANY(${scopedClinicIds}::text[])
         AND "startTime" >= ${fromDate}
         AND "startTime" <= ${toDate}
       GROUP BY DATE_TRUNC('month', "startTime")
@@ -434,7 +437,7 @@ router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
 
     // By doctor
     const activeDoctors = await prisma.user.findMany({
-      where: { clinicId, role: 'doctor', isActive: true },
+      where: { ...scope, role: 'doctor', isActive: true },
       select: { id: true, firstName: true, lastName: true },
     });
 
@@ -442,13 +445,13 @@ router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
       activeDoctors.map(async (doc) => {
         const [total, noShows, cancellations] = await Promise.all([
           prisma.appointment.count({
-            where: { clinicId, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: { not: 'cancelled' } },
+            where: { ...scope, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: { not: 'cancelled' } },
           }),
           prisma.appointment.count({
-            where: { clinicId, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: 'no_show' },
+            where: { ...scope, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: 'no_show' },
           }),
           prisma.appointment.count({
-            where: { clinicId, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: 'cancelled' },
+            where: { ...scope, practitionerId: doc.id, startTime: { gte: fromDate, lte: toDate }, status: 'cancelled' },
           }),
         ]);
         return {
@@ -472,7 +475,7 @@ router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
         COUNT(*) FILTER (WHERE status != 'cancelled')::int AS total,
         COUNT(*) FILTER (WHERE status = 'no_show')::int    AS no_shows
       FROM "Appointment"
-      WHERE "clinicId" = ${clinicId}
+      WHERE "clinicId" = ANY(${scopedClinicIds}::text[])
         AND "startTime" >= ${fromDate}
         AND "startTime" <= ${toDate}
       GROUP BY EXTRACT(DOW FROM "startTime")
@@ -488,7 +491,7 @@ router.get('/reports/no-show-analysis', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC
         COUNT(*) FILTER (WHERE status != 'cancelled')::int AS total,
         COUNT(*) FILTER (WHERE status = 'no_show')::int    AS no_shows
       FROM "Appointment"
-      WHERE "clinicId" = ${clinicId}
+      WHERE "clinicId" = ANY(${scopedClinicIds}::text[])
         AND "startTime" >= ${fromDate}
         AND "startTime" <= ${toDate}
       GROUP BY EXTRACT(HOUR FROM "startTime")
