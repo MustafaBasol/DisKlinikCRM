@@ -286,7 +286,7 @@ The separate implementation's shape matches this document's own §9 recommendati
 ### 16.5 Publication record
 
 - Branch: `docs/kvkk-high006-batch4-characterization` (pre-existing; not created or renamed by this pass).
-- Committed: this document only (documentation-only scope). Commit: `<filled in after commit — see PR>`.
+- Committed: this document only (documentation-only scope), on the branch named above. The exact commit SHA and PR number/URL are recorded in that branch's git history and in the pull request opened against `main` from it, rather than restated here to avoid a self-referential edit loop.
 - Pushed: yes, to the existing branch's remote tracking ref.
-- Pull request: opened against `main`, documentation-only, not merged. PR number and URL: `<filled in after `gh pr create``>`.
+- Pull request: opened against `main`, documentation-only, not merged.
 - Scope of the commit: exactly this file. No runtime, test, schema/migration, frontend, shared-tracker (`CURRENT_PHASE.md`, `NORAMEDI_MASTER_TRACKER.md`, `RISK_REGISTER.md`), or deployment-configuration file was committed alongside it.
