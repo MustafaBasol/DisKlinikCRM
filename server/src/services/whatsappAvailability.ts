@@ -158,7 +158,8 @@ export const buildAvailableSlots = async (
   clinicId: string,
   appointmentTypeId: string | null | undefined,
   date: string,
-  practitionerId?: string | null
+  practitionerId?: string | null,
+  referenceTime?: Date
 ) => {
   const [clinic, service, practitioners] = await Promise.all([
     prisma.clinic.findUnique({ where: { id: clinicId } }),
@@ -197,7 +198,9 @@ export const buildAvailableSlots = async (
 
   const durationMinutes = service?.durationMinutes ?? DEFAULT_SLOT_DURATION_MINUTES;
   const results: RawAvailableSlot[] = [];
-  const now = new Date();
+  // Injectable for tests that need a fixed reference instant; production
+  // callers never pass this and get the real wall clock, as before.
+  const now = referenceTime ?? new Date();
 
   for (const practitioner of practitioners) {
     // Skip practitioner if they have an off-day on this date
