@@ -7,6 +7,8 @@
 **Production application baseline:** `1aa741d1dc1e1888b1dfdb9b911d0123b4eea1ab`
 **Documentation branch baseline:** `origin/main` @ `ebb0246c0af9d32e71f4057e5d497ee140266bfc`
 
+**Forward reference (added 2026-07-23, does not alter this document's own historical result):** this document's own PASS result for Test C1/Test C3 remains historically valid. A later production deployment (SHA `8906e66af5169220a4aed48fe4cfea8524976fb8`) added a reversible reset mechanism and attempted a further authenticated step, which was itself blocked by a login `401` — see [R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md](R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md). R-061 remains `OPEN` under both documents.
+
 ## 1. Scope
 
 An authorized human operator executed Package A’s already-authorized, non-activating authenticated production retry.
