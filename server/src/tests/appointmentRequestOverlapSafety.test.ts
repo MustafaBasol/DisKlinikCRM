@@ -32,6 +32,15 @@
  *  14. Lock acquired before appointment.findFirst in combined flow
  *  15. Lock acquired before appointmentRequest.findFirst in combined flow
  *
+ *  ── computeAppointmentRequestConversionLockKey / acquireAppointmentRequestConversionLock ──
+ *   (DATA-INTEGRITY-001-F1 request-level conversion lock)
+ *   a. Same requestId → same key pair (deterministic)
+ *   b. Different requestId → different key pair
+ *   c. Domain-separated from computeSlotLockKey (no cross-namespace collision)
+ *   d. Calls $executeRaw with the deterministic key pair, ::int4 casts
+ *   e. Different requestId → different $executeRaw arguments
+ *   f. Call order: request-conversion lock $executeRaw precedes slot lock $executeRaw
+ *
  *  ── assertSlotAvailable ────────────────────────────────────────────────────
  *  16. Resolves when no conflicts
  *  17. Throws APPOINTMENT_OVERLAP for existing non-cancelled Appointment
@@ -95,6 +104,8 @@ import {
   assertSlotAvailable,
   acquireAppointmentSlotLock,
   computeSlotLockKey,
+  acquireAppointmentRequestConversionLock,
+  computeAppointmentRequestConversionLockKey,
   SlotConflictError,
   BLOCKING_APPOINTMENT_REQUEST_STATUSES,
   NON_BLOCKING_APPOINTMENT_STATUSES,
@@ -429,6 +440,123 @@ async function main() {
     const lockIdx = callOrder.indexOf('$executeRaw');
     const reqIdx = callOrder.indexOf('appointmentRequest.findFirst');
     assert.ok(lockIdx < reqIdx, `lock (pos ${lockIdx}) must precede appointmentRequest.findFirst (pos ${reqIdx})`);
+  });
+
+  // ── computeAppointmentRequestConversionLockKey ────────────────────────────
+  section('computeAppointmentRequestConversionLockKey');
+
+  await test('same requestId → same key pair (deterministic)', () => {
+    const a = computeAppointmentRequestConversionLockKey('request-conv-1');
+    const b = computeAppointmentRequestConversionLockKey('request-conv-1');
+    assert.deepEqual(a, b);
+  });
+
+  await test('different requestId → different key pair', () => {
+    const a = computeAppointmentRequestConversionLockKey('request-conv-1');
+    const b = computeAppointmentRequestConversionLockKey('request-conv-2');
+    assert.notDeepEqual(a, b);
+  });
+
+  await test('request-conversion lock key is domain-separated from the slot lock key, even for a colliding raw id', () => {
+    // The slot lock key is derived from "{clinicId}:{practitionerId}:{startEpochMs}".
+    // Feed the exact same raw string in as a requestId and confirm the two
+    // derivation functions land on different key pairs — proof the
+    // "appointment-request-conversion:" prefix actually namespaces the two
+    // advisory-lock spaces apart instead of accidentally reusing the same hash input.
+    const sharedRawString = 'clinic-x:practitioner-y:1750000000000';
+    const requestKey = computeAppointmentRequestConversionLockKey(sharedRawString);
+    const slotKey = computeSlotLockKey('clinic-x', 'practitioner-y', new Date(1750000000000));
+    assert.notDeepEqual(requestKey, slotKey);
+  });
+
+  // ── acquireAppointmentRequestConversionLock ───────────────────────────────
+  section('acquireAppointmentRequestConversionLock — $executeRaw call verification');
+
+  await test('calls $executeRaw with the key pair from computeAppointmentRequestConversionLockKey', async () => {
+    const requestId = 'request-lock-1';
+    let rawCalled = false;
+    const capturedArgs: unknown[] = [];
+
+    const mockTx = {
+      $executeRaw: (...args: unknown[]) => {
+        rawCalled = true;
+        capturedArgs.push(...args);
+        return Promise.resolve(0);
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    await acquireAppointmentRequestConversionLock(mockTx, requestId);
+
+    assert.ok(rawCalled, '$executeRaw must be called');
+    const [key1, key2] = computeAppointmentRequestConversionLockKey(requestId);
+    assert.equal(capturedArgs[1], key1, 'key1 passed to $executeRaw matches computeAppointmentRequestConversionLockKey');
+    assert.equal(capturedArgs[2], key2, 'key2 passed to $executeRaw matches computeAppointmentRequestConversionLockKey');
+  });
+
+  await test('advisory lock SQL uses ::int4 casts — not raw bigint', async () => {
+    const capturedArgs: unknown[] = [];
+    const mockTx = {
+      $executeRaw: (...args: unknown[]) => {
+        capturedArgs.push(...args);
+        return Promise.resolve(0);
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    await acquireAppointmentRequestConversionLock(mockTx, 'request-cast-test');
+
+    const template = capturedArgs[0] as readonly string[];
+    assert.ok(Array.isArray(template), 'First argument must be a template strings array');
+    assert.ok(template.join('').includes('::int4'), 'SQL template must include ::int4 cast');
+  });
+
+  await test('different requestId produces different $executeRaw arguments', async () => {
+    const calls: unknown[][] = [];
+    const mockTx = {
+      $executeRaw: (...args: unknown[]) => {
+        calls.push([...args]);
+        return Promise.resolve(0);
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    await acquireAppointmentRequestConversionLock(mockTx, 'request-diff-A');
+    await acquireAppointmentRequestConversionLock(mockTx, 'request-diff-B');
+
+    assert.ok(calls[0][1] !== calls[1][1] || calls[0][2] !== calls[1][2], 'different requestIds produce different key pairs');
+  });
+
+  // ── Call order: acquireAppointmentRequestConversionLock → acquireAppointmentSlotLock
+  // This is the exact lock ORDER the conversion handler
+  // (routes/appointmentRequests.ts POST /:id/convert) must use, and must stay
+  // consistent across every conversion code path: request lock first, slot
+  // lock second. Reversing the order (or omitting the request lock) is
+  // exactly the residual gap DATA-INTEGRITY-001-F1 closes — two concurrent
+  // conversions of the SAME request with DIFFERENT slot overrides would
+  // otherwise acquire different slot lock keys and both proceed.
+  section('Call order: acquireAppointmentRequestConversionLock → acquireAppointmentSlotLock');
+
+  await test('request-conversion lock $executeRaw call precedes the slot lock $executeRaw call', async () => {
+    const calls: unknown[][] = [];
+    const mockTx = {
+      $executeRaw: (...args: unknown[]) => {
+        calls.push([...args]);
+        return Promise.resolve(0);
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    await acquireAppointmentRequestConversionLock(mockTx, 'request-order-1');
+    await acquireAppointmentSlotLock(mockTx, {
+      clinicId: 'clinic-order-req-1',
+      practitionerId: 'prac-order-req-1',
+      startTime: new Date('2026-06-18T09:00:00Z'),
+    });
+
+    assert.equal(calls.length, 2, 'both locks must be acquired');
+    const [requestKey1, requestKey2] = computeAppointmentRequestConversionLockKey('request-order-1');
+    const [slotKey1, slotKey2] = computeSlotLockKey('clinic-order-req-1', 'prac-order-req-1', new Date('2026-06-18T09:00:00Z'));
+    assert.equal(calls[0][1], requestKey1, 'the FIRST $executeRaw call must be the request-conversion lock');
+    assert.equal(calls[0][2], requestKey2);
+    assert.equal(calls[1][1], slotKey1, 'the SECOND $executeRaw call must be the slot lock');
+    assert.equal(calls[1][2], slotKey2);
   });
 
   // ── assertSlotAvailable: no conflict ──────────────────────────────────────

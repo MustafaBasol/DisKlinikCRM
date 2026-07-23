@@ -256,6 +256,10 @@ export async function cleanupAllFixtures(): Promise<void> {
   const clinicIds = clinics.map((c) => c.id);
 
   await prisma.activityLog.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  // AppointmentRequest before Appointment: AppointmentRequest.convertedAppointmentId
+  // references Appointment.id.
+  await prisma.appointmentRequest.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  await prisma.appointment.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.sentMessage.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.messageTemplate.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.postTreatmentMessageQueue.deleteMany({ where: { clinicId: { in: clinicIds } } });
@@ -270,6 +274,8 @@ export async function cleanupAllFixtures(): Promise<void> {
   await prisma.appointmentType.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.userClinic.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.patientClinic.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  await prisma.doctorAvailability.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  await prisma.doctorOffDay.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.patient.deleteMany({ where: { organizationId: { in: orgIds } } });
   await prisma.user.deleteMany({ where: { organizationId: { in: orgIds } } });
   await prisma.clinic.deleteMany({ where: { organizationId: { in: orgIds } } });

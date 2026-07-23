@@ -94,7 +94,8 @@
     "test:kvkk-high006-db-insurance-list-behavior": "tsx src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
     "test:kvkk-high006-db-plan-limits-quota": "tsx src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
     "test:kvkk-high006-db-input-handling": "tsx src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts",
-    "test:kvkk-high006-db-verification": "npm run test:kvkk-high006-db-clinic-scope-access && npm run test:kvkk-high006-db-record-owned-mutation-scope && npm run test:kvkk-high006-db-target-clinic-creation && npm run test:kvkk-high006-db-insurance-list-behavior && npm run test:kvkk-high006-db-plan-limits-quota && npm run test:kvkk-high006-db-input-handling"
+    "test:kvkk-high006-db-verification": "npm run test:kvkk-high006-db-clinic-scope-access && npm run test:kvkk-high006-db-record-owned-mutation-scope && npm run test:kvkk-high006-db-target-clinic-creation && npm run test:kvkk-high006-db-insurance-list-behavior && npm run test:kvkk-high006-db-plan-limits-quota && npm run test:kvkk-high006-db-input-handling",
+    "test:appointment-request-conversion-atomicity": "tsx src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts"
   },
   "keywords": [],
   "author": "",
