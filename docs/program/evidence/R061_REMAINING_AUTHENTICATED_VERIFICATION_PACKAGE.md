@@ -283,7 +283,7 @@ If A.2's login instead fails again (any non-200), Package A still closes one thi
 - **What it is:** `PATCH /api/platform/privacy/legacy-consent-correction/settings` with body `{"runtimeEnabled": false}`, authenticated.
 - **Evidence it would close:** gaps 4–8 — a successful `setPlatformSetting()` write, a successful `PlatformAdminAuditEvent` insert, real `actorPlatformAdminId` attribution, the real previous/new value chain (`ABSENT`/`null` → `'false'`), confirmation of zero `SecuritySignalEvent` rows from the action, and confirmation of no PII/PHI in the created audit row.
 - **Why not currently authorized:** `setPlatformSetting()` (`platformSettings.ts:24-34`) always `upsert`s — a `false`-valued PATCH is not a no-op; it moves production from "row absent" (structural fail-closed default) to "row present with value `'false'`" (a persisted state), and inserts exactly one `PlatformAdminAuditEvent` row. This is a real production state change, not a pure read, and this task's scope is limited to non-activating, non-mutating verification.
-- **Reversible:** **No**, by this program's own reversibility standard (already established in [KVKK-HIGH-008-F1-PBV-S1](KVKK-HIGH-008-F1-PBV-S1_SAFE_BEHAVIORAL_PRODUCTION_VERIFICATION_FEASIBILITY.md) §35-§36): `platformSettings.ts` has no `deletePlatformSetting()`/unset function, and no route calls one. Returning to "no row" would require an out-of-band direct database `DELETE`, outside this program's normal, audited tooling and outside any task's authorization to date.
+- **Reversible:** **[Superseded 2026-07-23, R-061 residual-safe-reset production deployment and verification, preserved not deleted]:** the statement immediately below was correct at its own capture time. It is now resolved — implementation commit `b86001779fbbc2cfdcf76b84568d3d960850a761` (branch `feature/r061-residual-safe-closure`) added `unsetPlatformSetting()` and `DELETE /api/platform/privacy/legacy-consent-correction/settings`, deployed to production at SHA `8906e66af5169220a4aed48fe4cfea8524976fb8`. A `PATCH runtimeEnabled:false` followed by an authenticated `DELETE` is now a supported, audited way back to "no row" through this program's own normal tooling — no out-of-band direct database `DELETE` is required. This does **not** by itself authorize B.2 — B.2 remains a real, intentional production state change requiring the same explicit approval named below, now via the reversible chain rather than as a permanent one-way write; see the new §"R-061 residual-safe-reset execution result" at the end of this document. **[Historical, preserved]:** **No**, by this program's own reversibility standard (already established in [KVKK-HIGH-008-F1-PBV-S1](KVKK-HIGH-008-F1-PBV-S1_SAFE_BEHAVIORAL_PRODUCTION_VERIFICATION_FEASIBILITY.md) §35-§36): `platformSettings.ts` has no `deletePlatformSetting()`/unset function, and no route calls one. Returning to "no row" would require an out-of-band direct database `DELETE`, outside this program's normal, audited tooling and outside any task's authorization to date.
 - **Data mutation implications:** one new `PlatformSetting` row (key `privacy.legacyConsentCorrection.runtimeEnabled`, value `'false'`); one new `PlatformAdminAuditEvent` row (action `platform_setting.updated`, previousValue reflecting the fail-closed default, newValue `'false'`). No patient, consent, or clinic data is touched — the effective runtime behavior does not change (stays disabled).
 - **Minimum approval required:** an explicit, named human decision accepting the permanent, non-reversible-via-API persistence-state change described above as a deliberate, low-risk trade-off — i.e., accepting that "absent row" becomes "row present, value false" forever (short of an unsupported manual DB `DELETE`), in exchange for closing gaps 4–8.
 - **Safer alternative:** none exists that closes these exact gaps without writing the row — that is what makes this a genuine decision rather than a technical gap. A partial safer alternative is to accept `platformAdmin.test.ts`'s existing disposable-Postgres coverage (GET/PATCH round-trip, admin-attributed logging, FK-violation atomic rollback, concurrency — [KVKK_HIGH008_FREEZE_BOUNDARY.md](../KVKK_HIGH008_FREEZE_BOUNDARY.md) §7) as sufficient proof of the mechanism, and treat live production confirmation of gaps 4–8 as permanently deferred rather than pursued.
@@ -316,7 +316,7 @@ If A.2's login instead fails again (any non-200), Package A still closes one thi
 | Item | Closes | Authorized here? | Reversible? | Mutates data? | Approval needed |
 |---|---|---|---|---|---|
 | B.1 Real-patient route behavior | Gaps 1–3 | No | Partial (HTTP call yes; real-patient touch no) | No (on expected 403) | Named patient/tenant decision |
-| B.2 Explicit-`false` PATCH | Gaps 4–8 | No | No (no unset API exists) | Yes — 1 `PlatformSetting` row, 1 audit row | Explicit accept of permanent state change |
+| B.2 Explicit-`false` PATCH | Gaps 4–8 | No | **[Superseded 2026-07-23, preserved not deleted]** Historical: No (no unset API existed at capture time). Current: a `DELETE` reset path is now merged/deployed (commit `b86001779fbbc2cfdcf76b84568d3d960850a761`), but the authenticated `PATCH`→`DELETE` chain has not been executed in production (login returned `401`) | Yes — 1 `PlatformSetting` row, 1 audit row (now reversible via authenticated `DELETE`, once executed) | Explicit accept of the write, or authorization to run the now-available reversible `PATCH`→`DELETE` chain |
 | B.3 Audit-event creation | Gaps 5–8 | No (same action as B.2) | No | Same as B.2 | Same as B.2 |
 | B.4 Controlled activation | Not a verification gap | **No — never** | No | Yes — potentially patient-facing | Full program/product/compliance authorization, separate from verification |
 
@@ -374,3 +374,39 @@ Full operator-result evidence:
 Precise risk disposition:
 
 `R-061 remains OPEN — Package A PASS; Test C1/Test C3 CLOSED; separately-gated residual items remain unchanged and require their existing explicit authorization decisions.`
+
+---
+
+## R-061 residual-safe-reset execution result — 2026-07-23 production window
+
+Since Package A's execution above, implementation commit `b86001779fbbc2cfdcf76b84568d3d960850a761` (branch `feature/r061-residual-safe-closure`) was merged, adding `unsetPlatformSetting()` and `DELETE /api/platform/privacy/legacy-consent-correction/settings` — resolving B.2's historical "no unset API exists" limitation (see the supersession notes on B.2 above). An authorized operator deployed this commit to production and attempted the next authenticated step.
+
+Result:
+
+`PASS WITH BLOCKED AUTHENTICATED RESIDUAL`
+
+Observed:
+
+- deployed production SHA: `8906e66af5169220a4aed48fe4cfea8524976fb8` (== `origin/main`, clean tree, `npm run typecheck` clean);
+- `noramedi-api` restarted, PM2 `online`; a transient startup-window `502` is a pre-existing, already-recorded readiness gap (R-063), not a deployment failure;
+- unauthenticated `GET` policy (local and public): HTTP `401`;
+- unauthenticated `DELETE` settings (public): HTTP `401`, body `{"error":"Unauthorized: Missing token"}`;
+- database invariant before any authenticated attempt: setting row absent, `null` value, zero audit rows;
+- a single normal platform-admin login attempt: HTTP `401`;
+- per this package's own stop condition (§A.2): no second credential was attempted, and Sections A.3/A.4 (the authenticated `GET`/`PATCH`, and by extension any authenticated `DELETE`) were **not** executed;
+- database invariant after the login attempt: unchanged — setting row absent, `null` value, zero audit rows;
+- PM2 remained online; production `HEAD` remained `8906e66af5169220a4aed48fe4cfea8524976fb8`; repository remained clean;
+- temporary cookie/login files and secret-bearing shell variables were cleaned;
+- no real patient identifier was used; no valid-boolean `PlatformSetting` PATCH was sent; no `DELETE` was sent; the feature was not activated.
+
+This closes no additional item from §A.9 or §B.5 — Test C1/C3 remain closed from Package A above; the newly-available `DELETE` reset path (B.2/B.3) remains unexecuted, `BLOCKED / NOT EXECUTED`, because the authenticated session required to reach it was never established.
+
+Full operator-result evidence:
+
+[R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md](R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md)
+
+Precise risk disposition:
+
+`R-061 remains OPEN — residual-safe-reset mechanism deployed and PASS on unauthenticated protection/health/default-invariant; authenticated PATCH/DELETE/idempotency/audit-write chain (gaps 4-8) remains BLOCKED / NOT EXECUTED because the platform-admin login attempt returned 401; gaps 1-3 and controlled activation remain separately unauthorized, unchanged.`
+
+**Exact remaining closure requirements:** obtain or validate the normal platform-admin authentication path/credential operationally, then rerun only the already-authorized, non-activating authenticated chain: `GET` policy → `PATCH runtimeEnabled:false` → verify setting/audit → `DELETE` reset → verify `removed:true` → second `DELETE` → verify `removed:false`/no extra audit → final absent/default-false invariant. Controlled activation (`runtimeEnabled:true`) and a real-patient production test remain separately unauthorized and are not part of this next task.
