@@ -32,3 +32,19 @@ export async function setPlatformSetting(
     create: { key, value },
   });
 }
+
+/**
+ * Remove a platform setting so callers can restore its true default/absent
+ * state. Pass a Prisma.TransactionClient when the deletion must be atomic
+ * with a durable audit insert.
+ */
+export async function unsetPlatformSetting(
+  key: string,
+  client: Pick<PrismaClient, 'platformSetting'> | Prisma.TransactionClient = prisma,
+): Promise<boolean> {
+  const result = await client.platformSetting.deleteMany({
+    where: { key },
+  });
+
+  return result.count > 0;
+}
