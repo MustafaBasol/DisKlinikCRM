@@ -536,7 +536,7 @@ section('Privacy / Legacy Consent Correction Runtime Toggle (KVKK-HIGH-008-F1) â
 // covered above by the generic authenticatePlatformAdmin clinic-JWT-rejection
 // tests, which gate every route behind this router, including these two.
 type RouterLike = { stack: Array<any> };
-function getRouteMiddlewareChain(router: RouterLike, method: 'get' | 'patch', path: string) {
+function getRouteMiddlewareChain(router: RouterLike, method: 'get' | 'patch' | 'delete', path: string) {
   for (const layer of router.stack) {
     if (layer.route && layer.route.path === path && layer.route.methods?.[method]) {
       return layer.route.stack.map((s: any) => s.handle);
@@ -629,9 +629,15 @@ await test('PATCH settings: non-boolean payload is rejected with 400 and never w
 });
 
 const AUDIT_ACTION = 'platform_setting.updated';
+const RESET_AUDIT_ACTION = 'platform_setting.reset';
 
 async function cleanAuditRows() {
-  await prisma.platformAdminAuditEvent.deleteMany({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  await prisma.platformAdminAuditEvent.deleteMany({
+    where: {
+      action: { in: [AUDIT_ACTION, RESET_AUDIT_ACTION] },
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    },
+  });
 }
 
 await test('PATCH settings: successful falseâ†’true toggle creates exactly one durable PlatformAdminAuditEvent row (platform-scope, admin-attributed, no patient data/secrets)', async () => {
@@ -831,6 +837,203 @@ await test("PATCH settings: a concurrently-failing toggle (forced FK violation) 
   assert.equal(ghostAuditCount, 0);
 });
 
+await test('DELETE settings: explicit false row is removed, default-deny is restored, and one durable reset audit row is created', async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const chain = getRouteMiddlewareChain(
+    platformAdminRouter as any,
+    'delete',
+    '/privacy/legacy-consent-correction/settings',
+  );
+  const res = mockPlatformRes();
+  await runChain(chain, mockPlatformReq(), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, {
+    runtimeEnabled: false,
+    settingPresent: false,
+    removed: true,
+  });
+
+  const setting = await prisma.platformSetting.findUnique({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(setting, null);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: {
+      action: RESET_AUDIT_ACTION,
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    },
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].actorPlatformAdminId, 'admin-1');
+  assert.equal(rows[0].resourceType, 'platform_setting');
+  assert.equal(rows[0].previousValue, 'false');
+  assert.equal(rows[0].newValue, null);
+  assert.equal(rows[0].outcome, 'success');
+  assert.deepEqual(rows[0].safeMetadata, { restoredDefaultState: true });
+});
+
+await test('DELETE settings: absent setting is idempotent and creates no misleading reset audit row', async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.deleteMany({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+
+  const chain = getRouteMiddlewareChain(
+    platformAdminRouter as any,
+    'delete',
+    '/privacy/legacy-consent-correction/settings',
+  );
+  const res = mockPlatformRes();
+  await runChain(chain, mockPlatformReq(), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, {
+    runtimeEnabled: false,
+    settingPresent: false,
+    removed: false,
+  });
+
+  const auditCount = await prisma.platformAdminAuditEvent.count({
+    where: {
+      action: RESET_AUDIT_ACTION,
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    },
+  });
+  assert.equal(auditCount, 0);
+});
+
+await test('DELETE settings: audit failure rolls the deletion back atomically', async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const chain = getRouteMiddlewareChain(
+    platformAdminRouter as any,
+    'delete',
+    '/privacy/legacy-consent-correction/settings',
+  );
+
+  const req = {
+    body: {},
+    platformAdmin: {
+      id: 'admin-does-not-exist-reset-ghost',
+      email: 'reset-ghost@platform.test',
+    },
+  } as any;
+
+  await assert.rejects(() => runChain(chain, req, mockPlatformRes()));
+
+  const setting = await prisma.platformSetting.findUnique({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(setting?.value, 'false');
+
+  const auditCount = await prisma.platformAdminAuditEvent.count({
+    where: {
+      action: RESET_AUDIT_ACTION,
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    },
+  });
+  assert.equal(auditCount, 0);
+});
+
+await test('PATCH and DELETE settings: concurrent enable/reset operations serialize into a coherent final state and audit chain', async () => {
+  await cleanAuditRows();
+  const baselineValue = 'false';
+
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: baselineValue },
+    create: {
+      key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+      value: baselineValue,
+    },
+  });
+
+  const patchChain = getRouteMiddlewareChain(
+    platformAdminRouter as any,
+    'patch',
+    '/privacy/legacy-consent-correction/settings',
+  );
+  const deleteChain = getRouteMiddlewareChain(
+    platformAdminRouter as any,
+    'delete',
+    '/privacy/legacy-consent-correction/settings',
+  );
+
+  const patchRes = mockPlatformRes();
+  const deleteRes = mockPlatformRes();
+
+  // Both handlers open independent real Postgres transactions and acquire the
+  // same transaction-scoped advisory lock. The committed outcome must therefore
+  // be equivalent to one complete serial ordering, never a stale-read mixture.
+  await Promise.all([
+    runChain(patchChain, mockPlatformReq({ runtimeEnabled: true }), patchRes),
+    runChain(deleteChain, mockPlatformReq(), deleteRes),
+  ]);
+
+  assert.equal(patchRes.statusCode, 200);
+  assert.equal(deleteRes.statusCode, 200);
+
+  const finalSetting = await prisma.platformSetting.findUnique({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+
+  const updateRows = await prisma.platformAdminAuditEvent.findMany({
+    where: {
+      action: AUDIT_ACTION,
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    },
+  });
+  const resetRows = await prisma.platformAdminAuditEvent.findMany({
+    where: {
+      action: RESET_AUDIT_ACTION,
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+    },
+  });
+
+  assert.equal(updateRows.length, 1, 'the successful PATCH must create exactly one update audit row');
+  assert.equal(resetRows.length, 1, 'the successful DELETE must create exactly one reset audit row');
+
+  const updateRow = updateRows[0]!;
+  const resetRow = resetRows[0]!;
+
+  assert.equal(updateRow.newValue, 'true');
+  assert.equal(resetRow.newValue, null);
+
+  if (finalSetting === null) {
+    // PATCH committed first, then DELETE read the newly committed true value.
+    assert.equal(updateRow.previousValue, baselineValue);
+    assert.equal(resetRow.previousValue, 'true');
+    assert.deepEqual(deleteRes.body, {
+      runtimeEnabled: false,
+      settingPresent: false,
+      removed: true,
+    });
+  } else {
+    // DELETE committed first, then PATCH recreated the absent setting.
+    assert.equal(finalSetting.value, 'true');
+    assert.equal(resetRow.previousValue, baselineValue);
+    assert.equal(updateRow.previousValue, null);
+    assert.deepEqual(deleteRes.body, {
+      runtimeEnabled: false,
+      settingPresent: false,
+      removed: true,
+    });
+  }
+});
 await test('PATCH settings: admin-attributed console log is emitted on toggle (existing platform-admin observability convention), leaving the DB row as the final restored state', async () => {
   const logSpy: string[] = [];
   const originalLog = console.log;

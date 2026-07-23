@@ -9,7 +9,7 @@ import {
 import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { loadDataRetentionConfig } from '../services/privacy/dataRetentionPolicy.js';
-import { getPlatformSetting, setPlatformSetting } from '../services/platformSettings.js';
+import { getPlatformSetting, setPlatformSetting, unsetPlatformSetting } from '../services/platformSettings.js';
 import {
   LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
   isLegacyConsentCorrectionRuntimeEnabled,
@@ -1131,6 +1131,57 @@ router.patch('/privacy/legacy-consent-correction/settings', async (req: Platform
   // record above is the actual audit evidence, not this line.
   console.log(`[platform-privacy] Legacy consent correction runtime toggle set to ${runtimeEnabled} by admin ${req.platformAdmin?.email}`);
   res.json({ runtimeEnabled });
+});
+
+// DELETE /api/platform/privacy/legacy-consent-correction/settings
+// Restore the setting to its true default/absent state. Platform-admin only.
+//
+// PATCH persists an explicit boolean value. DELETE removes the PlatformSetting
+// row and restores default-deny behavior. Deletion and audit creation are
+// atomic and serialized under the same advisory lock used by PATCH.
+router.delete('/privacy/legacy-consent-correction/settings', async (req: PlatformAdminRequest, res: Response) => {
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY}))`;
+
+    const previousValue = await getPlatformSetting(
+      LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+      tx,
+    );
+
+    if (previousValue === null) {
+      return { removed: false };
+    }
+
+    const removed = await unsetPlatformSetting(
+      LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+      tx,
+    );
+
+    await writePlatformAdminAuditEventInTx(tx, {
+      actorPlatformAdminId: req.platformAdmin?.id ?? null,
+      action: 'platform_setting.reset',
+      resourceType: 'platform_setting',
+      resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
+      previousValue,
+      newValue: null,
+      outcome: 'success',
+      safeMetadata: {
+        restoredDefaultState: true,
+      },
+    });
+
+    return { removed };
+  });
+
+  console.log(
+    `[platform-privacy] Legacy consent correction runtime setting reset to default/absent by admin ${req.platformAdmin?.email}`,
+  );
+
+  res.json({
+    runtimeEnabled: false,
+    settingPresent: false,
+    removed: result.removed,
+  });
 });
 
 // POST /api/platform/privacy/data-retention/run
