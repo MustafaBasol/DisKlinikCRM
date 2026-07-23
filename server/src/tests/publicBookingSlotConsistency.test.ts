@@ -172,8 +172,17 @@ function mockPrisma(state: MockDbState): PrismaClient {
 
 // clinicId/date chosen so the weekday computation is deterministic regardless
 // of test-runner locale/TZ: 2026-07-20 is a Monday.
+//
+// NOW is an injected reference instant (see buildAvailableSlots'
+// `referenceTime` parameter), not the real wall clock — it anchors every
+// slot-visibility assertion below to a fixed point in calendar time (midnight
+// UTC on DATE, before any slot that day) so this suite can never again go
+// stale just because the real clock advances past DATE. See
+// TEST-DEBT-001-F1 for why: a version of this file that filtered solely by
+// the real `new Date()` silently broke once DATE was in the past.
 const CLINIC_ID = 'clinic-slots-1';
 const DATE = '2026-07-20';
+const NOW = new Date(`${DATE}T00:00:00.000Z`);
 const MONDAY = 1;
 const PRACTITIONER_A = { id: 'doc-a', firstName: 'Ada', lastName: 'A' };
 const PRACTITIONER_B = { id: 'doc-b', firstName: 'Bora', lastName: 'B' };
@@ -199,7 +208,7 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(slots);
     assert.ok(
       !slots!.some((s) => s.localStartTime === '09:00'),
@@ -221,7 +230,7 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(slots);
     assert.ok(!slots!.some((s) => s.localStartTime === '09:30'), '09:30 must be hidden by an approved request');
   });
@@ -240,7 +249,7 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(slots);
     assert.ok(slots!.some((s) => s.localStartTime === '09:00'), '09:00 must remain visible — request is rejected');
   });
@@ -262,7 +271,7 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(slots!.some((s) => s.localStartTime === '09:00'));
   });
 
@@ -281,7 +290,7 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(!slots!.some((s) => s.localStartTime === '10:00'));
   });
 
@@ -300,7 +309,7 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(slots!.some((s) => s.localStartTime === '10:00'));
   });
 
@@ -319,7 +328,7 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(!slots!.some((s) => s.localStartTime === '09:30'), '09:30-10:00 overlaps the appointment — must be hidden');
     assert.ok(slots!.some((s) => s.localStartTime === '10:00'), '10:00-10:30 starts exactly when the appointment ends — must NOT be hidden');
   });
@@ -342,9 +351,96 @@ async function main() {
         },
       ],
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, null);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, null, NOW);
     assert.ok(!slots!.some((s) => s.practitioner.id === PRACTITIONER_A.id && s.localStartTime === '09:00'));
     assert.ok(slots!.some((s) => s.practitioner.id === PRACTITIONER_B.id && s.localStartTime === '09:00'));
+  });
+
+  section('── buildAvailableSlots: injected reference-time clock (TEST-DEBT-001-F1) ──');
+
+  await test('slots after the injected reference time are listed', async () => {
+    const prisma = mockPrisma({
+      service: { durationMinutes: 30 },
+      practitioners: [PRACTITIONER_A],
+      availability: baseAvailability,
+    });
+    // Reference time is before every slot in the 09:00-11:00 window.
+    const referenceTime = new Date(`${DATE}T08:00:00.000Z`);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, referenceTime);
+    assert.ok(slots!.some((s) => s.localStartTime === '09:00'), '09:00 is after the injected reference time — must be listed');
+    assert.ok(slots!.some((s) => s.localStartTime === '10:00'), '10:00 is after the injected reference time — must be listed');
+  });
+
+  await test('slots before (or at) the injected reference time are excluded', async () => {
+    const prisma = mockPrisma({
+      service: { durationMinutes: 30 },
+      practitioners: [PRACTITIONER_A],
+      availability: baseAvailability,
+    });
+    // Reference time falls inside the 09:00-09:30 slot, after it has started,
+    // but still before the 10:00 slot.
+    const referenceTime = new Date(`${DATE}T09:15:00.000Z`);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, referenceTime);
+    assert.ok(!slots!.some((s) => s.localStartTime === '09:00'), '09:00 has already started relative to the injected reference time — must be excluded');
+    assert.ok(slots!.some((s) => s.localStartTime === '10:00'), '10:00 is still ahead of the injected reference time — must remain listed');
+  });
+
+  await test('boundary: a slot starting exactly at the injected reference time is excluded, one millisecond earlier it is included', async () => {
+    const prisma = mockPrisma({
+      service: { durationMinutes: 30 },
+      practitioners: [PRACTITIONER_A],
+      availability: baseAvailability,
+    });
+    const slotStart = new Date(`${DATE}T09:00:00.000Z`);
+
+    const atBoundary = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, slotStart);
+    assert.ok(
+      !atBoundary!.some((s) => s.localStartTime === '09:00'),
+      'startTime > now is strict — a reference time equal to the slot start must exclude it',
+    );
+
+    const justBeforeBoundary = new Date(slotStart.getTime() - 1);
+    const beforeBoundary = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, justBeforeBoundary);
+    assert.ok(
+      beforeBoundary!.some((s) => s.localStartTime === '09:00'),
+      'one millisecond before the slot start, the slot must be included — boundary behavior is unchanged by the clock injection',
+    );
+  });
+
+  section('── buildAvailableSlots: production default clock still uses the real wall clock ──');
+
+  await test('with no referenceTime argument, a slot on a real future date is listed (default clock is live, not frozen)', async () => {
+    // Deliberately NOT a hardcoded literal: computed from the real current
+    // time so this test cannot itself go stale the way the pre-fix fixture
+    // did. Only exercises buildAvailableSlots' 5-argument production call
+    // shape — referenceTime is omitted entirely.
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const tomorrowDate = tomorrow.toISOString().slice(0, 10);
+    const tomorrowWeekday = tomorrow.getUTCDay();
+    const prisma = mockPrisma({
+      service: { durationMinutes: 30 },
+      practitioners: [PRACTITIONER_A],
+      availability: [
+        { practitionerId: PRACTITIONER_A.id, weekday: tomorrowWeekday, startTime: '00:00', endTime: '23:30', isActive: true },
+      ],
+    });
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', tomorrowDate, PRACTITIONER_A.id);
+    assert.ok(slots!.length > 0, 'a full day of availability tomorrow must produce visible slots under the real default clock');
+  });
+
+  await test('with no referenceTime argument, a slot on a real past date is excluded (default clock is live, not frozen)', async () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const yesterdayDate = yesterday.toISOString().slice(0, 10);
+    const yesterdayWeekday = yesterday.getUTCDay();
+    const prisma = mockPrisma({
+      service: { durationMinutes: 30 },
+      practitioners: [PRACTITIONER_A],
+      availability: [
+        { practitionerId: PRACTITIONER_A.id, weekday: yesterdayWeekday, startTime: '00:00', endTime: '23:30', isActive: true },
+      ],
+    });
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'svc-1', yesterdayDate, PRACTITIONER_A.id);
+    assert.equal(slots!.length, 0, 'a full day of availability yesterday must produce zero visible slots under the real default clock');
   });
 
   section('── buildAvailableSlots: optional appointmentTypeId (widget "any service" step) ──');
@@ -355,7 +451,7 @@ async function main() {
       practitioners: [PRACTITIONER_A],
       availability: baseAvailability,
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, null, DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, null, DATE, PRACTITIONER_A.id, NOW);
     assert.ok(slots);
     assert.ok(slots!.length > 0);
   });
@@ -366,7 +462,7 @@ async function main() {
       practitioners: [PRACTITIONER_A],
       availability: baseAvailability,
     });
-    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'nonexistent-service', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(prisma, CLINIC_ID, 'nonexistent-service', DATE, PRACTITIONER_A.id, NOW);
     assert.equal(slots, null);
   });
 
@@ -386,7 +482,7 @@ async function main() {
       practitioners: [PRACTITIONER_A],
       availability: baseAvailability,
     });
-    const slots = await buildAvailableSlots(listingPrisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id);
+    const slots = await buildAvailableSlots(listingPrisma, CLINIC_ID, 'svc-1', DATE, PRACTITIONER_A.id, NOW);
     assert.ok(slots!.some((s) => s.localStartTime === '09:00'), 'listing must show the slot as free');
 
     // 2. Submit time (moments later): another customer's request landed first.
