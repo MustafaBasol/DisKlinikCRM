@@ -31,6 +31,21 @@
  *   - practitionerId=null uses the literal string 'null' for determinism
  *   - Different slots produce different keys; same slot always produces same key
  *
+ * Conversion transaction order (POST /api/appointment-requests/:id/convert):
+ *   1. acquireAppointmentRequestConversionLock(tx, requestId)
+ *      — serializes ALL concurrent conversion attempts of the SAME request,
+ *        regardless of which slot each attempt targets (a request lock alone
+ *        via the slot lock would not catch this: two concurrent conversions
+ *        of one request with different slot overrides compute two different
+ *        slot lock keys and would not serialize against each other)
+ *   2. re-read the AppointmentRequest inside the tx; reject if already converted
+ *   3. acquireAppointmentSlotLock(tx, { clinicId, practitionerId, startTime })
+ *      — serializes concurrent writes for the same slot (request lock always
+ *        acquired first — see acquireAppointmentRequestConversionLock's doc
+ *        comment for why this order must stay consistent everywhere)
+ *   4. re-check Appointment + AppointmentRequest overlaps inside the tx
+ *   5. create the Appointment and update the AppointmentRequest to converted
+ *
  * Blocking statuses:
  *   AppointmentRequest : pending, approved   (slot reserved for review)
  *   Appointment        : any except cancelled, no_show
@@ -132,6 +147,53 @@ export async function acquireAppointmentSlotLock(
   const [key1, key2] = computeSlotLockKey(args.clinicId, args.practitionerId, args.startTime);
   // pg_advisory_xact_lock(int4,int4): explicit casts required — Prisma binds JS
   // numbers as int8 by default, but PostgreSQL has no (bigint,bigint) overload.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`;
+}
+
+// ── Request-level conversion lock ────────────────────────────────────────────
+
+/**
+ * Deterministic pg_advisory_xact_lock key pair for a single AppointmentRequest's
+ * conversion critical section. Same key-derivation shape as computeSlotLockKey
+ * above, domain-separated by the "appointment-request-conversion:" prefix so
+ * this lock namespace can never collide with the slot-booking lock (or any
+ * other advisory lock in this codebase), even though all of them share
+ * PostgreSQL's single global (int4, int4) advisory-lock space.
+ *
+ * Exported for unit testing only.
+ */
+export function computeAppointmentRequestConversionLockKey(requestId: string): [number, number] {
+  const hash = createHash('sha256').update(`appointment-request-conversion:${requestId}`, 'utf8').digest();
+  return [hash.readInt32BE(0), hash.readInt32BE(4)];
+}
+
+/**
+ * Acquires a PostgreSQL advisory transaction lock scoped to a single
+ * AppointmentRequest's conversion critical section.
+ *
+ * MUST be called as the FIRST operation inside the conversion transaction —
+ * before acquireAppointmentSlotLock() and before re-reading the request row.
+ * Lock order is always: request lock (this function) first, then
+ * acquireAppointmentSlotLock() second. This order MUST be kept consistent
+ * across every conversion code path in the codebase to avoid deadlocks
+ * between concurrent conversions of different requests.
+ *
+ * Why a slot lock alone is not sufficient: two concurrent conversion attempts
+ * for the SAME AppointmentRequest can be given different slot overrides
+ * (different practitioner/startTime), so acquireAppointmentSlotLock() alone
+ * would compute two different lock keys and let both attempts proceed in
+ * parallel — each would pass its own slot's overlap check, and both could
+ * create an Appointment for the same request. Locking on the request's own
+ * id first serializes ALL conversion attempts for that request regardless of
+ * which slot each one targets; only the first to acquire the lock re-reads
+ * the request row and proceeds, every later one observes status: 'converted'
+ * and aborts cleanly.
+ */
+export async function acquireAppointmentRequestConversionLock(
+  tx: Prisma.TransactionClient,
+  requestId: string,
+): Promise<void> {
+  const [key1, key2] = computeAppointmentRequestConversionLockKey(requestId);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`;
 }
 

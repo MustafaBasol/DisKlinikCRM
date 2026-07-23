@@ -24,11 +24,12 @@
  *
  * Re-exported for single-import convenience:
  *   assertSlotAvailable, acquireAppointmentSlotLock,
+ *   acquireAppointmentRequestConversionLock,
  *   SlotConflictError, SlotConflictKind,
  *   NON_BLOCKING_APPOINTMENT_STATUSES, BLOCKING_APPOINTMENT_REQUEST_STATUSES
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 import {
   checkPractitionerAvailability as _checkPractitionerAvailability,
@@ -39,10 +40,19 @@ import {
   BLOCKING_APPOINTMENT_REQUEST_STATUSES,
 } from '../appointmentRequestSafety.js';
 
+// Accepts either the module-level PrismaClient singleton or a transaction
+// client (the `tx` passed into a prisma.$transaction callback) — PrismaClient
+// is structurally assignable to Prisma.TransactionClient, so every existing
+// call site (which passes the plain `prisma` singleton) keeps type-checking
+// unchanged; only callers that need the re-check to participate in an
+// in-flight transaction (see appointmentRequests.ts convert handler) pass `tx`.
+type QueryClient = Prisma.TransactionClient;
+
 // ── Re-exports from appointmentRequestSafety ──────────────────────────────────
 export {
   assertSlotAvailable,
   acquireAppointmentSlotLock,
+  acquireAppointmentRequestConversionLock,
   SlotConflictError,
   NON_BLOCKING_APPOINTMENT_STATUSES,
   BLOCKING_APPOINTMENT_REQUEST_STATUSES,
@@ -118,7 +128,7 @@ export async function checkPractitionerAvailabilityForSlot(
  * this function instead of ad-hoc `findFirst` queries with `notIn: ['cancelled']`.
  */
 export async function checkAppointmentOverlap(
-  prismaClient: PrismaClient,
+  prismaClient: QueryClient,
   params: CheckOverlapParams,
 ): Promise<boolean> {
   const { clinicId, practitionerId, startTime, endTime, excludeAppointmentId } = params;
@@ -150,7 +160,7 @@ export async function checkAppointmentOverlap(
  * silently creating an Appointment over a pending bot-submitted request.
  */
 export async function checkAppointmentRequestConflict(
-  prismaClient: PrismaClient,
+  prismaClient: QueryClient,
   params: CheckRequestConflictParams,
 ): Promise<boolean> {
   const { clinicId, practitionerId, startTime, endTime, excludeRequestId } = params;

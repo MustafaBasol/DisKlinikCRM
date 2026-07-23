@@ -6,6 +6,9 @@ import { getParam, checkPractitionerAvailability } from '../utils/helpers.js';
 import {
   checkAppointmentOverlap,
   checkAppointmentRequestConflict,
+  acquireAppointmentSlotLock,
+  acquireAppointmentRequestConversionLock,
+  SlotConflictError,
 } from '../services/appointments/appointmentAvailabilityService.js';
 import { appointmentRequestStatusSchema, appointmentRequestConvertSchema, appointmentRequestUpdateSchema } from '../schemas/index.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
@@ -14,6 +17,18 @@ import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { sendAppointmentRequestConfirmationNotification } from '../services/appointmentRequestNotification.js';
 
 const router = express.Router();
+
+// ── Convert-handler transaction errors ──────────────────────────────────────
+// Thrown INSIDE the prisma.$transaction callback in POST /:id/convert to
+// trigger an automatic rollback, then caught outside to map back onto the
+// exact pre-existing response status/body for each condition — no
+// client-visible response contract change from wrapping the writes in a
+// transaction. SlotConflictError is reused from appointmentAvailabilityService
+// (already the established type for this exact condition elsewhere in the
+// codebase, e.g. publicBooking.ts).
+class AlreadyConvertedError extends Error {}
+class AppointmentRequestNotFoundError extends Error {}
+class InvalidPatientError extends Error {}
 
 function appointmentRequestSourceLabel(source: string | null | undefined) {
   const normalized = String(source ?? '').toLowerCase();
@@ -232,28 +247,22 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
     if (!service) return res.status(400).json({ error: 'Invalid appointment type' });
     if (!practitioner) return res.status(400).json({ error: 'Invalid practitioner' });
 
-    let patientId = validation.data.patientId || request.patientId;
-    if (patientId) {
-      const patient = await prisma.patient.findFirst({ where: { id: patientId, clinicId, deletedAt: null } });
+    // Resolve-only pre-check (fast, common-case 400 without opening a
+    // transaction). Not a write — Patient/Appointment creation happens only
+    // inside the transaction below.
+    const requestedPatientId = validation.data.patientId || request.patientId;
+    let organizationIdForNewPatient: string | null = null;
+    if (requestedPatientId) {
+      const patient = await prisma.patient.findFirst({ where: { id: requestedPatientId, clinicId, deletedAt: null } });
       if (!patient) return res.status(400).json({ error: 'Invalid patient' });
     } else {
-      const [firstName, ...lastNameParts] = request.patientName.trim().split(/\s+/);
-      const patient = await prisma.patient.create({
-        data: {
-          clinicId,
-          organizationId: (await prisma.clinic.findUnique({ where: { id: clinicId }, select: { organizationId: true } }))!.organizationId,
-          firstName: firstName || request.patientName,
-          lastName: lastNameParts.join(' ') || '-',
-          phone: request.phone,
-          email: request.email,
-          source: request.source || 'whatsapp',
-          communicationConsent: true,
-          notes: `${appointmentRequestSourceLabel(request.source)} randevu talebinden oluşturuldu.`,
-        },
-      });
-      patientId = patient.id;
+      organizationIdForNewPatient = (await prisma.clinic.findUnique({ where: { id: clinicId }, select: { organizationId: true } }))!.organizationId;
     }
 
+    // Working-hours/off-day/clinic-schedule check — stable configuration data,
+    // not subject to the same booking race as overlap/conflict below, so (per
+    // the same convention already established in publicBooking.ts) it stays
+    // outside the transaction.
     const availability = await checkPractitionerAvailability(clinicId, practitionerId, startTime, endTime);
     if (!availability.ok) {
       return res.status(409).json({
@@ -263,13 +272,11 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
       });
     }
 
-    const overlap = await checkAppointmentOverlap(prisma, {
-      clinicId,
-      practitionerId,
-      startTime,
-      endTime,
-    });
-
+    // Fast pre-check outside the transaction: gives the common case (no
+    // contention) an immediate 409 without paying for a transaction + advisory
+    // lock. Not authoritative by itself — the same checks run again below,
+    // inside the transaction, after the lock is held.
+    const overlap = await checkAppointmentOverlap(prisma, { clinicId, practitionerId, startTime, endTime });
     if (overlap) {
       return res.status(409).json({ error: 'Practitioner already has an appointment during this time', code: 'APPOINTMENT_OVERLAP' });
     }
@@ -289,37 +296,137 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
       });
     }
 
-    const appointment = await prisma.appointment.create({
-      data: {
-        clinicId,
-        patientId,
-        practitionerId,
-        appointmentTypeId,
-        startTime,
-        endTime,
-        status: 'scheduled',
-        notes: validation.data.notes || request.notes || `${appointmentRequestSourceLabel(request.source)} randevu talebinden oluşturuldu.`,
-        createdById: req.user!.id,
-      },
-      include: { patient: { select: patientContactSelect }, practitioner: { select: userPublicSelect }, appointmentType: true },
-    });
+    let appointment, updatedRequest;
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // MUST be first, before acquireAppointmentSlotLock: serializes ALL
+        // concurrent conversion attempts of THIS request, regardless of which
+        // slot each attempt targets. A slot lock alone is not sufficient here
+        // — two concurrent conversions of the same request can be given
+        // different slot overrides (different practitioner/startTime in the
+        // request body), so they would compute different slot lock keys and
+        // both proceed to create an Appointment for the same request. Locking
+        // on the request's own id first closes that gap. Lock order (request
+        // lock, then slot lock) must stay consistent across every conversion
+        // path in the codebase — see acquireAppointmentRequestConversionLock's
+        // doc comment in appointmentRequestSafety.ts.
+        await acquireAppointmentRequestConversionLock(tx, id);
 
-    const updatedRequest = await prisma.appointmentRequest.update({
-      where: { id },
-      data: {
-        status: 'converted',
-        patientId,
-        convertedAppointmentId: appointment.id,
-        notes: validation.data.notes ?? request.notes,
-      },
-      include: {
-        patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
-        appointmentType: true,
-        practitioner: { select: { id: true, firstName: true, lastName: true } },
-        convertedAppointment: { select: { id: true, startTime: true, status: true } },
-      },
-    });
+        // Re-read the request under the same accepted scope, lock-protected —
+        // this is the authoritative duplicate-conversion guard. The read at
+        // the top of the handler is only a fast pre-check; two concurrent
+        // conversions of the same request now serialize on the request lock
+        // above, and the second to reach this point observes
+        // status: 'converted' and aborts cleanly.
+        const freshRequest = await tx.appointmentRequest.findFirst({ where: { ...scope, id } });
+        if (!freshRequest) throw new AppointmentRequestNotFoundError();
+        if (freshRequest.status === 'converted') throw new AlreadyConvertedError();
 
+        // Second: serializes concurrent writes for this exact slot — the same
+        // advisory lock every other booking-creation path in this codebase
+        // (publicBooking.ts, whatsapp.ts, Instagram/Meta AI flows) acquires
+        // via appointmentRequestSafety.ts before its own overlap check.
+        await acquireAppointmentSlotLock(tx, { clinicId, practitionerId, startTime });
+
+        // Authoritative, lock-protected re-check of the same two conditions
+        // pre-checked above — closes the TOCTOU window between the fast
+        // pre-check and lock acquisition.
+        const [txOverlap, txRequestConflict] = await Promise.all([
+          checkAppointmentOverlap(tx, { clinicId, practitionerId, startTime, endTime }),
+          checkAppointmentRequestConflict(tx, { clinicId, practitionerId, startTime, endTime, excludeRequestId: id }),
+        ]);
+        if (txOverlap) throw new SlotConflictError('APPOINTMENT_OVERLAP');
+        if (txRequestConflict) throw new SlotConflictError('APPOINTMENT_REQUEST_CONFLICT');
+
+        let patientId = requestedPatientId;
+        if (patientId) {
+          // Re-resolve inside the transaction — closes the race where the
+          // patient was deleted between the pre-check above and lock
+          // acquisition.
+          const patient = await tx.patient.findFirst({ where: { id: patientId, clinicId, deletedAt: null } });
+          if (!patient) throw new InvalidPatientError();
+        } else {
+          const [firstName, ...lastNameParts] = request.patientName.trim().split(/\s+/);
+          const patient = await tx.patient.create({
+            data: {
+              clinicId,
+              organizationId: organizationIdForNewPatient!,
+              firstName: firstName || request.patientName,
+              lastName: lastNameParts.join(' ') || '-',
+              phone: request.phone,
+              email: request.email,
+              source: request.source || 'whatsapp',
+              communicationConsent: true,
+              notes: `${appointmentRequestSourceLabel(request.source)} randevu talebinden oluşturuldu.`,
+            },
+          });
+          patientId = patient.id;
+        }
+
+        const appointment = await tx.appointment.create({
+          data: {
+            clinicId,
+            patientId,
+            practitionerId,
+            appointmentTypeId,
+            startTime,
+            endTime,
+            status: 'scheduled',
+            notes: validation.data.notes || request.notes || `${appointmentRequestSourceLabel(request.source)} randevu talebinden oluşturuldu.`,
+            createdById: req.user!.id,
+          },
+          include: { patient: { select: patientContactSelect }, practitioner: { select: userPublicSelect }, appointmentType: true },
+        });
+
+        const updatedRequest = await tx.appointmentRequest.update({
+          where: { id },
+          data: {
+            status: 'converted',
+            patientId,
+            convertedAppointmentId: appointment.id,
+            notes: validation.data.notes ?? request.notes,
+          },
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
+            appointmentType: true,
+            practitioner: { select: { id: true, firstName: true, lastName: true } },
+            convertedAppointment: { select: { id: true, startTime: true, status: true } },
+          },
+        });
+
+        return { appointment, updatedRequest };
+      });
+      appointment = result.appointment;
+      updatedRequest = result.updatedRequest;
+    } catch (txErr) {
+      // Every branch below maps 1:1 onto the exact status/body the
+      // pre-transaction version of this handler already returned for the
+      // same condition — no response-contract change.
+      if (txErr instanceof AlreadyConvertedError) {
+        return res.status(400).json({ error: 'Appointment request is already converted' });
+      }
+      if (txErr instanceof AppointmentRequestNotFoundError) {
+        return res.status(404).json({ error: 'Appointment request not found' });
+      }
+      if (txErr instanceof InvalidPatientError) {
+        return res.status(400).json({ error: 'Invalid patient' });
+      }
+      if (txErr instanceof SlotConflictError) {
+        if (txErr.kind === 'APPOINTMENT_OVERLAP') {
+          return res.status(409).json({ error: 'Practitioner already has an appointment during this time', code: 'APPOINTMENT_OVERLAP' });
+        }
+        return res.status(409).json({
+          error: 'This slot already has a pending or approved appointment request.',
+          code: 'APPOINTMENT_REQUEST_CONFLICT',
+        });
+      }
+      throw txErr;
+    }
+
+    // logActivity uses its own separate PrismaClient instance (activity.ts)
+    // and cannot participate in the transaction above; called only after
+    // commit, consistent with its existing best-effort/fire-and-forget
+    // semantics elsewhere in this codebase.
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'appointment_request', entityId: id,
       action: 'converted',
@@ -337,7 +444,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
       sourceConnectionId: request.sourceConnectionId,
       patientName: request.patientName,
       organizationId: req.user!.organizationId,
-      patientId,
+      patientId: updatedRequest.patientId!,
       appointment: {
         startTime: appointment.startTime,
         appointmentType: { name: appointment.appointmentType.name },
