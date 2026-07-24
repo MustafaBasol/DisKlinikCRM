@@ -230,10 +230,18 @@ router.post(
     if (!file) return res.status(400).json({ error: 'Dosya yüklenmedi' });
 
     const orgId = req.user!.organizationId;
-    const selectedClinicId = req.query.clinicId as string | undefined;
+    const rawClinicId = req.query.clinicId;
+    const selectedClinicId = typeof rawClinicId === 'string' ? rawClinicId.trim() : undefined;
 
     try {
       const accessibleIds = await getAccessibleClinicIds(req.user!);
+
+      // Sorgu ile seçilen klinik (selectedClinicId) erişilebilir değilse,
+      // satırlar işlenmeden ve hiçbir hasta oluşturulmadan önce reddet.
+      // Satır bazlı clinicIdFromRow doğrulaması zaten ayrı olarak yapılır.
+      if (selectedClinicId && selectedClinicId !== 'all' && !accessibleIds.includes(selectedClinicId)) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
 
       const { rows } = await parseExcelFile(
         file.buffer,
@@ -276,10 +284,18 @@ router.post(
 
     const user = req.user!;
     const orgId = user.organizationId;
-    const selectedClinicId = req.query.clinicId as string | undefined;
+    const rawClinicId = req.query.clinicId;
+    const selectedClinicId = typeof rawClinicId === 'string' ? rawClinicId.trim() : undefined;
 
     try {
       const accessibleIds = await getAccessibleClinicIds(user);
+
+      // Sorgu ile seçilen klinik (selectedClinicId) erişilebilir değilse,
+      // satırlar işlenmeden ve hiçbir hasta oluşturulmadan/güncellenmeden önce
+      // reddet. Satır bazlı clinicIdFromRow doğrulaması zaten ayrı olarak yapılır.
+      if (selectedClinicId && selectedClinicId !== 'all' && !accessibleIds.includes(selectedClinicId)) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
 
       const { rows } = await parseExcelFile(file.buffer, ['firstName', 'lastName', 'phone']);
       if (rows.length === 0) return res.status(400).json({ error: 'Dosyada satır bulunamadı' });
