@@ -291,4 +291,8 @@ This closure does not extend to:
 
 Full evidence: [R061_AUTHENTICATED_PRODUCTION_SAFE_RESET_VERIFICATION.md](evidence/R061_AUTHENTICATED_PRODUCTION_SAFE_RESET_VERIFICATION.md).
 
-Until such a decision is recorded, Package B remains non-executable.
+### 11.7 Package B disposition — 2026-07-24
+
+**[Superseded 2026-07-24, R-061 authenticated production safe-reset verification, see §11.1-§11.6 above, preserved not deleted]:** the statement below was accurate at its own capture time (2026-07-23), when the explicit human decision named in §10.1 was still pending. **[Historical, preserved]:** "Until such a decision is recorded, Package B remains non-executable."
+
+**Current state (2026-07-24):** the decision has been recorded — see §11.6's explicit R-061 human decision. `Package B` item B.2/B.3 (the explicit-`false` `PATCH` and its resulting `PlatformAdminAuditEvent`, closing gaps 4–8) has now been executed, via the reversible `PATCH`→`DELETE` chain documented in §11.3–§11.4, exactly as the "authorization to run the now-available reversible `PATCH`→`DELETE` chain" option in [R061_REMAINING_AUTHENTICATED_VERIFICATION_PACKAGE.md](evidence/R061_REMAINING_AUTHENTICATED_VERIFICATION_PACKAGE.md) §B.5 contemplated. `Package B` items B.1 (real in-scope-patient route behavioral verification, gaps 1–3) and B.4 (controlled activation, `runtimeEnabled: true`, gap 9) **remain separately unauthorized and non-executable** — they are not required for, and are not closed by, R-061's closure. Nothing in this section, or in R-061's closure, authorizes real-patient testing or controlled activation; both remain a later, separately-scoped, separately-approved decision.
