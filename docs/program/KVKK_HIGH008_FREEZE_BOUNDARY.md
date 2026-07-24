@@ -241,4 +241,54 @@ The next action is not automatic execution of Package B. It is an explicit human
 1. permanently defer the remaining production-only confirmation gaps and accept the existing repository/disposable-Postgres evidence as sufficient; or
 2. separately authorize one or more remaining items under the approval and evidence conditions already documented in Package B.
 
+---
+
+## 11. R-061 authenticated production safe-reset verification — 2026-07-24 — R-061 `CLOSED`
+
+Since §10, a separate reversibility mechanism (`unsetPlatformSetting()`/`DELETE /api/platform/privacy/legacy-consent-correction/settings`, implementation commit `b86001779fbbc2cfdcf76b84568d3d960850a761`) was deployed to production, and an authorized operator's authenticated attempt to exercise it returned a login `401` (see [R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md](evidence/R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md)). That login blocker is now resolved.
+
+### 11.1 Authentication recovery
+
+An authorized operator recovered access to the existing production `admin@noramedi.com` account using the audited operator CLI added by [PR #221](https://github.com/MustafaBasol/DisKlinikCRM/pull/221) (`server/src/scripts/platform-admin-recover-password.ts`). Recorded facts: `action: platform_admin.password_recovered`, `outcome: success`, `method: operator_cli`, `actorPlatformAdminId: null` (a system-operator action — the recovered account cannot itself supply an authenticated-session actor), `mfaPreserved: true`, `sessionsInvalidated: 0` (a pre-existing, documented limitation of `PlatformAdmin`'s stateless-JWT sessions, not introduced by this task). No password, hash, token, or credential value is recorded here or in any other program document.
+
+### 11.2 Diagnostic correction — not a defect
+
+An initial preflight `GET /api/platform/privacy/legacy-consent-correction/settings` returned misleading `401 Unauthorized: Missing token` responses because no `GET` route exists on `/settings` — only `PATCH` and `DELETE` are defined there. The correct read endpoint is `GET /api/platform/privacy/legacy-consent-correction/policy`. During diagnosis, cookie parsing (full 369-character JWT preserved), JWT structural validity/claims (`type=platform`, expected identity, session ID/JTI), and cookie-only session enforcement (bearer-token fallback correctly rejected with `Unauthorized: Cookie session required`) were all independently confirmed correct. This is recorded as an operational diagnostic note, not a product defect, authentication failure, or security incident.
+
+### 11.3 Authenticated verification sequence and results
+
+With a valid authenticated cookie session and CSRF protection, the already-authorized, non-activating chain named in §10.1/§12 of [R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md](evidence/R061_RESIDUAL_SAFE_RESET_PRODUCTION_VERIFICATION.md) was executed in full against the public production API:
+
+1. `GET` policy → HTTP `200`, `runtimeEnabled=false`.
+2. `PATCH {"runtimeEnabled": false}` → HTTP `200`, `runtimeEnabled=false`.
+3. First `DELETE` → HTTP `200`, `runtimeEnabled=false`, `settingPresent=false`, `removed=true`.
+4. Second, idempotent `DELETE` → HTTP `200`, `runtimeEnabled=false`, `settingPresent=false`, `removed=false`.
+5. Final `GET` policy → HTTP `200`, `runtimeEnabled=false`.
+
+`runtimeEnabled=true` was never submitted at any step. No consent correction, patient-data mutation, communication-preference mutation, backfill, or tenant-data mutation occurred.
+
+### 11.4 Database and audit evidence
+
+Final `PlatformSetting` row count for `privacy.legacyConsentCorrection.runtimeEnabled`: `0`. Two `PlatformAdminAuditEvent` rows were written, both attributed to the authenticated platform administrator: `platform_setting.updated` (`previousValue=false`, `newValue=false`) and `platform_setting.reset` (`previousValue=false`, `newValue=null`, `safeMetadata.restoredDefaultState=true`). The idempotent second `DELETE` correctly wrote no additional audit row, confirming atomic setting/audit behavior.
+
+### 11.5 Cleanup and health
+
+Temporary `r061_*` authentication/session/probe artifacts (session directory, Python/Node scripts, cache files) were removed from production; `remaining_r061_artifacts=false`; production Git working tree clean. Final health: API `200`; `noramedi-api` `online`, unstable restarts `0`, restart count `20`.
+
+### 11.6 Precise freeze-boundary disposition
+
+`R-061 CLOSED — authenticated production safe-reset verification complete; default-deny, explicit-false persistence, safe reset, reset idempotency, and audit attribution/atomicity all confirmed; runtimeEnabled=true never used.`
+
+**R-061's explicit human decision is recorded as:** reject the original no-kill-switch design; require and implement a runtime default-deny kill switch (done, PR #186); verify it safely in production without enabling the workflow (done, this section).
+
+This closure does not extend to:
+
+- legal KVKK compliance approval of any kind;
+- an overall "KVKK baseline stable" declaration;
+- freeze-boundary condition 4 (independent rollback/tenant-impact verification), which has its own separate F0-011-P2 evidence chain and remains open, unaffected by this closure;
+- gaps 1–3 (real-patient behavioral verification of the disabled mutation route), which remain a separate, unauthorized, unchanged item — they require a real, in-scope production patient and were never part of R-061's own closure criteria;
+- R-049, R-062, or any other risk row.
+
+Full evidence: [R061_AUTHENTICATED_PRODUCTION_SAFE_RESET_VERIFICATION.md](evidence/R061_AUTHENTICATED_PRODUCTION_SAFE_RESET_VERIFICATION.md).
+
 Until such a decision is recorded, Package B remains non-executable.
