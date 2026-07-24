@@ -2,6 +2,56 @@
 
 Documentation-only, read-only, evidence-driven audit. No application code, test, Prisma schema/migration, feature flag, or environment/config file was read for the purpose of being changed, and none was changed. This document is the sole deliverable of this task.
 
+## 0. Closure update — H1 closed after merge, deployment, and production verification (2026-07-24, post-deployment reconciliation)
+
+**This section supersedes Section 10a's "pending merge and production verification" status and the point-in-time findings below wherever they describe H1 as open/outstanding. It does not rewrite or delete the original audit text (Sections 1, 5, 6, 9, 10), which is preserved as the accurate record of what this audit found and when.** This update was performed as a narrowly-scoped, documentation/evidence-only task: no application code, test, Prisma schema/migration, feature flag, or environment/config file was read for the purpose of being changed, and none was changed, by this update.
+
+- **Original finding closed:** Finding H1 (§5, Category H; classification table row H-1, §6) — `server/src/routes/patientsImport.ts`, the unvalidated `selectedClinicId` query-string fallback in `validatePatientRows()`.
+- **Affected endpoints:** `POST /api/patients/import-preview`, `POST /api/patients/import-confirm`.
+- **Impact:** an authenticated RECEPTIONIST (or higher `IMPORT_ROLES`) could write real patient PII into a clinic outside their own accessible-clinic list — including a clinic belonging to a different organization — via the ordinary Excel patient bulk-import feature.
+- **Authorization boundary failure:** the query-string `clinicId` fallback used to resolve the target clinic for newly-created patient rows was never validated against the caller's accessible clinics or organization before use.
+- **Remediation summary:** both `import-preview` and `import-confirm` now call `getAccessibleClinicIds(req.user!)` and validate the requested `selectedClinicId` against that accessible-clinic list before any workbook row is parsed or processed. A request targeting an inaccessible clinic is rejected with HTTP `403` and body `{"error":"Access denied to requested clinic"}`. No Prisma schema, migration, frontend, or environment/config change was required or made; this was a backend-only deployment.
+- **Implementation PR:** **PR #224** (branch `fix/patients-import-clinic-scope`).
+- **Merge commit / production SHA:** `5f27ab15996d6f001d2da5f2f7be2ddd6ccfae0c` — confirmed as the exact tip of `origin/main` as of this update (`git rev-parse origin/main`).
+- **Deployment scope:** backend-only; no worker/job-registration change, no new environment variable, no feature flag.
+- **Production verification method and outcome:** an authorized operator exercised both live endpoints against production with a target clinic belonging to a **different organization** than the caller's own. Both calls returned:
+  - `POST /api/patients/import-preview` → HTTP `403`, body `{"error":"Access denied to requested clinic"}`
+  - `POST /api/patients/import-confirm` → HTTP `403`, body `{"error":"Access denied to requested clinic"}`
+  - Patient count before: `18`; patient count after: `18` (unchanged — no unauthorized row created).
+  - Verification result: `PASS`; verification script exit code: `0`.
+  - The temporary verification script used to run these checks was removed after use.
+  - Production Git working tree was confirmed clean after verification.
+  - `GET /api/health` returned `{"status":"ok"}`.
+  - PM2 process `noramedi-api`: `online`; unstable restart count: `0`.
+- **Closure classification: `CLOSED` — `MERGED_DEPLOYED_PRODUCTION_VERIFIED`.**
+
+**Scope-qualified conclusion:** no confirmed KVKK application-code blocker remains before onboarding, within the scope of this completed code-gap audit and the production verification recorded above. This statement is limited strictly to: (a) application-code scope, (b) the eight categories and representative call sites covered by this specific audit, and (c) the `CODE_BLOCKER_BEFORE_ONBOARDING` classification as defined and used by this document.
+
+**This closure explicitly does not claim:**
+- that NoraMedi is generally or fully KVKK compliant;
+- that all KVKK work is complete;
+- that all infrastructure evidence is complete;
+- that all legal or operational obligations are complete;
+- that the whole program baseline is stable;
+- that no security, privacy, infrastructure, legal, or operational risk remains;
+- that all recommended remediation items (below) are resolved; or
+- that onboarding is unconditionally approved from every compliance perspective.
+
+**Remaining open, non-blocker `CODE_REMEDIATION_RECOMMENDED` findings (unchanged by this closure — H1's closure does not resolve any of these):**
+- E-1 — `Notification` table: no anonymization/cleanup coverage for pre-existing patient name/phone in historical notification rows.
+- E-2 — `LabOrderAttachment` has no `legalHold` field, unlike sibling `PatientAttachment`/`ImagingStudy` models.
+- H-2 — same-organization, cross-branch WhatsApp/Instagram connection authorization gap (`CLINIC_MANAGER` not checked against `allowedClinicIds`).
+- H-4 — `GET /api/payments` over-exposes `treatmentCase.description`/`lostReason` to the `BILLING` role via an unrestricted `include`.
+- G-1 — two raw, unredacted `incomingMessage.phone` log statements in `server/src/routes/whatsapp.ts`'s Evolution webhook handler.
+
+Each of these requires its own individual reachability validation, severity reconfirmation, and — only if a real, reachable code gap is confirmed — a separately scoped remediation task. None is resolved, superseded, or reclassified by H1's closure.
+
+**Remaining open infrastructure evidence (unchanged by this closure):** VPS/disk/file encryption evidence, backup encryption evidence, restore evidence, and attachment/imaging storage posture (finding C-1, `INFRASTRUCTURE_EVIDENCE_REQUIRED`). Per the program's own pre-existing conditional rule (KVKK-HIGH-001), this remains an infrastructure-evidence item and becomes an application-level encryption code task only if that infrastructure evidence proves insufficient.
+
+**Remaining open legal and operational work (unchanged by this closure, outside application-code scope):** retention periods, legal hold policy, privacy notice and consent wording, DPA and subprocessor documentation, and international data transfer posture.
+
+**Explicitly out of scope of this closure:** a separate, unrelated reporting bug (`server/src/routes/reports.ts:85`, PostgreSQL error `column "Payment.paidAt" must appear in the GROUP BY clause or be used in an aggregate function`) is not KVKK-related and is not addressed, characterized, or touched by this closure.
+
 ## 1. Executive conclusion
 
 **One concrete application-code defect was found that should be fixed before onboarding the first real clinic/patient**, and it is unrelated to any previously-closed KVKK control: the Excel patient bulk-import endpoint (`server/src/routes/patientsImport.ts`) resolves a `?clinicId=` query-string fallback into the target clinic for newly-created patient rows **without validating it against the caller's accessible clinics or organization**, allowing an authenticated RECEPTIONIST/CLINIC_MANAGER/ORG_ADMIN/OWNER to write real patient PII into an arbitrary clinic — including one belonging to a different organization — via the ordinary "import patients from Excel" feature. This is a demonstrated authorization-bypass write path, not defense-in-depth hardening, and it sits directly beside the codebase's own correct pattern for the same problem (`server/src/routes/usersImport.ts`). See Finding H1.
@@ -114,7 +164,7 @@ The core `pino`/`pino-http` logger (`server/src/utils/logger.ts`) redacts `Autho
 | G-5 | G | Communication-consent audit logging is PII-free by construction | NO_GAP_FOUND |
 | G-6 | G | Email service has no logging; no patient-facing email sender exists | NO_GAP_FOUND |
 | G-7 | G | Reminders job phone logging correctly redacted | NO_GAP_FOUND |
-| H-1 | H | Patient bulk-import `?clinicId=` fallback unvalidated against caller's scope/org | **CODE_BLOCKER_BEFORE_ONBOARDING** |
+| H-1 | H | Patient bulk-import `?clinicId=` fallback unvalidated against caller's scope/org | **CODE_BLOCKER_BEFORE_ONBOARDING** (at audit time) → **`CLOSED — MERGED_DEPLOYED_PRODUCTION_VERIFIED`** (PR #224, SHA `5f27ab15996d6f001d2da5f2f7be2ddd6ccfae0c`; see §0) |
 | H-2 | H | CLINIC_MANAGER can view/reassign another same-org clinic's WhatsApp/Instagram connection | CODE_REMEDIATION_RECOMMENDED |
 | H-3 | H | `getDefaultClinic()` legacy assumption in 6 bot-integration routes | CODE_REMEDIATION_RECOMMENDED / INFRASTRUCTURE_EVIDENCE_REQUIRED (liveness) |
 | H-4 | H | BILLING role over-exposed to `treatmentCase.description`/`lostReason` via unrestricted `include` | CODE_REMEDIATION_RECOMMENDED |
@@ -135,7 +185,9 @@ The core `pino`/`pino-http` logger (`server/src/utils/logger.ts`) redacts `Autho
 
 ## 9. Does any KVKK-related application code need to be implemented before onboarding the first real clinic/patient?
 
-**Yes.** One bounded fix is required: Finding H1 (`server/src/routes/patientsImport.ts`, unvalidated `selectedClinicId` fallback). It is a demonstrated, reachable, low-privilege-exploitable write-path authorization bypass that can place real patient PII under the wrong clinic (potentially a different organization entirely), not a hypothetical or defense-in-depth concern, and not gated behind any disabled feature flag — patient bulk import is a live, always-on feature available to `RECEPTIONIST` and above today.
+**Superseded by §0 (2026-07-24 closure update): Finding H1 is now `CLOSED — MERGED_DEPLOYED_PRODUCTION_VERIFIED`. As of that update, no confirmed application-code onboarding blocker remains within this audit's scope.** The answer below reflects this audit's own point-in-time finding and is preserved as the accurate record of what the audit found at the time it ran.
+
+**Yes (at audit time, 2026-07-24, pre-deployment).** One bounded fix is required: Finding H1 (`server/src/routes/patientsImport.ts`, unvalidated `selectedClinicId` fallback). It is a demonstrated, reachable, low-privilege-exploitable write-path authorization bypass that can place real patient PII under the wrong clinic (potentially a different organization entirely), not a hypothetical or defense-in-depth concern, and not gated behind any disabled feature flag — patient bulk import is a live, always-on feature available to `RECEPTIONIST` and above today.
 
 No other category in this audit produced a `CODE_BLOCKER_BEFORE_ONBOARDING` finding.
 
@@ -155,6 +207,8 @@ No other category in this audit produced a `CODE_BLOCKER_BEFORE_ONBOARDING` find
 Finding H-1 (`CODE_BLOCKER_BEFORE_ONBOARDING`) now has an implementation PR open: **PR #224 — `fix(security): validate clinic scope for patient imports`** (branch `fix/patients-import-clinic-scope`, https://github.com/MustafaBasol/DisKlinikCRM/pull/224). It validates the query-string `?clinicId=` fallback against `getAccessibleClinicIds()` in both `/patients/import-preview` and `/patients/import-confirm`, rejecting with `403` before any workbook row is parsed or processed, and adds a dedicated regression suite (`server/src/tests/patientsImportClinicScope.test.ts`).
 
 **Remediation status: implementation complete, pending merge and production verification.** This finding is not yet closed — merge, backend deployment, and a post-deploy production behavioral check are still outstanding before Section 9's answer can be revisited.
+
+**Superseded 2026-07-24 (post-deployment) — see §0.** PR #224 merged, deployed (production SHA `5f27ab15996d6f001d2da5f2f7be2ddd6ccfae0c`), and production-verified. Finding H1 status: `CLOSED — MERGED_DEPLOYED_PRODUCTION_VERIFIED`.
 
 ## 11. (N/A — Section 9 answered "yes")
 
