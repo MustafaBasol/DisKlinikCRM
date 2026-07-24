@@ -150,6 +150,12 @@ No other category in this audit produced a `CODE_BLOCKER_BEFORE_ONBOARDING` find
 - **Deployment impact:** standard backend-only deploy, no new environment variable, no feature flag, no worker/job-registration change, no frontend change required (the frontend already only offers the user's own accessible clinics in its clinic selector — this is a server-side validation gap, not a UI change).
 - **Explicit non-goals:** this task does not touch `usersImport.ts` (already correct), does not add a compound DB constraint between `Patient.clinicId` and `Patient.organizationId` (a broader schema change, out of scope and unnecessary if the route-level check is correct), does not change any KVKK-HIGH-006/KVKK-HIGH-008/R-061 code, does not address H2/H3/H4/E1/E2/G1 (separate, lower-priority `CODE_REMEDIATION_RECOMMENDED` items that may be scoped as follow-up work but are not blockers), and does not change any communication-consent enforcement flag or default.
 
+### 10a. Remediation status update (2026-07-24, post-audit)
+
+Finding H-1 (`CODE_BLOCKER_BEFORE_ONBOARDING`) now has an implementation PR open: **PR #224 — `fix(security): validate clinic scope for patient imports`** (branch `fix/patients-import-clinic-scope`, https://github.com/MustafaBasol/DisKlinikCRM/pull/224). It validates the query-string `?clinicId=` fallback against `getAccessibleClinicIds()` in both `/patients/import-preview` and `/patients/import-confirm`, rejecting with `403` before any workbook row is parsed or processed, and adds a dedicated regression suite (`server/src/tests/patientsImportClinicScope.test.ts`).
+
+**Remediation status: implementation complete, pending merge and production verification.** This finding is not yet closed — merge, backend deployment, and a post-deploy production behavioral check are still outstanding before Section 9's answer can be revisited.
+
 ## 11. (N/A — Section 9 answered "yes")
 
 Not applicable; see Sections 9-10.
