@@ -228,3 +228,24 @@ export async function validateAndGetClinicIdScope(
 export function clinicIdsFromScope(scope: ClinicIdScopeWhere): string[] {
   return typeof scope.clinicId === 'string' ? [scope.clinicId] : scope.clinicId.in;
 }
+
+/**
+ * organizationId'ye ek olarak, klinikler ÜZERİNDEN bağlanan kaynaklar
+ * (WhatsAppConnection/InstagramConnection gibi — organizationId'ye sahip
+ * ama doğrudan bir clinicId alanı olmayan, ClinicWhatsAppConnection /
+ * ClinicInstagramConnection gibi ara tablolar üzerinden kliniklere bağlanan
+ * modeller) için: bu kaynağın en az bir klinik üzerinden kullanıcının
+ * erişimine açık olup olmadığını kontrol eder.
+ *
+ * canAccessAllClinics=true ise linkedClinicIds boş olsa bile true döner
+ * (organizasyon kapsamı yeterlidir — org-wide kullanıcılar hiçbir kliniğe
+ * bağlı olmayan kaynaklara da erişebilir). Aksi halde, linkedClinicIds ile
+ * allowedClinicIds kesişimi boş değilse true döner.
+ */
+export function isLinkedToAccessibleClinic(
+  user: NonNullable<AuthRequest['user']>,
+  linkedClinicIds: string[]
+): boolean {
+  if (user.canAccessAllClinics) return true;
+  return linkedClinicIds.some((id) => user.allowedClinicIds.includes(id));
+}

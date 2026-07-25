@@ -33,6 +33,7 @@ import {
   canAssignInstagramToClinic,
   canViewInstagramStatus,
 } from '../utils/roles.js';
+import { isLinkedToAccessibleClinic } from '../utils/clinicScope.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { encryptSecret, encryptSecretTagged } from '../utils/encryption.js';
@@ -166,8 +167,15 @@ router.get(
     }
 
     try {
+      // KVKK H-2: allowedClinicIds ile sınırlı CLINIC_MANAGER, yalnızca kendi
+      // erişebildiği en az bir kliniğe bağlı bağlantıları görebilir.
+      const where: Record<string, unknown> = { organizationId: user.organizationId };
+      if (!user.canAccessAllClinics) {
+        where.clinics = { some: { clinicId: { in: user.allowedClinicIds } } };
+      }
+
       const connections = await prisma.instagramConnection.findMany({
-        where: { organizationId: user.organizationId },
+        where,
         include: {
           clinics: {
             include: { clinic: { select: { id: true, name: true } } },
@@ -176,7 +184,15 @@ router.get(
         orderBy: { createdAt: 'desc' },
       });
 
-      return res.json({ connections: connections.map(c => sanitizeConnection(c as unknown as Record<string, unknown>)) });
+      // Erişilemeyen kliniklerin id/isim bilgisi yanıttaki clinics dizisinden sızmasın.
+      const scoped = user.canAccessAllClinics
+        ? connections
+        : connections.map((c) => ({
+            ...c,
+            clinics: c.clinics.filter((cl) => user.allowedClinicIds.includes(cl.clinicId)),
+          }));
+
+      return res.json({ connections: scoped.map(c => sanitizeConnection(c as unknown as Record<string, unknown>)) });
     } catch (err) {
       return res.status(500).json({ error: 'Failed to fetch connections' });
     }
@@ -308,7 +324,14 @@ router.get(
 
       if (!conn) return res.status(404).json({ error: 'Not found' });
 
-      return res.json({ connection: sanitizeConnection(conn as unknown as Record<string, unknown>) });
+      if (!isLinkedToAccessibleClinic(user, conn.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
+      }
+      const scoped = user.canAccessAllClinics
+        ? conn
+        : { ...conn, clinics: conn.clinics.filter((c) => user.allowedClinicIds.includes(c.clinicId)) };
+
+      return res.json({ connection: sanitizeConnection(scoped as unknown as Record<string, unknown>) });
     } catch {
       return res.status(500).json({ error: 'Failed to fetch connection' });
     }
@@ -460,8 +483,13 @@ router.post(
     try {
       const conn = await prisma.instagramConnection.findFirst({
         where: { id, organizationId: user.organizationId },
+        include: { clinics: { select: { clinicId: true } } },
       });
       if (!conn) return res.status(404).json({ error: 'Not found' });
+
+      if (!isLinkedToAccessibleClinic(user, conn.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
+      }
 
       const result = await testConnection(conn);
 
@@ -635,6 +663,10 @@ router.get(
       });
       if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
+      if (!user.canAccessAllClinics && !user.allowedClinicIds.includes(clinicId)) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
+
       const assignments = await prisma.clinicInstagramConnection.findMany({
         where: { clinicId },
         include: {
@@ -677,12 +709,23 @@ router.put(
       });
       if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
+      if (!user.canAccessAllClinics && !user.allowedClinicIds.includes(clinicId)) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
+
       // Cross-org guard for connection
+      // KVKK H-2: hedef bağlantı da erişim kapsamında doğrulanır — kısıtlı
+      // yönetici yalnızca zaten erişebildiği bir kliniğe bağlı bağlantıları
+      // atayabilir; organizasyon üyeliği tek başına yeterli değildir.
       const conn = await prisma.instagramConnection.findFirst({
         where: { id: instagramConnectionId, organizationId: user.organizationId },
-        select: { id: true },
+        select: { id: true, clinics: { select: { clinicId: true } } },
       });
       if (!conn) return res.status(404).json({ error: 'Instagram connection not found' });
+
+      if (!isLinkedToAccessibleClinic(user, conn.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
+      }
 
       await prisma.clinicInstagramConnection.upsert({
         where: { clinicId_instagramConnectionId: { clinicId, instagramConnectionId } },
@@ -722,6 +765,10 @@ router.delete(
         select: { id: true },
       });
       if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+      if (!user.canAccessAllClinics && !user.allowedClinicIds.includes(clinicId)) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
 
       await prisma.clinicInstagramConnection.deleteMany({
         where: { clinicId, instagramConnectionId: connectionId },
