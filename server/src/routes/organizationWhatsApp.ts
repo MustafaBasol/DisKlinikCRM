@@ -30,6 +30,7 @@ import {
   canAssignWhatsAppToClinic,
   canViewWhatsAppStatus,
 } from '../utils/roles.js';
+import { isLinkedToAccessibleClinic } from '../utils/clinicScope.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
 import { encryptSecret, encryptSecretTagged } from '../utils/encryption.js';
@@ -120,12 +121,19 @@ router.get(
     if (!canViewWhatsAppStatus(req.user!)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    const organizationId = req.user!.organizationId;
+    const { organizationId, canAccessAllClinics, allowedClinicIds } = req.user!;
     if (!organizationId) return res.status(400).json({ error: 'No organization context' });
 
     try {
+      // KVKK H-2: allowedClinicIds ile sınırlı CLINIC_MANAGER, yalnızca kendi
+      // erişebildiği en az bir kliniğe bağlı bağlantıları görebilir.
+      const where: Record<string, unknown> = { organizationId };
+      if (!canAccessAllClinics) {
+        where.clinics = { some: { clinicId: { in: allowedClinicIds } } };
+      }
+
       const connections = await prisma.whatsAppConnection.findMany({
-        where: { organizationId },
+        where,
         orderBy: { createdAt: 'desc' },
         include: {
           clinics: {
@@ -135,7 +143,14 @@ router.get(
           },
         },
       });
-      const sanitized = connections.map((c) => sanitizeConnection(c as unknown as Record<string, unknown>));
+      // Erişilemeyen kliniklerin id/isim bilgisi yanıttaki clinics dizisinden sızmasın.
+      const scoped = canAccessAllClinics
+        ? connections
+        : connections.map((c) => ({
+            ...c,
+            clinics: c.clinics.filter((cl) => allowedClinicIds.includes(cl.clinicId)),
+          }));
+      const sanitized = scoped.map((c) => sanitizeConnection(c as unknown as Record<string, unknown>));
 
       // Surface legacy env-var config as a virtual read-only entry when DB has no records.
       // Only shown when ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK is not disabled and all 3 env vars are set.
@@ -282,7 +297,7 @@ router.get(
     if (!canViewWhatsAppStatus(req.user!)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    const organizationId = req.user!.organizationId;
+    const { organizationId, canAccessAllClinics, allowedClinicIds } = req.user!;
     const id = getParam(req, 'id');
 
     try {
@@ -295,7 +310,15 @@ router.get(
         },
       });
       if (!connection) return res.status(404).json({ error: 'Connection not found' });
-      res.json(sanitizeConnection(connection as unknown as Record<string, unknown>));
+
+      if (!isLinkedToAccessibleClinic(req.user!, connection.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
+      }
+      const scoped = canAccessAllClinics
+        ? connection
+        : { ...connection, clinics: connection.clinics.filter((c) => allowedClinicIds.includes(c.clinicId)) };
+
+      res.json(sanitizeConnection(scoped as unknown as Record<string, unknown>));
     } catch {
       res.status(500).json({ error: 'Failed to fetch connection' });
     }
@@ -450,8 +473,13 @@ router.post(
     try {
       const existing = await prisma.whatsAppConnection.findFirst({
         where: { id, organizationId },
+        include: { clinics: { select: { clinicId: true } } },
       });
       if (!existing) return res.status(404).json({ error: 'Connection not found' });
+
+      if (!isLinkedToAccessibleClinic(req.user!, existing.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
+      }
 
       const result = await testWhatsAppConnection(id);
       writeAuditLog({
@@ -499,7 +527,7 @@ router.get(
     if (!canViewWhatsAppStatus(req.user!)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    const organizationId = req.user!.organizationId;
+    const { organizationId, canAccessAllClinics, allowedClinicIds } = req.user!;
     const id = getParam(req, 'id');
 
     try {
@@ -511,7 +539,15 @@ router.get(
       });
       if (!connection) return res.status(404).json({ error: 'Connection not found' });
 
-      const clinicIds = connection.clinics.map((c) => c.clinicId);
+      if (!isLinkedToAccessibleClinic(req.user!, connection.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
+      }
+      // Kısıtlı yöneticiye yalnızca erişebildiği kliniklerin readiness verisi gösterilir —
+      // bağlantı, erişilemeyen bir kliniğe de bağlı olabilir.
+      const visibleClinics = canAccessAllClinics
+        ? connection.clinics
+        : connection.clinics.filter((c) => allowedClinicIds.includes(c.clinicId));
+      const clinicIds = visibleClinics.map((c) => c.clinicId);
 
       if (clinicIds.length === 0) {
         return res.json({
@@ -547,7 +583,7 @@ router.get(
       const approvedPurposes = new Set(approvedTemplates.map((t) => t.purpose));
 
       res.json({
-        clinics: connection.clinics.map((c) => ({
+        clinics: visibleClinics.map((c) => ({
           id: c.clinic.id,
           name: c.clinic.name,
           legalProfilePublished: publishedByClinicId.get(c.clinicId) ?? false,
@@ -577,8 +613,13 @@ router.get(
     try {
       const existing = await prisma.whatsAppConnection.findFirst({
         where: { id, organizationId },
+        include: { clinics: { select: { clinicId: true } } },
       });
       if (!existing) return res.status(404).json({ error: 'Connection not found' });
+
+      if (!isLinkedToAccessibleClinic(req.user!, existing.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
+      }
 
       const result = await getWhatsAppQrCode(id);
       res.json(result);
@@ -1111,7 +1152,7 @@ router.get(
     if (!canViewWhatsAppStatus(req.user!)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    const organizationId = req.user!.organizationId;
+    const { organizationId, canAccessAllClinics, allowedClinicIds } = req.user!;
     const clinicId = getParam(req, 'clinicId');
 
     try {
@@ -1119,6 +1160,10 @@ router.get(
         where: { id: clinicId, organizationId },
       });
       if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+      if (!canAccessAllClinics && !allowedClinicIds.includes(clinicId)) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
 
       const assignments = await prisma.clinicWhatsAppConnection.findMany({
         where: { clinicId, organizationId },
@@ -1147,7 +1192,7 @@ router.put(
     if (!canAssignWhatsAppToClinic(req.user!)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    const organizationId = req.user!.organizationId;
+    const { organizationId, canAccessAllClinics, allowedClinicIds } = req.user!;
     const clinicId = getParam(req, 'clinicId');
 
     const parsed = z
@@ -1164,11 +1209,23 @@ router.put(
       });
       if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
+      if (!canAccessAllClinics && !allowedClinicIds.includes(clinicId)) {
+        return res.status(403).json({ error: 'Access denied to requested clinic' });
+      }
+
+      // KVKK H-2: hedef bağlantı da erişim kapsamında doğrulanır — kısıtlı
+      // yönetici yalnızca zaten erişebildiği bir kliniğe bağlı bağlantıları
+      // atayabilir; organizasyon üyeliği tek başına yeterli değildir.
       const connection = await prisma.whatsAppConnection.findFirst({
         where: { id: whatsappConnectionId, organizationId, isActive: true },
+        include: { clinics: { select: { clinicId: true } } },
       });
       if (!connection) {
         return res.status(404).json({ error: 'WhatsApp connection not found or inactive' });
+      }
+
+      if (!isLinkedToAccessibleClinic(req.user!, connection.clinics.map((c) => c.clinicId))) {
+        return res.status(403).json({ error: 'Access denied to requested connection' });
       }
 
       const assignment = await prisma.clinicWhatsAppConnection.upsert({
