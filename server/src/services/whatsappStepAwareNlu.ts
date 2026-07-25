@@ -17,6 +17,7 @@
 import { interpretTimeRequest } from './whatsappInterpreter.js';
 import { getGoogleAiStudioConfig } from './whatsappConversationAgent.js';
 import type { BookingServiceOption } from './whatsappBookingFlow.js';
+import { isHumanHandoffPhrase } from './whatsapp/humanHandoffPhrases.js';
 
 export type WhatsAppStepAwareStep =
   | 'main_menu'
@@ -182,15 +183,33 @@ const makeDecision = (
 // match below. See isExplicitNewBookingRequest for why a bare `includes('randevu')`
 // is unsafe on its own (production defect: it misclassified status/cancel/
 // change/handoff follow-ups as a request to start a brand-new booking).
-const POST_BOOKING_HANDOFF_PHRASES = [
-  'yetkili', 'temsilci', 'operator', 'canli destek',
-  'insanla gorus', 'personelle gorus', 'danismanla gorus',
-  'biriyle gorusmek istiyorum',
-];
+//
+// Handoff detection itself now lives in humanHandoffPhrases.ts — it used to be
+// a second, independently-maintained keyword list here that drifted from
+// metaWhatsAppAiProcessor.ts's isHumanHandoffRequest (missing "danışmanla
+// görüş"/"biriyle görüşmek istiyorum" there), which meant those two phrases
+// were correctly classified as human_handoff here but silently fell through
+// to the generic fallback because nothing downstream consumed that intent
+// for them. Both call sites now share isHumanHandoffPhrase.
 
-const POST_BOOKING_CANCEL_PHRASES = [
-  'iptal', 'sil', 'kaldir', 'vazgectim', 'istemiyorum',
-];
+const POST_BOOKING_CANCEL_WORDS = new Set(['iptal', 'sil', 'kaldir', 'vazgectim', 'istemiyorum']);
+
+/**
+ * True only when a post_booking message contains a cancellation trigger word
+ * as a whole, standalone token — never as a substring. A bare
+ * `text.includes('sil')` check previously matched inside "nasıl" ("how",
+ * normalized "nasil") and "asıl" ("actual", normalized "asil"), misclassifying
+ * ordinary questions like "randevu sistemi nasıl çalışıyor" (and even
+ * "randevumu nasıl değiştirebilirim", a change request) as cancel_request.
+ * Splitting on whitespace and requiring an exact token match keeps every
+ * previously-supported cancellation phrasing working (all trigger words here
+ * are themselves standalone words in normal usage: "randevumu sil", "randevu
+ * iptal etmek istiyorum", ...) while eliminating the substring collision.
+ */
+export const isPostBookingCancelRequest = (rawText: string): boolean => {
+  const text = normalizeStepAwareText(rawText);
+  return text.split(' ').some(token => POST_BOOKING_CANCEL_WORDS.has(token));
+};
 
 const POST_BOOKING_CHANGE_PHRASES = [
   'degistir', 'degisiklik', 'baska gune al', 'baska saate al',
@@ -250,10 +269,10 @@ export const ruleBasedStepAwareFallback = (args: ResolveStepAwareWhatsAppIntentA
     // cancel_request, change_request, ask_request_status, gratitude/closing,
     // explicit new_booking_request, then unknown_post_booking_request (the
     // shared default at the bottom of this function).
-    if (POST_BOOKING_HANDOFF_PHRASES.some(p => text.includes(p))) {
+    if (isHumanHandoffPhrase(args.userText)) {
       return makeDecision('human_handoff', 0.9);
     }
-    if (POST_BOOKING_CANCEL_PHRASES.some(p => text.includes(p))) {
+    if (isPostBookingCancelRequest(args.userText)) {
       return makeDecision('cancel_request', 0.75);
     }
     if (POST_BOOKING_CHANGE_PHRASES.some(p => text.includes(p))) {

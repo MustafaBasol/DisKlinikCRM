@@ -43,6 +43,7 @@ function section(title: string) {
 import {
   resolveStepAwareWhatsAppIntent,
   isExplicitNewBookingRequest,
+  isPostBookingCancelRequest,
   type ResolveStepAwareWhatsAppIntentArgs,
 } from '../services/whatsappStepAwareNlu.js';
 import type { BookingServiceOption } from '../services/whatsappBookingFlow.js';
@@ -294,6 +295,14 @@ async function main() {
   const HANDOFF_PHRASES = [
     'randevu için yetkiliyle görüşmek istiyorum',
     'randevu konusunda temsilci istiyorum',
+    // Round-2 independent review: these two were already correctly classified
+    // as human_handoff by the classifier, but metaWhatsAppAiProcessor.ts's
+    // post_booking consumer had no branch for that intent at all, so they
+    // silently fell through to the generic dead-end fallback with no staff
+    // handoff ever created. See metaWhatsAppPostBookingHandler.test.ts for the
+    // real-handler-level proof.
+    'danışmanla görüşmek istiyorum',
+    'biriyle görüşmek istiyorum',
   ];
 
   for (const phrase of HANDOFF_PHRASES) {
@@ -311,6 +320,77 @@ async function main() {
     );
     assert.notEqual(decision.intent, 'new_booking_request');
     assert.equal(decision.intent, 'unknown_post_booking_request');
+  });
+
+  section('resolveStepAwareWhatsAppIntent — post_booking "sil"/"nasıl" false positive (independent re-review round 2, CHANGES_REQUIRED)');
+
+  // Round-2 independent review found that the bare cancellation token 'sil'
+  // matched as a substring inside "nasıl" (how, normalized "nasil") and
+  // "asıl" (actual, normalized "asil"), misclassifying ordinary questions
+  // and even change requests phrased as questions as cancel_request.
+
+  await test('"randevu sistemi nasıl çalışıyor" at post_booking does not classify as cancel_request', async () => {
+    const { decision } = await resolveStepAwareWhatsAppIntent(
+      baseArgs({ currentStep: 'post_booking', userText: 'randevu sistemi nasıl çalışıyor' }),
+    );
+    assert.notEqual(decision.intent, 'cancel_request');
+    assert.equal(decision.intent, 'unknown_post_booking_request');
+  });
+
+  await test('"randevumu nasıl değiştirebilirim" at post_booking classifies as change_request, not cancel_request', async () => {
+    const { decision } = await resolveStepAwareWhatsAppIntent(
+      baseArgs({ currentStep: 'post_booking', userText: 'randevumu nasıl değiştirebilirim' }),
+    );
+    assert.notEqual(decision.intent, 'cancel_request');
+    assert.equal(decision.intent, 'change_request');
+  });
+
+  await test('"nasılsınız" at post_booking does not classify as cancel_request', async () => {
+    const { decision } = await resolveStepAwareWhatsAppIntent(
+      baseArgs({ currentStep: 'post_booking', userText: 'nasılsınız' }),
+    );
+    assert.notEqual(decision.intent, 'cancel_request');
+  });
+
+  await test('"asıl randevu hangisi" at post_booking does not classify as cancel_request', async () => {
+    const { decision } = await resolveStepAwareWhatsAppIntent(
+      baseArgs({ currentStep: 'post_booking', userText: 'asıl randevu hangisi' }),
+    );
+    assert.notEqual(decision.intent, 'cancel_request');
+  });
+
+  await test('"bu işlem nasıl yapılır" at post_booking does not classify as cancel_request', async () => {
+    const { decision } = await resolveStepAwareWhatsAppIntent(
+      baseArgs({ currentStep: 'post_booking', userText: 'bu işlem nasıl yapılır' }),
+    );
+    assert.notEqual(decision.intent, 'cancel_request');
+  });
+
+  section('isPostBookingCancelRequest — dedicated predicate (pure, testable)');
+
+  await test('recognizes exact-token cancellation phrases', () => {
+    for (const phrase of [
+      'randevumu sil',
+      'mevcut randevumu sil',
+      'randevu kaydını sil',
+      'randevuyu kaldır',
+      'randevumu iptal et',
+      'randevudan vazgeçtim',
+    ]) {
+      assert.equal(isPostBookingCancelRequest(phrase), true, `expected true for "${phrase}"`);
+    }
+  });
+
+  await test('rejects "sil"/"nasıl" substring collisions', () => {
+    for (const phrase of [
+      'randevu sistemi nasıl çalışıyor',
+      'randevumu nasıl değiştirebilirim',
+      'nasılsınız',
+      'asıl randevu hangisi',
+      'bu işlem nasıl yapılır',
+    ]) {
+      assert.equal(isPostBookingCancelRequest(phrase), false, `expected false for "${phrase}"`);
+    }
   });
 
   section('isExplicitNewBookingRequest — dedicated predicate (pure, testable)');

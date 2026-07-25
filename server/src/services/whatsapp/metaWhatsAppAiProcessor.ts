@@ -35,6 +35,7 @@ import {
 } from '../whatsappBookingFlow.js';
 import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';
 import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';
+import { isHumanHandoffPhrase } from './humanHandoffPhrases.js';
 import type { WhatsAppAgentDecision } from '../whatsappAgentSchema.js';
 import {
   buildAvailableSlots,
@@ -267,13 +268,10 @@ export const hasValidLastName = (lastName?: string | null) => {
   return Boolean(normalized) && !['-', 'unknown', 'bilinmiyor'].includes(normalized);
 };
 
-export const isHumanHandoffRequest = (text: string) => {
-  const n = normalizeSearchText(text);
-  return [
-    'temsilci', 'yetkili', 'operator', 'canli destek', 'personelle gorusmek',
-    'resepsiyonla gorusmek', 'insanla gorusmek', 'beni arasin',
-  ].some(p => n === p || n.includes(p));
-};
+// Delegates to the shared humanHandoffPhrases predicate so this deterministic
+// step-escape gate and the post_booking classifier's handoff detection can
+// never drift apart again (see humanHandoffPhrases.ts for why that mattered).
+export const isHumanHandoffRequest = (text: string) => isHumanHandoffPhrase(text);
 
 const isNegativeHandoffNote = (text: string) => {
   const n = normalizeSearchText(text);
@@ -2390,6 +2388,27 @@ const buildReplyText = async (args: {
 
     const summary = stateJson.lastBookingSummary ?? null;
 
+    // human_handoff is highest priority (see whatsappStepAwareNlu.ts's
+    // post_booking priority order) — it must be consumed here explicitly.
+    // Previously unhandled: the classifier already resolved phrases like
+    // "danışmanla görüşmek istiyorum" / "biriyle görüşmek istiyorum" to
+    // human_handoff, but nothing below acted on it, so those messages fell
+    // through to the generic dead-end reply with no staff handoff ever
+    // created — the same production defect this hotfix exists to fix, just
+    // for a different intent. Reuses the identical createHandoffRequest path
+    // already used for change_request/cancel_request below.
+    if (nluDecision.intent === 'human_handoff') {
+      return createHandoffRequest({
+        clinic: args.clinic,
+        inboxEntryId: args.inboxEntry?.id ?? null,
+        connectionId: args.connectionId,
+        phone: args.phone,
+        customerName,
+        text: args.text,
+        conversationKey: args.conversationKey,
+        patientId: resolvedPatient?.id ?? stateJson.selectedPatientId ?? null,
+      });
+    }
     if (nluDecision.intent === 'gratitude') {
       return 'Rica ederiz. Talebiniz klinik ekibine iletildi. Onay durumunu size bildireceğiz.';
     }

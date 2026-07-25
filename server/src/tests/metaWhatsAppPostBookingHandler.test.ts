@@ -340,6 +340,197 @@ async function main() {
     await cleanupAllFixtures();
   });
 
+  section('processMetaWhatsAppIncomingMessage — post_booking human_handoff (independent re-review round 2, real handler path)');
+
+  await test(
+    '"danışmanla görüşmek istiyorum" at post_booking creates a staff-handoff ContactRequest, does not start a fresh booking, and leaves the prior AppointmentRequest untouched',
+    async () => {
+      const fixture = await createFixture('handoffgap');
+      await acceptConsent(fixture);
+
+      const patient = await prisma.patient.create({
+        data: {
+          clinicId: fixture.clinic.id,
+          organizationId: fixture.organization.id,
+          firstName: 'Ayşe',
+          lastName: 'Yılmaz',
+          phone: fixture.phone,
+        },
+      });
+
+      const priorRequest = await prisma.appointmentRequest.create({
+        data: {
+          clinicId: fixture.clinic.id,
+          patientId: patient.id,
+          patientName: 'Ayşe Yılmaz',
+          phone: fixture.phone,
+          appointmentTypeId: fixture.services[0].id,
+          requestType: 'appointment',
+          source: 'meta_whatsapp',
+          status: 'approved',
+        },
+      });
+
+      const conversationKey = await createPostBookingState(fixture, {
+        stateJson: { selectedPatientId: patient.id },
+      });
+
+      const restoreFetch = mockSuccessfulMetaSend();
+      let result;
+      try {
+        result = await processMetaWhatsAppIncomingMessage({
+          organizationId: fixture.organization.id,
+          clinicId: fixture.clinic.id,
+          connectionId: fixture.connection.id,
+          phone: fixture.phone,
+          messageId: `wamid.in.${fixture.suffix}`,
+          text: 'danışmanla görüşmek istiyorum',
+        });
+      } finally {
+        restoreFetch();
+      }
+
+      // intent resolves to human_handoff (observable via the resulting reply +
+      // ContactRequest, asserted below) — this is the exact phrase the round-2
+      // review proved fell through to the generic dead-end fallback because
+      // the post_booking consumer had no branch for human_handoff at all.
+      assert.equal(result.status, 'processed');
+      assert.notEqual(result.replyText, GENERIC_POST_BOOKING_FALLBACK, 'must not be the generic dead-end fallback');
+      assert.ok(result.replyText.includes('yetkili ekibe'), 'must send the real handoff confirmation reply');
+      for (const service of fixture.services) {
+        assert.ok(!result.replyText.includes(service.name), 'must NOT send the fresh-booking service list');
+      }
+
+      const state = await readState(fixture, conversationKey);
+      assert.ok(state);
+      assert.notEqual(state!.step, 'awaiting_service', 'must not transition into a fresh booking');
+      assert.notEqual(state!.step, 'post_booking', 'must leave post_booking (handoff was consumed)');
+
+      const contactRequest = await prisma.contactRequest.findFirst({ where: { clinicId: fixture.clinic.id, type: 'staff_handoff' } });
+      assert.ok(contactRequest, 'a staff_handoff ContactRequest must be created');
+      assert.equal(contactRequest!.clinicId, fixture.clinic.id);
+      assert.equal(contactRequest!.patientId, patient.id, 'ContactRequest must be linked to the resolved patient');
+      const contactRequestCount = await prisma.contactRequest.count({ where: { clinicId: fixture.clinic.id } });
+      assert.equal(contactRequestCount, 1, 'exactly one handoff ContactRequest should exist');
+
+      // no AppointmentRequest is created, and the prior one is left untouched
+      const requestCount = await prisma.appointmentRequest.count({ where: { clinicId: fixture.clinic.id } });
+      assert.equal(requestCount, 1, 'only the pre-existing request should exist — none created');
+      const requestAfter = await prisma.appointmentRequest.findUnique({ where: { id: priorRequest.id } });
+      assert.ok(requestAfter);
+      assert.equal(requestAfter!.status, priorRequest.status);
+      assert.equal(requestAfter!.updatedAt.getTime(), priorRequest.updatedAt.getTime(), 'prior request must be untouched');
+
+      await cleanupAllFixtures();
+    },
+  );
+
+  await test('"randevu için yetkiliyle görüşmek istiyorum" at post_booking also routes to human handoff, not a fresh booking', async () => {
+    const fixture = await createFixture('handoffcontrol');
+    await acceptConsent(fixture);
+    const conversationKey = await createPostBookingState(fixture);
+
+    const restoreFetch = mockSuccessfulMetaSend();
+    let result;
+    try {
+      result = await processMetaWhatsAppIncomingMessage({
+        organizationId: fixture.organization.id,
+        clinicId: fixture.clinic.id,
+        connectionId: fixture.connection.id,
+        phone: fixture.phone,
+        messageId: `wamid.in.${fixture.suffix}`,
+        text: 'randevu için yetkiliyle görüşmek istiyorum',
+      });
+    } finally {
+      restoreFetch();
+    }
+
+    assert.equal(result.status, 'processed');
+    assert.notEqual(result.replyText, GENERIC_POST_BOOKING_FALLBACK);
+    for (const service of fixture.services) {
+      assert.ok(!result.replyText.includes(service.name), 'must NOT send the fresh-booking service list');
+    }
+
+    const state = await readState(fixture, conversationKey);
+    assert.ok(state);
+    assert.notEqual(state!.step, 'awaiting_service');
+
+    const contactRequestCount = await prisma.contactRequest.count({ where: { clinicId: fixture.clinic.id, type: 'staff_handoff' } });
+    assert.equal(contactRequestCount, 1, 'must create a staff handoff ContactRequest');
+
+    await cleanupAllFixtures();
+  });
+
+  section('processMetaWhatsAppIncomingMessage — post_booking "sil"/"nasıl" false positive (independent re-review round 2, real handler path)');
+
+  await test('"randevu sistemi nasıl çalışıyor" at post_booking does not create a cancellation handoff and does not start a fresh booking', async () => {
+    const fixture = await createFixture('nasilgap');
+    await acceptConsent(fixture);
+
+    const patient = await prisma.patient.create({
+      data: {
+        clinicId: fixture.clinic.id,
+        organizationId: fixture.organization.id,
+        firstName: 'Ayşe',
+        lastName: 'Yılmaz',
+        phone: fixture.phone,
+      },
+    });
+    const priorRequest = await prisma.appointmentRequest.create({
+      data: {
+        clinicId: fixture.clinic.id,
+        patientId: patient.id,
+        patientName: 'Ayşe Yılmaz',
+        phone: fixture.phone,
+        appointmentTypeId: fixture.services[0].id,
+        requestType: 'appointment',
+        source: 'meta_whatsapp',
+        status: 'approved',
+      },
+    });
+
+    const conversationKey = await createPostBookingState(fixture, { stateJson: { selectedPatientId: patient.id } });
+
+    const restoreFetch = mockSuccessfulMetaSend();
+    let result;
+    try {
+      result = await processMetaWhatsAppIncomingMessage({
+        organizationId: fixture.organization.id,
+        clinicId: fixture.clinic.id,
+        connectionId: fixture.connection.id,
+        phone: fixture.phone,
+        messageId: `wamid.in.${fixture.suffix}`,
+        text: 'randevu sistemi nasıl çalışıyor',
+      });
+    } finally {
+      restoreFetch();
+    }
+
+    assert.equal(result.status, 'processed');
+    for (const service of fixture.services) {
+      assert.ok(!result.replyText.includes(service.name), 'must NOT start a fresh booking (must not send the service list)');
+    }
+
+    const state = await readState(fixture, conversationKey);
+    assert.ok(state);
+    assert.notEqual(state!.step, 'awaiting_service', 'must not start a fresh booking');
+
+    // The bare 'sil' substring inside 'nasıl' previously misclassified this as
+    // cancel_request, which routes to createHandoffRequest — assert no such
+    // handoff/contact request was created for what is really an information question.
+    const contactRequestCount = await prisma.contactRequest.count({ where: { clinicId: fixture.clinic.id, type: 'staff_handoff' } });
+    assert.equal(contactRequestCount, 0, 'an information question must not create a cancellation/handoff ContactRequest');
+
+    const requestCount = await prisma.appointmentRequest.count({ where: { clinicId: fixture.clinic.id } });
+    assert.equal(requestCount, 1, 'only the pre-existing request should exist — none created');
+    const requestAfter = await prisma.appointmentRequest.findUnique({ where: { id: priorRequest.id } });
+    assert.ok(requestAfter);
+    assert.equal(requestAfter!.status, priorRequest.status);
+    assert.equal(requestAfter!.updatedAt.getTime(), priorRequest.updatedAt.getTime(), 'prior request must be untouched');
+
+    await cleanupAllFixtures();
+  });
+
   section('processMetaWhatsAppIncomingMessage — shared-phone safety (real handler path)');
 
   await test(
