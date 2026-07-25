@@ -42,6 +42,7 @@ function section(title: string) {
 
 import {
   resolveStepAwareWhatsAppIntent,
+  isExplicitNewBookingRequest,
   type ResolveStepAwareWhatsAppIntentArgs,
 } from '../services/whatsappStepAwareNlu.js';
 import type { BookingServiceOption } from '../services/whatsappBookingFlow.js';
@@ -222,6 +223,125 @@ async function main() {
       baseArgs({ currentStep: 'awaiting_date', userText: 'randevu almak istiyorum' }),
     );
     assert.notEqual(decision.intent, 'new_booking_request');
+  });
+
+  await test('"bir randevu daha istiyorum" at post_booking classifies as new_booking_request', async () => {
+    const { decision } = await resolveStepAwareWhatsAppIntent(
+      baseArgs({ currentStep: 'post_booking', userText: 'bir randevu daha istiyorum' }),
+    );
+    assert.equal(decision.intent, 'new_booking_request');
+  });
+
+  section('resolveStepAwareWhatsAppIntent — post_booking adversarial matching (independent review, CHANGES_REQUIRED)');
+
+  // Independent review of the production `ruleBasedStepAwareFallback` (called
+  // directly, as it is here) found that the broad `text.includes('randevu')`
+  // fallback misclassified every one of these as new_booking_request, wiping
+  // post_booking context (lastBookingSummary, selectedPatientId resume state)
+  // even though the user asked for status, cancellation, change, or a human.
+  // None of these phrases contain any explicit creation/initiation language
+  // (isExplicitNewBookingRequest), so none may resolve as new_booking_request.
+
+  const STATUS_QUERY_PHRASES = [
+    'randevum oluştu mu',
+    'mevcut randevumu sorgulamak istiyorum',
+    'randevu almış mıydım',
+    'randevu var mı',
+    'randevu detaylarını görmek istiyorum',
+    'randevu hakkında bilgi almak istiyorum',
+  ];
+
+  for (const phrase of STATUS_QUERY_PHRASES) {
+    await test(`"${phrase}" at post_booking classifies as ask_request_status, not new_booking_request`, async () => {
+      const { decision } = await resolveStepAwareWhatsAppIntent(
+        baseArgs({ currentStep: 'post_booking', userText: phrase }),
+      );
+      assert.equal(decision.intent, 'ask_request_status');
+    });
+  }
+
+  const CANCELLATION_PHRASES = [
+    'mevcut randevumu sil',
+    'randevuyu kaldır',
+    'randevudan vazgeçtim',
+  ];
+
+  for (const phrase of CANCELLATION_PHRASES) {
+    await test(`"${phrase}" at post_booking classifies as cancel_request, not new_booking_request`, async () => {
+      const { decision } = await resolveStepAwareWhatsAppIntent(
+        baseArgs({ currentStep: 'post_booking', userText: phrase }),
+      );
+      assert.equal(decision.intent, 'cancel_request');
+    });
+  }
+
+  const CHANGE_PHRASES = [
+    'randevu tarihini değiştir',
+    'randevumu başka güne al',
+    'randevu saatini değiştirmek istiyorum',
+    'randevuyu ertele',
+  ];
+
+  for (const phrase of CHANGE_PHRASES) {
+    await test(`"${phrase}" at post_booking classifies as change_request, not new_booking_request`, async () => {
+      const { decision } = await resolveStepAwareWhatsAppIntent(
+        baseArgs({ currentStep: 'post_booking', userText: phrase }),
+      );
+      assert.equal(decision.intent, 'change_request');
+    });
+  }
+
+  const HANDOFF_PHRASES = [
+    'randevu için yetkiliyle görüşmek istiyorum',
+    'randevu konusunda temsilci istiyorum',
+  ];
+
+  for (const phrase of HANDOFF_PHRASES) {
+    await test(`"${phrase}" at post_booking classifies as human_handoff, not new_booking_request (must win over "randevu")`, async () => {
+      const { decision } = await resolveStepAwareWhatsAppIntent(
+        baseArgs({ currentStep: 'post_booking', userText: phrase }),
+      );
+      assert.equal(decision.intent, 'human_handoff');
+    });
+  }
+
+  await test('"randevu fiyatı nedir" at post_booking does not reset into new_booking_request', async () => {
+    const { decision } = await resolveStepAwareWhatsAppIntent(
+      baseArgs({ currentStep: 'post_booking', userText: 'randevu fiyatı nedir' }),
+    );
+    assert.notEqual(decision.intent, 'new_booking_request');
+    assert.equal(decision.intent, 'unknown_post_booking_request');
+  });
+
+  section('isExplicitNewBookingRequest — dedicated predicate (pure, testable)');
+
+  await test('recognizes explicit new-booking phrases', () => {
+    for (const phrase of [
+      'randevu',
+      'randevu almak istiyorum',
+      'yeni randevu',
+      'yeni bir randevu almak istiyorum',
+      'başka randevu oluştur',
+      'başka bir randevu almak istiyorum',
+      'yeniden randevu almak istiyorum',
+      'tekrar randevu almak istiyorum',
+      'bir randevu daha istiyorum',
+    ]) {
+      assert.equal(isExplicitNewBookingRequest(phrase), true, `expected true for "${phrase}"`);
+    }
+  });
+
+  await test('rejects status/cancel/change/handoff/ambiguous phrases that merely mention "randevu"', () => {
+    for (const phrase of [
+      ...STATUS_QUERY_PHRASES,
+      ...CANCELLATION_PHRASES,
+      ...CHANGE_PHRASES,
+      ...HANDOFF_PHRASES,
+      'randevu fiyatı nedir',
+      'randevumu iptal etmek istiyorum',
+    ]) {
+      assert.equal(isExplicitNewBookingRequest(phrase), false, `expected false for "${phrase}"`);
+    }
   });
 
   section('buildFreshBookingTransition — post_booking → fresh booking entry (production defect fix)');

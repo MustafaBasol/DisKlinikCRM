@@ -176,6 +176,61 @@ const makeDecision = (
   ...overrides,
 });
 
+// post_booking-only keyword sets, checked in this exact priority order so a
+// message that mentions "randevu" alongside a more specific request (cancel,
+// change, status, handoff) never gets swallowed by the bare booking-word
+// match below. See isExplicitNewBookingRequest for why a bare `includes('randevu')`
+// is unsafe on its own (production defect: it misclassified status/cancel/
+// change/handoff follow-ups as a request to start a brand-new booking).
+const POST_BOOKING_HANDOFF_PHRASES = [
+  'yetkili', 'temsilci', 'operator', 'canli destek',
+  'insanla gorus', 'personelle gorus', 'danismanla gorus',
+  'biriyle gorusmek istiyorum',
+];
+
+const POST_BOOKING_CANCEL_PHRASES = [
+  'iptal', 'sil', 'kaldir', 'vazgectim', 'istemiyorum',
+];
+
+const POST_BOOKING_CHANGE_PHRASES = [
+  'degistir', 'degisiklik', 'baska gune al', 'baska saate al',
+  'ileri al', 'geri al', 'ertele', 'tarihi', 'saati',
+];
+
+const POST_BOOKING_STATUS_PHRASES = [
+  'durumu ne', 'durum ne', 'ne durumda', 'onaylandi mi', 'onay durumu', 'ne oldu',
+  'durumu', 'olustu mu', 'olusturuldu mu', 'sorgula', 'kontrol et',
+  'almis miydim', 'var mi', 'detay', 'bilgi almak', 'ne zaman', 'hangi gun', 'hangi saat',
+];
+
+// NOTE: deliberately NOT bare 'baska' or bare 'almak istiyorum' — both produce
+// false positives on real post_booking follow-ups that merely mention
+// "randevu" elsewhere in the sentence ("randevumu başka güne al" is a change
+// request; "randevu hakkında bilgi almak istiyorum" is a status question).
+// 'randevu almak istiyorum' (contiguous) still covers every "başka ... randevu
+// almak istiyorum" / "yeni ... randevu almak istiyorum" phrasing required below,
+// and bare 'olustur' covers "başka randevu oluştur".
+const NEW_BOOKING_INITIATION_SIGNALS = [
+  'yeni', 'tekrar', 'yeniden', 'bir tane daha', 'daha istiyorum',
+  'randevu almak istiyorum', 'olustur', 'ayarlamak istiyorum', 'rezervasyon yapmak istiyorum',
+];
+
+/**
+ * True only for an explicit request to start/create a (new) booking: the
+ * message mentions randevu/rezervasyon together with clear creation/initiation
+ * language, or the entire normalized message is the minimal command "randevu".
+ * Deliberately NOT satisfied by merely mentioning "randevu" — status, cancel,
+ * change, and handoff phrases all mention it too, and are resolved earlier in
+ * ruleBasedStepAwareFallback's post_booking branch before this ever runs.
+ */
+export const isExplicitNewBookingRequest = (rawText: string): boolean => {
+  const text = normalizeStepAwareText(rawText);
+  if (text === 'randevu') return true;
+  const mentionsBooking = text.includes('randevu') || text.includes('rezervasyon');
+  if (!mentionsBooking) return false;
+  return NEW_BOOKING_INITIATION_SIGNALS.some(signal => text.includes(signal));
+};
+
 /**
  * Deterministic-ish keyword classifier used when Google AI Studio is disabled,
  * unconfigured, or errors. Also serves as the reliable, network-free path exercised
@@ -191,25 +246,29 @@ export const ruleBasedStepAwareFallback = (args: ResolveStepAwareWhatsAppIntentA
   // fresh greeting, and a post-booking "iptal etmek istiyorum" isn't misread as the
   // generic cancel_flow (mid-flow "vazgeç") intent.
   if (args.currentStep === 'post_booking') {
+    // Priority order (see POST_BOOKING_*_PHRASES above): human_handoff,
+    // cancel_request, change_request, ask_request_status, gratitude/closing,
+    // explicit new_booking_request, then unknown_post_booking_request (the
+    // shared default at the bottom of this function).
+    if (POST_BOOKING_HANDOFF_PHRASES.some(p => text.includes(p))) {
+      return makeDecision('human_handoff', 0.9);
+    }
+    if (POST_BOOKING_CANCEL_PHRASES.some(p => text.includes(p))) {
+      return makeDecision('cancel_request', 0.75);
+    }
+    if (POST_BOOKING_CHANGE_PHRASES.some(p => text.includes(p))) {
+      return makeDecision('change_request', 0.7);
+    }
+    if (POST_BOOKING_STATUS_PHRASES.some(p => text.includes(p))) {
+      return makeDecision('ask_request_status', 0.75);
+    }
     if (['tesekkur', 'sag ol', 'saol'].some(p => text.includes(p))) {
       return makeDecision('gratitude', 0.85);
     }
     if (['iyi gunler', 'iyi aksamlar', 'gorusuruz', 'hoscakal'].some(p => text.includes(p)) || text === 'tamam') {
       return makeDecision('closing', 0.7);
     }
-    if (['durumu ne', 'durum ne', 'ne durumda', 'onaylandi mi', 'onay durumu', 'ne oldu'].some(p => text.includes(p))) {
-      return makeDecision('ask_request_status', 0.75);
-    }
-    if (['iptal etmek', 'iptal istiyorum', 'randevuyu iptal', 'randevumu iptal'].some(p => text.includes(p))) {
-      return makeDecision('cancel_request', 0.75);
-    }
-    if (['degistirmek istiyorum', 'saati degistir', 'saat degistir', 'tarihi degistir', 'gunu degistir'].some(p => text.includes(p))) {
-      return makeDecision('change_request', 0.7);
-    }
-    // A clear request for a (new) appointment — checked after the more specific
-    // status/change/cancel patterns above so "randevumu iptal" or "saati değiştir"
-    // keep their own intent instead of being swallowed by the bare "randevu" match.
-    if (text.includes('randevu')) {
+    if (isExplicitNewBookingRequest(args.userText)) {
       return makeDecision('new_booking_request', 0.75);
     }
   }
