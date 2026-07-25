@@ -640,6 +640,31 @@ async function main() {
     );
   });
 
+  // ── KVKK G-1: webhook logs must redact phone, not log it raw (regression) ──
+  await test('inbox-unassigned log redacts phone via redactPhone (KVKK G-1)', () => {
+    const src = readFileSync(fileURLToPath(new URL('../routes/whatsapp.ts', import.meta.url)), 'utf8');
+    assert.ok(
+      !/inbox-unassigned'[\s\S]{0,200}phone:\s*incomingMessage\.phone,/.test(src),
+      'inbox-unassigned log must not pass raw incomingMessage.phone to console.info',
+    );
+    assert.ok(
+      /inbox-unassigned'[\s\S]{0,200}phone:\s*redactPhone\(incomingMessage\.phone\)/.test(src),
+      'inbox-unassigned log must use redactPhone(incomingMessage.phone)',
+    );
+  });
+
+  await test('send-result (db-resolved) log redacts phone via redactPhone (KVKK G-1)', () => {
+    const src = readFileSync(fileURLToPath(new URL('../routes/whatsapp.ts', import.meta.url)), 'utf8');
+    assert.ok(
+      !/send-result \(db-resolved\)'[\s\S]{0,200}phone:\s*incomingMessage\.phone,/.test(src),
+      'send-result (db-resolved) log must not pass raw incomingMessage.phone to console.info',
+    );
+    assert.ok(
+      /send-result \(db-resolved\)'[\s\S]{0,200}phone:\s*redactPhone\(incomingMessage\.phone\)/.test(src),
+      'send-result (db-resolved) log must use redactPhone(incomingMessage.phone)',
+    );
+  });
+
   // ─── Summary ────────────────────────────────────────────────────────────────
 
   console.log(`\n${'─'.repeat(60)}`);

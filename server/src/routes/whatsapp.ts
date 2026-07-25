@@ -3663,7 +3663,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
             rawPayload: normalizedPayload as Record<string, unknown>,
           });
           console.info('[whatsapp-assistant] inbox-unassigned', {
-            phone: incomingMessage.phone,
+            phone: redactPhone(incomingMessage.phone),
             instance: normalizedPayload.instance,
             organizationId: dbConnection.organizationId,
           });
@@ -3733,7 +3733,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
             await markWhatsAppProviderMessageProcessed(resolvedClinic.id, incomingMessage.phone, incomingMessage.messageId);
             await markInboundEventProcessed(inboundEventId);
             console.info('[whatsapp-assistant] send-result (db-resolved)', {
-              phone: incomingMessage.phone,
+              phone: redactPhone(incomingMessage.phone),
               instance: normalizedPayload.instance ?? null,
               resolutionSource: resolution.resolutionSource,
               clinicId: resolvedClinic.id,
