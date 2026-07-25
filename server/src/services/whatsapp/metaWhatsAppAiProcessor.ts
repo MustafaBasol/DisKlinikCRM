@@ -35,6 +35,7 @@ import {
 } from '../whatsappBookingFlow.js';
 import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';
 import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';
+import { isHumanHandoffPhrase } from './humanHandoffPhrases.js';
 import type { WhatsAppAgentDecision } from '../whatsappAgentSchema.js';
 import {
   buildAvailableSlots,
@@ -267,13 +268,10 @@ export const hasValidLastName = (lastName?: string | null) => {
   return Boolean(normalized) && !['-', 'unknown', 'bilinmiyor'].includes(normalized);
 };
 
-export const isHumanHandoffRequest = (text: string) => {
-  const n = normalizeSearchText(text);
-  return [
-    'temsilci', 'yetkili', 'operator', 'canli destek', 'personelle gorusmek',
-    'resepsiyonla gorusmek', 'insanla gorusmek', 'beni arasin',
-  ].some(p => n === p || n.includes(p));
-};
+// Delegates to the shared humanHandoffPhrases predicate so this deterministic
+// step-escape gate and the post_booking classifier's handoff detection can
+// never drift apart again (see humanHandoffPhrases.ts for why that mattered).
+export const isHumanHandoffRequest = (text: string) => isHumanHandoffPhrase(text);
 
 const isNegativeHandoffNote = (text: string) => {
   const n = normalizeSearchText(text);
@@ -315,6 +313,38 @@ const formatServiceList = (services: MetaWaService[]): string =>
     'Elbette, hangi hizmet icin randevu planlamak istersiniz?',
     ...services.map((s, i) => `${i + 1}. ${s.name}`),
   ].join('\n');
+
+// Starts a brand-new booking from any step that is not itself an in-progress
+// booking step (currently only reached from post_booking — see the
+// new_booking_request branch below). Mirrors the main-menu "1" and AI-agent
+// start_booking/continue_booking transitions: clears appointment-specific
+// state (service/date/time/practitioner) and lands on awaiting_service with
+// the live service list, while preserving a previously validated
+// selectedPatientId so a resolved patient is never forced through identity
+// collection again. Never touches AppointmentRequest — a prior request from
+// the finished booking is left completely alone.
+export const buildFreshBookingTransition = (args: {
+  customerName: string | null;
+  services: MetaWaService[];
+  selectedPatientId?: string | null;
+  text: string;
+  messageId?: string | null;
+}): { stateUpdate: StateData; reply: string } => ({
+  stateUpdate: {
+    customerName: args.customerName,
+    currentIntent: 'book_appointment',
+    step: 'awaiting_service',
+    selectedAppointmentTypeId: null,
+    selectedAppointmentTypeName: null,
+    selectedPractitionerId: null,
+    selectedDate: null,
+    selectedTime: null,
+    lastMessage: args.text,
+    lastProviderMessageId: args.messageId ?? null,
+    stateJson: args.selectedPatientId ? { selectedPatientId: args.selectedPatientId } : null,
+  },
+  reply: args.services.length > 0 ? formatServiceList(args.services) : NO_ACTIVE_SERVICES_TEXT,
+});
 
 const formatMainMenu = (_clinicName: string, customerName?: string | null): string => {
   const firstName = getFirstName(customerName);
@@ -2358,6 +2388,27 @@ const buildReplyText = async (args: {
 
     const summary = stateJson.lastBookingSummary ?? null;
 
+    // human_handoff is highest priority (see whatsappStepAwareNlu.ts's
+    // post_booking priority order) — it must be consumed here explicitly.
+    // Previously unhandled: the classifier already resolved phrases like
+    // "danışmanla görüşmek istiyorum" / "biriyle görüşmek istiyorum" to
+    // human_handoff, but nothing below acted on it, so those messages fell
+    // through to the generic dead-end reply with no staff handoff ever
+    // created — the same production defect this hotfix exists to fix, just
+    // for a different intent. Reuses the identical createHandoffRequest path
+    // already used for change_request/cancel_request below.
+    if (nluDecision.intent === 'human_handoff') {
+      return createHandoffRequest({
+        clinic: args.clinic,
+        inboxEntryId: args.inboxEntry?.id ?? null,
+        connectionId: args.connectionId,
+        phone: args.phone,
+        customerName,
+        text: args.text,
+        conversationKey: args.conversationKey,
+        patientId: resolvedPatient?.id ?? stateJson.selectedPatientId ?? null,
+      });
+    }
     if (nluDecision.intent === 'gratitude') {
       return 'Rica ederiz. Talebiniz klinik ekibine iletildi. Onay durumunu size bildireceğiz.';
     }
@@ -2368,6 +2419,17 @@ const buildReplyText = async (args: {
       return summary?.serviceName
         ? `${summary.serviceName} için ${summary.date ? formatTurkishDateLong(summary.date, WHATSAPP_ASSISTANT_TIME_ZONE) : ''}${summary.time ? ` saat ${summary.time}` : ''} talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.`
         : 'Randevu talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.';
+    }
+    if (nluDecision.intent === 'new_booking_request') {
+      const { stateUpdate, reply } = buildFreshBookingTransition({
+        customerName,
+        services,
+        selectedPatientId: resolvedPatient?.id ?? stateJson.selectedPatientId ?? null,
+        text: args.text,
+        messageId: args.messageId,
+      });
+      await upsertMetaWaState(args.clinic.id, args.conversationKey, stateUpdate);
+      return reply;
     }
     if (nluDecision.intent === 'change_request' || nluDecision.intent === 'cancel_request') {
       return createHandoffRequest({
