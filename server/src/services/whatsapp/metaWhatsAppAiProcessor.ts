@@ -316,6 +316,38 @@ const formatServiceList = (services: MetaWaService[]): string =>
     ...services.map((s, i) => `${i + 1}. ${s.name}`),
   ].join('\n');
 
+// Starts a brand-new booking from any step that is not itself an in-progress
+// booking step (currently only reached from post_booking — see the
+// new_booking_request branch below). Mirrors the main-menu "1" and AI-agent
+// start_booking/continue_booking transitions: clears appointment-specific
+// state (service/date/time/practitioner) and lands on awaiting_service with
+// the live service list, while preserving a previously validated
+// selectedPatientId so a resolved patient is never forced through identity
+// collection again. Never touches AppointmentRequest — a prior request from
+// the finished booking is left completely alone.
+export const buildFreshBookingTransition = (args: {
+  customerName: string | null;
+  services: MetaWaService[];
+  selectedPatientId?: string | null;
+  text: string;
+  messageId?: string | null;
+}): { stateUpdate: StateData; reply: string } => ({
+  stateUpdate: {
+    customerName: args.customerName,
+    currentIntent: 'book_appointment',
+    step: 'awaiting_service',
+    selectedAppointmentTypeId: null,
+    selectedAppointmentTypeName: null,
+    selectedPractitionerId: null,
+    selectedDate: null,
+    selectedTime: null,
+    lastMessage: args.text,
+    lastProviderMessageId: args.messageId ?? null,
+    stateJson: args.selectedPatientId ? { selectedPatientId: args.selectedPatientId } : null,
+  },
+  reply: args.services.length > 0 ? formatServiceList(args.services) : NO_ACTIVE_SERVICES_TEXT,
+});
+
 const formatMainMenu = (_clinicName: string, customerName?: string | null): string => {
   const firstName = getFirstName(customerName);
   return [
@@ -2368,6 +2400,17 @@ const buildReplyText = async (args: {
       return summary?.serviceName
         ? `${summary.serviceName} için ${summary.date ? formatTurkishDateLong(summary.date, WHATSAPP_ASSISTANT_TIME_ZONE) : ''}${summary.time ? ` saat ${summary.time}` : ''} talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.`
         : 'Randevu talebiniz klinik ekibi tarafından inceleniyor; onaylandığında size bildirilecek.';
+    }
+    if (nluDecision.intent === 'new_booking_request') {
+      const { stateUpdate, reply } = buildFreshBookingTransition({
+        customerName,
+        services,
+        selectedPatientId: resolvedPatient?.id ?? stateJson.selectedPatientId ?? null,
+        text: args.text,
+        messageId: args.messageId,
+      });
+      await upsertMetaWaState(args.clinic.id, args.conversationKey, stateUpdate);
+      return reply;
     }
     if (nluDecision.intent === 'change_request' || nluDecision.intent === 'cancel_request') {
       return createHandoffRequest({

@@ -60,6 +60,7 @@ export const stepAwarePostBookingIntents = [
   'ask_request_status',
   'change_request',
   'cancel_request',
+  'new_booking_request',
   'unknown_post_booking_request',
 ] as const;
 
@@ -204,6 +205,12 @@ export const ruleBasedStepAwareFallback = (args: ResolveStepAwareWhatsAppIntentA
     }
     if (['degistirmek istiyorum', 'saati degistir', 'saat degistir', 'tarihi degistir', 'gunu degistir'].some(p => text.includes(p))) {
       return makeDecision('change_request', 0.7);
+    }
+    // A clear request for a (new) appointment — checked after the more specific
+    // status/change/cancel patterns above so "randevumu iptal" or "saati değiştir"
+    // keep their own intent instead of being swallowed by the bare "randevu" match.
+    if (text.includes('randevu')) {
+      return makeDecision('new_booking_request', 0.75);
     }
   }
 
