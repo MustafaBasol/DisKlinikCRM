@@ -1,6 +1,8 @@
 # RELEASE_GATES — Yayın Kapıları (G0–G6)
 
-Son güncelleme: 2026-07-20 (F0-012 — G1/G2 kanıt listesi [LAUNCH_GATES.md](LAUNCH_GATES.md)'e ayrıntılandırıldı; bu dosyadaki G1/G2 durumu `NOT_APPROVED` kalır, hiçbir kapı bu görevle geçilmedi.)
+Son güncelleme: 2026-07-25 (**F0-014 — G0 Approval Recording, F0 Closure, and F1 Initial Task Assignment.** G0 ("F0 Architecture Validation Complete") is recorded below as `APPROVED_WITH_CONDITIONS` — an externally-supplied decision (ChatGPT architecture review + Mustafa Basol decision, 2026-07-25), not an agent self-grant; per `NORAMEDI_MASTER_TRACKER.md` §2.3 an agent may never assign this status itself, only transcribe an already-made external decision with its supporting evidence. This is architectural/program readiness for F1 entry only — it is explicitly **not** production readiness, not G1/G2 pilot or launch approval, and not KVKK legal sign-off. Ten mandatory conditions are preserved verbatim below and must not be silently narrowed by any future task. G1–G6 are unaffected by this update and remain `NOT_APPROVED`. See [evidence/F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md](evidence/F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md) for full supporting detail.)
+
+Prior update: 2026-07-20 (F0-012 — G1/G2 kanıt listesi [LAUNCH_GATES.md](LAUNCH_GATES.md)'e ayrıntılandırıldı; bu dosyadaki G1/G2 durumu `NOT_APPROVED` kalır, hiçbir kapı bu görevle geçilmedi.)
 
 Prior update: 2026-07-17 (F0-001)
 
@@ -17,7 +19,7 @@ Tüm kapılar başlangıçta `NOT_APPROVED` durumundadır. Hiçbir kapı geçilm
 
 ## G0 — F0 Architecture Validation Complete
 
-- **Status:** `NOT_APPROVED`
+- **Status:** `APPROVED_WITH_CONDITIONS` (2026-07-25, F0-014)
 - **Amaç:** F0 fazının çıktılarıyla (baseline, haritalar, PoC tasarımları, riskler) mimari programın uygulanabilirliğinin doğrulanması.
 - **Gerekli teknik kanıt:** F0-002 baseline envanteri; F0-003/004 doğrulanmış haritalar; F0-009/010/011 PoC tasarımları; F0-013 konsolide rapor.
 - **Gerekli güvenlik kanıtı:** F0-007 KVKK dondurma sınırı; risk kaydının güncellenmiş durumu.
@@ -26,6 +28,30 @@ Tüm kapılar başlangıçta `NOT_APPROVED` durumundadır. Hiçbir kapı geçilm
 - **Gerekli operasyonel kanıt:** F0-006 production topoloji raporu.
 - **Onay sahibi:** ChatGPT incelemesi + kullanıcı kararı.
 - **Rollback hazırlığı:** Uygulanamaz (dokümantasyon fazı); yine de F0 çıktılarının Git geçmişi korunur.
+
+### G0 approval record (2026-07-25, F0-014)
+
+| Field | Value |
+|---|---|
+| Gate | G0 — F0 Architecture Validation Complete |
+| Status | `APPROVED_WITH_CONDITIONS` |
+| Decision date | 2026-07-25 |
+| Approval authority | ChatGPT architecture review + Mustafa Basol decision (external, per this gate's own "Onay sahibi" row above — not agent-granted) |
+| Supporting evidence | [F0-013_CONSOLIDATED_ARCHITECTURE_VALIDATION_REPORT.md](F0-013_CONSOLIDATED_ARCHITECTURE_VALIDATION_REPORT.md) (executive decision `CONDITIONALLY READY`); [PR #228](https://github.com/MustafaBasol/DisKlinikCRM/pull/228), merge commit `35224a3d073d46b90aa195568d27f00c3b6881e8`; the full F0-002…F0-012 merged-evidence chain reconciled in that report's §4; [evidence/F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md](evidence/F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md) |
+| Exact meaning | This approval is **architectural/program readiness for F1 entry only**. It is explicitly **not**: production readiness, G1 (Controlled Pilot) approval, G2 (General Commercial Launch) approval, or KVKK legal/compliance sign-off. G1 and G2 each require their own, independently-evaluated evidence per [LAUNCH_GATES.md](LAUNCH_GATES.md) and remain `NOT_APPROVED`/`NOT_EVALUATED` below, unaffected by this decision. |
+
+**Mandatory conditions preserved by this approval (none may be silently narrowed, closed, or reinterpreted by a later task without an explicit new external decision):**
+
+1. **R-046 remains `OPEN`.** Full production cross-tenant negative verification and full production audit verification for KVKK-HIGH-007/HIGH-008 remain outstanding (disposable-environment level only, via F0-011-P2). See [RISK_REGISTER.md](RISK_REGISTER.md).
+2. **R-071 remains `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`** — not `CLOSED`. It must not be marked `CLOSED` without independent confirmation or an explicit external risk-owner decision.
+3. **No general "KVKK baseline stable" declaration has been granted.** [KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md](KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md) §5 condition 5 remains unmet.
+4. **The KVKK physical-architecture freeze remains active** until condition 5 above receives its own explicit human/program decision, separate from this G0 decision.
+5. **G1 — Controlled Pilot Ready remains `NOT_APPROVED`.**
+6. **G2 — General Commercial Launch Ready remains `NOT_APPROVED`.**
+7. **`NEEDS_POC` ADRs are not implementation-ready:** ADR-004 (Prisma + PgBouncer), ADR-005 (PostgreSQL RLS), ADR-006 (Transactional outbox), ADR-007 (Queue platform), ADR-013 (Backup/PITR/DR). See [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md).
+8. **This G0 decision does not authorize:** RLS rollout; tenant-key backfills or broad tenant schema changes; queue/outbox implementation; object-storage migration; production backfill; consent/reconciliation activation; Kafka; Kubernetes; microservices; database-per-tenant; or a framework rewrite.
+9. **Modular-monolith boundaries remain mandatory** (ADR-001).
+10. **Direct cross-domain access must not be introduced except through an accepted public contract** (ADR-015). The 9 existing documented `WHA`/`IGM`→`PAT`/`APT` boundary violations remain transitional debt, not precedent for further violations.
 
 ## G1 — Controlled Pilot Ready
 
@@ -108,7 +134,7 @@ Tüm kapılar başlangıçta `NOT_APPROVED` durumundadır. Hiçbir kapı geçilm
 
 | Kapı | Ad | Durum |
 |---|---|---|
-| G0 | F0 Architecture Validation Complete | `NOT_APPROVED` |
+| G0 | F0 Architecture Validation Complete | `APPROVED_WITH_CONDITIONS` (2026-07-25) |
 | G1 | Controlled Pilot Ready | `NOT_APPROVED` |
 | G2 | General Commercial Launch Ready | `NOT_APPROVED` |
 | G3 | Rapid Growth Ready | `NOT_APPROVED` |
