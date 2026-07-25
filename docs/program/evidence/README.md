@@ -28,6 +28,7 @@ These are evidence-quality labels, not task status values. Task status values (`
 | [F0-006_configuration_inventory.json](F0-006_configuration_inventory.json) | F0-006 | Structured machine-readable inventory: topology, configuration sources/variables, deployment steps, drift findings, risks, unverified fields. |
 | [F0-007_KVKK_BASELINE_EVIDENCE.md](F0-007_KVKK_BASELINE_EVIDENCE.md) | F0-007 | Worktree/primary-tree safety record, full GitHub PR verification for all known KVKK PRs (repository-wide sweep found 0 open PRs), three-way migration baseline (repository/production/active-uncommitted), dependency/conflict analysis built from F0-003/F0-004 evidence, and test/acceptance baseline per KVKK task. |
 | [F0-007_kvkk_work_inventory.json](F0-007_kvkk_work_inventory.json) | F0-007 | Structured machine-readable inventory: known KVKK tasks/PRs, stable baseline, active-work scope metadata, freeze boundary, parallel-safe/blocked work, conflict risks, unverified items, exit criteria. |
+| [F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md](F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md) | F0-014 | Records the externally-granted G0 decision (`APPROVED_WITH_CONDITIONS`, 2026-07-25), F0 phase closure, F1 phase transition, and the F1-001 initial task assignment. **Note:** this index is otherwise stale beyond the rows above (F0-013 itself flagged this in its own §9 item 5) — a full evidence-index refresh remains a separate, non-blocking documentation task, out of F0-014's own narrow scope. |
 
 ## Stage model for F0-002
 

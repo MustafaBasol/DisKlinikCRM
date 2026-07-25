@@ -218,3 +218,17 @@ gh pr diff --repo MustafaBasol/DisKlinikCRM 228
 ```
 
 **Stop before merge.** This task explicitly does not merge. Do not merge PR #228 until you (and/or ChatGPT, per this program's own review convention) have reviewed §2/§7/§10/§11 above and made the G0 decision described there. Merging this PR only records the report — it does not itself grant G0.
+
+## 15. Post-review approval addendum (added 2026-07-25, F0-014 — later external decision, not this report's own)
+
+**This section records a decision made after, and separately from, this report's original authoring. It does not alter §1–§14 above, which remain this report's own capture-time findings and recommendation.**
+
+PR #228 (carrying this report) subsequently merged: merge commit `35224a3d073d46b90aa195568d27f00c3b6881e8`, `mergedAt: 2026-07-25T08:48:36Z` (`gh pr view 228`). Following external review of this report by ChatGPT architecture review and a decision by Mustafa Basol, **G0 — F0 Architecture Validation Complete was granted `APPROVED_WITH_CONDITIONS` on 2026-07-25** — recorded by task F0-014, not by this report or by the agent that authored it. Full approval record, including all ten preserved conditions, is in [RELEASE_GATES.md](RELEASE_GATES.md); it is not restated here to avoid a second, potentially-drifting copy.
+
+This addendum exists solely to close the loop this report's own §2/§11 explicitly left open ("What is NOT satisfied, and is not something this agent may satisfy... G0 approval"). It does not:
+- Change this report's §2 executive decision text (`CONDITIONALLY READY`, as assessed at the time),
+- Change §7's open blockers or §8's accepted residual risks (R-046, R-071, KVKK freeze condition 5, the `NEEDS_POC` ADRs, etc. — all remain exactly as recorded there),
+- Reopen or re-run any F0-002…F0-012 evidence reconciliation,
+- Retroactively claim this report itself granted G0 — it did not, and could not, per this program's own §2.3 agent-authority limit.
+
+F0 phase closure and F1 initial-task assignment carried out on the strength of this decision are recorded in `NORAMEDI_MASTER_TRACKER.md`, `CURRENT_PHASE.md`, `phases/F0_BASELINE_AND_VALIDATION.md`, and `phases/F1_CI_AND_TEST_ARCHITECTURE.md` — see [evidence/F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md](evidence/F0-014_G0_APPROVAL_F0_CLOSURE_F1_TRANSITION.md) for the full record.
