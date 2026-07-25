@@ -47,7 +47,13 @@ router.get('/payments', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILL
       include: {
         patient: { select: patientContactSelect },
         treatmentCase: {
-          include: {
+          select: {
+            id: true,
+            title: true,
+            stage: true,
+            estimatedAmount: true,
+            acceptedAmount: true,
+            currency: true,
             practitioner: { select: { firstName: true, lastName: true } },
           },
         },
