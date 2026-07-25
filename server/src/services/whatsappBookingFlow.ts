@@ -17,6 +17,7 @@ import {
   normalizeDateFromTurkishInput,
   WHATSAPP_ASSISTANT_TIME_ZONE,
 } from '../utils/whatsappDate.js';
+import { redactPhone, summarizeTextForLog } from '../utils/logRedaction.js';
 
 export type BookingServiceOption = {
   id: string;
@@ -413,7 +414,7 @@ export const handleAwaitingServiceStep = async ({
       : null;
 
   console.log('[whatsapp-assistant] route-handler', {
-    phone,
+    phone: redactPhone(phone),
     handler: 'awaiting_service-selection',
     extractedServiceNumber,
     matchedServiceName: selectedService?.name ?? null,
@@ -750,7 +751,7 @@ export const handleAwaitingTimeStep = async ({
   let selectedSlot = selectedSlotIndex >= 0 ? availableSlots[selectedSlotIndex] : null;
 
   console.log('[whatsapp-assistant] route-handler', {
-    phone,
+    phone: redactPhone(phone),
     handler: 'awaiting_time-selection',
     extractedTime: slotMatch.extractedTime,
     matchedPractitioner: selectedSlot?.practitionerName ?? (slotMatch.matches.length === 1 ? slotMatch.matches[0].slot.practitionerName : null),
@@ -808,8 +809,8 @@ export const handleAwaitingTimeStep = async ({
       .filter(item => item.slot.localStartTime === explicitRequestedTime);
 
     console.log('[whatsapp-assistant] time-request', {
-      phone,
-      text,
+      phone: redactPhone(phone),
+      text: summarizeTextForLog(text),
       type: 'exact_time',
       requestedTime: explicitRequestedTime,
       totalAvailableSlots: availableSlots.length,
@@ -861,8 +862,8 @@ export const handleAwaitingTimeStep = async ({
     const shownSlots = filteredSlots.slice(0, 8);
 
     console.log('[whatsapp-assistant] time-request', {
-      phone,
-      text,
+      phone: redactPhone(phone),
+      text: summarizeTextForLog(text),
       type: 'time_range',
       requestedStartTime: minutesToTime(rangeStartMinutes),
       requestedEndTime: minutesToTime(rangeEndMinutes),
@@ -893,8 +894,8 @@ export const handleAwaitingTimeStep = async ({
     const filteredSlots = filterSlotsByTimeThreshold(availableSlots, explicitTimeThreshold);
     const shownSlots = filteredSlots.slice(0, 8);
     console.log('[whatsapp-assistant] time-request', {
-      phone,
-      text,
+      phone: redactPhone(phone),
+      text: summarizeTextForLog(text),
       type: 'after_time',
       requestedTime: minutesToTime(explicitTimeThreshold),
       totalAvailableSlots: availableSlots.length,
@@ -924,8 +925,8 @@ export const handleAwaitingTimeStep = async ({
     const filteredSlots = filterSlotsByTimePreference(availableSlots, preference);
     const shownSlots = filteredSlots.slice(0, 8);
     console.log('[whatsapp-assistant] time-request', {
-      phone,
-      text,
+      phone: redactPhone(phone),
+      text: summarizeTextForLog(text),
       type: 'preference',
       requestedTime: preference,
       totalAvailableSlots: availableSlots.length,
