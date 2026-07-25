@@ -79,7 +79,7 @@ Note: the Instagram `DELETE` assignment route is reachable by `CLINIC_MANAGER` (
 |---|---|---|---|
 | OWNER | true | Organization-wide (intentional) | Organization-wide — correct |
 | ORG_ADMIN | true | Organization-wide (intentional) | Organization-wide — correct |
-| CLINIC_MANAGER | **false** (canonical definition, `roles.ts:11-12,57-61`: "admin + canAccessAllClinics=false → CLINIC_MANAGER") | Restricted to `allowedClinicIds` (own branch(es) only) — `roles.ts:271-272,213-214,222-224` document this intent explicitly for related features | **Organization-wide** on 9 of the 15 WhatsApp routes and 6 of the 11 Instagram routes listed above — confirmed gap |
+| CLINIC_MANAGER | **false** (canonical definition, `roles.ts:11-12,57-61`: "admin + canAccessAllClinics=false → CLINIC_MANAGER") | Restricted to `allowedClinicIds` (own branch(es) only) — `roles.ts:271-272,213-214,222-224` document this intent explicitly for related features | **Organization-wide** on 7 of the 15 WhatsApp routes and 6 of the 11 Instagram routes listed above (13 affected routes total) — confirmed gap |
 | RECEPTIONIST | false | No connection-management access | Blocked at `authorize()` — not in role list on any inspected route |
 | DENTIST | false | No connection-management access | Blocked at `authorize()` |
 | BILLING | false | No connection-management access | Blocked at `authorize()` |
