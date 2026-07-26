@@ -11,15 +11,17 @@
 
 ## 1. Executive conclusion
 
-The KVKK/GDPR remediation program has produced a genuinely large body of correct, tested, and in several cases production-verified technical control work: tenant/clinic scoping, patient export/anonymization, WhatsApp/Instagram consent gating, the KVKK-HIGH-008 kill-switch, and R-061's authenticated production verification are all real and hold up under direct source inspection. However, **this reconciliation finds the program is not technically complete and is not ready to declare "production evidence current."** Three findings drive that conclusion:
+*Correction note (2026-07-26, same-day): the initial version of this report concluded that no production-deployment evidence existed for PR #231–#234/#237 because no standalone repository evidence file had been committed for them. During this reconciliation task, the operator supplied direct production-deployment evidence for both the pre-#237 bundle and PR #237 itself. That evidence is recorded in §15 and the appendix below, and is labeled **OPERATOR-SUPPLIED PRODUCTION EVIDENCE** throughout — it was supplied verbally/in-task on 2026-07-26 and had not yet been committed as a standalone repository evidence file at the time of the original pass. Absence of a repository file is not equivalent to absence of evidence; this correction distinguishes the two. The paragraphs below reflect the corrected position.*
 
-1. **Production-deployment evidence has not kept pace with `main`.** The most recent evidence document anywhere in the repository that records an operator-confirmed production HEAD is commit `db53f37` — **22 commits behind** the audited SHA. Five merged, KVKK-relevant PRs (#231, #232, #233, #234, #237) have **no production-deployment or smoke-verification evidence at all**, including PR #237, whose production-verified status this task's own brief asserted as an established fact. That assertion could not be substantiated by any document in the repository and is treated in this report as **unverified**, not confirmed.
+The KVKK/GDPR remediation program has produced a genuinely large body of correct, tested, and in several cases production-verified technical control work: tenant/clinic scoping, patient export/anonymization, WhatsApp/Instagram consent gating, the KVKK-HIGH-008 kill-switch, R-061's authenticated production verification, and — per operator-supplied evidence recorded in this pass — the deployment of PRs #231–#234 and the full deployment plus behavioral verification of PR #237, are all real and hold up under direct source inspection and/or operator testimony. However, **this reconciliation still finds the program is not technically complete.** The findings that drive that conclusion:
+
+1. **Repository evidence had not kept pace with `main`, and this is now partially corrected.** Before this pass, no standalone repository evidence document existed recording deployment of PR #231–#234/#237. The operator has now supplied that evidence directly (§15, Appendix). PR #237 is production-deployed and behaviorally verified (`CLOSED_VERIFIED`). PR #231/#234 are production-deployed with a later-observed behavioral effect (redacted logs), also `CLOSED_VERIFIED`. PR #232 (H-2) and PR #233 (H-4) are confirmed **deployed** but still lack a direct authenticated-production behavioral smoke test of their specific access-control effect (a real cross-branch-denial call for H-2; a real BILLING-role response inspection for H-4) — these remain `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`, not "not deployed." This operator-supplied evidence has still not been committed to the repository as a standalone file — that remains an open documentation task (§19).
 2. **A new, previously untracked logging-privacy gap is confirmed by direct source read**: the global HTTP request logger logs patient/clinic UUIDs embedded in route paths and query strings without redaction. This is real, at this SHA, and was not caught by the most recent (2026-07-24) code-gap audit's own logging review.
-3. **Several legally-gating and infrastructure-gating items remain open and are self-documented as open**: no DPA/subprocessor list, no breach-notification plan, no restore rehearsal ever executed, and no backup coverage for attachments/imaging files at all (only PostgreSQL is backed up, on the same single host, with no offsite copy).
+3. **Several legally-gating and infrastructure-gating items remain open and are self-documented as open**: no DPA/subprocessor list, no breach-notification plan, no restore rehearsal ever executed, and no backup coverage for attachments/imaging files at all (only PostgreSQL is backed up, on the same single host, with no offsite copy). R-046 also remains open.
 
 Two governance trackers (`LAUNCH_GATES.md`, 127 commits stale; `NORAMEDI_MASTER_TRACKER.md`/`RISK_REGISTER.md`, un-reconciled for the last 5 merged PRs) need a documentation-only reconciliation pass before they can be relied on as current state. This report **does not** perform that reconciliation itself — per task scope, tracker files were not edited.
 
-**Final verdict: `KVKK_NOT_COMPLETE_BLOCKERS_REMAIN`.** See §21.
+**Final verdict: `KVKK_NOT_COMPLETE_BLOCKERS_REMAIN`.** See §21. Removing the false "not deployed" blocker does not change the verdict — it changes *why* the verdict holds.
 
 ---
 
@@ -35,10 +37,12 @@ Two governance trackers (`LAUNCH_GATES.md`, 127 commits stale; `NORAMEDI_MASTER_
 | Includes PR #231 (WhatsApp raw phone/message redaction) | Yes (`26411de`) |
 | Includes KVKK-HIGH-006 batches 1–4 | Yes |
 | Includes KVKK-HIGH-008 + F1 kill switch + R-061 closure chain | Yes |
-| **Last operator-confirmed production HEAD in any evidence document** | `db53f37` — **22 commits behind audited SHA** |
-| Production deployment/smoke evidence for #231, #232, #233, #234, #237 | **None found anywhere in the repository** |
+| **Last operator-confirmed production HEAD recorded in a standalone repository evidence file** | `db53f37` — 22 commits behind audited SHA |
+| **Last operator-confirmed production HEAD recorded by this task (operator-supplied, not yet a standalone repository file)** | `f6677f47228c0b06593068f56b66b74ab58692ca` — **exact match to audited SHA** (see §15, Appendix) |
+| Production deployment evidence for #231, #232, #233, #234 | **OPERATOR-SUPPLIED**: deployed as the `f1cb150` bundle, confirmed production HEAD, clean typecheck, focused test suites passed, PM2/health clean, no new application errors post-deploy |
+| Production deployment + behavioral evidence for #237 | **OPERATOR-SUPPLIED**: deployed at exact `f6677f4`, PM2/health clean, three live behavioral smokes passed, log redaction observed |
 
-This gap — code merged to `main` with no corresponding production-deployment record — is itself a recognized, named, *recurring* risk in this program's own tracker (`RISK_REGISTER.md` R-042, "documentation self-reference lag vs. git/GitHub truth"). This audit reconfirms R-042 has recurred again for this exact batch of commits.
+Before this task, code merged to `main` with no corresponding *repository-committed* production-deployment record was a recognized, named, recurring risk in this program's own tracker (`RISK_REGISTER.md` R-042, "documentation self-reference lag vs. git/GitHub truth"). That pattern held for the repository as inspected at the start of this task. It is now **partially closed** by the operator-supplied evidence recorded in §15 — the deployments themselves are confirmed — but R-042 remains technically live until that evidence is committed as a standalone repository file (§19, item 1).
 
 ---
 
@@ -73,8 +77,9 @@ This gap — code merged to `main` with no corresponding production-deployment r
 | Retention cleanup job — code correctness | Registered, cron-scheduled, dry-run supported, env kill switch, `PlatformSetting` runtime toggle, excludes AuditLog/ActivityLog | `server/src/jobs/dataRetentionCleanupJob.ts` |
 | WhatsApp/Instagram channel consent gate | `ChannelConsentLog`, version-aware, checked before every booking/contact mutation, parity across Evolution/Meta/Instagram | `server/src/services/channelConsentGate.ts` |
 | Shared/family phone disambiguation | Never auto-links ambiguous phone matches; prompts for selection | `metaWhatsAppAiProcessor.ts:704-751` |
-| PR #234 raw message log redaction | Confirmed ancestor of HEAD; shared `logRedaction.ts` utility applied | `server/src/utils/logRedaction.ts:9-17` |
-| PR #237 post-booking new-appointment + safe cancellation matching | Confirmed at HEAD; 963 new lines of test coverage | `metaWhatsAppAiProcessor.ts:2400-2445`, `326-347` |
+| PR #231 raw WhatsApp phone log redaction | Deployed in `f1cb150` bundle (operator-supplied); phone-suffix redaction later behaviorally observed in production logs under `f6677f4` | `server/src/utils/logRedaction.ts` |
+| PR #234 raw message log redaction (booking-flow) | Confirmed ancestor of HEAD; deployed in `f1cb150` bundle (operator-supplied); shared `logRedaction.ts` utility applied; no raw inbound content observed in production logs under `f6677f4` | `server/src/utils/logRedaction.ts:9-17` |
+| PR #237 post-booking new-appointment + safe cancellation matching | Confirmed at HEAD; 963 new lines of test coverage; **production-deployed and behaviorally verified** — new-booking service list, non-cancellation of "randevu sistemi nasıl çalışıyor", and human-handoff intent all observed live (operator-supplied, §15/Appendix) | `metaWhatsAppAiProcessor.ts:2400-2445`, `326-347` |
 | Fallback behavior when AI unavailable | Deterministic rule-based fallback; AI is optional, not mandatory, for booking flow | `googleAiStudio.ts:127-130`, `whatsappConversationAgent.ts:259-314` |
 | AI prompt/response body logging | Not logged; only metadata fields logged | `routes/whatsapp.ts:973-981` |
 | R-061 (KVKK-HIGH-008 kill-switch verification) | Full authenticated production chain executed and passed 2026-07-24 | §9 below |
@@ -87,14 +92,13 @@ This gap — code merged to `main` with no corresponding production-deployment r
 | Control | Code status | Why unverified |
 |---|---|---|
 | KVKK-HIGH-006 batches 1–4 (financial/messaging/default-clinic scope) | Code CLOSED_VERIFIED, 46+648+31+275 tests | R-071 closure is **self-proposed**, not externally confirmed (`RISK_REGISTER.md` correction 2026-07-25) |
-| H-2 cross-branch messaging scope fix (PR #232) | Merged, `691`-line new test file | No post-merge production-verification document exists; not reflected in `RISK_REGISTER.md`/`NORAMEDI_MASTER_TRACKER.md` |
-| H-4 BILLING payment field scope fix (PR #233) | Merged, `356`-line new test file | Same as above — no production verification doc, not in risk register |
+| H-2 cross-branch messaging scope fix (PR #232) | Merged, `691`-line new test file, **deployed** in `f1cb150` bundle (operator-supplied evidence) | Deployment is confirmed; no direct authenticated-production HTTP behavioral smoke (a real cross-branch-denial call against a restricted `CLINIC_MANAGER`) exists — code effect not independently observed live. Not reflected in `RISK_REGISTER.md`/`NORAMEDI_MASTER_TRACKER.md` |
+| H-4 BILLING payment field scope fix (PR #233) | Merged, `356`-line new test file, **deployed** in `f1cb150` bundle (operator-supplied evidence) | Deployment is confirmed; no direct authenticated-production BILLING-role response inspection exists — code effect not independently observed live. Not reflected in risk register |
 | CLINIC_MANAGER scope pattern (general) | Sound pattern, applied broadly | Not audited route-by-route for every CLINIC_MANAGER-reachable endpoint in this pass |
 | S3-compatible object storage code path | Real AWS SDK v3 implementation exists | Production confirmed running local-disk-only; S3 path unexercised |
 | DICOM/imaging storage | Uses same `fileStorage.ts` abstraction as attachments | Shares attachments' complete lack of backup coverage |
 | Data retention job — production runtime state | Code correct | `privacy.dataRetention.runtimeEnabled` production value has **no evidence anywhere** — unknown whether cleanup is actually running in production |
 | Webhook payload retention (90-day default) | Code correct, channel-agnostic cleanup | Same runtime-toggle uncertainty as above |
-| PR #231/#234/#237 in production | Merged to `main`, tested | **No deployment or smoke-verification evidence exists** (see §15) |
 
 ---
 
@@ -251,7 +255,20 @@ No document makes an affirmative, evidenced claim of Turkish (or any specific co
 
 ## 15. Production evidence reconciliation
 
-Cross-checking every evidence document's cited SHA against the audited HEAD via `git merge-base --is-ancestor` confirmed **all are true ancestors — no fork or divergence** — but several are substantially stale:
+### 15.1 Evidence provenance model
+
+This section corrects the initial pass, which treated "no standalone repository evidence file found" as equivalent to "no evidence exists." Those are different claims. This reconciliation now distinguishes four evidence tiers:
+
+1. **Repository-contained evidence** — a standalone document committed under `docs/program/evidence/` (or equivalent) recording a specific verification. This is the strongest, most durable tier, but its *absence* only means "not yet written down in the repository," not "did not happen."
+2. **Externally supplied operator production evidence** — evidence reported directly by the system operator (the person with production/PM2/SSH access) during this task, describing commands run and outputs observed against the live system. This is treated as genuine evidence of what occurred, attributed to the operator, and labeled **OPERATOR-SUPPLIED PRODUCTION EVIDENCE** everywhere it is used. It was supplied during this reconciliation task and had **not yet been committed as a standalone repository evidence file** at the time of this correction (§19 recommends that follow-up).
+3. **Independently reproducible evidence** — a subset of the above that any operator with equivalent access could re-run and re-observe today (e.g., `git rev-parse HEAD`, PM2 status, a health-check curl, a live WhatsApp conversation smoke). This tier is not weaker than repository evidence in *substance*, only in *durability* until it is written down.
+4. **Missing evidence** — no operator report and no repository document exist for a specific control's behavioral effect. This is the only tier this report treats as "not verified."
+
+Operator-supplied evidence is **not** independently re-executed or witnessed by this task (this remains a read-only reconciliation, no production system was queried by this task itself) — it is recorded as testimony from the accountable operator, distinct from, and not to be confused with, this task's own direct source-code findings.
+
+### 15.2 Repository-document staleness (unchanged from the original pass)
+
+Cross-checking every *repository* evidence document's cited SHA against the audited HEAD via `git merge-base --is-ancestor` confirmed **all are true ancestors — no fork or divergence** — but several are substantially stale:
 
 | Document | Cited SHA | Commits behind HEAD |
 |---|---|---|
@@ -260,14 +277,32 @@ Cross-checking every evidence document's cited SHA against the audited HEAD via 
 | `KVKK-HIGH-006-PRODUCTION_DEPLOYMENT_AND_SMOKE_VERIFICATION.md` | `1aa741d` | 52 |
 | `PILOT_CUSTOMER_ONBOARDING_CHECKLIST.md` / acceptance criteria / rollback playbook | `3b4ec9d` | 50 |
 | `KVKK_REMAINING_CODE_GAP_AUDIT_20260724.md` | `a290b6f` | 19 |
-| R-061 closure base / latest confirmed production-runtime HEAD observation anywhere | `db53f37` | **22** |
+| Latest production-runtime HEAD recorded in a *repository* document | `db53f37` | 22 |
 | H-1 patient-import production-verified SHA | `5f27ab1` | 14 |
 
-**No evidence document anywhere records an operator-confirmed production HEAD later than `db53f37`.** This means there is **no confirmation that PR #231, #232, #233, #234, or #237 have ever been deployed to production**, let alone smoke-verified — they exist only as merged, tested `main` commits.
+No *repository* evidence document records an operator-confirmed production HEAD later than `db53f37`. That fact is still true and still worth fixing (§19). It does **not**, however, mean the deployments themselves did not happen — see §15.3.
 
-**Regarding this task's own brief**, which asserted PR #237's production verification as an established fact (API/worker online, health OK, new-booking service-list PASS, "randevu sistemi nasıl çalışıyor" correctly not treated as cancellation, human handoff PASS, phone-suffix redaction PASS): **this audit could not substantiate that claim.** PR #237 is a real, well-tested code change (963 new test lines across two files) whose behavior matches the described checks *in its test suite* — but **zero of the six production checks the brief described has any corresponding evidence document in the repository.** This is reported here as a **production-evidence gap**, not confirmed or denied as a production fact; if the checks were in fact run manually and are simply undocumented, the correct remediation is to write that evidence document, not to assume this report's absence-of-evidence proves failure.
+### 15.3 Operator-supplied production evidence (corrected finding)
 
-`NORAMEDI_MASTER_TRACKER.md` and `RISK_REGISTER.md` have zero entries referencing PR #231–234 or #237 (grep-confirmed) — the G-1 (raw phone logging), H-2 (cross-branch messaging), and H-4 (BILLING field exposure) findings that these PRs apparently remediate have no corresponding tracker update reflecting the fix.
+During this reconciliation task, the operator supplied direct production evidence for two deployments, reproduced in full in the Appendix:
+
+**Bundle deployment (PRs #231, #232, #233, #234), baseline `f1cb150fa5ad80d127004303a306aa559012f321`.** Verified via `git merge-base --is-ancestor` that this SHA is one commit before `f6677f4` (only PR #237 sits between them), and that #231 (`26411de`), #232 (`83f50fa`), #233 (`d34348d`), and #234 (`f1cb150` itself) are all ancestors of it — the bundle's contents match the operator's description exactly. Operator-reported production evidence for this deployment: repository HEAD matched `f1cb150...`; `npm ci` succeeded; Prisma Client generated; migrations up to date; typecheck passed; focused WhatsApp/Meta/agent/message-safety/outbound/log-redaction test suites passed; PM2 `noramedi-api` and `noramedi-worker` online; local `/api/health` returned `{"status":"ok"}`; public `https://api.noramedi.com/api/health` returned `{"status":"ok"}`; post-deploy API error-log range contained no new application errors. **This is OPERATOR-SUPPLIED PRODUCTION EVIDENCE that the bundle is deployed.**
+
+**PR #237 deployment, exact SHA `f6677f47228c0b06593068f56b66b74ab58692ca`** (confirmed identical to the audited SHA). Operator-reported: `git rev-parse HEAD` returned the exact SHA; `git status --short` clean; PM2 `noramedi-api` and `noramedi-worker` online with no restart loop; local and public health both `{"status":"ok"}`; a live new-booking-request smoke opened the real service list; "randevu sistemi nasıl çalışıyor" did not enter cancellation; "danışmanla görüşmek istiyorum" produced `detectedIntent: human_handoff`, `responseType: human_handoff`, and a visible handoff confirmation; WhatsApp logs showed `phoneSuffix: '***9141'` with no raw message content in the relevant agent logs; the post-deploy error-log section contained only normal Prisma startup lines (`Loaded Prisma config from prisma.config.ts`, `Prisma schema loaded from prisma/schema.prisma`). **This is OPERATOR-SUPPLIED PRODUCTION EVIDENCE that PR #237 is deployed and behaviorally verified** — full detail in the Appendix.
+
+### 15.4 Corrected PR #231–#237 status table
+
+| PR | Control | Deployment | Behavioral production evidence | Status | Evidence tier |
+|---|---|---|---|---|---|
+| #231 | Raw WhatsApp phone log redaction | Deployed (`f1cb150` bundle) | Phone-suffix redaction (`***9141`) observed live under `f6677f4` | `CLOSED_VERIFIED` | Operator-supplied |
+| #232 | H-2 cross-branch messaging scope | Deployed (`f1cb150` bundle) | No direct authenticated cross-branch-denial smoke executed | `IMPLEMENTED_NOT_PRODUCTION_VERIFIED` | Operator-supplied (deployment only) |
+| #233 | H-4 BILLING payment field narrowing | Deployed (`f1cb150` bundle) | No direct authenticated BILLING-response-inspection smoke executed | `IMPLEMENTED_NOT_PRODUCTION_VERIFIED` | Operator-supplied (deployment only) |
+| #234 | Booking-flow raw phone/message-text log redaction | Deployed (`f1cb150` bundle) | No raw inbound content observed in relevant logs under `f6677f4` | `CLOSED_VERIFIED` | Operator-supplied |
+| #237 | Post-booking new-appointment + safe cancellation matching + human handoff | Deployed at exact `f6677f4` | New-booking, non-cancellation, and human-handoff intents all observed live; log redaction confirmed; PM2/health clean; no new errors | `CLOSED_VERIFIED` | Operator-supplied |
+
+**Correction to the original finding:** it is **false** to state that no production-deployment or smoke-verification evidence exists for PR #231–#234/#237. Repository-committed evidence does not yet exist for these deployments (a real, standing gap — see §19), but operator-supplied evidence, recorded above and cross-checked against git ancestry by this task, confirms all five PRs are deployed. Two of the five controls (#232/H-2, #233/H-4) remain without a *direct, control-specific* authenticated-production behavioral check and are classified `IMPLEMENTED_NOT_PRODUCTION_VERIFIED` accordingly — this is a narrower and more accurate gap than "not deployed."
+
+`NORAMEDI_MASTER_TRACKER.md` and `RISK_REGISTER.md` still have zero entries referencing PR #231–234 or #237 (grep-confirmed, unchanged by this correction) — the G-1 (raw phone logging), H-2 (cross-branch messaging), and H-4 (BILLING field exposure) findings that these PRs remediate have no corresponding tracker update reflecting the fix, independent of whether the fix is deployed.
 
 ---
 
@@ -276,17 +311,24 @@ Cross-checking every evidence document's cited SHA against the audited HEAD via 
 These items are named, directly or by clear implication, as pilot/onboarding blockers by the program's own governance documents (`LAUNCH_GATES.md` §2, `PILOT_CUSTOMER_ONBOARDING_CHECKLIST.md` §5 go/no-go):
 
 1. **R-046** (KVKK-HIGH-007 migration deployed without independently-verified rollback/tenant-impact evidence) — still `OPEN`.
-2. **Restore rehearsal never executed** (§14) — named G1 blocker.
-3. **DPA/subprocessor list and breach-notification plan** — required before real patient data is processed per `LAUNCH_GATES.md` §H; neither exists.
-4. **Production-deployment confirmation for #231–234/#237** — until an operator-confirmed production HEAD later than `db53f37` exists, the program cannot assert these KVKK-relevant fixes are actually live for any onboarded clinic.
-5. **G1 evaluation itself has never been performed** (`NOT_EVALUATED` at every governance document's current state) — a formal G1 pass is a prerequisite the task brief's own audit domains assume, but no document shows it has run.
-6. **Pilot incident/rollback contact roster is entirely template placeholders** (`[to be named]`) — explicitly self-flagged as a go/no-go blocker by its own document.
+2. **Restore rehearsal never executed** (§14) — named G1 blocker. Severity unchanged by this correction.
+3. **DPA/subprocessor list and breach-notification plan** — required before real patient data is processed per `LAUNCH_GATES.md` §H; neither exists. Severity unchanged.
+4. **No offsite/resilient backup strategy and no attachment/imaging backup coverage** — backup is PostgreSQL-only, same host, no offsite copy (§14). Severity unchanged.
+5. **HTTP request-log privacy gap** (§11) — newly found this pass, unaffected by the deployment correction.
+6. **AI prompt privacy gap** (§13) — newly found this pass, unaffected by the deployment correction.
+7. **Production retention dry-run/effective-policy evidence missing** — `privacy.dataRetention.runtimeEnabled`'s production value is still undocumented anywhere, repository or operator-supplied.
+8. **Infrastructure encryption/residency evidence missing** (§14) — VPS location, disk encryption, DB in-transit encryption all unconfirmed.
+9. **G1 evaluation itself has never been performed** (`NOT_EVALUATED` at every governance document's current state) — a formal G1 pass is a prerequisite the task brief's own audit domains assume, but no document shows it has run.
+10. **Pilot incident/rollback contact roster is entirely template placeholders** (`[to be named]`) — explicitly self-flagged as a go/no-go blocker by its own document.
+
+**Removed as a false blocker by this correction:** "PR #231–#234/#237 not deployed to production." Operator-supplied evidence (§15.3) confirms all five are deployed; PR #237, #231, and #234 are additionally behaviorally verified. What remains open for #232 (H-2) and #233 (H-4) is narrower — a direct, control-specific authenticated-production behavioral smoke — and is tracked as `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`, a CONDITIONAL item (§17), not a BLOCKER. Removing this false blocker does not reduce the severity of any other item above — each remains open on its own, independently documented evidence.
 
 ---
 
 ## 17. Conditional / non-blocking items
 
-- KVKK-HIGH-006 batches 1–4 and H-2/H-4 fixes: code-complete and well-tested; conditional on production-deployment confirmation and tracker reconciliation, not on further code work.
+- KVKK-HIGH-006 batches 1–4: code-complete, well-tested, and R-071 closure-proposed; conditional on external confirmation and tracker reconciliation, not on further code work.
+- H-2 (PR #232) and H-4 (PR #233): code-complete, well-tested, and **now confirmed deployed** (operator-supplied evidence, §15.3); conditional only on a direct, control-specific authenticated-production behavioral smoke and tracker reconciliation — no longer conditional on deployment itself.
 - CLINIC_MANAGER route-by-route universality: sound pattern, not exhaustively re-audited in this pass — conditional follow-up, not urgent.
 - AuditLog historical-PII-retention question (pre-anonymization AuditLog rows may retain original PII): deliberate design, legal-review item, non-blocking.
 - Imaging/DICOM and attachment indefinite retention: deliberate, conservative, non-blocking pending legal retention-period decision.
@@ -313,16 +355,17 @@ All of the above are **documentation-reconciliation items only** — none requir
 
 ## 19. Prioritized next-task sequence
 
-1. **`PRODUCTION-DEPLOYMENT-CONFIRMATION-001`** (DEVOPS, CRITICAL) — confirm and document whether PR #231/#232/#233/#234/#237 are deployed to production; record actual production HEAD.
-2. **`HTTP-LOG-PRIVACY-HARDENING-001`** (CODE, HIGH) — redact patient/clinic UUIDs and identifier query params from the global HTTP logger; verify IP-field handling.
-3. **`AI-PROMPT-REDACTION-GAP-001`** (CODE, HIGH) — apply the documented redaction invariant to the current/latest message and full customer name on both active Gemini call paths.
-4. **`BACKUP-RESTORE-REHEARSAL-001`** (DEVOPS, HIGH) — execute and document the first-ever restore rehearsal; inspect the external backup script for encryption behavior.
-5. **`FILE-BACKUP-COVERAGE-001`** (DEVOPS, HIGH) — establish backup coverage for attachments/imaging files; evaluate offsite copy.
-6. **DPA/subprocessor list and breach-notification plan** (LEGAL, HIGH) — counsel-drafted documents, blocking per `LAUNCH_GATES.md` §H.
-7. **`INFRA-ENCRYPTION-RESIDENCY-EVIDENCE-001`** (DEVOPS, HIGH) — obtain and document actual VPS location, disk encryption, and DB in-transit encryption evidence.
-8. **Tracker/gate documentation reconciliation** (DOCUMENTATION, MEDIUM) — update `LAUNCH_GATES.md` (R-061 closure), `NORAMEDI_MASTER_TRACKER.md`/`RISK_REGISTER.md` (PRs #231–237), doc 55 header. Separate task, not performed here.
-9. **`RETENTION-MANUAL-RUN-AUDIT-001`** (CODE, MEDIUM) — add `PlatformAdminAuditEvent` write and runtime-toggle consistency check to the manual live-run endpoint.
-10. **G1 formal evaluation** (PLATFORM_ADMIN, MEDIUM) — once items 1–7 are addressed, perform and record the first actual G1 controlled-pilot gate evaluation.
+1. **`PRODUCTION-DEPLOYMENT-EVIDENCE-COMMIT-001`** (DOCUMENTATION, HIGH) — write the operator-supplied evidence recorded in §15.3/Appendix of this report into a standalone `docs/program/evidence/` file (bundle deployment `f1cb150` + PR #237 deployment `f6677f4`), so it is durable, repository-contained evidence rather than task-supplied testimony. This is a transcription task, not new verification.
+2. **`H2-H4-PRODUCTION-BEHAVIORAL-SMOKE-001`** (DEVOPS/CODE, HIGH) — execute and document a direct, authenticated-production behavioral smoke for H-2 (cross-branch messaging denial) and H-4 (BILLING response field narrowing); deployment is already confirmed, only the control-specific live behavior remains unverified.
+3. **`HTTP-LOG-PRIVACY-HARDENING-001`** (CODE, HIGH) — redact patient/clinic UUIDs and identifier query params from the global HTTP logger; verify IP-field handling.
+4. **`AI-PROMPT-REDACTION-GAP-001`** (CODE, HIGH) — apply the documented redaction invariant to the current/latest message and full customer name on both active Gemini call paths.
+5. **`BACKUP-RESTORE-REHEARSAL-001`** (DEVOPS, HIGH) — execute and document the first-ever restore rehearsal; inspect the external backup script for encryption behavior.
+6. **`FILE-BACKUP-COVERAGE-001`** (DEVOPS, HIGH) — establish backup coverage for attachments/imaging files; evaluate offsite copy.
+7. **DPA/subprocessor list and breach-notification plan** (LEGAL, HIGH) — counsel-drafted documents, blocking per `LAUNCH_GATES.md` §H.
+8. **`INFRA-ENCRYPTION-RESIDENCY-EVIDENCE-001`** (DEVOPS, HIGH) — obtain and document actual VPS location, disk encryption, and DB in-transit encryption evidence.
+9. **Tracker/gate documentation reconciliation** (DOCUMENTATION, MEDIUM) — update `LAUNCH_GATES.md` (R-061 closure), `NORAMEDI_MASTER_TRACKER.md`/`RISK_REGISTER.md` (PRs #231–237 deployment + fix status), doc 55 header. Separate task, not performed here.
+10. **`RETENTION-MANUAL-RUN-AUDIT-001`** (CODE, MEDIUM) — add `PlatformAdminAuditEvent` write and runtime-toggle consistency check to the manual live-run endpoint.
+11. **G1 formal evaluation** (PLATFORM_ADMIN, MEDIUM) — once items 1–8 are addressed, perform and record the first actual G1 controlled-pilot gate evaluation.
 
 ---
 
@@ -332,7 +375,9 @@ This report does **not** claim:
 - That NoraMedi/DisKlinikCRM is "fully KVKK compliant." Technical completion is not legal-compliance approval.
 - That disk, database, or backup encryption exists in production — the honest state is unknown/unverified, not "presumed absent" or "presumed present."
 - That Turkish (or any specific) data residency is achieved — no evidence supports or refutes this.
-- That PR #231, #232, #233, #234, or #237 have been deployed to or verified in production — no evidence exists either way; this report explicitly declines to assume the task brief's stated production-verification checks occurred.
+- That PR #232 (H-2) or #233 (H-4) have had their specific access-control behavior independently exercised through an authenticated production HTTP call — deployment is operator-confirmed, but that specific behavioral check has not been run or reported.
+- That the operator-supplied evidence in §15.3/Appendix has been independently re-executed, witnessed, or verified by this task — it is recorded as operator testimony, cross-checked only against git ancestry (SHA/commit relationships), not against a live system queried by this task.
+- That the operator-supplied evidence has been committed to the repository as a standalone, durable evidence file — it has not, as of this correction; §19 item 1 tracks that as an open task.
 - That R-046, the restore-rehearsal gap, or the DPA/breach-notification gaps are resolved.
 - That this audit's code-path coverage was exhaustive — it was scoped to the permitted source/doc roots per task instruction, plus a small number of directly-imported adjacent files necessary to answer specific questions (each such file is named in the underlying research and cited above).
 - That any risk, gate, or tracker entry has been closed by this task — per scope, no tracker file was edited.
@@ -343,4 +388,36 @@ This report does **not** claim:
 
 **`KVKK_NOT_COMPLETE_BLOCKERS_REMAIN`**
 
-The program has real, substantial, well-tested technical control work, and two of the task's most scrutinized items (R-061, the KVKK-HIGH-008 kill switch) are genuinely closed with production evidence. But onboarding-blocking gaps remain open and undisputed by the program's own documents: no restore rehearsal ever performed, no file-tree backup coverage, no DPA/subprocessor list, no breach-notification plan, R-046 still open, and — newly surfaced by this reconciliation — no confirmed production deployment for the five most recently merged KVKK-relevant PRs, plus two genuine new code gaps (HTTP log privacy, AI prompt redaction). This is not a legal-compliance judgment; it is a technical-readiness determination, and it does not support declaring the program complete or customer-ready at this time.
+*(Unchanged by this correction — the correction removes a false blocker, it does not manufacture a more favorable verdict.)*
+
+The program has real, substantial, well-tested technical control work, and three of the task's most scrutinized items — R-061, the KVKK-HIGH-008 kill switch, and (per this correction) PR #237's production deployment and behavior — are genuinely closed with production evidence, the latter now via operator-supplied testimony recorded in §15.3/Appendix rather than a repository document. PR #231 and #234 are likewise closed-verified on the same basis. What the correction changes is *why* the verdict holds, not *whether* it holds: onboarding-blocking gaps remain open and undisputed by the program's own documents — no restore rehearsal ever performed, no file-tree backup coverage, no DPA/subprocessor list, no breach-notification plan, R-046 still open, no production retention-policy runtime-state evidence, no infrastructure encryption/residency evidence — plus two genuine new code gaps found by direct source read (HTTP log privacy, AI prompt redaction) and two controls (H-2/#232, H-4/#233) that are deployed but still lack a direct, control-specific authenticated-production behavioral check. This is not a legal-compliance judgment; it is a technical-readiness determination, and it does not support declaring the program complete or customer-ready at this time.
+
+---
+
+## Appendix: Operator-Supplied Production Verification — 2026-07-26
+
+**Provenance:** OPERATOR-SUPPLIED PRODUCTION EVIDENCE. Supplied by the accountable system operator during the KVKK-FINAL-RECONCILIATION-001 task, 2026-07-26. **Not independently re-executed or witnessed by this task** — this reconciliation remains read-only and did not itself query any production system. **Not yet committed as a standalone repository evidence file** at the time of this correction (tracked as `PRODUCTION-DEPLOYMENT-EVIDENCE-COMMIT-001`, §19 item 1). Content below is a sanitized summary only — see redaction note at the end of this appendix.
+
+### A.1 Bundle deployment (PRs #231, #232, #233, #234)
+
+- **Deployed SHA:** `f1cb150fa5ad80d127004303a306aa559012f321` (confirmed by this task, via `git merge-base --is-ancestor`, to be exactly one commit before the audited HEAD, and to include #231/#232/#233/#234 as ancestors).
+- **Deploy-time checks reported:** production repository HEAD matched `f1cb150...`; `npm ci` succeeded; Prisma Client generated; database migrations up to date; TypeScript typecheck passed; focused WhatsApp/Meta/agent/message-safety/outbound/log-redaction test suites passed.
+- **PM2 status:** `noramedi-api` online; `noramedi-worker` online.
+- **Health:** local `/api/health` → `{"status":"ok"}`; public `https://api.noramedi.com/api/health` → `{"status":"ok"}`.
+- **Post-deploy error log:** reviewed range contained no new application errors.
+
+### A.2 PR #237 deployment and behavior verification
+
+- **Deployed SHA:** `f6677f47228c0b06593068f56b66b74ab58692ca` (exact match to the audited SHA — confirmed via `git rev-parse`).
+- **Worktree state:** `git rev-parse HEAD` returned the exact SHA above; `git status --short` was clean.
+- **PM2 status:** `noramedi-api` online; `noramedi-worker` online; no restart loop observed.
+- **Health:** local → `{"status":"ok"}`; public → `{"status":"ok"}`.
+- **New-booking smoke:** a new booking request correctly opened the real, live service list.
+- **Non-cancellation regression smoke:** the generic inquiry "randevu sistemi nasıl çalışıyor" (a how-does-the-appointment-system-work question, not tied to any specific patient) did not enter the cancellation flow.
+- **Human-handoff smoke:** the generic phrase "danışmanla görüşmek istiyorum" (a request to speak with staff) produced `detectedIntent: human_handoff`, `responseType: human_handoff`, and a visible handoff-confirmation response.
+- **Log-redaction observation:** WhatsApp logs used the partially-redacted format `phoneSuffix: '***9141'` (last four digits only, consistent with this codebase's established redaction convention — not a full phone number); no raw WhatsApp message content was present in the relevant agent logs.
+- **Post-deploy error log:** the new section contained only normal Prisma startup lines — `Loaded Prisma config from prisma.config.ts`, `Prisma schema loaded from prisma/schema.prisma` — no application errors.
+
+### A.3 Redaction note
+
+The above is a sanitized summary. It deliberately excludes: full phone numbers, patient names, `patientId`, `clinicId`, IP addresses, cookies, raw message contents, and any screenshots or artifacts that might carry additional personal data. The only phone-related datum retained (`***9141`) is a pre-redacted four-digit suffix in the operator's own report, matching the codebase's existing `redactPhone`/`phoneSuffix` convention used elsewhere in this program's evidence documents.
