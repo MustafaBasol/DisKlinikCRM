@@ -10,9 +10,9 @@
  *
  * Bunun yerine yalnızca operasyonel açıdan gerekli, açıkça izin verilmiş
  * (allowlist) alanlar log'a yazılır: request id, method, route template
- * (veya UUID/identifier'ları temizlenmiş fallback path), status code,
- * response time. Ham request/response nesnesi, header'lar, query, params,
- * body ve IP asla loglanmaz.
+ * (eşleşen bir route yoksa sabit, kullanıcı girdisi taşımayan bir etiket),
+ * status code, response time. Ham request/response nesnesi, header'lar,
+ * query, params, body ve IP asla loglanmaz.
  *
  * Detaylar: docs/program/evidence/HTTP_LOG_PRIVACY_HARDENING_001.md
  */
@@ -26,48 +26,26 @@ export const logger = pino({
   base: undefined, // pid/hostname loglanmasın
 });
 
-const UUID_SEGMENT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const NUMERIC_ID_SEGMENT_RE = /^\d{4,}$/;
-const EMAIL_SEGMENT_RE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
-const OPAQUE_TOKEN_SEGMENT_RE = /^[A-Za-z0-9_-]{20,}$/;
-// +90 555 000 99 99 / +33 6 12 34 56 78 / +905550009999 gibi biçimler:
-// en az 7 basamak, sadece rakam/boşluk/parantez/tire/nokta, opsiyonel baştaki '+'.
-const PHONE_SEGMENT_RE = /^\+?(?:[\d][\s().-]*){7,}$/;
-
-function isIdentifierLikeSegment(segment: string): boolean {
-  // Path segment'i percent-encoded olarak gelmiş olabilir (örn. e-posta
-  // içindeki '@' -> %40, UUID'deki '-' -> %2D); decode edilmiş hali de
-  // kontrol edilmezse encoded bir identifier tespitten kaçabilir.
-  let decoded = segment;
-  try {
-    decoded = decodeURIComponent(segment);
-  } catch {
-    // Bozuk percent-encoding — yalnızca ham segment kontrol edilir.
-  }
-  const candidates = decoded === segment ? [segment] : [segment, decoded];
-  return candidates.some(
-    value =>
-      UUID_SEGMENT_RE.test(value) ||
-      NUMERIC_ID_SEGMENT_RE.test(value) ||
-      EMAIL_SEGMENT_RE.test(value) ||
-      OPAQUE_TOKEN_SEGMENT_RE.test(value) ||
-      PHONE_SEGMENT_RE.test(value),
-  );
-}
-
 /**
- * Route template bulunamadığında kullanılan güvenli fallback: query string
- * ve fragment atılır, path segment'leri tek tek UUID/e-posta/uzun opak
- * token/uzun sayısal id/telefon olup olmadığına bakılarak (percent-encoded
- * hali dahil) `:id` ile değiştirilir.
+ * Route template bulunamadığında (404, route öncesi hata, veya route.path
+ * string olmayan bir değer — array/RegExp) kullanılan güvenli fallback.
+ *
+ * Önceki tasarım, path segment'lerini tek tek bilinen kalıplara (UUID,
+ * e-posta, uzun opak token, uzun sayısal id, telefon) göre sınıflandırıp
+ * yalnızca eşleşenleri `:id` ile değiştiriyordu. Bu yaklaşım prensipte asla
+ * tam olamaz: 4 haneden kısa sayısal id'ler (`/42`), serbest metin/isim
+ * benzeri slug'lar (`/jane-doe`), kısa sır/referans kodları (`/AB123`) gibi
+ * bilinmeyen biçimler her zaman atlatılabilir — çağıran taraf hangi path'in
+ * eşleşmeyeceğini (dolayısıyla hangi ham segmentin log'a düşeceğini)
+ * doğrudan kontrol eder. Sınıflandırma yerine sabit, geri döndürülemez bir
+ * etiket kullanmak bu sızıntı sınıfının tamamını kapatır; eşleşen route'lar
+ * zaten `safeRoute()` içinde ayrı bir daldan, kendi template'iyle loglanır —
+ * bu fallback yalnızca "route eşleşmedi" bilgisini taşır.
  */
-export function sanitizePathFallback(rawPath: string | undefined | null): string {
-  if (!rawPath) return '';
-  const withoutQueryOrFragment = rawPath.split('?')[0].split('#')[0];
-  return withoutQueryOrFragment
-    .split('/')
-    .map(segment => (segment === '' || !isIdentifierLikeSegment(segment) ? segment : ':id'))
-    .join('/');
+export function sanitizePathFallback(
+  _rawPath: string | undefined | null,
+): string {
+  return '/:unmatched';
 }
 
 /**

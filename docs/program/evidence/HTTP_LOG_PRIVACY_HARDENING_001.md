@@ -283,3 +283,108 @@ Regression tests added: `server/src/tests/httpRequestLogPrivacy.test.ts`
 (percent-encoded email/UUID, phone number, malformed encoding). Suite is now
 29 assertions (was 22), all passing; `npm run typecheck` and `git diff
 --check` also re-verified clean.
+
+---
+
+## 11. Second independent review addendum — fallback route redesign (constant label)
+
+A second independent review of this PR (fresh worktree at PR head
+`af7a9b8b38f39297adae4b03086695fcc02ff3e8`) revisited §10's residual
+limitation and determined it was **not acceptable as a permanent design**,
+not merely a low-severity gap: a segment-pattern classifier (§10's
+`isIdentifierLikeSegment`, matching UUID/email/opaque-token/numeric-id/phone
+shapes) can never be exhaustive, and an external caller fully controls which
+unmatched path is sent. Concretely, requests such as `/api/patients/42`
+(short numeric id), `/api/patient/jane-doe` or `/api/patient/Mustafa-Basol`
+(free-text name-like slugs), `/api/reset/my-short-secret` (short secret), and
+`/api/lookup/AB123` (short reference code) all bypassed every regex in the
+old fallback and were logged **verbatim** in the `route` field whenever
+Express produced no matched route template (404s and pre-route failures)
+— the exact production-reachable path this task set out to close.
+
+**Investigation confirming the redesign was safe:**
+
+- `sanitizePathFallback()` has exactly one call site: `safeRoute()`'s
+  no-match branch (`route` is `undefined`, or `route.path` is not a
+  `string` — covers 404s, pre-route errors, and the array/RegExp route-path
+  shapes Express also allows). `safeRoute()` itself has exactly two call
+  sites, both inside `logger.ts`: `logUnhandledError()` and
+  `buildHttpLogger()`'s `customSuccessObject`/`customErrorObject` hooks. No
+  other module in the repository reads the logged `route` field — confirmed
+  by a repo-wide search restricted to direct consumers of that field.
+  (`server/src/middleware/clinicAccess.ts` computes an unrelated,
+  similarly-named `routeTemplate` locally, for a security-signal detector,
+  independent of `logger.ts` and unaffected by this change.)
+- No route in `server/src/routes/*` or `index.ts` is registered with an
+  array or `RegExp` path, so the array/RegExp branch is a defensive
+  guarantee for future routes, not a currently-exercised path today — either
+  way it now also resolves to the constant label instead of falling through
+  to path-segment classification.
+- No operational script, monitoring dashboard, or test (besides the ones in
+  this suite, which are updated in lockstep with this change) depends on the
+  detailed fallback path string. There is no concrete operational dependency
+  that a constant label would break.
+- `baseUrl` is **not** retained in the unmatched-route fallback: the fallback
+  branch of `safeRoute()` never reads `req.baseUrl`, so there is no risk of a
+  partially-matched mount prefix leaking a user-controlled segment. Only the
+  matched-route branch uses `baseUrl`, and only in combination with a
+  confirmed string `route.path` (i.e., a route Express actually resolved) —
+  that behavior is unchanged.
+- `sanitizePathFallback()` no longer inspects its input at all (decoding,
+  regex testing) — it cannot throw on malformed or percent-encoded input,
+  closing that investigation question by construction rather than by
+  additional guarding.
+
+**Fix applied** (`server/src/utils/logger.ts`): `sanitizePathFallback()` no
+longer classifies path segments by pattern. It now unconditionally returns a
+fixed, non-identifying label — `/:unmatched` — regardless of the raw
+path/segments passed in. The five identifier-classification regexes
+(`UUID_SEGMENT_RE`, `NUMERIC_ID_SEGMENT_RE`, `EMAIL_SEGMENT_RE`,
+`OPAQUE_TOKEN_SEGMENT_RE`, `PHONE_SEGMENT_RE`) and the
+`isIdentifierLikeSegment()` helper were removed as dead code — nothing else
+referenced them. `safeRoute()`'s matched-route branch (`baseUrl +
+route.path`) is unchanged: a matched Express route (including mounted
+routers) still logs its normalized template exactly as before.
+
+**Updated residual-limitations status:**
+
+- Matched routes retain their normalized route template (`/api/patients/:id`,
+  `/api/clinics/:clinicId/patients/:patientId`, including mounted-router
+  templates) — unchanged from §3/§10.
+- Unmatched paths — 404s, pre-route failures, and any non-string
+  (array/RegExp) route path — **no longer retain any user-controlled path
+  segment value**. They resolve to the fixed label `/:unmatched`
+  unconditionally. This closes the §10 residual gap: short numeric ids,
+  name-like slugs, short secrets/reference codes, and any other
+  unenumerated identifier shape can no longer be injected into production
+  logs through an unmatched-route path, because no classification is
+  performed at all.
+- The previously-noted inert `REDACT_PATHS` mixed-case header entries are
+  unchanged (still dead code, not a leak, per §10).
+
+Regression tests added/updated in
+`server/src/tests/httpRequestLogPrivacy.test.ts`: the pure-helper section now
+asserts `sanitizePathFallback` returns the constant label for every case in
+§10's residual list plus the full original bypass corpus (UUID, long/short
+numeric id, email, opaque token, phone with and without punctuation,
+percent-encoded identifiers, malformed percent-encoding, name-like slugs,
+short secrets/reference codes, a bare query string) and for `route.path`
+values that are arrays or `RegExp` objects; a matching set of live-server
+(`real Express + real pino-http + real node:http` client) cases in §7.3
+confirms the same for the actual completed/error log line, alongside the
+existing matched-route and mounted-router assertions. Suite is now **44
+assertions** (was 29), all passing.
+
+**Validation re-run** (this worktree, PR head
+`af7a9b8b38f39297adae4b03086695fcc02ff3e8`):
+
+```
+cd server
+npm run typecheck              # clean
+npm run test:http-log-privacy  # 44 passed, 0 failed
+git diff --check               # clean
+```
+
+**Status remains `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`.** Production
+verification (real production log volume inspection) remains explicitly out
+of scope for this task.

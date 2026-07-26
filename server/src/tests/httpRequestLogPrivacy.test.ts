@@ -238,34 +238,44 @@ async function waitForLineCount(lines: string[], countBefore: number, expectedNe
 async function main() {
   section('safeRoute / sanitizePathFallback — pure helper tests');
 
-  await test('sanitizePathFallback redacts a UUID path segment', () => {
-    const out = sanitizePathFallback(`/api/unregistered/${SENTINEL.routeUuid}/edit`);
-    assert.ok(!out.includes(SENTINEL.routeUuid), `fallback still contains raw UUID: ${out}`);
-    assert.equal(out, '/api/unregistered/:id/edit');
+  // sanitizePathFallback no longer classifies path segments by pattern (UUID,
+  // email, opaque token, numeric id, phone) and selectively replaces matches
+  // with `:id` — that design always had bypasses (short numeric ids, name-like
+  // slugs, short secrets/reference codes) because it depends on enumerating
+  // every possible identifier shape. It now ignores its input entirely and
+  // always returns the same constant, non-identifying label, regardless of
+  // what the unmatched path/segments contain.
+
+  await test('sanitizePathFallback always returns the fixed unmatched-route label, ignoring its input', () => {
+    assert.equal(sanitizePathFallback('/api/patients/42'), '/:unmatched');
+    assert.equal(sanitizePathFallback(undefined), '/:unmatched');
+    assert.equal(sanitizePathFallback(null), '/:unmatched');
+    assert.equal(sanitizePathFallback(''), '/:unmatched');
   });
 
-  await test('sanitizePathFallback redacts a long numeric id segment', () => {
-    const out = sanitizePathFallback('/api/legacy/908213');
-    assert.equal(out, '/api/legacy/:id');
-  });
+  const UNMATCHED_PATH_CASES: Array<[string, string]> = [
+    ['a UUID path segment', `/api/unregistered/${SENTINEL.routeUuid}/edit`],
+    ['a long numeric id segment', '/api/legacy/908213'],
+    ['a short numeric id segment (fewer than 4 digits)', '/api/patients/42'],
+    ['a free-text name-like slug', '/api/patient/jane-doe'],
+    ['a short secret/reference-code segment', '/api/reset/my-short-secret'],
+    ['a short alphanumeric reference code', '/api/lookup/AB123'],
+    ['an email path segment', `/api/lookup/${SENTINEL.email}`],
+    ['a percent-encoded email path segment', `/api/lookup/${encodeURIComponent(SENTINEL.email)}`],
+    ['a percent-encoded UUID path segment', `/api/lookup/${SENTINEL.routeUuid.replace(/-/g, '%2D')}`],
+    ['a phone number path segment (percent-encoded)', `/api/contact/${encodeURIComponent(SENTINEL.phone)}`],
+    ['a phone number path segment (with punctuation/spaces)', '/api/lookup/+90 555 000 99 99'],
+    ['a long opaque token segment', `/api/verify/${SENTINEL.token}`],
+    ['a query string appended to an unmatched path', `/api/patients?patientId=${SENTINEL.patientId}`],
+    ['malformed percent-encoding', '/api/lookup/%E0%A4%A'],
+  ];
 
-  await test('sanitizePathFallback redacts an email path segment', () => {
-    const out = sanitizePathFallback(`/api/lookup/${SENTINEL.email}`);
-    assert.ok(!out.includes(SENTINEL.email));
-    assert.equal(out, '/api/lookup/:id');
-  });
-
-  await test('sanitizePathFallback redacts a long opaque token segment', () => {
-    const out = sanitizePathFallback(`/api/verify/${SENTINEL.token}`);
-    assert.ok(!out.includes(SENTINEL.token));
-    assert.equal(out, '/api/verify/:id');
-  });
-
-  await test('sanitizePathFallback strips the query string entirely', () => {
-    const out = sanitizePathFallback(`/api/patients?patientId=${SENTINEL.patientId}`);
-    assert.ok(!out.includes(SENTINEL.patientId));
-    assert.equal(out, '/api/patients');
-  });
+  for (const [label, rawPath] of UNMATCHED_PATH_CASES) {
+    await test(`sanitizePathFallback resolves ${label} to the constant unmatched-route label`, () => {
+      const out = sanitizePathFallback(rawPath);
+      assert.equal(out, '/:unmatched', `expected constant label, got: ${out}`);
+    });
+  }
 
   await test('safeRoute prefers the matched route template over the concrete path', () => {
     const out = safeRoute({
@@ -276,36 +286,16 @@ async function main() {
     assert.equal(out, '/api/clinics/:clinicId/patients/:id');
   });
 
-  await test('safeRoute falls back to sanitized path when no route matched', () => {
+  await test('safeRoute falls back to the constant unmatched-route label when no route matched', () => {
     const out = safeRoute({ originalUrl: `/api/unknown/${SENTINEL.routeUuid}` });
-    assert.equal(out, '/api/unknown/:id');
+    assert.equal(out, '/:unmatched');
   });
 
-  await test('sanitizePathFallback redacts a percent-encoded email path segment', () => {
-    const out = sanitizePathFallback(`/api/lookup/${encodeURIComponent(SENTINEL.email)}`);
-    assert.ok(!out.includes(SENTINEL.email));
-    assert.ok(!out.includes(encodeURIComponent(SENTINEL.email)));
-    assert.equal(out, '/api/lookup/:id');
-  });
-
-  await test('sanitizePathFallback redacts a percent-encoded UUID path segment', () => {
-    const encoded = SENTINEL.routeUuid.replace(/-/g, '%2D');
-    const out = sanitizePathFallback(`/api/lookup/${encoded}`);
-    assert.ok(!out.includes(SENTINEL.routeUuid));
-    assert.equal(out, '/api/lookup/:id');
-  });
-
-  await test('sanitizePathFallback redacts a phone number path segment (with punctuation)', () => {
-    const out = sanitizePathFallback(`/api/lookup/${encodeURIComponent(SENTINEL.phone)}`);
-    assert.ok(!out.includes(SENTINEL.phone));
-    assert.equal(out, '/api/lookup/:id');
-    const outSpaced = sanitizePathFallback('/api/lookup/+90 555 000 99 99');
-    assert.equal(outSpaced, '/api/lookup/:id');
-  });
-
-  await test('sanitizePathFallback does not throw on malformed percent-encoding', () => {
-    const out = sanitizePathFallback('/api/lookup/%E0%A4%A');
-    assert.equal(typeof out, 'string');
+  await test('safeRoute falls back to the constant label when route.path is a non-string (array/RegExp route)', () => {
+    const outArray = safeRoute({ route: { path: ['/a', '/b'] }, originalUrl: '/a' });
+    assert.equal(outArray, '/:unmatched');
+    const outRegExp = safeRoute({ route: { path: /^\/x/ }, originalUrl: '/x' });
+    assert.equal(outRegExp, '/:unmatched');
   });
 
   section('mounted-router coverage — safeRoute composes baseUrl + route.path');
@@ -370,7 +360,7 @@ async function main() {
     });
   });
 
-  section('7.3 — path identifier redaction');
+  section('7.3 — path identifier redaction (unmatched paths never retain path segment values)');
 
   await withServer(async ({ port, lines }) => {
     await test('a route template with two path params logs the template, not the concrete UUIDs', async () => {
@@ -384,15 +374,37 @@ async function main() {
       assert.equal(parsed.route, '/api/patients/:id/appointments/:apptId');
     });
 
-    await test('an unmatched path with an embedded UUID falls back to a sanitized path (no route template)', async () => {
+    await test('an unmatched path with an embedded UUID falls back to the constant unmatched-route label (no route template, no raw segment)', async () => {
       const before = lines.length;
       await issueRequest(port, { path: `/api/no-such-route/${SENTINEL.routeUuid}` });
       const line = await waitForNewLine(lines, before);
       assert.ok(!line.includes(SENTINEL.routeUuid), 'concrete UUID leaked into fallback log line');
       const parsed = JSON.parse(line);
-      assert.equal(parsed.route, '/api/no-such-route/:id');
+      assert.equal(parsed.route, '/:unmatched');
       assert.equal(parsed.res?.statusCode, 404);
     });
+
+    const UNMATCHED_LIVE_CASES: Array<[string, string]> = [
+      ['an unmatched short numeric path (fewer than 4 digits)', '/api/legacy/42'],
+      ['an unmatched free-text name-like slug', '/api/patient/Mustafa-Basol'],
+      ['an unmatched short secret/reference-code path', '/api/reset/my-short-secret'],
+      ['an unmatched short alphanumeric reference code', '/api/lookup/AB123'],
+      ['an unmatched phone-number path', `/api/contact/${encodeURIComponent(SENTINEL.phone)}`],
+      ['an unmatched email path', `/api/test/${encodeURIComponent(SENTINEL.email)}`],
+      ['an unmatched percent-encoded identifier path', `/api/lookup/${SENTINEL.routeUuid.replace(/-/g, '%2D')}`],
+      ['an unmatched malformed-percent-encoding path', '/api/lookup/%E0%A4%A'],
+    ];
+
+    for (const [label, rawPath] of UNMATCHED_LIVE_CASES) {
+      await test(`${label} does not log the raw segment and resolves to the constant unmatched-route label`, async () => {
+        const before = lines.length;
+        await issueRequest(port, { path: rawPath });
+        const line = await waitForNewLine(lines, before);
+        assert.ok(!line.includes(rawPath), `raw unmatched path leaked into log line: ${line}`);
+        const parsed = JSON.parse(line);
+        assert.equal(parsed.route, '/:unmatched');
+      });
+    }
   });
 
   section('7.4 — query-string privacy');
