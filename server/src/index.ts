@@ -67,7 +67,7 @@ import { closeRedis } from './utils/redis.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
 import { getBearerFallbackWarnings } from './utils/authFallback.js';
-import { httpLogger } from './utils/logger.js';
+import { httpLogger, logUnhandledError } from './utils/logger.js';
 
 dotenv.config();
 
@@ -247,11 +247,16 @@ app.use('/api', imagingRoutes);
 // Global error handler — without this, unhandled errors fall through to
 // Express's default handler, which writes the stack trace into the response
 // whenever NODE_ENV !== 'production'.
-app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+// Logging goes through logUnhandledError (structured, sanitized — see
+// utils/logger.ts), never a raw console.error(err): the raw error can carry
+// request-derived values (ids, tokens, emails) in err.message or custom
+// properties, and this handler is on the same production-reachable HTTP
+// path the rest of this file's logging was hardened for.
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (res.headersSent) return next(err);
   // Body-parser errors (malformed JSON, payload too large) carry a client status.
   const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 500 ? err.status : 500;
-  if (status >= 500) console.error('[unhandled-error]', err);
+  if (status >= 500) logUnhandledError(req, status, err);
   res.status(status).json({ error: status >= 500 ? 'Internal server error' : 'Invalid request' });
 });
 
