@@ -27,6 +27,7 @@ import express from 'express';
 import pino from 'pino';
 import {
   buildHttpLogger,
+  logUnhandledError,
   safeRoute,
   sanitizePathFallback,
 } from '../utils/logger.js';
@@ -107,20 +108,54 @@ function buildTestApp(instance: pino.Logger) {
     res.status(201).json({ received: true });
   });
   app.get('/api/patients/:id/boom', (req, res) => {
-    // Mirrors the real 500 path: index.ts's global error handler never wires
-    // res.err, so pino-http always synthesizes the error object from the
-    // status code alone (see logger.ts investigation notes).
+    // Mirrors the real 500 path when no error/res.err is wired: pino-http
+    // synthesizes the error object from the status code alone.
     res.status(500).json({ error: 'Internal server error' });
   });
+
+  // A real thrown Error whose message embeds request-derived sentinel
+  // values (mirrors e.g. `throw new Error('Patient ' + id + ' not found')`
+  // — see review §4.2). Reaches pino-http's error branch via res.err, then
+  // the mirrored global error handler below (mirrors index.ts:250).
+  app.get('/api/patients/:id/real-throw', (_req, res, next) => {
+    const err = new Error(`Patient ${SENTINEL.patientId} lookup failed for clinic ${SENTINEL.clinicId}`);
+    (res as unknown as { err: Error }).err = err;
+    next(err);
+  });
+
+  // Mirrors server/src/index.ts's global Express error handler verbatim
+  // (including routing all 5xx logging through logUnhandledError instead of
+  // a raw console.error(err) — see review §4.3).
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) return next(err);
+    const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 500 ? err.status : 500;
+    if (status >= 500) logUnhandledError(req, status, err, instance);
+    res.status(status).json({ error: status >= 500 ? 'Internal server error' : 'Invalid request' });
+  });
+
+  return app;
+}
+
+function buildMountedRouterApp(instance: pino.Logger) {
+  const app = express();
+  app.set('trust proxy', 1);
+  app.use(buildHttpLogger(instance));
+
+  const clinics = express.Router();
+  clinics.get('/:clinicId/appointments', (_req, res) => {
+    res.status(200).json({ ok: true });
+  });
+  app.use('/api/clinics', clinics);
 
   return app;
 }
 
 async function withServer(
   fn: (ctx: { port: number; lines: string[] }) => Promise<void>,
+  appBuilder: (instance: pino.Logger) => express.Express = buildTestApp,
 ) {
   const { instance, lines } = createCapturingLogger();
-  const app = buildTestApp(instance);
+  const app = appBuilder(instance);
   const server = app.listen(0);
   await new Promise<void>(resolve => server.once('listening', resolve));
   const address = server.address();
@@ -185,6 +220,21 @@ function fullLogText(lines: string[]): string {
   return lines.join('\n');
 }
 
+/** Like waitForNewLine, but for scenarios that emit more than one log line
+ * per request (e.g. logUnhandledError + the httpLogger completion line) —
+ * waits for an exact count so callers can identify each line by its `msg`
+ * field instead of assuming array position. */
+async function waitForLineCount(lines: string[], countBefore: number, expectedNewLines: number, timeoutMs = 2000): Promise<string[]> {
+  const start = Date.now();
+  while (lines.length < countBefore + expectedNewLines) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`timed out waiting for ${expectedNewLines} new log line(s) (have ${lines.length - countBefore}, expected ${expectedNewLines})`);
+    }
+    await new Promise(r => setTimeout(r, 5));
+  }
+  return lines.slice(countBefore, countBefore + expectedNewLines);
+}
+
 async function main() {
   section('safeRoute / sanitizePathFallback — pure helper tests');
 
@@ -230,6 +280,46 @@ async function main() {
     const out = safeRoute({ originalUrl: `/api/unknown/${SENTINEL.routeUuid}` });
     assert.equal(out, '/api/unknown/:id');
   });
+
+  await test('sanitizePathFallback redacts a percent-encoded email path segment', () => {
+    const out = sanitizePathFallback(`/api/lookup/${encodeURIComponent(SENTINEL.email)}`);
+    assert.ok(!out.includes(SENTINEL.email));
+    assert.ok(!out.includes(encodeURIComponent(SENTINEL.email)));
+    assert.equal(out, '/api/lookup/:id');
+  });
+
+  await test('sanitizePathFallback redacts a percent-encoded UUID path segment', () => {
+    const encoded = SENTINEL.routeUuid.replace(/-/g, '%2D');
+    const out = sanitizePathFallback(`/api/lookup/${encoded}`);
+    assert.ok(!out.includes(SENTINEL.routeUuid));
+    assert.equal(out, '/api/lookup/:id');
+  });
+
+  await test('sanitizePathFallback redacts a phone number path segment (with punctuation)', () => {
+    const out = sanitizePathFallback(`/api/lookup/${encodeURIComponent(SENTINEL.phone)}`);
+    assert.ok(!out.includes(SENTINEL.phone));
+    assert.equal(out, '/api/lookup/:id');
+    const outSpaced = sanitizePathFallback('/api/lookup/+90 555 000 99 99');
+    assert.equal(outSpaced, '/api/lookup/:id');
+  });
+
+  await test('sanitizePathFallback does not throw on malformed percent-encoding', () => {
+    const out = sanitizePathFallback('/api/lookup/%E0%A4%A');
+    assert.equal(typeof out, 'string');
+  });
+
+  section('mounted-router coverage — safeRoute composes baseUrl + route.path');
+
+  await withServer(async ({ port, lines }) => {
+    await test('a route served through a mounted sub-router logs baseUrl + route.path, not the concrete id', async () => {
+      const before = lines.length;
+      await issueRequest(port, { path: `/api/clinics/${SENTINEL.clinicId}/appointments` });
+      const line = await waitForNewLine(lines, before);
+      assert.ok(!line.includes(SENTINEL.clinicId), 'clinicId leaked from mounted-router route');
+      const parsed = JSON.parse(line);
+      assert.equal(parsed.route, '/api/clinics/:clinicId/appointments');
+    });
+  }, buildMountedRouterApp);
 
   section('7.1 — safe operational metadata retained');
 
@@ -482,6 +572,62 @@ async function main() {
   } finally {
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = originalNodeEnv;
+  }
+
+  section('7.10 — a real thrown error (res.err) does not leak its message via httpLogger or the global error handler');
+
+  const originalNodeEnv2 = process.env.NODE_ENV;
+  try {
+    for (const env of ['production', 'development']) {
+      process.env.NODE_ENV = env;
+      await withServer(async ({ port, lines }) => {
+        await test(`[NODE_ENV=${env}] a real thrown Error whose message embeds patientId/clinicId is handled correctly by logUnhandledError and httpLogger`, async () => {
+          const before = lines.length;
+          await issueRequest(port, { path: `/api/patients/${SENTINEL.patientId}/real-throw` });
+          // This request produces exactly two log lines: logUnhandledError's
+          // "unhandled error" (written synchronously in the mirrored global
+          // error handler, before the response is sent) and httpLogger's own
+          // "request errored" completion line (written on res 'finish').
+          const newLines = await waitForLineCount(lines, before, 2);
+
+          const parsedLines = newLines.map(l => JSON.parse(l));
+          const unhandledLine = parsedLines.find(p => p.msg === 'unhandled error');
+          const httpLine = parsedLines.find(p => p.msg === 'request errored');
+          assert.ok(unhandledLine, 'expected an "unhandled error" log line from logUnhandledError');
+          assert.ok(httpLine, 'expected an httpLogger "request errored" completion line');
+
+          assert.equal(unhandledLine.route, '/api/patients/:id/real-throw');
+          assert.equal(unhandledLine.status, 500);
+          assert.ok(unhandledLine.reqId !== undefined, 'expected reqId on the unhandled-error log line');
+          assert.equal(unhandledLine.errType, 'Error');
+
+          assert.equal(httpLine.res?.statusCode, 500);
+          assert.equal(httpLine.err?.type, 'Error');
+
+          if (env === 'production') {
+            // Production: the raw message (which embeds patientId/clinicId)
+            // must never reach either log line — this is the security
+            // property under test (review §4.2/§4.3).
+            const text = fullLogText(newLines);
+            assert.ok(!text.includes(SENTINEL.patientId), 'patientId leaked via a real error message in production');
+            assert.ok(!text.includes(SENTINEL.clinicId), 'clinicId leaked via a real error message in production');
+            assert.equal(unhandledLine.errMessage, 'internal error', 'production must not echo the raw error message (logUnhandledError)');
+            assert.equal(httpLine.err?.message, 'internal error', 'production must not echo the raw error message (httpLogger)');
+            assert.equal(unhandledLine.errStack, undefined);
+            assert.equal(httpLine.err?.stack, undefined);
+          } else {
+            // Development: full diagnostic message is a deliberate,
+            // documented exception (local/dev-only) — assert it is present,
+            // not absent.
+            assert.ok(unhandledLine.errMessage.includes(SENTINEL.patientId), 'expected full diagnostic message outside production (logUnhandledError)');
+            assert.ok(httpLine.err?.message.includes(SENTINEL.patientId), 'expected full diagnostic message outside production (httpLogger)');
+          }
+        });
+      });
+    }
+  } finally {
+    if (originalNodeEnv2 === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv2;
   }
 
   section('Regression sanity: nothing in this suite ever logs a raw request/socket object');

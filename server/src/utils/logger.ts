@@ -30,20 +30,36 @@ const UUID_SEGMENT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 const NUMERIC_ID_SEGMENT_RE = /^\d{4,}$/;
 const EMAIL_SEGMENT_RE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
 const OPAQUE_TOKEN_SEGMENT_RE = /^[A-Za-z0-9_-]{20,}$/;
+// +90 555 000 99 99 / +33 6 12 34 56 78 / +905550009999 gibi biçimler:
+// en az 7 basamak, sadece rakam/boşluk/parantez/tire/nokta, opsiyonel baştaki '+'.
+const PHONE_SEGMENT_RE = /^\+?(?:[\d][\s().-]*){7,}$/;
 
 function isIdentifierLikeSegment(segment: string): boolean {
-  return (
-    UUID_SEGMENT_RE.test(segment) ||
-    NUMERIC_ID_SEGMENT_RE.test(segment) ||
-    EMAIL_SEGMENT_RE.test(segment) ||
-    OPAQUE_TOKEN_SEGMENT_RE.test(segment)
+  // Path segment'i percent-encoded olarak gelmiş olabilir (örn. e-posta
+  // içindeki '@' -> %40, UUID'deki '-' -> %2D); decode edilmiş hali de
+  // kontrol edilmezse encoded bir identifier tespitten kaçabilir.
+  let decoded = segment;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    // Bozuk percent-encoding — yalnızca ham segment kontrol edilir.
+  }
+  const candidates = decoded === segment ? [segment] : [segment, decoded];
+  return candidates.some(
+    value =>
+      UUID_SEGMENT_RE.test(value) ||
+      NUMERIC_ID_SEGMENT_RE.test(value) ||
+      EMAIL_SEGMENT_RE.test(value) ||
+      OPAQUE_TOKEN_SEGMENT_RE.test(value) ||
+      PHONE_SEGMENT_RE.test(value),
   );
 }
 
 /**
  * Route template bulunamadığında kullanılan güvenli fallback: query string
  * ve fragment atılır, path segment'leri tek tek UUID/e-posta/uzun opak
- * token/uzun sayısal id olup olmadığına bakılarak `:id` ile değiştirilir.
+ * token/uzun sayısal id/telefon olup olmadığına bakılarak (percent-encoded
+ * hali dahil) `:id` ile değiştirilir.
  */
 export function sanitizePathFallback(rawPath: string | undefined | null): string {
   if (!rawPath) return '';
@@ -96,13 +112,59 @@ function safeResponseLog(res: Response) {
   };
 }
 
+/**
+ * error.message serbest metindir — uygulama kodu (thrown Error, Prisma
+ * hatası, üçüncü parti API yanıtı vb.) buraya patientId/clinicId/e-posta/
+ * token gibi istek kaynaklı değerleri gömebilir (örn. `Patient ${id} not
+ * found`). Production'da mesajı olduğu gibi loglamak bu PR'ın engellemeye
+ * çalıştığı sızıntıyı `err.message` üzerinden yeniden açar; bu yüzden
+ * production'da yalnızca sabit, içerik taşımayan bir mesaj + hata tipi
+ * (error.name) loglanır. Tanılama için error.name + reqId + route yeterli;
+ * tam mesaj/stack yalnızca production dışında.
+ */
 function safeErrorLog(err: unknown) {
   const error = err instanceof Error ? err : new Error(String(err));
+  const isProduction = process.env.NODE_ENV === 'production';
   return {
     type: error.name,
-    message: error.message,
-    ...(process.env.NODE_ENV !== 'production' ? { stack: error.stack } : {}),
+    message: isProduction ? 'internal error' : error.message,
+    ...(isProduction ? {} : { stack: error.stack }),
   };
+}
+
+/**
+ * server/src/index.ts'in global Express hata middleware'i için tek güvenli
+ * loglama noktası — ham `err` nesnesini asla `console.error`/log stream'ine
+ * yazmaz (aksi halde bu PR'ın httpLogger için kapattığı sızıntı, ayrı bir
+ * yoldan — PM2/stdout üzerinden — yeniden açılmış olur).
+ *
+ * Alanlar bilinçli olarak `errType`/`errMessage`/`errStack` — `err` DEĞİL:
+ * pino her instance'a varsayılan olarak bir `err` serializer'ı
+ * (`pino-std-serializers`) bağlar; `logger`/test'lerdeki capturing instance
+ * gibi `err` serializer'ını override etmeyen bir logger'a zaten
+ * sanitize edilmiş bir düz obje `err` anahtarıyla verilirse, o varsayılan
+ * serializer devreye girip objeyi (gerçek bir Error olmadığı için) yeniden,
+ * beklenmedik şekilde işler. Ayrı, çakışmayan alan adları bu riski tamamen
+ * ortadan kaldırır.
+ */
+export function logUnhandledError(
+  req: RouteAwareRequest & { id?: unknown },
+  status: number,
+  err: unknown,
+  instance: pino.Logger = logger,
+) {
+  const safeErr = safeErrorLog(err);
+  instance.error(
+    {
+      reqId: req.id,
+      route: safeRoute(req),
+      status,
+      errType: safeErr.type,
+      errMessage: safeErr.message,
+      ...('stack' in safeErr ? { errStack: safeErr.stack } : {}),
+    },
+    'unhandled error',
+  );
 }
 
 const REDACT_PATHS = [

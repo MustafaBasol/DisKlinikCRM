@@ -219,3 +219,67 @@ absent under `NODE_ENV=production` (shown above).
   explicitly out of scope for this task.
 
 **Status remains `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`.**
+
+---
+
+## 10. Independent review addendum (post-merge-request review)
+
+An independent review of this PR (fresh worktree at PR head
+`487ffa45791a10e0bf492a74c479507eb1382a9b`) found that §2/§9's characterization
+of `index.ts`'s global error handler as "out of scope, untouched" understated
+the risk: the handler is directly on the production-reachable HTTP
+request-error path this task set out to close, and it logged the **raw,
+unsanitized** `err` object via `console.error('[unhandled-error]', err)` for
+every 5xx response — including thrown/rejected application errors whose
+`.message` can embed request-derived identifiers (e.g. `` `Patient ${id} not
+found` ``). Synthetic reproduction (sentinel patient/clinic UUIDs, email,
+bearer token, session cookie, in both `NODE_ENV=production` and
+`development`, via a real thrown sync error, a rejected async handler, and an
+explicit `res.err` assignment) confirmed every sentinel value reached
+`console.error`'s captured output in both environments. Separately,
+`safeErrorLog()`'s `message` field was unrestricted in production; wiring
+`res.err` anywhere (the standard pino-http mechanism, and the natural fix for
+the first issue) would have leaked the same content straight into the
+structured pino log instead.
+
+**Fixes applied** (`server/src/utils/logger.ts`, `server/src/index.ts`):
+
+1. `safeErrorLog()` now returns a fixed, content-free `message` ("internal
+   error") and omits `stack` when `NODE_ENV === 'production'`, instead of
+   echoing `error.message` unconditionally. `error.name` (type) is still
+   logged in all environments; full message/stack are retained outside
+   production for diagnostics.
+2. New exported `logUnhandledError(req, status, err, instance?)` — the single
+   safe logging entry point for `index.ts`'s global error handler. Logs
+   `reqId`, `route` (via `safeRoute`), `status`, and the same sanitized
+   `errType`/`errMessage`/`errStack` shape as `safeErrorLog`, through the
+   structured pino `logger`, never a raw `console.error(err)`. (Flat field
+   names, not `err`, deliberately avoid colliding with pino's own
+   default-registered `err` serializer on a plain, already-sanitized object.)
+3. `index.ts`'s global error handler now calls `logUnhandledError(req, status,
+   err)` in place of `console.error('[unhandled-error]', err)`.
+4. `sanitizePathFallback()`'s identifier detection now also tests the
+   percent-decoded form of each path segment (guarded against malformed
+   encoding) and recognizes punctuated phone-number segments (`+90 555 000 99
+   99`, `+905550009999`), closing two confirmed bypasses of the fallback
+   sanitizer (percent-encoded UUIDs/emails; phone numbers) that previously
+   let those identifiers through un-redacted on unmatched (404 / pre-route)
+   paths.
+
+**Residual, documented (not fixed in this pass):** the fallback sanitizer
+still does not redact short numeric path segments (<4 digits, e.g. `/42`) or
+free-text name-like slugs (e.g. `/jane-doe`) — both are low-severity,
+fallback-path-only (never on a matched route), and the latter is not
+reliably solvable via segment-pattern matching. `REDACT_PATHS` also still
+carries several mixed-case header path entries (`req.headers.Authorization`,
+`req.headers["X-Forwarded-For"]`, etc.) that can never match, since
+Node.js/Express always lowercase incoming header names — inert dead code,
+not a leak, since the allowlist serializers already omit all headers.
+
+Regression tests added: `server/src/tests/httpRequestLogPrivacy.test.ts`
+§7.10 (real thrown error via `res.err`, both environments, both
+`logUnhandledError` and `httpLogger` output lines), a mounted sub-router
+`safeRoute` case, and four additional `sanitizePathFallback` cases
+(percent-encoded email/UUID, phone number, malformed encoding). Suite is now
+29 assertions (was 22), all passing; `npm run typecheck` and `git diff
+--check` also re-verified clean.
