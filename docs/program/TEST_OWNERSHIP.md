@@ -1,16 +1,21 @@
 # TEST_OWNERSHIP — Test Mimarisi, Envanteri ve Sahiplik Haritası
 
-Son güncelleme: 2026-07-19 (F0-005 rebaseline — bkz. aşağıdaki durum notu)
+Son güncelleme: 2026-07-28 (**F1-002 — Test Inventory Refresh and Ownership Reconciliation**, documentation/evidence-only. Refreshes §3 onward against execution baseline `08f2eaf82a205cf3f997c57e6a295fedd66b142d`, replacing the 2026-07-19 F0-005 snapshot as the current authoritative inventory. See the status note immediately below and [evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md](evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md) for the full process record.)
 
-> **Durum:** §1–§2 **hedef** test mimarisini tanımlar (aşağıda F0-001'den değişmeden korunmuştur — etki-bazlı/affected test altyapısı bugün **mevcut değildir**, F1'in işidir). §3'ten itibaren, F0-005 tarafından **depo-kanıtıyla ve gerçek komut çalıştırmasıyla doğrulanmış** mevcut-durum (current-state) test envanteri, süre ölçümleri, sahiplik ve güvenilirlik verisi yer alır.
+Prior update: 2026-07-19 (F0-005 rebaseline — historical, preserved below for lineage)
+
+> **Durum:** §1–§2 **hedef** test mimarisini tanımlar (aşağıda F0-001'den değişmeden korunmuştur — etki-bazlı/affected test altyapısı bugün **mevcut değildir**, F1'in işidir, ve F1-001'in tasarımı bu mekanizmanın henüz implemente edilmediğini teyit eder). §3'ten itibaren, **F1-002 tarafından güncel `HEAD`'e karşı yenilenmiş** mevcut-durum (current-state) test envanteri, sahiplik ve script-erişilebilirlik verisi yer alır.
 >
-> **Rebaseline notu (2026-07-19):** Bu görevin orijinal baseline'ı commit `5ee0b6af30fff187b7190d649f1fc3e844362105` idi (97 kayıt). PR #171 (bu görevin kendi PR'ı) merge edilmeden önce `origin/main`, PR #169 ile bir commit ilerledi (`7fcf2f850f151241266f07349c4bf4442c72bbca` — "communication preference and consent management"), 3 yeni test dosyası ekleyerek. F0-005 branch'i normal, force olmayan bir `git merge origin/main` ile güncellendi (0 conflict); bu 3 dosya envantere eklendi ve ilgili tüm runtime komutları yeniden çalıştırıldı. Güncel baseline artık **commit `7fcf2f850f151241266f07349c4bf4442c72bbca`**, toplam **100** test/doğrulama hedefi. Detay: evidence doc §1a.
+> **F1-002 refresh notu (2026-07-28):** F1-001'in kendi tasarım sürecinde bulduğu R-072 riski (test envanteri kanıtının F0-005'in 2026-07-19 taban çizgisine sabitlenmiş, güncel `HEAD`'e göre bayatlamış olması — 72→96→105 backend dosya, 6→9 frontend dosya) bu görev tarafından giderildi. Yürütme taban çizgisi `08f2eaf82a205cf3f997c57e6a295fedd66b142d` (beklenen başlangıç taban çizgisi `94cc4ac58f0487dd186886878c5628627f0b1ce3`'ün soyundan, ara commit'ler PR #242-#252 — KVKK yedekleme/saklama/AI-gizlilik/şema-bütünlüğü işi + bir gelir raporu düzeltmesi, hepsi olağan ileri ilerleme olarak incelendi). **Toplam test/doğrulama hedefi artık 137** (backend 105, frontend 9, bridge-agent 9, windows-bridge 8 proje/script, manuel disposable-DB doğrulama script'i 4, smoke/deploy script'i 2). Sıfır dosya kaldırıldı/yeniden adlandırıldı; 34 yeni backend + 3 yeni frontend + 1 yeni manuel doğrulama script'i eklendi; `aiPrivacyBoundary.test.ts` içerik olarak önemli ölçüde değişti (yeniden yazılmadı, `MEDIUM` güvenle taşındı). CodeGraph bu görev ortamında da **kullanılamadı** (F1-001 ile aynı bulgu) — hedefli dosya-sistemi envanteri, dosya-başlığı/import incelemesi ve programatik package-script ayrıştırması kullanıldı. Detay: evidence doc §1a, [F1-002_test_inventory.json](evidence/F1-002_test_inventory.json).
 >
-> Detaylı kanıt: [evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md](evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md).
-> Yapısal/makine-okunur envanter: [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) (100 test/doğrulama hedefi, sahiplik, F0-004 yüksek-riskli edge kapsamı, kapsam boşlukları, F1 için önerilen affected-test yönlendirme tablosu).
-> Runtime komut/sonuç kaydı: [evidence/F0-005_test_runtime_results.json](evidence/F0-005_test_runtime_results.json).
+> Detaylı kanıt (F1-002, güncel): [evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md](evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md).
+> Yapısal/makine-okunur envanter (F1-002, güncel — **yetkili**): [evidence/F1-002_test_inventory.json](evidence/F1-002_test_inventory.json) (137 test/doğrulama hedefi, sahiplik, script-erişilebilirlik, DB/harici-servis gereksinimleri).
+> Script reconciliation (F1-002, güncel): [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json).
+> Sahiplik boşlukları (F1-002, güncel): [evidence/F1-002_test_ownership_gaps.json](evidence/F1-002_test_ownership_gaps.json).
 >
-> **Kapsam dışı (bu görevde yapılmadı):** test dosyası değişikliği, snapshot güncelleme, assertion gevşetme, skip ekleme, timeout değişikliği, package script ekleme/değiştirme, CI workflow değişikliği, yeni test framework/coverage tool kurulumu, runtime kaynak refactor'u, Prisma şema/migration değişikliği veya deploy'u, production/VPS erişimi, affected-test seçim mekanizmasının implementasyonu. (2026-07-19 rebaseline'ı yalnızca `origin/main`'den normal bir merge içerir — merge ile gelen test/şema/migration/script değişiklikleri PR #169 tarafından bağımsız olarak zaten merge edilmişti, bu görev tarafından yazılmadı.)
+> **Historical (F0-005, 2026-07-19, superseded but preserved for lineage — not deleted):** [evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md](evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md), [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) (100 targets, includes the only runtime pass/fail execution record — F1-002 did not re-run tests, see below), [evidence/F0-005_test_runtime_results.json](evidence/F0-005_test_runtime_results.json).
+>
+> **Kapsam dışı (F1-002'de yapılmadı, F0-005'te olduğu gibi):** test dosyası değişikliği, snapshot güncelleme, assertion gevşetme, skip ekleme, timeout değişikliği, package script ekleme/değiştirme, CI workflow değişikliği, yeni test framework/coverage tool kurulumu, runtime kaynak refactor'u, Prisma şema/migration değişikliği veya deploy'u, production/VPS erişimi, affected-test seçim mekanizmasının implementasyonu, **ve testlerin gerçek çalıştırılması (runtime pass/fail F0-005'in 2026-07-19 kaydında donmuş kalır — bu görev yalnızca envanter/sahiplik/script-erişilebilirliği yeniler, davranışı yeniden doğrulamaz).**
 
 ## 1. Hedef test mimarisi katmanları
 
@@ -64,56 +69,57 @@ Son güncelleme: 2026-07-19 (F0-005 rebaseline — bkz. aşağıdaki durum notu)
 
 > Etki-bazlı (affected) seçim mekanizması **henüz mevcut değildir**; F1'de tasarlanıp kurulacaktır. Bu doküman yalnızca hedefi tanımlar.
 
-## 3. Mevcut test envanteri — özet (F0-005, depo-kanıtıyla)
+## 3. Mevcut test envanteri — özet (F1-002, depo-kanıtıyla, 2026-07-28)
 
-Güncel baseline commit `7fcf2f850f151241266f07349c4bf4442c72bbca` (orijinal baseline `5ee0b6af30fff187b7190d649f1fc3e844362105` idi; 2026-07-19'da PR #169'u içeren bir `origin/main` merge'i ile rebaseline edildi — bkz. evidence doc §1a). Tam 100 satırlık per-test kayıt (sahip domain, secondary domain, test tipi, korunan kaynak dosyalar, DB/Redis/filesystem/network gereksinimi, env var, order/timing sensitivity, gözlemlenen runtime, tekrar-çalıştırma durumu) [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) `testFiles[]` içindedir. Bu bölüm yalnızca özet sayıları verir.
+Yürütme taban çizgisi commit `08f2eaf82a205cf3f997c57e6a295fedd66b142d` (F0-005'in 2026-07-19 taban çizgisi `7fcf2f850f1` idi; F1-001'in kendi tasarım taban çizgisi `d0311636` — 2026-07-25 — R-072'yi bulduğu an idi). Tam 137 satırlık per-target kayıt (sahip domain, secondary domain, test tipi, runtime sınıfı, DB/harici-servis gereksinimi, script-erişilebilirliği, korunan kaynak dosyalar, güven seviyesi, kanıt referansı) [evidence/F1-002_test_inventory.json](evidence/F1-002_test_inventory.json) `testFiles[]` içindedir. Bu bölüm yalnızca özet sayıları verir.
 
 | Alan | Sayı | Kanıt |
 |---|---|---|
-| Backend `server/src/tests/*.test.ts` | 72 (rebaseline öncesi 70 idi; PR #169'dan +2) | F0-003'ün "72/72" sayımıyla + PR #169'un 2 yeni dosyasıyla tutarlı (72 `.test.ts` + 2 fixture yardımcı dosya = 74) |
-| Frontend test dosyası | 6 (rebaseline öncesi 5 idi; PR #169'dan +1) | her biri tek bir `npm run test:*` script'ine bağlı, orphan yok |
-| bridge-agent test dosyası | 9 | `bridge-agent/` içinde `npm run test` hepsini zincirler; PR #169'dan etkilenmedi |
-| windows-bridge .NET test projesi | 4 | ~354 `[Fact]`/`[Theory]` (proje/script granülaritesinde envanterlendi — bkz. evidence doc §1); PR #169'dan etkilenmedi |
-| windows-bridge installer PowerShell test script'i | 4 | CI'nin (`windows-bridge-pr.yml`) çağırdığı tam liste; PR #169'dan etkilenmedi |
-| Manuel disposable-DB doğrulama script'i (`server/scripts/verify-*.ts`) | 3 | tasarım gereği `npm test`'e bağlı değil |
-| **Toplam test/doğrulama hedefi** | **100** (rebaseline öncesi 97 idi) | |
-| JS/TS test framework'ü / merkezi runner | **Yok** | Backend/frontend/bridge-agent'taki tüm `.test.ts` dosyaları `node:assert/strict` + elle yazılmış `test()/section()` yardımcı fonksiyonuyla, framework'süz, dosya-başına-`tsx` ile çalışır. Windows Bridge'in 4 .NET test projesi ise gerçek bir framework kullanır (**xUnit**, `dotnet test` ile) — bu makinede pinned SDK sürümü (10.0.301, kurulu: 9.0.305) nedeniyle çalıştırılamadı, framework eksikliğinden değil. Bkz. evidence doc §5. |
-| CI tarafından çalıştırılan test dosyası sayısı | 4 backend + 3 frontend + 4 dotnet + 4 ps1 (yalnızca imaging path'inde) | tek workflow: `.github/workflows/windows-bridge-pr.yml` — bkz. §7; PR #169'un 3 yeni dosyası bu path kapsamında değil, sıfır CI kapsamıyla geldi |
+| Backend `server/src/tests/*.test.ts` | **105** (F0-005'te 72, F1-001'in kendi ara-ölçümünde 96) | `find server/src/tests -type f -name '*.test.ts'` (F1-002 tarafından yürütüldü) |
+| Frontend test dosyası (`src/**/*.test.ts(x)`) | **9** (F0-005'te 6) | `find src -type f -name '*.test.ts(x)'`; 7'si ayrı `npm run test:*` script'ine, 2'si (`*.vitest.test.tsx`) `npm run test:vitest`'e (vitest glob `src/**/*.vitest.test.{ts,tsx}`) bağlı |
+| bridge-agent test dosyası | 9 (değişmedi) | `bridge-agent/` içinde `npm run test` hepsini zincirler |
+| windows-bridge .NET test projesi | 4 (değişmedi) | proje/script granülaritesinde envanterlendi — bkz. F0-005 evidence doc §1 (bu görevde yeniden ölçülmedi, yalnızca varlığı doğrulandı) |
+| windows-bridge installer PowerShell test script'i | 4 (değişmedi) | CI'nin (`windows-bridge-pr.yml`) çağırdığı tam liste |
+| Manuel disposable-DB doğrulama script'i (`server/scripts/verify-*.ts`) | **4** (F0-005'te 3; +1 `verify-kvkk-high007-high008-rollback-tenant.ts`) | tasarım gereği `npm test`'e bağlı değil, destructive/manual-only |
+| Smoke/deploy script'i (`scripts/*.sh`) | 2 (değişmedi) | |
+| **Toplam test/doğrulama hedefi** | **137** (F0-005'te 100) | `docs/program/evidence/F1-002_test_inventory.json` `countsExactCommands` |
+| JS/TS test framework'ü / merkezi runner | **Kısmen değişti** | Backend testlerinin ezici çoğunluğu hâlâ `node:assert/strict` + elle yazılmış `test()/section()` yardımcı fonksiyonuyla, framework'süz çalışır. **Yeni:** 2 frontend bileşen testi artık gerçek bir framework kullanıyor (**vitest** + `@testing-library/react`, jsdom ortamı, `vitest.config.ts` ile) — F1-001'in R-072 bulgusunda zaten not edilmişti. Windows Bridge'in 4 .NET test projesi xUnit kullanır (`dotnet test`, bu görevde de SDK sürüm uyuşmazlığı nedeniyle çalıştırılamadı — framework eksikliğinden değil). |
+| CI tarafından çalıştırılan test dosyası sayısı | **Değişmedi: 4 backend + 3 frontend + 4 dotnet + 4 ps1** (yalnızca `windows-bridge-pr.yml`, imaging path'inde) | 34 yeni backend + 3 yeni frontend dosyanın hiçbiri bu CI path kapsamında değil — aynı CI-uygulama boşluğunun 37 yeni örneği, bkz. §7 |
 
-### 3.1 Sahiplik dağılımı (domain başına test sayısı)
+### 3.1 Sahiplik dağılımı (domain başına test/doğrulama hedefi sayısı, F1-002)
 
-| Domain | Test sayısı |
-|---|---|
-| Imaging — Device Bridge / Windows Bridge | 22 |
-| Privacy / Consent / Retention / Data Subject Rights | 16 (rebaseline öncesi 13 idi; PR #169'un 3 dosyası da bu domain'e primary sahip olarak eklendi) |
-| Messaging — WhatsApp | 10 |
-| Appointments and Availability | 8 |
-| Tenant Security and Scope | 4 |
-| Identity and Access | 4 |
-| Basic Payments | 4 |
-| Public Booking | 4 |
-| Reporting / Analytics | 3 |
-| Patients | 3 |
-| Messaging — Instagram | 3 |
-| Messaging AI Orchestration | 3 |
-| Imaging — Server Ingest and Viewer | 2 |
-| Observability / Operational Events | 2 |
-| Platform Administration | 2 |
-| Organization / Clinic / User Membership | 2 |
-| Storage Abstraction | 1 |
-| Dental Laboratory / Prosthetics Tracking | 1 |
-| Cross-Domain Contract | 1 |
-| Automations / Reminders / Follow-up / Recall | 1 |
-| Security Incident Response and Detection | 1 |
-| Messaging — SMS | 1 |
-| Permissions / Roles | 1 |
-| Repository/Build Tooling | 1 |
+| Domain | Sayı | F0-005'e göre değişim |
+|---|---|---|
+| Privacy / Consent / Retention / Data Subject Rights | 27 | +11 (16→27; KVKK-HIGH-007/008/006, retention-manual-run-audit, schema-integrity, file-backup ile ilgili consent/audit dosyaları) |
+| Imaging — Device Bridge / Windows Bridge | 22 | değişmedi |
+| Tenant Security and Scope | 18 | +14 (4→18; KVKK-HIGH-006 Batch1-4 + 6 dbVerification clinic-scope dosyası + messaging-connection-scope + patients-import-clinic-scope + appointment-request-record-scope + dental-chart-clinic-scope + messages-record-scope + plan-limits-target-clinic-fix) |
+| Messaging — WhatsApp | 12 | +2 |
+| Appointments and Availability | 9 | +1 |
+| Reporting / Analytics | 5 | +2 (revenue-by-period, clinic-scope) |
+| Patients | 5 | +2 |
+| Basic Payments | 5 | +1 |
+| Identity and Access | 4 | değişmedi |
+| Public Booking | 4 | değişmedi |
+| Storage Abstraction | 3 | +2 (fileBackupService, fileBackupDbIntegration) |
+| Messaging — Instagram | 3 | değişmedi |
+| Observability / Operational Events | 3 | +1 (httpRequestLogPrivacy) |
+| Platform Administration | 3 | +1 (platformAdminPasswordRecovery) |
+| Messaging AI Orchestration | 3 | değişmedi |
+| Imaging — Server Ingest and Viewer | 2 | değişmedi |
+| Organization / Clinic / User Membership | 2 | değişmedi |
+| Dental Laboratory / Prosthetics Tracking | 1 | değişmedi |
+| Cross-Domain Contract | 1 | değişmedi |
+| Automations / Reminders / Follow-up / Recall | 1 | değişmedi |
+| Security Incident Response and Detection | 1 | değişmedi |
+| Messaging — SMS | 1 | değişmedi |
+| Permissions / Roles | 1 | değişmedi |
+| Repository/Build Tooling | 1 | değişmedi |
 
-**Sahip test dosyası sıfır olan 12 domain:** Entitlements and Release Flags, Audit and Activity, Configuration and Secrets, Shared Events / Queue Contracts / Idempotency, Notifications, Treatment Cases *(yalnızca secondary domain olarak 3 testte geçiyor, hiçbirinde primary sahip değil)*, Dental Chart / Procedures, Tasks and Follow-up, Messaging — Email, Inventory, Insurance, Advanced Finance — Compensation and Payouts. Tam gerekçe: evidence doc §11, `coverageGaps.domainsWithNoOwnedTests`.
+**Sahip test dosyası sıfır olan domainler (değişmedi, F0-005'ten korunmuştur):** Entitlements and Release Flags, Audit and Activity, Configuration and Secrets, Shared Events / Queue Contracts / Idempotency, Notifications, Treatment Cases *(yalnızca secondary domain olarak geçiyor, hiçbirinde primary sahip değil)*, Dental Chart / Procedures *(F1-002'de bir test — `dentalChartClinicScope.test.ts` — bu domaine yalnızca **secondary** olarak eklendi, primary sahibi Tenant Security and Scope)*, Tasks and Follow-up, Messaging — Email, Inventory *(F1-002'de yalnızca secondary olarak görünüyor)*, Insurance *(F1-002'de yalnızca secondary olarak görünüyor)*, Advanced Finance — Compensation and Payouts. **0 UNKNOWN sahiplik** — bkz. [evidence/F1-002_test_ownership_gaps.json](evidence/F1-002_test_ownership_gaps.json). Bu, pre-existing bir kapsam boşluğudur, F1-002 tarafından yaratılmamış veya kötüleştirilmemiştir; R-072 kapanışı için engelleyici değildir (R-072 envanter/sahiplik güncelliği hakkındadır, her kapsam boşluğunun kapatılması hakkında değil).
 
-## 4. Runtime ölçüm sonuçları — özet
+## 4. Runtime ölçüm sonuçları — özet (F0-005, 2026-07-19'da donmuş — F1-002 testleri yeniden ÇALIŞTIRMADI)
 
-Tam komut/süre/exit-code kaydı [evidence/F0-005_test_runtime_results.json](evidence/F0-005_test_runtime_results.json) içindedir (her kayıtta bu rebaseline'da yeniden çalıştırılıp çalıştırılmadığını gösteren `rerunAt7fcf2f8` bayrağıyla).
+**F1-002 kapsam notu:** bu görev testleri yeniden çalıştırmadı — yalnızca envanter/sahiplik/script-erişilebilirliğini yeniledi. Aşağıdaki runtime sonuçları hâlâ 2026-07-19 F0-005 taban çizgisine aittir ve 105 backend/9 frontend dosyanın yalnızca 72/6'sını kapsar; 34 yeni backend + 3 yeni frontend dosya için **hiçbir runtime pass/fail kaydı yoktur** (bu bir defect değildir — F1-002'nin görev tanımı davranış doğrulaması değil, envanter yenilemesidir). Tam komut/süre/exit-code kaydı [evidence/F0-005_test_runtime_results.json](evidence/F0-005_test_runtime_results.json) içindedir.
 
 | Komut | Sonuç |
 |---|---|
@@ -161,27 +167,30 @@ Tam kök-neden analizi: evidence doc §9.
 
 **En kritik bulgu:** `routes/whatsappInbox.ts:757`'deki eksik `pg_advisory_xact_lock` koruması (F0004-E0684, F0-004'ün "en şiddetli" bulgusu) — bu double-booking race condition'ın testi **yok**. `whatsappInbox.test.ts` var (25 test case) ama kendi docstring'ine göre yalnızca `utils/roles.ts` izin kontrollerini kapsıyor, gerçek route handler'ı hiç import etmiyor. Tam tablo (9 edge, dosya:satır, kanıt, eksik davranış): [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) `highRiskEdgeCoverage[]` ve evidence doc §7.
 
-## 6. Command-map bulguları
+## 6. Command-map bulguları (F1-002, güncel — programatik olarak ayrıştırıldı)
 
-- `npm run test` (server) 56/62 `test:*` script'ini zincirler (öncesi 54/60 idi; PR #169 2 script ekledi, ikisi de zincirin sonuna eklendi); **6 script hiç çağrılmıyor** (`test:consent-resume`, `test:meta-template`, `test:outbound`, `test:no-show-follow-up-parity`, `test:overdue-installments`, `test:overdue-receivables`) — bu liste rebaseline'dan etkilenmedi.
-- **6 backend `.test.ts` dosyasının hiç `package.json` script'i yok**: `aiPrivacyBoundary.test.ts`, `channelConsentGate.test.ts`, `clinicLegalProfile.test.ts`, `patientSharedPhone.test.ts`, `platformBackup.test.ts`, `treatmentPackagePermissions.test.ts`.
-- `npm run test` (server) `npx prisma generate` çalıştırılmadan **başarısız olur** (`@prisma/client` `PrismaClient` export etmiyor hatası) — bu ön koşul script'e gömülü değil.
-- Root `npm run build` adı yanıltıcı: yalnızca typecheck değil, gerçek bir production bundle build'i (`tsc -b && vite build`).
-- `bridge-agent/package.json:test` çalışıyor ama hiçbir CI workflow'u tarafından çağrılmıyor.
+- `npm run test` (server) artık **77** script çağrısı zincirler (F0-005'te 56/62 idi); tam liste ve her script'in zincir-üyeliği [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json)'da.
+- **6 önceden bilinen orphan `test:*` script'i hâlâ zincire dahil değil, değişmedi:** `test:consent-resume`, `test:meta-template`, `test:outbound`, `test:no-show-follow-up-parity`, `test:overdue-installments`, `test:overdue-receivables`.
+- **+10 yeni "scripted ama zincire dahil değil" script**, hepsi bilinçli olarak DB/harici-servis bağımlılığı nedeniyle hariç tutulmuş (tasarım gereği, boşluk değil): `test:appointment-request-conversion-atomicity`, `test:file-backup-db-integration`, `test:kvkk-high006-db-*` (6 script), `test:platform-admin-password-recovery`. **1 istisna, gerçek bir bulgu:** `test:file-backup` (`fileBackupService.test.ts`) DB-bağımsızdır (kendi dosya başlığına göre) ama yine de zincire eklenmemiştir — muhtemelen gözden kaçmış, DB-bağımlılığı nedeniyle bilinçli hariç tutulan diğerlerinden farklı.
+- **8 backend `.test.ts` dosyasının hiç `package.json` script'i yok** (F0-005'te 6 idi): `channelConsentGate.test.ts`, `clinicLegalProfile.test.ts`, `patientSharedPhone.test.ts`, `platformBackup.test.ts`, `treatmentPackagePermissions.test.ts` (5'i değişmedi), + **3 yeni**: `kvkkHigh006Batch2ClinicScope.test.ts`, `metaWhatsAppPostBookingHandler.test.ts`, `planLimitsTargetClinicFix.test.ts`. `aiPrivacyBoundary.test.ts` bu listeden **çıktı** — artık `test:ai-prompt-privacy` script'i var ve tam zincire dahil.
+- **0 stale/dead script referansı** — her script'in referans verdiği dosya diskte mevcut (programatik `fs.existsSync` kontrolü ile doğrulandı).
+- Frontend (`root/package.json`) hâlâ tüm 7 bireysel `test:*` script'ini zincirleyen bir aggregate'e sahip değil (F0-005'in bulgusu, değişmedi); ayrıca **yeni**: `test:vitest` (vitest run) 2 `*.vitest.test.tsx` dosyasını glob ile kapsıyor, bu da bireysel script gerektirmiyor.
+- `npm run test` (server) hâlâ `npx prisma generate` çalıştırılmadan başarısız olur — bu ön koşul script'e gömülü değil (F0-005'in bulgusu, F1-002 tarafından bu görevde yeniden doğrulanmadı, davranış değişikliği yok).
+- `bridge-agent/package.json:test` hâlâ çalışıyor ama hiçbir CI workflow'u tarafından çağrılmıyor (değişmedi).
 
-Tam detay: evidence doc §6.
+Tam detay: [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json).
 
-## 7. CI-uygulama boşluğu — merkezi bulgu
+## 7. CI-uygulama boşluğu — merkezi bulgu (F1-002, güncel)
 
-Depoda test çalıştıran **tam olarak bir** GitHub Actions workflow'u var: [`.github/workflows/windows-bridge-pr.yml`](../../.github/workflows/windows-bridge-pr.yml), yalnızca `windows-bridge/**`/imaging path'lerine dokunan PR'larda tetikleniyor. **68/72 backend test dosyası (öncesi 66/70), 3/6 frontend test dosyası (öncesi 2/5) ve 9/9 bridge-agent test dosyası hiçbir CI kapsamında değil.** `npm run test` (tam 56-script backend zinciri, öncesi 54) hiçbir workflow tarafından hiçbir zaman çağrılmıyor. PR #169'un eklediği 3 yeni dosya (`communicationConsent.test.ts`, `communicationPreferenceBackfill.test.ts`, `communicationConsentMatrixHelpers.test.ts`) da bu path kapsamı dışında kaldığı için sıfır CI kapsamıyla geldi — aynı boşluğun yeni bir örneği. §4.1 madde 2 (`overdueInstallments.test.ts`) bu boşluğun teorik değil, **şu anda gerçek ve sessiz bir regresyon taşıdığının** doğrudan kanıtıdır. Tam detay: evidence doc §11.
+Depoda test çalıştıran **tam olarak bir** GitHub Actions workflow'u var (değişmedi): [`.github/workflows/windows-bridge-pr.yml`](../../.github/workflows/windows-bridge-pr.yml), yalnızca `windows-bridge/**`/imaging path'lerine dokunan PR'larda tetikleniyor. **101/105 backend test dosyası (F0-005'te 68/72), 7/9 frontend test dosyası (F0-005'te 3/6) ve 9/9 bridge-agent test dosyası hiçbir CI kapsamında değil.** `npm run test` (tam 77-script backend zinciri) hiçbir workflow tarafından hiçbir zaman çağrılmıyor. **34 yeni backend + 3 yeni frontend dosyanın hiçbirinin** bu CI path kapsamında olmaması — aynı boşluğun 37 yeni örneği, F0-005'in PR #169 gözlemiyle birebir aynı yapı. §4.1'deki `overdueInstallments.test.ts` bulgusu (2026-07-19'dan beri değişmedi, bu görevde yeniden doğrulanmadı) bu boşluğun hâlâ teorik değil somut olduğunun kanıtı olarak kalır. Tam detay: F0-005 evidence doc §11 (F1-002 bu bulguyu yeniden üretmedi, yalnızca güncel dosya sayılarıyla teyit etti).
 
-## 8. Kapsam boşlukları (özet)
+## 8. Kapsam boşlukları (özet, F0-005'ten korunmuştur — F1-002 bu analizi yeniden yapmadı)
 
-Domain boşlukları (§3.1), concurrency boşlukları (F0004-E0684 — hiç test yok), tenant-security boşlukları (`multiBranchAccess.test.ts`'in 1043 satırlık kendi mantık mirror'ı gerçek `clinicScope.ts`/`clinicAccess.ts`'i hiç import etmiyor — §9.2'deki drift riskiyle aynı yapı), provider-failure boşlukları (yalnızca unit-seviye fetch-stub testleri var), migration boşlukları (otomatik migration up/down testi yok), frontend boşlukları (sıfır `FRONTEND_COMPONENT` testi, DOM/RTL harness'i yok), bridge boşlukları (.NET testleri bu görevde ölçülemedi — SDK uyuşmazlığı), load/chaos boşlukları (hiç yok). Tam liste: [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) `coverageGaps` ve evidence doc §12–§14.
+Domain boşlukları (§3.1, F1-002 tarafından güncellendi), concurrency boşlukları (F0004-E0684 — hâlâ hiç test yok, F1-002 bunu yeniden doğrulamadı), tenant-security boşlukları (`multiBranchAccess.test.ts`'in kendi mantık mirror'ı), provider-failure boşlukları, migration boşlukları (kısmen ele alındı — bkz. yeni `kvkkHigh007High008SchemaIntegrity.test.ts`, ama genel otomatik migration up/down testi hâlâ yok), frontend boşlukları (**kısmen kapandı** — artık 2 gerçek `UI_COMPONENT`/jsdom/RTL testi var, F0-005'in "sıfır FRONTEND_COMPONENT testi" bulgusu artık geçerli değil), bridge boşlukları (.NET testleri bu görevde de ölçülemedi — SDK uyuşmazlığı, değişmedi), load/chaos boşlukları (hiç yok, değişmedi). Bu bölümün geri kalanı F0-005'in orijinal analizini yansıtır ve F1-002 tarafından yeniden üretilmedi; ayrıntılı, güncel kapsam-boşluğu listesi için [evidence/F1-002_test_ownership_gaps.json](evidence/F1-002_test_ownership_gaps.json)'a bakın.
 
-## 9. F1 için önerilen affected-test yönlendirme tablosu (öneri — henüz uygulanmadı)
+## 9. F1 için önerilen affected-test yönlendirme tablosu
 
-Her F0-003 domain'i için sahip test dosyaları, mevcut odaklı komut, F0-004 bağımlı contract/security suite'leri, eskalasyon kuralı ve kritiklik: [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) `affectedTestRecommendations[]` (36 kayıt — 24 sahipli domain + 12 sıfır-testli domain). Bunlar **F1'in tasarım girdisidir, uygulanmış bir mekanizma değildir.**
+F1-001'in kendi tasarımı ([architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md](architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md)) bu tabloyu F0-005'in `affectedTestRecommendations[]`'ından türetilmiş bir sınıflandırma taksonomisiyle (24 kategori, 4 risk seviyesi, 18 yüksek-riskli boyut) **değiştirmiştir** — bkz. [architecture/evidence/f1-001-test-scope-classification.json](architecture/evidence/f1-001-test-scope-classification.json). F1-002'nin işi bu tasarımı uygulamak değildir; yalnızca o tasarımın kendi §0'da açıkladığı kanıt-bayatlığı riskini (R-072) gidermektir. F1-001'in tasarımı, kanonik sahiplik/domain sınırlarının dosya sayısı kadar hızlı değişmediğini, dolayısıyla F1-002'nin bu tabloyu yeniden üretmesine gerek olmadığını, yalnızca alttaki envanterin (§3, [F1-002_test_inventory.json](evidence/F1-002_test_inventory.json)) güncel tutulmasının yeterli olduğunu zaten öngörmüştür (confidence model, "stale evidence" kuralı). **F1'in bir sonraki CI-implementasyon görevi için ön koşul artık budur: F1-002'nin güncel envanteri.**
 
 ## 10. Sahiplik kuralları (hedef — F0-001'den korunmuştur)
 

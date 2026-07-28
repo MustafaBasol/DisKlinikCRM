@@ -57,7 +57,7 @@ Prior update: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Decisi
 **F1 — CI and Test Architecture**
 
 Faz dokümanı: [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md)
-Faz durumu: `IN_PROGRESS` (2026-07-25, F0-014 — phase entered following externally-approved G0; phase entry itself implies no implementation authorization beyond the assigned first task, F1-001, which is itself design/evidence-first). **Update 2026-07-28 (F1-001):** F1-001's design is delivered (`AGENT_COMPLETED`, PR opened, not merged — see "Aktif F1 görevi" below); faz durumu remains `IN_PROGRESS`, exit gate not satisfied, F1-002 not started.
+Faz durumu: `IN_PROGRESS` (2026-07-25, F0-014 — phase entered following externally-approved G0; phase entry itself implies no implementation authorization beyond the assigned first task, F1-001, which is itself design/evidence-first). **Update 2026-07-28 (F1-001):** F1-001's design is delivered (`AGENT_COMPLETED`, PR opened, not merged); faz durumu remains `IN_PROGRESS`, exit gate not satisfied, F1-002 not started. **Update 2026-07-28 (F1-002):** F1-002 — Test Inventory Refresh and Ownership Reconciliation — delivered (`AGENT_COMPLETED`, PR opened, not merged — see "Aktif F1 görevi" below); R-072 (test-inventory evidence staleness) remediated and closure proposed; faz durumu remains `IN_PROGRESS`, exit gate not satisfied, F1-003 not started.
 
 **Prior phase, now closed:** F0 — Baseline, Program Control, and Architecture Validation. Faz dokümanı: [phases/F0_BASELINE_AND_VALIDATION.md](phases/F0_BASELINE_AND_VALIDATION.md). Faz durumu: `COMPLETE` (2026-07-25, F0-014 — G0 externally `APPROVED_WITH_CONDITIONS`, all exit-gate conditions per [phases/F0_BASELINE_AND_VALIDATION.md](phases/F0_BASELINE_AND_VALIDATION.md) §"Exit gate" satisfied).
 
@@ -75,6 +75,18 @@ F1'in girişi G0'ın dış onayına bağlıydı ([phases/F1_CI_AND_TEST_ARCHITEC
 F1'in kendi kapsamı, [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md)'de tanımlı CI/test mimarisiyle sınırlıdır. F1 fazının kendi "Allowed work" maddesi CI dosyalarının bu fazda değiştirilebileceğini belirtir, ancak bu yalnızca dış onaylı, sıralı görevler için geçerlidir — bu döküman tek başına hiçbir implementasyonu yetkilendirmez.
 
 ## Aktif F1 görevi
+
+| Alan | Değer |
+|---|---|
+| ID | F1-002 |
+| Title | Test Inventory Refresh and Ownership Reconciliation |
+| Status | `AGENT_COMPLETED` (2026-07-28) — refreshed inventory/ownership/script-reconciliation delivered; PR opened, not merged. Not `MERGED`; does not by itself satisfy F1's exit gate. |
+| Full definition | [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md) §"F1-002 — Test Inventory Refresh and Ownership Reconciliation" |
+| Dependency | F1-001 (`AGENT_COMPLETED`, PR opened — provides domain/classification vocabulary this task reuses; F1-002 does not require F1-001 to be `MERGED` first) |
+| Deliverables | [TEST_OWNERSHIP.md](TEST_OWNERSHIP.md) (refreshed), [evidence/F1-002_test_inventory.json](evidence/F1-002_test_inventory.json), [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json), [evidence/F1-002_test_ownership_gaps.json](evidence/F1-002_test_ownership_gaps.json), [evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md](evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md) |
+| Risk remediated | R-072 (test-inventory evidence staleness) — closure **proposed**, not unilaterally declared `CLOSED` — see [RISK_REGISTER.md](RISK_REGISTER.md) |
+
+**Prior F1 task (2026-07-28, F1-001, design/evidence-first):**
 
 | Alan | Değer |
 |---|---|

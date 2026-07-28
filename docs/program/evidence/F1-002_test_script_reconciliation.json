@@ -1,0 +1,1447 @@
+{
+  "taskId": "F1-002",
+  "generatedAt": "2026-07-28",
+  "executionBaseline": "08f2eaf82a205cf3f997c57e6a295fedd66b142d",
+  "methodology": "server/package.json and root package.json scripts parsed programmatically with Node (regex extraction of `tsx <path>` invocations and `npm run <name>` tokens inside the aggregate `test` script), not read manually. Every matched file path was checked with fs.existsSync against the execution-baseline worktree.",
+  "serverPackageScripts": [
+    {
+      "package": "server",
+      "scriptName": "test:password-reset",
+      "command": "tsx src/tests/passwordReset.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/passwordReset.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:ai-prompt-privacy",
+      "command": "tsx src/tests/aiPrivacyBoundary.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/aiPrivacyBoundary.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test",
+      "command": "npm run test:fixtures && npm run test:agent && npm run test:safety && npm run test:msg-safety && npm run test:auth && npm run test:password-reset && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:patients-import-clinic-scope && npm run test:user-import-onboarding && npm run test:staff-onboarding && npm run test:email-verification && npm run test:instagram && npm run test:meta-wa && npm run test:overlap-safety && npm run test:availability-service && npm run test:public-booking && npm run test:public-booking-slots && npm run test:public-booking-slot-required && npm run test:notice-evidence && npm run test:purpose && npm run test:contact-requests && npm run test:post-treatment && npm run test:meta-template-sync && npm run test:template-waba-binding && npm run test:data-retention && npm run test:patient-privacy && npm run test:patient-name && npm run test:billing-patient-access && npm run test:treatment-case-scope && npm run test:kvkk-high006-batch3 && npm run test:billing-financial-select && npm run test:payment-validation && npm run test:payment-billing-edit && npm run test:payments-list-field-scope && npm run test:appointment-update-validation && npm run test:sms && npm run test:lab-orders && npm run test:imaging && npm run test:imaging-bridge-pairing && npm run test:imaging-bridge-onboarding && npm run test:imaging-bridge-update && npm run test:file-preview && npm run test:totp && npm run test:wa-persistence && npm run test:kvkk-lifecycle && npm run test:clinic-bulk-export && npm run test:security-incidents && npm run test:communication-consent && npm run test:communication-consent-backfill && npm run test:communication-consent-reconciliation-report && npm run test:communication-consent-reconciliation && npm run test:communication-consent-audit-report && npm run test:communication-consent-matrix-route && npm run test:legacy-consent-correction && npm run test:kvkk-high007-high008-schema-integrity && npm run test:messages-consent-gate && npm run test:messages-record-scope && npm run test:recall-consent-gate && npm run test:reports-clinic-scope && npm run test:reports-revenue-by-period && npm run test:appointment-request-record-scope && npm run test:dental-chart-clinic-scope && npm run test:messaging-connection-scope && npm run test:booking-flow-log-redaction && npm run test:http-log-privacy && npm run test:ai-prompt-privacy && npm run test:retention-manual-run-audit",
+      "matchedTestFiles": [],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A (this IS the aggregate)",
+      "isAggregateDefinition": true,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": false
+    },
+    {
+      "package": "server",
+      "scriptName": "test:payments-list-field-scope",
+      "command": "tsx src/tests/paymentsListFieldScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/paymentsListFieldScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:security-incidents",
+      "command": "tsx src/tests/securityIncident.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/securityIncident.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:clinic-bulk-export",
+      "command": "tsx src/tests/clinicBulkExport.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/clinicBulkExport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:patient-privacy",
+      "command": "tsx src/tests/patientPrivacy.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/patientPrivacy.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:patient-name",
+      "command": "tsx src/tests/patientName.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/patientName.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:billing-patient-access",
+      "command": "tsx src/tests/billingPatientAccess.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/billingPatientAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:fixtures",
+      "command": "tsx src/tests/whatsappConversationFixtures.ts",
+      "matchedTestFiles": [],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:agent",
+      "command": "tsx src/tests/whatsappAgentEvaluation.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/whatsappAgentEvaluation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:safety",
+      "command": "tsx src/tests/whatsappSafetyFixtures.ts",
+      "matchedTestFiles": [],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:msg-safety",
+      "command": "tsx src/tests/messageSafetyHardening.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/messageSafetyHardening.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:availability-service",
+      "command": "tsx src/tests/appointmentAvailabilityService.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/appointmentAvailabilityService.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:public-booking",
+      "command": "tsx src/tests/publicBookingAvailability.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/publicBookingAvailability.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:public-booking-slots",
+      "command": "tsx src/tests/publicBookingSlotConsistency.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/publicBookingSlotConsistency.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:public-booking-slot-required",
+      "command": "tsx src/tests/publicBookingSlotRequired.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/publicBookingSlotRequired.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:notice-evidence",
+      "command": "tsx src/tests/publicBookingNoticeEvidence.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/publicBookingNoticeEvidence.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:auth",
+      "command": "tsx src/tests/sessionCookieCsrf.test.ts && tsx src/tests/platformAdmin.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/sessionCookieCsrf.test.ts",
+        "server/src/tests/platformAdmin.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": false
+    },
+    {
+      "package": "server",
+      "scriptName": "test:whatsapp",
+      "command": "tsx src/tests/whatsappProvider.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/whatsappProvider.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:inbox",
+      "command": "tsx src/tests/whatsappInbox.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/whatsappInbox.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:wa-persistence",
+      "command": "tsx src/tests/whatsappConversationPersistence.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/whatsappConversationPersistence.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-lifecycle",
+      "command": "tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:finance",
+      "command": "tsx src/tests/financeDashboard.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/financeDashboard.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:ops",
+      "command": "tsx src/tests/operationalMonitoring.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/operationalMonitoring.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:no-shows",
+      "command": "tsx src/tests/noShow.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/noShow.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:pricing",
+      "command": "tsx src/tests/servicePricing.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/servicePricing.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:roles",
+      "command": "tsx src/tests/multiBranchAccess.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/multiBranchAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:schedule",
+      "command": "tsx src/tests/scheduleAccess.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/scheduleAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:orgdash",
+      "command": "tsx src/tests/organizationDashboard.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/organizationDashboard.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:dashboard",
+      "command": "tsx src/tests/dashboard.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dashboard.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imports",
+      "command": "tsx src/tests/excelImport.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/excelImport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:patients-import-clinic-scope",
+      "command": "tsx src/tests/patientsImportClinicScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/patientsImportClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:instagram",
+      "command": "tsx src/tests/instagramProvider.test.ts && tsx src/tests/instagramConversion.test.ts && tsx src/tests/instagramAssistantParity.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/instagramProvider.test.ts",
+        "server/src/tests/instagramConversion.test.ts",
+        "server/src/tests/instagramAssistantParity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": false
+    },
+    {
+      "package": "server",
+      "scriptName": "test:meta-wa",
+      "command": "tsx src/tests/metaWhatsAppWebhook.test.ts && tsx src/tests/whatsappAwaitingServiceStep.test.ts && tsx src/tests/whatsappStepAwareNlu.test.ts && tsx src/tests/whatsappIdentityAndPostBooking.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/metaWhatsAppWebhook.test.ts",
+        "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+        "server/src/tests/whatsappStepAwareNlu.test.ts",
+        "server/src/tests/whatsappIdentityAndPostBooking.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": false
+    },
+    {
+      "package": "server",
+      "scriptName": "test:consent-resume",
+      "command": "tsx src/tests/channelConsentFlowResume.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/channelConsentFlowResume.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:meta-template",
+      "command": "tsx src/tests/metaTemplateService.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/metaTemplateService.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:meta-template-sync",
+      "command": "tsx src/tests/metaTemplateSyncJob.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/metaTemplateSyncJob.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:template-waba-binding",
+      "command": "tsx src/tests/messageTemplateWabaBinding.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/messageTemplateWabaBinding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:data-retention",
+      "command": "tsx src/tests/dataRetentionCleanupJob.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dataRetentionCleanupJob.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:retention-manual-run-audit",
+      "command": "tsx src/tests/retentionManualRunAudit.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/retentionManualRunAudit.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:outbound",
+      "command": "tsx src/tests/whatsappOutboundMessaging.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/whatsappOutboundMessaging.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:booking-flow-log-redaction",
+      "command": "tsx src/tests/whatsappBookingFlowLogRedaction.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/whatsappBookingFlowLogRedaction.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:purpose",
+      "command": "tsx src/tests/messageTemplatePurpose.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/messageTemplatePurpose.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:contact-requests",
+      "command": "tsx src/tests/contactRequests.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/contactRequests.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:post-treatment",
+      "command": "tsx src/tests/postTreatmentMessaging.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/postTreatmentMessaging.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:overlap-safety",
+      "command": "tsx src/tests/appointmentRequestOverlapSafety.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/appointmentRequestOverlapSafety.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:treatment-case-scope",
+      "command": "tsx src/tests/treatmentCaseClinicScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/treatmentCaseClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-batch3",
+      "command": "tsx src/tests/kvkkHigh006Batch3ClinicScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/kvkkHigh006Batch3ClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:reports-clinic-scope",
+      "command": "tsx src/tests/reportsClinicScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/reportsClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:appointment-request-record-scope",
+      "command": "tsx src/tests/appointmentRequestRecordScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/appointmentRequestRecordScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:dental-chart-clinic-scope",
+      "command": "tsx src/tests/dentalChartClinicScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dentalChartClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:messaging-connection-scope",
+      "command": "tsx src/tests/organizationMessagingConnectionScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/organizationMessagingConnectionScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:billing-financial-select",
+      "command": "tsx src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:payment-validation",
+      "command": "tsx src/tests/paymentValidation.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/paymentValidation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:payment-billing-edit",
+      "command": "tsx src/tests/paymentBillingEdit.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/paymentBillingEdit.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:appointment-update-validation",
+      "command": "tsx src/tests/appointmentUpdateValidation.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/appointmentUpdateValidation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:sms",
+      "command": "tsx src/tests/smsModule.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/smsModule.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:lab-orders",
+      "command": "tsx src/tests/labOrders.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/labOrders.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging",
+      "command": "tsx src/tests/imaging.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/imaging.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging-bridge-pairing",
+      "command": "tsx src/tests/imagingBridgePairing.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/imagingBridgePairing.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging-bridge-onboarding",
+      "command": "tsx src/tests/imagingBridgeOnboarding.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/imagingBridgeOnboarding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging-bridge-update",
+      "command": "tsx src/tests/imagingBridgeUpdate.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/imagingBridgeUpdate.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:file-preview",
+      "command": "tsx src/tests/filePreview.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/filePreview.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:totp",
+      "command": "tsx src/tests/totp.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/totp.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:email-verification",
+      "command": "tsx src/tests/emailVerification.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/emailVerification.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:staff-onboarding",
+      "command": "tsx src/tests/staffOnboarding.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/staffOnboarding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:user-import-onboarding",
+      "command": "tsx src/tests/userImportOnboarding.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/userImportOnboarding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:no-show-follow-up-parity",
+      "command": "tsx src/tests/noShowFollowUpParity.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/noShowFollowUpParity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:overdue-installments",
+      "command": "tsx src/tests/overdueInstallments.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/overdueInstallments.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:overdue-receivables",
+      "command": "tsx src/tests/overdueReceivables.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/overdueReceivables.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent",
+      "command": "tsx src/tests/communicationConsent.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/communicationConsent.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-backfill",
+      "command": "tsx src/tests/communicationPreferenceBackfill.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/communicationPreferenceBackfill.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-reconciliation-report",
+      "command": "tsx src/tests/communicationPreferenceReconciliationReport.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/communicationPreferenceReconciliationReport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-reconciliation",
+      "command": "tsx src/tests/legacyReconciliationResolver.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/legacyReconciliationResolver.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-audit-report",
+      "command": "tsx src/tests/communicationConsentAuditReport.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/communicationConsentAuditReport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-matrix-route",
+      "command": "tsx src/tests/communicationPreferencesRoute.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/communicationPreferencesRoute.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:legacy-consent-correction",
+      "command": "tsx src/tests/legacyConsentCorrection.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/legacyConsentCorrection.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high007-high008-schema-integrity",
+      "command": "tsx src/tests/kvkkHigh007High008SchemaIntegrity.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/kvkkHigh007High008SchemaIntegrity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:messages-consent-gate",
+      "command": "tsx src/tests/messagesConsentGate.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/messagesConsentGate.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:messages-record-scope",
+      "command": "tsx src/tests/messagesRecordScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/messagesRecordScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:recall-consent-gate",
+      "command": "tsx src/tests/recallConsentGate.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/recallConsentGate.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-clinic-scope-access",
+      "command": "tsx src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-record-owned-mutation-scope",
+      "command": "tsx src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-target-clinic-creation",
+      "command": "tsx src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-insurance-list-behavior",
+      "command": "tsx src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-plan-limits-quota",
+      "command": "tsx src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-input-handling",
+      "command": "tsx src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-verification",
+      "command": "npm run test:kvkk-high006-db-clinic-scope-access && npm run test:kvkk-high006-db-record-owned-mutation-scope && npm run test:kvkk-high006-db-target-clinic-creation && npm run test:kvkk-high006-db-insurance-list-behavior && npm run test:kvkk-high006-db-plan-limits-quota && npm run test:kvkk-high006-db-input-handling",
+      "matchedTestFiles": [],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": true,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:appointment-request-conversion-atomicity",
+      "command": "tsx src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:platform-admin-password-recovery",
+      "command": "tsx src/tests/platformAdminPasswordRecovery.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/platformAdminPasswordRecovery.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:http-log-privacy",
+      "command": "tsx src/tests/httpRequestLogPrivacy.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/httpRequestLogPrivacy.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:file-backup",
+      "command": "tsx src/tests/fileBackupService.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/fileBackupService.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:file-backup-db-integration",
+      "command": "tsx src/tests/dbVerification/fileBackupDbIntegration.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": false,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "server",
+      "scriptName": "test:reports-revenue-by-period",
+      "command": "tsx src/tests/reportsRevenueByPeriod.test.ts",
+      "matchedTestFiles": [
+        "server/src/tests/reportsRevenueByPeriod.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": true,
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": true,
+      "suitableForCiAsIs": true
+    }
+  ],
+  "frontendPackageScripts": [
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:dicom-helpers",
+      "command": "tsx src/components/imaging/__tests__/dicomHelpers.test.ts",
+      "matchedTestFiles": [
+        "src/components/imaging/__tests__/dicomHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:onboarding-helpers",
+      "command": "tsx src/components/imaging/__tests__/onboardingHelpers.test.ts",
+      "matchedTestFiles": [
+        "src/components/imaging/__tests__/onboardingHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:pairing-poller",
+      "command": "tsx src/components/imaging/__tests__/pairingPoller.test.ts",
+      "matchedTestFiles": [
+        "src/components/imaging/__tests__/pairingPoller.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:booking-widget-helpers",
+      "command": "tsx src/pages/__tests__/bookingWidgetHelpers.test.ts",
+      "matchedTestFiles": [
+        "src/pages/__tests__/bookingWidgetHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:clinic-bulk-export-selection",
+      "command": "tsx src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
+      "matchedTestFiles": [
+        "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:communication-consent-matrix",
+      "command": "tsx src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
+      "matchedTestFiles": [
+        "src/components/__tests__/communicationConsentMatrixHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:patient-detail-tabs-helpers",
+      "command": "tsx src/pages/__tests__/patientDetailTabsHelpers.test.ts",
+      "matchedTestFiles": [
+        "src/pages/__tests__/patientDetailTabsHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": false,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    },
+    {
+      "package": "root (frontend)",
+      "scriptName": "test:vitest",
+      "command": "vitest run",
+      "matchedTestFiles": [
+        "src/components/CommunicationPreferencesPanel.vitest.test.tsx",
+        "src/components/PatientDetailTabs.vitest.test.tsx"
+      ],
+      "missingReferencedFiles": [],
+      "inFullSuiteAggregate": "N/A — root package.json defines NO aggregate frontend test script chaining these together (same finding as F0-005); each script is run individually",
+      "isAggregateDefinition": true,
+      "databaseOrExternalServiceLikely": false,
+      "suitableForCiAsIs": true
+    }
+  ],
+  "bridgeAgentPackageScript": {
+    "package": "bridge-agent",
+    "scriptName": "test",
+    "command": "tsx tests/config.test.ts && tsx tests/hash.test.ts && tsx tests/queue.test.ts && tsx tests/watcher.test.ts && tsx tests/uploader.test.ts && tsx tests/lifecycle.test.ts && tsx tests/archiveStrategy.test.ts && tsx tests/textEncoding.test.ts && tsx tests/installServiceAcl.test.ts",
+    "matchedTestFiles": [
+      "bridge-agent/tests/config.test.ts",
+      "bridge-agent/tests/hash.test.ts",
+      "bridge-agent/tests/queue.test.ts",
+      "bridge-agent/tests/watcher.test.ts",
+      "bridge-agent/tests/uploader.test.ts",
+      "bridge-agent/tests/lifecycle.test.ts",
+      "bridge-agent/tests/archiveStrategy.test.ts",
+      "bridge-agent/tests/textEncoding.test.ts",
+      "bridge-agent/tests/installServiceAcl.test.ts"
+    ],
+    "missingReferencedFiles": [],
+    "inFullSuiteAggregate": "N/A — own package, not called by root or server test scripts, and not called by any CI workflow (F0-005 finding, re-confirmed unchanged)",
+    "isAggregateDefinition": true,
+    "databaseOrExternalServiceLikely": false,
+    "suitableForCiAsIs": true
+  },
+  "aggregateSuiteDefinition": {
+    "package": "server",
+    "scriptName": "test",
+    "chainedScriptCount": 77,
+    "note": "The 6 pre-existing orphan scripts identified by F0-005 (test:consent-resume, test:meta-template, test:outbound, test:no-show-follow-up-parity, test:overdue-installments, test:overdue-receivables) remain orphaned — unchanged by any commit since 2026-07-19. This is a pre-existing gap, not a regression introduced since F0-005."
+  },
+  "findings": {
+    "scriptsReferencingNoFiles": [],
+    "filesNotMatchedByAnyScript": {
+      "backend": [
+        "server/src/tests/channelConsentGate.test.ts",
+        "server/src/tests/clinicLegalProfile.test.ts",
+        "server/src/tests/kvkkHigh006Batch2ClinicScope.test.ts",
+        "server/src/tests/metaWhatsAppPostBookingHandler.test.ts",
+        "server/src/tests/patientSharedPhone.test.ts",
+        "server/src/tests/planLimitsTargetClinicFix.test.ts",
+        "server/src/tests/platformBackup.test.ts",
+        "server/src/tests/treatmentPackagePermissions.test.ts"
+      ],
+      "frontend": []
+    },
+    "staleAliasesOrDuplicateCoverage": "None found — every server test:* script maps 1:1 or N:1 (test:auth, test:instagram, test:meta-wa chain 2-4 files each under one script name) to an existing file; no two script names point at overlapping-but-different file sets.",
+    "scriptsThatSilentlySkipExpectedTests": "The aggregate `npm run test` chain (server) does not run: the 6 pre-existing orphans above, the 8 never-scripted files (see ownership-gaps artifact), or any of the 8 dbVerification/DB-dependent scripts (by design — these require a disposable Postgres/MinIO the ordinary task/CI environment does not provide) — see testsOnlyReachableThroughGlobalSuite below for the inverse case.",
+    "packageScriptsAddedSinceF0005": {
+      "server": [
+        "test:ai-prompt-privacy",
+        "test:retention-manual-run-audit",
+        "test:kvkk-high007-high008-schema-integrity",
+        "test:file-backup",
+        "test:file-backup-db-integration",
+        "test:reports-revenue-by-period",
+        "test:appointment-request-record-scope",
+        "test:dental-chart-clinic-scope",
+        "test:messaging-connection-scope",
+        "test:booking-flow-log-redaction",
+        "test:http-log-privacy",
+        "test:communication-consent-reconciliation-report",
+        "test:communication-consent-audit-report",
+        "test:communication-consent-matrix-route",
+        "test:legacy-consent-correction",
+        "test:messages-consent-gate",
+        "test:messages-record-scope",
+        "test:recall-consent-gate",
+        "test:reports-clinic-scope",
+        "test:payments-list-field-scope",
+        "test:patients-import-clinic-scope",
+        "test:kvkk-high006-batch3",
+        "test:platform-admin-password-recovery",
+        "test:kvkk-high006-db-clinic-scope-access",
+        "test:kvkk-high006-db-record-owned-mutation-scope",
+        "test:kvkk-high006-db-target-clinic-creation",
+        "test:kvkk-high006-db-insurance-list-behavior",
+        "test:kvkk-high006-db-plan-limits-quota",
+        "test:kvkk-high006-db-input-handling",
+        "test:kvkk-high006-db-verification",
+        "test:appointment-request-conversion-atomicity"
+      ],
+      "root": [
+        "test:patient-detail-tabs-helpers",
+        "test:vitest (framework introduced 2026-07 for KVKK-HIGH-008 component tests, already present at F1-001s own baseline)"
+      ],
+      "note": "This list is broader than the F0-005-vs-now test-file delta because several scripts (e.g. test:dental-chart-clinic-scope, test:reports-clinic-scope) were added for files that ALSO already existed as an add in the F0-005-to-now window — i.e. script and file were added together, consistent with normal development practice, not a stale reference."
+    },
+    "testsOnlyReachableThroughGlobalSuite": "None — every backend file that IS in the aggregate `test` chain is ALSO independently runnable via its own named script (server/package.json defines one script per file, then chains them). There is no case in this repository of a test only reachable by running the full `npm run test` with no standalone script.",
+    "testsNotReachableThroughAnySuite": {
+      "backend": [
+        "server/src/tests/channelConsentGate.test.ts",
+        "server/src/tests/clinicLegalProfile.test.ts",
+        "server/src/tests/kvkkHigh006Batch2ClinicScope.test.ts",
+        "server/src/tests/metaWhatsAppPostBookingHandler.test.ts",
+        "server/src/tests/patientSharedPhone.test.ts",
+        "server/src/tests/planLimitsTargetClinicFix.test.ts",
+        "server/src/tests/platformBackup.test.ts",
+        "server/src/tests/treatmentPackagePermissions.test.ts"
+      ],
+      "note": "These 8 files have zero package.json script of any kind (individual or aggregate) and are runnable only via a direct `npx tsx <path>` invocation. 5 of these 8 were already unscripted at F0-005 (channelConsentGate, clinicLegalProfile, patientSharedPhone, platformBackup, treatmentPackagePermissions); aiPrivacyBoundary (the 6th F0-005 orphan) gained a script since and is no longer in this list; 3 are newly-added files that never received a script (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix)."
+    }
+  }
+}
