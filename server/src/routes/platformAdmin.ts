@@ -8,7 +8,7 @@ import {
 } from '../middleware/platformAuth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
-import { loadDataRetentionConfig } from '../services/privacy/dataRetentionPolicy.js';
+import { loadDataRetentionConfig, DATA_RETENTION_RUNTIME_SETTING_KEY } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting, setPlatformSetting, unsetPlatformSetting } from '../services/platformSettings.js';
 import {
   LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
@@ -1054,7 +1054,7 @@ function buildPolicyResponse(
 // Returns current retention policy config including runtime toggle. No secrets. Platform-admin only.
 router.get('/privacy/data-retention/policy', async (_req, res: Response) => {
   const config = loadDataRetentionConfig();
-  const runtimeVal = await getPlatformSetting('privacy.dataRetention.runtimeEnabled');
+  const runtimeVal = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);
   const runtimeCleanupEnabled = runtimeVal === 'true';
   res.json(buildPolicyResponse(config, runtimeCleanupEnabled));
 });
@@ -1067,7 +1067,7 @@ router.patch('/privacy/data-retention/settings', async (req, res: Response) => {
     res.status(400).json({ error: 'runtimeCleanupEnabled must be a boolean' });
     return;
   }
-  await setPlatformSetting('privacy.dataRetention.runtimeEnabled', String(runtimeCleanupEnabled));
+  await setPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY, String(runtimeCleanupEnabled));
   const config = loadDataRetentionConfig();
   res.json(buildPolicyResponse(config, runtimeCleanupEnabled));
 });
@@ -1184,24 +1184,141 @@ router.delete('/privacy/legacy-consent-correction/settings', async (req: Platfor
   });
 });
 
+// RETENTION-MANUAL-RUN-AUDIT-001: every attempt below (blocked, successful,
+// partially failed, or unexpectedly errored) writes exactly one immutable
+// PlatformAdminAuditEvent — written server-side inside the handler itself,
+// never behind a separate "confirm" call, so the audit trail can never
+// depend on what the calling frontend does with the HTTP response.
+const DATA_RETENTION_MANUAL_RUN_ACTION = 'data_retention.manual_run';
+
+type DataRetentionManualRunOutcome = 'success' | 'partial_failure' | 'blocked' | 'error';
+
+async function recordDataRetentionManualRunAudit(input: {
+  actorPlatformAdminId: string | null;
+  dryRun: boolean;
+  config: ReturnType<typeof loadDataRetentionConfig>;
+  runtimeCleanupEnabled: boolean;
+  effectiveCleanupEnabled: boolean;
+  cleanupEnabledSource: 'env_disabled' | 'runtime_disabled' | 'enabled';
+  outcome: DataRetentionManualRunOutcome;
+  errorCategory?: string;
+  resultCounts?: Record<string, number>;
+  skippedCategories?: string[];
+}): Promise<void> {
+  // Only categorical/numeric fields ever land here: config values, booleans,
+  // static category labels (e.g. "conversationMessages"), and result counts.
+  // Never the deleted/anonymized rows themselves, never a raw error message
+  // (which could echo back query fragments) — only a fixed errorCategory code.
+  await prisma.$transaction(async (tx) => {
+    await writePlatformAdminAuditEventInTx(tx, {
+      actorPlatformAdminId: input.actorPlatformAdminId,
+      action: DATA_RETENTION_MANUAL_RUN_ACTION,
+      resourceType: 'data_retention',
+      resourceKey: 'manual_run',
+      outcome: input.outcome,
+      safeMetadata: {
+        dryRun: input.dryRun,
+        effectiveConfig: {
+          envCleanupEnabled: input.config.enabled,
+          cronSchedule: input.config.cronSchedule,
+          conversationMessagesDays: input.config.conversationMessagesDays,
+          conversationStateDays: input.config.conversationStateDays,
+          operationalEventsDays: input.config.operationalEventsDays,
+          inboundEventDays: input.config.inboundEventDays,
+          resolvedContactRequestDays: input.config.resolvedContactRequestDays,
+          communicationConsentConflictBucketsDays: input.config.communicationConsentConflictBucketsDays,
+          batchSize: input.config.batchSize,
+        },
+        runtimeCleanupEnabled: input.runtimeCleanupEnabled,
+        effectiveCleanupEnabled: input.effectiveCleanupEnabled,
+        cleanupEnabledSource: input.cleanupEnabledSource,
+        ...(input.resultCounts ? { resultCounts: input.resultCounts } : {}),
+        ...(input.skippedCategories?.length ? { skippedCategories: input.skippedCategories } : {}),
+        ...(input.errorCategory ? { errorCategory: input.errorCategory } : {}),
+      },
+    });
+  });
+}
+
 // POST /api/platform/privacy/data-retention/run
 // Trigger or dry-run the data retention cleanup. Platform-admin only.
-// Live run is blocked if DATA_RETENTION_CLEANUP_ENABLED=false (env hard-switch).
-router.post('/privacy/data-retention/run', async (req, res: Response) => {
+//
+// Live execution (dryRun=false) requires BOTH the environment hard-switch
+// (DATA_RETENTION_CLEANUP_ENABLED) AND the runtime kill-switch
+// (privacy.dataRetention.runtimeEnabled PlatformSetting) to agree cleanup
+// should run — the exact same "effective enabled" gate the scheduled cron
+// uses (see dataRetentionCleanupJob.ts / buildPolicyResponse above). Without
+// this, an operator could flip the runtime toggle off to halt the *scheduled*
+// job while this manual endpoint kept deleting data anyway — a
+// runtime-toggle/requested-execution inconsistency this check exists to
+// catch and reject rather than silently execute.
+router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res: Response) => {
   const dryRun = req.body?.dryRun !== false; // default to dry-run for safety
-  if (!dryRun) {
-    const config = loadDataRetentionConfig();
-    if (!config.enabled) {
-      res.status(403).json({ error: 'Live cleanup is disabled at the environment level (DATA_RETENTION_CLEANUP_ENABLED=false).' });
-      return;
-    }
+  const config = loadDataRetentionConfig();
+  const runtimeVal = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);
+  const runtimeCleanupEnabled = runtimeVal === 'true';
+  const { effectiveCleanupEnabled, cleanupEnabledSource } = buildPolicyResponse(config, runtimeCleanupEnabled);
+  const actorPlatformAdminId = req.platformAdmin?.id ?? null;
+
+  if (!dryRun && !effectiveCleanupEnabled) {
+    await recordDataRetentionManualRunAudit({
+      actorPlatformAdminId,
+      dryRun,
+      config,
+      runtimeCleanupEnabled,
+      effectiveCleanupEnabled,
+      cleanupEnabledSource,
+      outcome: 'blocked',
+      errorCategory: cleanupEnabledSource === 'env_disabled' ? 'blocked_env_disabled' : 'blocked_runtime_disabled',
+    });
+    res.status(403).json({
+      error: cleanupEnabledSource === 'env_disabled'
+        ? 'Live cleanup is disabled at the environment level (DATA_RETENTION_CLEANUP_ENABLED=false).'
+        : 'Live cleanup is disabled at the runtime level (privacy.dataRetention.runtimeEnabled is not true).',
+      cleanupEnabledSource,
+    });
+    return;
   }
+
   try {
     const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
-    const summary = await runDataRetentionCleanup({ dryRun });
+    const summary = await runDataRetentionCleanup({ dryRun, config });
+    const hadErrors = summary.errors.length > 0;
+
+    await recordDataRetentionManualRunAudit({
+      actorPlatformAdminId,
+      dryRun,
+      config,
+      runtimeCleanupEnabled,
+      effectiveCleanupEnabled,
+      cleanupEnabledSource,
+      outcome: hadErrors ? 'partial_failure' : 'success',
+      errorCategory: hadErrors ? 'category_execution_error' : undefined,
+      resultCounts: {
+        deletedConversationMessages: summary.deletedConversationMessages,
+        deletedConversationStates: summary.deletedConversationStates,
+        deletedOperationalEvents: summary.deletedOperationalEvents,
+        deletedInboundEvents: summary.deletedInboundEvents,
+        anonymizedContactRequests: summary.anonymizedContactRequests,
+        redactedInboxEntries: summary.redactedInboxEntries,
+        deletedCommunicationConsentConflictBuckets: summary.deletedCommunicationConsentConflictBuckets,
+      },
+      skippedCategories: summary.skippedCategories,
+    });
+
     res.json({ success: true, summary });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
+    await recordDataRetentionManualRunAudit({
+      actorPlatformAdminId,
+      dryRun,
+      config,
+      runtimeCleanupEnabled,
+      effectiveCleanupEnabled,
+      cleanupEnabledSource,
+      outcome: 'error',
+      errorCategory: 'unexpected_exception',
+    });
     res.status(500).json({ error: `Data retention run failed: ${msg}` });
   }
 });

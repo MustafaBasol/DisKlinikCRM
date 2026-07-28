@@ -22,6 +22,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import {
   loadDataRetentionConfig,
+  DATA_RETENTION_RUNTIME_SETTING_KEY,
   type DataRetentionConfig,
 } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting } from '../services/platformSettings.js';
@@ -402,7 +403,7 @@ export function startDataRetentionCleanupJob(overrides?: DataRetentionJobOverrid
   }
 
   const getRuntimeEnabled = overrides?.getRuntimeEnabled ?? (async () => {
-    const val = await getPlatformSetting('privacy.dataRetention.runtimeEnabled');
+    const val = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);
     return val === 'true';
   });
 
