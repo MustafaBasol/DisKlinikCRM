@@ -1855,8 +1855,18 @@ model PlatformAdminAuditEvent {
   previousValue String?
   newValue      String?
 
-  /// "success" | "failure" — this table only ever records successful
-  /// mutations (see platformAdminAuditService.ts); reserved for future use.
+  /// Most actions (e.g. "platform_setting.updated") only ever record
+  /// "success" — those mutations either commit with their audit row or roll
+  /// back entirely (see platformAdminAudit.ts). Actions that audit an
+  /// *attempted operation* rather than a single mutation use more outcomes:
+  /// e.g. "data_retention.manual_run_started" / "..._completed" /
+  /// "..._partial_failure" / "..._blocked" / "..._failed"
+  /// (RETENTION-MANUAL-RUN-AUDIT-001, see
+  /// services/privacy/dataRetentionManualRunAudit.ts) records a
+  /// "started" row (outcome "started") before any live cleanup mutation,
+  /// then exactly one terminal row sharing the same safeMetadata.runId —
+  /// see that row's safeMetadata.errorCategory for a safe (non-PII) reason
+  /// code on non-"success" terminal outcomes.
   outcome String
 
   /// Sanitized, non-secret, non-patient metadata only.
