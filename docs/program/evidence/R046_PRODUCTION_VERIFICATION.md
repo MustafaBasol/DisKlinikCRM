@@ -7,9 +7,9 @@
 
 ## Status
 
-`READY_FOR_PRODUCTION_READ_ONLY_VERIFICATION`
+`CLOSURE_PROPOSED_AWAITING_FINAL_RECONCILIATION`
 
-**Not** `CLOSED_VERIFIED`. **Not** `CLOSURE_PROPOSED_AWAITING_OPERATOR_EVIDENCE` — that status is reserved for the point after the operator has run §6's commands and pasted results back into this file (or a follow-up file); that has not happened yet. This document prepares the exact operator commands and reconciles every closure criterion, but R-046 itself **remains `OPEN`** in `RISK_REGISTER.md` (see §7).
+**Not** `CLOSED_VERIFIED`. The operator has now run §6's read-only production commands and the raw results are recorded below in §6a ("Production Verification Transcript"), as of 2026-07-28. Per §6a.4's explicit caveats, this production read-only evidence — combined with the disposable/synthetic rehearsal evidence already in §3 — supports **proposing** closure of R-046; it does not itself constitute a unilateral closure. R-046 itself **remains `OPEN`** in `RISK_REGISTER.md` (see §7); final closure is contingent on the decision/risk owner's reconciliation of the residual structural gap identified in §5 and §6a.4 (no live cross-tenant mutation test was performed, and none is proposed, against real production patient data).
 
 ## 0. Baseline correction
 
@@ -142,9 +142,9 @@ Every HIGH-007/HIGH-008-related committed suite re-run against the §3.1 databas
 | Disposable tenant-impact evidence | `VERIFIED_DISPOSABLE_REHEARSAL`, 14/14 (F0-011-P2) | Independently reproduced again, fresh session, 5/5 (§3.3 Part 4) |
 | Failed-migration recovery documented | **Not previously covered by any R-046 evidence** | **Newly satisfied** (§3.4) — distinct from R-070's after-success case |
 | Constraint/index regression protection | None (one-time evidence only) | **Newly satisfied, ongoing** (§3.6, wired into `npm test`) |
-| Production migration-application evidence | `VERIFIED_USER_SUPPLIED_PRODUCTION_EVIDENCE`, narrative only | Unchanged by this task (no production access) — §6 prepares the command package to convert this into a committed raw-transcript artifact |
-| Full production cross-tenant negative verification | **Missing** | **Still missing** — see §5 for why this cannot simply be "run now," and §6 for the safe path forward |
-| Full production audit verification | **Missing** | **Still missing** — production has `0` rows in every relevant table (per KVKK-HIGH-008-F1-PROD-DOCS), so there is nothing to inspect yet; see §5 |
+| Production migration-application evidence | `VERIFIED_USER_SUPPLIED_PRODUCTION_EVIDENCE`, narrative only | **Now a committed raw-transcript artifact** (§6a.1) — 65/65 migrations, all three in-scope migrations `applied=true`/`rolled_back=false`, `unfinished=0` |
+| Full production cross-tenant negative verification | **Missing** | **Still not a live negative test** — §6a.2 collected the aggregate/mismatch-count read (`0` rows, `0` mismatches), but per §6a.4 point 2 this is a passive read against zero existing rows, not a live cross-tenant mutation attempt; see §5 for why that remains out of scope and §6a.4 for the caveat |
+| Full production audit verification | **Missing** | **Still not a full audit verification** — §6a.3 collected raw counts: `PatientLegacyConsentCorrection=0` (nothing to inspect yet, per §6a.4 point 1) and `PlatformAdminAuditEvent=3` (non-zero; a dedicated row-level audit-attribution check, per §6.4's own trigger, has not been performed) |
 | Production schema state | `VERIFIED_USER_SUPPLIED_PRODUCTION_EVIDENCE` | Unchanged by this task — §6 prepares read-only commands to reconfirm and commit raw output |
 
 ## 5. Why "full production cross-tenant negative verification" is not simply executable now
@@ -235,6 +235,53 @@ GROUP BY action;
 ### 6.5 Authenticated endpoint re-attempt (only if valid platform-admin credentials are available)
 
 Re-run `KVKK-HIGH-008-F1_PRODUCTION_SAFE_BEHAVIORAL_VERIFICATION.md`'s Test C1 (`GET` read-only policy endpoint) and Test C3 (authenticated invalid-payload rejection) — both were `BLOCKED / NOT EXECUTED` in that pass due to a login credential rejection, not attempted since. This task did not obtain or request credentials and did not re-attempt this step. If credentials are available now, re-running exactly that prior evidence file's §4.1/§4.3 command package (unchanged, still non-activating) would close that specific gap without requiring any new command design.
+
+## 6a. Operator-executed results — Production Verification Transcript
+
+**Date:** 2026-07-28
+**Executed by:** Operator, from the production host (`/var/www/noramedi` per `PRODUCTION_TOPOLOGY.md`), running exactly the read-only §6 command package against production `$DATABASE_URL`. No command below writes to any table, creates a `PlatformAdminAuditEvent`, or touches a `Patient` row.
+
+### 6a.1 Migration-table verification (raw output, §6.1)
+
+```
+Scoped migrations:
+all 3 applied=true
+all 3 rolled_back=false
+
+total migrations=65
+unfinished=0
+rolled_back=0
+```
+
+Matches §6.1's expected output: all three in-scope migrations (`20260719120821_kvkk_high007_consent_reconciliation`, `20260719155318_kvkk_high008_legacy_consent_correction`, `20260720180000_add_platform_admin_audit_event`) show `applied=true`/`rolled_back=false`; `total migrations=65` matches the disposable-rehearsal count independently reproduced in §3.1; `unfinished=0` satisfies §6.1's stop condition (no escalation triggered). The additional `rolled_back=0` total confirms no migration anywhere in the full production history has ever been marked rolled back.
+
+### 6a.2 Tenant-impact inspection (raw output, §6.3)
+
+```
+PatientLegacyConsentCorrection:
+count=0
+organization_count=0
+clinic_count=0
+
+tenant mismatch count=0
+```
+
+`PatientLegacyConsentCorrection` remains at `0` rows in production, consistent with every prior production pass (KVKK-HIGH-008-F1-PROD-DOCS, 2026-07-20/21) and with §5's structural analysis. §6.3's tenant-mismatch integrity query returned a count of `0`, satisfying §6.3's "healthy" condition — the stop-condition escalation (any row returned) was not triggered.
+
+### 6a.3 Audit evidence collection (raw output, §6.4)
+
+```
+PlatformAdminAuditEvent count=3
+```
+
+Non-zero: unlike `PatientLegacyConsentCorrection`, `PlatformAdminAuditEvent` now holds `3` rows in production. Per §6.4's own stated trigger, this is the signal for a future, separate, dedicated read-only audit-attribution check (row-level, PII-safe field selection to be designed at that time) — no such row-level inspection was performed as part of this task, and this document does not characterize the content of those 3 rows.
+
+### 6a.4 Analysis and caveats — read before treating this as closure
+
+1. **Zero `PatientLegacyConsentCorrection` rows is an absence-of-data result, not a positive pass of the correction logic itself.** §6.3's aggregate query returning `count=0` means there is currently nothing in production for the correction workflow's tenant-scoping logic to have gotten right or wrong — it is not evidence that the logic behaves correctly under real, populated, cross-tenant production conditions. The disposable-rehearsal evidence in §3.3 Part 4 (5/5 assertions, synthetic colliding data) and F0-011-P2's independently-reproduced 14/14 remain the only evidence that actually exercises the logic; this production read confirms only that production currently has no rows that could have violated it.
+2. **A mismatch count of zero is a valid check for existing rows, but it is not a live cross-tenant mutation test.** §6.3's integrity query (`clinicId`/`organizationId` consistency between `PatientLegacyConsentCorrection` and its `Patient`) is a passive read against whatever rows already exist. With `count=0` there was nothing to check, so this result is vacuously true rather than a demonstration that a cross-tenant write attempt is correctly rejected in production. It did **not** exercise any mutation attempt against production data. §5's conclusion — that a live cross-tenant mutation attempt against a real patient record is not proposed here and is recommended against — is unchanged by this transcript; that gap is not closed by this evidence.
+3. **No real-patient data mutation was performed during this verification.** Every command in this operator transcript (§6a.1–§6a.3) is a read-only `SELECT`; none writes to any table, creates a `PlatformAdminAuditEvent`, or touches a `Patient` row. This is consistent with §6's read-only command package and with §8's safety-boundary compliance for this task's own disposable-only work.
+4. **This production read-only evidence, combined with the disposable/synthetic environment evidence already in this document (§3 — especially §3.3 Part 4's 5/5 tenant-isolation assertions and F0-011-P2's independently-reproduced 14/14), together support a closure *proposal* — not a unilateral closure.** Neither category of evidence alone closes R-046: the disposable evidence exercises the real service logic but not production; the production evidence confirms current production state but, per points 1–2 above, has not exercised that logic against populated or cross-tenant production data. §7's risk-register disposition and this document's §10 non-authorization posture are unchanged by this transcript — R-046's actual closure remains a decision for the risk/decision owner performing final reconciliation, not this task.
 
 ## 7. Risk register disposition
 
