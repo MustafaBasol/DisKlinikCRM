@@ -230,7 +230,7 @@ A single `git revert` of this task's one commit on branch `fix/f1-003-b1-overdue
 
 - The legacy/persisted `'overdue'` status literal's origin (which historical process or manual action wrote it) was not traced further than "legacy/persisted," per the production code's own docstring — this task did not investigate database history, and that investigation was out of scope.
 - F1-003-P1's own broader findings (17 aggregate-chain exclusions, legacy `server:test`'s 23 silently-chained DB-required scripts, disposable-Postgres/MinIO provisioning gaps, R-070 `OPEN`) are entirely unaffected by and unresolved by this task — this task closes exactly the one `overdueInstallments.test.ts` drift and nothing else.
-- `server:test:non-disposable` reaching exit 0 does not mean the full legacy `server:test` chain (77 scripts, including 23 DB-required + 1 MinIO-required members) is green or runnable in this environment — that remains F1-003-P2's scope, unchanged.
+- `server:test:non-disposable` reaching exit 0 does not mean the full legacy `server:test` chain (77 scripts, including 23 DB-required members — **corrected 2026-07-29 by F1-003-R1B, citing F1-003-R1A: 0 additionally MinIO-required; the "1 MinIO-required" figure in this bullet as originally written was an objective factual error, since corrected — `test:kvkk-lifecycle`'s S3 provider is fully mocked; `test:file-backup-db-integration` is the sole genuine MinIO-dependent target program-wide, and is not a member of legacy `server:test`**) is green or runnable in this environment — that remains F1-003-P2's scope, unchanged.
 
 ---
 

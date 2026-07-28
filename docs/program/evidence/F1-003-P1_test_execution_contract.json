@@ -32,6 +32,16 @@
       "note": "F1-003-P1 correction (upgrades prior evidence): F1-002_test_inventory.json and F1-002-P1_test_file_reachability.json both classify server/src/tests/platformBackup.test.ts as databaseRequired:true / DISPOSABLE_POSTGRES, \"confidence HIGH (carried forward from F0-005 evidence)\" — not independently re-verified since 2026-07-19. F1-003-P1 direct verification: full read of the file (286 lines) shows its only imports are node:assert/strict, ../services/backupService.js (filesystem-path constants + graceful-missing-path functions), ../middleware/platformAuth.js, and jsonwebtoken — no ../db.js or @prisma/client import anywhere. F1-003-P1 direct execution: `cd server && npm run test:platform-backup` with no DATABASE_URL set in the environment → exit 0, \"24 passed, 0 failed\" (2026-07-28). This is treated as an authoritative correction of the carried-forward F0-005 classification for this one file; F1-002/F1-002-P1's other classifications are not re-derived or second-guessed by this task beyond this one directly-executed, directly-read case."
     }
   ],
+  "f1003r1aCorrectionsApplied": [
+    {
+      "correctionId": "F1-003-R1A",
+      "scriptName": "test:kvkk-lifecycle",
+      "field": "minioRequired",
+      "priorValue": true,
+      "correctedValue": false,
+      "note": "F1-003-R1 (2026-07-28) found this task's own §5/§9 claim — that test:kvkk-lifecycle (kvkkAttachmentImagingLifecycle.test.ts) requires a live MinIO/S3-compatible instance, carried forward unverified from F1-002-P1_test_script_reconciliation.json's externalServiceRequired=true/externalServiceDetail=[\"aws-s3\"] field — to be an objective factual error. Direct inspection of the test file: every code path the test exercises calls through S3Client.prototype.send, and every one of those call sites is mocked (no live network/S3 endpoint is contacted at any point the test reaches). F1-003-P1's original claim was never independently re-verified against the actual test file — it was carried forward from F1-002-P1's static externalServiceRequired flag, which is a coarser signal (import-presence) than actual exercised-path analysis. Corrected: test:kvkk-lifecycle requires PostgreSQL (databaseRequired remains true, unchanged) but does NOT require a live MinIO instance; its S3 provider is mocked; externalNetworkRequired remains false. This correction narrows, not widens, the runtime requirement — no test behavior, script, or application code was changed to produce it. test:file-backup-db-integration (fileBackupDbIntegration.test.ts) remains the sole genuine MinIO-dependent target in the entire 114-record contract. This is a narrow evidence correction (F1-003-R1A) over F1-003-P1's merged record — P1's own historical execution status, counts, and narrative are preserved elsewhere in this document and in the companion MD report; only the specific stale MinIO claim is corrected here and everywhere it was mechanically derived from."
+    }
+  ],
   "messagesConsentGateResolution": {
     "file": "server/src/tests/messagesConsentGate.test.ts",
     "priorStatus": "UNKNOWN (F1-002-P2_TEST_RUNTIME_DEPENDENCY_BASELINE.md §7, MEDIUM confidence, flagged for closer review)",
@@ -72,7 +82,7 @@
     }
   },
   "legacyServerTestPreExistingDbMixingFinding": {
-    "summary": "server/package.json's existing \"test\" (legacy server:test) aggregate is left completely unmodified by this task (additive-only constraint), but it already silently chains at least 23 DB-required test scripts (not merely the 3 named by the task brief as an example) plus at least 1 (test:kvkk-lifecycle) that additionally requires MinIO/S3 (aws-s3) on top of Postgres — meaning legacy server:test is not simply \"mostly non-DB with 3 known exceptions\"; it is a genuinely mixed aggregate whose own real Postgres/MinIO footprint is larger than any prior evidence document enumerated in one place. Untangling or renaming legacy server:test is explicitly out of this task's scope (see task brief's \"Critical design constraint\").",
+    "summary": "server/package.json's existing \"test\" (legacy server:test) aggregate is left completely unmodified by this task (additive-only constraint), but it already silently chains at least 23 DB-required test scripts (not merely the 3 named by the task brief as an example) — meaning legacy server:test is not simply \"mostly non-DB with 3 known exceptions\"; it is a genuinely mixed aggregate whose own real Postgres footprint is larger than any prior evidence document enumerated in one place. Untangling or renaming legacy server:test is explicitly out of this task's scope (see task brief's \"Critical design constraint\"). **Corrected by F1-003-R1A (2026-07-28):** legacy server:test is PostgreSQL-required but MinIO-free — it does not additionally require a live MinIO/S3 instance. The original F1-003-P1 claim that it silently required 1 additional MinIO-dependent script (test:kvkk-lifecycle) was an objective factual error; see f1003r1aCorrectionsApplied above and additionalMinioRequiredMemberOfLegacyChain below. test:file-backup-db-integration (not a member of legacy server:test) remains the sole genuine MinIO-dependent target in this contract.",
     "dbRequiredScriptsSilentlyInLegacyServerTestChain": [
       "test:payments-list-field-scope",
       "test:security-incidents",
@@ -98,7 +108,7 @@
       "test:messages-consent-gate",
       "test:recall-consent-gate"
     ],
-    "additionalMinioRequiredMemberOfLegacyChain": "test:kvkk-lifecycle (kvkkAttachmentImagingLifecycle.test.ts) — F1-002-P1_test_script_reconciliation.json scripts[] scriptName=\"test:kvkk-lifecycle\": databaseRequired=true, externalServiceRequired=true, externalServiceDetail=[\"aws-s3\"]. Already inside legacy server:test; NOT one of the 17 previously-excluded scripts; NOT duplicated into the new server:test:storage-integration aggregate (which chains only test:file-backup-db-integration) to avoid double-invocation of an already-chained script from a second aggregate.",
+    "additionalMinioRequiredMemberOfLegacyChain": "NONE (corrected by F1-003-R1A, 2026-07-28 — see f1003r1aCorrectionsApplied above). F1-003-P1 originally claimed test:kvkk-lifecycle (kvkkAttachmentImagingLifecycle.test.ts) additionally required a live MinIO/S3 instance, carried forward unverified from F1-002-P1_test_script_reconciliation.json's coarse externalServiceRequired=true/externalServiceDetail=[\"aws-s3\"] flag. Direct inspection of the test file found every S3Client.prototype.send path the test exercises is mocked — no live MinIO/S3 endpoint is ever contacted. test:kvkk-lifecycle remains PostgreSQL-required (databaseRequired=true, unchanged, already inside legacy server:test, NOT one of the 17 previously-excluded scripts) but is NOT MinIO-required. test:file-backup-db-integration (new server:test:storage-integration aggregate) remains the sole genuine MinIO-dependent target anywhere in this contract.",
     "evidenceSource": "F1-003-P1 direct computation from F1-002-P1_test_script_reconciliation.json scripts[] (node script cross-referencing server:test's own expandedScriptChain against every server script's databaseRequired/externalServiceRequired fields), 2026-07-28."
   },
   "r070Boundary": {
@@ -110,7 +120,7 @@
       "This task's own JSON contract (this file) and MD report (F1-003-P1_TEST_SCRIPT_CLOSURE_AND_EXECUTION_CONTRACT.md).",
       "Exact list of the 9 DISPOSABLE_POSTGRES-only scripts server:test:disposable-db already chains (see NEW_AGGREGATE_SCRIPTS record for server:test:disposable-db, memberScripts field).",
       "Exact list of the 23 DB-required scripts already silently inside legacy server:test (see legacyServerTestPreExistingDbMixingFinding above) — F1-003-P2's provisioning must make legacy server:test itself runnable too, not just the two new DB/MinIO aggregates, if F1-003-P2's own scope includes restoring legacy server:test to a runnable state; if not, this must be explicitly re-scoped in F1-003-P2's own task definition.",
-      "Exact MinIO/S3-required script list: test:file-backup-db-integration (new server:test:storage-integration aggregate) PLUS test:kvkk-lifecycle (already inside legacy server:test, not yet in any new aggregate).",
+      "Exact MinIO/S3-required script list: test:file-backup-db-integration (new server:test:storage-integration aggregate) — the sole genuine MinIO-dependent target (corrected by F1-003-R1A, 2026-07-28: test:kvkk-lifecycle does NOT require MinIO — its S3 provider is fully mocked; it remains PostgreSQL-required only, already inside legacy server:test).",
       "Port/database-name collision-avoidance gap: confirmed still unmitigated (F1-002-P2_disposable_environment_capabilities.json disposablePostgresAssessment item 5/6; re-confirmed unchanged by this task, no new evidence gathered beyond citing the existing finding).",
       "Migration-rollback tooling gap tied to R-070: confirmed OPEN (see r070Boundary above); F1-003-P2 must reference, not resolve, this gap unless a separate, explicitly-authorized task is opened for it."
     ],
@@ -118,7 +128,7 @@
       "A disposable Postgres provisioning mechanism (script or Compose file) exists, is committed to the repository, and `server:test:disposable-db` executes end-to-end against it with a real, reported pass/fail count (not merely \"not_executed_dependency_blocked\").",
       "A disposable MinIO/S3-compatible emulator provisioning mechanism exists, is committed, and `server:test:storage-integration` executes end-to-end against it with a real, reported pass/fail count.",
       "A documented, enforced port/database-name collision-avoidance mechanism exists such that two parallel worktree/CI runs cannot silently corrupt or block each other (resolving F1-002-P2 disposablePostgresAssessment items 5/6).",
-      "Legacy server:test's own 23 DB-required + 1 MinIO-required members are explicitly re-classified as either (a) migrated into the new disposable-db/storage-integration aggregates with server:test itself updated to remove them (an application/script-behavior change requiring its own explicit authorization, not assumed here), or (b) left as-is with an explicit, documented decision that legacy server:test remains a \"DB/MinIO-environment-required\" aggregate going forward, not a non-disposable-safe one — either decision satisfies this criterion, silence does not.",
+      "Legacy server:test's own 23 DB-required members (0 additionally MinIO-required — corrected by F1-003-R1A, 2026-07-28; test:kvkk-lifecycle's S3 provider is mocked, no live MinIO instance is required) are explicitly re-classified as either (a) migrated into the new disposable-db aggregate with server:test itself updated to remove them (an application/script-behavior change requiring its own explicit authorization, not assumed here), or (b) left as-is with an explicit, documented decision that legacy server:test remains a \"DB-environment-required\" aggregate going forward, not a non-disposable-safe one — either decision satisfies this criterion, silence does not.",
       "No `.github/workflows/**` file is created or enabled by F1-003-P2 unless that is explicitly back in scope for P2 per its own task definition (F1-003-P1 does not assume P2 includes CI-workflow activation).",
       "F1-003-P2's own completion report explicitly states R-070's status is unchanged (still OPEN) unless a separate, explicitly-authorized migration-rollback-tooling task has run.",
       "F1-003-P2 reaches at most AGENT_COMPLETED; it may not self-declare MERGED, may not close R-046/R-070/R-071, may not declare F1's exit gate satisfied, may not declare the KVKK baseline stable."
@@ -159,7 +169,7 @@
         ],
         "note": "6 of these 22 (all dbVerification/kvkkHigh006Db*) plus organizationMessagingConnectionScope.test.ts (7 total) are DB-required and therefore NOT yet runnable in the PR profile until F1-003-P2 lands disposable Postgres — this mandatory-tenant-security set is itself split across the non-disposable/disposable-db boundary, a concrete illustration of why F1-003-P2 is a co-requisite, not a nice-to-have, for a complete PR gate."
       },
-      "noSilentOmissionStatement": "The PR contract explicitly does NOT run: the 10 DB-required previously-excluded scripts (now in server:test:disposable-db), the 1 MinIO-required script (server:test:storage-integration), the 23 DB-required + 1 MinIO-required scripts already silently inside legacy server:test, or legacy server:test itself (left unmodified, mixed-requirement, not safely runnable without a DB). This is recorded here as an explicit, acknowledged gap blocked on F1-003-P2, not a silent omission."
+      "noSilentOmissionStatement": "The PR contract explicitly does NOT run: the 10 DB-required previously-excluded scripts (now in server:test:disposable-db), the 1 MinIO-required script (server:test:storage-integration), the 23 DB-required scripts already silently inside legacy server:test (0 additionally MinIO-required — corrected by F1-003-R1A, 2026-07-28), or legacy server:test itself (left unmodified, DB-mixed, not safely runnable without a DB). This is recorded here as an explicit, acknowledged gap blocked on F1-003-P2, not a silent omission."
     },
     "main": {
       "contract": "Merged-commit baseline: same as the PR safety profile (root build, server typecheck, server:test:non-disposable) re-run against the merged main tip; no impact-based selector reduction is authorized yet (F1-001's design remains unimplemented — see docs/program/architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md)."
@@ -550,12 +560,12 @@
         "legacy_full_suite_aggregator_unchanged"
       ],
       "exclusionClassification": null,
-      "runtimeClass": "DISPOSABLE_POSTGRES+STORAGE_EMULATOR_REQUIRED",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
       "postgresRequired": true,
-      "minioRequired": true,
+      "minioRequired": false,
       "externalNetworkRequired": false,
-      "parallelSafetyClass": "REQUIRES_ISOLATED_DB_AND_STORAGE_INSTANCE_PER_PARALLEL_RUN",
-      "cleanupExpectation": "Requires disposable-container teardown for both Postgres and MinIO (--rm, no persisted volume) plus self-truncating test-data fixtures; no committed provisioning exists yet (F1-003-P2 scope).",
+      "parallelSafetyClass": "REQUIRES_ISOLATED_DB_INSTANCE_PER_PARALLEL_RUN_NO_COLLISION_AVOIDANCE_MECHANISM_EXISTS",
+      "cleanupExpectation": "Requires disposable-container teardown for Postgres (--rm, no persisted volume) plus self-truncating test-data fixtures; no committed provisioning exists yet (F1-003-P2 scope).",
       "ciEligibility": {
         "pr": false,
         "main": false,
@@ -563,8 +573,8 @@
         "release": true
       },
       "currentExecutionStatus": "not_executed_out_of_scope",
-      "rationale": "Pre-existing aggregator/orchestrator script, unmodified by F1-003-P1 (additive-only constraint: legacy server:test, its own kvkk-high006-db-verification alias, and root:test:vitest are left exactly as-is). Not independently re-executed by this task — F1-003-P1 executed only the new server:test:non-disposable aggregate plus individual new/reclassified leaf scripts, per its own explicit scope.",
-      "evidenceSource": "F1-002-P1_test_script_reconciliation.json scripts[] scriptName=\"test\" (databaseRequired=true, externalServiceRequired=true, suitableForCI=false, confidence=HIGH)"
+      "rationale": "Pre-existing aggregator/orchestrator script, unmodified by F1-003-P1 (additive-only constraint: legacy server:test, its own kvkk-high006-db-verification alias, and root:test:vitest are left exactly as-is). Not independently re-executed by this task — F1-003-P1 executed only the new server:test:non-disposable aggregate plus individual new/reclassified leaf scripts, per its own explicit scope. **Corrected by F1-003-R1A (2026-07-28):** this record previously also claimed a MinIO/S3-compatible emulator was required (runtimeClass DISPOSABLE_POSTGRES+STORAGE_EMULATOR_REQUIRED, minioRequired=true), because F1-003-P1 believed one chained member (test:kvkk-lifecycle) required live MinIO. Direct inspection of that test file found its S3 provider fully mocked — no chained member of legacy server:test requires a live MinIO/S3 endpoint. test:file-backup-db-integration, the sole genuine MinIO-dependent target, is not and never was a member of this aggregate. See f1003r1aCorrectionsApplied.",
+      "evidenceSource": "F1-002-P1_test_script_reconciliation.json scripts[] scriptName=\"test\" (databaseRequired=true, externalServiceRequired=true, suitableForCI=false, confidence=HIGH) — externalServiceRequired field superseded by F1-003-R1A direct verification (2026-07-28): the one chained member (test:kvkk-lifecycle) previously believed to trigger this flag has a fully-mocked S3 provider."
     },
     {
       "canonicalScript": "server:test:payments-list-field-scope",
@@ -1142,12 +1152,12 @@
         "legacy_server_test_member"
       ],
       "exclusionClassification": null,
-      "runtimeClass": "DISPOSABLE_POSTGRES+STORAGE_EMULATOR_REQUIRED",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
       "postgresRequired": true,
-      "minioRequired": true,
+      "minioRequired": false,
       "externalNetworkRequired": false,
-      "parallelSafetyClass": "REQUIRES_ISOLATED_DB_AND_STORAGE_INSTANCE_PER_PARALLEL_RUN",
-      "cleanupExpectation": "Requires disposable-container teardown for both Postgres and MinIO (--rm, no persisted volume) plus self-truncating test-data fixtures; no committed provisioning exists yet (F1-003-P2 scope).",
+      "parallelSafetyClass": "REQUIRES_ISOLATED_DB_INSTANCE_PER_PARALLEL_RUN_NO_COLLISION_AVOIDANCE_MECHANISM_EXISTS",
+      "cleanupExpectation": "Requires disposable-container teardown for Postgres (--rm, no persisted volume) plus self-truncating/UUID-suffixed test-data fixtures; no committed provisioning exists yet (F1-003-P2 scope).",
       "ciEligibility": {
         "pr": false,
         "main": false,
@@ -1155,8 +1165,8 @@
         "release": true
       },
       "currentExecutionStatus": "not_executed_dependency_blocked",
-      "rationale": "Not executed by F1-003-P1 — requires a reachable disposable PostgreSQL (DATABASE_URL) and a MinIO/S3-compatible object-storage emulator; neither exists in this task's environment; provisioning either is explicitly out of scope (F1-003-P2). Honestly reported as blocked, not claimed passing.",
-      "evidenceSource": "F1-002-P1_test_script_reconciliation.json scripts[] scriptName=\"test:kvkk-lifecycle\" (databaseRequired=true, externalServiceRequired=true, suitableForCI=false, confidence=HIGH)"
+      "rationale": "Not executed by F1-003-P1 — requires a reachable disposable PostgreSQL (DATABASE_URL); none exists in this task's environment; provisioning is explicitly out of scope (F1-003-P2). Honestly reported as blocked, not claimed passing. **Corrected by F1-003-R1A (2026-07-28):** this record previously also claimed a MinIO/S3-compatible emulator was required (runtimeClass DISPOSABLE_POSTGRES+STORAGE_EMULATOR_REQUIRED, minioRequired=true), carried forward from F1-002-P1's coarse externalServiceRequired=true/aws-s3 flag. Direct inspection of the test file found every S3Client.prototype.send path it exercises is mocked — no live MinIO/S3 endpoint is ever contacted. See f1003r1aCorrectionsApplied.",
+      "evidenceSource": "F1-002-P1_test_script_reconciliation.json scripts[] scriptName=\"test:kvkk-lifecycle\" (databaseRequired=true, externalServiceRequired=true, suitableForCI=false, confidence=HIGH) — externalServiceRequired field superseded by F1-003-R1A direct verification (2026-07-28): S3 provider fully mocked, no live external service reachable from this test."
     },
     {
       "canonicalScript": "server:test:finance",
@@ -3630,7 +3640,19 @@
         "release": true
       },
       "currentExecutionStatus": "executed_fail",
-      "rationale": "npm run server:test:non-disposable (server/, 2026-07-28) → exit 1, duration ~65143ms. Chains 68 member scripts (61 pre-existing suitableForCI:true server scripts from F1-002-P1_test_script_reconciliation.json + 7 newly-added non-DB leaf scripts from this task's part A). All 67 members preceding test:overdue-installments (deliberately ordered last in this new aggregate) ran and reported 0 failures across every summary line this task could parse (best-effort scan across 37 of 68 member scripts' own printed summary lines found 1207 passed / 0 failed among those 37; the remaining members print pass/fail in formats this task's scanner did not recognize, or are fixture-loader scripts with no literal pass/fail tally — not claimed as additional passes). The chain then invoked test:overdue-installments last, which failed exactly as pre-existing/documented (F0-005, F1-002-P1 §4.1/§9): \"Total: 9  Passed: 7  Failed: 2\" — the 2 known deterministic assertion failures caused by production code now writing/reading a literal 'overdue' status value this orphan test still assumes differs. This is the sole failure found; no other, new, or unexpected failure occurred among the 68 members that executed.",
+      "rationale": "npm run server:test:non-disposable (server/, 2026-07-28) → exit 1, duration ~65143ms. Chains 68 member scripts (61 pre-existing suitableForCI:true server scripts from F1-002-P1_test_script_reconciliation.json + 7 newly-added non-DB leaf scripts from this task's part A). All 67 members preceding test:overdue-installments (deliberately ordered last in this new aggregate) ran and reported 0 failures across every summary line this task could parse (best-effort scan across 37 of 68 member scripts' own printed summary lines found 1207 passed / 0 failed among those 37; the remaining members print pass/fail in formats this task's scanner did not recognize, or are fixture-loader scripts with no literal pass/fail tally — not claimed as additional passes). The chain then invoked test:overdue-installments last, which failed exactly as pre-existing/documented (F0-005, F1-002-P1 §4.1/§9): \"Total: 9  Passed: 7  Failed: 2\" — the 2 known deterministic assertion failures caused by production code now writing/reading a literal 'overdue' status value this orphan test still assumes differs. This is the sole failure found; no other, new, or unexpected failure occurred among the 68 members that executed. **[Historical P1 result — preserved verbatim. See f1003b1Resolution below for the current, post-merge state.]**",
+      "f1003b1Resolution": {
+        "note": "Recorded 2026-07-29 by F1-003-R1B. currentExecutionStatus/rationale above remain the original, historical P1 result and are not altered.",
+        "taskId": "F1-003-B1",
+        "pullRequest": "#258",
+        "mergeCommit": "bb4186793323485c71b91ad6939a0d8469f886cd",
+        "mergedAt": "2026-07-28T22:13:04Z",
+        "status": "MERGED",
+        "currentExitCode": 0,
+        "currentOverdueInstallmentsResult": "Total: 9  Passed: 9  Failed: 0",
+        "reExecutedByF1003R1B": false,
+        "evidenceCitedFrom": "F1-003-B1's own merged evidence (evidence/F1-003-B1_OVERDUE_INSTALLMENTS_BASELINE_DRIFT_RESOLUTION.md) — not re-run by this reconciliation"
+      },
       "evidenceSource": "server/package.json (this task's own addition) + F1-003-P1 direct execution/structural-validation, 2026-07-28"
     },
     {

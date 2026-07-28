@@ -1,0 +1,597 @@
+{
+  "schemaVersion": "2.0.0",
+  "generatedAt": "2026-07-28",
+  "reconciledAt": "2026-07-28",
+  "reconciliationTaskId": "F1-003-R1",
+  "taskId": "F1-003-P2A",
+  "parentTaskId": "F1-003",
+  "taskType": "DOCUMENTATION_EVIDENCE_BRANCH_RECONCILIATION_ONLY",
+  "originalP2AHead": "c45b37c3f73685e1e21e19042baa40a170402b36",
+  "p1PullRequest": {
+    "number": 257,
+    "state": "MERGED",
+    "base": "main",
+    "head": "feature/f1-003-p1-test-script-closure",
+    "mergedAt": "2026-07-28T21:43:36Z"
+  },
+  "p1MergeCommit": "1e983fe7134f9224cdaeb0065d32b1e8ef2d0904",
+  "reconciliationBaselineCommit": "1e983fe7134f9224cdaeb0065d32b1e8ef2d0904",
+  "reconciliationMergeCommit": "42ea904",
+  "reconciliationMergeConflicts": "0 conflicts (git merge --no-ff origin/main into docs/f1-003-p2a-disposable-runtime-design). Files brought in: F1-003-P1_TEST_SCRIPT_CLOSURE_AND_EXECUTION_CONTRACT.md (new), F1-003-P1_test_execution_contract.json (new), CURRENT_PHASE.md, NORAMEDI_MASTER_TRACKER.md, TEST_OWNERSHIP.md, phases/F1_CI_AND_TEST_ARCHITECTURE.md, evidence/README.md, server/package.json (updates). This document's own 2 evidence files were untouched by the merge itself (P1 never touched them) and were separately updated by this reconciliation commit.",
+  "codegraphStatus": {
+    "available": false,
+    "commandsTried": [
+      "ToolSearch(query=\"CodeGraph code graph analysis\", max_results=5)"
+    ],
+    "result": "Zero matching deferred tools found. Fifth independent confirmation in this program (after F1-001, F1-002-P1, F1-002-P2, and the original F1-003-P2A pass).",
+    "fallbackUsed": "Narrowly-bounded Glob/Grep/Read, scoped to server/src/tests/, server/src/tests/dbVerification/, server/src/services/fileBackupDestination.ts, server/package.json, server/prisma/ (directory listing only), and the P1/P2A evidence JSON files. Additionally read server/src/tests/kvkkAttachmentImagingLifecycle.test.ts in full (1483 lines) to directly resolve the MinIO-dependency reconciliation question — the one file this reconciliation pass opened that the original P2A design had not itself opened."
+  },
+  "countVocabulary": {
+    "purpose": "Reconciles 7 distinct counts appearing across F1-002-P2, F1-003-P1, and this document. Each count belongs to exactly one category below; none may be added, subtracted, or compared across categories without restating the category boundary.",
+    "counts": [
+      {
+        "value": 22,
+        "category": "file_count",
+        "label": "DISPOSABLE_POSTGRES-classified test files",
+        "source": "F1-002-P2_test_runtime_requirements.json testGroups[] (14 flat + 8 under server/src/tests/dbVerification/, fileBackupDbIntegration.test.ts dual-counted with STORAGE_EMULATOR_REQUIRED)",
+        "note": "A file-centric classification pass, independent of how many package scripts reference each file or how those scripts are aggregated."
+      },
+      {
+        "value": 23,
+        "category": "package_script_count",
+        "label": "DB-required scripts already silently chained inside legacy server:test",
+        "source": "F1-003-P1_test_execution_contract.json legacyServerTestPreExistingDbMixingFinding.dbRequiredScriptsSilentlyInLegacyServerTestChain",
+        "note": "A script-chain-centric count computed by P1 by cross-referencing server:test's own expandedScriptChain against every member's databaseRequired field. Overlaps partially, not identically, with the file-count-22 population (e.g. test:kvkk-high007-high008-schema-integrity and test:messages-consent-gate are in the 23 but were classified under F1-002-P2's separate POSTGRES_PLUS_MIGRATIONS/EXTERNAL_PROVIDER_MOCK groupings, not its 22 DISPOSABLE_POSTGRES group). Do not sum with the 22 above."
+      },
+      {
+        "value": 9,
+        "category": "aggregate_member_count",
+        "label": "server:test:disposable-db membership",
+        "source": "F1-003-P1_test_execution_contract.json records[] scriptName=server:test:disposable-db memberScripts",
+        "note": "A deliberate P1 subset selection, disjoint by design from the 23-count legacy-server:test population above (not duplicated) and disjoint from the 1-count storage-integration member below."
+      },
+      {
+        "value": 1,
+        "category": "aggregate_member_count",
+        "label": "server:test:storage-integration membership",
+        "source": "F1-003-P1_test_execution_contract.json records[] scriptName=server:test:storage-integration memberScripts",
+        "note": "test:file-backup-db-integration only — the sole script in this program with a genuine, unconditional, unmocked MinIO/S3 requirement (this reconciliation's own §6 finding)."
+      },
+      {
+        "value": 10,
+        "category": "file_set_count",
+        "label": "Corrected DB-required group of the original 17 aggregate-chain exclusions",
+        "source": "F1-003-P1_test_execution_contract.json the17ExclusionsReconciliation.dbRequiredGroup",
+        "note": "9 in F1-002-P1's own MD prose + 1 (test:platform-admin-password-recovery, a prose-only correction) = 10. Of these 10, test:kvkk-high006-db-verification is a duplicate alias of the 6 test:kvkk-high006-db-* leaf scripts already counted in the 9-count aggregate above, not an 11th independent target."
+      },
+      {
+        "value": 114,
+        "category": "canonical_script_record_count",
+        "label": "Total canonical script records in F1-003-P1's contract",
+        "source": "F1-003-P1_test_execution_contract.json totalCanonicalScriptRecords",
+        "note": "103 pre-existing (F1-002-P1) + 8 new leaf + 3 new aggregate. A record-bookkeeping count (one JSON object per canonical script name) including non-DB scripts, aggregates, and alias records as equal-weight entries. Not a file count, not a runtime-dependency count."
+      },
+      {
+        "value": 137,
+        "category": "program_verification_target_count",
+        "label": "Program-wide test/verification targets",
+        "source": "docs/program/RISK_REGISTER.md R-072 row; F1-002_test_inventory.json",
+        "note": "105 backend + 9 frontend test files + 22 other targets (9 bridge-agent test files, 4 windows-bridge .NET test projects, 4 windows-bridge installer PowerShell scripts, 4 manual verify-*.ts disposable-DB scripts, 1 production-safe healthcheck script). The broadest count in the program; spans backend/frontend/bridge-agent/.NET/PowerShell targets the other 6 counts (all backend-server/-script-scoped) do not include."
+      }
+    ],
+    "explicitRule": "File counts, package-script counts, aggregate-member counts, file-set counts, canonical-record counts, and program-wide verification-target counts must always be labeled with which category they belong to. At least two prior evidence passes (F1-002-P1's own MD prose, corrected by F1-003-P1 itself) produced numeric inconsistencies exactly by blurring this distinction."
+  },
+  "canonicalRuntimeTargets": {
+    "serverTestNonDisposable": {
+      "scriptName": "server:test:non-disposable",
+      "memberCount": 68,
+      "runtimeClass": "PURE_NODE",
+      "postgresRequired": false,
+      "minioRequired": false,
+      "canonical": true,
+      "currentExecutionStatus": "executed_fail",
+      "knownFailure": "test:overdue-installments (last member by design) — Total: 9 Passed: 7 Failed: 2, pre-existing deterministic drift, see nonDisposableKnownFailure"
+    },
+    "serverTestDisposableDb": {
+      "scriptName": "server:test:disposable-db",
+      "memberCount": 9,
+      "members": [
+        "test:kvkk-high006-db-clinic-scope-access",
+        "test:kvkk-high006-db-record-owned-mutation-scope",
+        "test:kvkk-high006-db-target-clinic-creation",
+        "test:kvkk-high006-db-insurance-list-behavior",
+        "test:kvkk-high006-db-plan-limits-quota",
+        "test:kvkk-high006-db-input-handling",
+        "test:appointment-request-conversion-atomicity",
+        "test:platform-admin-password-recovery",
+        "test:meta-whatsapp-post-booking"
+      ],
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "postgresRequired": true,
+      "minioRequired": false,
+      "canonical": true,
+      "currentExecutionStatus": "not_executed_dependency_blocked"
+    },
+    "serverTestStorageIntegration": {
+      "scriptName": "server:test:storage-integration",
+      "memberCount": 1,
+      "members": ["test:file-backup-db-integration"],
+      "runtimeClass": "DISPOSABLE_POSTGRES_PLUS_STORAGE_EMULATOR",
+      "postgresRequired": true,
+      "minioRequired": true,
+      "canonical": true,
+      "currentExecutionStatus": "not_executed_dependency_blocked"
+    },
+    "legacyServerTest": {
+      "scriptName": "test",
+      "aliasName": "server:test (legacy)",
+      "memberCount": 77,
+      "unmodifiedByP1": true,
+      "runtimeClass": "MIXED_PURE_NODE_AND_DISPOSABLE_POSTGRES",
+      "postgresRequired": true,
+      "minioRequired": false,
+      "canonical": false,
+      "compatibilityOnly": true,
+      "note": "Contains 23 silently DB-required scripts (package_script_count category). Corrected by this reconciliation to minioRequired=false — see minioDependentScripts note on test:kvkk-lifecycle."
+    }
+  },
+  "postgresDependentFiles": {
+    "count": 22,
+    "category": "file_count",
+    "source": "F1-002-P2_test_runtime_requirements.json (DISPOSABLE_POSTGRES class, 14 flat + 8 under server/src/tests/dbVerification/)",
+    "plusMigrationMechanics": {
+      "count": 2,
+      "files": [
+        "server/src/tests/dbVerification/kvkkHigh007High008SchemaIntegrity.test.ts",
+        "server/scripts/verify-kvkk-high007-high008-rollback-tenant.ts (manual, unscripted)"
+      ]
+    }
+  },
+  "postgresDependentScripts": {
+    "silentlyInLegacyServerTest": {
+      "count": 23,
+      "category": "package_script_count",
+      "scripts": [
+        "test:payments-list-field-scope",
+        "test:security-incidents",
+        "test:clinic-bulk-export",
+        "test:availability-service",
+        "test:public-booking",
+        "test:public-booking-slots",
+        "test:notice-evidence",
+        "test:auth",
+        "test:kvkk-lifecycle",
+        "test:instagram",
+        "test:retention-manual-run-audit",
+        "test:overlap-safety",
+        "test:messaging-connection-scope",
+        "test:communication-consent",
+        "test:communication-consent-backfill",
+        "test:communication-consent-reconciliation-report",
+        "test:communication-consent-reconciliation",
+        "test:communication-consent-audit-report",
+        "test:communication-consent-matrix-route",
+        "test:legacy-consent-correction",
+        "test:kvkk-high007-high008-schema-integrity",
+        "test:messages-consent-gate",
+        "test:recall-consent-gate"
+      ]
+    },
+    "serverTestDisposableDbMembers": {
+      "count": 9,
+      "category": "aggregate_member_count",
+      "scripts": [
+        "test:kvkk-high006-db-clinic-scope-access",
+        "test:kvkk-high006-db-record-owned-mutation-scope",
+        "test:kvkk-high006-db-target-clinic-creation",
+        "test:kvkk-high006-db-insurance-list-behavior",
+        "test:kvkk-high006-db-plan-limits-quota",
+        "test:kvkk-high006-db-input-handling",
+        "test:appointment-request-conversion-atomicity",
+        "test:platform-admin-password-recovery",
+        "test:meta-whatsapp-post-booking"
+      ]
+    },
+    "storageIntegrationMember": {
+      "count": 1,
+      "scripts": ["test:file-backup-db-integration"],
+      "note": "Also Postgres-required, in addition to MinIO-required."
+    },
+    "duplicateAlias": {
+      "scriptName": "test:kvkk-high006-db-verification",
+      "aliasOf": [
+        "test:kvkk-high006-db-clinic-scope-access",
+        "test:kvkk-high006-db-record-owned-mutation-scope",
+        "test:kvkk-high006-db-target-clinic-creation",
+        "test:kvkk-high006-db-insurance-list-behavior",
+        "test:kvkk-high006-db-plan-limits-quota",
+        "test:kvkk-high006-db-input-handling"
+      ],
+      "classification": "duplicate_alias_of_6_kvkk_high006_db_leaf_scripts",
+      "note": "Not counted as a 7th independent target for chaining/provisioning purposes."
+    }
+  },
+  "minioDependentFiles": {
+    "canonicalList": [
+      "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts"
+    ],
+    "count": 1,
+    "correctedFromP1": {
+      "p1Candidate": "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+      "p1Claim": "F1-003-P1's legacyServerTestPreExistingDbMixingFinding.additionalMinioRequiredMemberOfLegacyChain named this file (via script test:kvkk-lifecycle) as additionally MinIO-required, derived solely from F1-002-P1's JSON field externalServiceDetail=[\"aws-s3\"], without opening the file's own code.",
+      "reconciliationFinding": "This reconciliation pass directly read the file in full (1483 lines). It imports S3Client from @aws-sdk/client-s3 (line 100) but overrides S3Client.prototype.send with an in-process mock in its only 2 S3-touching test cases (lines 952-994, restored via finally). No test case in this file ever calls .send() against a real network endpoint. Real external S3/MinIO access is structurally impossible as written.",
+      "corrected_classification": "Postgres-required only (already inside legacy server:test's 23-script silent DB-required set). Not MinIO-required. Not added to server:test:storage-integration.",
+      "evidenceMethod": "Direct full read of server/src/tests/kvkkAttachmentImagingLifecycle.test.ts, cross-checked against server/src/tests/dbVerification/fileBackupDbIntegration.test.ts's own code (lines 358-374: real, unmocked S3Client + adminS3.send(new CreateBucketCommand(...)) call, no mock branch anywhere in the file) to confirm the contrast is real, not an artifact of reading two files differently."
+    }
+  },
+  "minioDependentScripts": {
+    "canonicalList": ["test:file-backup-db-integration"],
+    "count": 1,
+    "owningAggregate": "server:test:storage-integration",
+    "notMinioRequired": [
+      {
+        "scriptName": "test:kvkk-lifecycle",
+        "file": "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+        "reason": "S3 SDK usage fully mocked at the S3Client.prototype.send level in its only 2 S3-touching test cases; requires DATABASE_URL only.",
+        "remainsInLegacyServerTest": true
+      }
+    ]
+  },
+  "aliasAndAggregateMappings": [
+    {
+      "scriptName": "test:kvkk-high006-db-verification",
+      "type": "duplicate_alias",
+      "aliasOf": [
+        "test:kvkk-high006-db-clinic-scope-access",
+        "test:kvkk-high006-db-record-owned-mutation-scope",
+        "test:kvkk-high006-db-target-clinic-creation",
+        "test:kvkk-high006-db-insurance-list-behavior",
+        "test:kvkk-high006-db-plan-limits-quota",
+        "test:kvkk-high006-db-input-handling"
+      ],
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "chainedInto": "none (standalone orchestrator alias, not a member of server:test:disposable-db, not a member of legacy server:test)"
+    },
+    {
+      "scriptName": "test:kvkk-lifecycle",
+      "type": "canonical_leaf_inside_compatibility_only_aggregate",
+      "file": "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "chainedInto": "legacy server:test (test / 77-member aggregate) only — never duplicated into server:test:disposable-db or server:test:storage-integration"
+    },
+    {
+      "scriptName": "test:file-backup-db-integration",
+      "type": "canonical_leaf_dedicated_aggregate_member",
+      "file": "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts",
+      "runtimeClass": "DISPOSABLE_POSTGRES_PLUS_STORAGE_EMULATOR",
+      "chainedInto": "server:test:storage-integration only"
+    }
+  ],
+  "aggregateOwnership": [
+    {
+      "aggregate": "server:test:non-disposable",
+      "members": 68,
+      "runtimeDependencies": "none (pure Node / in-process mock only)",
+      "canonicalOrCompatibilityOnly": "canonical",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": true, "main": true, "nightly": true, "release": true},
+      "expectedCurrentExitStatus": "exit 1 (sole known cause: test:overdue-installments, pre-existing drift)",
+      "setupCleanupOwner": "none required (in-process only)"
+    },
+    {
+      "aggregate": "server:test:disposable-db",
+      "members": 9,
+      "runtimeDependencies": "disposable PostgreSQL",
+      "canonicalOrCompatibilityOnly": "canonical",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": false, "main": false, "nightly": true, "release": true},
+      "expectedCurrentExitStatus": "not_executed_dependency_blocked",
+      "setupCleanupOwner": "F1-003-P2 provisioning mechanism"
+    },
+    {
+      "aggregate": "server:test:storage-integration",
+      "members": 1,
+      "runtimeDependencies": "disposable PostgreSQL + disposable MinIO",
+      "canonicalOrCompatibilityOnly": "canonical",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": false, "main": false, "nightly": true, "release": true},
+      "expectedCurrentExitStatus": "not_executed_dependency_blocked",
+      "setupCleanupOwner": "F1-003-P2 provisioning mechanism"
+    },
+    {
+      "aggregate": "legacy server:test",
+      "members": 77,
+      "runtimeDependencies": "disposable PostgreSQL (23 silently-chained members); no MinIO (corrected, see minioDependentFiles.correctedFromP1)",
+      "canonicalOrCompatibilityOnly": "compatibility-only",
+      "duplicateExecutionAllowed": "n/a — its members are disjoint from server:test:disposable-db/storage-integration by design",
+      "ciEligibility": {"pr": false, "main": false, "nightly": true, "release": true},
+      "expectedCurrentExitStatus": "not independently re-executed by P1 or this reconciliation; known DB-mixed",
+      "setupCleanupOwner": "F1-003-P2, only if its own task definition explicitly includes making legacy server:test runnable (open decision, see legacyServerTestPolicy)"
+    },
+    {
+      "aggregate": "future full-runtime wrapper",
+      "members": "not yet created — would compose all 4 aggregates above as sibling steps, never nested",
+      "runtimeDependencies": "superset of all above",
+      "canonicalOrCompatibilityOnly": "not yet created",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": false, "main": false, "nightly": true, "release": true},
+      "expectedCurrentExitStatus": "does not exist",
+      "setupCleanupOwner": "whichever future task creates it"
+    },
+    {
+      "aggregate": "future PR profile",
+      "members": "root: npm run build + server: npm run typecheck + server: npm run server:test:non-disposable",
+      "runtimeDependencies": "none beyond Node/tsc",
+      "canonicalOrCompatibilityOnly": "canonical (per futureCiCommandMatrix.pr)",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": true, "main": false, "nightly": false, "release": false},
+      "expectedCurrentExitStatus": "blocked today on test:overdue-installments for a must-be-green gate (see nonDisposableKnownFailure)",
+      "setupCleanupOwner": "none"
+    },
+    {
+      "aggregate": "future main profile",
+      "members": "same as PR profile, re-run at merged main tip",
+      "runtimeDependencies": "none beyond Node/tsc",
+      "canonicalOrCompatibilityOnly": "canonical (per futureCiCommandMatrix.main)",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": false, "main": true, "nightly": false, "release": false},
+      "expectedCurrentExitStatus": "same as PR profile",
+      "setupCleanupOwner": "none"
+    },
+    {
+      "aggregate": "future nightly profile",
+      "members": "legacy server:test + server:test:non-disposable + server:test:disposable-db + server:test:storage-integration + root frontend + root:test:vitest + bridge-agent npm run test",
+      "runtimeDependencies": "disposable Postgres + MinIO",
+      "canonicalOrCompatibilityOnly": "canonical (per futureCiCommandMatrix.nightly)",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": false, "main": false, "nightly": true, "release": false},
+      "expectedCurrentExitStatus": "blocked entirely on F1-003-P2",
+      "setupCleanupOwner": "F1-003-P2 provisioning mechanism"
+    },
+    {
+      "aggregate": "future release profile",
+      "members": "nightly set + migration deployment/upgrade verification (forward-only) + production-like smoke in a non-production environment",
+      "runtimeDependencies": "disposable Postgres + MinIO + migration tooling",
+      "canonicalOrCompatibilityOnly": "canonical (per futureCiCommandMatrix.release)",
+      "duplicateExecutionAllowed": false,
+      "ciEligibility": {"pr": false, "main": false, "nightly": false, "release": true},
+      "expectedCurrentExitStatus": "blocked on F1-003-P2 (nightly prerequisite) and R-070 (destructive rollback rehearsal remains opt-in/non-default)",
+      "setupCleanupOwner": "F1-003-P2 provisioning mechanism + a separate, not-yet-authorized migration-rollback-tooling task"
+    }
+  ],
+  "legacyServerTestPolicy": {
+    "adopted": "preserve_for_backward_compatibility_classify_mixed_not_pr_gate",
+    "rules": [
+      "Preserve legacy server:test for backward compatibility; not renamed/restructured/reordered.",
+      "Formally classify it as MIXED_PURE_NODE_AND_DISPOSABLE_POSTGRES, requiring disposable PostgreSQL for a correct all-green run; MinIO-free (corrected from P1's own raw finding, see minioDependentFiles.correctedFromP1).",
+      "Not the non-disposable PR gate — server:test:non-disposable holds that role.",
+      "Do not remove or reorder its members in F1-003-R1 or in F1-003-P2 (unless a separately-authorized task chooses to untangle it).",
+      "Do not duplicate every legacy DB member into server:test:disposable-db merely for count symmetry — P1 already made this a deliberate disjoint-set decision, ratified here.",
+      "Use explicit profile composition (sibling steps, not aggregate nesting) in future runner scripts to prevent duplicate execution."
+    ],
+    "alternativePolicyConsidered": false,
+    "justification": "No repository evidence found to disprove the task brief's own preferred default; adopted as-is."
+  },
+  "nonDisposableKnownFailure": {
+    "status": "RESOLVED — see f1003b1Resolution below (updated 2026-07-29, F1-003-R1B)",
+    "historicalP1Observation": {
+      "aggregate": "server:test:non-disposable",
+      "memberCount": 68,
+      "exitCode": 1,
+      "soleKnownFailure": "test:overdue-installments",
+      "failureDetail": "Total: 9 Passed: 7 Failed: 2",
+      "nature": "deterministic, pre-existing product/test drift — production code writes/reads a literal 'overdue' status value this orphan test still assumes differs",
+      "firstDocumented": "F0-005, reconfirmed F1-002-P1 section 4.1/9, independently re-executed and reconfirmed by F1-003-P1",
+      "reExecutedByThisReconciliation": false,
+      "acceptedAsHistoricalEvidence": true,
+      "preservedNotRewritten": true,
+      "note": "This sub-object is the original, as-observed-at-the-time F1-003-P1/R1 evidence. It is preserved verbatim for historical lineage and is superseded by f1003b1Resolution below, not restated as current state."
+    },
+    "f1003b1Resolution": {
+      "taskId": "F1-003-B1",
+      "taskTitle": "Overdue Installments Baseline Drift Resolution",
+      "pullRequest": "#258",
+      "mergeCommit": "bb4186793323485c71b91ad6939a0d8469f886cd",
+      "mergedAt": "2026-07-28T22:13:04Z",
+      "status": "MERGED",
+      "rootCauseClassification": "Case A — stale test, not a product defect",
+      "fixScope": "server/src/tests/overdueInstallments.test.ts only — 2 assertions + docstring corrected to the current, already-deployed contract; no application/schema/migration/CI/Docker/Compose file changed; no assertion weakened, skipped, or removed",
+      "currentResult": {
+        "aggregate": "server:test:non-disposable",
+        "memberCount": 68,
+        "exitCode": 0,
+        "overdueInstallmentsResult": "Total: 9 Passed: 9 Failed: 0"
+      },
+      "reExecutedByThisReconciliation": false,
+      "evidenceCitedFrom": "F1-003-B1's own merged evidence (evidence/F1-003-B1_OVERDUE_INSTALLMENTS_BASELINE_DRIFT_RESOLUTION.md) — not re-run by F1-003-R1B; upstream-merged result cited as authoritative"
+    },
+    "hardPrerequisiteForP3": false,
+    "hardPrerequisiteForP3Note": "Was true prior to F1-003-B1's merge (PR #258). Now satisfied — removed from P3's blocker list. P3 remains blocked on other, unrelated prerequisites (see p3Prerequisites below)."
+  },
+  "cleanupFailurePolicy": {
+    "provisioningFailure": "FAIL",
+    "readinessFailure": "FAIL — 60s bounded timeout, no indefinite retry",
+    "migrationFailure": "FAIL — non-zero exit or any reported pending migration after migrate deploy",
+    "testFailure": "FAIL — real outcome, never swallowed",
+    "productionLikeEndpointDetection": "FAIL CLOSED, before any provisioning command runs",
+    "missingRuntimeCredentialOrConfig": "FAIL CLOSED",
+    "cleanupFailureAfterSuccessfulTests": "FAIL the runtime job — reverses the original P2A design's warn-only rule",
+    "cleanupFailureAfterFailedTests": "preserve the original test failure as primary, additionally and separately report the infrastructure cleanup failure — not conflated into one opaque message",
+    "localOrphanResource": "non-zero exit plus an actionable cleanup command printed to the operator",
+    "ciOrphanResource": "cleanup step must run with always/finally semantics (e.g. GitHub Actions if: always())",
+    "sweeper": "defense-in-depth only, not the primary success criterion — role narrows now that per-run cleanup is fail-fatal",
+    "exceptionRequired": false,
+    "exceptionRationale": "The task brief's stricter policy is adopted in full, with no carve-out. A flaky docker rm is expected to surface as a real, actionable failure rather than being absorbed silently — a silently-leaked container/database/bucket is itself a real problem (resource exhaustion, future-run collision risk) that deserves visibility, not suppression."
+  },
+  "postgresVersionEvidence": {
+    "authoritativeProductionMajorVersionFound": false,
+    "searchedSources": [
+      "docs/program/ evidence and tracker files (grep for postgres version strings)",
+      "server/.env.example",
+      "server/prisma/schema.prisma datasource block (engine-agnostic, no version pin)",
+      "deployment-related evidence documents cited by RISK_REGISTER.md R-046/R-070 rows"
+    ],
+    "productionAccessed": false,
+    "secretsRead": false,
+    "provisionalChoice": "postgres:16-alpine",
+    "provisionalChoiceBasis": "historical repository precedent — 3 independent prior disposable-Postgres uses in this repository all used version-16-family images",
+    "versionParityClaimed": false,
+    "recordedAs": "explicit pre-P3/pre-release verification item, not resolved by this task or by F1-003-P1"
+  },
+  "minioImagePinningPolicy": {
+    "exactReleaseTagRequired": true,
+    "tagConvention": "MinIO official RELEASE.<YYYY-MM-DDThh-mm-ssZ> tagging convention",
+    "exactTagSelection": "P2 implementation-time decision — no repository evidence constrains which specific release to choose (first MinIO use in this program's history)",
+    "mutableLatestTagProhibited": true,
+    "digestPinRequiredForCi": true,
+    "digestPinRecommendedForLocal": true,
+    "imageVersionAndDigestMustBeRecordedInP2Evidence": true
+  },
+  "networkIsolationPolicy": {
+    "mandatoryApplicationTestLevelOutboundGuards": {"exists": false, "recommended": true, "detail": "shared test-bootstrap fetch/undici dispatcher override allow-listing DATABASE_URL/MINIO_ENDPOINT hosts plus loopback — recommended, not implemented"},
+    "mandatoryProductionEndpointGuards": {"exists": false, "requiredForP2": true, "detail": "no hostname allow-list/deny-list exists anywhere today; F1-003-P2's implementation contract makes this mandatory, not optional"},
+    "providerMocksStubs": {"exists": true, "verifiedBy": "F1-002-P2 section 6, F1-003-P1 messagesConsentGateResolution, this reconciliation's own direct read of kvkkAttachmentImagingLifecycle.test.ts's S3 mock", "detail": "every external-provider and every S3/MinIO touchpoint except fileBackupDbIntegration.test.ts is fully stubbed at the code level"},
+    "optionalRunnerContainerLevelEgressRestriction": {"exists": false, "recommended": true, "mandatory": false, "detail": "restricting CI runner egress to npm registry/GitHub/loopback for disposable-runtime-backed jobs — a recommendation, not a hard acceptance criterion"},
+    "controlsNotPracticallyEnforceableOnHostedRunners": "full network-egress denial at the OS/firewall level on a shared, hosted GitHub Actions runner without a self-hosted runner or third-party network-policy action",
+    "fullEgressDenialClaimed": false
+  },
+  "productionEndpointGuardPolicy": {
+    "existsToday": false,
+    "mandatoryForP2": true,
+    "behavior": "hard-fail, before any provisioning command runs, if DATABASE_URL/MINIO_ENDPOINT resolves to a non-loopback/non-private host or matches a known production hostname pattern (e.g. noramedi.com, a real AWS/S3 endpoint)",
+    "failMode": "fail closed, hard stop, not a warning"
+  },
+  "r070Boundary": {
+    "status": "OPEN — unchanged by F1-003-P1, unchanged by this reconciliation (F1-003-R1)",
+    "verifiedDirectlyAtNewBaseline": true,
+    "restatement": "prisma migrate deploy is forward-only and is not rollback tooling. This design's default profiles (1-4) never mutate _prisma_migrations directly and never perform a physical schema rollback. Profile 5 is explicitly opt-in, destructive, non-default, and does not introduce any new automated rollback tool.",
+    "explicitNonClosure": "Neither F1-003-P1, this reconciliation, nor the future F1-003-P2 implementation closes, mitigates, or narrows R-070. The underlying tooling gap (no drift-detection between _prisma_migrations and true schema state, no documented reconciliation runbook) is unchanged.",
+    "prismaMigrateDeployForwardOnly": true,
+    "emptyDbMigrationValidationAllowed": true,
+    "previousToCurrentUpgradeValidationAllowed": true,
+    "idempotencyStatusVerificationAllowed": true,
+    "physicalRollbackToolingImplemented": false,
+    "prismaMigrationsManualRewriteProhibited": true,
+    "destructiveRollbackRehearsalSeparateOptInNonDefault": true,
+    "f1003p2DoesNotCloseR070": true
+  },
+  "relatedRiskStatusReadDirectly": {
+    "r046": "OPEN — read directly from RISK_REGISTER.md at this reconciliation's new baseline; not altered by this task",
+    "r071": "CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION — IMPLEMENTATION_MERGED — SOURCE_DB_AND_PRODUCTION_VERIFIED — COMPLETE; not CLOSED; not altered by this task",
+    "r072": "CLOSED (external confirmation, F1-002-R2, 2026-07-28) — narrow closure, does not imply runtime/CI readiness; not altered by this task"
+  },
+  "f1003p2ImplementationContract": {
+    "title": "F1-003-P2 — Disposable PostgreSQL and MinIO Provisioning and Collision Avoidance",
+    "filesExpectedToBeCreatedOrChanged": [
+      "scripts/test-runtime/provision.ps1 (PowerShell-compatible local entry point; exact path a P2 implementation-time decision)",
+      "scripts/test-runtime/provision.sh (Bash/Linux/CI-compatible entry point, same contract)",
+      "scripts/test-runtime/sweep.ps1 / scripts/test-runtime/sweep.sh (stale-resource sweeper, local/worktree-only)",
+      "docs/program/evidence/F1-003-P2_DISPOSABLE_RUNTIME_PROVISIONING_IMPLEMENTATION.md + machine-readable JSON companion",
+      "No .github/workflows/** file, unless P2's own task definition explicitly re-includes CI-workflow activation",
+      "No change required to server/package.json's existing script definitions; new profile-composition wrapper scripts may be added but must not rename/remove/reorder any existing script"
+    ],
+    "oneContainerPerRunPostgres": true,
+    "oneContainerPerRunMinio": true,
+    "dynamicHostPortAllocation": "Docker-assigned via -p 127.0.0.1::5432 / ::9000, discovered via docker port after bind — never pre-scan-then-bind",
+    "collisionResistantIdentifiers": "runKey derived from CI_RUN_ID/CI_RUN_ATTEMPT/process.pid/a fresh UUID; nmtest_<scopeTag>_<runKey> databases, nmtest-<scopeTag>-<runKey> buckets, nmtest-pg-<scopeTag>-<runKey>/nmtest-minio-<scopeTag>-<runKey> containers",
+    "preImportDatabaseUrlConstruction": "DATABASE_URL constructed and exported before any Prisma-dependent test file is imported; never hardcoded, never written to a committed .env file",
+    "preImportMinioEnvConstruction": "MINIO_ENDPOINT/MINIO_ACCESS_KEY/MINIO_SECRET_KEY constructed and exported before any storage-dependent test file is imported",
+    "productionLikeEndpointGuards": "hard-fail before any provisioning command runs, per productionEndpointGuardPolicy",
+    "readinessTimeouts": "60s bounded for both Postgres (pg_isready) and MinIO (GET /minio/health/ready); fail on timeout, never indefinite retry",
+    "migrationDeploySequence": "npx prisma generate && npx prisma migrate deploy; assert exit 0 and zero reported pending migrations; exactly once per provisioned database, before any dependent test runs",
+    "deterministicCleanup": "per cleanupFailurePolicy (fail-fatal on cleanup failure, superseding the original P2A design's warn-only rule)",
+    "signalInterruptionCleanup": "PowerShell try/finally + Register-EngineEvent PowerShell.Exiting for local Windows; POSIX trap EXIT/INT/TERM for the Bash entry point; documented known-gap for a hard task-manager-kill on Windows",
+    "staleResourceLabelsAndTtl": "noramedi.disposable-runtime=true, noramedi.run-scope, noramedi.run-id, noramedi.created-at labels; 4-hour local/worktree TTL; no sweeper needed in CI",
+    "noPersistentVolumes": true,
+    "noRealExternalProviders": true,
+    "noProductionAccess": true,
+    "exactAggregateCommandsP2MustExecute": [
+      "server:test:disposable-db (9 members) against a freshly-provisioned, freshly-migrated disposable Postgres",
+      "server:test:storage-integration (1 member) against the same disposable Postgres plus a freshly-provisioned disposable MinIO",
+      "Legacy server:test only if P2's own task definition explicitly includes making it runnable — silence is not an acceptable resolution, per F1-003-P1's own acceptance criterion",
+      "The 5 migration profiles (profile-1-empty-db-migrate-deploy, profile-2-previous-release-to-current-upgrade, profile-3-migration-idempotency-status, profile-4-application-test-execution-after-migration, profile-5-destructive-rollback-rehearsal [opt-in, non-default])"
+    ],
+    "exactPassFailEvidenceRequired": "Real, reported pass/fail counts for server:test:disposable-db and server:test:storage-integration — not merely not_executed_dependency_blocked",
+    "twoRunParallelCollisionTestingMandatory": true,
+    "legacyServerTestExecutionRequiredInP2OrDeferred": "Not pre-decided by this contract — an explicit P2-time decision with two acceptable outcomes (provision now, or defer with a documented reason); P2's own evidence must state which was chosen and why",
+    "exactMigrationScope": "Forward-only prisma migrate deploy against a freshly disposable, empty database, applying the full current migration set (67+ directories as of this reconciliation's baseline); no new migration created by P2",
+    "exactRollbackMethod": "None automated. Profile 5 (destructive rollback rehearsal) is hand-authored, opt-in, non-default, mirrors F0-011-P2's methodology, and does not introduce new automated rollback tooling. R-070 remains open."
+  },
+  "f1003p2AcceptanceCriteria": [
+    "Repository-committed provisioning entry points exist for local Windows and Linux/CI-compatible execution.",
+    "PostgreSQL is one disposable container per run, no persistent volume.",
+    "MinIO is one disposable container per run, no persistent volume.",
+    "Host ports are dynamically assigned by Docker, not pre-scanned.",
+    "Every run receives collision-resistant container, database, and bucket names.",
+    "DATABASE_URL and MinIO variables are established before importing any Prisma/storage-dependent test.",
+    "Production-like endpoints are rejected before any migration or test starts.",
+    "prisma migrate deploy succeeds against a fresh disposable database.",
+    "server:test:disposable-db executes with exact pass/fail counts.",
+    "The canonical storage-integration profile executes every reconciled MinIO-dependent target exactly once.",
+    "At least two disposable runtime invocations execute concurrently without port/database/bucket collision.",
+    "Normal-success cleanup leaves zero labeled containers, volumes, databases, buckets, or test objects.",
+    "Forced test failure still triggers cleanup.",
+    "Forced interruption/cancellation cleanup is demonstrated where the local platform permits it.",
+    "Cleanup failure after successful tests produces a non-zero runtime-job exit.",
+    "No live external provider call occurs.",
+    "No production access or real patient data occurs.",
+    "No schema migration is created.",
+    "R-070 remains OPEN.",
+    "P2 reaches at most AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW.",
+    "F1 exit gate remains unsatisfied.",
+    "P3 workflow activation was blocked by the overdue-installments baseline drift; RESOLVED 2026-07-28 by F1-003-B1 (PR #258, MERGED) — no longer a P3 blocker (updated 2026-07-29, F1-003-R1B). P3 remains blocked by F1-003-P2's unstarted disposable-runtime provisioning/collision-avoidance scope."
+  ],
+  "p3Prerequisites": [
+    "F1-003-P2 implementation merged and independently reviewed",
+    "SATISFIED (2026-07-28, F1-003-B1, PR #258, MERGED, merge commit bb4186793323485c71b91ad6939a0d8469f886cd): F1-003-B1 (overdue-installments baseline drift resolution) completed — server:test:non-disposable exits 0, 9/9 — removed from P3's blocker list by F1-003-R1B (2026-07-29)",
+    "messagesConsentGate.test.ts's runtime classification already resolved by F1-003-P1 (DISPOSABLE_POSTGRES + EXTERNAL_PROVIDER_MOCK, HIGH confidence) — no longer a P3 blocker",
+    "Legacy server:test's own provisioning-in-P2-or-deferred decision made and documented"
+  ],
+  "unresolvedItems": [
+    "Production PostgreSQL major-version confirmation — no evidence source in this program answers it; pre-P3/pre-release verification item",
+    "Exact MinIO release tag + digest selection — P2 implementation-time decision",
+    "Whether legacy server:test's 23 DB-required members are provisioned by F1-003-P2 itself or deferred to a later task — explicit open decision, not resolved by silence",
+    "The test-code change fileBackupDbIntegration.test.ts needs (bucket-naming algorithm adoption + completing its bucket-teardown path) — requires separate authorization, unchanged from the original design",
+    "Whether a future runner/container-level egress restriction is adopted — recommended, not decided"
+  ],
+  "unresolvedItemsChangeLog": [
+    "2026-07-29 (F1-003-R1B): removed 'F1-003-B1 (overdue-installments drift) — named, not executed, not scheduled by this reconciliation' — F1-003-B1 merged (PR #258) and resolved the drift; see nonDisposableKnownFailure.f1003b1Resolution above."
+  ],
+  "explicitNonClaims": [
+    "Disposable-Postgres or MinIO provisioning is implemented, running, or CI-ready",
+    "Any application test was executed by this reconciliation task (F1-003-P1's own historical execution record and F1-003-B1's own merged execution record are cited as authoritative evidence, not re-run — updated 2026-07-29, F1-003-R1B)",
+    "A CI workflow was implemented, created, or enabled",
+    "A deployment occurred",
+    "Production was accessed or verified",
+    "R-070 is resolved, mitigated, or closed — it remains OPEN",
+    "R-046 or R-071's status was changed by this task",
+    "F1's exit gate is satisfied",
+    "F1 or F1-003 is complete",
+    "G1/G2 approval status has changed",
+    "The KVKK baseline is stable",
+    "PR #256 is merged (still open as of F1-003-R1B, 2026-07-29)",
+    "This document (F1-003-P2A design) is itself independently merged — it remains part of open PR #256, cross-checked against F1-003-R1A, not a separately merged artifact",
+    "F1-003-P2 (disposable Postgres/MinIO provisioning) is implemented — not started",
+    "This task reached any status beyond AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW"
+  ],
+  "evidenceSources": [
+    "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+    "docs/program/RISK_REGISTER.md (R-070, R-046, R-071, R-072 rows, re-read directly at new baseline)",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md (F1-003-P1's own entry)",
+    "docs/program/TEST_OWNERSHIP.md",
+    "docs/program/evidence/README.md",
+    "docs/program/architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md",
+    "docs/program/evidence/F1-003-P1_TEST_SCRIPT_CLOSURE_AND_EXECUTION_CONTRACT.md (full, 296 lines)",
+    "docs/program/evidence/F1-003-P1_test_execution_contract.json (full, 114 records, 3705 lines)",
+    "docs/program/evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md",
+    "docs/program/evidence/F1-002-P2_TEST_RUNTIME_DEPENDENCY_BASELINE.md",
+    "docs/program/evidence/F1-002-P2_test_runtime_requirements.json",
+    "docs/program/evidence/F1-002-P2_disposable_environment_capabilities.json",
+    "server/package.json (re-verified at new baseline: 115 total scripts, all referenced targets resolve)",
+    "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts (re-read in full, 475 lines)",
+    "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts (newly read in full by this reconciliation, 1483 lines)",
+    "server/src/services/fileBackupDestination.ts (read in full, original P2A pass)",
+    "PR #258 (F1-003-B1, MERGED, merge commit bb4186793323485c71b91ad6939a0d8469f886cd, mergedAt 2026-07-28T22:13:04Z) — cited as upstream merged evidence for the overdue-installments resolution, not re-executed by this reconciliation (added 2026-07-29, F1-003-R1B)",
+    "origin/main @ bb4186793323485c71b91ad6939a0d8469f886cd (confirmed ancestor via git merge-base --is-ancestor; F1-003-R1B's own git merge --no-ff origin/main reconciliation, 2026-07-29)"
+  ]
+}
