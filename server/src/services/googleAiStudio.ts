@@ -209,7 +209,7 @@ export const extractAssistantInputWithGoogleAi = async (
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Google AI Studio extraction failed with ${response.status}: ${errorText}`);
+    throw new Error(`Google AI Studio extraction failed with ${response.status}: ${redactSensitiveText(errorText)}`);
   }
 
   const payload = await response.json();

@@ -509,7 +509,7 @@ const runGoogleStepAwareNlu = async (
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Step-aware WhatsApp NLU failed with ${response.status}: ${errorText}`);
+    throw new Error(`Step-aware WhatsApp NLU failed with ${response.status}: ${redactSensitiveText(errorText)}`);
   }
 
   const payload = await response.json();

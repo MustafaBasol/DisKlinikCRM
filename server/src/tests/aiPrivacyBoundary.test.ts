@@ -48,6 +48,13 @@
  *  35.  resolveStepAwareWhatsAppIntent redacts a raw phone number the customer is
  *       actively providing (awaiting_phone step) before it reaches the AI provider.
  *  36.  Booking intent (service/date/time wording) survives redaction end-to-end.
+ *  37.  redactSensitiveText preserves date+dot-time adjacency (no phone false-positive).
+ *  38.  redactSensitiveText preserves date+colon-time adjacency (DD.MM.YYYY HH:MM).
+ *  39.  redactSensitiveText preserves ISO date+colon-time adjacency (YYYY-MM-DD HH:MM).
+ *  40.  Date+time exemption does not weaken redaction of a genuine adjacent phone number.
+ *  41.  extractAssistantInputWithGoogleAi sanitizes a PII-bearing provider error body.
+ *  42.  resolveWhatsAppConversationAgentDecision sanitizes a PII-bearing provider error body.
+ *  43.  resolveStepAwareWhatsAppIntent sanitizes a PII-bearing provider error body.
  */
 
 import assert from 'node:assert/strict';
@@ -638,6 +645,134 @@ async function main() {
     assert.ok(messageSection.includes('[PHONE]'));
     assert.ok(messageSection.includes('yarın saat 14:00'), 'the appointment date/time phrase must survive redaction');
     assert.ok(messageSection.includes('randevu almak istiyorum'), 'the booking intent phrase must survive redaction');
+  });
+
+  // 37. redactSensitiveText — date immediately followed by a dot-separated time
+  await test('redactSensitiveText preserves a date immediately followed by a dot-separated time (no phone false-positive)', () => {
+    const result = redactSensitiveText('27.07.2026 14.00 icin randevu almak istiyorum');
+    assert.ok(result.includes('27.07.2026 14.00'), `date+time must survive redaction in "${result}"`);
+    assert.ok(!result.includes('[PHONE]'), `date+time must not be misread as a phone number: "${result}"`);
+  });
+
+  // 38. redactSensitiveText — date immediately followed by a colon-separated time (the
+  // single most common way a customer types a specific appointment request)
+  await test('redactSensitiveText preserves a date immediately followed by a colon-separated time', () => {
+    const result = redactSensitiveText('27.07.2026 14:00 icin randevu almak istiyorum');
+    assert.ok(result.includes('27.07.2026 14:00'), `date+time must survive redaction in "${result}"`);
+    assert.ok(!result.includes('[PHONE]'), `date+time must not be misread as a phone number: "${result}"`);
+  });
+
+  // 39. redactSensitiveText — ISO date immediately followed by a colon-separated time
+  await test('redactSensitiveText preserves an ISO date immediately followed by a colon-separated time', () => {
+    const result = redactSensitiveText('2026-07-27 14:00 gelebilirim');
+    assert.ok(result.includes('2026-07-27 14:00'), `ISO date+time must survive redaction in "${result}"`);
+    assert.ok(!result.includes('[PHONE]'), `ISO date+time must not be misread as a phone number: "${result}"`);
+  });
+
+  // 40. redactSensitiveText — the date+time exemption does not weaken genuine phone redaction
+  await test('redactSensitiveText still redacts a real phone number appearing alongside a date+time phrase', () => {
+    const result = redactSensitiveText(
+      '27.07.2026 14:00 icin randevu almak istiyorum, telefonum 0532 123 45 67',
+    );
+    assert.ok(result.includes('27.07.2026 14:00'), `date+time must survive: "${result}"`);
+    assert.ok(!result.includes('0532 123 45 67'), `raw phone must not survive: "${result}"`);
+    assert.ok(result.includes('[PHONE]'), `phone must still be redacted: "${result}"`);
+  });
+
+  // 41. Provider error bodies must not reflect raw prompt-derived PII into thrown
+  // errors or logs — across all three Gemini call paths (AI-PROMPT-REDACTION-GAP-001
+  // follow-up: the original fix only verified this with a synthetic, non-PII error
+  // body; a provider error response that itself echoes request-derived data was
+  // previously forwarded to console.error unsanitized).
+  await test('extractAssistantInputWithGoogleAi sanitizes a PII-bearing provider error body before it is thrown or logged', async () => {
+    const originalConsoleError = console.error;
+    const loggedArgs: unknown[][] = [];
+    console.error = (...args: unknown[]) => { loggedArgs.push(args); };
+    const mock = mockGeminiFetchError(400, 'Invalid request, echo: phone 0532 123 45 67 email ahmet@ornek.com');
+    let thrown: unknown = null;
+    try {
+      await extractAssistantInputWithGoogleAi({
+        text: 'merhaba',
+        services: [],
+        currentIntent: null,
+        currentStep: null,
+        customerName: null,
+        selectedAppointmentTypeName: null,
+        selectedDate: null,
+      });
+    } catch (err) {
+      thrown = err;
+    } finally {
+      mock.restore();
+      console.error = originalConsoleError;
+    }
+    const thrownMessage = thrown instanceof Error ? thrown.message : String(thrown);
+    assert.ok(!thrownMessage.includes('0532 123 45 67'), 'thrown error must not echo a raw phone number from the provider error body');
+    assert.ok(!thrownMessage.includes('ahmet@ornek.com'), 'thrown error must not echo a raw email from the provider error body');
+    for (const args of loggedArgs) {
+      const serialized = JSON.stringify(args);
+      assert.ok(!serialized.includes('0532 123 45 67'), 'console.error must never include a raw phone number from a provider error body');
+      assert.ok(!serialized.includes('ahmet@ornek.com'), 'console.error must never include a raw email from a provider error body');
+    }
+  });
+
+  // 42. Same guarantee for the shared WhatsApp / Meta WhatsApp / Instagram conversation-agent path
+  await test('resolveWhatsAppConversationAgentDecision sanitizes a PII-bearing provider error body before it is thrown or logged', async () => {
+    const originalConsoleError = console.error;
+    const loggedArgs: unknown[][] = [];
+    console.error = (...args: unknown[]) => { loggedArgs.push(args); };
+    const mock = mockGeminiFetchError(400, 'Invalid request, echo: phone 0532 123 45 67 email ahmet@ornek.com');
+    try {
+      await resolveWhatsAppConversationAgentDecision({
+        latestMessage: 'merhaba',
+        customerName: null,
+        currentIntent: null,
+        currentStep: null,
+        selectedAppointmentTypeName: null,
+        selectedDate: null,
+        services: [],
+        recentMessages: [],
+        clinicFacts: baseClinicFacts,
+      });
+    } finally {
+      mock.restore();
+      console.error = originalConsoleError;
+    }
+    for (const args of loggedArgs) {
+      const serialized = JSON.stringify(args);
+      assert.ok(!serialized.includes('0532 123 45 67'), 'console.error must never include a raw phone number from a provider error body');
+      assert.ok(!serialized.includes('ahmet@ornek.com'), 'console.error must never include a raw email from a provider error body');
+    }
+  });
+
+  // 43. Same guarantee for the step-aware NLU path
+  await test('resolveStepAwareWhatsAppIntent sanitizes a PII-bearing provider error body before it is thrown or logged', async () => {
+    const originalConsoleError = console.error;
+    const loggedArgs: unknown[][] = [];
+    console.error = (...args: unknown[]) => { loggedArgs.push(args); };
+    const mock = mockGeminiFetchError(400, 'Invalid request, echo: phone 0532 123 45 67 email ahmet@ornek.com');
+    try {
+      await resolveStepAwareWhatsAppIntent({
+        clinicId: 'clinic-1',
+        phone: '905551234567',
+        currentStep: 'main_menu',
+        currentIntent: null,
+        lastMessage: null,
+        userText: 'merhaba',
+        availableServices: [],
+        selectedService: null,
+        selectedDate: null,
+        selectedTime: null,
+      });
+    } finally {
+      mock.restore();
+      console.error = originalConsoleError;
+    }
+    for (const args of loggedArgs) {
+      const serialized = JSON.stringify(args);
+      assert.ok(!serialized.includes('0532 123 45 67'), 'console.error must never include a raw phone number from a provider error body');
+      assert.ok(!serialized.includes('ahmet@ornek.com'), 'console.error must never include a raw email from a provider error body');
+    }
   });
 
   // ─── Summary ────────────────────────────────────────────────────────────────

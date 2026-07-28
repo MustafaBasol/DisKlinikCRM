@@ -31,6 +31,46 @@ const PHONE_CANDIDATE_PATTERN = /(\+?\d[\d\s\-().]{5,}\d)/g;
 const MIN_PHONE_DIGITS = 9;
 const MAX_PHONE_DIGITS = 15;
 
+// A calendar date (DD.MM.YYYY, DD-MM-YYYY, or ISO YYYY-MM-DD) immediately
+// followed by whitespace and a clock time is the single most common way a
+// customer types a specific appointment request ("27.07.2026 14:00"). Dates
+// and times use the same digit/separator characters as a phone number, so
+// digit-count alone would otherwise swallow the whole date+time into one
+// [PHONE] match (verified: "27.07.2026 14:00" -> "[PHONE]:00", destroying
+// both the date and the time). Recognized via calendar/clock range
+// validation (not just shape) so an actual phone number is not exempted by
+// coincidence.
+const DMY_DATE_PATTERN = /^(\d{1,2})[.\-](\d{1,2})[.\-](\d{2,4})$/;
+const YMD_DATE_PATTERN = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+const isValidCalendarDay = (day: number) => day >= 1 && day <= 31;
+const isValidCalendarMonth = (month: number) => month >= 1 && month <= 12;
+
+const isCalendarDateShape = (token: string): boolean => {
+  const dmy = token.match(DMY_DATE_PATTERN);
+  if (dmy) {
+    const [, day, month] = dmy;
+    return isValidCalendarDay(Number(day)) && isValidCalendarMonth(Number(month));
+  }
+  const ymd = token.match(YMD_DATE_PATTERN);
+  if (ymd) {
+    const [, , month, day] = ymd;
+    return isValidCalendarDay(Number(day)) && isValidCalendarMonth(Number(month));
+  }
+  return false;
+};
+
+// True when a phone-shaped candidate is actually "<date> <time>": either the
+// time survives in the match verbatim (dot-separated, e.g. "14.00") or it was
+// truncated to a bare hour because ':' is not part of the phone character
+// class (e.g. "27.07.2026 14" immediately followed by ":00" in the source).
+const isDateFollowedByTime = (candidate: string, offset: number, fullString: string): boolean => {
+  const parts = candidate.trim().split(/\s+/);
+  if (parts.length !== 2 || !isCalendarDateShape(parts[0])) return false;
+  const [, timePart] = parts;
+  if (/^\d{1,2}\.\d{2}$/.test(timePart)) return true;
+  return /^\d{1,2}$/.test(timePart) && fullString[offset + candidate.length] === ':';
+};
+
 // Standard email pattern.
 const EMAIL_PATTERN = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 
@@ -82,7 +122,8 @@ export const maskEmail = (value: string | null | undefined): string => {
 };
 
 const redactPhoneCandidates = (value: string): string =>
-  value.replace(PHONE_CANDIDATE_PATTERN, (match) => {
+  value.replace(PHONE_CANDIDATE_PATTERN, (match, _group, offset: number, fullString: string) => {
+    if (isDateFollowedByTime(match, offset, fullString)) return match;
     const digitCount = (match.match(/\d/g) ?? []).length;
     return digitCount >= MIN_PHONE_DIGITS && digitCount <= MAX_PHONE_DIGITS ? '[PHONE]' : match;
   });
