@@ -57,7 +57,7 @@ Prior update: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Decisi
 **F1 — CI and Test Architecture**
 
 Faz dokümanı: [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md)
-Faz durumu: `IN_PROGRESS` (2026-07-25, F0-014 — phase entered following externally-approved G0; phase entry itself implies no implementation authorization beyond the assigned first task, F1-001, which is itself design/evidence-first)
+Faz durumu: `IN_PROGRESS` (2026-07-25, F0-014 — phase entered following externally-approved G0; phase entry itself implies no implementation authorization beyond the assigned first task, F1-001, which is itself design/evidence-first). **Update 2026-07-28 (F1-001):** F1-001's design is delivered (`AGENT_COMPLETED`, PR opened, not merged — see "Aktif F1 görevi" below); faz durumu remains `IN_PROGRESS`, exit gate not satisfied, F1-002 not started.
 
 **Prior phase, now closed:** F0 — Baseline, Program Control, and Architecture Validation. Faz dokümanı: [phases/F0_BASELINE_AND_VALIDATION.md](phases/F0_BASELINE_AND_VALIDATION.md). Faz durumu: `COMPLETE` (2026-07-25, F0-014 — G0 externally `APPROVED_WITH_CONDITIONS`, all exit-gate conditions per [phases/F0_BASELINE_AND_VALIDATION.md](phases/F0_BASELINE_AND_VALIDATION.md) §"Exit gate" satisfied).
 
@@ -80,9 +80,11 @@ F1'in kendi kapsamı, [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_T
 |---|---|
 | ID | F1-001 |
 | Title | Impact-Based Test-Selection Architecture and Test-Scope Classification |
-| Status | `READY` — assigned by F0-014 (2026-07-25), not started; no agent work has begun on this task |
+| Status | `AGENT_COMPLETED` (2026-07-28) — design document, classification/rules JSON, and evidence document delivered; PR opened, not merged. Not `MERGED`; does not by itself satisfy F1's exit gate. |
 | Full definition | [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md) §"F1-001 — first assigned task" |
 | Dependency | G0 `APPROVED_WITH_CONDITIONS` (satisfied, 2026-07-25); F0-005 test envanteri `MERGED` (satisfied) |
+| Deliverables | [architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md](architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md), [architecture/evidence/f1-001-test-scope-classification.json](architecture/evidence/f1-001-test-scope-classification.json), [architecture/evidence/f1-001-impact-selection-rules.json](architecture/evidence/f1-001-impact-selection-rules.json), [evidence/F1-001_IMPACT_TEST_SELECTION_DESIGN_EVIDENCE.md](evidence/F1-001_IMPACT_TEST_SELECTION_DESIGN_EVIDENCE.md) |
+| New risk found | R-072 (test-inventory evidence staleness) — see [RISK_REGISTER.md](RISK_REGISTER.md) |
 
 ## Faz amacı
 

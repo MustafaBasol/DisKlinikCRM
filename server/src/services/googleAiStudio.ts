@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getAiCustomerNamePlaceholder, redactSensitiveText } from './privacy/redaction.js';
 
 const allowedIntents = new Set([
   'greeting',
@@ -152,11 +153,14 @@ export const extractAssistantInputWithGoogleAi = async (
     '',
     `Current intent: ${args.currentIntent ?? 'null'}`,
     `Current step: ${args.currentStep ?? 'null'}`,
-    `Known customer name: ${args.customerName ?? 'null'}`,
+    // No genuine name transmitted: this extraction task does not depend on
+    // knowing the customer's real name for correctness, so a fixed pseudonym
+    // is sent instead (see AI_CUSTOMER_NAME_PLACEHOLDER in privacy/redaction.ts).
+    `Known customer name: ${getAiCustomerNamePlaceholder(args.customerName) ?? 'null'}`,
     `Selected appointment type: ${args.selectedAppointmentTypeName ?? 'null'}`,
     `Selected date: ${args.selectedDate ?? 'null'}`,
     `Available services: ${JSON.stringify(args.services)}`,
-    `Latest customer message: ${JSON.stringify(args.text)}`,
+    `Latest customer message: ${JSON.stringify(redactSensitiveText(args.text))}`,
     '',
     'JSON shape:',
     '{',
@@ -208,7 +212,7 @@ export const extractAssistantInputWithGoogleAi = async (
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Google AI Studio extraction failed with ${response.status}: ${errorText}`);
+    throw new Error(`Google AI Studio extraction failed with ${response.status}: ${redactSensitiveText(errorText)}`);
   }
 
   const payload = await response.json();
@@ -257,7 +261,7 @@ export const normalizeDateWithGoogleAi = async (
     '- "yarın" → tomorrow',
     '- "bugün" → today',
     '- "2 hafta sonra" → 14 days from today',
-    `User message: ${JSON.stringify(text)}`,
+    `User message: ${JSON.stringify(redactSensitiveText(text))}`,
     '',
     'Return: { "isoDate": "YYYY-MM-DD" | null }',
     'Only return a date if the user is clearly referring to a specific date or relative date. If no date is mentioned, return null.',
