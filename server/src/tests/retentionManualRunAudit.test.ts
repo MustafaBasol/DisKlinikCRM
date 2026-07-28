@@ -1,11 +1,22 @@
 /**
  * retentionManualRunAudit.test.ts — RETENTION-MANUAL-RUN-AUDIT-001
  *
- * Focused coverage for POST /api/platform/privacy/data-retention/run: every
- * attempt (blocked, successful, partially failed, or unexpectedly errored)
- * must write exactly one immutable PlatformAdminAuditEvent row, and live
- * execution must be rejected whenever the runtime toggle / configured
- * environment / requested mode are inconsistent.
+ * Focused coverage for POST /api/platform/privacy/data-retention/run and the
+ * two-phase durable audit trail behind it (services/privacy/
+ * dataRetentionManualRunAudit.ts):
+ *
+ *   - Every genuine live-run attempt (dryRun=false, cleanup effectively
+ *     enabled) writes a "started" PlatformAdminAuditEvent row BEFORE the
+ *     job lock is attempted / before any delete-anonymize batch runs, then
+ *     exactly one terminal row (completed/partial_failure/failed/blocked)
+ *     sharing the same runId once the attempt concludes.
+ *   - If the "started" write itself fails, cleanup must never execute.
+ *   - A terminal-write failure must never roll back or corrupt the already
+ *     durably-committed "started" row.
+ *   - Dry runs and the policy-gate ("blocked") rejection never reach a lock
+ *     acquisition or a mutation, so a single terminal-only row (still with
+ *     its own runId, no "started" precursor) is correct for both.
+ *   - No PII ever lands in either row's metadata.
  *
  * Same technique as legacyConsentCorrection.test.ts: route handlers are
  * extracted directly from the router's internal stack and invoked against a
@@ -30,9 +41,21 @@ import { generatePlatformToken } from '../middleware/platformAuth.js';
 import jwt from 'jsonwebtoken';
 import {
   DATA_RETENTION_RUNTIME_SETTING_KEY,
+  loadDataRetentionConfig,
 } from '../services/privacy/dataRetentionPolicy.js';
 import { DATA_RETENTION_JOB_LOCK_NAME } from '../jobs/dataRetentionCleanupJob.js';
 import { getPlatformSetting, setPlatformSetting, unsetPlatformSetting } from '../services/platformSettings.js';
+import {
+  DATA_RETENTION_MANUAL_RUN_STARTED_ACTION,
+  DATA_RETENTION_MANUAL_RUN_COMPLETED_ACTION,
+  DATA_RETENTION_MANUAL_RUN_PARTIAL_FAILURE_ACTION,
+  DATA_RETENTION_MANUAL_RUN_FAILED_ACTION,
+  DATA_RETENTION_MANUAL_RUN_BLOCKED_ACTION,
+  DATA_RETENTION_MANUAL_RUN_ALL_ACTIONS,
+  recordManualRunStarted,
+  recordManualRunTerminal,
+  findIncompleteManualRuns,
+} from '../services/privacy/dataRetentionManualRunAudit.js';
 
 let passed = 0;
 let failed = 0;
@@ -105,17 +128,31 @@ function mockReq(body: Record<string, unknown> = {}) {
   return { body, platformAdmin: { id: ACTOR_ID, email: 'retention-admin@platform.test' } } as any;
 }
 
-const RUN_ACTION = 'data_retention.manual_run';
-
-async function cleanAuditRows() {
-  await prisma.platformAdminAuditEvent.deleteMany({ where: { action: RUN_ACTION, actorPlatformAdminId: ACTOR_ID } });
+async function cleanAuditRows(actorId: string = ACTOR_ID) {
+  await prisma.platformAdminAuditEvent.deleteMany({
+    where: { action: { in: DATA_RETENTION_MANUAL_RUN_ALL_ACTIONS }, actorPlatformAdminId: actorId },
+  });
 }
 
-async function auditRows() {
+async function auditRows(actorId: string = ACTOR_ID) {
   return prisma.platformAdminAuditEvent.findMany({
-    where: { action: RUN_ACTION, actorPlatformAdminId: ACTOR_ID },
+    where: { action: { in: DATA_RETENTION_MANUAL_RUN_ALL_ACTIONS }, actorPlatformAdminId: actorId },
     orderBy: { createdAt: 'asc' },
   });
+}
+
+function startedRows(rows: Awaited<ReturnType<typeof auditRows>>) {
+  return rows.filter((r) => r.action === DATA_RETENTION_MANUAL_RUN_STARTED_ACTION);
+}
+
+function terminalRows(rows: Awaited<ReturnType<typeof auditRows>>) {
+  return rows.filter((r) => r.action !== DATA_RETENTION_MANUAL_RUN_STARTED_ACTION);
+}
+
+function runIdOf(row: { safeMetadata: unknown }): string {
+  const runId = (row.safeMetadata as any)?.runId;
+  assert.equal(typeof runId, 'string', 'every manual-run audit row must carry a string runId in safeMetadata');
+  return runId as string;
 }
 
 async function setRuntimeEnabled(enabled: boolean) {
@@ -161,6 +198,22 @@ async function countOperationalEventsBySubstring(substring: string): Promise<num
   return prisma.operationalEvent.count({ where: { message: { contains: substring } } });
 }
 
+function buildGateCtx(overrides: Partial<{
+  actorPlatformAdminId: string | null;
+  runtimeCleanupEnabled: boolean;
+  effectiveCleanupEnabled: boolean;
+  cleanupEnabledSource: 'env_disabled' | 'runtime_disabled' | 'enabled';
+}> = {}) {
+  return {
+    actorPlatformAdminId: ACTOR_ID,
+    config: loadDataRetentionConfig(),
+    runtimeCleanupEnabled: true,
+    effectiveCleanupEnabled: true,
+    cleanupEnabledSource: 'enabled' as const,
+    ...overrides,
+  };
+}
+
 section('POST /privacy/data-retention/run — Authorization gate');
 
 await test('unauthorized (no token): authenticatePlatformAdmin rejects before any handler runs, no audit row', async () => {
@@ -198,9 +251,9 @@ await test('sanity: a genuine platform admin token is accepted by the gate', asy
   assert.equal(nextCalled, true);
 });
 
-section('POST /privacy/data-retention/run — dry-run audit');
+section('POST /privacy/data-retention/run — dry-run audit (single terminal event, no "started" precursor)');
 
-await test('dry-run (default env/runtime state): 200, audit outcome=success, dryRun=true, no PII, effective config captured', async () => {
+await test('dry-run (default env/runtime state): 200, single audit row, action=manual_run_completed, outcome=success, dryRun=true, no PII, effective config captured', async () => {
   await cleanAuditRows();
   await clearRuntimeSetting(); // default-deny: runtime toggle absent → runtimeCleanupEnabled=false, irrelevant for a dry run
   const chain = runChainForRoute();
@@ -212,14 +265,17 @@ await test('dry-run (default env/runtime state): 200, audit outcome=success, dry
   assert.equal(res.body.summary.dryRun, true);
 
   const rows = await auditRows();
-  assert.equal(rows.length, 1, 'exactly one audit row per attempt');
+  assert.equal(rows.length, 1, 'a dry run never gets a "started" precursor — exactly one terminal row');
+  assert.equal(startedRows(rows).length, 0, 'dry run must never write a manual_run_started row');
   const row = rows[0];
+  assert.equal(row.action, DATA_RETENTION_MANUAL_RUN_COMPLETED_ACTION);
   assert.equal(row.actorPlatformAdminId, ACTOR_ID);
   assert.equal(row.resourceType, 'data_retention');
   assert.equal(row.resourceKey, 'manual_run');
   assert.equal(row.outcome, 'success');
 
   const meta = row.safeMetadata as any;
+  assert.equal(typeof meta.runId, 'string', 'even a "started"-less terminal row carries its own runId, for uniform tooling');
   assert.equal(meta.dryRun, true);
   assert.equal(meta.runtimeCleanupEnabled, false, 'default-deny: absent PlatformSetting means runtime is off');
   assert.ok(meta.effectiveConfig, 'effective retention configuration must be recorded');
@@ -231,9 +287,9 @@ await test('dry-run (default env/runtime state): 200, audit outcome=success, dry
   assert.ok(!('clinicId' in meta) && !('organizationId' in meta) && !('patientId' in meta), 'must never carry clinic/patient identifiers — platform-scoped only');
 });
 
-section('POST /privacy/data-retention/run — inconsistent / disabled state rejection');
+section('POST /privacy/data-retention/run — inconsistent / disabled state rejection (policy gate: single terminal event, no "started" precursor)');
 
-await test('runtime disabled (env enabled, runtime absent/false): live run rejected 403, audit outcome=blocked, errorCategory=blocked_runtime_disabled', async () => {
+await test('runtime disabled (env enabled, runtime absent/false): live run rejected 403, single audit row, action=manual_run_blocked, outcome=blocked, errorCategory=blocked_runtime_disabled', async () => {
   await cleanAuditRows();
   await clearRuntimeSetting();
   await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
@@ -245,7 +301,9 @@ await test('runtime disabled (env enabled, runtime absent/false): live run rejec
     assert.equal(res.body.cleanupEnabledSource, 'runtime_disabled');
 
     const rows = await auditRows();
-    assert.equal(rows.length, 1);
+    assert.equal(rows.length, 1, 'the policy gate is a synchronous rejection — nothing was ever going to run, so no "started" precursor');
+    assert.equal(startedRows(rows).length, 0);
+    assert.equal(rows[0].action, DATA_RETENTION_MANUAL_RUN_BLOCKED_ACTION);
     assert.equal(rows[0].outcome, 'blocked');
     const meta = rows[0].safeMetadata as any;
     assert.equal(meta.errorCategory, 'blocked_runtime_disabled');
@@ -268,6 +326,7 @@ await test('inconsistent toggle (runtime ON but env-level kill switch OFF): live
 
     const rows = await auditRows();
     assert.equal(rows.length, 1);
+    assert.equal(rows[0].action, DATA_RETENTION_MANUAL_RUN_BLOCKED_ACTION);
     assert.equal(rows[0].outcome, 'blocked');
     const meta = rows[0].safeMetadata as any;
     assert.equal(meta.errorCategory, 'blocked_env_disabled');
@@ -288,13 +347,14 @@ await test('dry-run is never blocked by disabled state (safety valve preserved)'
     await runChain(chain, mockReq({ dryRun: true }), res);
     assert.equal(res.statusCode, 200);
     const rows = await auditRows();
+    assert.equal(rows[0].action, DATA_RETENTION_MANUAL_RUN_COMPLETED_ACTION);
     assert.equal(rows[0].outcome, 'success');
   });
 });
 
-section('POST /privacy/data-retention/run — live-run audit with real counts');
+section('POST /privacy/data-retention/run — live-run two-phase audit (started + terminal, shared runId)');
 
-await test('live-run: env+runtime enabled, seeded eligible row is actually deleted, audit outcome=success with correct result counts', async () => {
+await test('live-run: env+runtime enabled, seeded eligible row is actually deleted; a "started" row is written, followed by exactly one manual_run_completed terminal row sharing its runId', async () => {
   await cleanAuditRows();
   await setRuntimeEnabled(true);
   const marker = `retention-audit-test-${randomUUID()}`;
@@ -313,19 +373,66 @@ await test('live-run: env+runtime enabled, seeded eligible row is actually delet
     assert.equal(await countOperationalEventsBySubstring(marker), 0, 'the seeded eligible row must actually be deleted, not just counted');
 
     const rows = await auditRows();
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0].outcome, 'success');
-    const meta = rows[0].safeMetadata as any;
+    assert.equal(rows.length, 2, 'a genuine live-run attempt writes exactly two rows: started + one terminal');
+    const started = startedRows(rows);
+    const terminal = terminalRows(rows);
+    assert.equal(started.length, 1);
+    assert.equal(terminal.length, 1);
+    assert.equal(started[0].outcome, 'started');
+    assert.equal(started[0].action, DATA_RETENTION_MANUAL_RUN_STARTED_ACTION);
+    assert.ok(started[0].createdAt.getTime() <= terminal[0].createdAt.getTime(), 'the "started" row must be committed no later than its terminal row');
+
+    assert.equal(terminal[0].action, DATA_RETENTION_MANUAL_RUN_COMPLETED_ACTION);
+    assert.equal(terminal[0].outcome, 'success');
+
+    const startedRunId = runIdOf(started[0]);
+    const terminalRunId = runIdOf(terminal[0]);
+    assert.equal(startedRunId, terminalRunId, 'the terminal row must share the exact same runId as its started row');
+
+    const meta = terminal[0].safeMetadata as any;
     assert.equal(meta.dryRun, false);
     assert.ok(meta.resultCounts.deletedOperationalEvents >= 1);
     assert.equal(meta.runtimeCleanupEnabled, true);
     assert.equal(meta.effectiveCleanupEnabled, true);
     assert.equal(meta.cleanupEnabledSource, 'enabled');
+
+    const startedMeta = started[0].safeMetadata as any;
+    assert.equal(startedMeta.dryRun, false);
+    assert.ok(!('resultCounts' in startedMeta), 'a "started" row is written before cleanup runs — it can never carry result counts');
   });
   await clearRuntimeSetting();
 });
 
-await test('repeated invocation: two consecutive live runs each write their own audit row; the second finds nothing left to delete', async () => {
+await test('the "started" row is durably committed before the first delete/anonymize operation of the run', async () => {
+  // Exercises recordManualRunStarted()/runDataRetentionCleanup() directly
+  // (bypassing the HTTP layer) so the ordering can be asserted deterministically,
+  // rather than inferred from timestamps after the fact.
+  await cleanAuditRows();
+  const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
+  const marker = `retention-audit-ordering-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
+
+  const ctx = buildGateCtx();
+  const { runId } = await recordManualRunStarted(ctx);
+
+  // At this point recordManualRunStarted() has returned (its own transaction
+  // committed) but the route has not yet called runDataRetentionCleanup —
+  // exactly mirroring platformAdmin.ts's ordering. The seeded row must still
+  // be untouched.
+  assert.equal(await countOperationalEventsBySubstring(marker), 1, 'no mutation may occur before the started row is committed');
+  const midRunRows = await auditRows();
+  assert.equal(midRunRows.length, 1);
+  assert.equal(midRunRows[0].action, DATA_RETENTION_MANUAL_RUN_STARTED_ACTION);
+
+  const summary = await runDataRetentionCleanup({ dryRun: false, config: ctx.config });
+  assert.equal(await countOperationalEventsBySubstring(marker), 0, 'the mutation happens strictly after the started row was committed');
+
+  await recordManualRunTerminal({ ...ctx, runId, dryRun: false, outcome: 'success', resultCounts: { deletedOperationalEvents: summary.deletedOperationalEvents } });
+  const rows = await auditRows();
+  assert.equal(rows.length, 2);
+});
+
+await test('repeated invocation: two consecutive live runs each write their own started+terminal pair with distinct runIds; the second finds nothing left to delete', async () => {
   await cleanAuditRows();
   await setRuntimeEnabled(true);
   const marker = `retention-audit-idem-${randomUUID()}`;
@@ -345,19 +452,26 @@ await test('repeated invocation: two consecutive live runs each write their own 
     assert.equal(await countOperationalEventsBySubstring(marker), 0);
 
     const rows = await auditRows();
-    assert.equal(rows.length, 2, 'each attempt gets its own immutable audit row — attempts are never deduplicated');
-    assert.equal(rows[0].outcome, 'success');
-    assert.equal(rows[1].outcome, 'success');
-    const meta2 = rows[1].safeMetadata as any;
-    // Second run is idempotent: nothing new left for this fixture's category to touch.
-    assert.equal((meta2.resultCounts.deletedOperationalEvents ?? 0) === 0 || meta2.resultCounts.deletedOperationalEvents < res1.body.summary.deletedOperationalEvents + 1, true);
+    assert.equal(rows.length, 4, 'two attempts × (started + terminal) = 4 immutable rows — attempts are never deduplicated');
+    const started = startedRows(rows);
+    const terminal = terminalRows(rows);
+    assert.equal(started.length, 2);
+    assert.equal(terminal.length, 2);
+
+    const runIds = new Set(rows.map(runIdOf));
+    assert.equal(runIds.size, 2, 'each attempt gets its own distinct runId');
+
+    for (const t of terminal) {
+      assert.equal(t.action, DATA_RETENTION_MANUAL_RUN_COMPLETED_ACTION);
+      assert.equal(t.outcome, 'success');
+    }
   });
   await clearRuntimeSetting();
 });
 
 section('POST /privacy/data-retention/run — partial/failed cleanup');
 
-await test('partial failure: one category genuinely fails at the DB level, others still succeed; audit outcome=partial_failure with a safe error category (no raw error message, no PII)', async () => {
+await test('partial failure: one category genuinely fails at the DB level, others still succeed; started row + manual_run_partial_failure terminal row share one runId, safe error category, no PII', async () => {
   await cleanAuditRows();
   await setRuntimeEnabled(true);
   const marker = `retention-audit-partial-${randomUUID()}`;
@@ -380,15 +494,21 @@ await test('partial failure: one category genuinely fails at the DB level, other
       assert.ok(res.body.summary.skippedCategories.includes('operationalEvents'));
 
       const rows = await auditRows();
-      assert.equal(rows.length, 1);
-      assert.equal(rows[0].outcome, 'partial_failure');
-      const meta = rows[0].safeMetadata as any;
+      assert.equal(rows.length, 2, 'started + one partial_failure terminal row');
+      const started = startedRows(rows);
+      const terminal = terminalRows(rows);
+      assert.equal(started.length, 1);
+      assert.equal(terminal.length, 1);
+      assert.equal(terminal[0].action, DATA_RETENTION_MANUAL_RUN_PARTIAL_FAILURE_ACTION);
+      assert.equal(terminal[0].outcome, 'partial_failure');
+      assert.equal(runIdOf(started[0]), runIdOf(terminal[0]), 'started and terminal rows must share the same runId');
+      const meta = terminal[0].safeMetadata as any;
       assert.equal(meta.errorCategory, 'category_execution_error');
       assert.ok(meta.skippedCategories.includes('operationalEvents'));
 
-      const serialized = JSON.stringify(rows[0]);
-      assert.ok(!serialized.includes('OperationalEvent_test_disabled'), 'no raw DB/error detail should leak into the audit row');
-      assert.ok(!serialized.includes(marker), 'no raw content from the affected rows should leak into the audit row');
+      const serialized = JSON.stringify(rows);
+      assert.ok(!serialized.includes('OperationalEvent_test_disabled'), 'no raw DB/error detail should leak into the audit rows');
+      assert.ok(!serialized.includes(marker), 'no raw content from the affected rows should leak into the audit rows');
     });
   } finally {
     await prisma.$executeRawUnsafe('ALTER TABLE "OperationalEvent_test_disabled" RENAME TO "OperationalEvent"');
@@ -400,7 +520,7 @@ await test('partial failure: one category genuinely fails at the DB level, other
 
 section('POST /privacy/data-retention/run — audit redaction / no PII / platform-scope');
 
-await test('no PII in audit metadata: a message containing name/phone-shaped content never appears in safeMetadata', async () => {
+await test('no PII in audit metadata: a message containing name/phone-shaped content never appears in either the started or terminal row', async () => {
   await cleanAuditRows();
   await setRuntimeEnabled(true);
   const piiLikeMarker = `PII-Ayse-Yilmaz-+905551237788-${randomUUID()}`;
@@ -413,7 +533,8 @@ await test('no PII in audit metadata: a message containing name/phone-shaped con
     assert.equal(res.statusCode, 200);
 
     const rows = await auditRows();
-    const serialized = JSON.stringify(rows[rows.length - 1].safeMetadata);
+    assert.equal(rows.length, 2);
+    const serialized = JSON.stringify(rows);
     assert.ok(!serialized.includes('Ayse'), 'no name-shaped content in audit metadata');
     assert.ok(!serialized.includes('+905551237788'), 'no phone-shaped content in audit metadata');
     assert.ok(!serialized.includes(piiLikeMarker), 'the raw seeded message content must never appear in audit metadata — only counts');
@@ -440,18 +561,61 @@ await test('no cross-tenant leakage: audit metadata never carries a clinicId/org
   await clearRuntimeSetting();
 });
 
-section('POST /privacy/data-retention/run — audit persistence failure');
-
-await test('audit write failure: live run still executes (real deletion happens) but the response makes the missing audit record explicit, not a plain 200', async () => {
+await test('exact metadata field set: both a started row and its terminal row carry only the documented, non-PII keys', async () => {
   await cleanAuditRows();
   await setRuntimeEnabled(true);
-  const marker = `retention-audit-writefail-${randomUUID()}`;
+  const marker = `retention-audit-fieldset-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
+
+  await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+    const chain = runChainForRoute();
+    const res = mockRes();
+    await runChain(chain, mockReq({ dryRun: false }), res);
+    assert.equal(res.statusCode, 200);
+
+    const rows = await auditRows();
+    const started = startedRows(rows)[0];
+    const terminal = terminalRows(rows)[0];
+
+    const startedKeys = Object.keys(started.safeMetadata as object).sort();
+    assert.deepEqual(startedKeys, [
+      'cleanupEnabledSource',
+      'dryRun',
+      'effectiveCleanupEnabled',
+      'effectiveConfig',
+      'runId',
+      'runtimeCleanupEnabled',
+    ].sort());
+
+    const terminalKeys = Object.keys(terminal.safeMetadata as object).sort();
+    assert.deepEqual(terminalKeys, [
+      'cleanupEnabledSource',
+      'dryRun',
+      'effectiveCleanupEnabled',
+      'effectiveConfig',
+      'resultCounts',
+      'runId',
+      'runtimeCleanupEnabled',
+    ].sort());
+  });
+  await clearRuntimeSetting();
+});
+
+section('POST /privacy/data-retention/run — "started" audit-write failure (must abort before any mutation)');
+
+await test('started-audit-write failure: cleanup never executes (no deletion happens), a safe 500 is returned, and no audit row of any kind is left behind', async () => {
+  await cleanAuditRows('retention-manual-run-ghost-admin');
+  await setRuntimeEnabled(true);
+  const marker = `retention-audit-startfail-${randomUUID()}`;
   await seedOldOperationalEvent(marker);
 
   // actorPlatformAdminId has a real FK to PlatformAdmin(id) — a non-existent
-  // admin id forces a genuine DB-level foreign-key violation on the audit
-  // insert itself, no mocking required (same technique as
-  // legacyConsentCorrection's forced-FK-violation tests in platformAdmin.test.ts).
+  // admin id forces a genuine DB-level foreign-key violation on the very
+  // first audit insert this request makes: the "started" row. Since that
+  // write happens strictly before the job lock / cleanup call, this proves
+  // cleanup is never reached when the pre-run audit trail cannot be
+  // persisted (same fault-injection technique as
+  // legacyConsentCorrection.test.ts's forced-FK-violation tests).
   const ghostActorId = 'retention-manual-run-ghost-admin';
   const req = mockReq({ dryRun: false });
   req.platformAdmin = { id: ghostActorId, email: 'ghost@platform.test' };
@@ -461,21 +625,58 @@ await test('audit write failure: live run still executes (real deletion happens)
     const res = mockRes();
     await runChain(chain, req, res);
 
-    assert.equal(res.statusCode, 500, 'a cleanup that ran but whose audit record failed to persist must never look like an ordinary 200 success');
-    assert.ok(res.body?.summary, 'the actual summary must still be surfaced so the caller/ops can see what really happened');
-    assert.ok(res.body.summary.deletedOperationalEvents >= 1, 'the response summary must reflect the real deletion, not be hidden');
+    assert.equal(res.statusCode, 500, 'a run whose pre-run audit trail could not be persisted must never proceed to a 200/403/409');
+    assert.deepEqual(res.body, { error: 'Unable to record a durable audit trail for this run. The run was not executed.' });
 
-    assert.equal(await countOperationalEventsBySubstring(marker), 0, 'the cleanup itself must have actually run and deleted the eligible row, even though its audit row failed to persist — this endpoint cannot atomically bundle a 7-table batched cleanup with one audit insert');
+    assert.equal(await countOperationalEventsBySubstring(marker), 1, 'the seeded eligible row must be untouched — cleanup must never have run');
 
     const ghostRows = await prisma.platformAdminAuditEvent.findMany({ where: { actorPlatformAdminId: ghostActorId } });
-    assert.equal(ghostRows.length, 0, 'the failed audit insert must not leave a partial/corrupt row behind — its own transaction rolled back cleanly');
+    assert.equal(ghostRows.length, 0, 'the failed "started" insert must not leave a partial/corrupt row behind — its own transaction rolled back cleanly');
   });
   await clearRuntimeSetting();
+  await prisma.operationalEvent.deleteMany({ where: { message: { contains: marker } } });
 });
 
-section('POST /privacy/data-retention/run — concurrent manual runs');
+section('POST /privacy/data-retention/run — terminal audit-write failure (must never corrupt the started row)');
 
-await test('concurrent live runs: the shared job lock serializes execution — only one run actually deletes, the other is rejected 409 with outcome=blocked/concurrent_run_in_progress', async () => {
+await test('terminal-audit-write failure: the "started" row remains fully intact (not rolled back, not updated) even though the terminal insert fails', async () => {
+  // Direct service-level test (bypasses the HTTP layer) so the failure can
+  // be injected deterministically between the two writes, rather than
+  // racing the route's internal timing.
+  await cleanAuditRows();
+  const ctx = buildGateCtx();
+  const { runId } = await recordManualRunStarted(ctx);
+
+  const beforeRows = await auditRows();
+  assert.equal(beforeRows.length, 1);
+  const startedRowBefore = beforeRows[0];
+
+  // Force the next PlatformAdminAuditEvent insert to fail at the DB level —
+  // same rename-the-table fault-injection technique used by the partial-
+  // failure test above, applied here to the audit table itself.
+  await prisma.$executeRawUnsafe('ALTER TABLE "PlatformAdminAuditEvent" RENAME TO "PlatformAdminAuditEvent_test_disabled"');
+  let threw = false;
+  try {
+    await recordManualRunTerminal({ ...ctx, runId, dryRun: false, outcome: 'success', resultCounts: { deletedOperationalEvents: 0 } });
+  } catch {
+    threw = true;
+  } finally {
+    await prisma.$executeRawUnsafe('ALTER TABLE "PlatformAdminAuditEvent_test_disabled" RENAME TO "PlatformAdminAuditEvent"');
+  }
+  assert.equal(threw, true, 'the terminal write must propagate its failure to the caller (platformAdmin.ts logs it and responds accordingly)');
+
+  const afterRows = await auditRows();
+  assert.equal(afterRows.length, 1, 'no terminal row was created, and the started row was not duplicated');
+  assert.equal(afterRows[0].id, startedRowBefore.id);
+  assert.equal(afterRows[0].action, DATA_RETENTION_MANUAL_RUN_STARTED_ACTION);
+  assert.equal(afterRows[0].outcome, 'started');
+  assert.deepEqual(afterRows[0].safeMetadata, startedRowBefore.safeMetadata, 'the started row\'s content must be byte-for-byte unchanged');
+  assert.equal(afterRows[0].createdAt.getTime(), startedRowBefore.createdAt.getTime(), 'the started row must never be touched (no update, no delete) by a failed terminal write');
+});
+
+section('POST /privacy/data-retention/run — concurrent manual runs and scheduled/manual lock collisions');
+
+await test('concurrent live runs: the shared job lock serializes execution — only one run actually deletes; both attempts get their own started+terminal audit pair, the loser terminal is manual_run_blocked/concurrent_run_in_progress', async () => {
   await cleanAuditRows();
   await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
   await setRuntimeEnabled(true);
@@ -504,13 +705,103 @@ await test('concurrent live runs: the shared job lock serializes execution — o
     assert.equal(await countOperationalEventsBySubstring(marker), 0, 'the seeded row is deleted exactly once — no double-processing');
 
     const rows = await auditRows();
-    assert.equal(rows.length, 2, 'both attempts — the executed one and the lock-rejected one — each get their own immutable audit row');
-    const outcomes = rows.map((r) => r.outcome).sort();
+    assert.equal(rows.length, 4, 'both attempts write their own started+terminal pair: 2 started + 2 terminal');
+    assert.equal(startedRows(rows).length, 2, 'both racers reach the "started" write before contending for the lock');
+    const terminal = terminalRows(rows);
+    assert.equal(terminal.length, 2);
+    const outcomes = terminal.map((r) => r.outcome).sort();
     assert.deepEqual(outcomes, ['blocked', 'success']);
-    const blockedRow = rows.find((r) => r.outcome === 'blocked')!;
+
+    const blockedRow = terminal.find((r) => r.outcome === 'blocked')!;
+    assert.equal(blockedRow.action, DATA_RETENTION_MANUAL_RUN_BLOCKED_ACTION);
     assert.equal((blockedRow.safeMetadata as any).errorCategory, 'concurrent_run_in_progress');
+
+    const completedRow = terminal.find((r) => r.outcome === 'success')!;
+    assert.equal(completedRow.action, DATA_RETENTION_MANUAL_RUN_COMPLETED_ACTION);
+
+    // Every terminal row's runId must match exactly one started row's runId —
+    // pairs are never cross-wired between the two concurrent attempts.
+    const startedRunIds = startedRows(rows).map(runIdOf).sort();
+    const terminalRunIds = terminal.map(runIdOf).sort();
+    assert.deepEqual(startedRunIds, terminalRunIds);
+    assert.equal(new Set(startedRunIds).size, 2, 'the two concurrent attempts must have distinct runIds');
   });
   await clearRuntimeSetting();
+});
+
+await test('scheduled/manual lock collision: a live manual run is rejected 409 when the shared lock is already held (simulating the scheduled cron mid-run), and the collision is itself audited as started+blocked', async () => {
+  await cleanAuditRows();
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await setRuntimeEnabled(true);
+
+  // Simulate the scheduled cron currently holding the shared lease lock —
+  // same JobLock row/name the cron (dataRetentionCleanupJob.ts) and this
+  // manual route both contend for.
+  await prisma.jobLock.create({
+    data: { name: DATA_RETENTION_JOB_LOCK_NAME, lockedUntil: new Date(Date.now() + 60_000), lockedBy: 'simulated-scheduled-cron' },
+  });
+
+  try {
+    await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+      const chain = runChainForRoute();
+      const res = mockRes();
+      await runChain(chain, mockReq({ dryRun: false }), res);
+
+      assert.equal(res.statusCode, 409, 'a manual live run must be rejected while the scheduled job holds the shared lock');
+      assert.equal(res.body.error, 'Another data retention run (scheduled or manual) is already in progress. Try again shortly.');
+
+      const rows = await auditRows();
+      assert.equal(rows.length, 2, 'the manual attempt still writes started + blocked, even though the scheduled job (not another manual run) held the lock');
+      assert.equal(startedRows(rows).length, 1);
+      const terminal = terminalRows(rows);
+      assert.equal(terminal.length, 1);
+      assert.equal(terminal[0].action, DATA_RETENTION_MANUAL_RUN_BLOCKED_ACTION);
+      assert.equal(terminal[0].outcome, 'blocked');
+      assert.equal((terminal[0].safeMetadata as any).errorCategory, 'concurrent_run_in_progress');
+      assert.equal(runIdOf(startedRows(rows)[0]), runIdOf(terminal[0]));
+    });
+  } finally {
+    await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  }
+  await clearRuntimeSetting();
+});
+
+section('POST /privacy/data-retention/run — incomplete-run reconciliation (findIncompleteManualRuns)');
+
+await test('findIncompleteManualRuns: a "started" row with no matching terminal row (simulating a mid-run crash) is detected; a normally-completed run is not', async () => {
+  await cleanAuditRows();
+  const ctx = buildGateCtx();
+
+  // Simulate a crash: write "started" and never write a terminal row.
+  const { runId: crashedRunId } = await recordManualRunStarted(ctx);
+
+  // A normal, fully-completed attempt for comparison — must NOT be reported incomplete.
+  const { runId: completedRunId } = await recordManualRunStarted(ctx);
+  await recordManualRunTerminal({ ...ctx, runId: completedRunId, dryRun: false, outcome: 'success', resultCounts: { deletedOperationalEvents: 0 } });
+
+  const incomplete = await findIncompleteManualRuns({ graceMs: 0 });
+  const incompleteRunIds = incomplete.map((r) => r.runId);
+  assert.ok(incompleteRunIds.includes(crashedRunId), 'a started-but-never-terminated run must be surfaced');
+  assert.ok(!incompleteRunIds.includes(completedRunId), 'a run with a matching terminal row must never be reported as incomplete');
+
+  const crashedEntry = incomplete.find((r) => r.runId === crashedRunId)!;
+  assert.equal(crashedEntry.actorPlatformAdminId, ACTOR_ID);
+  assert.ok(crashedEntry.startedAt instanceof Date);
+
+  // No PII: the reconciliation result itself must only ever carry runId/timestamp/actor id.
+  const serialized = JSON.stringify(incomplete);
+  assert.ok(!serialized.includes('@'), 'reconciliation output must never contain an email/identity string');
+});
+
+await test('findIncompleteManualRuns: a still-in-flight started row younger than the grace period is not (yet) reported', async () => {
+  await cleanAuditRows();
+  const ctx = buildGateCtx();
+  await recordManualRunStarted(ctx);
+
+  const incomplete = await findIncompleteManualRuns({ graceMs: 60 * 60 * 1000 }); // 1h grace — this run is seconds old
+  const ourRows = await auditRows();
+  const ourRunId = runIdOf(ourRows[0]);
+  assert.ok(!incomplete.map((r) => r.runId).includes(ourRunId), 'a run still plausibly in flight must not be reported as incomplete yet');
 });
 
 console.log(`\n─────────────────────────────────`);
