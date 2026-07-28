@@ -1,0 +1,138 @@
+{
+  "taskId": "F1-002-P2",
+  "title": "Disposable Environment Capabilities Assessment",
+  "generatedAt": "2026-07-28",
+  "scopeNote": "This is a characterization pass, not a provisioning task. No database, container, or environment was created, started, or destroyed by this task. Every fact below is sourced from prior committed evidence documents (F0-011-P2, KVKK-HIGH-006-DISPOSABLE_POSTGRES_VERIFICATION.md, KVKK-HIGH-008-PMVR) plus this task's own read-only repository inspection (Docker/Compose file glob, package.json script inventory). Per this task's own instructions: no production database was run, no production connection was made, and no real patient data is referenced anywhere in this file.",
+  "disposablePostgresAssessment": {
+    "q1_existingPatternPresent": {
+      "answer": "YES, but only as a repeated, independently-authored AD HOC practice — NOT as a committed, reusable repository artifact.",
+      "detail": "At least 3 independent task executions have stood up a disposable Postgres 16 container and run real assertions against it: (1) F0-011-P2 (2026-07-20, container f0011p2-verify-pg, port 5434, 3 databases for phase isolation), (2) KVKK-HIGH-006-DISPOSABLE_POSTGRES_VERIFICATION (2026-07-22, container kvkk-high006-db-verify-pg, port 55432, database noramedi_kvkk_high006_test), (3) KVKK-HIGH-008-PMVR Phase B1 (2026-07-20, disposable Postgres 16.14, 3-scenario migration rehearsal). None of these left behind a committed script, Dockerfile, or docker-compose.yml — each task re-derived the docker run invocation from scratch in its own evidence document's prose."
+    },
+    "q2_exactCommandsPreviouslyUsed": {
+      "answer": "docker run (ad hoc, ephemeral, ---rm, no volume) followed by npx prisma generate && npx prisma migrate deploy.",
+      "exampleFromKvkkHigh006": "docker run --rm -d --name kvkk-high006-db-verify-pg -e POSTGRES_USER=noramedi_test -e POSTGRES_PASSWORD=<24-char random, never committed> -e POSTGRES_DB=noramedi_kvkk_high006_test -p 55432:5432 postgres:16-alpine ; then (cd server && npx prisma generate && DATABASE_URL=postgresql://noramedi_test:<pw>@127.0.0.1:55432/noramedi_kvkk_high006_test npx prisma migrate deploy)",
+      "exampleFromF0011P2": "A dedicated container f0011p2-verify-pg (postgres:16-alpine, port 5434, credentials generated per-task) with 3 separate databases created inside it (noramedi_f0011p2, noramedi_f0011p2_partbc, noramedi_f0011p2_partd) for phase isolation within a single task; migrations applied via npx prisma migrate deploy (Prisma v7.8.0, server/prisma.config.ts) for the full-deploy paths, plus a temporary migrations-folder copy (server/.tmp-prisma-partial/) for a deliberately partial pre-migration baseline rehearsal.",
+      "readinessCheck": "pg_isready confirmed before any Prisma command was run, in at least the KVKK-HIGH-006 pass.",
+      "portConventionObserved": "Every recorded instance deliberately chose a non-default port (5434, 55432) specifically to avoid colliding with the host default (5432) and, in F0-011-P2's case, an unrelated pre-existing container already occupying 5433 — this is evidence of manual collision-avoidance, not an enforced mechanism (see q6)."
+    },
+    "q3_deploysMigrations": {
+      "answer": "YES, always via the project's normal npx prisma migrate deploy — never hand-run SQL for the full-deploy path.",
+      "detail": "F0-011-P2 explicitly states migrations were applied 'through the project's normal mechanism ... never hand-run SQL for the full-deploy paths.' KVKK-HIGH-006's pass applied 66 migrations cleanly with zero errors and zero manual intervention, confirmed via Prisma's own 'All migrations have been successfully applied' output. The one exception is F0-011-P2's Part C rollback rehearsal, which necessarily used hand-authored reverse DDL because Prisma has no native down-migration — see q10."
+    },
+    "q4_testDataIsolated": {
+      "answer": "YES at the fixture level, by convention — NOT enforced by any shared harness or database-per-test mechanism.",
+      "detail": "Every recorded test file in the disposable-Postgres-backed groups (see F1-002-P2_test_runtime_requirements.json TG-04/TG-05) creates its own Organization/Clinic/User/Patient fixtures using UUID- or Date.now()-suffixed unique identifiers, and several explicitly truncate/delete their own created rows at completion. The server/src/tests/dbVerification/dbVerificationHarness.ts shared helper (used by the 6 KVKK-HIGH-006 db-verification files) standardizes this convention within that one subdirectory. F0-011-P2 went further, using 3 separate databases inside one container to isolate its own internal phases (A/B-C/D) from each other. There is, however, no repository-enforced rule that every DB-backed test must follow this convention — it is observed practice across every file this task and its predecessors inspected, not a structural guarantee."
+    },
+    "q5_parallelAgentSafety": {
+      "answer": "NOT DESIGNED FOR THIS — safe only by accident/convention today, not by any enforced mechanism.",
+      "detail": "F0-011-P2's own evidence records explicitly choosing port 5434 specifically because an unrelated pre-existing container (noramedi-kvkk-test-db) was already occupying port 5433 at the time — i.e. there IS observed evidence that two independently-provisioned disposable Postgres containers can and did coexist on the same host without collision, but this was achieved by an operator/agent manually checking what was already running and picking an unused port, not by any registry, lock file, or dynamic-allocation mechanism. If two parallel F1-002-family agents (this task explicitly runs in parallel with F1-002 main, F1-002-P1, and active KVKK remediation, per its own authorization) each independently decided to use the same convenient port (5432, 5433, 5434, or 55432 are the only 4 values ever observed in this program's history) without checking, a collision is plausible and has no automatic detection or resolution."
+    },
+    "q6_portsOrDatabaseNamesCanCollide": {
+      "answer": "YES, this is a real, currently-unmitigated risk.",
+      "detail": "No central port/name allocation registry, lock file, or dynamic-port-selection script exists anywhere in the repository. The only collision-avoidance mechanism found across 3 independent historical uses is ad hoc human/agent judgment ('pick a port that looks free, give the container a task-specific name'). Container names observed (f0011p2-verify-pg, kvkk-high006-db-verify-pg) are task-slug-derived and would very likely not collide with each other by name, but nothing prevents two different tasks from picking the identical port if neither operator happens to check first. This is recorded here as an explicit finding, not remediated by this task (remediation is out of scope — this task may not provision or change any environment)."
+    },
+    "q7_cleanupDeterministic": {
+      "answer": "YES for container-level teardown; PARTIALLY YES (convention-based, not universally enforced) for in-container test-data cleanup.",
+      "detail": "Every recorded container was launched with --rm (auto-delete on stop) and no -v volume mount, so docker stop <container> alone fully removes all traces, confirmed in the KVKK-HIGH-006 evidence via a post-teardown docker ps -a showing zero matching rows and a confirmed-closed port. Within a still-running container, the KVKK-HIGH-006 evidence explicitly states its 6 test files are 'safe to re-run any number of times without manual cleanup' because each creates and deterministically truncates its own UUID-suffixed fixtures. This is a strong, repeatedly-demonstrated pattern but is enforced by convention across authors, not by a shared, repository-committed cleanup harness that every DB-backed test is required to use."
+    },
+    "q8_canLaterSupportS5": {
+      "answer": "PARTIALLY — the underlying capability has already been demonstrated once, but is not committed, automated, or repeatable via a single script.",
+      "detail": "F1-001's own design (F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md §7 item 4, §D) defines S5 as 'disposable-DB migration verification' and explicitly names 'F0-011-P2's disposable-Postgres rehearsal' as the precedent that such a mechanism is achievable. F0-011-P2 itself performed exactly this: a migration-forward baseline rehearsal (Part B, pre-HIGH-007 state → both migrations applied, 64/64) and a rollback rehearsal (Part C, both an empty-table and a populated-table scenario). This proves the capability exists in practice. It is not, however, packaged as a reusable script or CI step — every execution to date has been a fresh, hand-reconstructed sequence of docker run + prisma commands + one-off TypeScript verification scripts, written and deleted within each task's own worktree (F0-011-P2 explicitly deleted its temporary migrations-folder copy, rollback SQL file, old-client directory, and tenant-isolation-check script before finalizing its own diff)."
+    },
+    "q9_whatIsMissingBeforeCiAutomation": {
+      "answer": "Five concrete gaps, none of which this task is authorized to close.",
+      "gaps": [
+        "No Dockerfile, docker-compose.yml, or compose.yaml exists anywhere in the repository (confirmed by this task's own repo-wide glob for **/Dockerfile*, **/docker-compose*, **/compose.y*ml — zero matches) — PRODUCTION_TOPOLOGY.md's 2026-07-19 finding that a documented Docker Compose runbook (docs/35-docker-deploy-runbook.md) describes infrastructure that does not exist as running code is independently re-confirmed unchanged at current HEAD.",
+        "No committed disposable-Postgres provisioning script (e.g. a scripts/test-db-up.sh or an npm script that wraps the docker run + migrate deploy sequence) — every historical use has been a one-off, non-reusable invocation authored fresh inside a task's own evidence document.",
+        "No port/container-name allocation strategy for concurrent/parallel use (see q5/q6) — a prerequisite for running this pattern safely from multiple CI jobs or parallel agents at once.",
+        "No automated migration-rollback tooling — Prisma has no native down-migration; F0-011-P2 found that after a hand-authored physical DDL rollback, _prisma_migrations bookkeeping does not self-reconcile, and prisma migrate resolve --rolled-back refuses to act on a migration that finished cleanly (error P3012). The only path found to make Prisma treat a physically-rolled-back migration as pending again was an unsupported, direct DELETE FROM _prisma_migrations, explicitly documented as an emergency-only technique, never a production or CI procedure (tracked as RISK_REGISTER.md R-070, still OPEN).",
+        "No CI workflow currently invokes any disposable-Postgres-backed test at all — the repository's one test-running workflow (.github/workflows/windows-bridge-pr.yml) is scoped entirely to the imaging-bridge path and never sets DATABASE_URL or starts a Postgres service container."
+      ]
+    },
+    "q10_rollbackCleanupBehavior": {
+      "answer": "Forward-only by design; physical rollback is technically possible but explicitly not recommended and has a documented tooling gap.",
+      "detail": "Prisma provides no native down-migration mechanism in this codebase. F0-011-P2 demonstrated that a hand-authored reverse-DDL script CAN cleanly roll back the two migrations it tested, in a single transaction, when the affected tables are empty (Scenario 1 — clean, reversible). When the same tables hold even synthetic evidence rows, the identical rollback SQL executes without error but irrecoverably destroys those rows (Scenario 2 — destructive, demonstrated not merely asserted). Beyond the data-loss risk, a second, independent finding (R-070) is that Prisma's own bookkeeping table (_prisma_migrations) does not detect or self-repair after a physical rollback: prisma migrate deploy reports 'No pending migrations to apply' (wrongly, since the schema was actually rolled back), and prisma migrate resolve --rolled-back refuses to act on a migration it considers successfully applied (P3012). The only working recovery path found was an unsupported raw DELETE FROM _prisma_migrations WHERE migration_name IN (...), explicitly flagged as an emergency-only disposable-environment technique, never to be used as a documented or default production/CI procedure. The program's own accepted recommendation (F0-011-P2 §Part C, R-070's hardened mitigation) is: prefer retain-schema-and-forward-fix over physical rollback by default; only perform an exceptional physical rollback with verified backup/export, approved reverse-DDL, explicit schema-and-ledger reconciliation, post-rollback schema verification, _prisma_migrations verification, and DBA/program approval."
+    }
+  },
+  "externalDependencyAssessment": {
+    "methodology": "Per-provider classification of how backend/frontend tests interact with each named integration, sourced from F0-005_test_inventory.json's externalProviderMode fields (unchanged files) plus this task's own subagent grep pass for fetch/provider-adapter usage in the 33 files added since F0-005.",
+    "providers": [
+      {
+        "provider": "Meta WhatsApp Cloud API",
+        "testUsageMode": "stubbed adapter (globalThis.fetch reassignment)",
+        "files": ["messageTemplateWabaBinding.test.ts", "messageTemplatePurpose.test.ts", "metaWhatsAppPostBookingHandler.test.ts (new)"],
+        "credentialRisk": "NONE FOUND — no test reads a live Meta access token or makes an unstubbed call",
+        "confidence": "HIGH"
+      },
+      {
+        "provider": "Evolution API (self-hosted WhatsApp gateway)",
+        "testUsageMode": "pure-helper exercise (channelConsentFlowResume.test.ts calls exported helper functions directly, bypassing the network/webhook layer entirely) or provider-type-only import without invocation (messagesConsentGate.test.ts)",
+        "files": ["channelConsentFlowResume.test.ts", "messagesConsentGate.test.ts (new — MEDIUM confidence, see UNKNOWN finding in test_runtime_requirements.json)"],
+        "credentialRisk": "LOW — no live call site found for the pre-existing file; the new file's stub-completeness was not independently confirmed line-by-line by this task",
+        "confidence": "HIGH for channelConsentFlowResume.test.ts; MEDIUM for messagesConsentGate.test.ts"
+      },
+      {
+        "provider": "Instagram Graph API",
+        "testUsageMode": "stubbed adapter (globalThis.fetch reassignment)",
+        "files": ["instagramProvider.test.ts", "instagramAssistantParity.test.ts", "instagramConversion.test.ts"],
+        "credentialRisk": "NONE FOUND",
+        "confidence": "HIGH"
+      },
+      {
+        "provider": "SMS (smsService.ts)",
+        "testUsageMode": "stubbed at the provider-class-method level (per F0-005's communicationConsent.test.ts entry)",
+        "files": ["communicationConsent.test.ts"],
+        "credentialRisk": "NONE FOUND",
+        "confidence": "HIGH"
+      },
+      {
+        "provider": "Email (emailService.ts / SMTP)",
+        "testUsageMode": "environment-dependent skip — sendMail is tested only with MAIL_ENABLED=false, which short-circuits before any SMTP connection is attempted",
+        "files": ["emailVerification.test.ts"],
+        "credentialRisk": "NONE FOUND",
+        "confidence": "HIGH"
+      },
+      {
+        "provider": "AI (Gemini / Google AI Studio)",
+        "testUsageMode": "environment-dependent skip — instagramAssistantParity.test.ts explicitly deletes GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY from process.env before running, forcing the deterministic non-AI fallback path; contactRequests.test.ts tests the fallback-decision builder directly without any live call",
+        "files": ["instagramAssistantParity.test.ts", "contactRequests.test.ts"],
+        "credentialRisk": "NONE FOUND — and the explicit env-var deletion pattern is itself a positive safety signal (a test author deliberately ensured a real key present in a developer's shell cannot cause a live call during this test)",
+        "confidence": "HIGH"
+      },
+      {
+        "provider": "S3 / object storage (AWS S3 SDK)",
+        "testUsageMode": "mocked for kvkkAttachmentImagingLifecycle.test.ts (S3Client.prototype.send monkey-patched); REAL (unmocked) local network call to a disposable MinIO instance for dbVerification/fileBackupDbIntegration.test.ts (new)",
+        "files": ["kvkkAttachmentImagingLifecycle.test.ts", "dbVerification/fileBackupDbIntegration.test.ts (new)"],
+        "credentialRisk": "NONE for the mocked file; LOW-MEDIUM for fileBackupDbIntegration.test.ts — it uses fixed, presumably non-production test credentials against a disposable local MinIO target per its own header, but this task did not independently confirm those credentials are never a real AWS key, only that the endpoint (MINIO_ENDPOINT, default http://localhost:19000) is local by default",
+        "confidence": "HIGH for kvkkAttachmentImagingLifecycle.test.ts; MEDIUM for fileBackupDbIntegration.test.ts — flagged as the single item in this entire assessment warranting a closer manual read before any CI wiring is attempted"
+      },
+      {
+        "provider": "Redis",
+        "testUsageMode": "not used by any test as a live client — see F1-002-P2_test_runtime_requirements.json TG-13",
+        "files": [],
+        "credentialRisk": "NONE — no test connects to Redis at all",
+        "confidence": "HIGH"
+      },
+      {
+        "provider": "Imaging bridge / DICOM devices",
+        "testUsageMode": "not applicable — all imaging tests exercise bridge-pairing/onboarding/update metadata logic only, never a real DICOM device or file",
+        "files": [],
+        "credentialRisk": "NONE",
+        "confidence": "HIGH"
+      }
+    ],
+    "flaggedForCloserReview": [
+      "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts — the one file in the entire inventory making a genuinely unstubbed network call (to a disposable local MinIO), and the one file this task could not locate a recorded prior execution/pass-count for. Recommended as the top candidate for a closer, dedicated read before any future CI-wiring or migration-implementation task relies on it.",
+      "server/src/tests/messagesConsentGate.test.ts — stub-completeness for its Evolution/WhatsApp provider import was not independently confirmed line-by-line."
+    ],
+    "unsafeOrCredentialSensitivePathsFound": "NONE. Every provider touchpoint found across the full 105-file backend inventory plus the 9 frontend files is either (a) never invoked at all by the test, (b) invoked only through a stubbed/spied/mocked call site restored after the test, or (c) gated behind an explicit environment-variable short-circuit (MAIL_ENABLED=false, deleted AI API keys). No test file was found to read a real, non-test provider credential or to make a live call to Meta, Instagram, Evolution, SMS, email, or AI infrastructure."
+  },
+  "missingCapabilitiesSummary": [
+    "Committed disposable-Postgres provisioning script or Docker Compose service (does not exist)",
+    "Committed disposable-object-storage (MinIO/S3-emulator) provisioning (does not exist; needed by exactly one test file)",
+    "Port/container-name collision-avoidance mechanism for concurrent disposable-DB use across parallel tasks/CI jobs (does not exist — currently manual/ad hoc only)",
+    "Automated, tool-supported migration-rollback path (Prisma has none natively; R-070 documents the bookkeeping-drift failure mode of the only workaround found)",
+    "Any CI workflow that provisions and exercises a disposable Postgres, Redis, or object-storage service container (the sole existing test-running workflow, windows-bridge-pr.yml, does none of this)",
+    "package.json script wiring for 3 committed test files (kvkkHigh006Batch2ClinicScope.test.ts, metaWhatsAppPostBookingHandler.test.ts, planLimitsTargetClinicFix.test.ts) — a reachability gap, not an environment gap, but adjacent to this task's disposable-DB findings since one of the three orphans also requires a live Postgres to run at all"
+  ]
+}
