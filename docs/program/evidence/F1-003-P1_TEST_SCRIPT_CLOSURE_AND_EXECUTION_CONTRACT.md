@@ -1,6 +1,8 @@
 # F1-003-P1 — Test Script Closure and Authoritative Execution Contract
 
 > **F1-003-R1A correction notice (2026-07-28):** F1-003-R1 found an objective factual error in this merged evidence — `test:kvkk-lifecycle` (`kvkkAttachmentImagingLifecycle.test.ts`) does **not** require a live MinIO instance; every `S3Client.prototype.send` path the test exercises is mocked. This document's original status and execution results are preserved below unchanged; the stale MinIO claim is corrected in place at §5, §7.2, §9, and §13.1/§13.2, and summarized in the new **§18** at the end of this document. See also `f1003r1aCorrectionsApplied` in the companion JSON contract.
+>
+> **F1-003-R1B status update (2026-07-29):** this task (F1-003-P1) is now `MERGED` (PR #257). Its "sole known failure" result for `server:test:non-disposable` below (exit `1`, `test:overdue-installments` 7/9, §4.2/§11.3/§12) is **historical** — preserved verbatim, unchanged, as the original as-observed-at-the-time evidence. **F1-003-B1 (PR #258, `MERGED`, merge commit `bb4186793323485c71b91ad6939a0d8469f886cd`) subsequently resolved this drift**: the current, post-B1 result is `server:test:non-disposable` exit `0`, `test:overdue-installments` 9/9. See [F1-003-P2A_DISPOSABLE_RUNTIME_PROVISIONING_DESIGN.md](F1-003-P2A_DISPOSABLE_RUNTIME_PROVISIONING_DESIGN.md) §11a and [F1-003-B1_OVERDUE_INSTALLMENTS_BASELINE_DRIFT_RESOLUTION.md](F1-003-B1_OVERDUE_INSTALLMENTS_BASELINE_DRIFT_RESOLUTION.md) for the resolution evidence. This reconciliation task did not re-execute any test.
 
 **Task ID:** F1-003-P1
 **Parent task:** F1-003 (Baseline CI Test Execution and Disposable Runtime Readiness), first ordered subtask

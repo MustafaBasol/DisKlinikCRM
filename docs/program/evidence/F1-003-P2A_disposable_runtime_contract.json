@@ -373,21 +373,40 @@
     "justification": "No repository evidence found to disprove the task brief's own preferred default; adopted as-is."
   },
   "nonDisposableKnownFailure": {
-    "aggregate": "server:test:non-disposable",
-    "memberCount": 68,
-    "exitCode": 1,
-    "soleKnownFailure": "test:overdue-installments",
-    "failureDetail": "Total: 9 Passed: 7 Failed: 2",
-    "nature": "deterministic, pre-existing product/test drift — production code writes/reads a literal 'overdue' status value this orphan test still assumes differs",
-    "firstDocumented": "F0-005, reconfirmed F1-002-P1 section 4.1/9, independently re-executed and reconfirmed by F1-003-P1",
-    "reExecutedByThisReconciliation": false,
-    "acceptedAsHistoricalEvidence": true,
-    "hardPrerequisiteForP3": true,
-    "followUpTaskId": "F1-003-B1",
-    "followUpTaskTitle": "Overdue Installments Baseline Drift Resolution",
-    "followUpTaskScope": "Resolve the deterministic 2-assertion drift in server/src/tests/overdueInstallments.test.ts against current production 'overdue' status-literal behavior — update test expectations or fix a genuine product regression, whichever root-cause analysis determines. Must not weaken/skip/no-op the test. Exact acceptance criterion: server:test:non-disposable (68 members, unchanged membership) executes end-to-end with exit 0.",
-    "executedByThisReconciliation": false,
-    "notFixedNotSkippedNotRemoved": true
+    "status": "RESOLVED — see f1003b1Resolution below (updated 2026-07-29, F1-003-R1B)",
+    "historicalP1Observation": {
+      "aggregate": "server:test:non-disposable",
+      "memberCount": 68,
+      "exitCode": 1,
+      "soleKnownFailure": "test:overdue-installments",
+      "failureDetail": "Total: 9 Passed: 7 Failed: 2",
+      "nature": "deterministic, pre-existing product/test drift — production code writes/reads a literal 'overdue' status value this orphan test still assumes differs",
+      "firstDocumented": "F0-005, reconfirmed F1-002-P1 section 4.1/9, independently re-executed and reconfirmed by F1-003-P1",
+      "reExecutedByThisReconciliation": false,
+      "acceptedAsHistoricalEvidence": true,
+      "preservedNotRewritten": true,
+      "note": "This sub-object is the original, as-observed-at-the-time F1-003-P1/R1 evidence. It is preserved verbatim for historical lineage and is superseded by f1003b1Resolution below, not restated as current state."
+    },
+    "f1003b1Resolution": {
+      "taskId": "F1-003-B1",
+      "taskTitle": "Overdue Installments Baseline Drift Resolution",
+      "pullRequest": "#258",
+      "mergeCommit": "bb4186793323485c71b91ad6939a0d8469f886cd",
+      "mergedAt": "2026-07-28T22:13:04Z",
+      "status": "MERGED",
+      "rootCauseClassification": "Case A — stale test, not a product defect",
+      "fixScope": "server/src/tests/overdueInstallments.test.ts only — 2 assertions + docstring corrected to the current, already-deployed contract; no application/schema/migration/CI/Docker/Compose file changed; no assertion weakened, skipped, or removed",
+      "currentResult": {
+        "aggregate": "server:test:non-disposable",
+        "memberCount": 68,
+        "exitCode": 0,
+        "overdueInstallmentsResult": "Total: 9 Passed: 9 Failed: 0"
+      },
+      "reExecutedByThisReconciliation": false,
+      "evidenceCitedFrom": "F1-003-B1's own merged evidence (evidence/F1-003-B1_OVERDUE_INSTALLMENTS_BASELINE_DRIFT_RESOLUTION.md) — not re-run by F1-003-R1B; upstream-merged result cited as authoritative"
+    },
+    "hardPrerequisiteForP3": false,
+    "hardPrerequisiteForP3Note": "Was true prior to F1-003-B1's merge (PR #258). Now satisfied — removed from P3's blocker list. P3 remains blocked on other, unrelated prerequisites (see p3Prerequisites below)."
   },
   "cleanupFailurePolicy": {
     "provisioningFailure": "FAIL",
@@ -520,11 +539,11 @@
     "R-070 remains OPEN.",
     "P2 reaches at most AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW.",
     "F1 exit gate remains unsatisfied.",
-    "P3 workflow activation remains blocked by overdue-installments baseline drift unless F1-003-B1 is separately completed."
+    "P3 workflow activation was blocked by the overdue-installments baseline drift; RESOLVED 2026-07-28 by F1-003-B1 (PR #258, MERGED) — no longer a P3 blocker (updated 2026-07-29, F1-003-R1B). P3 remains blocked by F1-003-P2's unstarted disposable-runtime provisioning/collision-avoidance scope."
   ],
   "p3Prerequisites": [
     "F1-003-P2 implementation merged and independently reviewed",
-    "F1-003-B1 (overdue-installments baseline drift resolution) completed — server:test:non-disposable exits 0",
+    "SATISFIED (2026-07-28, F1-003-B1, PR #258, MERGED, merge commit bb4186793323485c71b91ad6939a0d8469f886cd): F1-003-B1 (overdue-installments baseline drift resolution) completed — server:test:non-disposable exits 0, 9/9 — removed from P3's blocker list by F1-003-R1B (2026-07-29)",
     "messagesConsentGate.test.ts's runtime classification already resolved by F1-003-P1 (DISPOSABLE_POSTGRES + EXTERNAL_PROVIDER_MOCK, HIGH confidence) — no longer a P3 blocker",
     "Legacy server:test's own provisioning-in-P2-or-deferred decision made and documented"
   ],
@@ -532,13 +551,15 @@
     "Production PostgreSQL major-version confirmation — no evidence source in this program answers it; pre-P3/pre-release verification item",
     "Exact MinIO release tag + digest selection — P2 implementation-time decision",
     "Whether legacy server:test's 23 DB-required members are provisioned by F1-003-P2 itself or deferred to a later task — explicit open decision, not resolved by silence",
-    "F1-003-B1 (overdue-installments drift) — named, not executed, not scheduled by this reconciliation",
     "The test-code change fileBackupDbIntegration.test.ts needs (bucket-naming algorithm adoption + completing its bucket-teardown path) — requires separate authorization, unchanged from the original design",
     "Whether a future runner/container-level egress restriction is adopted — recommended, not decided"
   ],
+  "unresolvedItemsChangeLog": [
+    "2026-07-29 (F1-003-R1B): removed 'F1-003-B1 (overdue-installments drift) — named, not executed, not scheduled by this reconciliation' — F1-003-B1 merged (PR #258) and resolved the drift; see nonDisposableKnownFailure.f1003b1Resolution above."
+  ],
   "explicitNonClaims": [
     "Disposable-Postgres or MinIO provisioning is implemented, running, or CI-ready",
-    "Any application test was executed by this reconciliation task (F1-003-P1's own historical execution record is cited as authoritative evidence, not re-run)",
+    "Any application test was executed by this reconciliation task (F1-003-P1's own historical execution record and F1-003-B1's own merged execution record are cited as authoritative evidence, not re-run — updated 2026-07-29, F1-003-R1B)",
     "A CI workflow was implemented, created, or enabled",
     "A deployment occurred",
     "Production was accessed or verified",
@@ -548,7 +569,9 @@
     "F1 or F1-003 is complete",
     "G1/G2 approval status has changed",
     "The KVKK baseline is stable",
-    "PR #256 is merged",
+    "PR #256 is merged (still open as of F1-003-R1B, 2026-07-29)",
+    "This document (F1-003-P2A design) is itself independently merged — it remains part of open PR #256, cross-checked against F1-003-R1A, not a separately merged artifact",
+    "F1-003-P2 (disposable Postgres/MinIO provisioning) is implemented — not started",
     "This task reached any status beyond AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW"
   ],
   "evidenceSources": [
@@ -567,6 +590,8 @@
     "server/package.json (re-verified at new baseline: 115 total scripts, all referenced targets resolve)",
     "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts (re-read in full, 475 lines)",
     "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts (newly read in full by this reconciliation, 1483 lines)",
-    "server/src/services/fileBackupDestination.ts (read in full, original P2A pass)"
+    "server/src/services/fileBackupDestination.ts (read in full, original P2A pass)",
+    "PR #258 (F1-003-B1, MERGED, merge commit bb4186793323485c71b91ad6939a0d8469f886cd, mergedAt 2026-07-28T22:13:04Z) — cited as upstream merged evidence for the overdue-installments resolution, not re-executed by this reconciliation (added 2026-07-29, F1-003-R1B)",
+    "origin/main @ bb4186793323485c71b91ad6939a0d8469f886cd (confirmed ancestor via git merge-base --is-ancestor; F1-003-R1B's own git merge --no-ff origin/main reconciliation, 2026-07-29)"
   ]
 }

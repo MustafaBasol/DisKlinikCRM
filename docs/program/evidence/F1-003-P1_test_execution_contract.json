@@ -3640,7 +3640,19 @@
         "release": true
       },
       "currentExecutionStatus": "executed_fail",
-      "rationale": "npm run server:test:non-disposable (server/, 2026-07-28) → exit 1, duration ~65143ms. Chains 68 member scripts (61 pre-existing suitableForCI:true server scripts from F1-002-P1_test_script_reconciliation.json + 7 newly-added non-DB leaf scripts from this task's part A). All 67 members preceding test:overdue-installments (deliberately ordered last in this new aggregate) ran and reported 0 failures across every summary line this task could parse (best-effort scan across 37 of 68 member scripts' own printed summary lines found 1207 passed / 0 failed among those 37; the remaining members print pass/fail in formats this task's scanner did not recognize, or are fixture-loader scripts with no literal pass/fail tally — not claimed as additional passes). The chain then invoked test:overdue-installments last, which failed exactly as pre-existing/documented (F0-005, F1-002-P1 §4.1/§9): \"Total: 9  Passed: 7  Failed: 2\" — the 2 known deterministic assertion failures caused by production code now writing/reading a literal 'overdue' status value this orphan test still assumes differs. This is the sole failure found; no other, new, or unexpected failure occurred among the 68 members that executed.",
+      "rationale": "npm run server:test:non-disposable (server/, 2026-07-28) → exit 1, duration ~65143ms. Chains 68 member scripts (61 pre-existing suitableForCI:true server scripts from F1-002-P1_test_script_reconciliation.json + 7 newly-added non-DB leaf scripts from this task's part A). All 67 members preceding test:overdue-installments (deliberately ordered last in this new aggregate) ran and reported 0 failures across every summary line this task could parse (best-effort scan across 37 of 68 member scripts' own printed summary lines found 1207 passed / 0 failed among those 37; the remaining members print pass/fail in formats this task's scanner did not recognize, or are fixture-loader scripts with no literal pass/fail tally — not claimed as additional passes). The chain then invoked test:overdue-installments last, which failed exactly as pre-existing/documented (F0-005, F1-002-P1 §4.1/§9): \"Total: 9  Passed: 7  Failed: 2\" — the 2 known deterministic assertion failures caused by production code now writing/reading a literal 'overdue' status value this orphan test still assumes differs. This is the sole failure found; no other, new, or unexpected failure occurred among the 68 members that executed. **[Historical P1 result — preserved verbatim. See f1003b1Resolution below for the current, post-merge state.]**",
+      "f1003b1Resolution": {
+        "note": "Recorded 2026-07-29 by F1-003-R1B. currentExecutionStatus/rationale above remain the original, historical P1 result and are not altered.",
+        "taskId": "F1-003-B1",
+        "pullRequest": "#258",
+        "mergeCommit": "bb4186793323485c71b91ad6939a0d8469f886cd",
+        "mergedAt": "2026-07-28T22:13:04Z",
+        "status": "MERGED",
+        "currentExitCode": 0,
+        "currentOverdueInstallmentsResult": "Total: 9  Passed: 9  Failed: 0",
+        "reExecutedByF1003R1B": false,
+        "evidenceCitedFrom": "F1-003-B1's own merged evidence (evidence/F1-003-B1_OVERDUE_INSTALLMENTS_BASELINE_DRIFT_RESOLUTION.md) — not re-run by this reconciliation"
+      },
       "evidenceSource": "server/package.json (this task's own addition) + F1-003-P1 direct execution/structural-validation, 2026-07-28"
     },
     {
