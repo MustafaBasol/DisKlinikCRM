@@ -3,7 +3,7 @@
 Task: HTTP-LOG-PRIVACY-HARDENING-001
 Baseline: `origin/main @ cadc0784def237179f1af49de6f75a2ac9f2e969`
 Branch: `fix/http-log-privacy-hardening-001`
-Status: **IMPLEMENTED_NOT_PRODUCTION_VERIFIED**
+Status: **CLOSED_VERIFIED** (2026-07-28 — see §12; implementation/review history in §1–§11 below is preserved unchanged)
 
 ---
 
@@ -218,7 +218,7 @@ absent under `NODE_ENV=production` (shown above).
 - No production log volumes were inspected. Production verification is
   explicitly out of scope for this task.
 
-**Status remains `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`.**
+**Status remains `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`.** [Superseded 2026-07-28 — see §12: production deployment and log-privacy verification now close this task as `CLOSED_VERIFIED`. This §9 text is preserved unchanged as the historical record at merge time.]
 
 ---
 
@@ -387,4 +387,138 @@ git diff --check               # clean
 
 **Status remains `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`.** Production
 verification (real production log volume inspection) remains explicitly out
-of scope for this task.
+of scope for this task. [Superseded 2026-07-28 — see §12: production
+deployment and a real production log capture now close this task as
+`CLOSED_VERIFIED`. This §11 text is preserved unchanged as the historical
+record at PR-head time.]
+
+---
+
+## 12. Production deployment and production verification (2026-07-28)
+
+**Status: `CLOSED_VERIFIED`.** This section is an additive closeout record.
+Nothing in §1–§11 above is altered; production verification (explicitly out
+of scope for the merge itself, per §9/§11) has now been performed and is
+recorded here.
+
+### 12.1 Merge and deployment
+
+- PR: [#239](https://github.com/MustafaBasol/DisKlinikCRM/pull/239) — "fix(kvkk): harden HTTP request log privacy".
+- PR merge commit / baseline for this closeout: `d03116368e6c55cfa87ff1e35b95c485f7ff240d`.
+- Production repository (`/var/www/noramedi`), branch `main`, deployed to the
+  same SHA: `d03116368e6c55cfa87ff1e35b95c485f7ff240d`. Production working
+  tree confirmed clean at that SHA.
+
+### 12.2 Runtime state
+
+- PM2 processes `noramedi-api` and `noramedi-worker` were both restarted
+  after deployment and both remained `online`; clean shutdown and clean
+  restart messages were observed for both. No restart loop, import failure,
+  Prisma Client failure, port conflict, or database connection error was
+  observed.
+- API runtime: PM2 command `npm run start` → application command
+  `npx prisma generate && tsx src/index.ts`, bound to `127.0.0.1:5000`.
+- Worker runtime: PM2 command `npm run start:worker` → application command
+  `npx prisma generate && tsx src/worker.ts`.
+
+### 12.3 Focused validation on the production host
+
+```
+npm run typecheck              → clean
+npm run test:http-log-privacy  → 44 passed, 0 failed
+```
+
+No server-level `build` script exists in this repository — the application
+runs directly through `tsx`, not a compiled artifact. An attempted
+`npm run build` accordingly has no script to run; this is a missing-script
+condition, not a code or deployment failure, and is not characterized as one.
+
+### 12.4 Health checks
+
+- Local backend: `http://127.0.0.1:5000/api/health` → `HTTP 200`,
+  `{"status":"ok"}`. (`/health`, without the `/api` prefix, returns `404`
+  and is not this application's health endpoint.)
+- Correct public API host: `https://api.noramedi.com`. Nginx evidence
+  confirms `api.noramedi.com → proxy_pass http://127.0.0.1:5000`; Docker/
+  Traefik is not used for this production API path. Public health:
+  `https://api.noramedi.com/api/health` → `HTTP/1.1 200 OK`,
+  `Content-Type: application/json; charset=utf-8`, `{"status":"ok"}`.
+- `https://noramedi.com/api/health` and `https://app.noramedi.com/api/health`
+  are frontend SPA hosts, not the API health endpoint — both returned
+  frontend HTML during this pass and are **not** recorded as public API
+  health failures. `crm.noramedi.com` did not resolve and is not part of the
+  verified production API path.
+
+### 12.5 Production HTTP log privacy verification
+
+Synthetic values only were used — no real patient or credential data.
+Synthetic request data included a patient UUID, a clinic UUID, a synthetic
+email, a synthetic French-format phone number, a synthetic token, a synthetic
+session cookie, a synthetic bearer token, a synthetic name slug, two
+documentation-range IPv4 addresses, a short numeric identifier, and a
+`jane-doe` free-text slug.
+
+**Public matched request** — `GET https://api.noramedi.com/api/health` →
+`HTTP 200`, `Content-Type: application/json`, `{"status":"ok"}`. Emitted
+production log:
+
+```json
+{"level":30,"req":{"id":7,"method":"GET"},"res":{"statusCode":200},"responseTime":27,"route":"/api/health","msg":"request completed"}
+```
+
+**Public unmatched request** — a request carrying the synthetic path
+identifiers, query parameters, forwarded-IP headers, an `authorization`
+value, and a cookie value, against a path with no matching route → `HTTP 401`,
+`{"error":"Unauthorized: Cookie session required"}` (acceptable: the request
+reached the production authentication layer). Emitted production log:
+
+```json
+{"level":40,"req":{"id":8,"method":"GET"},"res":{"statusCode":401},"responseTime":3,"route":"/:unmatched","msg":"request completed"}
+```
+
+**Leak verification:** all of the synthetic values above (patient UUID,
+clinic UUID, email, phone, token, cookie, bearer token, name slug, both
+forwarded IPv4 values, `jane-doe`) were confirmed **absent** from the
+captured production log segment.
+
+```
+PUBLIC_LEAK_COUNT=0
+```
+
+**Forbidden fields confirmed absent:** `headers`, `query`, `params`,
+`remoteAddress`, `remotePort`, `socket`, `connection`, `x-forwarded-for`,
+`x-real-ip`, `authorization`, `cookie`, `set-cookie`.
+
+**Route behavior confirmed:** the matched request logged `route` as
+`/api/health`; the unmatched request logged `route` as the fixed label
+`/:unmatched` (the §11 constant-label redesign) — no user-controlled
+unmatched path segment was logged.
+
+**Error-path check:** the pre-fix raw `[unhandled-error]` console marker was
+absent from the captured production log segment.
+
+### 12.6 Scope of this verification — explicit boundary
+
+This production pass covered a normal matched request and an
+authentication-rejected unmatched request only. **An intentional production
+`5xx` was not generated during this verification** — that would require
+exercising a real thrown/rejected error against the live system, which was
+not performed here and is not claimed to have been performed. Real
+thrown-error and 5xx sanitization behavior (§10, §11's `logUnhandledError()`
+path) is covered by the 44-assertion automated suite
+(`npm run test:http-log-privacy`), independently re-confirmed passing on the
+production host during this pass (§12.3) — it is not separately claimed to
+have been exercised by a live production 500.
+
+### 12.7 Closure
+
+All items required to move this task from `IMPLEMENTED_NOT_PRODUCTION_VERIFIED`
+(§7–§11) to `CLOSED_VERIFIED` are satisfied: the fix is merged and deployed to
+production at an exact, confirmed SHA; both PM2 processes are healthy on
+restart; typecheck and the full 44-assertion focused suite pass on the
+production host; the correct public API health endpoint responds `200`; and a
+live production log capture, using synthetic-only data, confirms zero leaked
+sentinel values, absence of every forbidden field, and absence of the pre-fix
+`[unhandled-error]` raw marker.
+
+**Task status: `CLOSED_VERIFIED`.**
