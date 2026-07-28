@@ -3,7 +3,7 @@
 **Task ID:** BACKUP-RESTORE-REHEARSAL-001
 **Title:** First controlled NoraMedi PostgreSQL backup restore rehearsal — runbook, script, and preflight design
 **Phase:** F0 → F4 handoff (operationalizes the rehearsal `LAUNCH_GATES.md` §2.E/§3.E already names as **mandatory for G1**)
-**Type:** Repository-only preparation task — a runbook and an operator-run script were authored and reviewed against the current backup implementation. **No restore was executed against a real production backup by this task.**
+**Type:** Runbook/script preparation followed by an actual operator-executed rehearsal. A runbook and an operator-run script were authored and reviewed against the current backup implementation, the script's root-invocation/delegation handling was then fixed based on a reviewer pass, and an operator subsequently ran the fixed script twice against a real production backup file (§7): once hitting an expected fail-safe rejection under the pre-fix script, once successfully after the fix. **The restore rehearsal itself has now been executed and evidenced (§7); this document's own status is `CLOSED_VERIFIED` for the database-restore-rehearsal gap only (§9).**
 **Branch:** `audit/backup-restore-rehearsal-001`
 **Baseline:** `origin/main @ 26c6c339a7cd8db06b1707c059f7f27857f45e61`
 **Evidence-gathering date:** 2026-07-28
@@ -11,14 +11,14 @@
 ## Status
 
 ```
-READY_FOR_OPERATOR_REHEARSAL
+CLOSED_VERIFIED
 ```
 
-This status means: the script and runbook below are believed complete and safe to run based on repository inspection, but **the rehearsal itself has not been performed**. Nothing in this document may be read as "restore verified," "RTO measured," or "R-032 closed." Those claims only become true after an operator runs the script on the production VPS (read-only against the backup directory) and the resulting evidence summary is appended to §7 below. Until then, this file is a prepared, not-yet-executed procedure.
+This status means: an operator ran `scripts/backup-restore-rehearsal.sh` against a real production backup file, first hitting a fail-safe root-invocation rejection (expected — see §7 Attempt 1), then a second, successful run after the script's root-invocation/delegation handling was fixed (§7 Attempt 2, `result: PASS`, `cleanup: VERIFIED`). This closes the specific gap `RISK_REGISTER.md` R-032 describes for the **PostgreSQL database restore rehearsal only**. It explicitly does **not** close: off-host backup absence (R-030), backup file encryption (R-030 context), attachment physical-file restore, or imaging/DICOM physical-file restore — see §9 for the unchanged scope boundary, which this closure does not widen.
 
 ## 0. Scope and method statement
 
-This is a **repository-only preparation task**: backup scripts, cron/systemd references, PostgreSQL backup/restore code paths, existing restore documentation, environment variable names, storage destinations, retention/rotation behavior, encryption behavior, and PostgreSQL version compatibility were inspected directly in the repository. No SSH connection was made, no production command was executed, no restore was run, and no shared tracker (`docs/program/RISK_REGISTER.md`, `docs/program/LAUNCH_GATES.md`, `docs/program/NORAMEDI_MASTER_TRACKER.md`, `docs/program/CURRENT_PHASE.md`, etc.) was modified by this task.
+This task began as a **repository-only preparation task**: backup scripts, cron/systemd references, PostgreSQL backup/restore code paths, existing restore documentation, environment variable names, storage destinations, retention/rotation behavior, encryption behavior, and PostgreSQL version compatibility were inspected directly in the repository. It was then extended, after a reviewer pass fixed the script's root-invocation/delegation handling, by an operator actually running the rehearsal against a real production backup (§7) — the only production-facing action taken is that read-only rehearsal run itself (an SSH connection to run the already-reviewed script, reading the backup directory and driving a disposable, loopback-only PostgreSQL cluster entirely under `/dev/shm`). No shared tracker (`docs/program/RISK_REGISTER.md`, `docs/program/LAUNCH_GATES.md`, `docs/program/NORAMEDI_MASTER_TRACKER.md`, `docs/program/CURRENT_PHASE.md`, etc.) was modified by this task; this document's own `CLOSED_VERIFIED` status (§Status) applies only to this evidence file, not to any shared tracker row.
 
 This task is aware of, and builds on rather than duplicates, the parallel `PILOT-RESILIENCE-001` coverage audit (branch `audit/pilot-backup-restore-coverage`, not yet merged at this task's baseline), which independently reached the same classification for the PostgreSQL tier — `READY_FOR_REHEARSAL` — and proposed an equivalent same-host-caveat-aware rehearsal design in its §13. This document's contribution is the concrete, runnable artifact (`scripts/backup-restore-rehearsal.sh`) and an evidence-capture template, not a re-derivation of that audit's findings. Where the two documents describe the same repository fact, this document does not repeat the full citation trail — see that audit for the exhaustive version.
 
@@ -52,21 +52,23 @@ Three constraints from the task brief shaped the design, in order of how much th
 
 All checks below run — and must all pass — before anything is created. Any failure aborts before touching disk/RAM/network.
 
+0. **Root invocation / delegation setup** — added after Attempt 1 (§7) surfaced that `initdb`/`pg_ctl` categorically refuse to run as root. When the script's EUID is 0, it now requires `REHEARSAL_OS_USER` to be set **explicitly** (no implicit default is applied for a root invocation) and refuses to proceed if: `REHEARSAL_OS_USER` is unset; it is `root`; its UID resolves to `0`; its UID/GID cannot be resolved via `id`; the required PostgreSQL binaries are not executable by that user; or neither `runuser` nor `su` is available to delegate to it. Once validated, every PostgreSQL operation (`initdb`, `postgresql.conf` edits, `pg_ctl start/stop`, `createdb`, `pg_restore`, verification queries) is delegated to that unprivileged OS user; only reading the root-only backup file, staging it under `/dev/shm` (mode `700` directory, mode `600` dump copy, both `chown`ed to the delegated user), and final cleanup are performed directly by root. When not running as root, the script runs every operation directly as the invoking user, unchanged from the original design.
 1. **Source backup exists** — `BACKUP_DIR` (default `/root/noramedi-backups`) is readable; the target `.dump` file (latest, or an explicitly named one matching `noramedi_crm-\d{8}-\d{6}\.dump`) exists and is non-zero bytes.
 2. **Checksum** — SHA-256 of the source file is computed and logged before any copy; re-verified byte-for-byte against the RAM-backed working copy before restore begins (a mismatch aborts).
 3. **Encryption status** — the file's first 5 bytes are checked against the `PGDMP` magic header `pg_dump` custom-format files begin with. If present, the artifact is reported as not encrypted at the file level (consistent with the still-open `UNVERIFIED_PRODUCTION`/likely-absent encryption finding in `RISK_REGISTER.md` R-030 context); if absent, the format is reported as unknown rather than assumed, and the subsequent `pg_restore` step is the authoritative check (it fails cleanly on non-dump input).
-4. **PostgreSQL version compatibility** — `pg_restore -l` on the dump is scanned for its `Dumped from database version` header and compared against the disposable cluster's own major version (must match production's 16.x); a major-version mismatch aborts with an explicit message rather than attempting a cross-version restore.
-5. **Free RAM** — required RAM is estimated as `dump size × 3` (configurable via `REHEARSAL_RAM_MULTIPLIER`), and the preflight requires at least `REHEARSAL_MIN_FREE_RAM_MB` (default 2048 MB) of headroom to remain *after* that allocation, specifically to avoid starving the production `noramedi-api`/`noramedi-worker` processes that share this host.
-6. **Free disk** — defensive minimum of 512 MB free on `/` for logs/tooling (the restore target itself is tmpfs, not disk).
-7. **Isolated target name/port** — the chosen port (default `55432`) must differ from the configured production port (default `5432`, hard-coded guard, not just a default) and must not already be listening; the disposable database name (`noramedi_rehearsal`) is guarded against ever equaling `noramedi_crm`.
+4. **PostgreSQL version compatibility** — `pg_restore -l` on the dump is scanned for its `Dumped from database version` header and compared against the disposable cluster's own major version (must match production's 16.x); a major-version mismatch aborts with an explicit message rather than attempting a cross-version restore. If the header cannot be reliably parsed, the script records `source_pg_version_evidence: UNKNOWN` and `source_pg_version_reliable: false` and logs an explicit `WARNING` — it never silently guesses or omits that warning.
+5. **Free system RAM** — required RAM is estimated as `dump size × 3` (configurable via `REHEARSAL_RAM_MULTIPLIER`), and the preflight requires at least `REHEARSAL_MIN_FREE_RAM_MB` (default 2048 MB) of headroom to remain *after* that allocation, specifically to avoid starving the production `noramedi-api`/`noramedi-worker` processes that share this host.
+6. **`/dev/shm` capacity** — a check distinct from #5 above, since `/dev/shm` frequently has its own, smaller size cap than total system RAM. Required capacity is the staged dump copy size **plus** an estimated on-disk (tmpfs) footprint for the restored cluster (`dump size × REHEARSAL_RAM_MULTIPLIER`, to account for indexes/TOAST/WAL beyond the raw dump size) — not the dump file alone. The check refuses to consume `/dev/shm` down to its last byte: `REHEARSAL_SHM_MARGIN_PCT` (default `20`) of currently-available capacity must remain unused after the estimated requirement.
+7. **Free disk** — defensive minimum of 512 MB free on `/` for logs/tooling (the restore target itself is tmpfs, not disk).
+8. **Isolated target name/port** — the chosen port (default `55432`) must differ from the configured production port (default `5432`, hard-coded guard, not just a default) and must not already be listening; the disposable database name (`noramedi_rehearsal`) is guarded against ever equaling `noramedi_crm`. After the cluster starts, the script also runtime-verifies (via `ss -ltn`, not just the config file) that it is listening on `127.0.0.1` only, and refuses to proceed to restore if a non-loopback bind is ever observed.
 
 ## 4. Restore steps
 
-1. Copy (never move) the source `.dump` into the RAM-backed working directory; re-verify checksum.
-2. `initdb` a brand-new cluster under `/dev/shm/noramedi-rehearsal-<run-id>/pgdata`, SCRAM auth with a randomly generated password discarded at process exit, `listen_addresses='127.0.0.1'`, a non-production port, Unix socket directory scoped to the same tmpfs path.
-3. `pg_ctl start` (this is a **new, separate** Postgres server process — production's own Postgres service is never stopped, reloaded, or otherwise touched).
-4. `createdb noramedi_rehearsal`.
-5. `pg_restore --no-privileges --no-owner` — the same flags `runRestoreTest()` already uses — timed from immediately before to immediately after, producing the run's measured RTO.
+1. Copy (never move) the source `.dump` into the RAM-backed working directory (root, if running as root — the source directory is root-only); `chmod 600` the copy, `chown` it to `REHEARSAL_OS_USER` if delegating; re-verify checksum.
+2. `initdb` a brand-new cluster under `/dev/shm/noramedi-rehearsal-<run-id>/pgdata` — delegated to `REHEARSAL_OS_USER` if running as root — SCRAM auth with a randomly generated password (written only to mode-600 tmpfs files: a one-line `pwfile` for `initdb` and a `.pgpass`-format file consumed via `PGPASSFILE` by every client call, never a `PGPASSWORD` environment variable, so the secret does not depend on environment propagation across the root→delegated-user boundary), `listen_addresses='127.0.0.1'`, a non-production port, Unix socket directory scoped to the same tmpfs path.
+3. `pg_ctl start` (this is a **new, separate** Postgres server process — production's own Postgres service is never stopped, reloaded, or otherwise touched), delegated to `REHEARSAL_OS_USER` if running as root; followed by a runtime `ss -ltn` check that the resulting listener is loopback-only.
+4. `createdb noramedi_rehearsal`, delegated to `REHEARSAL_OS_USER` if running as root.
+5. `pg_restore --no-privileges --no-owner` — the same flags `runRestoreTest()` already uses — delegated to `REHEARSAL_OS_USER` if running as root, timed from immediately before to immediately after, producing the run's measured RTO.
 
 ## 5. Verification (counts, booleans, and hashes only — never row content)
 
@@ -80,40 +82,55 @@ All checks below run — and must all pass — before anything is created. Any f
 
 ## 6. Cleanup
 
-- `pg_ctl -m fast stop` on the disposable cluster (via a `trap ... EXIT INT TERM`, so it runs even on failure or Ctrl-C).
-- `rm -rf` of the entire `/dev/shm/noramedi-rehearsal-<run-id>` directory — since this was tmpfs, this releases RAM rather than shredding a disk copy; nothing persists on any block device.
+- `pg_ctl -m fast stop` on the disposable cluster — delegated to `REHEARSAL_OS_USER` (the same unprivileged user that started it) when running as root — via a `trap ... EXIT INT TERM`, so it runs even on failure or Ctrl-C.
+- `rm -rf` of the entire `/dev/shm/noramedi-rehearsal-<run-id>` directory, performed directly by root when running as root (root can always remove it regardless of the delegated user's ownership) — since this was tmpfs, this releases RAM rather than shredding a disk copy; nothing persists on any block device. `/dev/shm` itself, being a shared host-wide mount, is never unmounted — only this run's own subdirectory is removed.
 - The original backup file in `/root/noramedi-backups` is never modified, moved, or deleted by this script.
 - `--keep-on-failure` exists only for operator-driven post-mortem of a failed run; the runbook requires manually removing that directory afterward, and it must never be used for a successful run.
 
-## 7. Evidence template — to be completed by the operator after running the script
+## 7. Evidence — actual operator runs
 
-**Do not fill in this section from anything other than an actual script run.** If the rehearsal has not been executed, leave every field as `NOT YET EXECUTED`.
+**This section is filled in exclusively from actual script runs; no numbers below are invented or estimated.** Two runs were performed against the production VPS, read-only against the backup directory, on 2026-07-28:
+
+### Attempt 1 (fail-safe rejection)
+
+The script was invoked directly as root, before the root-invocation/delegation fix in `scripts/backup-restore-rehearsal.sh` existed. It correctly refused to proceed rather than run PostgreSQL tooling as root, and left no partial/mutable state behind:
 
 ```
-Rehearsal run date (UTC):        NOT YET EXECUTED
-Run ID:                          NOT YET EXECUTED
-Operator:                        NOT YET EXECUTED
-Backup file used:                NOT YET EXECUTED
-Backup size (bytes):             NOT YET EXECUTED
-Backup SHA-256:                  NOT YET EXECUTED
-Encryption status finding:       NOT YET EXECUTED
-Dump Postgres version header:    NOT YET EXECUTED
-Disposable cluster PG version:   NOT YET EXECUTED
-Restore duration (seconds):      NOT YET EXECUTED
-Base table count:                NOT YET EXECUTED
-_prisma_migrations count:        NOT YET EXECUTED
-PlatformAdmin count:             NOT YET EXECUTED
-Plan count:                      NOT YET EXECUTED
-Orphaned Appointment rows:       NOT YET EXECUTED
-Orphaned Treatment rows:         NOT YET EXECUTED
-PatientAttachment row count:     NOT YET EXECUTED
-ImagingImage row count:          NOT YET EXECUTED
-Production PatientAttachment count (operator-supplied, for comparison only): NOT YET EXECUTED
-Production ImagingImage count (operator-supplied, for comparison only):     NOT YET EXECUTED
-Result (PASS/FAIL):              NOT YET EXECUTED
-Cleanup confirmed (dir removed): NOT YET EXECUTED
-Notes / anomalies:               NOT YET EXECUTED
+PRECHECK_PASSED
+RESTORE_NOT_STARTED
+FAILED_SAFE_INITDB_ROOT_REJECTION
+CLEANUP_CONFIRMED
 ```
+
+This confirmed the preflight checks (backup presence, checksum, encryption-format check, port/name guards) ran and passed, but that `initdb`/`pg_ctl` cannot run as root — exactly the defect this task's script fix (delegating all PostgreSQL operations to an unprivileged `REHEARSAL_OS_USER`) addresses. No disposable cluster, PGDATA, or restored data was ever created in this attempt.
+
+### Attempt 2 (successful rehearsal, after the fix)
+
+After the script fix landed (root reads the backup and stages it under `/dev/shm` with `700`/`600` permissions, then delegates every PostgreSQL operation to `REHEARSAL_OS_USER`), the operator re-ran the script as root with `REHEARSAL_OS_USER=postgres`:
+
+```
+run_id: 20260728-143702-407705
+backup_file: noramedi_crm-20260728-031501.dump
+backup_size_bytes: 472881
+backup_sha256: 64c6bf505e6f4dee6bce2d2b7063081e17c205834e9930ddc7bfa89800b07176
+encryption_status: NOT_ENCRYPTED_AT_FILE_LEVEL
+restore_duration_seconds: 3
+table_count: 94
+migrations_row_count: 65
+platform_admin_count: 1
+plan_count: 3
+orphaned_appointment_rows: 0
+orphaned_treatment_rows: N/A
+patient_attachment_row_count: 3
+imaging_image_row_count: 14
+result: PASS
+cleanup: VERIFIED
+port_55432: CLEAN
+```
+
+`orphaned_treatment_rows: N/A` reflects the same benign query-applicability outcome the script's own verification step already tolerates (see §5) — it is not a failure. `port_55432: CLEAN` confirms the disposable cluster's port was no longer listening after cleanup, i.e. `pg_ctl stop` and the `rm -rf` of the RAM-backed root both completed as expected.
+
+Both attempts, taken together, are the durable evidence that closes R-032's "no durable evidence a restore has ever been executed" gap for the PostgreSQL tier — see §9 for exactly what this does and does not close.
 
 ## 8. Abort / rollback conditions
 
@@ -122,9 +139,15 @@ The script itself aborts automatically, before creating anything, on any of:
 - Backup directory missing or unreadable; no matching `.dump` file found; zero-byte file.
 - Post-copy checksum mismatch.
 - PostgreSQL major-version mismatch between the dump header and the disposable cluster.
-- Insufficient free RAM to satisfy the configured headroom margin.
+- Insufficient free system RAM to satisfy the configured headroom margin.
+- Insufficient `/dev/shm` capacity to hold the staged dump copy plus the estimated restored-cluster footprint after reserving the `REHEARSAL_SHM_MARGIN_PCT` safety margin.
 - Less than 512 MB free on `/`.
 - Chosen port equals the configured production port, or is already in use.
+- Target database name equals the production database name (`noramedi_crm`).
+- Running as root with `REHEARSAL_OS_USER` unset, `root`, resolving to UID `0`, unresolvable via `id`, or naming a user the required PostgreSQL binaries are not executable by.
+- No `runuser`/`su` available to delegate to `REHEARSAL_OS_USER` when running as root.
+- After staging, the rehearsal directory/dump copy ownership or permissions do not match the expected `700`/`600`, owned by `REHEARSAL_OS_USER`.
+- The disposable cluster is observed, at runtime, listening on anything other than `127.0.0.1`.
 - `pg_restore` exits non-zero for any reason (the script reports FAIL and still runs cleanup; it never reports success in this case).
 
 Operator-level abort conditions (require stopping manually, not automated):
@@ -137,13 +160,18 @@ Rollback is not applicable in the traditional sense: nothing in production is ev
 
 ## 9. What this rehearsal does and does not close
 
-- **Closes, once executed successfully:** durable evidence that a real backup artifact restores cleanly into a genuinely separate PostgreSQL instance (not merely a same-host temp database), with a measured RTO — the specific gap `RISK_REGISTER.md` R-032 describes ("no durable evidence a restore has ever been executed... exists anywhere in this repository").
-- **Does not close:** offsite backup absence (R-030), PITR absence (R-031), or file-tree/attachment/imaging backup absence (no risk-register row currently covers this narrower gap in the same way, but it is the same finding as the parallel `PILOT-RESILIENCE-001` audit's §5/§6/§14 `BLOCKED_BY_MISSING_COVERAGE` classification for that tier — nothing has ever backed up `uploads/`, so no restore rehearsal of any kind can prove those files are recoverable). This task's script deliberately reports `PatientAttachment`/`ImagingImage` row counts specifically to keep that gap visible in the rehearsal's own output, not to imply it is covered.
-- **Program-level framing, unchanged by this task:** per `LAUNCH_GATES.md` §2.E, this is "the one item promoted from design to mandatory rehearsal for G1" for the PostgreSQL tier specifically; §3.E requires **recurring**, scheduled restore-test evidence before G2, which this one-time rehearsal does not by itself satisfy. This document neither claims G1/G2 readiness nor modifies any gate — that determination belongs to `LAUNCH_GATES.md`'s own governance process.
+- **Closes (this task, per the §7 evidence above):** durable evidence that a real backup artifact restores cleanly into a genuinely separate PostgreSQL instance (not merely a same-host temp database), with a measured RTO of 3 seconds — the specific gap `RISK_REGISTER.md` R-032 describes ("no durable evidence a restore has ever been executed... exists anywhere in this repository"). This is a **database restore-rehearsal closure only**.
+- **Explicitly does NOT close, and remains separately open/unverified:**
+  - **Off-host backup** — the backup still lives only at `/root/noramedi-backups` on the same VPS as production (`RISK_REGISTER.md` R-030, `OPEN`); this rehearsal read that same on-host location and proves nothing about offsite recoverability.
+  - **Backup encryption** — this run's own evidence (`encryption_status: NOT_ENCRYPTED_AT_FILE_LEVEL`) confirms, not resolves, the still-open encryption-at-rest gap for the backup artifact itself.
+  - **Attachment physical-file restore** — `patient_attachment_row_count: 3` is a *database row count only*; no attachment file bytes were restored or verified, because no file-tree backup of `uploads/` exists to restore from in the first place.
+  - **Imaging/DICOM physical-file restore** — `imaging_image_row_count: 14` is likewise a database row count only; no imaging/DICOM file bytes were restored or verified, for the same reason.
+  - PITR absence (`RISK_REGISTER.md` R-031) is also unaffected — this was a full-dump restore rehearsal, not a point-in-time-recovery test.
+- **Program-level framing, unchanged by this task:** per `LAUNCH_GATES.md` §2.E, this was "the one item promoted from design to mandatory rehearsal for G1" for the PostgreSQL tier specifically; §3.E requires **recurring**, scheduled restore-test evidence before G2, which this one-time (twice-run) rehearsal does not by itself satisfy. This document neither claims G1/G2 readiness nor modifies any gate, and no shared tracker (`RISK_REGISTER.md`, `LAUNCH_GATES.md`, `NORAMEDI_MASTER_TRACKER.md`) row is flipped by this document itself — that determination belongs to those trackers' own governance process, informed by this evidence.
 
 ## 10. Non-authorization statement
 
-This document and the accompanying script define a prepared, reviewed procedure. Neither this task nor this document executes any restore against a real production backup, modifies `RISK_REGISTER.md`, `LAUNCH_GATES.md`, `NORAMEDI_MASTER_TRACKER.md`, `CURRENT_PHASE.md`, or any other shared tracker, or upgrades any existing risk-register entry. R-029, R-030, R-031, and R-032 all remain `OPEN` until an operator runs the rehearsal, the evidence in §7 is completed from that real run, and a separate, explicit tracker-update task records the result.
+This document and the accompanying script define a reviewed, now-executed procedure, and this document's own status (§Status) has moved to `CLOSED_VERIFIED` for the database-restore-rehearsal gap specifically, backed by the two runs recorded in §7. This document does **not**, by itself, modify `RISK_REGISTER.md`, `LAUNCH_GATES.md`, `NORAMEDI_MASTER_TRACKER.md`, `CURRENT_PHASE.md`, or any other shared tracker, and does not itself flip any existing risk-register entry. R-029, R-030, and R-031 remain `OPEN` and are explicitly **not** affected by this closure (§9). R-032's underlying gap ("no durable evidence a restore has ever been executed") is what this evidence closes; updating R-032's own status in `RISK_REGISTER.md` to reflect that is left to a separate, explicit tracker-update task, consistent with this task never touching shared trackers directly.
 
 ## Cross-references
 
