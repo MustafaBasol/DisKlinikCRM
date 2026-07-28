@@ -103,7 +103,8 @@
     "platform-admin:recover-password": "tsx src/scripts/platform-admin-recover-password.ts",
     "test:platform-admin-password-recovery": "tsx src/tests/platformAdminPasswordRecovery.test.ts",
     "test:http-log-privacy": "tsx src/tests/httpRequestLogPrivacy.test.ts",
-    "test:file-backup": "tsx src/tests/fileBackupService.test.ts"
+    "test:file-backup": "tsx src/tests/fileBackupService.test.ts",
+    "test:file-backup-db-integration": "tsx src/tests/dbVerification/fileBackupDbIntegration.test.ts"
   },
   "keywords": [],
   "author": "",

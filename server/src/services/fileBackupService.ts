@@ -39,6 +39,7 @@ import { pipeline } from 'stream/promises';
 import prisma from '../db.js';
 import { openFileStream } from './fileStorage.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import { withJobLock } from '../utils/jobLock.js';
 import {
   isFileBackupDestinationConfigured,
   getFileBackupDestinationKind,
@@ -68,6 +69,17 @@ function getRestoreRehearsalSampleSize(): number {
   const raw = Number(process.env.FILE_BACKUP_RESTORE_REHEARSAL_SAMPLE_SIZE);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 5;
 }
+
+// Cross-process guard: every caller of runFileBackup() (the scheduled cron
+// tick in fileBackupJob.ts, the manual POST /file-backups/run route, and any
+// future caller) funnels through this SAME withJobLock name/TTL, so a manual
+// trigger on one replica can never run concurrently with the scheduled job
+// (or another manual trigger) on a different replica. Fixed here, not in
+// each call site, so no caller can forget it. TTL must comfortably exceed
+// the slowest expected full sweep — see jobLock.ts's own doc comment on why
+// a too-short TTL lets a second replica start while the first is still mid-run.
+export const FILE_BACKUP_JOB_LOCK_NAME = 'file-backup';
+export const FILE_BACKUP_JOB_LOCK_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 type SourceModelName = 'PatientAttachment' | 'LabOrderAttachment' | 'ImagingImage';
 type SourceDomain = 'attachments' | 'lab-attachments' | 'imaging';
@@ -150,6 +162,21 @@ export async function runFileBackup(options: { trigger?: 'scheduled' | 'manual' 
   }
   backupRunning = true;
 
+  try {
+    let summary: FileBackupRunSummary | undefined;
+    const acquired = await withJobLock(FILE_BACKUP_JOB_LOCK_NAME, FILE_BACKUP_JOB_LOCK_TTL_MS, async () => {
+      summary = await runFileBackupLocked(options);
+    });
+    if (!acquired) {
+      throw new Error('A file backup run is already in progress on another process/replica');
+    }
+    return summary!;
+  } finally {
+    backupRunning = false;
+  }
+}
+
+async function runFileBackupLocked(options: { trigger?: 'scheduled' | 'manual' }): Promise<FileBackupRunSummary> {
   const run = await prisma.fileBackupRun.create({ data: { trigger: options.trigger ?? 'scheduled', status: 'running' } });
 
   let filesScanned = 0;
@@ -300,8 +327,6 @@ export async function runFileBackup(options: { trigger?: 'scheduled' | 'manual' 
       .update({ where: { id: run.id }, data: { status: 'failed', finishedAt: new Date(), errorSummary: errorCode } })
       .catch(() => {});
     throw err;
-  } finally {
-    backupRunning = false;
   }
 }
 
@@ -349,17 +374,50 @@ export async function getFileBackupStatus() {
 
 // ─── Restore ─────────────────────────────────────────────────────────────────
 
+function isInsidePrimaryUploadDir(resolved: string): boolean {
+  const relative = path.relative(PRIMARY_UPLOAD_DIR, resolved);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+/**
+ * Resolves symlinks for whatever prefix of `p` already exists on disk,
+ * leaving any not-yet-created suffix untouched (mkdir hasn't run yet at the
+ * time this is first called). A plain `path.resolve`/`path.relative` check
+ * only compares path STRINGS — it never follows a symlink, so an output
+ * directory that is itself a symlink pointing at (or inside) primary
+ * storage's uploads/ tree would satisfy the string check while actually
+ * writing through to primary storage. Walking up to the nearest existing
+ * ancestor and realpath-ing that ancestor closes that gap.
+ */
+function resolveRealExistingPrefix(p: string): string {
+  const suffix: string[] = [];
+  let current = p;
+  for (;;) {
+    try {
+      const real = fs.realpathSync(current);
+      return suffix.length > 0 ? path.join(real, ...suffix.reverse()) : real;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return p; // reached filesystem root, nothing on this path exists
+      suffix.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
 /**
  * Refuses any output directory that resolves inside (or equal to) primary
  * storage's upload root. This is the hard safety line the task brief
  * requires: restore must never silently write back into production/primary
  * storage — that stays a separate, explicit, operator-controlled action.
+ *
+ * Symlink-aware: resolves the existing portion of `outputDir` to its real
+ * path before comparing, so a pre-existing symlink pointing at (or inside)
+ * the primary uploads/ tree cannot be used to bypass this check.
  */
 function isSafeRestoreOutputDir(outputDir: string): boolean {
-  const resolved = path.resolve(outputDir);
-  const relative = path.relative(PRIMARY_UPLOAD_DIR, resolved);
-  const insidePrimaryUploadDir = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-  return !insidePrimaryUploadDir;
+  const resolved = resolveRealExistingPrefix(path.resolve(outputDir));
+  return !isInsidePrimaryUploadDir(resolved);
 }
 
 export interface RestoreResult {
@@ -399,7 +457,17 @@ export async function restoreFileToPath(params: {
   }
 
   await fs.promises.mkdir(params.outputDir, { recursive: true });
-  const outputPath = path.join(params.outputDir, `${params.sourceModel}-${params.sourceRecordId}.bin`);
+
+  // Re-check post-mkdir against the fully-resolved real path: outputDir is
+  // now guaranteed to exist, so this is the authoritative check (closes a
+  // narrow TOCTOU window where outputDir could be replaced by a symlink
+  // between the pre-check above and this point).
+  const realOutputDir = await fs.promises.realpath(params.outputDir);
+  if (isInsidePrimaryUploadDir(path.resolve(realOutputDir))) {
+    return { success: false, error: 'Refusing to restore into primary storage upload directory' };
+  }
+
+  const outputPath = path.join(realOutputDir, `${params.sourceModel}-${params.sourceRecordId}.bin`);
   const hash = crypto.createHash('sha256');
   const hashing = new Transform({
     transform(chunk: Buffer, _enc, callback) {
