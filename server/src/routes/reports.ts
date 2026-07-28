@@ -10,13 +10,17 @@ const router = express.Router();
 // Same shape as imaging.ts's clinicScopeSql — array-aware clinic scope for
 // raw SQL, so an org-wide ('all') scope reaches every accessible clinic
 // instead of only the requester's own resolved clinic.
-function clinicScopeSql(scope: ClinicIdScopeWhere): Prisma.Sql {
+// `alias` scopes the "clinicId" column to a specific table alias — required
+// once a query joins another table (e.g. TreatmentCase) that also has a
+// clinicId column, to avoid an ambiguous-column error/silent misscope.
+function clinicScopeSql(scope: ClinicIdScopeWhere, alias?: string): Prisma.Sql {
+  const col = alias ? Prisma.raw(`"${alias}"."clinicId"`) : Prisma.raw('"clinicId"');
   if (typeof scope.clinicId === 'string') {
-    return Prisma.sql`"clinicId" = ${scope.clinicId}`;
+    return Prisma.sql`${col} = ${scope.clinicId}`;
   }
   const ids = scope.clinicId.in;
   if (ids.length === 0) return Prisma.sql`1 = 0`;
-  return Prisma.sql`"clinicId" IN (${Prisma.join(ids)})`;
+  return Prisma.sql`${col} IN (${Prisma.join(ids)})`;
 }
 
 // GET /api/reports/revenue
@@ -80,20 +84,50 @@ router.get('/reports/revenue', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
 
     // By period — raw SQL for DATE_TRUNC (validated groupBy, parameterized values,
     // full array-aware scope so an 'all'/multi-clinic selection covers every
-    // accessible clinic, not just the requester's own resolved clinic)
+    // accessible clinic, not just the requester's own resolved clinic).
+    //
+    // DATE_TRUNC is computed exactly once in the CTE as `period_start`. Each
+    // template-literal interpolation of groupByTrunc becomes its own bound
+    // parameter, so repeating `DATE_TRUNC(${groupByTrunc}, "paidAt")` in
+    // SELECT/GROUP BY/ORDER BY produces syntactically distinct expressions
+    // from Postgres's point of view — it can't prove they're equal at parse
+    // time, so it falls back to requiring "paidAt" itself in GROUP BY and
+    // raises 42803. Grouping/ordering by the single computed `period_start`
+    // column (and formatting with TO_CHAR only in the outer SELECT) avoids
+    // the repeated interpolation entirely.
+    //
+    // practitionerId/paymentMethod mirror baseWhere exactly so byPeriod stays
+    // consistent with summary/byMethod/byPractitioner for the same request.
     const groupByTrunc = groupBy; // already validated against whitelist
+
+    const practitionerFilterSql = practitionerId
+      ? Prisma.sql`AND tc."practitionerId" = ${String(practitionerId)}`
+      : Prisma.empty;
+    const paymentMethodFilterSql = paymentMethod
+      ? Prisma.sql`AND p."paymentMethod" = ${String(paymentMethod)}`
+      : Prisma.empty;
+
     const byPeriodRaw = await prisma.$queryRaw<{ period: string; revenue: number; count: number }[]>`
+      WITH scoped_payments AS (
+        SELECT
+          DATE_TRUNC(${groupByTrunc}, p."paidAt") AS period_start,
+          p.amount AS amount
+        FROM "Payment" p
+        LEFT JOIN "TreatmentCase" tc ON tc.id = p."treatmentCaseId"
+        WHERE ${clinicScopeSql(scope, 'p')}
+          AND p."paymentStatus" IN ('paid', 'partial')
+          AND p."paidAt" >= ${from}
+          AND p."paidAt" <= ${to}
+          ${paymentMethodFilterSql}
+          ${practitionerFilterSql}
+      )
       SELECT
-        TO_CHAR(DATE_TRUNC(${groupByTrunc}, "paidAt"), 'YYYY-MM-DD') as period,
+        TO_CHAR(period_start, 'YYYY-MM-DD') as period,
         COALESCE(SUM(amount), 0)::float as revenue,
         COUNT(*)::int as count
-      FROM "Payment"
-      WHERE ${clinicScopeSql(scope)}
-        AND "paymentStatus" IN ('paid', 'partial')
-        AND "paidAt" >= ${from}
-        AND "paidAt" <= ${to}
-      GROUP BY DATE_TRUNC(${groupByTrunc}, "paidAt")
-      ORDER BY DATE_TRUNC(${groupByTrunc}, "paidAt")
+      FROM scoped_payments
+      GROUP BY period_start
+      ORDER BY period_start
     `;
 
     // By practitioner — fetch commission rates separately (avoids select validation on old Prisma client)
