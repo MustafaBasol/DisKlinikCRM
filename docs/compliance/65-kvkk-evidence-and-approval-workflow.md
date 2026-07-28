@@ -4,7 +4,7 @@
 
 ## 0. Purpose
 
-Documents 56–59 (`docs/compliance/61-kvkk-data-processing-agreement.md`,
+Documents 61–64 (`docs/compliance/61-kvkk-data-processing-agreement.md`,
 `62-kvkk-subprocessor-register.md`, `63-kvkk-personal-data-breach-procedure.md`,
 `64-kvkk-incident-contact-roster.md` — together "the Readiness Package") define
 *what* must exist. This document defines *how the Readiness Package moves from draft
@@ -60,7 +60,7 @@ means is incomplete and must not be treated as "done."
 
 ## 4. Evidence storage and format
 
-- Evidence citations within the Readiness Package (this document and 56–59) should
+- Evidence citations within the Readiness Package (this document and 61–64) should
   reference either: (a) another file in this repository (relative path), (b) a dated,
   named external record (e.g. "signed DPA on file, `<clinic>`, `<date>`, filed at
   `<location>`") — this repository does not itself store signed agreements or personal
@@ -86,7 +86,7 @@ alongside the relevant pilot/onboarding evidence, not as a silent edit to the do
 own status line without a backing record.
 
 ```
-DOCUMENT: [56 | 57 | 58 | 59]
+DOCUMENT: [61 | 62 | 63 | 64]
 Document version reviewed (commit hash):
 Reviewer (name, qualification — e.g. "KVKK counsel", "GDPR counsel"):
 Review date:
@@ -94,8 +94,8 @@ Review outcome: [CHANGES REQUIRED | APPROVED AS-IS | APPROVED WITH NOTED CONDITI
 Conditions (if any):
 Evidence reference (redline, comments, or approval email/letter — where filed):
 
-If this record also constitutes EXECUTION (56 only) or COMPLETION (57/59) or
-REHEARSAL (58), additionally record:
+If this record also constitutes EXECUTION (61 only) or COMPLETION (62/64) or
+REHEARSAL (63), additionally record:
   Clinic (if applicable):
   Execution/completion/rehearsal date:
   Signatories / participants:
@@ -122,9 +122,9 @@ Sign-off: ______________________  Date: ______
 
 ## 7. Explicit non-claims
 
-- No document in the Readiness Package (56–60) is, by virtue of existing, legally
+- No document in the Readiness Package (61–65) is, by virtue of existing, legally
   approved, executed, or a certification of KVKK compliance.
-- Creating this workflow document does not itself advance any of documents 56–59 past
+- Creating this workflow document does not itself advance any of documents 61–64 past
   `DRAFT_FOR_COUNSEL_REVIEW` — that requires the actual review/approval/execution steps
   in §§2–5 to occur and be evidenced.
 - This document does not authorize any agent to self-approve any part of the Readiness

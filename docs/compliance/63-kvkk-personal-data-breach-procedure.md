@@ -88,8 +88,8 @@ or a contained non-breach.
 | Step | Who | Action |
 |---|---|---|
 | 1 | Whoever detects/receives the report | Classify technical severity if applicable (Technical Foundation §3), or note "non-technical, severity not yet assessed" if the trigger came through §1.2. |
-| 2 | Technical on-call (§59 roster) | Acknowledge and begin investigation within the response target implied by `docs/operations/pilot/PILOT_INCIDENT_AND_ROLLBACK_PLAYBOOK.md` §2's SEV classification, if the pilot playbook's severity scale also applies to this incident (it does, for any pilot-clinic-affecting incident — that document's SEV-1 explicitly includes "a security/privacy incident (including any suspected KVKK-relevant exposure)"). |
-| 3 | Technical on-call | Determine whether personal data (of any category, not only health data) was or may have been involved. If yes, or if uncertain, escalate to the privacy lead (§59 roster) immediately — uncertainty is escalated, not resolved unilaterally by engineering. |
+| 2 | Technical on-call (§64 roster) | Acknowledge and begin investigation within the response target implied by `docs/operations/pilot/PILOT_INCIDENT_AND_ROLLBACK_PLAYBOOK.md` §2's SEV classification, if the pilot playbook's severity scale also applies to this incident (it does, for any pilot-clinic-affecting incident — that document's SEV-1 explicitly includes "a security/privacy incident (including any suspected KVKK-relevant exposure)"). |
+| 3 | Technical on-call | Determine whether personal data (of any category, not only health data) was or may have been involved. If yes, or if uncertain, escalate to the privacy lead (§64 roster) immediately — uncertainty is escalated, not resolved unilaterally by engineering. |
 
 ## 3. Containment
 
@@ -265,13 +265,13 @@ redefine roles independently.
 ## 11. Post-incident review
 
 1. Once an incident reaches resolution (§9's "Resolution/closure"), the incident owner
-   (privacy lead or technical on-call, per §59 roster) schedules a post-incident review
+   (privacy lead or technical on-call, per §64 roster) schedules a post-incident review
    covering: root cause, what worked in detection/containment, what did not, whether the
    decision log (§9) is complete, and whether this procedure itself needs a correction —
    consistent with the Technical Foundation §11's statement that the activity-log
    timeline is currently the review record; this document adds the legal/decision-log
    dimension the Technical Foundation intentionally does not cover.
-2. Any process gap identified (e.g. a missing contact in §59's roster, a step in this
+2. Any process gap identified (e.g. a missing contact in §64's roster, a step in this
    procedure that did not work in practice) must be corrected as a follow-up action with
    an owner and a due date, not merely noted and forgotten.
 3. This document itself should be periodically reviewed against actual incident
