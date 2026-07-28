@@ -48,6 +48,7 @@ import {
   writeToBackupDestination,
   openBackupDestinationStream,
   writeBackupManifest,
+  validateFileBackupS3Config,
 } from './fileBackupDestination.js';
 
 // Mirrors fileStorage.ts's own BASE_UPLOAD_DIR constant (not exported from
@@ -157,6 +158,12 @@ export async function runFileBackup(options: { trigger?: 'scheduled' | 'manual' 
   if (!isFileBackupDestinationConfigured()) {
     throw new Error('No file backup destination configured (set FILE_BACKUP_S3_BUCKET or FILE_BACKUP_LOCAL_DIR)');
   }
+  // Fail-closed S3 production-safety pre-flight (endpoint TLS + required SSE
+  // mode) — checked here, before a FileBackupRun row is even created, not
+  // discovered mid-run on the first S3 write. No-op for local-mode
+  // destinations. See fileBackupDestination.ts's validateFileBackupS3Config
+  // doc comment for the exact rules.
+  validateFileBackupS3Config();
   if (backupRunning) {
     throw new Error('A file backup run is already in progress on this process');
   }

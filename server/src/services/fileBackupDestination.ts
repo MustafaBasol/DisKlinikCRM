@@ -31,6 +31,44 @@
  * If neither is configured, `isFileBackupDestinationConfigured()` returns
  * false and the backup job must refuse to run (fail closed — never silently
  * report "backup completed" with zero real off-host copies made).
+ *
+ * Production S3-mode safety configuration (FILE-BACKUP-COVERAGE-001 follow-
+ * up, PR #247 hardening — production S3-mode backup is still NOT enabled by
+ * this change; this only tightens what is REQUIRED before it could be):
+ *
+ *   - FILE_BACKUP_S3_ENDPOINT, when set, must be `https://` in production
+ *     (`NODE_ENV=production`). An explicit, opt-in
+ *     `FILE_BACKUP_S3_ALLOW_INSECURE_ENDPOINT=true` is required to run a
+ *     plaintext-transport endpoint in production (e.g. a self-hosted MinIO
+ *     reachable only over a private network without TLS termination) — this
+ *     stops a copy/paste of a dev `.env` (`http://localhost:9000`, etc.)
+ *     from silently shipping clinical file bytes over an unencrypted
+ *     channel. Leaving `FILE_BACKUP_S3_ENDPOINT` unset (real AWS S3) is
+ *     always fine — the AWS SDK's default endpoints are always HTTPS.
+ *   - FILE_BACKUP_S3_SSE selects the server-side-encryption mode requested
+ *     on every write (`AES256` or `aws:kms`, optionally paired with
+ *     FILE_BACKUP_S3_SSE_KMS_KEY_ID for a specific customer-managed KMS
+ *     key). In production, S3 mode refuses to start at all if this is
+ *     unset — an unconfigured encryption mode is refused rather than
+ *     silently falling back to whatever the bucket's own default happens to
+ *     be (which may be none). This REQUESTS encryption on every write via
+ *     the `ServerSideEncryption`/`SSEKMSKeyId` request parameters; it does
+ *     NOT verify bucket-level default encryption via the S3 API (no
+ *     `GetBucketEncryption` call is made) — see
+ *     `docs/program/evidence/FILE_BACKUP_COVERAGE_001.md` §14 for what
+ *     remains `IMPLEMENTED_NOT_PRODUCTION_VERIFIED` versus what this
+ *     validation actually enforces in code.
+ *   - Outside production (`NODE_ENV !== 'production'`: dev/test/CI), none
+ *     of the above throws — a local MinIO container with `http://` and no
+ *     SSE configured keeps working for this repo's own test suite
+ *     (`fileBackupService.test.ts`, `fileBackupDbIntegration.test.ts`)
+ *     without requiring TLS or KMS setup.
+ *   - Bucket-level controls this module does NOT and CANNOT enforce from
+ *     application code alone — versioning, object-lock/immutability,
+ *     lifecycle/retention rules, and the IAM policy attached to the
+ *     credentials used here — are operator-managed provider configuration.
+ *     They are documented as explicit requirements (not implemented here)
+ *     in `docs/program/evidence/FILE_BACKUP_COVERAGE_001.md` §14.
  */
 
 import fs from 'fs';
@@ -66,8 +104,88 @@ export function isFileBackupDestinationOffHost(): boolean {
 
 let s3Client: S3Client | null = null;
 
+function isProductionEnv(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+export type FileBackupS3SseMode = 'AES256' | 'aws:kms';
+
+/**
+ * Parses/validates FILE_BACKUP_S3_SSE. Returns `null` when unset. Throws on
+ * any *set-but-unrecognized* value in every environment (dev included) —
+ * a typo here must never silently result in "no SSE header sent", it must
+ * be loud immediately.
+ */
+function getFileBackupS3SseMode(): FileBackupS3SseMode | null {
+  const raw = process.env.FILE_BACKUP_S3_SSE?.trim();
+  if (!raw) return null;
+  if (raw === 'AES256' || raw === 'aws:kms') return raw;
+  throw new Error(`Invalid FILE_BACKUP_S3_SSE value "${raw}" — must be "AES256" or "aws:kms"`);
+}
+
+/**
+ * Server-side-encryption request parameters to attach to every S3 write
+ * (PutObject and multipart Upload) when FILE_BACKUP_S3_SSE is configured.
+ * Returns `{}` (no SSE params sent) when unset — callers in production are
+ * protected from ever reaching this with SSE unset by
+ * `validateFileBackupS3Config()`'s fail-closed check, run before any client
+ * is constructed.
+ */
+function getFileBackupS3SseParams(): { ServerSideEncryption?: FileBackupS3SseMode; SSEKMSKeyId?: string } {
+  const mode = getFileBackupS3SseMode();
+  if (!mode) return {};
+  const kmsKeyId = process.env.FILE_BACKUP_S3_SSE_KMS_KEY_ID?.trim();
+  return {
+    ServerSideEncryption: mode,
+    ...(mode === 'aws:kms' && kmsKeyId ? { SSEKMSKeyId: kmsKeyId } : {}),
+  };
+}
+
+/**
+ * Fail-closed pre-flight check for S3-mode file backup configuration. A
+ * no-op when the configured destination kind isn't `s3` (local mode has no
+ * transport/encryption-in-transit story to validate here). Called from
+ * `getS3()` before the client is constructed AND from
+ * `fileBackupService.ts`'s `runFileBackup()` pre-flight, so a misconfigured
+ * production S3 destination is refused before a `FileBackupRun` row is even
+ * created — not discovered mid-run on the first `PutObject` call.
+ *
+ * See this file's header comment for the full rationale. Summary:
+ *   - production only (`NODE_ENV==='production'`): FILE_BACKUP_S3_ENDPOINT,
+ *     if set, must be `https://` unless FILE_BACKUP_S3_ALLOW_INSECURE_ENDPOINT
+ *     is explicitly `'true'`.
+ *   - production only: FILE_BACKUP_S3_SSE must be set to a recognized mode
+ *     — refuses to start with no server-side-encryption mode configured.
+ *   - every environment: an explicitly-set-but-unrecognized
+ *     FILE_BACKUP_S3_SSE value is always rejected.
+ */
+export function validateFileBackupS3Config(): void {
+  if (getFileBackupDestinationKind() !== 's3') return;
+
+  // Always validated, even outside production: a typo'd SSE value must
+  // never silently degrade to "no encryption requested".
+  const sseMode = getFileBackupS3SseMode();
+
+  if (!isProductionEnv()) return;
+
+  const endpoint = process.env.FILE_BACKUP_S3_ENDPOINT?.trim();
+  const allowInsecure = process.env.FILE_BACKUP_S3_ALLOW_INSECURE_ENDPOINT === 'true';
+  if (endpoint && !endpoint.startsWith('https://') && !allowInsecure) {
+    throw new Error(
+      'FILE_BACKUP_S3_ENDPOINT must use https:// in production (set FILE_BACKUP_S3_ALLOW_INSECURE_ENDPOINT=true to explicitly override for a non-TLS-terminated, private-network endpoint)',
+    );
+  }
+
+  if (!sseMode) {
+    throw new Error(
+      'FILE_BACKUP_S3_SSE must be set ("AES256" or "aws:kms") before running S3-mode file backup in production — refusing to start with no server-side-encryption mode configured (fail closed)',
+    );
+  }
+}
+
 function getS3(): S3Client {
   if (s3Client) return s3Client;
+  validateFileBackupS3Config();
   const accessKeyId = process.env.FILE_BACKUP_S3_ACCESS_KEY_ID?.trim();
   const secretAccessKey = process.env.FILE_BACKUP_S3_SECRET_ACCESS_KEY?.trim();
   s3Client = new S3Client({
@@ -138,9 +256,10 @@ export async function writeToBackupDestination(
   });
 
   if (kind === 's3') {
+    const client = getS3(); // validates FILE_BACKUP_S3_SSE/endpoint before any write is attempted
     const upload = new Upload({
-      client: getS3(),
-      params: { Bucket: s3Bucket(), Key: key, Body: source.pipe(hashing) },
+      client,
+      params: { Bucket: s3Bucket(), Key: key, Body: source.pipe(hashing), ...getFileBackupS3SseParams() },
       leavePartsOnError: false,
     });
     await upload.done();
@@ -213,6 +332,7 @@ export async function writeBackupManifest(key: string, manifest: unknown): Promi
         Key: key,
         Body: body,
         ContentType: 'application/json',
+        ...getFileBackupS3SseParams(),
       }));
       return true;
     }
