@@ -22,6 +22,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import {
   loadDataRetentionConfig,
+  DATA_RETENTION_RUNTIME_SETTING_KEY,
   type DataRetentionConfig,
 } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting } from '../services/platformSettings.js';
@@ -393,6 +394,16 @@ export type DataRetentionJobOverrides = {
   getRuntimeEnabled?: () => Promise<boolean>;
 };
 
+// Shared lease-lock identity for live cleanup execution — used by BOTH the
+// scheduled cron below and the platform-admin manual run route
+// (routes/platformAdmin.ts), so a manual live run and a scheduled tick (or
+// two concurrent manual runs) can never execute their delete/anonymize
+// batches against the same tables at the same time. Lease 2 hours — large
+// cleanups can run long; a shorter lease risks a second runner starting
+// mid-batch.
+export const DATA_RETENTION_JOB_LOCK_NAME = 'data-retention-cleanup';
+export const DATA_RETENTION_JOB_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
+
 export function startDataRetentionCleanupJob(overrides?: DataRetentionJobOverrides): void {
   const config = loadDataRetentionConfig();
 
@@ -402,7 +413,7 @@ export function startDataRetentionCleanupJob(overrides?: DataRetentionJobOverrid
   }
 
   const getRuntimeEnabled = overrides?.getRuntimeEnabled ?? (async () => {
-    const val = await getPlatformSetting('privacy.dataRetention.runtimeEnabled');
+    const val = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);
     return val === 'true';
   });
 
@@ -414,9 +425,10 @@ export function startDataRetentionCleanupJob(overrides?: DataRetentionJobOverrid
         return;
       }
       // Paylaşımlı kilit: birden fazla replika/worker temizliği aynı anda
-      // koşturmasın (docs/45 Faz 3 #9-10). Lease 2 saat — büyük temizlikler
-      // uzun sürebilir.
-      await withJobLock('data-retention-cleanup', 2 * 60 * 60 * 1000, async () => {
+      // koşturmasın (docs/45 Faz 3 #9-10), ve platform-admin panelinden
+      // tetiklenen manuel bir live run ile de çakışmasın (aynı kilit adı
+      // routes/platformAdmin.ts tarafından da kullanılıyor).
+      await withJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS, async () => {
         await runDataRetentionCleanup({ config });
       });
     } catch (err: unknown) {

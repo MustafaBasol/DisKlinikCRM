@@ -59,6 +59,12 @@ export type DataRetentionConfig = {
 export const DATA_RETENTION_MIN_DAYS = 30;
 export const DATA_RETENTION_MAX_BATCH_SIZE = 1000;
 
+/** PlatformSetting key for the runtime kill switch — checked by both the
+ * scheduled cron (dataRetentionCleanupJob.ts) and the platform-admin manual
+ * run endpoint (routes/platformAdmin.ts), so both paths agree on the same
+ * on/off state. */
+export const DATA_RETENTION_RUNTIME_SETTING_KEY = 'privacy.dataRetention.runtimeEnabled';
+
 const DEFAULTS = {
   conversationMessagesDays: 365,
   conversationStateDays: 90,
