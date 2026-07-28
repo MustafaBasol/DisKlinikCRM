@@ -1,0 +1,215 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-07-28",
+  "baselineCommit": "e3a29a3bdf4e862c17a18bbad75c3a4b0b36d80a",
+  "taskId": "F1-003-P2A",
+  "parentTaskId": "F1-003",
+  "taskType": "PARALLEL_PREPARATORY_EVIDENCE_DESIGN_ONLY",
+  "codegraphStatus": {
+    "available": false,
+    "commandsTried": [
+      "ToolSearch(query=\"CodeGraph search index repository code graph\", max_results=10)",
+      "ToolSearch(query=\"codegraph\", max_results=5)"
+    ],
+    "result": "Zero matching deferred tools found for either query in this task's execution environment.",
+    "fallbackUsed": "Narrowly-bounded Glob/Grep/Read inspection scoped exactly to the roots named in this task's instructions (server/src/tests/dbVerification/, server/src/services/fileBackupDestination.ts, server/prisma/, .github/workflows/, package.json script inventories). No repository-wide replacement scan was performed.",
+    "consistentWith": ["F1-001", "F1-002-P1", "F1-002-P2 — all independently found CodeGraph unavailable in their own execution environments"]
+  },
+  "postgres": {
+    "selectedModel": "ONE_DISPOSABLE_CONTAINER_PER_RUN_ONE_DATABASE_INSIDE_IT",
+    "optionsConsidered": [
+      {"option": "ONE_DISPOSABLE_CONTAINER_PER_RUN_ONE_DATABASE_INSIDE_IT", "selected": true, "rationale": "Matches all 3 historical precedents (F0-011-P2, KVKK-HIGH-006-DISPOSABLE_POSTGRES_VERIFICATION, KVKK-HIGH-008-PMVR); total process/storage isolation; unconditional cleanup via container removal; requires zero new Prisma configuration."},
+      {"option": "NEW_DATABASE_ON_SHARED_LONG_LIVED_DISPOSABLE_CONTAINER", "selected": false, "rationale": "Reduces container-start latency but reintroduces shared connection-pool/pg_stat_activity contention and a leaked-database-survives-a-healthy-container failure mode. Retained only as an optional local-developer convenience variant, never the CI default."},
+      {"option": "SCHEMA_PER_RUN_SHARED_DATABASE", "selected": false, "rationale": "Evaluated, not selected — no historical precedent in this repository, no multiSchema Prisma preview feature declared, and at least one dependent test (kvkkHigh007High008SchemaIntegrity.test.ts) performs raw schema introspection whose schema-qualification safety was not independently verified by this task. See unresolvedQuestions."},
+      {"option": "IN_MEMORY_OR_SQLITE_SUBSTITUTE", "selected": false, "rationale": "Rejected outright — datasource provider is postgresql (grep-confirmed); at least one dependent test explicitly asserts Postgres-specific absence-of-unique-constraint behavior that would not reproduce identically on a different engine; would constitute an application-testability change outside this task's authorization."}
+    ],
+    "versionPolicy": {
+      "image": "postgres:16-alpine",
+      "pinningStrategy": "exact tag pin, matching all 3 historical precedents in this repository; no `latest` tag",
+      "openQuestion": "Production PostgreSQL major-version was not confirmed by any evidence source this task reviewed — flagged in unresolvedQuestions to avoid a CI/production version skew masking a real migration incompatibility."
+    },
+    "imagePinningPolicy": "Exact version tag (e.g. postgres:16-alpine), never `latest`; periodic manual/Dependabot-style review, not automatic upgrade.",
+    "readiness": {
+      "mechanism": "pg_isready polling (local) or GitHub Actions service `options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12` (CI)",
+      "timeoutSeconds": 60,
+      "onTimeout": "FAIL — never an extended/indefinite retry, never a silent skip"
+    },
+    "databaseNamingAlgorithm": {
+      "prefix": "nmtest_",
+      "pattern": "nmtest_<scopeTag>_<runKey>",
+      "runKeyDerivation": "first 12 hex characters of sha256(`${CI_RUN_ID || 'local'}:${CI_RUN_ATTEMPT || '0'}:${process.pid}:${branchOrWorktreeIdentifier}:${crypto.randomUUID()}`)",
+      "scopeTagValues": ["local", "ci"],
+      "maxIdentifierLength": 63,
+      "typicalLength": "22-24 characters, well under Postgres's 63-byte NAMEDATALEN limit",
+      "examples": ["nmtest_local_7f3a9c1e2b44", "nmtest_ci_0aa1b2c3d4e5"],
+      "sensitiveContentHandling": "Branch/worktree identity is folded into the sha256 input only, never embedded raw — no container/database/bucket name or log line can leak a branch/ticket/person name.",
+      "cleanupPrefixForSweep": "nmtest_",
+      "uniquenessUnderParallelMatrix": "CI_RUN_ID + CI_RUN_ATTEMPT + process.pid + crypto.randomUUID() composite distinguishes concurrent matrix legs, concurrent CI runs, and concurrent local invocations on the same machine."
+    },
+    "portStrategyLocal": {
+      "mechanism": "docker run -p 127.0.0.1::5432 (Docker-assigned free host port, double-colon syntax) then `docker port <container> 5432` to discover the assigned port before constructing DATABASE_URL",
+      "raceAvoidance": "Docker's own bind already happened by the time the port is queried — no discover-then-bind TOCTOU race, unlike a script that pre-scans for a free port and then races to bind it."
+    },
+    "portStrategyCI": {
+      "mechanism": "GitHub Actions service container with a dynamic host-port mapping (`ports: [\"5432\"]`, no fixed left-hand side), resolved port read via `${{ job.services.postgres.ports['5432'] }}`",
+      "hostPortExposureRequired": "Not required by GH Actions' own job-isolation model (each matrix leg gets its own runner VM) but recommended anyway as defense in depth."
+    },
+    "migrationSequence": [
+      "npx prisma generate",
+      "npx prisma migrate deploy",
+      "assert exit code 0 and no reported pending migrations"
+    ],
+    "cleanupSequence": [
+      "docker rm -f <postgres container> (run from a finally/trap-equivalent block, unconditional on test exit code)",
+      "no volume was ever mounted, so removal is total — no orphaned data directory can remain"
+    ],
+    "staleResourcePolicy": {
+      "scope": "local/worktree only — CI runner destruction already handles the CI case",
+      "mechanism": "docker ps -a --filter label=noramedi.disposable-runtime=true, filtered by noramedi.created-at age",
+      "ttlHours": 4,
+      "safetyConstraint": "must filter strictly on the noramedi.disposable-runtime=true label; must never remove an unlabeled container"
+    }
+  },
+  "minio": {
+    "required": true,
+    "dependentTargets": ["server/src/tests/dbVerification/fileBackupDbIntegration.test.ts"],
+    "selectedModel": "ONE_DISPOSABLE_CONTAINER_PER_RUN",
+    "optionsConsidered": [
+      {"option": "ONE_DISPOSABLE_CONTAINER_PER_RUN", "selected": true, "rationale": "Mirrors the selected Postgres model; unconditional cleanup via container teardown regardless of the test's own confirmed-incomplete bucket-teardown code path."},
+      {"option": "SHARED_LONG_LIVED_INSTANCE_PER_RUN_BUCKET", "selected": false, "rationale": "Closer to today's ad hoc pattern but accumulates orphaned buckets indefinitely — the test never issues DeleteBucketCommand or a per-object delete loop covering all created objects, confirmed by this task's own full read of the file's final cleanup block."},
+      {"option": "MOCKED_STUBBED_S3_CLIENT", "selected": false, "rationale": "Would require modifying the test file itself (prohibited by this task's parallel-isolation rules) and would defeat the file's own stated purpose of exercising the real, unstubbed S3 code path."}
+    ],
+    "versionPolicy": {
+      "image": "minio/minio, exact release tag pinned (e.g. RELEASE.<date>), never `latest`",
+      "note": "First MinIO use in this program's history — no historical precedent tag to carry forward."
+    },
+    "readiness": {
+      "mechanism": "Poll GET /minio/health/ready",
+      "timeoutSeconds": 60,
+      "onTimeout": "FAIL — same rule as Postgres"
+    },
+    "bucketNamingAlgorithm": {
+      "prefix": "nmtest-",
+      "pattern": "nmtest-<scopeTag>-<runKey>",
+      "runKeySharedWith": "same runKey derivation as the Postgres databaseNamingAlgorithm, reformatted with hyphens (S3/MinIO bucket names forbid underscores)",
+      "currentTestCodeGap": "fileBackupDbIntegration.test.ts currently hardcodes `file-backup-review-${Date.now()}` — millisecond-resolution, not collision-resistant under concurrent execution, and not overridable via any environment variable today. Adopting this naming algorithm requires a test-code change this design task is not authorized to make (see unresolvedQuestions)."
+    },
+    "credentialsPolicy": {
+      "automatedProvisioningDefault": "freshly-generated random access key / secret key per run, exported as MINIO_ACCESS_KEY / MINIO_SECRET_KEY, never logged",
+      "testFileFallbackDefault": "reviewminio / reviewminiosecret — retained only as a manual/ad hoc local-convenience fallback inside the test file itself, never the automated-provisioning default"
+    },
+    "endpointPolicy": {
+      "addressingStyle": "path-style (forcePathStyle: true, already hardcoded client-side by the test)",
+      "productionUrlGuard": "provisioning must hard-fail if MINIO_ENDPOINT resolves to a non-loopback/non-private host or matches any known production hostname/S3 endpoint pattern"
+    },
+    "cleanupSequence": [
+      "docker rm -f <minio container> (unconditional, finally/trap-equivalent)",
+      "no volume mounted, so container removal is the sole load-bearing cleanup guarantee — per-object/bucket deletion in-test is defense-in-depth only, not relied upon, since it is currently absent (confirmed gap, see §4 Q7 of the markdown design)"
+    ]
+  },
+  "isolation": {
+    "parallelWorktrees": "Guaranteed by container-per-run: two worktrees each provisioning their own Postgres/MinIO container cannot share connection pools, locks, or storage, regardless of naming-algorithm correctness; naming algorithm additionally prevents any human-visible name collision in `docker ps`/logs.",
+    "parallelCIJobs": "Each GH Actions matrix leg/job runs on its own isolated runner VM with its own service containers by default; the naming/labeling contract is defense-in-depth, not the primary isolation mechanism, for the CI case specifically.",
+    "processEnvironment": "DATABASE_URL/MINIO_* are exported into the invoking process's environment only, immediately before test invocation, never written to a committed .env file; no test file constructs or overrides these values itself (confirmed by direct read of dbVerificationHarness.ts and fileBackupDbIntegration.test.ts, and by F1-002-P2's grep pass over the remaining 20 DB-dependent files).",
+    "externalNetwork": "Zero live external-provider calls found anywhere in the 105-file backend + 9-file frontend suite (F1-002-P2 finding, relied upon not re-derived). This design recommends, as a not-yet-implemented defense-in-depth control, a shared test-bootstrap fetch/undici dispatcher override allow-listing only the resolved DATABASE_URL/MINIO_ENDPOINT hosts plus loopback, and recommends restricting CI-runner egress to the npm registry, GitHub, and loopback for any disposable-runtime-backed job.",
+    "productionUrlGuards": "NEW, not-yet-implemented control this design specifies: before any provisioning command runs, DATABASE_URL and MINIO_ENDPOINT must be checked against a hostname denylist/allowlist (reject any non-loopback/non-private host, any host matching known production patterns such as noramedi.com or a real AWS/S3 endpoint) — hard stop, not a warning, on a match. No such guard exists anywhere in the repository today (confirmed by this task's own read of db.ts's callers and every DB-dependent test file's own connection logic)."
+  },
+  "migrationProfiles": [
+    {
+      "id": "profile-1-empty-db-migrate-deploy",
+      "name": "Empty-database migrate-deploy validation",
+      "description": "Fresh container/database, `prisma migrate deploy` from zero, assert exit 0 and `migrate status` reports up to date, assert all migrations applied (dynamic count read at run time, not hardcoded — 67 migration directories as of this task's own count, expected to grow).",
+      "default": true,
+      "destructive": false
+    },
+    {
+      "id": "profile-2-previous-release-to-current-upgrade",
+      "name": "Previous-release-to-current upgrade validation",
+      "description": "Provision a database at a prior tagged commit's migration set, migrate deploy to that point, then migrate deploy again against current HEAD's full migration set; assert clean incremental apply. Mirrors F0-011-P2's Part B methodology.",
+      "default": true,
+      "destructive": false
+    },
+    {
+      "id": "profile-3-migration-idempotency-status",
+      "name": "Migration idempotency/status validation",
+      "description": "Run `prisma migrate deploy` twice in a row against the same already-migrated database; assert the second run reports zero pending/no-op work and exits 0.",
+      "default": true,
+      "destructive": false
+    },
+    {
+      "id": "profile-4-application-test-execution-after-migration",
+      "name": "Application test execution after migration",
+      "description": "The 22+1 DISPOSABLE_POSTGRES/STORAGE_EMULATOR_REQUIRED test files run against the fully-migrated database — the primary 'does the app actually work' gate.",
+      "default": true,
+      "destructive": false
+    },
+    {
+      "id": "profile-5-destructive-rollback-rehearsal",
+      "name": "Destructive rollback rehearsal",
+      "description": "Explicitly separate, opt-in only, never part of default CI. Hand-authored reverse-DDL against a throwaway database seeded with synthetic evidence rows, demonstrating destructive rollback consequences, mirroring F0-011-P2 Part C. Feeds R-070's still-open tooling-gap discussion; does not close R-070.",
+      "default": false,
+      "destructive": true
+    }
+  ],
+  "r070Boundary": {
+    "status": "OPEN — unchanged by this task",
+    "restatement": "Standard `prisma migrate deploy` is forward-only and is not rollback tooling. This design's default profiles (1-4) never mutate _prisma_migrations directly and never perform a physical schema rollback. Profile 5 is explicitly opt-in, destructive, non-default, and does not introduce any new automated rollback tool.",
+    "explicitNonClosure": "This task does not close, mitigate, or narrow R-070. The underlying tooling gap (no drift-detection between _prisma_migrations and true schema state, no documented reconciliation runbook) is unchanged."
+  },
+  "failSafeRules": {
+    "provisioningFailure": "FAIL — tests must fail, not skip",
+    "migrationFailure": "FAIL — non-zero exit or any reported pending migration after migrate deploy",
+    "readinessTimeout": "FAIL — 60s bounded timeout, no indefinite retry",
+    "cleanupFailure": "WARN, non-fatal to the already-determined test result; logged loudly; the stale-resource sweeper is the actual backstop, not the per-run script's own exit code",
+    "unknownRuntimeClass": "Escalate to full disposable profile / manual-only classification — never silently exclude, never assume safe (mirrors F1-001's own fail-safe design)",
+    "selectorFailureFuture": "Fall back to full suite, including full disposable-runtime provisioning for the full suite, not just a partial subset",
+    "missingCredentials": "FAIL CLOSED — DATABASE_URL/MINIO_* unset when required must error immediately, never silently skip",
+    "detectedProductionLikeUrl": "HARD STOP before any command runs — new guard this design specifies, not present in the repository today"
+  },
+  "securityImpact": {
+    "netChange": "ADDS two new controls beyond today's ad hoc practice: (1) fail-closed production-URL detector, (2) recommended network-egress guard. REDUCES reliance on the test file's hardcoded MinIO credential fallback for automated use.",
+    "noChangeTo": ["application authorization/authentication code paths", "production access", "external network dependencies beyond local/disposable Postgres and MinIO"]
+  },
+  "tenantImpact": {
+    "netChange": "None — this design changes only test-execution infrastructure, not fixture generation, authorization logic, or scope-filtering code.",
+    "fixtureGenerationUnchanged": true
+  },
+  "kvkkImpact": {
+    "netChange": "None — no real patient data introduced, referenced, or required. Disposable databases/buckets are transient and fully destroyed per run.",
+    "reinforcedRule": "Any fixture producing a non-synthetic-looking value inside a disposable-runtime-backed test is a defect in that test, not an acceptable input to this design."
+  },
+  "implementationPrerequisites": [
+    "F1-003-P1's merged, authoritative script/file matrix (this design's 22+1 target file set is subject to reconciliation)",
+    "Resolution of messagesConsentGate.test.ts's UNKNOWN provider-stub-completeness status",
+    "Confirmation of production PostgreSQL major version",
+    "P1's disposition of the 3 currently-orphaned test files (kvkkHigh006Batch2ClinicScope.test.ts, metaWhatsAppPostBookingHandler.test.ts, planLimitsTargetClinicFix.test.ts)",
+    "A separately-authorized test-code change to fileBackupDbIntegration.test.ts adopting this design's bucket-naming algorithm and completing its bucket-teardown path"
+  ],
+  "unresolvedQuestions": [
+    {"id": "UQ-1", "question": "Will F1-003-P1's final script/file matrix change which of the 22+1 target files exist, are chained, or are renamed?", "owner": "F1-003-P1 reconciliation"},
+    {"id": "UQ-2", "question": "Is messagesConsentGate.test.ts's EvolutionWhatsAppProvider import exercised only in a fully-stubbed path in every code path?", "owner": "future dedicated review, possibly F1-003-P1"},
+    {"id": "UQ-3", "question": "What is the production PostgreSQL major version, and does it match the recommended postgres:16-alpine CI/local pin?", "owner": "unassigned — no evidence source in this task's review answers it"},
+    {"id": "UQ-4", "question": "Will kvkkHigh006Batch2ClinicScope.test.ts, metaWhatsAppPostBookingHandler.test.ts, and planLimitsTargetClinicFix.test.ts receive package scripts?", "owner": "F1-003-P1 reconciliation"},
+    {"id": "UQ-5", "question": "Is schema-per-run safe given kvkkHigh007High008SchemaIntegrity.test.ts's raw schema introspection and the absence of a declared multiSchema Prisma preview feature?", "owner": "candidate future design/evidence task, not selected as this design's baseline"},
+    {"id": "UQ-6", "question": "Who is authorized to change fileBackupDbIntegration.test.ts's hardcoded bucket name and incomplete bucket-teardown path to adopt this design's naming/cleanup contract?", "owner": "future F1-003-P2 implementation task, separately authorized"}
+  ],
+  "evidenceSources": [
+    "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+    "docs/program/RISK_REGISTER.md (R-070, R-072, R-046 rows)",
+    "docs/program/evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md",
+    "docs/program/evidence/F1-002-P2_TEST_RUNTIME_DEPENDENCY_BASELINE.md",
+    "docs/program/evidence/F1-002-P2_disposable_environment_capabilities.json",
+    "docs/program/evidence/F1-002-P2_test_runtime_requirements.json",
+    "docs/program/evidence/F0-011-P2_KVKK_HIGH007_HIGH008_ROLLBACK_TENANT_VERIFICATION.md (existence-confirmed, cited via F1-002-P2's own quoted commands)",
+    "docs/program/evidence/KVKK-HIGH-006-DISPOSABLE_POSTGRES_VERIFICATION.md (existence-confirmed, cited via F1-002-P2's own quoted commands)",
+    "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts (read in full)",
+    "server/src/tests/dbVerification/dbVerificationHarness.ts (read in full)",
+    "server/src/services/fileBackupDestination.ts (read in full)",
+    "server/.env.example (read in full)",
+    "server/prisma/schema.prisma (targeted grep: generator/datasource/enum/schema-attribute lines)",
+    "server/prisma/migrations/ (directory listing only, 67 directories + migration_lock.toml)",
+    "server/package.json, package.json (script inventories via programmatic introspection)",
+    ".github/workflows/windows-bridge-pr.yml (read in full)",
+    ".github/workflows/windows-bridge-release.yml (existence confirmed only)"
+  ]
+}
