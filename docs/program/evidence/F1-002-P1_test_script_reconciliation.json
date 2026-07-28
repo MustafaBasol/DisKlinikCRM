@@ -1,0 +1,3481 @@
+{
+  "taskId": "F1-002-P1",
+  "parentTaskId": "F1-002",
+  "generatedAt": "2026-07-28",
+  "executionBaselineCommit": "08f2eaf82a205cf3f997c57e6a295fedd66b142d",
+  "expectedInitialBaselineCommit": "94cc4ac58f0487dd186886878c5628627f0b1ce3",
+  "baselineAncestryVerified": true,
+  "scripts": [
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:dicom-helpers",
+      "rawCommand": "tsx src/components/imaging/__tests__/dicomHelpers.test.ts",
+      "expandedScriptChain": [
+        "tsx src/components/imaging/__tests__/dicomHelpers.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "src/components/imaging/__tests__/dicomHelpers.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "src/components/imaging/__tests__/dicomHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:onboarding-helpers",
+      "rawCommand": "tsx src/components/imaging/__tests__/onboardingHelpers.test.ts",
+      "expandedScriptChain": [
+        "tsx src/components/imaging/__tests__/onboardingHelpers.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "src/components/imaging/__tests__/onboardingHelpers.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "src/components/imaging/__tests__/onboardingHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:pairing-poller",
+      "rawCommand": "tsx src/components/imaging/__tests__/pairingPoller.test.ts",
+      "expandedScriptChain": [
+        "tsx src/components/imaging/__tests__/pairingPoller.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "src/components/imaging/__tests__/pairingPoller.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "src/components/imaging/__tests__/pairingPoller.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:booking-widget-helpers",
+      "rawCommand": "tsx src/pages/__tests__/bookingWidgetHelpers.test.ts",
+      "expandedScriptChain": [
+        "tsx src/pages/__tests__/bookingWidgetHelpers.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "src/pages/__tests__/bookingWidgetHelpers.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "src/pages/__tests__/bookingWidgetHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:clinic-bulk-export-selection",
+      "rawCommand": "tsx src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
+      "expandedScriptChain": [
+        "tsx src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:communication-consent-matrix",
+      "rawCommand": "tsx src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
+      "expandedScriptChain": [
+        "tsx src/components/__tests__/communicationConsentMatrixHelpers.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "src/components/__tests__/communicationConsentMatrixHelpers.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "src/components/__tests__/communicationConsentMatrixHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:patient-detail-tabs-helpers",
+      "rawCommand": "tsx src/pages/__tests__/patientDetailTabsHelpers.test.ts",
+      "expandedScriptChain": [
+        "tsx src/pages/__tests__/patientDetailTabsHelpers.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "src/pages/__tests__/patientDetailTabsHelpers.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "src/pages/__tests__/patientDetailTabsHelpers.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "root (health-crm-frontend)",
+      "scriptName": "test:vitest",
+      "rawCommand": "vitest run",
+      "expandedScriptChain": [
+        "vitest run"
+      ],
+      "runner": "vitest",
+      "workingDirectory": "repo root",
+      "environmentVariables": [],
+      "referencedFiles": [],
+      "referencedGlobs": [
+        "src/**/*.vitest.test.{ts,tsx}"
+      ],
+      "matchedCurrentFiles": [],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Discovers files by glob (vitest include pattern), not by explicit path list; file set can change without a script edit."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:password-reset",
+      "rawCommand": "tsx src/tests/passwordReset.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/passwordReset.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "MAIL_ENABLED"
+      ],
+      "referencedFiles": [
+        "server/src/tests/passwordReset.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/passwordReset.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:ai-prompt-privacy",
+      "rawCommand": "tsx src/tests/aiPrivacyBoundary.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/aiPrivacyBoundary.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY",
+        "GOOGLE_AI_STUDIO_API_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/aiPrivacyBoundary.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/aiPrivacyBoundary.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test",
+      "rawCommand": "npm run test:fixtures && npm run test:agent && npm run test:safety && npm run test:msg-safety && npm run test:auth && npm run test:password-reset && npm run test:whatsapp && npm run test:inbox && npm run test:finance && npm run test:ops && npm run test:no-shows && npm run test:pricing && npm run test:roles && npm run test:schedule && npm run test:orgdash && npm run test:dashboard && npm run test:imports && npm run test:patients-import-clinic-scope && npm run test:user-import-onboarding && npm run test:staff-onboarding && npm run test:email-verification && npm run test:instagram && npm run test:meta-wa && npm run test:overlap-safety && npm run test:availability-service && npm run test:public-booking && npm run test:public-booking-slots && npm run test:public-booking-slot-required && npm run test:notice-evidence && npm run test:purpose && npm run test:contact-requests && npm run test:post-treatment && npm run test:meta-template-sync && npm run test:template-waba-binding && npm run test:data-retention && npm run test:patient-privacy && npm run test:patient-name && npm run test:billing-patient-access && npm run test:treatment-case-scope && npm run test:kvkk-high006-batch3 && npm run test:billing-financial-select && npm run test:payment-validation && npm run test:payment-billing-edit && npm run test:payments-list-field-scope && npm run test:appointment-update-validation && npm run test:sms && npm run test:lab-orders && npm run test:imaging && npm run test:imaging-bridge-pairing && npm run test:imaging-bridge-onboarding && npm run test:imaging-bridge-update && npm run test:file-preview && npm run test:totp && npm run test:wa-persistence && npm run test:kvkk-lifecycle && npm run test:clinic-bulk-export && npm run test:security-incidents && npm run test:communication-consent && npm run test:communication-consent-backfill && npm run test:communication-consent-reconciliation-report && npm run test:communication-consent-reconciliation && npm run test:communication-consent-audit-report && npm run test:communication-consent-matrix-route && npm run test:legacy-consent-correction && npm run test:kvkk-high007-high008-schema-integrity && npm run test:messages-consent-gate && npm run test:messages-record-scope && npm run test:recall-consent-gate && npm run test:reports-clinic-scope && npm run test:reports-revenue-by-period && npm run test:appointment-request-record-scope && npm run test:dental-chart-clinic-scope && npm run test:messaging-connection-scope && npm run test:booking-flow-log-redaction && npm run test:http-log-privacy && npm run test:ai-prompt-privacy && npm run test:retention-manual-run-audit",
+      "expandedScriptChain": [
+        "npm run test:fixtures",
+        "tsx src/tests/whatsappConversationFixtures.ts",
+        "npm run test:agent",
+        "tsx src/tests/whatsappAgentEvaluation.test.ts",
+        "npm run test:safety",
+        "tsx src/tests/whatsappSafetyFixtures.ts",
+        "npm run test:msg-safety",
+        "tsx src/tests/messageSafetyHardening.test.ts",
+        "npm run test:auth",
+        "tsx src/tests/sessionCookieCsrf.test.ts",
+        "tsx src/tests/platformAdmin.test.ts",
+        "npm run test:password-reset",
+        "tsx src/tests/passwordReset.test.ts",
+        "npm run test:whatsapp",
+        "tsx src/tests/whatsappProvider.test.ts",
+        "npm run test:inbox",
+        "tsx src/tests/whatsappInbox.test.ts",
+        "npm run test:finance",
+        "tsx src/tests/financeDashboard.test.ts",
+        "npm run test:ops",
+        "tsx src/tests/operationalMonitoring.test.ts",
+        "npm run test:no-shows",
+        "tsx src/tests/noShow.test.ts",
+        "npm run test:pricing",
+        "tsx src/tests/servicePricing.test.ts",
+        "npm run test:roles",
+        "tsx src/tests/multiBranchAccess.test.ts",
+        "npm run test:schedule",
+        "tsx src/tests/scheduleAccess.test.ts",
+        "npm run test:orgdash",
+        "tsx src/tests/organizationDashboard.test.ts",
+        "npm run test:dashboard",
+        "tsx src/tests/dashboard.test.ts",
+        "npm run test:imports",
+        "tsx src/tests/excelImport.test.ts",
+        "npm run test:patients-import-clinic-scope",
+        "tsx src/tests/patientsImportClinicScope.test.ts",
+        "npm run test:user-import-onboarding",
+        "tsx src/tests/userImportOnboarding.test.ts",
+        "npm run test:staff-onboarding",
+        "tsx src/tests/staffOnboarding.test.ts",
+        "npm run test:email-verification",
+        "tsx src/tests/emailVerification.test.ts",
+        "npm run test:instagram",
+        "tsx src/tests/instagramProvider.test.ts",
+        "tsx src/tests/instagramConversion.test.ts",
+        "tsx src/tests/instagramAssistantParity.test.ts",
+        "npm run test:meta-wa",
+        "tsx src/tests/metaWhatsAppWebhook.test.ts",
+        "tsx src/tests/whatsappAwaitingServiceStep.test.ts",
+        "tsx src/tests/whatsappStepAwareNlu.test.ts",
+        "tsx src/tests/whatsappIdentityAndPostBooking.test.ts",
+        "npm run test:overlap-safety",
+        "tsx src/tests/appointmentRequestOverlapSafety.test.ts",
+        "npm run test:availability-service",
+        "tsx src/tests/appointmentAvailabilityService.test.ts",
+        "npm run test:public-booking",
+        "tsx src/tests/publicBookingAvailability.test.ts",
+        "npm run test:public-booking-slots",
+        "tsx src/tests/publicBookingSlotConsistency.test.ts",
+        "npm run test:public-booking-slot-required",
+        "tsx src/tests/publicBookingSlotRequired.test.ts",
+        "npm run test:notice-evidence",
+        "tsx src/tests/publicBookingNoticeEvidence.test.ts",
+        "npm run test:purpose",
+        "tsx src/tests/messageTemplatePurpose.test.ts",
+        "npm run test:contact-requests",
+        "tsx src/tests/contactRequests.test.ts",
+        "npm run test:post-treatment",
+        "tsx src/tests/postTreatmentMessaging.test.ts",
+        "npm run test:meta-template-sync",
+        "tsx src/tests/metaTemplateSyncJob.test.ts",
+        "npm run test:template-waba-binding",
+        "tsx src/tests/messageTemplateWabaBinding.test.ts",
+        "npm run test:data-retention",
+        "tsx src/tests/dataRetentionCleanupJob.test.ts",
+        "npm run test:patient-privacy",
+        "tsx src/tests/patientPrivacy.test.ts",
+        "npm run test:patient-name",
+        "tsx src/tests/patientName.test.ts",
+        "npm run test:billing-patient-access",
+        "tsx src/tests/billingPatientAccess.test.ts",
+        "npm run test:treatment-case-scope",
+        "tsx src/tests/treatmentCaseClinicScope.test.ts",
+        "npm run test:kvkk-high006-batch3",
+        "tsx src/tests/kvkkHigh006Batch3ClinicScope.test.ts",
+        "npm run test:billing-financial-select",
+        "tsx src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+        "npm run test:payment-validation",
+        "tsx src/tests/paymentValidation.test.ts",
+        "npm run test:payment-billing-edit",
+        "tsx src/tests/paymentBillingEdit.test.ts",
+        "npm run test:payments-list-field-scope",
+        "tsx src/tests/paymentsListFieldScope.test.ts",
+        "npm run test:appointment-update-validation",
+        "tsx src/tests/appointmentUpdateValidation.test.ts",
+        "npm run test:sms",
+        "tsx src/tests/smsModule.test.ts",
+        "npm run test:lab-orders",
+        "tsx src/tests/labOrders.test.ts",
+        "npm run test:imaging",
+        "tsx src/tests/imaging.test.ts",
+        "npm run test:imaging-bridge-pairing",
+        "tsx src/tests/imagingBridgePairing.test.ts",
+        "npm run test:imaging-bridge-onboarding",
+        "tsx src/tests/imagingBridgeOnboarding.test.ts",
+        "npm run test:imaging-bridge-update",
+        "tsx src/tests/imagingBridgeUpdate.test.ts",
+        "npm run test:file-preview",
+        "tsx src/tests/filePreview.test.ts",
+        "npm run test:totp",
+        "tsx src/tests/totp.test.ts",
+        "npm run test:wa-persistence",
+        "tsx src/tests/whatsappConversationPersistence.test.ts",
+        "npm run test:kvkk-lifecycle",
+        "tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+        "npm run test:clinic-bulk-export",
+        "tsx src/tests/clinicBulkExport.test.ts",
+        "npm run test:security-incidents",
+        "tsx src/tests/securityIncident.test.ts",
+        "npm run test:communication-consent",
+        "tsx src/tests/communicationConsent.test.ts",
+        "npm run test:communication-consent-backfill",
+        "tsx src/tests/communicationPreferenceBackfill.test.ts",
+        "npm run test:communication-consent-reconciliation-report",
+        "tsx src/tests/communicationPreferenceReconciliationReport.test.ts",
+        "npm run test:communication-consent-reconciliation",
+        "tsx src/tests/legacyReconciliationResolver.test.ts",
+        "npm run test:communication-consent-audit-report",
+        "tsx src/tests/communicationConsentAuditReport.test.ts",
+        "npm run test:communication-consent-matrix-route",
+        "tsx src/tests/communicationPreferencesRoute.test.ts",
+        "npm run test:legacy-consent-correction",
+        "tsx src/tests/legacyConsentCorrection.test.ts",
+        "npm run test:kvkk-high007-high008-schema-integrity",
+        "tsx src/tests/kvkkHigh007High008SchemaIntegrity.test.ts",
+        "npm run test:messages-consent-gate",
+        "tsx src/tests/messagesConsentGate.test.ts",
+        "npm run test:messages-record-scope",
+        "tsx src/tests/messagesRecordScope.test.ts",
+        "npm run test:recall-consent-gate",
+        "tsx src/tests/recallConsentGate.test.ts",
+        "npm run test:reports-clinic-scope",
+        "tsx src/tests/reportsClinicScope.test.ts",
+        "npm run test:reports-revenue-by-period",
+        "tsx src/tests/reportsRevenueByPeriod.test.ts",
+        "npm run test:appointment-request-record-scope",
+        "tsx src/tests/appointmentRequestRecordScope.test.ts",
+        "npm run test:dental-chart-clinic-scope",
+        "tsx src/tests/dentalChartClinicScope.test.ts",
+        "npm run test:messaging-connection-scope",
+        "tsx src/tests/organizationMessagingConnectionScope.test.ts",
+        "npm run test:booking-flow-log-redaction",
+        "tsx src/tests/whatsappBookingFlowLogRedaction.test.ts",
+        "npm run test:http-log-privacy",
+        "tsx src/tests/httpRequestLogPrivacy.test.ts",
+        "npm run test:ai-prompt-privacy",
+        "tsx src/tests/aiPrivacyBoundary.test.ts",
+        "npm run test:retention-manual-run-audit",
+        "tsx src/tests/retentionManualRunAudit.test.ts"
+      ],
+      "runner": "npm-chain (no direct file invocation of its own)",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY",
+        "PLATFORM_BEARER_FALLBACK_ENABLED",
+        "PLATFORM_JWT_SECRET",
+        "JWT_SECRET",
+        "MAIL_ENABLED",
+        "EVOLUTION_API_BASE_URL",
+        "EVOLUTION_API_KEY",
+        "EVOLUTION_INSTANCE_NAME",
+        "ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK",
+        "NODE_ENV",
+        "GOOGLE_AI_STUDIO_API_KEY",
+        "GEMINI_API_KEY",
+        "IMAGING_BRIDGE_ONBOARDING_ENABLED",
+        "IMAGING_BRIDGE_INSTALLER_SIGNED",
+        "IMAGING_BRIDGE_INSTALLER_DOWNLOAD_URL",
+        "IMAGING_BRIDGE_INSTALLER_VERSION",
+        "IMAGING_BRIDGE_INSTALLER_SHA256",
+        "IMAGING_BRIDGE_UPDATE_MODE",
+        "IMAGING_BRIDGE_UPDATE_VERSION",
+        "IMAGING_BRIDGE_UPDATE_DOWNLOAD_URL",
+        "IMAGING_BRIDGE_UPDATE_SHA256",
+        "IMAGING_BRIDGE_UPDATE_SIGNED",
+        "IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT",
+        "IMAGING_BRIDGE_UPDATE_MIN_SOURCE_VERSION",
+        "IMAGING_BRIDGE_UPDATE_RELEASE_ID",
+        "IMAGING_BRIDGE_UPDATE_ROLLOUT_PERCENT",
+        "IMAGING_BRIDGE_UPDATE_CHANNEL",
+        "IMAGING_BRIDGE_UPDATE_FORCED",
+        "IMAGING_BRIDGE_ROLLBACK_VERSION",
+        "IMAGING_BRIDGE_ROLLBACK_DOWNLOAD_URL",
+        "PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED",
+        "S3_BUCKET",
+        "CLINIC_BULK_EXPORT_ENABLED",
+        "CLINIC_BULK_EXPORT_CLEANUP_ENABLED",
+        "CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS",
+        "CLINIC_BULK_EXPORT_IP_HASH_SECRET",
+        "CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS",
+        "CLINIC_BULK_EXPORT_GENERATION_LEASE_MS",
+        "CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS",
+        "SECURITY_SIGNAL_IP_HASH_SECRET",
+        "SECURITY_ALERT_AUTH_FAILURE_THRESHOLD",
+        "SECURITY_ALERT_CROSS_TENANT_THRESHOLD",
+        "SECURITY_ALERT_EXPORT_REPLAY_THRESHOLD",
+        "DATABASE_URL"
+      ],
+      "referencedFiles": [
+        "server/src/tests/whatsappConversationFixtures.ts",
+        "server/src/tests/whatsappAgentEvaluation.test.ts",
+        "server/src/tests/whatsappSafetyFixtures.ts",
+        "server/src/tests/messageSafetyHardening.test.ts",
+        "server/src/tests/sessionCookieCsrf.test.ts",
+        "server/src/tests/platformAdmin.test.ts",
+        "server/src/tests/passwordReset.test.ts",
+        "server/src/tests/whatsappProvider.test.ts",
+        "server/src/tests/whatsappInbox.test.ts",
+        "server/src/tests/financeDashboard.test.ts",
+        "server/src/tests/operationalMonitoring.test.ts",
+        "server/src/tests/noShow.test.ts",
+        "server/src/tests/servicePricing.test.ts",
+        "server/src/tests/multiBranchAccess.test.ts",
+        "server/src/tests/scheduleAccess.test.ts",
+        "server/src/tests/organizationDashboard.test.ts",
+        "server/src/tests/dashboard.test.ts",
+        "server/src/tests/excelImport.test.ts",
+        "server/src/tests/patientsImportClinicScope.test.ts",
+        "server/src/tests/userImportOnboarding.test.ts",
+        "server/src/tests/staffOnboarding.test.ts",
+        "server/src/tests/emailVerification.test.ts",
+        "server/src/tests/instagramProvider.test.ts",
+        "server/src/tests/instagramConversion.test.ts",
+        "server/src/tests/instagramAssistantParity.test.ts",
+        "server/src/tests/metaWhatsAppWebhook.test.ts",
+        "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+        "server/src/tests/whatsappStepAwareNlu.test.ts",
+        "server/src/tests/whatsappIdentityAndPostBooking.test.ts",
+        "server/src/tests/appointmentRequestOverlapSafety.test.ts",
+        "server/src/tests/appointmentAvailabilityService.test.ts",
+        "server/src/tests/publicBookingAvailability.test.ts",
+        "server/src/tests/publicBookingSlotConsistency.test.ts",
+        "server/src/tests/publicBookingSlotRequired.test.ts",
+        "server/src/tests/publicBookingNoticeEvidence.test.ts",
+        "server/src/tests/messageTemplatePurpose.test.ts",
+        "server/src/tests/contactRequests.test.ts",
+        "server/src/tests/postTreatmentMessaging.test.ts",
+        "server/src/tests/metaTemplateSyncJob.test.ts",
+        "server/src/tests/messageTemplateWabaBinding.test.ts",
+        "server/src/tests/dataRetentionCleanupJob.test.ts",
+        "server/src/tests/patientPrivacy.test.ts",
+        "server/src/tests/patientName.test.ts",
+        "server/src/tests/billingPatientAccess.test.ts",
+        "server/src/tests/treatmentCaseClinicScope.test.ts",
+        "server/src/tests/kvkkHigh006Batch3ClinicScope.test.ts",
+        "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+        "server/src/tests/paymentValidation.test.ts",
+        "server/src/tests/paymentBillingEdit.test.ts",
+        "server/src/tests/paymentsListFieldScope.test.ts",
+        "server/src/tests/appointmentUpdateValidation.test.ts",
+        "server/src/tests/smsModule.test.ts",
+        "server/src/tests/labOrders.test.ts",
+        "server/src/tests/imaging.test.ts",
+        "server/src/tests/imagingBridgePairing.test.ts",
+        "server/src/tests/imagingBridgeOnboarding.test.ts",
+        "server/src/tests/imagingBridgeUpdate.test.ts",
+        "server/src/tests/filePreview.test.ts",
+        "server/src/tests/totp.test.ts",
+        "server/src/tests/whatsappConversationPersistence.test.ts",
+        "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+        "server/src/tests/clinicBulkExport.test.ts",
+        "server/src/tests/securityIncident.test.ts",
+        "server/src/tests/communicationConsent.test.ts",
+        "server/src/tests/communicationPreferenceBackfill.test.ts",
+        "server/src/tests/communicationPreferenceReconciliationReport.test.ts",
+        "server/src/tests/legacyReconciliationResolver.test.ts",
+        "server/src/tests/communicationConsentAuditReport.test.ts",
+        "server/src/tests/communicationPreferencesRoute.test.ts",
+        "server/src/tests/legacyConsentCorrection.test.ts",
+        "server/src/tests/kvkkHigh007High008SchemaIntegrity.test.ts",
+        "server/src/tests/messagesConsentGate.test.ts",
+        "server/src/tests/messagesRecordScope.test.ts",
+        "server/src/tests/recallConsentGate.test.ts",
+        "server/src/tests/reportsClinicScope.test.ts",
+        "server/src/tests/reportsRevenueByPeriod.test.ts",
+        "server/src/tests/appointmentRequestRecordScope.test.ts",
+        "server/src/tests/dentalChartClinicScope.test.ts",
+        "server/src/tests/organizationMessagingConnectionScope.test.ts",
+        "server/src/tests/whatsappBookingFlowLogRedaction.test.ts",
+        "server/src/tests/httpRequestLogPrivacy.test.ts",
+        "server/src/tests/aiPrivacyBoundary.test.ts",
+        "server/src/tests/retentionManualRunAudit.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappConversationFixtures.ts",
+        "server/src/tests/whatsappAgentEvaluation.test.ts",
+        "server/src/tests/whatsappSafetyFixtures.ts",
+        "server/src/tests/messageSafetyHardening.test.ts",
+        "server/src/tests/sessionCookieCsrf.test.ts",
+        "server/src/tests/platformAdmin.test.ts",
+        "server/src/tests/passwordReset.test.ts",
+        "server/src/tests/whatsappProvider.test.ts",
+        "server/src/tests/whatsappInbox.test.ts",
+        "server/src/tests/financeDashboard.test.ts",
+        "server/src/tests/operationalMonitoring.test.ts",
+        "server/src/tests/noShow.test.ts",
+        "server/src/tests/servicePricing.test.ts",
+        "server/src/tests/multiBranchAccess.test.ts",
+        "server/src/tests/scheduleAccess.test.ts",
+        "server/src/tests/organizationDashboard.test.ts",
+        "server/src/tests/dashboard.test.ts",
+        "server/src/tests/excelImport.test.ts",
+        "server/src/tests/patientsImportClinicScope.test.ts",
+        "server/src/tests/userImportOnboarding.test.ts",
+        "server/src/tests/staffOnboarding.test.ts",
+        "server/src/tests/emailVerification.test.ts",
+        "server/src/tests/instagramProvider.test.ts",
+        "server/src/tests/instagramConversion.test.ts",
+        "server/src/tests/instagramAssistantParity.test.ts",
+        "server/src/tests/metaWhatsAppWebhook.test.ts",
+        "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+        "server/src/tests/whatsappStepAwareNlu.test.ts",
+        "server/src/tests/whatsappIdentityAndPostBooking.test.ts",
+        "server/src/tests/appointmentRequestOverlapSafety.test.ts",
+        "server/src/tests/appointmentAvailabilityService.test.ts",
+        "server/src/tests/publicBookingAvailability.test.ts",
+        "server/src/tests/publicBookingSlotConsistency.test.ts",
+        "server/src/tests/publicBookingSlotRequired.test.ts",
+        "server/src/tests/publicBookingNoticeEvidence.test.ts",
+        "server/src/tests/messageTemplatePurpose.test.ts",
+        "server/src/tests/contactRequests.test.ts",
+        "server/src/tests/postTreatmentMessaging.test.ts",
+        "server/src/tests/metaTemplateSyncJob.test.ts",
+        "server/src/tests/messageTemplateWabaBinding.test.ts",
+        "server/src/tests/dataRetentionCleanupJob.test.ts",
+        "server/src/tests/patientPrivacy.test.ts",
+        "server/src/tests/patientName.test.ts",
+        "server/src/tests/billingPatientAccess.test.ts",
+        "server/src/tests/treatmentCaseClinicScope.test.ts",
+        "server/src/tests/kvkkHigh006Batch3ClinicScope.test.ts",
+        "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+        "server/src/tests/paymentValidation.test.ts",
+        "server/src/tests/paymentBillingEdit.test.ts",
+        "server/src/tests/paymentsListFieldScope.test.ts",
+        "server/src/tests/appointmentUpdateValidation.test.ts",
+        "server/src/tests/smsModule.test.ts",
+        "server/src/tests/labOrders.test.ts",
+        "server/src/tests/imaging.test.ts",
+        "server/src/tests/imagingBridgePairing.test.ts",
+        "server/src/tests/imagingBridgeOnboarding.test.ts",
+        "server/src/tests/imagingBridgeUpdate.test.ts",
+        "server/src/tests/filePreview.test.ts",
+        "server/src/tests/totp.test.ts",
+        "server/src/tests/whatsappConversationPersistence.test.ts",
+        "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+        "server/src/tests/clinicBulkExport.test.ts",
+        "server/src/tests/securityIncident.test.ts",
+        "server/src/tests/communicationConsent.test.ts",
+        "server/src/tests/communicationPreferenceBackfill.test.ts",
+        "server/src/tests/communicationPreferenceReconciliationReport.test.ts",
+        "server/src/tests/legacyReconciliationResolver.test.ts",
+        "server/src/tests/communicationConsentAuditReport.test.ts",
+        "server/src/tests/communicationPreferencesRoute.test.ts",
+        "server/src/tests/legacyConsentCorrection.test.ts",
+        "server/src/tests/kvkkHigh007High008SchemaIntegrity.test.ts",
+        "server/src/tests/messagesConsentGate.test.ts",
+        "server/src/tests/messagesRecordScope.test.ts",
+        "server/src/tests/recallConsentGate.test.ts",
+        "server/src/tests/reportsClinicScope.test.ts",
+        "server/src/tests/reportsRevenueByPeriod.test.ts",
+        "server/src/tests/appointmentRequestRecordScope.test.ts",
+        "server/src/tests/dentalChartClinicScope.test.ts",
+        "server/src/tests/organizationMessagingConnectionScope.test.ts",
+        "server/src/tests/whatsappBookingFlowLogRedaction.test.ts",
+        "server/src/tests/httpRequestLogPrivacy.test.ts",
+        "server/src/tests/aiPrivacyBoundary.test.ts",
+        "server/src/tests/retentionManualRunAudit.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [
+        "test:fixtures",
+        "test:agent",
+        "test:safety",
+        "test:msg-safety",
+        "test:auth",
+        "test:password-reset",
+        "test:whatsapp",
+        "test:inbox",
+        "test:finance",
+        "test:ops",
+        "test:no-shows",
+        "test:pricing",
+        "test:roles",
+        "test:schedule",
+        "test:orgdash",
+        "test:dashboard",
+        "test:imports",
+        "test:patients-import-clinic-scope",
+        "test:user-import-onboarding",
+        "test:staff-onboarding",
+        "test:email-verification",
+        "test:instagram",
+        "test:meta-wa",
+        "test:overlap-safety",
+        "test:availability-service",
+        "test:public-booking",
+        "test:public-booking-slots",
+        "test:public-booking-slot-required",
+        "test:notice-evidence",
+        "test:purpose",
+        "test:contact-requests",
+        "test:post-treatment",
+        "test:meta-template-sync",
+        "test:template-waba-binding",
+        "test:data-retention",
+        "test:patient-privacy",
+        "test:patient-name",
+        "test:billing-patient-access",
+        "test:treatment-case-scope",
+        "test:kvkk-high006-batch3",
+        "test:billing-financial-select",
+        "test:payment-validation",
+        "test:payment-billing-edit",
+        "test:payments-list-field-scope",
+        "test:appointment-update-validation",
+        "test:sms",
+        "test:lab-orders",
+        "test:imaging",
+        "test:imaging-bridge-pairing",
+        "test:imaging-bridge-onboarding",
+        "test:imaging-bridge-update",
+        "test:file-preview",
+        "test:totp",
+        "test:wa-persistence",
+        "test:kvkk-lifecycle",
+        "test:clinic-bulk-export",
+        "test:security-incidents",
+        "test:communication-consent",
+        "test:communication-consent-backfill",
+        "test:communication-consent-reconciliation-report",
+        "test:communication-consent-reconciliation",
+        "test:communication-consent-audit-report",
+        "test:communication-consent-matrix-route",
+        "test:legacy-consent-correction",
+        "test:kvkk-high007-high008-schema-integrity",
+        "test:messages-consent-gate",
+        "test:messages-record-scope",
+        "test:recall-consent-gate",
+        "test:reports-clinic-scope",
+        "test:reports-revenue-by-period",
+        "test:appointment-request-record-scope",
+        "test:dental-chart-clinic-scope",
+        "test:messaging-connection-scope",
+        "test:booking-flow-log-redaction",
+        "test:http-log-privacy",
+        "test:ai-prompt-privacy",
+        "test:retention-manual-run-audit"
+      ],
+      "databaseRequired": true,
+      "externalServiceRequired": true,
+      "externalServiceDetail": [
+        "aws-s3"
+      ],
+      "suitableForCI": false,
+      "fullSuiteCandidate": true,
+      "notes": [
+        "Full-suite orchestrator chaining ~77 npm-run references; requires `npx prisma generate` to have been run beforehand (typecheck/start scripts do this, `test` itself does not) and requires a reachable database for the subset of chained scripts whose underlying files import server/src/db.ts.",
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:payments-list-field-scope",
+      "rawCommand": "tsx src/tests/paymentsListFieldScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/paymentsListFieldScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/paymentsListFieldScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/paymentsListFieldScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:security-incidents",
+      "rawCommand": "tsx src/tests/securityIncident.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/securityIncident.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "SECURITY_SIGNAL_IP_HASH_SECRET",
+        "NODE_ENV",
+        "SECURITY_ALERT_AUTH_FAILURE_THRESHOLD",
+        "SECURITY_ALERT_CROSS_TENANT_THRESHOLD",
+        "SECURITY_ALERT_EXPORT_REPLAY_THRESHOLD"
+      ],
+      "referencedFiles": [
+        "server/src/tests/securityIncident.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/securityIncident.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:clinic-bulk-export",
+      "rawCommand": "tsx src/tests/clinicBulkExport.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/clinicBulkExport.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "CLINIC_BULK_EXPORT_ENABLED",
+        "CLINIC_BULK_EXPORT_CLEANUP_ENABLED",
+        "CLINIC_BULK_EXPORT_ALLOWED_ORGANIZATION_IDS",
+        "CLINIC_BULK_EXPORT_IP_HASH_SECRET",
+        "CLINIC_BULK_EXPORT_QUEUE_TIMEOUT_MS",
+        "CLINIC_BULK_EXPORT_GENERATION_LEASE_MS",
+        "CLINIC_BULK_EXPORT_HEARTBEAT_INTERVAL_MS"
+      ],
+      "referencedFiles": [
+        "server/src/tests/clinicBulkExport.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/clinicBulkExport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:patient-privacy",
+      "rawCommand": "tsx src/tests/patientPrivacy.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/patientPrivacy.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/patientPrivacy.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/patientPrivacy.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:patient-name",
+      "rawCommand": "tsx src/tests/patientName.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/patientName.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/patientName.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/patientName.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:billing-patient-access",
+      "rawCommand": "tsx src/tests/billingPatientAccess.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/billingPatientAccess.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/billingPatientAccess.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/billingPatientAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:fixtures",
+      "rawCommand": "tsx src/tests/whatsappConversationFixtures.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappConversationFixtures.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/whatsappConversationFixtures.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappConversationFixtures.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:agent",
+      "rawCommand": "tsx src/tests/whatsappAgentEvaluation.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappAgentEvaluation.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/whatsappAgentEvaluation.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappAgentEvaluation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:safety",
+      "rawCommand": "tsx src/tests/whatsappSafetyFixtures.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappSafetyFixtures.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/whatsappSafetyFixtures.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappSafetyFixtures.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:msg-safety",
+      "rawCommand": "tsx src/tests/messageSafetyHardening.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/messageSafetyHardening.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/messageSafetyHardening.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/messageSafetyHardening.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:availability-service",
+      "rawCommand": "tsx src/tests/appointmentAvailabilityService.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/appointmentAvailabilityService.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/appointmentAvailabilityService.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/appointmentAvailabilityService.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:public-booking",
+      "rawCommand": "tsx src/tests/publicBookingAvailability.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/publicBookingAvailability.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/publicBookingAvailability.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/publicBookingAvailability.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:public-booking-slots",
+      "rawCommand": "tsx src/tests/publicBookingSlotConsistency.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/publicBookingSlotConsistency.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/publicBookingSlotConsistency.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/publicBookingSlotConsistency.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:public-booking-slot-required",
+      "rawCommand": "tsx src/tests/publicBookingSlotRequired.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/publicBookingSlotRequired.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/publicBookingSlotRequired.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/publicBookingSlotRequired.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:notice-evidence",
+      "rawCommand": "tsx src/tests/publicBookingNoticeEvidence.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/publicBookingNoticeEvidence.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/publicBookingNoticeEvidence.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/publicBookingNoticeEvidence.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:auth",
+      "rawCommand": "tsx src/tests/sessionCookieCsrf.test.ts && tsx src/tests/platformAdmin.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/sessionCookieCsrf.test.ts",
+        "tsx src/tests/platformAdmin.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "PLATFORM_BEARER_FALLBACK_ENABLED",
+        "PLATFORM_JWT_SECRET",
+        "JWT_SECRET"
+      ],
+      "referencedFiles": [
+        "server/src/tests/sessionCookieCsrf.test.ts",
+        "server/src/tests/platformAdmin.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/sessionCookieCsrf.test.ts",
+        "server/src/tests/platformAdmin.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:whatsapp",
+      "rawCommand": "tsx src/tests/whatsappProvider.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappProvider.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY",
+        "EVOLUTION_API_BASE_URL",
+        "EVOLUTION_API_KEY",
+        "EVOLUTION_INSTANCE_NAME",
+        "ENABLE_LEGACY_WHATSAPP_ENV_FALLBACK",
+        "NODE_ENV"
+      ],
+      "referencedFiles": [
+        "server/src/tests/whatsappProvider.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappProvider.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:inbox",
+      "rawCommand": "tsx src/tests/whatsappInbox.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappInbox.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/whatsappInbox.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappInbox.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:wa-persistence",
+      "rawCommand": "tsx src/tests/whatsappConversationPersistence.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappConversationPersistence.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/whatsappConversationPersistence.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappConversationPersistence.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-lifecycle",
+      "rawCommand": "tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED",
+        "S3_BUCKET"
+      ],
+      "referencedFiles": [
+        "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": true,
+      "externalServiceDetail": [
+        "aws-s3"
+      ],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:finance",
+      "rawCommand": "tsx src/tests/financeDashboard.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/financeDashboard.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/financeDashboard.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/financeDashboard.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:ops",
+      "rawCommand": "tsx src/tests/operationalMonitoring.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/operationalMonitoring.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/operationalMonitoring.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/operationalMonitoring.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:no-shows",
+      "rawCommand": "tsx src/tests/noShow.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/noShow.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/noShow.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/noShow.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:pricing",
+      "rawCommand": "tsx src/tests/servicePricing.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/servicePricing.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/servicePricing.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/servicePricing.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:roles",
+      "rawCommand": "tsx src/tests/multiBranchAccess.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/multiBranchAccess.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/multiBranchAccess.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/multiBranchAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:schedule",
+      "rawCommand": "tsx src/tests/scheduleAccess.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/scheduleAccess.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/scheduleAccess.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/scheduleAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:orgdash",
+      "rawCommand": "tsx src/tests/organizationDashboard.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/organizationDashboard.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/organizationDashboard.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/organizationDashboard.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:dashboard",
+      "rawCommand": "tsx src/tests/dashboard.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dashboard.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dashboard.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dashboard.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imports",
+      "rawCommand": "tsx src/tests/excelImport.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/excelImport.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/excelImport.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/excelImport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:patients-import-clinic-scope",
+      "rawCommand": "tsx src/tests/patientsImportClinicScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/patientsImportClinicScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/patientsImportClinicScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/patientsImportClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:instagram",
+      "rawCommand": "tsx src/tests/instagramProvider.test.ts && tsx src/tests/instagramConversion.test.ts && tsx src/tests/instagramAssistantParity.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/instagramProvider.test.ts",
+        "tsx src/tests/instagramConversion.test.ts",
+        "tsx src/tests/instagramAssistantParity.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY",
+        "GOOGLE_AI_STUDIO_API_KEY",
+        "GEMINI_API_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/instagramProvider.test.ts",
+        "server/src/tests/instagramConversion.test.ts",
+        "server/src/tests/instagramAssistantParity.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/instagramProvider.test.ts",
+        "server/src/tests/instagramConversion.test.ts",
+        "server/src/tests/instagramAssistantParity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:meta-wa",
+      "rawCommand": "tsx src/tests/metaWhatsAppWebhook.test.ts && tsx src/tests/whatsappAwaitingServiceStep.test.ts && tsx src/tests/whatsappStepAwareNlu.test.ts && tsx src/tests/whatsappIdentityAndPostBooking.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/metaWhatsAppWebhook.test.ts",
+        "tsx src/tests/whatsappAwaitingServiceStep.test.ts",
+        "tsx src/tests/whatsappStepAwareNlu.test.ts",
+        "tsx src/tests/whatsappIdentityAndPostBooking.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY",
+        "GOOGLE_AI_STUDIO_API_KEY",
+        "GEMINI_API_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/metaWhatsAppWebhook.test.ts",
+        "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+        "server/src/tests/whatsappStepAwareNlu.test.ts",
+        "server/src/tests/whatsappIdentityAndPostBooking.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/metaWhatsAppWebhook.test.ts",
+        "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+        "server/src/tests/whatsappStepAwareNlu.test.ts",
+        "server/src/tests/whatsappIdentityAndPostBooking.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:consent-resume",
+      "rawCommand": "tsx src/tests/channelConsentFlowResume.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/channelConsentFlowResume.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY",
+        "APP_BASE_URL"
+      ],
+      "referencedFiles": [
+        "server/src/tests/channelConsentFlowResume.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/channelConsentFlowResume.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:meta-template",
+      "rawCommand": "tsx src/tests/metaTemplateService.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/metaTemplateService.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/metaTemplateService.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/metaTemplateService.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:meta-template-sync",
+      "rawCommand": "tsx src/tests/metaTemplateSyncJob.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/metaTemplateSyncJob.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/metaTemplateSyncJob.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/metaTemplateSyncJob.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:template-waba-binding",
+      "rawCommand": "tsx src/tests/messageTemplateWabaBinding.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/messageTemplateWabaBinding.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/messageTemplateWabaBinding.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/messageTemplateWabaBinding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:data-retention",
+      "rawCommand": "tsx src/tests/dataRetentionCleanupJob.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dataRetentionCleanupJob.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/dataRetentionCleanupJob.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dataRetentionCleanupJob.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:retention-manual-run-audit",
+      "rawCommand": "tsx src/tests/retentionManualRunAudit.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/retentionManualRunAudit.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "PLATFORM_BEARER_FALLBACK_ENABLED",
+        "JWT_SECRET"
+      ],
+      "referencedFiles": [
+        "server/src/tests/retentionManualRunAudit.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/retentionManualRunAudit.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:outbound",
+      "rawCommand": "tsx src/tests/whatsappOutboundMessaging.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappOutboundMessaging.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/whatsappOutboundMessaging.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappOutboundMessaging.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:booking-flow-log-redaction",
+      "rawCommand": "tsx src/tests/whatsappBookingFlowLogRedaction.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/whatsappBookingFlowLogRedaction.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/whatsappBookingFlowLogRedaction.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/whatsappBookingFlowLogRedaction.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:purpose",
+      "rawCommand": "tsx src/tests/messageTemplatePurpose.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/messageTemplatePurpose.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/messageTemplatePurpose.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/messageTemplatePurpose.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:contact-requests",
+      "rawCommand": "tsx src/tests/contactRequests.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/contactRequests.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/contactRequests.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/contactRequests.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:post-treatment",
+      "rawCommand": "tsx src/tests/postTreatmentMessaging.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/postTreatmentMessaging.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/postTreatmentMessaging.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/postTreatmentMessaging.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:overlap-safety",
+      "rawCommand": "tsx src/tests/appointmentRequestOverlapSafety.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/appointmentRequestOverlapSafety.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/appointmentRequestOverlapSafety.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/appointmentRequestOverlapSafety.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:treatment-case-scope",
+      "rawCommand": "tsx src/tests/treatmentCaseClinicScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/treatmentCaseClinicScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/treatmentCaseClinicScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/treatmentCaseClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-batch3",
+      "rawCommand": "tsx src/tests/kvkkHigh006Batch3ClinicScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/kvkkHigh006Batch3ClinicScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/kvkkHigh006Batch3ClinicScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/kvkkHigh006Batch3ClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:reports-clinic-scope",
+      "rawCommand": "tsx src/tests/reportsClinicScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/reportsClinicScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/reportsClinicScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/reportsClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:appointment-request-record-scope",
+      "rawCommand": "tsx src/tests/appointmentRequestRecordScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/appointmentRequestRecordScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/appointmentRequestRecordScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/appointmentRequestRecordScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:dental-chart-clinic-scope",
+      "rawCommand": "tsx src/tests/dentalChartClinicScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dentalChartClinicScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dentalChartClinicScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dentalChartClinicScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:messaging-connection-scope",
+      "rawCommand": "tsx src/tests/organizationMessagingConnectionScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/organizationMessagingConnectionScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/organizationMessagingConnectionScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/organizationMessagingConnectionScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:billing-financial-select",
+      "rawCommand": "tsx src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/billingFinancialTreatmentCaseSelect.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:payment-validation",
+      "rawCommand": "tsx src/tests/paymentValidation.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/paymentValidation.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/paymentValidation.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/paymentValidation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:payment-billing-edit",
+      "rawCommand": "tsx src/tests/paymentBillingEdit.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/paymentBillingEdit.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/paymentBillingEdit.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/paymentBillingEdit.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:appointment-update-validation",
+      "rawCommand": "tsx src/tests/appointmentUpdateValidation.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/appointmentUpdateValidation.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/appointmentUpdateValidation.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/appointmentUpdateValidation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:sms",
+      "rawCommand": "tsx src/tests/smsModule.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/smsModule.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "ENCRYPTION_KEY"
+      ],
+      "referencedFiles": [
+        "server/src/tests/smsModule.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/smsModule.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:lab-orders",
+      "rawCommand": "tsx src/tests/labOrders.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/labOrders.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/labOrders.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/labOrders.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging",
+      "rawCommand": "tsx src/tests/imaging.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/imaging.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/imaging.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/imaging.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging-bridge-pairing",
+      "rawCommand": "tsx src/tests/imagingBridgePairing.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/imagingBridgePairing.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/imagingBridgePairing.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/imagingBridgePairing.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging-bridge-onboarding",
+      "rawCommand": "tsx src/tests/imagingBridgeOnboarding.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/imagingBridgeOnboarding.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "IMAGING_BRIDGE_ONBOARDING_ENABLED",
+        "IMAGING_BRIDGE_INSTALLER_SIGNED",
+        "IMAGING_BRIDGE_INSTALLER_DOWNLOAD_URL",
+        "IMAGING_BRIDGE_INSTALLER_VERSION",
+        "IMAGING_BRIDGE_INSTALLER_SHA256"
+      ],
+      "referencedFiles": [
+        "server/src/tests/imagingBridgeOnboarding.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/imagingBridgeOnboarding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:imaging-bridge-update",
+      "rawCommand": "tsx src/tests/imagingBridgeUpdate.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/imagingBridgeUpdate.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "IMAGING_BRIDGE_UPDATE_MODE",
+        "IMAGING_BRIDGE_UPDATE_VERSION",
+        "IMAGING_BRIDGE_UPDATE_DOWNLOAD_URL",
+        "IMAGING_BRIDGE_UPDATE_SHA256",
+        "IMAGING_BRIDGE_UPDATE_SIGNED",
+        "IMAGING_BRIDGE_UPDATE_PUBLISHER_THUMBPRINT",
+        "IMAGING_BRIDGE_UPDATE_MIN_SOURCE_VERSION",
+        "IMAGING_BRIDGE_UPDATE_RELEASE_ID",
+        "IMAGING_BRIDGE_UPDATE_ROLLOUT_PERCENT",
+        "IMAGING_BRIDGE_UPDATE_CHANNEL",
+        "IMAGING_BRIDGE_UPDATE_FORCED",
+        "IMAGING_BRIDGE_ROLLBACK_VERSION",
+        "IMAGING_BRIDGE_ROLLBACK_DOWNLOAD_URL"
+      ],
+      "referencedFiles": [
+        "server/src/tests/imagingBridgeUpdate.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/imagingBridgeUpdate.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:file-preview",
+      "rawCommand": "tsx src/tests/filePreview.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/filePreview.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/filePreview.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/filePreview.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:totp",
+      "rawCommand": "tsx src/tests/totp.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/totp.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/totp.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/totp.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:email-verification",
+      "rawCommand": "tsx src/tests/emailVerification.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/emailVerification.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "MAIL_ENABLED"
+      ],
+      "referencedFiles": [
+        "server/src/tests/emailVerification.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/emailVerification.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:staff-onboarding",
+      "rawCommand": "tsx src/tests/staffOnboarding.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/staffOnboarding.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "MAIL_ENABLED"
+      ],
+      "referencedFiles": [
+        "server/src/tests/staffOnboarding.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/staffOnboarding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:user-import-onboarding",
+      "rawCommand": "tsx src/tests/userImportOnboarding.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/userImportOnboarding.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/userImportOnboarding.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/userImportOnboarding.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:no-show-follow-up-parity",
+      "rawCommand": "tsx src/tests/noShowFollowUpParity.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/noShowFollowUpParity.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/noShowFollowUpParity.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/noShowFollowUpParity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:overdue-installments",
+      "rawCommand": "tsx src/tests/overdueInstallments.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/overdueInstallments.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/overdueInstallments.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/overdueInstallments.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:overdue-receivables",
+      "rawCommand": "tsx src/tests/overdueReceivables.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/overdueReceivables.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/overdueReceivables.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/overdueReceivables.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent",
+      "rawCommand": "tsx src/tests/communicationConsent.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/communicationConsent.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "DATABASE_URL"
+      ],
+      "referencedFiles": [
+        "server/src/tests/communicationConsent.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/communicationConsent.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-backfill",
+      "rawCommand": "tsx src/tests/communicationPreferenceBackfill.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/communicationPreferenceBackfill.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "DATABASE_URL"
+      ],
+      "referencedFiles": [
+        "server/src/tests/communicationPreferenceBackfill.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/communicationPreferenceBackfill.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-reconciliation-report",
+      "rawCommand": "tsx src/tests/communicationPreferenceReconciliationReport.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/communicationPreferenceReconciliationReport.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/communicationPreferenceReconciliationReport.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/communicationPreferenceReconciliationReport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-reconciliation",
+      "rawCommand": "tsx src/tests/legacyReconciliationResolver.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/legacyReconciliationResolver.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/legacyReconciliationResolver.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/legacyReconciliationResolver.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-audit-report",
+      "rawCommand": "tsx src/tests/communicationConsentAuditReport.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/communicationConsentAuditReport.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/communicationConsentAuditReport.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/communicationConsentAuditReport.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:communication-consent-matrix-route",
+      "rawCommand": "tsx src/tests/communicationPreferencesRoute.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/communicationPreferencesRoute.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/communicationPreferencesRoute.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/communicationPreferencesRoute.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:legacy-consent-correction",
+      "rawCommand": "tsx src/tests/legacyConsentCorrection.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/legacyConsentCorrection.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/legacyConsentCorrection.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/legacyConsentCorrection.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high007-high008-schema-integrity",
+      "rawCommand": "tsx src/tests/kvkkHigh007High008SchemaIntegrity.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/kvkkHigh007High008SchemaIntegrity.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/kvkkHigh007High008SchemaIntegrity.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/kvkkHigh007High008SchemaIntegrity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:messages-consent-gate",
+      "rawCommand": "tsx src/tests/messagesConsentGate.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/messagesConsentGate.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/messagesConsentGate.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/messagesConsentGate.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:messages-record-scope",
+      "rawCommand": "tsx src/tests/messagesRecordScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/messagesRecordScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/messagesRecordScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/messagesRecordScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:recall-consent-gate",
+      "rawCommand": "tsx src/tests/recallConsentGate.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/recallConsentGate.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/recallConsentGate.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/recallConsentGate.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-clinic-scope-access",
+      "rawCommand": "tsx src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-record-owned-mutation-scope",
+      "rawCommand": "tsx src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-target-clinic-creation",
+      "rawCommand": "tsx src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-insurance-list-behavior",
+      "rawCommand": "tsx src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-plan-limits-quota",
+      "rawCommand": "tsx src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-input-handling",
+      "rawCommand": "tsx src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:kvkk-high006-db-verification",
+      "rawCommand": "npm run test:kvkk-high006-db-clinic-scope-access && npm run test:kvkk-high006-db-record-owned-mutation-scope && npm run test:kvkk-high006-db-target-clinic-creation && npm run test:kvkk-high006-db-insurance-list-behavior && npm run test:kvkk-high006-db-plan-limits-quota && npm run test:kvkk-high006-db-input-handling",
+      "expandedScriptChain": [
+        "npm run test:kvkk-high006-db-clinic-scope-access",
+        "tsx src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+        "npm run test:kvkk-high006-db-record-owned-mutation-scope",
+        "tsx src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+        "npm run test:kvkk-high006-db-target-clinic-creation",
+        "tsx src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+        "npm run test:kvkk-high006-db-insurance-list-behavior",
+        "tsx src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+        "npm run test:kvkk-high006-db-plan-limits-quota",
+        "tsx src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+        "npm run test:kvkk-high006-db-input-handling",
+        "tsx src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts"
+      ],
+      "runner": "npm-chain (no direct file invocation of its own)",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+        "server/src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [
+        "test:kvkk-high006-db-clinic-scope-access",
+        "test:kvkk-high006-db-record-owned-mutation-scope",
+        "test:kvkk-high006-db-target-clinic-creation",
+        "test:kvkk-high006-db-insurance-list-behavior",
+        "test:kvkk-high006-db-plan-limits-quota",
+        "test:kvkk-high006-db-input-handling"
+      ],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Orchestrator script chaining other npm scripts; not itself invoked by the server \"test\" mega-script.",
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:appointment-request-conversion-atomicity",
+      "rawCommand": "tsx src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:platform-admin-password-recovery",
+      "rawCommand": "tsx src/tests/platformAdminPasswordRecovery.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/platformAdminPasswordRecovery.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/platformAdminPasswordRecovery.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/platformAdminPasswordRecovery.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import)."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:http-log-privacy",
+      "rawCommand": "tsx src/tests/httpRequestLogPrivacy.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/httpRequestLogPrivacy.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "NODE_ENV"
+      ],
+      "referencedFiles": [
+        "server/src/tests/httpRequestLogPrivacy.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/httpRequestLogPrivacy.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:file-backup",
+      "rawCommand": "tsx src/tests/fileBackupService.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/fileBackupService.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "FILE_BACKUP_LOCAL_DIR",
+        "FILE_BACKUP_S3_BUCKET",
+        "FILE_BACKUP_ENABLED"
+      ],
+      "referencedFiles": [
+        "server/src/tests/fileBackupService.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/fileBackupService.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:file-backup-db-integration",
+      "rawCommand": "tsx src/tests/dbVerification/fileBackupDbIntegration.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/dbVerification/fileBackupDbIntegration.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [
+        "FILE_BACKUP_ENABLED",
+        "FILE_BACKUP_LOCAL_DIR",
+        "FILE_BACKUP_S3_BUCKET",
+        "MINIO_ENDPOINT",
+        "MINIO_ACCESS_KEY",
+        "MINIO_SECRET_KEY",
+        "FILE_BACKUP_S3_ENDPOINT",
+        "FILE_BACKUP_S3_ACCESS_KEY_ID",
+        "FILE_BACKUP_S3_SECRET_ACCESS_KEY",
+        "FILE_BACKUP_S3_FORCE_PATH_STYLE",
+        "FILE_BACKUP_S3_REGION"
+      ],
+      "referencedFiles": [
+        "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": true,
+      "externalServiceRequired": true,
+      "externalServiceDetail": [
+        "aws-s3"
+      ],
+      "suitableForCI": false,
+      "fullSuiteCandidate": false,
+      "notes": [
+        "Requires a reachable PostgreSQL instance via DATABASE_URL at import time (server/src/db.ts opens a live pg pool on import).",
+        "Located under src/tests/dbVerification/ — explicitly documented in-repo (dbVerificationHarness.ts header) as requiring a disposable real Postgres instance, deliberately excluded from `npm test`."
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "package": "server",
+      "scriptName": "test:reports-revenue-by-period",
+      "rawCommand": "tsx src/tests/reportsRevenueByPeriod.test.ts",
+      "expandedScriptChain": [
+        "tsx src/tests/reportsRevenueByPeriod.test.ts"
+      ],
+      "runner": "tsx",
+      "workingDirectory": "server",
+      "environmentVariables": [],
+      "referencedFiles": [
+        "server/src/tests/reportsRevenueByPeriod.test.ts"
+      ],
+      "referencedGlobs": [],
+      "matchedCurrentFiles": [
+        "server/src/tests/reportsRevenueByPeriod.test.ts"
+      ],
+      "missingReferencedFiles": [],
+      "indirectlyInvokedScripts": [],
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "externalServiceDetail": [],
+      "suitableForCI": true,
+      "fullSuiteCandidate": false,
+      "notes": [],
+      "confidence": "HIGH"
+    }
+  ]
+}
