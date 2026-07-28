@@ -1488,6 +1488,57 @@ router.post('/backups/restore-test', async (req: PlatformAdminRequest, res: Resp
   }
 });
 
+// ─── File Backups (FILE-BACKUP-COVERAGE-001) ───────────────────────────────────
+// Off-host backup/replication for patient attachments, lab attachments, and
+// imaging images — separate from the DB-only backup routes above. See
+// docs/program/evidence/FILE_BACKUP_COVERAGE_001.md.
+
+// GET /api/platform/file-backups/status
+router.get('/file-backups/status', async (_req, res: Response) => {
+  try {
+    const { getFileBackupStatus } = await import('../services/fileBackupService.js');
+    const status = await getFileBackupStatus();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to get file backup status: ${err?.message ?? 'Unknown error'}` });
+  }
+});
+
+// POST /api/platform/file-backups/run
+router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response) => {
+  try {
+    const { runFileBackup, isFileBackupRunning } = await import('../services/fileBackupService.js');
+    if (isFileBackupRunning()) {
+      return res.status(409).json({ error: 'A file backup run is already in progress' });
+    }
+    console.log(`[platform-file-backup] Manual backup run triggered by admin ${req.platformAdmin?.email}`);
+    const result = await runFileBackup({ trigger: 'manual' });
+    res.json(result);
+  } catch (err: any) {
+    const status = err?.message?.includes('disabled') || err?.message?.includes('No file backup destination') ? 409 : 500;
+    res.status(status).json({ error: `File backup run failed: ${err?.message ?? 'Unknown error'}` });
+  }
+});
+
+// POST /api/platform/file-backups/restore-rehearsal
+router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest, res: Response) => {
+  const { sampleSize } = req.body ?? {};
+  if (sampleSize !== undefined && (typeof sampleSize !== 'number' || !Number.isFinite(sampleSize) || sampleSize <= 0)) {
+    return res.status(400).json({ error: 'sampleSize must be a positive number' });
+  }
+  try {
+    const { runFileBackupRestoreRehearsal, isFileBackupRestoreRehearsalRunning } = await import('../services/fileBackupService.js');
+    if (isFileBackupRestoreRehearsalRunning()) {
+      return res.status(409).json({ error: 'A restore rehearsal is already running' });
+    }
+    console.log(`[platform-file-backup] Restore rehearsal triggered by admin ${req.platformAdmin?.email}`);
+    const result = await runFileBackupRestoreRehearsal(sampleSize);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? 'Restore rehearsal failed' });
+  }
+});
+
 // ─── Mail Test ────────────────────────────────────────────────────────────────
 
 // POST /api/platform/mail/test

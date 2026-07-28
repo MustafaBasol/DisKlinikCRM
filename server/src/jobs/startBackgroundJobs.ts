@@ -17,6 +17,7 @@ import { startPublicBookingNoticeEvidenceCleanupJob } from './publicBookingNotic
 import { startPatientPrivacyExportCleanupJob } from './patientPrivacyExportCleanupJob.js';
 import { startClinicBulkExportWorker } from './clinicBulkExportWorker.js';
 import { startClinicBulkExportCleanupJob } from './clinicBulkExportCleanupJob.js';
+import { startFileBackupJob } from './fileBackupJob.js';
 
 export function startBackgroundJobs(): void {
   startReminderJobs();
@@ -28,4 +29,5 @@ export function startBackgroundJobs(): void {
   startPatientPrivacyExportCleanupJob();
   startClinicBulkExportWorker();
   startClinicBulkExportCleanupJob();
+  startFileBackupJob();
 }

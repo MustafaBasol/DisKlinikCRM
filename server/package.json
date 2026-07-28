@@ -105,7 +105,9 @@
     "test:appointment-request-conversion-atomicity": "tsx src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts",
     "platform-admin:recover-password": "tsx src/scripts/platform-admin-recover-password.ts",
     "test:platform-admin-password-recovery": "tsx src/tests/platformAdminPasswordRecovery.test.ts",
-    "test:http-log-privacy": "tsx src/tests/httpRequestLogPrivacy.test.ts"
+    "test:http-log-privacy": "tsx src/tests/httpRequestLogPrivacy.test.ts",
+    "test:file-backup": "tsx src/tests/fileBackupService.test.ts",
+    "test:file-backup-db-integration": "tsx src/tests/dbVerification/fileBackupDbIntegration.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -153,5 +155,10 @@
       "uuid": "^11.1.1"
     },
     "@hono/node-server": "1.19.13"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.8.0": true,
+    "esbuild@0.28.1": true,
+    "prisma@7.8.0": true
   }
 }
