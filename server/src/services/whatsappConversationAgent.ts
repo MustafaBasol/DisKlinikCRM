@@ -4,6 +4,7 @@ import {
   type WhatsAppAgentDecision,
   type WhatsAppAgentIntent,
 } from './whatsappAgentSchema.js';
+import { redactSensitiveText } from './privacy/redaction.js';
 
 export type WhatsAppConversationAgentSource = 'ai' | 'rule_fallback' | 'unavailable' | 'ai_error';
 
@@ -279,7 +280,7 @@ const runGoogleConversationAgent = async (args: ResolveWhatsAppConversationAgent
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`WhatsApp conversation agent failed with ${response.status}: ${errorText}`);
+    throw new Error(`WhatsApp conversation agent failed with ${response.status}: ${redactSensitiveText(errorText)}`);
   }
 
   const payload = await response.json();
