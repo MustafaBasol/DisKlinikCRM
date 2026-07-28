@@ -1,0 +1,152 @@
+# 62 — KVKK-CRIT-002 / Subprocessor Register
+
+**STATUS: `DRAFT_FOR_COUNSEL_REVIEW`.**
+
+This document is **not** a legal determination that any listed provider is a lawful
+subprocessor, that any required contract/DPA/SCC is in place, or that international
+transfer requirements are satisfied. It is a factual inventory — built strictly from
+what is verifiable in this repository (environment-variable names, integration code,
+existing audit documents) plus explicit `TO BE VERIFIED` markers wherever a fact was
+not independently confirmed. **No legal entity name, contract term, data-residency
+region, or transfer mechanism is asserted anywhere below unless a specific evidence
+source is cited for it.** Where no such source exists, the field says
+`TO BE VERIFIED` — it is never guessed.
+
+This register is incorporated by reference into
+`docs/compliance/61-kvkk-data-processing-agreement.md` Annex C. Update this single
+document, not the DPA template, when a provider's status changes.
+
+## 0. Classification legend
+
+| Status | Meaning |
+|---|---|
+| `ACTIVE` | Repository evidence (env var wired into working code, integration routes present) confirms the platform currently has a live technical integration with this provider, for at least some clinics/configurations. |
+| `CONFIGURABLE, NOT CONFIRMED ACTIVE` | The platform supports connecting to this category of provider, but no repository evidence confirms a specific vendor is actually configured/used in production today. |
+| `NOT YET INTEGRATED` | Code exists for the category but currently only a placeholder/mock implementation is registered — no real third-party vendor receives data through this path yet. |
+| `NO SUBPROCESSOR IDENTIFIED` | No third-party vendor relationship was found in the repository for this category as of this document's drafting. |
+
+## 1. Hosting / VPS infrastructure
+
+| Field | Value |
+|---|---|
+| Category | Infrastructure hosting (VPS, compute, network) |
+| Status | `ACTIVE` (a production VPS clearly exists and serves the platform — `docs/program/PRODUCTION_TOPOLOGY.md`), but the **hosting company's identity is `TO BE VERIFIED`** |
+| Provider name | `TO BE VERIFIED`. The 2026-07-15 compliance audit (`docs/compliance/archive/NoraMedi_KVKK_Denetim_Raporu_2026-07-15_v3_REVIZE_full.md` §8/§11) refers to the provider as "Hostinger" when describing checklist items (disk/volume encryption, snapshot encryption settings) to verify — but the later, independently-gathered production-topology evidence (`docs/program/evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md`, `docs/program/evidence/F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md`, `docs/program/PRODUCTION_TOPOLOGY.md`) describes the VPS/topology in detail (host `disklinik-prod-01`, Ubuntu, PM2, host Nginx) but does **not** itself name or independently re-confirm a hosting company. Do not treat "Hostinger" as confirmed until an independent production-evidence check (e.g. WHOIS/reverse-DNS/billing-panel screenshot) resolves it. |
+| Data processed | All platform data at rest and in transit through this host: database (PostgreSQL), application file storage (`server/uploads/`), database backups (same host, per `docs/program/PRODUCTION_TOPOLOGY.md` §6), Redis (rate-limit counters only, not patient data). |
+| Data residency / region | `TO BE VERIFIED` — not established in any reviewed document. |
+| Contract / DPA status | `TO BE VERIFIED` — no hosting contract or DPA document exists in this repository; this register cannot confirm whether one exists outside the repository. |
+| Encryption at rest | `TO BE VERIFIED` — disk/volume encryption, PostgreSQL storage-level encryption, and backup encryption are all listed as unverified in `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` §4 and `docs/program/PRODUCTION_TOPOLOGY.md` §7. |
+| International transfer relevance | `TO BE VERIFIED` — depends on the confirmed hosting region; if the region is Türkiye, Art. 9 international-transfer analysis for the hosting layer itself may not apply (as opposed to the AI/messaging subprocessors below, which are cross-border regardless of hosting region). |
+| Risk notes | This is the single highest-priority `TO BE VERIFIED` item in this register — every other operational-security item downstream of it (backup safety, encryption-at-rest, snapshot handling) depends on first confirming who the actual provider is and what their platform offers. |
+
+## 2. AI-assisted messaging: Google (Gemini)
+
+| Field | Value |
+|---|---|
+| Category | AI processing (message drafting assistance) |
+| Status | `ACTIVE` — `GEMINI_API_KEY` is a wired, functioning configuration variable (`server/.env.example`), and the archive audit report confirms a real integration exists and sends live traffic to `generativelanguage.googleapis.com` when a clinic has this feature enabled. |
+| Provider name | Google (Gemini API). Which product tier — free AI Studio tier vs. paid Vertex AI/Enterprise tier — is **`TO BE VERIFIED`**; this materially affects whether Google may use submitted content for model training (per `docs/compliance/archive/NoraMedi_KVKK_Denetim_Raporu_2026-07-15_v3_REVIZE_full.md` §7, row for Google: "hangi ürün kademesi ... kod incelemesiyle kesinleşmedi"). |
+| Data processed | Per the same archive report §7: only the patient's first name and a masked message history (email/phone-shaped substrings redacted, bounded to 10 messages / 300 characters) — a documented data-minimization measure. This reduces exposure; it does **not** remove the Art. 9 transfer obligation, and it is not itself a substitute for a transfer-mechanism decision. |
+| Data residency / region | `TO BE VERIFIED` — the archive report explicitly withdrew an earlier, unverified "US-based processing" claim (§7: "'ABD' iddiası bu revizyonda geri çekildi"). Do not reassert a specific region without new evidence. |
+| Contract / DPA status | `TO BE VERIFIED` — no Google DPA/contract document exists in this repository. |
+| International transfer mechanism | **Not yet selected.** `docs/compliance/61-...md` §7 records this as an open counsel decision (Art. 9 post-2024 regime; consent is one option among several, not the only one). |
+| Risk notes | Whether the platform contracting entity or each individual clinic is the counterparty to Google's terms is itself `TO BE VERIFIED` (archive report §7) — this affects who is the "processor→subprocessor" party in the KVKK sense for this specific relationship. |
+
+## 3. Messaging channels: Meta (WhatsApp Business Cloud API, Instagram)
+
+| Field | Value |
+|---|---|
+| Category | Communication channel delivery (patient messaging) |
+| Status | `ACTIVE` — `META_APP_ID`/`META_APP_SECRET`/`META_GRAPH_API_VERSION`/`META_EMBEDDED_SIGNUP_CONFIG_ID`/webhook verify tokens for both WhatsApp and Instagram are wired configuration (`server/.env.example`), and existing consent-gating code (`channelConsentGate.ts`, per the compliance tracker) confirms a live integration. |
+| Provider name | Meta Platforms (WhatsApp Business Cloud API; Instagram). Exact Meta Business/Cloud API plan tier is `TO BE VERIFIED` (archive report §7). |
+| Data processed | Message content sent/received through the enabled channel(s), where the clinic has enabled that channel and channel-specific consent exists (`ChannelConsentLog`). |
+| Data residency / region | `TO BE VERIFIED` — not established in any reviewed document. |
+| Contract / DPA status | `TO BE VERIFIED` — no Meta contract/DPA document exists in this repository. Whether the platform or each clinic is the direct contracting party with Meta is also `TO BE VERIFIED` (archive report §7). |
+| International transfer mechanism | **Not yet selected** — same open status as §2 above; see `docs/compliance/61-...md` §7. |
+| Risk notes | The archive report (§7, follow-up item 7) separately flags a question about "Evolution API" (an unofficial WhatsApp client) usage and whether it creates additional KVKK/Meta-ToS risk beyond the official Cloud API path — `TO BE VERIFIED`; this register does not resolve that question, only records it so it is not lost. |
+
+## 4. Email delivery (SMTP)
+
+| Field | Value |
+|---|---|
+| Category | Transactional/notification email delivery |
+| Status | `CONFIGURABLE, NOT CONFIRMED ACTIVE` — `server/.env.example` documents a generic SMTP integration (`MAIL_ENABLED`, `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM`/`SMTP_REPLY_TO`) explicitly designed to work with "any SMTP provider: Brevo, Mailgun, Postmark, Amazon SES, own server" — the repository does not select or hard-code a specific vendor. |
+| Provider name | `TO BE VERIFIED` — depends entirely on what is actually configured in the production environment; this register cannot determine that from source code alone. |
+| Data processed | Recipient email address, and whatever notification content the platform sends via email (transactional notifications) — exact content categories `TO BE VERIFIED` by reviewing the specific email templates in active use. |
+| Data residency / region | `TO BE VERIFIED` — depends on the actual configured provider. |
+| Contract / DPA status | `TO BE VERIFIED`. |
+| International transfer relevance | `TO BE VERIFIED` — most listed example providers (Brevo, Mailgun, Postmark, Amazon SES) are non-Turkish; if any is the actual configured provider, the same Art. 9 analysis as §§2–3 applies and has likewise not yet been performed. |
+| Risk notes | Confirming the actual production `SMTP_HOST` value (without exposing `SMTP_PASS`) is a low-effort, high-value next verification step — this is a configuration read, not a code change. |
+
+## 5. SMS delivery
+
+| Field | Value |
+|---|---|
+| Category | SMS notification/reminder delivery |
+| Status | `NOT YET INTEGRATED` — verified by direct code inspection: `server/src/services/sms/smsProviders.ts` registers only `MockSmsProvider` instances (`mock_turkey`, `mock_europe`) and its own module docstring states real Turkey/Europe SMS companies are "connected later by implementing `SmsProvider` and adding them here." `server/src/services/sms/platformSmsProviders.ts` supports a `PlatformSmsProvider` database-configuration model (encrypted credentials, per-region routing) for when a real provider is connected, but as of this document's drafting, no real SMS vendor is wired into the registry that model resolves against. |
+| Provider name | `NO SUBPROCESSOR IDENTIFIED` at the code level today. If/when a real provider (e.g. a Turkish operator like Netgsm/İleti Merkezi, or an international provider like Twilio) is integrated, this row must be updated **before** that integration is used with real patient data, and the DPA (`docs/compliance/61-...md`) and international-transfer analysis (§7 of that document) must be revisited for it. |
+| Risk notes | This is the one subprocessor category in this register where the honest answer is "not active yet," not merely "unverified" — do not treat future SMS-provider selection as pre-approved by this register; it requires its own subprocessor-authorization and transfer-mechanism review at the time it is actually implemented. |
+
+## 6. Object storage / file backup (S3-compatible)
+
+| Field | Value |
+|---|---|
+| Category | Object storage (attachments/imaging files), offsite backup |
+| Status | `NOT YET INTEGRATED` in production — `server/.env.example` and `docs/program/PRODUCTION_TOPOLOGY.md` §6 both confirm the platform's dual-mode storage abstraction (`fileStorage.ts`) currently runs in `LOCAL_VPS_STORAGE` mode; no S3-compatible bucket/credentials are configured in production evidence gathered by F0-002/F0-006 (`docs/program/PRODUCTION_TOPOLOGY.md` §7: "Offsite backup copy | Not found, not supplied — treated as absent"). The codebase does have S3-capable code paths (`@aws-sdk/lib-storage`, per `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` §6.2 file list) for the export-package feature, but that is a capability, not evidence of a configured production S3 subprocessor — `docs/program/LAUNCH_GATES.md` §2.E explicitly restates this distinction ("S3 capability ≠ proof of production S3 use"). |
+| Provider name | `NO SUBPROCESSOR IDENTIFIED` for object storage today. |
+| Database backup destination | Same host as the production database (`/root/noramedi-backups`, per `docs/program/PRODUCTION_TOPOLOGY.md` §6) — this is **not** a third-party subprocessor relationship distinct from §1 (Hosting), since it is the same VPS. |
+| Risk notes | If/when object storage or an offsite backup destination is added (tracked separately under `docs/architecture/object-storage-backup-migration-design.md` and the KVKK-HIGH-001 conditional item), this register must be updated with that provider's identity, region, and DPA status before real patient files are migrated to it. |
+
+## 7. Monitoring / alerting / observability
+
+| Field | Value |
+|---|---|
+| Category | Application/infrastructure monitoring, error tracking, alerting |
+| Status | `NO SUBPROCESSOR IDENTIFIED` — `docs/program/ARCHITECTURE_DECISIONS.md` records ADR-012 (observability) as `DEFERRED`, and `docs/program/LAUNCH_GATES.md` §2.F confirms "no monitoring/alerting stack exists" as of that document's drafting, with manual/human monitoring substituting during a pilot. |
+| Redis (rate-limiting) | Self-hosted, same host as the application (`docs/program/PRODUCTION_TOPOLOGY.md` §1) — used only as an optional, fail-open store for rate-limit counters, not a monitoring/observability product and not a distinct third-party subprocessor. Listed here only to avoid it being mistaken for an unlisted monitoring vendor. |
+| Risk notes | If a monitoring/error-tracking SaaS (e.g. Sentry, Datadog, or similar) is adopted in the future, it very likely will receive application logs/error payloads that could incidentally contain personal data unless a redaction policy (still `UNVERIFIED`/`DEFERRED` per R-018/ADR-012) is implemented first — that provider must be added to this register, and the redaction policy should exist **before**, not after, adoption. |
+
+## 8. GitHub / source-control and development systems
+
+| Field | Value |
+|---|---|
+| Category | Source-code hosting, issue tracking, CI |
+| Status | `ACTIVE` for source code and development artifacts (the repository itself is hosted on GitHub, per PR references throughout `docs/program/`) — but classified as **out of scope as a patient-data subprocessor** unless evidence emerges that real patient data has been committed, attached to an issue/PR, or otherwise transmitted through it. |
+| Data processed | Source code, commit history, PR/issue discussion, CI logs. This register does not identify any confirmed instance of real patient data being placed into any of these surfaces — the existing PR/task discipline in `docs/program/` explicitly favors disposable/synthetic test data and documents when synthetic values are used (e.g. `docs/program/NORAMEDI_MASTER_TRACKER.md`'s repeated "synthetic values only" notes for production log verification). |
+| Provider name | GitHub, Inc. (a Microsoft subsidiary) — named here only because the repository's own PR URLs confirm its use for source control; not independently verified against a signed GitHub Enterprise/Terms-of-Service DPA document, which `TO BE VERIFIED` if this classification is ever revisited. |
+| Risk notes | This entry exists to make an explicit, documented decision — "GitHub is a development-system subprocessor, not currently a production-patient-data subprocessor" — rather than silently omitting it. If any future workflow ever attaches real patient data to a GitHub issue, PR, or CI artifact (e.g. a bug report with a real export file), that specific incident should be treated as a potential security/privacy incident under `docs/compliance/63-kvkk-personal-data-breach-procedure.md`, not as this register's steady-state classification. |
+
+## 9. Summary table
+
+| # | Provider / category | Status | Data-transfer relevance | Contract/DPA status |
+|---|---|---|---|---|
+| 1 | Hosting / VPS | `ACTIVE` (provider identity `TO BE VERIFIED`) | `TO BE VERIFIED` (depends on region) | `TO BE VERIFIED` |
+| 2 | Google (Gemini) | `ACTIVE` | International transfer likely — mechanism not selected | `TO BE VERIFIED` |
+| 3 | Meta (WhatsApp/Instagram) | `ACTIVE` | International transfer likely — mechanism not selected | `TO BE VERIFIED` |
+| 4 | Email (SMTP, vendor-agnostic) | `CONFIGURABLE, NOT CONFIRMED ACTIVE` | `TO BE VERIFIED` | `TO BE VERIFIED` |
+| 5 | SMS | `NOT YET INTEGRATED` | N/A until a provider is chosen | N/A |
+| 6 | Object storage / offsite backup | `NOT YET INTEGRATED` | N/A until a provider is chosen | N/A |
+| 7 | Monitoring/alerting | `NO SUBPROCESSOR IDENTIFIED` | N/A | N/A |
+| 8 | GitHub / development systems | `ACTIVE` (development-only; not a patient-data subprocessor on current evidence) | N/A (out of production-data scope) | `TO BE VERIFIED` if scope changes |
+
+## 10. Required next actions (non-exhaustive, for counsel/operator sequencing — not a commitment this document makes on anyone's behalf)
+
+1. Independently confirm the hosting provider's identity and region (§1) — the single
+   highest-leverage unresolved fact, since it gates the encryption/backup/residency
+   sub-questions underneath it.
+2. Confirm the Google Gemini product tier (free vs. paid) actually in use (§2) — this
+   determines whether submitted content is contractually excluded from model training.
+3. Confirm the Meta Cloud API contracting party (platform vs. each clinic) (§3).
+4. Confirm the actual configured SMTP provider, if any, in production (§4).
+5. Select and document an Art. 9 international-transfer mechanism for §§2–3 (and §4 if
+   the confirmed SMTP provider is non-Turkish) — see `docs/compliance/61-...md` §7.
+6. Re-run this register's classification whenever a new provider category (SMS, object
+   storage, monitoring) moves from `NOT YET INTEGRATED`/`NO SUBPROCESSOR IDENTIFIED` to
+   `ACTIVE` — do not let that transition happen without an update here.
+
+---
+
+**This register does not certify KVKK compliance for any listed provider relationship.
+Every `TO BE VERIFIED` marker above must be resolved — by independent verification,
+not assumption — before it can be relied upon as a complete or accurate subprocessor
+inventory for legal or contractual purposes.**
