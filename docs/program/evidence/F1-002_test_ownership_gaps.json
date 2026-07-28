@@ -1,0 +1,666 @@
+{
+  "taskId": "F1-002",
+  "generatedAt": "2026-07-28",
+  "executionBaseline": "08f2eaf82a205cf3f997c57e6a295fedd66b142d",
+  "summary": {
+    "totalTestFiles": 137,
+    "unknownCanonicalOwnerCount": 0,
+    "nonHighConfidenceCount": 1,
+    "neverScriptedBackendCount": 8,
+    "databaseOrExternalServiceBlockedCount": 67
+  },
+  "unknownOwnership": [],
+  "nonHighConfidenceEntries": [
+    {
+      "path": "server/src/tests/aiPrivacyBoundary.test.ts",
+      "confidence": "MEDIUM",
+      "reason": "MATERIALLY_MODIFIED_SINCE_F0-005 — file grew substantially (PR #245/#246 area, AI-PROMPT-REDACTION-GAP-001 closure) and gained its own package.json script (test:ai-prompt-privacy, added to full test chain) since the 2026-07-19 F0-005 baseline, where it was one of 6 unscripted files. Content not re-read line-by-line by F1-002; ownership domain re-confirmed unchanged from file purpose (AI prompt PII redaction) but confidence lowered to MEDIUM pending a future full re-read."
+    }
+  ],
+  "neverScriptedBackendFiles": [
+    {
+      "path": "server/src/tests/channelConsentGate.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    },
+    {
+      "path": "server/src/tests/clinicLegalProfile.test.ts",
+      "canonicalOwner": "Privacy / Consent / Retention / Data Subject Rights",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    },
+    {
+      "path": "server/src/tests/patientSharedPhone.test.ts",
+      "canonicalOwner": "Patients",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    },
+    {
+      "path": "server/src/tests/platformBackup.test.ts",
+      "canonicalOwner": "Platform Administration",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    },
+    {
+      "path": "server/src/tests/treatmentPackagePermissions.test.ts",
+      "canonicalOwner": "Permissions / Roles",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    },
+    {
+      "path": "server/src/tests/kvkkHigh006Batch2ClinicScope.test.ts",
+      "canonicalOwner": "Tenant Security and Scope",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    },
+    {
+      "path": "server/src/tests/metaWhatsAppPostBookingHandler.test.ts",
+      "canonicalOwner": "Messaging — WhatsApp",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    },
+    {
+      "path": "server/src/tests/planLimitsTargetClinicFix.test.ts",
+      "canonicalOwner": "Tenant Security and Scope",
+      "blockerReason": "No package.json script of any kind references this file; runnable only via direct `npx tsx <path>`. Not a new gap for 5/8 (pre-existing since F0-005); 3/8 are newly-added files (kvkkHigh006Batch2ClinicScope, metaWhatsAppPostBookingHandler, planLimitsTargetClinicFix) that never received a script."
+    }
+  ],
+  "databaseOrExternalServiceDependentTests": [
+    {
+      "path": "server/src/tests/channelConsentFlowResume.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Exercises real exported helper functions from Evolution WhatsApp, Meta WhatsApp Cloud, and Instagram processor modules directly (not through the network/webhook), so provider I/O itself is bypassed entirely — only the pure resume-state logic is under test",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Exercises real exported helper functions from Evolution WhatsApp, Meta WhatsApp Cloud, and Instagram processor modules directly (not through the network/webhook), so provider I/O itself is bypassed entirely — only the pure resume-state logic is under test"
+    },
+    {
+      "path": "server/src/tests/communicationConsent.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": "SMS/WhatsApp provider send calls are spied/stubbed at the provider-class-method level, not live",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`) + SMS/WhatsApp provider send calls are spied/stubbed at the provider-class-method level, not live"
+    },
+    {
+      "path": "server/src/tests/communicationPreferenceBackfill.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`) + n/a"
+    },
+    {
+      "path": "server/src/tests/contactRequests.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Tests the AI agent's fallback decision logic (buildFallbackWhatsAppAgentDecision) and handoff-intent classification directly, no actual WhatsApp/Gemini call made",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Tests the AI agent's fallback decision logic (buildFallbackWhatsAppAgentDecision) and handoff-intent classification directly, no actual WhatsApp/Gemini call made"
+    },
+    {
+      "path": "server/src/tests/emailVerification.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "sendMail is tested only with MAIL_ENABLED=false, gated to short-circuit and return sent=false without contacting a real SMTP server",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "sendMail is tested only with MAIL_ENABLED=false, gated to short-circuit and return sent=false without contacting a real SMTP server"
+    },
+    {
+      "path": "server/src/tests/instagramAssistantParity.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": "Instagram/Gemini AI touch points deliberately disabled - deletes GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY so AI fallback path is gated off, tests only deterministic step-aware NLU logic",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`) + Instagram/Gemini AI touch points deliberately disabled - deletes GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY so AI fallback path is gated off, tests only deterministic step-aware NLU logic"
+    },
+    {
+      "path": "server/src/tests/instagramProvider.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Instagram Graph API adapter (testConnection, sendMessage, parseWebhook) exercised against a stubbed globalThis.fetch, not a real Meta endpoint",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Instagram Graph API adapter (testConnection, sendMessage, parseWebhook) exercised against a stubbed globalThis.fetch, not a real Meta endpoint"
+    },
+    {
+      "path": "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": "S3 client mocked via S3Client.prototype.send override (success and failure paths) to test temp-file cleanup on upload; no real S3 bucket touched despite process.env.S3_BUCKET being set",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`) + S3 client mocked via S3Client.prototype.send override (success and failure paths) to test temp-file cleanup on upload; no real S3 bucket touched despite process.env.S3_BUCKET being set"
+    },
+    {
+      "path": "server/src/tests/messageTemplatePurpose.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Meta WhatsApp Cloud outbound send path exercised with globalThis.fetch stubbed; asserts sendMessage is NOT called when no approved template exists (fail-safe behavior)",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Meta WhatsApp Cloud outbound send path exercised with globalThis.fetch stubbed; asserts sendMessage is NOT called when no approved template exists (fail-safe behavior)"
+    },
+    {
+      "path": "server/src/tests/messageTemplateWabaBinding.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "WhatsApp/Meta send flow fully mocked via globalThis.fetch stub and fake WhatsAppConnectionRecord fixtures",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "WhatsApp/Meta send flow fully mocked via globalThis.fetch stub and fake WhatsAppConnectionRecord fixtures"
+    },
+    {
+      "path": "server/src/tests/metaTemplateService.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Meta WhatsApp Template API mocked via globalThis.fetch monkey-patch (success, error status codes, network failure/ECONNREFUSED cases)",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Meta WhatsApp Template API mocked via globalThis.fetch monkey-patch (success, error status codes, network failure/ECONNREFUSED cases)"
+    },
+    {
+      "path": "server/src/tests/metaTemplateSyncJob.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Meta template sync simulated entirely through injected SyncDeps fakes, not a real provider call",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Meta template sync simulated entirely through injected SyncDeps fakes, not a real provider call"
+    },
+    {
+      "path": "server/src/tests/metaWhatsAppWebhook.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Meta WhatsApp/Instagram webhook flow simulated with fake deps/counters for inbound message, AI processing, and outbound reply calls, not a real Meta call",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Meta WhatsApp/Instagram webhook flow simulated with fake deps/counters for inbound message, AI processing, and outbound reply calls, not a real Meta call"
+    },
+    {
+      "path": "server/src/tests/multiBranchAccess.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/noShow.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/noShowFollowUpParity.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/operationalMonitoring.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/organizationDashboard.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/overdueInstallments.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/overdueReceivables.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/passwordReset.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "Email (SMTP) send gated/disabled via MAIL_ENABLED env var; tests only assert the disabled-mode ('sent=false') behavior, never a real send",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "Email (SMTP) send gated/disabled via MAIL_ENABLED env var; tests only assert the disabled-mode ('sent=false') behavior, never a real send"
+    },
+    {
+      "path": "server/src/tests/patientName.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/patientPrivacy.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a - covers KVKK-style anonymization, export, deletion-review, and audit-log-safety logic entirely via injected fakes",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a - covers KVKK-style anonymization, export, deletion-review, and audit-log-safety logic entirely via injected fakes"
+    },
+    {
+      "path": "server/src/tests/platformBackup.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/postTreatmentMessaging.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "WhatsApp Meta Cloud and Evolution API providers, fully mocked via globalThis.fetch stub returning canned responses",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "WhatsApp Meta Cloud and Evolution API providers, fully mocked via globalThis.fetch stub returning canned responses"
+    },
+    {
+      "path": "server/src/tests/publicBookingAvailability.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/publicBookingNoticeEvidence.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/publicBookingSlotConsistency.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/securityIncident.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/smsModule.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "SMS provider is the real registry's built-in mock_turkey/mock_europe fake providers; runPlatformSmsProviderTest exercised in mock mode with encrypted fake credentials, no real network",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "SMS provider is the real registry's built-in mock_turkey/mock_europe fake providers; runPlatformSmsProviderTest exercised in mock mode with encrypted fake credentials, no real network"
+    },
+    {
+      "path": "server/src/tests/staffOnboarding.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "SMTP via emailService.sendMail, gated off with process.env.MAIL_ENABLED='false' so no real network hit",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "SMTP via emailService.sendMail, gated off with process.env.MAIL_ENABLED='false' so no real network hit"
+    },
+    {
+      "path": "server/src/tests/userImportOnboarding.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "sendMail fully faked via a local sendMailFn closure returning {sent:true/false} or throwing, not the real emailService",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "sendMail fully faked via a local sendMailFn closure returning {sent:true/false} or throwing, not the real emailService"
+    },
+    {
+      "path": "server/src/tests/whatsappIdentityAndPostBooking.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY explicitly deleted from env to force the deterministic rule-based NLU path, avoiding any real Gemini call",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY explicitly deleted from env to force the deterministic rule-based NLU path, avoiding any real Gemini call"
+    },
+    {
+      "path": "server/src/tests/whatsappOutboundMessaging.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "WhatsApp Meta Cloud API and Evolution API both mocked via globalThis.fetch override returning canned Response objects (success/HTTP-error/thrown-network-error scenarios)",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "WhatsApp Meta Cloud API and Evolution API both mocked via globalThis.fetch override returning canned Response objects (success/HTTP-error/thrown-network-error scenarios)"
+    },
+    {
+      "path": "server/src/tests/whatsappProvider.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "WhatsApp Meta Cloud API and Evolution API mocked via globalThis.fetch stub returning canned success/error Response objects; no real provider network calls",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "WhatsApp Meta Cloud API and Evolution API mocked via globalThis.fetch stub returning canned success/error Response objects; no real provider network calls"
+    },
+    {
+      "path": "server/src/tests/whatsappStepAwareNlu.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY deliberately deleted from env (documented in file header) to force the network-free rule-based classifier path (source: rule_fallback)",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "GOOGLE_AI_STUDIO_API_KEY/GEMINI_API_KEY deliberately deleted from env (documented in file header) to force the network-free rule-based classifier path (source: rule_fallback)"
+    },
+    {
+      "path": "src/components/imaging/__tests__/dicomHelpers.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "src/components/imaging/__tests__/onboardingHelpers.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "src/components/imaging/__tests__/pairingPoller.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "src/pages/__tests__/bookingWidgetHelpers.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
+      "databaseRequired": false,
+      "externalServiceRequired": "n/a",
+      "runtimeClass": "PURE_NODE",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "n/a"
+    },
+    {
+      "path": "server/src/tests/communicationConsentAuditReport.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/communicationPreferenceReconciliationReport.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/communicationPreferencesRoute.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": "MinIO (S3-compatible) at MINIO_ENDPOINT",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`) + MinIO (S3-compatible) at MINIO_ENDPOINT"
+    },
+    {
+      "path": "server/src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/kvkkHigh007High008SchemaIntegrity.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/legacyConsentCorrection.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/legacyReconciliationResolver.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/messagesConsentGate.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/metaWhatsAppPostBookingHandler.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": "Meta Graph API (mocked via fetch stub, not called for real)",
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`) + Meta Graph API (mocked via fetch stub, not called for real)"
+    },
+    {
+      "path": "server/src/tests/organizationMessagingConnectionScope.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/paymentsListFieldScope.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/platformAdminPasswordRecovery.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/recallConsentGate.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/src/tests/retentionManualRunAudit.test.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/scripts/verify-kvkk-high007-high008-rollback-tenant.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/scripts/verify-attachment-legal-hold-lifecycle.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/scripts/verify-clinic-bulk-export-lifecycle.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    },
+    {
+      "path": "server/scripts/verify-export-archive-lifecycle.ts",
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "runtimeClass": "DISPOSABLE_POSTGRES",
+      "runnableInOrdinaryTaskEnvironment": false,
+      "prerequisite": "DATABASE_URL pointing at a disposable PostgreSQL instance with migrations applied (`prisma migrate deploy`)"
+    }
+  ],
+  "domainsWithZeroOwnedTestsCarriedFromF0005": {
+    "domains": [
+      "Entitlements and Release Flags",
+      "Audit and Activity",
+      "Configuration and Secrets",
+      "Shared Events / Queue Contracts / Idempotency",
+      "Notifications",
+      "Messaging — Email",
+      "Insurance",
+      "Treatment Cases"
+    ],
+    "note": "Unchanged from F0-005 §3.1 finding except Treatment Cases and Insurance, which now appear only as secondaryDomains on newly-added tests (kvkkHigh006Db* files), never as a canonicalOwner — same \"secondary only\" status F0-005 already recorded for Treatment Cases. This is a pre-existing coverage gap, not introduced or worsened by this task, and is NOT itself a blocker for R-072 closure (R-072 is about inventory/ownership currency, not about closing every coverage gap)."
+  },
+  "r072ClosureAssessment": {
+    "conditionsFromTaskSpec": [
+      {
+        "condition": "Every current backend test file is inventoried",
+        "met": true,
+        "evidence": "105/105 server/src/tests files present in F1-002_test_inventory.json testFiles[]"
+      },
+      {
+        "condition": "Every current frontend test file is inventoried",
+        "met": true,
+        "evidence": "9/9 src test files present in F1-002_test_inventory.json testFiles[]"
+      },
+      {
+        "condition": "Every test has a canonical owner or an explicitly accepted UNKNOWN entry",
+        "met": true,
+        "evidence": "0 UNKNOWN entries across all 137 targets"
+      },
+      {
+        "condition": "Every UNKNOWN is either resolved or retained as a separate blocking risk",
+        "met": true,
+        "evidence": "N/A — no UNKNOWN entries exist"
+      },
+      {
+        "condition": "Every test-related package script is reconciled",
+        "met": true,
+        "evidence": "F1-002_test_script_reconciliation.json — every server/root/bridge-agent test:* script parsed and matched to file(s)"
+      },
+      {
+        "condition": "Every stale or dead script reference is identified",
+        "met": true,
+        "evidence": "F1-002_test_script_reconciliation.json findings.scriptsReferencingNoFiles: [] (none found — 0 stale references)"
+      },
+      {
+        "condition": "Every test file's script reachability is known",
+        "met": true,
+        "evidence": "scriptCoverage field populated on all 137 entries; 8 backend files explicitly known to have zero script (listed above), not unknown-but-unchecked"
+      },
+      {
+        "condition": "Current file counts are proven from exact commands",
+        "met": true,
+        "evidence": "F1-002_test_inventory.json countsExactCommands field"
+      },
+      {
+        "condition": "JSON evidence validates",
+        "met": "PENDING — validated separately via node -e JSON.parse, see delivery report"
+      },
+      {
+        "condition": "No current-main drift invalidates the inventory before PR creation",
+        "met": "PENDING — re-checked immediately before commit/PR per task instructions, see delivery report"
+      }
+    ],
+    "verdict": "All 8 conditions checkable at documentation-generation time are MET. The final 2 (JSON validation, pre-PR drift recheck) are procedural steps performed later in this same task before commit — R-072 closure is conditional on those also passing with no material finding."
+  }
+}
