@@ -9,6 +9,9 @@ import {
 import { csrfProtection } from '../middleware/csrf.js';
 import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies, setCsrfCookie } from '../utils/sessionCookies.js';
 import { loadDataRetentionConfig, DATA_RETENTION_RUNTIME_SETTING_KEY } from '../services/privacy/dataRetentionPolicy.js';
+import type { DataRetentionSummary } from '../jobs/dataRetentionCleanupJob.js';
+import { DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS } from '../jobs/dataRetentionCleanupJob.js';
+import { withJobLock } from '../utils/jobLock.js';
 import { getPlatformSetting, setPlatformSetting, unsetPlatformSetting } from '../services/platformSettings.js';
 import {
   LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
@@ -1260,8 +1263,32 @@ router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res
   const { effectiveCleanupEnabled, cleanupEnabledSource } = buildPolicyResponse(config, runtimeCleanupEnabled);
   const actorPlatformAdminId = req.platformAdmin?.id ?? null;
 
+  // Best-effort audit write: a persistence failure here must never escape as
+  // an uncaught rejection, and must never silently retry under a different
+  // (mislabeled, evidence-losing) outcome. Failures are logged loudly and
+  // server-side — sanitized, since resultCounts/errorCategory/config values
+  // are the only things that ever reach this function — so the incident is
+  // visible even when the audit table itself can't be written to right now.
+  async function tryRecordAudit(
+    input: Parameters<typeof recordDataRetentionManualRunAudit>[0],
+  ): Promise<boolean> {
+    try {
+      await recordDataRetentionManualRunAudit(input);
+      return true;
+    } catch (auditErr: unknown) {
+      const auditMsg = auditErr instanceof Error ? auditErr.message : 'Unknown error';
+      console.error(
+        `[data-retention] CRITICAL: manual run audit persistence failed` +
+        ` (outcome=${input.outcome}, dryRun=${input.dryRun}` +
+        (input.resultCounts ? `, resultCounts=${JSON.stringify(input.resultCounts)}` : '') +
+        `): ${auditMsg}`,
+      );
+      return false;
+    }
+  }
+
   if (!dryRun && !effectiveCleanupEnabled) {
-    await recordDataRetentionManualRunAudit({
+    await tryRecordAudit({
       actorPlatformAdminId,
       dryRun,
       config,
@@ -1280,36 +1307,28 @@ router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res
     return;
   }
 
+  let summary: DataRetentionSummary | undefined;
+  let lockUnavailable = false;
+
   try {
     const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
-    const summary = await runDataRetentionCleanup({ dryRun, config });
-    const hadErrors = summary.errors.length > 0;
-
-    await recordDataRetentionManualRunAudit({
-      actorPlatformAdminId,
-      dryRun,
-      config,
-      runtimeCleanupEnabled,
-      effectiveCleanupEnabled,
-      cleanupEnabledSource,
-      outcome: hadErrors ? 'partial_failure' : 'success',
-      errorCategory: hadErrors ? 'category_execution_error' : undefined,
-      resultCounts: {
-        deletedConversationMessages: summary.deletedConversationMessages,
-        deletedConversationStates: summary.deletedConversationStates,
-        deletedOperationalEvents: summary.deletedOperationalEvents,
-        deletedInboundEvents: summary.deletedInboundEvents,
-        anonymizedContactRequests: summary.anonymizedContactRequests,
-        redactedInboxEntries: summary.redactedInboxEntries,
-        deletedCommunicationConsentConflictBuckets: summary.deletedCommunicationConsentConflictBuckets,
-      },
-      skippedCategories: summary.skippedCategories,
-    });
-
-    res.json({ success: true, summary });
+    if (dryRun) {
+      // Read-only (countEligible only) — never contends with the
+      // live-execution lock below.
+      summary = await runDataRetentionCleanup({ dryRun, config });
+    } else {
+      // Same shared lease lock as the scheduled cron (dataRetentionCleanupJob.ts):
+      // a manual live run must never execute its delete/anonymize batches
+      // concurrently with the scheduled job OR another manual live run.
+      const acquired = await withJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS, async () => {
+        summary = await runDataRetentionCleanup({ dryRun, config });
+      });
+      lockUnavailable = !acquired;
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    await recordDataRetentionManualRunAudit({
+    console.error(`[data-retention] manual run failed: ${msg}`);
+    await tryRecordAudit({
       actorPlatformAdminId,
       dryRun,
       config,
@@ -1319,8 +1338,67 @@ router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res
       outcome: 'error',
       errorCategory: 'unexpected_exception',
     });
-    res.status(500).json({ error: `Data retention run failed: ${msg}` });
+    // The raw error message is logged above but never echoed to the caller —
+    // it can carry driver/query-fragment detail this endpoint must not leak.
+    res.status(500).json({ error: 'Data retention run failed. See server logs for detail.' });
+    return;
   }
+
+  if (lockUnavailable) {
+    await tryRecordAudit({
+      actorPlatformAdminId,
+      dryRun,
+      config,
+      runtimeCleanupEnabled,
+      effectiveCleanupEnabled,
+      cleanupEnabledSource,
+      outcome: 'blocked',
+      errorCategory: 'concurrent_run_in_progress',
+    });
+    res.status(409).json({
+      error: 'Another data retention run (scheduled or manual) is already in progress. Try again shortly.',
+    });
+    return;
+  }
+
+  const finalSummary = summary as DataRetentionSummary;
+  const hadErrors = finalSummary.errors.length > 0;
+
+  const auditPersisted = await tryRecordAudit({
+    actorPlatformAdminId,
+    dryRun,
+    config,
+    runtimeCleanupEnabled,
+    effectiveCleanupEnabled,
+    cleanupEnabledSource,
+    outcome: hadErrors ? 'partial_failure' : 'success',
+    errorCategory: hadErrors ? 'category_execution_error' : undefined,
+    resultCounts: {
+      deletedConversationMessages: finalSummary.deletedConversationMessages,
+      deletedConversationStates: finalSummary.deletedConversationStates,
+      deletedOperationalEvents: finalSummary.deletedOperationalEvents,
+      deletedInboundEvents: finalSummary.deletedInboundEvents,
+      anonymizedContactRequests: finalSummary.anonymizedContactRequests,
+      redactedInboxEntries: finalSummary.redactedInboxEntries,
+      deletedCommunicationConsentConflictBuckets: finalSummary.deletedCommunicationConsentConflictBuckets,
+    },
+    skippedCategories: finalSummary.skippedCategories,
+  });
+
+  if (!auditPersisted) {
+    // The cleanup itself already completed (and for a live run, may have
+    // deleted/anonymized real rows) but the audit record failed to persist.
+    // The actual counts were logged above (sanitized, counts only) for
+    // out-of-band reconciliation — this must never look like an ordinary
+    // fully-evidenced 200 to the caller.
+    res.status(500).json({
+      error: 'Data retention run completed but the audit record failed to persist. See server logs.',
+      summary: finalSummary,
+    });
+    return;
+  }
+
+  res.json({ success: true, summary: finalSummary });
 });
 
 // ─── Backups ──────────────────────────────────────────────────────────────────
